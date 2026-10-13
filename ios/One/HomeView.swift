@@ -153,6 +153,16 @@ struct HomeView: View {
             await Reminders.shared.resync()
             await Ringer.sync(context)
         }
+        .onChange(of: QuickAction.shared.pending, initial: true) { _, type in
+            guard let type else { return }
+            QuickAction.shared.pending = nil
+            switch type {
+            case "com.luworks.one.ask": showsAsk = true
+            case "com.luworks.one.newTask": newItem = .task
+            case "com.luworks.one.newEvent": newItem = .event
+            default: break
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await Reminders.shared.resync() } }
         }

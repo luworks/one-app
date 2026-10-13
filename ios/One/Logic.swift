@@ -130,3 +130,27 @@ enum DurationLabel {
         return m == 0 ? "\(h) h" : "\(h) h \(m) min"
     }
 }
+
+/// When reminders fire (Due-style): at the reminder time, then nags until the task is done.
+enum ReminderPlan {
+    /// Follow-up nags after the first reminder, in minutes.
+    static let nagMinutes = [5, 10, 20]
+
+    /// Fire dates still in the future: (date, isNag).
+    static func taskFires(reminder: Date, now: Date) -> [(date: Date, isNag: Bool)] {
+        var result: [(Date, Bool)] = []
+        if reminder > now { result.append((reminder, false)) }
+        for m in nagMinutes {
+            let nag = reminder.addingTimeInterval(TimeInterval(m * 60))
+            if nag > now { result.append((nag, true)) }
+        }
+        return result
+    }
+
+    /// Snooze presets offered on the notification.
+    static let snoozeMinutes = ["SNOOZE_10": 10, "SNOOZE_60": 60]
+
+    static func snoozed(_ action: String, now: Date) -> Date? {
+        snoozeMinutes[action].map { now.addingTimeInterval(TimeInterval($0 * 60)) }
+    }
+}

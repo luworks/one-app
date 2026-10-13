@@ -4,5 +4,32 @@
 <dict>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>one. rings alarms you set on tasks and events, even on Silent.</string>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.ask</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Ask AI</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>sparkles</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.newTask</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New task</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>checklist</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.newEvent</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New event</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>calendar</string>
+		</dict>
+	</array>
 </dict>
 </plist>

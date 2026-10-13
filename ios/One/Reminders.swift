@@ -15,8 +15,6 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     static let habitCategory = "ONE_HABIT"
     enum Action: String { case checkIn = "CHECK_IN", done = "DONE", snooze10 = "SNOOZE_10", snooze60 = "SNOOZE_60", tomorrow = "TOMORROW" }
 
-    /// Follow-up nags after the first reminder, in minutes.
-    static let nagMinutes = [5, 10, 20]
     /// iOS keeps at most 64 pending requests per app.
     static let maxPending = 60
     private static let snoozePrefix = "snooze-"
@@ -71,14 +69,9 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
             guard let fire = task.reminderDate, fire < horizon else { continue }
             let id = Self.key(task.persistentModelID)
             let when = task.plannedStart.map { DayLabel.withTime($0) } ?? task.due.map { "Due " + DayLabel.withTime($0) } ?? ""
-            if fire > now {
-                requests.append((fire, request(id: "\(id)#0", title: task.title, body: when, category: Self.taskCategory, key: id, at: fire)))
-            }
-            for (n, minutes) in Self.nagMinutes.enumerated() {
-                let nag = fire.addingTimeInterval(TimeInterval(minutes * 60))
-                guard nag > now else { continue }
-                requests.append((nag, request(id: "\(id)#\(n + 1)", title: task.title, body: "Still open · " + when,
-                                              category: Self.taskCategory, key: id, at: nag)))
+            for (n, f) in ReminderPlan.taskFires(reminder: fire, now: now).enumerated() {
+                requests.append((f.date, request(id: "\(id)#\(n)", title: task.title, body: f.isNag ? "Still open · " + when : when,
+                                                 category: Self.taskCategory, key: id, at: f.date)))
             }
         }
         for event in events {
@@ -154,13 +147,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func handle(action: String, key: String, title: String, body: String, category: String) async {
-        let snooze: Int? = switch Action(rawValue: action) {
-        case .snooze10: 10
-        case .snooze60: 60
-        default: nil
-        }
-        if let minutes = snooze {
-            let fire = Date.now.addingTimeInterval(TimeInterval(minutes * 60))
+        if let fire = ReminderPlan.snoozed(action, now: .now) {
             let r = request(id: Self.snoozePrefix + UUID().uuidString, title: title, body: body, category: category, key: key, at: fire)
             try? await center.add(r)
             await clearDelivered(key: key)

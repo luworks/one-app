@@ -3,6 +3,7 @@ import SwiftData
 
 @main
 struct OneApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     let container: ModelContainer
 
     init() {

@@ -90,3 +90,26 @@ final class HabitStatsTests: XCTestCase {
         XCTAssertEqual(HabitMath.bestStreak([], calendar: cal), 0)
     }
 }
+
+final class ReminderPlanTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testFutureReminderFiresThenNags() {
+        let fires = ReminderPlan.taskFires(reminder: t0.addingTimeInterval(600), now: t0)
+        XCTAssertEqual(fires.map(\.isNag), [false, true, true, true])
+        XCTAssertEqual(fires.last?.date, t0.addingTimeInterval(600 + 20 * 60))
+    }
+
+    func testPastReminderKeepsRemainingNagsOnly() {
+        // Reminder was 7 minutes ago: the 5-minute nag has passed, 10 and 20 remain.
+        let fires = ReminderPlan.taskFires(reminder: t0.addingTimeInterval(-7 * 60), now: t0)
+        XCTAssertEqual(fires.count, 2)
+        XCTAssertTrue(fires.allSatisfy(\.isNag))
+    }
+
+    func testSnoozePresets() {
+        XCTAssertEqual(ReminderPlan.snoozed("SNOOZE_10", now: t0), t0.addingTimeInterval(600))
+        XCTAssertEqual(ReminderPlan.snoozed("SNOOZE_60", now: t0), t0.addingTimeInterval(3600))
+        XCTAssertNil(ReminderPlan.snoozed("DONE", now: t0))
+    }
+}
