@@ -1,106 +1,130 @@
 import SwiftUI
 import SwiftData
 
-/// Home: week strip, what's overdue / due, the day's timeline, and the composer at the bottom.
+enum HomeTab: CaseIterable, Identifiable {
+    case home, calendar, tasks, alarms
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .home: "首页"
+        case .calendar: "日历"
+        case .tasks: "任务"
+        case .alarms: "提醒"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .home: "house.fill"
+        case .calendar: "calendar"
+        case .tasks: "checklist"
+        case .alarms: "alarm"
+        }
+    }
+}
+
+/// App shell, laid out like Notion mobile: tab pills on top, content in the middle,
+/// and an AI-style input pinned to the bottom.
 struct HomeView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \OneEvent.start) private var events: [OneEvent]
-    @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
 
-    @State private var day = Calendar.current.startOfDay(for: .now)
+    @State private var tab: HomeTab = .home
+    @State private var calendarDay = Calendar.current.startOfDay(for: .now)
     @State private var draft = ""
     @State private var pending: Capture?
     @State private var confirmClear = false
 
-    private let cal = Calendar.current
-
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    WeekStrip(selected: $day)
-                }
-                .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
-                .listRowBackground(Color.clear)
-
-                if cal.isDateInToday(day), !overdue.isEmpty {
-                    Section("已过期") {
-                        ForEach(overdue) { TaskRow(task: $0) }
-                    }
-                }
-                if !dueOnDay.isEmpty {
-                    Section(cal.isDateInToday(day) ? "今天到期" : "当天到期") {
-                        ForEach(dueOnDay) { TaskRow(task: $0) }
-                    }
-                }
-                Section("日程") {
-                    if timeline.isEmpty {
-                        Text("这一天还没有安排").foregroundStyle(.secondary)
-                    }
-                    ForEach(timeline) { item in
-                        switch item {
-                        case .event(let event): EventRow(event: event)
-                        case .task(let task): TaskRow(task: task, showsTime: true)
-                        case .nowMarker(let date): NowRow(date: date)
-                        }
-                    }
-                }
+            VStack(spacing: 0) {
+                header
+                TabPills(selection: $tab)
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle(day.formatted(.dateTime.month().day().weekday(.wide)))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Button("回到今天") { day = cal.startOfDay(for: .now) }
-                        Button("清空全部数据", role: .destructive) { confirmClear = true }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        TasksView()
-                    } label: {
-                        Image(systemName: "checklist")
-                    }
-                }
-            }
+            .background(Color(.systemGroupedBackground))
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .bottom) { askBar }
             .confirmationDialog("清空全部任务和日程？", isPresented: $confirmClear, titleVisibility: .visible) {
                 Button("清空", role: .destructive) {
                     try? context.delete(model: OneTask.self)
                     try? context.delete(model: OneEvent.self)
                 }
             }
-            .safeAreaInset(edge: .bottom) { bottomBar }
             .task { SampleData.insertIfNeeded(context) }
         }
     }
 
-    // MARK: Composer
+    // MARK: Top
 
-    private var bottomBar: some View {
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("One").font(.title2.bold())
+            Text(Date.now.formatted(.dateTime.month().day().weekday(.wide)))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Menu {
+                Button("日历回到今天") { calendarDay = Calendar.current.startOfDay(for: .now) }
+                Button("清空全部数据", role: .destructive) { confirmClear = true }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 36, height: 36)
+                    .background(Color(.secondarySystemGroupedBackground), in: Circle())
+            }
+            .tint(.primary)
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch tab {
+        case .home:
+            DayAgenda(day: .constant(Calendar.current.startOfDay(for: .now)), showsWeekStrip: false)
+        case .calendar:
+            DayAgenda(day: $calendarDay, showsWeekStrip: true)
+        case .tasks:
+            TasksView()
+        case .alarms:
+            AlarmsView()
+        }
+    }
+
+    // MARK: Bottom: AI input
+
+    private var askBar: some View {
         VStack(spacing: 8) {
             if let capture = pending {
                 CaptureCard(capture: capture, onAdd: { add(capture) }, onCancel: { pending = nil })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            HStack(spacing: 8) {
-                TextField("记一件事，比如：明天下午3点 打电话给 Alex", text: $draft)
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.purple)
+                TextField("问 AI，或记一件事…", text: $draft)
                     .submitLabel(.send)
                     .onSubmit(capture)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color(.secondarySystemBackground), in: Capsule())
                 Button(action: capture) {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 32))
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 28))
                 }
                 .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+            .padding(.leading, 16)
+            .padding(.trailing, 6)
+            .padding(.vertical, 6)
+            .background(Color(.systemBackground), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.secondary.opacity(0.2)))
+            .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
         .animation(.snappy, value: pending)
     }
 
@@ -113,57 +137,40 @@ struct HomeView: View {
 
     private func add(_ capture: Capture) {
         context.insert(capture.makeTask())
-        if capture.hasDay { day = capture.day }
+        if capture.hasDay { calendarDay = capture.day }
         pending = nil
-    }
-
-    // MARK: Data for the selected day
-
-    private var overdue: [OneTask] {
-        tasks.filter(\.isOverdue)
-    }
-
-    private var dueOnDay: [OneTask] {
-        tasks.filter { task in
-            guard !task.isDone, task.plannedStart == nil, !task.isOverdue, let due = task.due else { return false }
-            return cal.isDate(due, inSameDayAs: day)
-        }
-    }
-
-    private var timeline: [TimelineItem] {
-        var items: [TimelineItem] = events
-            .filter { cal.isDate($0.start, inSameDayAs: day) }
-            .map { .event($0) }
-        items += tasks.compactMap { task -> TimelineItem? in
-            guard let start = task.plannedStart, cal.isDate(start, inSameDayAs: day) else { return nil }
-            return .task(task)
-        }
-        if cal.isDateInToday(day), !items.isEmpty {
-            items.append(.nowMarker(Date.now))
-        }
-        return items.sorted { $0.start < $1.start }
     }
 }
 
-enum TimelineItem: Identifiable {
-    case event(OneEvent)
-    case task(OneTask)
-    case nowMarker(Date)
+/// Notion-style tab row: the selected tab is a pill with icon + label, the others are icon-only circles.
+struct TabPills: View {
+    @Binding var selection: HomeTab
 
-    var id: AnyHashable {
-        switch self {
-        case .event(let e): return ObjectIdentifier(e)
-        case .task(let t): return ObjectIdentifier(t)
-        case .nowMarker: return "now"
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(HomeTab.allCases) { tab in
+                    let isSelected = tab == selection
+                    Button {
+                        selection = tab
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.icon)
+                            if isSelected { Text(tab.title) }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, isSelected ? 14 : 0)
+                        .frame(minWidth: 40, minHeight: 40)
+                        .background(isSelected ? Color(.label) : Color(.secondarySystemGroupedBackground), in: Capsule())
+                        .foregroundStyle(isSelected ? Color(.systemBackground) : Color.primary)
+                    }
+                    .accessibilityLabel(tab.title)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
         }
-    }
-
-    var start: Date {
-        switch self {
-        case .event(let e): return e.start
-        case .task(let t): return t.plannedStart ?? .distantFuture
-        case .nowMarker(let d): return d
-        }
+        .animation(.snappy, value: selection)
     }
 }
 
