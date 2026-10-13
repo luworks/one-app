@@ -1,0 +1,6 @@
+dist/.worker.mjs
+tests/shots/
+.wrangler/
+node_modules/
+__pycache__/
+.DS_Store
