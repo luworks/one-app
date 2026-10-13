@@ -71,3 +71,22 @@ final class RecurrenceTests: XCTestCase {
         XCTAssertEqual(Recurrence.occurrences(start: start, duration: 1800, rule: nil, in: nextDay, calendar: cal).count, 0)
     }
 }
+
+final class HabitStatsTests: XCTestCase {
+    var cal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        return c
+    }()
+    func d(_ day: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: 8))! }
+
+    func testWeekCountStartsMonday() {
+        // Wed Oct 14; week is Mon 12 – Sun 18. Sun 11 belongs to the previous week.
+        XCTAssertEqual(HabitMath.weekCount([d(11), d(12), d(14), d(14)], now: d(14), calendar: cal), 2)
+    }
+
+    func testBestStreak() {
+        XCTAssertEqual(HabitMath.bestStreak([d(1), d(2), d(3), d(5), d(6)], calendar: cal), 3)
+        XCTAssertEqual(HabitMath.bestStreak([], calendar: cal), 0)
+    }
+}

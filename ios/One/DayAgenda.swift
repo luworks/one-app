@@ -38,6 +38,9 @@ struct DayAgenda: View {
                     ForEach(dueOnDay) { TaskRow(task: $0) }
                 }
             }
+            if !showsWeekStrip {
+                TodayHabits()
+            }
             Section(showsWeekStrip ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule") {
                 if timeline.isEmpty {
                     Text("Nothing planned").foregroundStyle(.secondary)

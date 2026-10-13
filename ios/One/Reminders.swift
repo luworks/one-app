@@ -12,7 +12,8 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
 
     static let taskCategory = "ONE_TASK"
     static let eventCategory = "ONE_EVENT"
-    enum Action: String { case done = "DONE", snooze10 = "SNOOZE_10", snooze60 = "SNOOZE_60", tomorrow = "TOMORROW" }
+    static let habitCategory = "ONE_HABIT"
+    enum Action: String { case checkIn = "CHECK_IN", done = "DONE", snooze10 = "SNOOZE_10", snooze60 = "SNOOZE_60", tomorrow = "TOMORROW" }
 
     /// Follow-up nags after the first reminder, in minutes.
     static let nagMinutes = [5, 10, 20]
@@ -33,6 +34,9 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Self.taskCategory, actions: [done, s10, s60, tomorrow], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.eventCategory, actions: [s10], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Self.habitCategory,
+                                   actions: [UNNotificationAction(identifier: Action.checkIn.rawValue, title: "Check in", options: []), s60],
+                                   intentIdentifiers: []),
         ])
     }
 
@@ -82,6 +86,22 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
             let id = Self.key(event.persistentModelID)
             let body = event.start.formatted(date: .omitted, time: .shortened) + " · \(event.durationMinutes) min"
             requests.append((fire, request(id: "\(id)#0", title: event.title, body: body, category: Self.eventCategory, key: id, at: fire)))
+        }
+
+        let habits = (try? context.fetch(FetchDescriptor<Habit>())) ?? []
+        let cal = Calendar.current
+        for habit in habits {
+            guard let hour = habit.reminderHour else { continue }
+            let id = Self.key(habit.persistentModelID)
+            for n in 0..<7 {
+                guard let day = cal.date(byAdding: .day, value: n, to: cal.startOfDay(for: now)),
+                      !habit.isDone(on: day),
+                      let fire = cal.date(bySettingHour: hour, minute: habit.reminderMinute, second: 0, of: day),
+                      fire > now else { continue }
+                let body = habit.isDaily ? "Keep your streak going" : "\(habit.thisWeek)/\(habit.targetPerWeek) this week"
+                requests.append((fire, request(id: "\(id)#\(n)", title: habit.title, body: body,
+                                              category: Self.habitCategory, key: id, at: fire)))
+            }
         }
 
         let pending = await center.pendingNotificationRequests()
@@ -147,8 +167,15 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
             return
         }
 
-        guard let context = container?.mainContext, let id = Self.identifier(from: key),
-              let task = context.model(for: id) as? OneTask else { return }
+        guard let context = container?.mainContext, let id = Self.identifier(from: key) else { return }
+        if Action(rawValue: action) == .checkIn, let habit = context.model(for: id) as? Habit {
+            if !habit.isDone(on: .now) { habit.toggle(on: .now) }
+            try? context.save()
+            await clearDelivered(key: key)
+            await resync()
+            return
+        }
+        guard let task = context.model(for: id) as? OneTask else { return }
         switch Action(rawValue: action) {
         case .done:
             if !task.isDone { TaskActions.toggleDone(task, context: context, toast: nil) }

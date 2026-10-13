@@ -35,6 +35,7 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var allTasks: [OneTask]
     @Query private var allEvents: [OneEvent]
+    @Query private var allHabits: [Habit]
 
     @State private var tab: HomeTab = .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
@@ -143,6 +144,7 @@ struct HomeView: View {
             switch item {
             case .task: TaskEditor()
             case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
+            case .habit: HabitEditor(habit: nil)
             }
         }
         .task { SampleData.insertIfNeeded(context) }
@@ -161,6 +163,7 @@ struct HomeView: View {
         for t in allTasks {
             h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
         }
+        for hb in allHabits { h.combine(hb.reminderHour); h.combine(hb.reminderMinute); h.combine(hb.checkins.count) }
         for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay) }
         return h.finalize()
     }
@@ -220,7 +223,7 @@ struct HomeView: View {
             Menu {
                 Button { newItem = .task } label: { Label("New task", systemImage: "checklist") }
                 Button { newItem = .event } label: { Label("New event", systemImage: "calendar") }
-                Button { tab = .habits } label: { Label("New habit", systemImage: "flame") }
+                Button { newItem = .habit } label: { Label("New habit", systemImage: "flame") }
             } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.body.weight(.semibold))
@@ -238,7 +241,7 @@ struct HomeView: View {
 }
 
 enum NewItem: Identifiable {
-    case task, event
+    case task, event, habit
     var id: Self { self }
 }
 

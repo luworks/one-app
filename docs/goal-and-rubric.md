@@ -158,6 +158,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 5 | 5 | 9 | 6 | 5 | 5 | 8 | 7 | 7 | 6.5 | Tasks: lists, tags, flag, repeat (next occurrence on complete, verified), checklist, filter chips, undo toast. Undo not yet demonstrated end-to-end (tool latency), so Tasks 3 / Interaction 5 not counted. RepeatRule unit tests |
 | 6 | 9 | 9 | 6 | 5 | 5 | 8 | 7 | 7 | 7.0 | Calendar: Day / Week (time grid) / Month views, all-day and multi-day events, repeating events (occurrences expanded everywhere), event editor with all-day/repeat. Recurrence unit tests. EventKit still missing |
 | 7 | 9 | 9 | 6 | 5 | 8 | 8 | 7 | 7 | 7.4 | AI parser rewrite (prepositions, weekdays, dates, repeat, noon, bare hours, time ranges) and task/event/habit detection with a switch on the preview card. NL eval v1: train 6→15/15, test 5→14/14. v2 cases (kind, duration) written before the code: train 24/24, test 22/22. Eval now saturated: next cases should come from Yuan's real inputs |
+| 8 | 9 | 9 | 6 | 9 | 8 | 8 | 7 | 7 | 7.9 | Habits: editor (name, 20 icons, weekly target, reminder time), 5-week history, current/best streak, "x/3 this week" for weekly goals, habit chips on Today, habit reminders with Check in action. weekCount/bestStreak tests |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
@@ -178,5 +179,9 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 - **Next — UI tests (XCUITest)** for J1–J7 so undo, notification actions and journeys are demonstrated by a program, not by hand.
 - ~~Round 6 — Calendar~~ done (EventKit still open).
 - ~~Round 7 — AI parser~~ done. Saturated; needs new real-world cases.
-- **Round 8 — Habits:** edit name/icon, weekly targets, reminder time, stats, habits on Today.
+- ~~Round 8 — Habits~~ done.
+- **Round 9 — Reliability + Interaction:** XCUITest journeys (J1–J7) incl. undo; tap counts.
+- **Round 10 — Design:** dark mode + largest Dynamic Type pass on every screen.
+- **Round 11 — Alarms:** AlarmKit alarms that ring through Silent; demonstrate notification actions.
+- **Round 12 — Calendar:** EventKit read/write. **AI:** plan-my-day preview, voice input.
 - Then re-score and keep climbing whatever is weakest.

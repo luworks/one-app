@@ -64,6 +64,7 @@ enum SampleData {
         let read = Habit(title: "Read 20 minutes", icon: "book")
         read.checkins = days([0, 1, 2, 3, 4, 5])
         let run = Habit(title: "Run", icon: "figure.run")
+        run.targetPerWeek = 3
         run.checkins = days([2, 4])
         [water, read, run].forEach(context.insert)
     }

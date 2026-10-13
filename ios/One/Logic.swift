@@ -23,6 +23,27 @@ enum HabitMath {
         checkins.contains { calendar.isDate($0, inSameDayAs: day) }
     }
 
+    /// Check-ins in the week containing `now` (weeks start on Monday).
+    static func weekCount(_ checkins: [Date], now: Date = .now, calendar: Calendar = .current) -> Int {
+        var cal = calendar
+        cal.firstWeekday = 2
+        guard let week = cal.dateInterval(of: .weekOfYear, for: now) else { return 0 }
+        return Set(checkins.filter { week.contains($0) }.map { cal.startOfDay(for: $0) }).count
+    }
+
+    /// Longest run of consecutive checked-in days ever.
+    static func bestStreak(_ checkins: [Date], calendar: Calendar = .current) -> Int {
+        let days = Set(checkins.map { calendar.startOfDay(for: $0) }).sorted()
+        var best = 0, run = 0
+        var previous: Date?
+        for d in days {
+            if let p = previous, calendar.date(byAdding: .day, value: 1, to: p) == d { run += 1 } else { run = 1 }
+            best = max(best, run)
+            previous = d
+        }
+        return best
+    }
+
     /// Consecutive checked-in days ending today, or ending yesterday if today isn't checked yet.
     static func streak(_ checkins: [Date], now: Date = .now, calendar: Calendar = .current) -> Int {
         var day = calendar.startOfDay(for: now)
