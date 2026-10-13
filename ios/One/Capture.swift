@@ -77,9 +77,9 @@ enum CaptureParser {
     private static func adjust(_ hour: Int?, period: String?) -> Int? {
         guard var h = hour else { return nil }
         switch period?.lowercased() {
-        case "pm", "下午", "晚上": if h < 12 { h += 12 }
-        case "中午": if h < 11 { h += 12 }
-        case "am", "上午", "早上": if h == 12 { h = 0 }
+        case "pm"?, "下午"?, "晚上"?: if h < 12 { h += 12 }
+        case "中午"?: if h < 11 { h += 12 }
+        case "am"?, "上午"?, "早上"?: if h == 12 { h = 0 }
         case nil: if (1...6).contains(h) { h += 12 } // "3点开会" almost always means 3 PM
         default: break
         }
