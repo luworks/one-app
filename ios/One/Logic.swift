@@ -212,3 +212,12 @@ extension ReminderPlan {
         }
     }
 }
+
+enum ListName {
+    /// "01 工作" → "工作". Numbered names keep their order for sorting; the number is noise when shown.
+    static func display(_ name: String) -> String {
+        guard let r = name.range(of: #"^\d{1,3}[\s._-]+"#, options: .regularExpression) else { return name }
+        let rest = name[r.upperBound...]
+        return rest.isEmpty ? name : String(rest)
+    }
+}

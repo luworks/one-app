@@ -11,7 +11,7 @@ struct TasksView: View {
             case .all: "All"
             case .inbox: "Inbox"
             case .flagged: "Flagged"
-            case .list(let name): name
+            case .list(let name): ListName.display(name)
             case .tag(let tag): "#" + tag
             }
         }
@@ -26,7 +26,9 @@ struct TasksView: View {
     private var filters: [Filter] {
         let lists = Set(tasks.map(\.listName).filter { !$0.isEmpty }).sorted().map(Filter.list)
         let tags = Set(tasks.flatMap(\.tags)).sorted().map(Filter.tag)
-        return [.all, .inbox, .flagged] + lists + tags
+        // The built-in Inbox only shows when something lives there (imported lists often have their own inbox).
+        let inbox: [Filter] = tasks.contains { $0.listName.isEmpty && !$0.isDone } ? [.inbox] : []
+        return [.all] + inbox + [.flagged] + lists + tags
     }
 
     private var filtered: [OneTask] {
@@ -62,7 +64,9 @@ struct TasksView: View {
             }
 
             List {
-                section("Unscheduled", filtered.filter { !$0.isDone && $0.plannedStart == nil })
+                section("Unscheduled", filtered
+                    .filter { !$0.isDone && $0.plannedStart == nil }
+                    .sorted { ($0.due ?? .distantFuture, $1.createdAt) < ($1.due ?? .distantFuture, $0.createdAt) })
                 section("Scheduled", filtered
                     .filter { !$0.isDone && $0.plannedStart != nil }
                     .sorted { ($0.plannedStart ?? .distantFuture) < ($1.plannedStart ?? .distantFuture) })

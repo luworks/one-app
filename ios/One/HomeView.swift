@@ -149,7 +149,20 @@ struct HomeView: View {
             case .habit: HabitEditor(habit: nil)
             }
         }
-        .task { SampleData.insertIfNeeded(context) }
+        .task {
+            #if DEBUG
+            if let path = DevImport.requestedPath {
+                do {
+                    let (e, t) = try DevImport.run(path: path, into: context)
+                    print("IMPORT ok: \(e) events, \(t) reminders")
+                } catch {
+                    print("IMPORT failed: \(error)")
+                }
+                return
+            }
+            #endif
+            SampleData.insertIfNeeded(context)
+        }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {
             // UI tests read the cold start time from this invisible label.

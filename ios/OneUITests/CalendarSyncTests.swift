@@ -42,7 +42,13 @@ final class CalendarSyncTests: XCTestCase {
         app.terminate()
         app.launch()
         app.buttons["Calendar"].firstMatch.tap()
-        let row = app.staticTexts[title]
-        XCTAssertTrue(row.waitForExistence(timeout: 8), "event read back from the system calendar")
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+        // Earlier runs leave events in the simulator's calendar, so the row may be further down the list.
+        var found = row.waitForExistence(timeout: 5)
+        for _ in 0..<6 where !found {
+            app.swipeUp()
+            found = row.waitForExistence(timeout: 1)
+        }
+        XCTAssertTrue(found, "event read back from the system calendar")
     }
 }

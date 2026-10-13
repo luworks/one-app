@@ -11,6 +11,7 @@ struct DayAgenda: View {
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
 
     private let cal = Calendar.current
+    @State private var showsAllOverdue = false
 
     var body: some View {
         List {
@@ -30,8 +31,17 @@ struct DayAgenda: View {
                 }
             }
             if cal.isDateInToday(day), !overdue.isEmpty {
-                Section("Overdue") {
-                    ForEach(overdue) { TaskRow(task: $0) }
+                Section("Overdue \(overdue.count)") {
+                    ForEach(showsAllOverdue ? overdue : Array(overdue.prefix(3))) { TaskRow(task: $0) }
+                    if overdue.count > 3 {
+                        Button(showsAllOverdue ? "Show less" : "Show \(overdue.count - 3) more") {
+                            withAnimation(.snappy) { showsAllOverdue.toggle() }
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 54, bottom: 4, trailing: 20))
+                    }
                 }
             }
             if !dueOnDay.isEmpty {
@@ -71,8 +81,9 @@ struct DayAgenda: View {
         events.filter { $0.isAllDay && !$0.occurs(on: day).isEmpty }
     }
 
+    /// Oldest deadline first.
     private var overdue: [OneTask] {
-        tasks.filter(\.isOverdue)
+        tasks.filter(\.isOverdue).sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
     }
 
     private var dueOnDay: [OneTask] {

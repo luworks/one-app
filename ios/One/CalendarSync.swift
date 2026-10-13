@@ -1,5 +1,6 @@
 import EventKit
 import SwiftUI
+import os
 
 /// A read-only event from the system calendar (Apple Calendar, Google, Exchange…).
 struct ExternalEvent: Identifiable, Hashable {
@@ -19,6 +20,7 @@ struct ExternalEvent: Identifiable, Hashable {
 @Observable
 final class CalendarSync {
     static let shared = CalendarSync()
+    @ObservationIgnored private let log = Logger(subsystem: "com.luworks.one", category: "calendar")
 
     /// Created on first use: EKEventStore is slow to set up and most launches don't need it.
     @ObservationIgnored private lazy var store: EKEventStore = {
@@ -90,7 +92,10 @@ final class CalendarSync {
 
     /// Saves a copy of `event` to the default calendar and returns its identifier.
     func save(_ event: OneEvent) -> String? {
-        guard isOn, let calendar = store.defaultCalendarForNewEvents else { return nil }
+        guard isOn, let calendar = store.defaultCalendarForNewEvents else {
+            log.error("save skipped isOn=\(self.isOn) default=\(self.store.defaultCalendarForNewEvents != nil)")
+            return nil
+        }
         let ek = event.externalID.flatMap { store.event(withIdentifier: $0) } ?? EKEvent(eventStore: store)
         ek.calendar = ek.calendar ?? calendar
         ek.title = event.title
@@ -114,8 +119,10 @@ final class CalendarSync {
         }
         do {
             try store.save(ek, span: .futureEvents)
+            log.info("saved \(ek.eventIdentifier ?? "nil", privacy: .public)")
             return ek.eventIdentifier
         } catch {
+            log.error("save failed \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
@@ -132,9 +139,7 @@ struct ExternalEventRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            if event.isAllDay {
-                Text("All day").font(.caption).foregroundStyle(.secondary).frame(width: 58, alignment: .leading)
-            } else {
+            if !event.isAllDay {
                 TimeColumn(date: event.start)
             }
             RoundedRectangle(cornerRadius: 2)

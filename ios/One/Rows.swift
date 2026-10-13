@@ -21,7 +21,7 @@ struct EventRow: View {
         var parts: [String] = []
         if event.isAllDay {
             let days = max(1, event.durationMinutes / 1440)
-            parts.append(days > 1 ? "\(days) days" : "All day")
+            parts.append(days > 1 ? "\(days) days" : event.calendarName)
         } else {
             parts.append(DurationLabel.text(minutes: event.durationMinutes))
         }
@@ -31,12 +31,7 @@ struct EventRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            if event.isAllDay {
-                Text("All day")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 58, alignment: .leading)
-            } else {
+            if !event.isAllDay {
                 TimeColumn(date: start ?? event.start)
             }
             RoundedRectangle(cornerRadius: 2)
@@ -149,16 +144,18 @@ struct TaskRow: View {
         }
     }
 
+    /// Most important first, so truncation drops the least useful bits: deadline, plan, repeat, list, tags.
     private var detail: String? {
         var parts: [String] = []
-        if task.isOverdue { parts.append("Overdue") }
-        if !showsTime, let start = task.plannedStart { parts.append("Planned " + DayLabel.withTime(start)) }
         if let due = task.due { parts.append("Due " + DayLabel.withTime(due)) }
-        if let rule = task.repeats { parts.append("↻ " + rule.label) }
+        if !showsTime, let start = task.plannedStart, start != task.due {
+            parts.append("Planned " + DayLabel.withTime(start))
+        }
+        if task.repeats != nil { parts.append("↻") }
         if !task.checklist.isEmpty {
             parts.append("\(task.checklist.filter(\.done).count)/\(task.checklist.count)")
         }
-        if !task.listName.isEmpty { parts.append(task.listName) }
+        if !task.listName.isEmpty { parts.append(ListName.display(task.listName)) }
         parts += task.tags.map { "#" + $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

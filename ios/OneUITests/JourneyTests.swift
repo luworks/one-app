@@ -41,7 +41,7 @@ final class JourneyTests: XCTestCase {
 
     /// J2: see what's left today.
     func testJ2_todayShowsWhatsLeft() {
-        XCTAssertTrue(app.staticTexts["Overdue"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Overdue'")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Due today"].exists)
         XCTAssertTrue(app.staticTexts["Schedule"].exists)
         XCTAssertTrue(app.staticTexts["Buy milk"].exists)

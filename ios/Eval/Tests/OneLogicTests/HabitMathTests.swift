@@ -159,3 +159,12 @@ final class HabitReminderTests: XCTestCase {
         XCTAssertEqual(fires, [at(12, 20, 30)])
     }
 }
+
+final class ListNameTests: XCTestCase {
+    func testStripsOrderingNumber() {
+        XCTAssertEqual(ListName.display("01 Work"), "Work")
+        XCTAssertEqual(ListName.display("00 收件箱"), "收件箱")
+        XCTAssertEqual(ListName.display("Home"), "Home")
+        XCTAssertEqual(ListName.display("2026 plans"), "2026 plans")
+    }
+}
