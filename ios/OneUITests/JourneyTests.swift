@@ -114,4 +114,21 @@ final class JourneyTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Planned 3 tasks'")).firstMatch
             .waitForExistence(timeout: 3))
     }
+
+    /// Interaction claim 8: long-press and drag a task in the week grid to reschedule it.
+    func testDragTaskInWeekGrid() {
+        tab("Calendar")
+        tap(app.buttons["Week"])
+        let block = app.otherElements.matching(NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned'")).firstMatch
+        let anyBlock = block.exists ? block
+            : app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned'")).firstMatch
+        XCTAssertTrue(anyBlock.waitForExistence(timeout: 5))
+        let before = anyBlock.label
+        let start = anyBlock.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+        // One hour down = 48 pt in the grid.
+        start.press(forDuration: 0.6, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 48)))
+        let moved = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned' AND label != %@", before)).firstMatch
+        XCTAssertTrue(moved.waitForExistence(timeout: 3), "planned time changed after drag (was: \(before))")
+    }
 }

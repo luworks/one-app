@@ -166,6 +166,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 13 | 10 | 10 | 8 | 9 | 8 | 9 | 9 | 9 | 9.0 | EventKit: sidebar toggle "Show Apple Calendar"; system events appear in Today / Week / Month; events created in one. are saved to the system calendar (with repeat) and deduplicated. CalendarSyncTests round-trips an event through the system calendar. Full suite: 10 UI tests pass, 1 device-only skipped |
 | 14 | 10 | 10 | 8 | 9 | 9 | 10 | 9 | 9 | 9.25 | AI "Plan my day": first-fits overdue / due-today / flagged tasks into free time around fixed events (incl. system calendar), shown as a preview card; Apply with Undo. DayPlanner unit tests + testPlanMyDay UI test. Habits empty state |
 | 15 | 10 | 10 | 8 | 9 | 9 | 10 | 9 | 10 | 9.4 | Cold start measured in-app (process start → first frame): 2981 ms → 575 ms median by deferring EventKit store creation and only building the sidebar when open. `Eval/cold-start.sh` enforces < 1000 ms; LaunchTests guards regressions under automation. 12 UI tests pass, 1 device-only skipped |
+| 16 | 10 | 10 | 8 | 9 | 9 | 10 | 10 | 10 | 9.5 | Week grid: long-press and drag a planned task to a new time (15-min steps) or day; events stay fixed; deadline untouched. testDragTaskInWeekGrid passes |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
@@ -194,7 +195,7 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 - ~~Round 12 — reminder logic tests, quick actions~~ done.
 - ~~Round 13 — EventKit~~ done.
 - ~~Round 14 — Plan my day~~ done.
-- **Next:** voice input (AI 10), drag to reschedule (Interaction 8), habit reminder firing (Habits 8). Device-only: AlarmKit ringing, notification actions.
+- **Next:** voice input (AI 10), habit reminder firing (Habits 8). Device-only: AlarmKit ringing, notification actions.
 - Device-only: AlarmKit ringing, notification actions (needs the iPhone verified).
 
 - Then re-score and keep climbing whatever is weakest.

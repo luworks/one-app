@@ -85,9 +85,15 @@ struct WeekGrid: View {
                             ForEach(Array(days.enumerated()), id: \.offset) { index, d in
                                 let x = gutter + CGFloat(index) * colWidth
                                 ForEach(blocks(on: d), id: \.id) { b in
-                                    block(b)
-                                        .frame(width: colWidth - 2, height: max(18, b.height(hourHeight)))
-                                        .offset(x: x + 1, y: b.y(hourHeight))
+                                    if let task = b.task {
+                                        DraggableTaskBlock(task: task, colWidth: colWidth, hourHeight: hourHeight) { block(b) }
+                                            .frame(width: colWidth - 2, height: max(18, b.height(hourHeight)))
+                                            .offset(x: x + 1, y: b.y(hourHeight))
+                                    } else {
+                                        block(b)
+                                            .frame(width: colWidth - 2, height: max(18, b.height(hourHeight)))
+                                            .offset(x: x + 1, y: b.y(hourHeight))
+                                    }
                                 }
                                 if cal.isDateInToday(d) {
                                     let y = minutes(Date.now) / 60 * hourHeight
@@ -167,6 +173,7 @@ struct WeekGrid: View {
         let startMinute: CGFloat
         let lengthMinutes: CGFloat
         let isTask: Bool
+        var task: OneTask? = nil
         func y(_ hourHeight: CGFloat) -> CGFloat { startMinute / 60 * hourHeight }
         func height(_ hourHeight: CGFloat) -> CGFloat { lengthMinutes / 60 * hourHeight - 1 }
     }
@@ -188,7 +195,7 @@ struct WeekGrid: View {
         for t in tasks where !t.isDone {
             if let s = t.plannedStart, cal.isDate(s, inSameDayAs: d) {
                 result.append(Block(id: "t\(t.persistentModelID.hashValue)", title: t.title, startMinute: minutes(s),
-                                    lengthMinutes: CGFloat(t.durationMinutes), isTask: true))
+                                    lengthMinutes: CGFloat(t.durationMinutes), isTask: true, task: t))
             }
         }
         return result
@@ -306,5 +313,56 @@ struct MonthGrid: View {
 
     private func shift(_ months: Int) {
         if let d = cal.date(byAdding: .month, value: months, to: day) { day = d }
+    }
+}
+
+/// Long-press, then drag a planned task to another time (15-minute steps) or day. Events never move.
+/// Moving changes only the planned time, never the deadline.
+struct DraggableTaskBlock<Content: View>: View {
+    let task: OneTask
+    let colWidth: CGFloat
+    let hourHeight: CGFloat
+    @ViewBuilder var content: Content
+
+    @GestureState private var translation: CGSize = .zero
+    @State private var lifted = false
+
+    var body: some View {
+        content
+            .scaleEffect(lifted ? 1.04 : 1)
+            .shadow(color: .black.opacity(lifted ? 0.2 : 0), radius: 6, y: 3)
+            .offset(snapped(translation))
+            .zIndex(lifted ? 1 : 0)
+            .gesture(
+                LongPressGesture(minimumDuration: 0.3)
+                    .onEnded { _ in withAnimation(.snappy) { lifted = true } }
+                    .sequenced(before: DragGesture())
+                    .updating($translation) { value, state, _ in
+                        if case .second(true, let drag?) = value { state = drag.translation }
+                    }
+                    .onEnded { value in
+                        defer { withAnimation(.snappy) { lifted = false } }
+                        guard case .second(true, let drag?) = value, let start = task.plannedStart else { return }
+                        let (days, minutes) = steps(drag.translation)
+                        let cal = Calendar.current
+                        let moved = cal.date(byAdding: .minute, value: minutes, to: start)
+                            .flatMap { cal.date(byAdding: .day, value: days, to: $0) }
+                        withAnimation(.snappy) { task.plannedStart = moved ?? start }
+                    }
+            )
+            .sensoryFeedback(.impact(weight: .medium), trigger: lifted) { _, up in up }
+            .accessibilityLabel("\(task.title), planned \(task.plannedStart.map { DayLabel.withTime($0) } ?? "")")
+            .accessibilityHint("Long-press and drag to move it")
+    }
+
+    private func steps(_ t: CGSize) -> (days: Int, minutes: Int) {
+        let days = Int((t.width / colWidth).rounded())
+        let minutes = Int((t.height / hourHeight * 60 / 15).rounded()) * 15
+        return (days, minutes)
+    }
+
+    private func snapped(_ t: CGSize) -> CGSize {
+        let (days, minutes) = steps(t)
+        return CGSize(width: CGFloat(days) * colWidth, height: CGFloat(minutes) / 60 * hourHeight)
     }
 }
