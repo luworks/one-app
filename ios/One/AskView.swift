@@ -94,6 +94,10 @@ struct AskView: View {
                 TextField("Ask AI or add anything", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($focused)
+                    .onChange(of: draft) { _, text in
+                        // Return sends, like a chat app (a vertical TextField would insert a newline).
+                        if text.hasSuffix("\n") { send(String(text.dropLast())) }
+                    }
                     .padding(.vertical, 8)
                 if isEmpty {
                     Image(systemName: "mic.fill")

@@ -14,6 +14,8 @@ final class OneTask {
     /// Deadline. Moving planned time never changes this.
     var due: Date?
     var createdAt: Date
+    /// Minutes before the planned time (or a timed deadline) to remind. nil = no reminder.
+    var reminderOffsetMinutes: Int? = 0
 
     init(title: String, note: String = "", plannedStart: Date? = nil, durationMinutes: Int = 25, due: Date? = nil) {
         self.title = title
@@ -29,6 +31,20 @@ final class OneTask {
     var isOverdue: Bool {
         guard !isDone, let due else { return false }
         return due < Calendar.current.startOfDay(for: .now)
+    }
+
+    /// When the reminder fires: planned time, else a deadline that has a time of day.
+    var reminderDate: Date? {
+        guard let offset = reminderOffsetMinutes else { return nil }
+        let base: Date?
+        if let plannedStart {
+            base = plannedStart
+        } else if let due, Calendar.current.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0) {
+            base = due
+        } else {
+            base = nil
+        }
+        return base?.addingTimeInterval(TimeInterval(-offset * 60))
     }
 
     func toggleDone() {
@@ -59,6 +75,11 @@ final class OneEvent {
     var start: Date
     var durationMinutes: Int
     var calendarName: String
+    var reminderOffsetMinutes: Int? = 10
+
+    var reminderDate: Date? {
+        reminderOffsetMinutes.map { start.addingTimeInterval(TimeInterval(-$0 * 60)) }
+    }
 
     init(title: String, start: Date, durationMinutes: Int, calendarName: String = "Local") {
         self.title = title

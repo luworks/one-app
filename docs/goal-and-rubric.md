@@ -127,7 +127,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 4. Haptics on key actions
 5. Undo after complete / delete
 6. Add a timed task in ≤ 3 taps plus typing (J1)
-7. Swipe between top tabs
+7. Sidebar like ChatGPT/Claude: swipe right from the left edge (or tap the avatar) slides the page over to a drawer
 8. Drag to reschedule on the timeline
 9. Home Screen quick actions or widget
 10. No dead ends: every sheet closes, every tab can return to today
@@ -153,6 +153,8 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 0 | 3 | 3 | 1 | 0 | 4 | 5 | 5 | 2 | 2.9 | Notion-style shell (1609475) |
 | 1 | 5 | 4 | 1 | 5 | 5 | 6 | 6 | 3 | 4.4 | English UI, habits, task/event editors (0d78750) |
 | 2 | 5 | 4 | 1 | 5 | 5 | 6 | 6 | 6 | 4.8 | Eval harness: `ios/Eval/run-eval.sh`, logic unit tests, NL-capture eval. Capture train 6/15, test 5/14 |
+| 3 | 5 | 4 | 6 | 5 | 5 | 6 | 6 | 6 | 5.4 | Reminders: local notifications (verified firing in simulator), Due-style nags, Done/Snooze/Tomorrow actions, per-item offset, bell toggle, badge, permission card. Actions not yet demonstrated, so claims 3–5 not counted |
+| 4 | 5 | 4 | 6 | 5 | 5 | 8 | 7 | 6 | 5.75 | Sidebar (Yuan's ask), app icon "one." (C) and brand orange accent |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
@@ -167,7 +169,9 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 ## Plan
 
 - ~~Round 2 — eval harness~~ done.
-- **Round 3 — Alarms:** local notifications with Done/Snooze actions, Due-style nag, per-item reminder.
-- **Round 4 — Calendar:** week and month views, all-day events.
-- **Round 5 — Tasks:** lists, tags, repeat, undo.
+- ~~Round 3 — Alarms~~ done (AlarmKit and demonstrating notification actions still open).
+- ~~Round 4 — Sidebar + icon~~ done. Tab swiping was dropped so the edge swipe can open the sidebar.
+- **Round 5 — Tasks:** undo, lists, tags, repeat, flag.
+- **Round 6 — Calendar:** week and month views, all-day events, recurring.
+- **Round 7 — AI parser:** weekdays, dates, repeat, "at" cleanup (train/test rule).
 - Then re-score and keep climbing whatever is weakest.

@@ -27,10 +27,14 @@ enum HomeTab: CaseIterable, Identifiable {
     }
 }
 
-/// App shell, laid out like Notion mobile: avatar + tab pills on top, swipeable pages in the middle,
-/// and a bottom bar (search, Ask AI, new) that is always visible.
+/// App shell, laid out like Notion mobile: avatar + tab pills on top, content in the middle,
+/// and a bottom bar (search, Ask AI, new) that is always visible. A left drawer (like ChatGPT/Claude)
+/// opens from the avatar or a swipe from the left edge.
 struct HomeView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
+    @Query private var allTasks: [OneTask]
+    @Query private var allEvents: [OneEvent]
 
     @State private var tab: HomeTab = .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
@@ -38,23 +42,93 @@ struct HomeView: View {
     @State private var showsSearch = false
     @State private var newItem: NewItem?
     @State private var confirmClear = false
+    @State private var sidebarOpen = false
+    @GestureState private var drag: CGFloat = 0
 
     var body: some View {
+        GeometryReader { geo in
+            let width = min(geo.size.width * 0.82, 340)
+            let offset = min(max((sidebarOpen ? width : 0) + drag, 0), width)
+            ZStack(alignment: .leading) {
+                Sidebar(tab: $tab,
+                        onNewChat: { showsAsk = true },
+                        onToday: { calendarDay = Calendar.current.startOfDay(for: .now) },
+                        onDeleteAll: { confirmClear = true },
+                        close: { setSidebar(false) })
+                    .frame(width: width)
+                    .offset(x: (offset - width) * 0.3)
+
+                main
+                    .background(Color(.systemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: offset > 0 ? 32 : 0))
+                    .shadow(color: .black.opacity(offset > 0 ? 0.12 : 0), radius: 16)
+                    .overlay {
+                        // Dim + tap/drag to close while open.
+                        if offset > 0 {
+                            Color.black.opacity(0.08 * offset / width)
+                                .clipShape(RoundedRectangle(cornerRadius: 32))
+                                .onTapGesture { setSidebar(false) }
+                                .highPriorityGesture(sidebarDrag(width: width))
+                        }
+                    }
+                    // Swipe right from the left edge opens the sidebar. The edge strip sits above the
+                    // lists so it wins over row swipe actions; row swipes elsewhere stay free.
+                    .overlay(alignment: .leading) {
+                        if offset == 0 {
+                            Color.clear
+                                .frame(width: 24)
+                                .contentShape(Rectangle())
+                                .highPriorityGesture(sidebarDrag(width: width))
+                        }
+                    }
+                    .simultaneousGesture(sidebarDrag(width: width, edgeOnly: true))
+                    .offset(x: offset)
+            }
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: sidebarOpen)
+        .confirmationDialog("Delete all tasks, events and habits?", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Delete all", role: .destructive) {
+                try? context.delete(model: OneTask.self)
+                try? context.delete(model: OneEvent.self)
+                try? context.delete(model: Habit.self)
+            }
+        }
+    }
+
+    private func setSidebar(_ open: Bool) {
+        withAnimation(.snappy(duration: 0.3)) {
+            sidebarOpen = open
+        }
+    }
+
+    private func sidebarDrag(width: CGFloat, edgeOnly: Bool = false) -> some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .updating($drag) { v, state, _ in
+                if edgeOnly && (sidebarOpen || v.startLocation.x > 44) { return }
+                guard abs(v.translation.width) > abs(v.translation.height) else { return }
+                state = v.translation.width
+            }
+            .onEnded { v in
+                if edgeOnly && (sidebarOpen || v.startLocation.x > 44) { return }
+                guard abs(v.translation.width) > abs(v.translation.height) else { return }
+                let projected = (sidebarOpen ? width : 0) + v.predictedEndTranslation.width
+                setSidebar(projected > width / 2)
+            }
+    }
+
+    private var main: some View {
         VStack(spacing: 0) {
             topBar
-            TabView(selection: $tab) {
-                DayAgenda(day: .constant(Calendar.current.startOfDay(for: .now)), showsWeekStrip: false)
-                    .tag(HomeTab.today)
-                DayAgenda(day: $calendarDay, showsWeekStrip: true)
-                    .tag(HomeTab.calendar)
-                TasksView()
-                    .tag(HomeTab.tasks)
-                HabitsView()
-                    .tag(HomeTab.habits)
-                AlarmsView()
-                    .tag(HomeTab.alarms)
+            Group {
+                switch tab {
+                case .today: DayAgenda(day: .constant(Calendar.current.startOfDay(for: .now)), showsWeekStrip: false)
+                case .calendar: DayAgenda(day: $calendarDay, showsWeekStrip: true)
+                case .tasks: TasksView()
+                case .habits: HabitsView()
+                case .alarms: AlarmsView()
+                }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
         .fullScreenCover(isPresented: $showsAsk) {
@@ -69,30 +143,39 @@ struct HomeView: View {
             case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
             }
         }
-        .confirmationDialog("Delete all tasks, events and habits?", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("Delete all", role: .destructive) {
-                try? context.delete(model: OneTask.self)
-                try? context.delete(model: OneEvent.self)
-            }
-        }
         .task { SampleData.insertIfNeeded(context) }
+        .task(id: reminderSignature) {
+            try? await Task.sleep(for: .milliseconds(300))
+            await Reminders.shared.resync()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await Reminders.shared.resync() } }
+        }
+    }
+
+    /// Changes whenever anything that affects reminders changes.
+    private var reminderSignature: Int {
+        var h = Hasher()
+        for t in allTasks {
+            h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
+        }
+        for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes) }
+        return h.finalize()
     }
 
     // MARK: Top: avatar + tab pills
 
     private var topBar: some View {
         HStack(spacing: 8) {
-            Menu {
-                Button("Calendar: go to today") { calendarDay = Calendar.current.startOfDay(for: .now) }
-                Button("Delete all data", role: .destructive) { confirmClear = true }
-            } label: {
+            Button { setSidebar(true) } label: {
                 Text("Y")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(Color.accentColor.gradient, in: Circle())
             }
-            .accessibilityLabel("Settings")
+            .buttonStyle(PressScale())
+            .accessibilityLabel("Open sidebar")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
