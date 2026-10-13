@@ -117,9 +117,36 @@ final class OneEvent {
     var durationMinutes: Int
     var calendarName: String
     var reminderOffsetMinutes: Int? = 10
+    var isAllDay: Bool = false
+    /// RepeatRule raw value; nil = one-off.
+    var repeatRule: String? = nil
 
+    var repeats: RepeatRule? { repeatRule.flatMap(RepeatRule.init(rawValue:)) }
+    var duration: TimeInterval { TimeInterval(durationMinutes * 60) }
+
+    /// Start dates of this event's occurrences overlapping `interval` (one-off events give 0 or 1).
+    func occurrences(in interval: DateInterval) -> [Date] {
+        Recurrence.occurrences(start: start, duration: duration, rule: repeats, in: interval)
+    }
+
+    func occurs(on day: Date, calendar: Calendar = .current) -> [Date] {
+        guard let interval = calendar.dateInterval(of: .day, for: day) else { return [] }
+        return occurrences(in: interval)
+    }
+
+    /// Next occurrence starting after `date`, for reminders.
+    func nextStart(after date: Date) -> Date? {
+        occurrences(in: DateInterval(start: date, duration: 400 * 86400)).first { $0 > date }
+    }
+
+    /// Next reminder: before the next upcoming occurrence (all-day events remind at 9:00 that day).
     var reminderDate: Date? {
-        reminderOffsetMinutes.map { start.addingTimeInterval(TimeInterval(-$0 * 60)) }
+        guard let offset = reminderOffsetMinutes else { return nil }
+        let now = Date.now
+        let lead = TimeInterval(offset * 60)
+        guard var next = nextStart(after: now.addingTimeInterval(-60)) else { return nil }
+        if isAllDay { next = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: next) ?? next }
+        return next.addingTimeInterval(-lead)
     }
 
     init(title: String, start: Date, durationMinutes: Int, calendarName: String = "Local") {

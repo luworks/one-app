@@ -11,19 +11,40 @@ struct TimeColumn: View {
     }
 }
 
-/// Events are fixed: no move actions here.
+/// Events are fixed: no move actions here. `start` is the occurrence shown (repeating events).
 struct EventRow: View {
     let event: OneEvent
+    var start: Date? = nil
     @State private var editing = false
+
+    private var detail: String {
+        var parts: [String] = []
+        if event.isAllDay {
+            let days = max(1, event.durationMinutes / 1440)
+            parts.append(days > 1 ? "\(days) days" : "All day")
+        } else {
+            parts.append(DurationLabel.text(minutes: event.durationMinutes))
+        }
+        if let rule = event.repeats { parts.append("↻ " + rule.label) }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
         HStack(spacing: 10) {
-            TimeColumn(date: event.start)
+            if event.isAllDay {
+                Text("All day")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 58, alignment: .leading)
+            } else {
+                TimeColumn(date: start ?? event.start)
+            }
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color.blue)
                 .frame(width: 4, height: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.title)
-                Label("\(event.durationMinutes) min · fixed", systemImage: "lock.fill")
+                Label(detail, systemImage: "lock.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .labelStyle(.titleAndIcon)
@@ -206,7 +227,7 @@ struct WeekStrip: View {
                         Text(d.formatted(.dateTime.weekday(.narrow)))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        Text(d.formatted(.dateTime.day()))
+                        Text("\(Calendar.current.component(.day, from: d))")
                             .font(.callout.weight(isSelected ? .bold : .regular))
                             .frame(width: 32, height: 32)
                             .background(isSelected ? Color.accentColor : Color.clear, in: Circle())

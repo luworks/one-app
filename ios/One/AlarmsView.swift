@@ -23,9 +23,9 @@ struct AlarmsView: View {
                 Section(DayLabel.text(for: day)) {
                     ForEach(items.filter { cal.isDate($0.start, inSameDayAs: day) }) { item in
                         switch item {
-                        case .event(let event):
+                        case .event(let event, let start):
                             HStack(spacing: 0) {
-                                EventRow(event: event)
+                                EventRow(event: event, start: start)
                                 ReminderMenu(minutes: Binding(get: { event.reminderOffsetMinutes },
                                                               set: { event.reminderOffsetMinutes = $0 }))
                             }
@@ -87,7 +87,8 @@ struct AlarmsView: View {
     private var items: [TimelineItem] {
         let now = Date.now
         guard let end = cal.date(byAdding: .day, value: 7, to: now) else { return [] }
-        let upcoming = events.filter { $0.start >= now && $0.start < end }.map(TimelineItem.event)
+        let window = DateInterval(start: now, end: end)
+        let upcoming = events.flatMap { e in e.occurrences(in: window).filter { $0 >= now }.map { TimelineItem.event(e, $0) } }
             + tasks.filter { task in
                 guard !task.isDone, let start = task.plannedStart else { return false }
                 return start >= now && start < end

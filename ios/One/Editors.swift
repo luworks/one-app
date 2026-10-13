@@ -198,8 +198,10 @@ struct EventEditor: View {
     let event: OneEvent?
 
     @State private var title: String
+    @State private var isAllDay: Bool
     @State private var start: Date
-    @State private var duration: Int
+    @State private var end: Date
+    @State private var repeatRule: RepeatRule?
     @State private var reminder: Int?
 
     init(event: OneEvent? = nil, day: Date = .now) {
@@ -207,9 +209,12 @@ struct EventEditor: View {
         let cal = Calendar.current
         let base = cal.isDateInToday(day) ? Date.now : (cal.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
         let rounded = cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
+        let start = event?.start ?? rounded
         _title = State(initialValue: event?.title ?? "")
-        _start = State(initialValue: event?.start ?? rounded)
-        _duration = State(initialValue: event?.durationMinutes ?? 60)
+        _isAllDay = State(initialValue: event?.isAllDay ?? false)
+        _start = State(initialValue: start)
+        _end = State(initialValue: start.addingTimeInterval(TimeInterval((event?.durationMinutes ?? 60) * 60)))
+        _repeatRule = State(initialValue: event?.repeats)
         _reminder = State(initialValue: event == nil ? 10 : event?.reminderOffsetMinutes)
     }
 
@@ -221,10 +226,19 @@ struct EventEditor: View {
                         .font(.headline)
                 }
                 Section {
-                    DatePicker("Starts", selection: $start)
-                    Stepper("Duration \(duration) min", value: $duration, in: 5...720, step: 5)
-                    LabeledContent("Ends", value: start.addingTimeInterval(TimeInterval(duration * 60))
-                        .formatted(date: .omitted, time: .shortened))
+                    Toggle("All-day", isOn: $isAllDay.animation())
+                    DatePicker("Starts", selection: $start, displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
+                    DatePicker("Ends", selection: $end, in: start..., displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
+                    Picker(selection: $repeatRule) {
+                        Text("Never").tag(RepeatRule?.none)
+                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                    } label: {
+                        Text("Repeat")
+                    }
+                }
+                .onChange(of: start) { old, new in
+                    // Keep the length when the start moves, like Apple Calendar.
+                    end = new.addingTimeInterval(end.timeIntervalSince(old))
                 }
                 Section {
                     Picker(selection: $reminder) {
@@ -235,7 +249,7 @@ struct EventEditor: View {
                 }
                 if let event {
                     Section {
-                        Button("Delete event", role: .destructive) {
+                        Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
                             context.delete(event)
                             dismiss()
                         }
@@ -255,17 +269,23 @@ struct EventEditor: View {
     }
 
     private func save() {
+        let cal = Calendar.current
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let event {
-            event.title = trimmed
-            event.start = start
-            event.durationMinutes = duration
-            event.reminderOffsetMinutes = reminder
-        } else {
-            let e = OneEvent(title: trimmed, start: start, durationMinutes: duration)
-            e.reminderOffsetMinutes = reminder
-            context.insert(e)
+        var s = start
+        var minutes = max(5, Int(end.timeIntervalSince(start) / 60))
+        if isAllDay {
+            s = cal.startOfDay(for: start)
+            let days = (cal.dateComponents([.day], from: s, to: cal.startOfDay(for: end)).day ?? 0) + 1
+            minutes = max(1, days) * 1440
         }
+        let e = event ?? OneEvent(title: trimmed, start: s, durationMinutes: minutes)
+        e.title = trimmed
+        e.start = s
+        e.durationMinutes = minutes
+        e.isAllDay = isAllDay
+        e.repeatRule = repeatRule?.rawValue
+        e.reminderOffsetMinutes = reminder
+        if event == nil { context.insert(e) }
         dismiss()
     }
 }

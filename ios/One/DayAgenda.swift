@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// One day's view: what's overdue / due, then the timeline of events and planned tasks.
-/// Home shows today; the Calendar tab adds the week strip to pick a day.
+/// One day's view: all-day events, what's overdue / due, then the timeline of events and planned tasks.
+/// Today shows the current day; the Calendar tab adds the week strip to pick a day.
 struct DayAgenda: View {
     @Binding var day: Date
     var showsWeekStrip: Bool
@@ -20,8 +20,14 @@ struct DayAgenda: View {
                 }
                 .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
 
+            if !allDay.isEmpty {
+                Section("All day") {
+                    ForEach(allDay) { EventRow(event: $0) }
+                }
+            }
             if cal.isDateInToday(day), !overdue.isEmpty {
                 Section("Overdue") {
                     ForEach(overdue) { TaskRow(task: $0) }
@@ -35,10 +41,11 @@ struct DayAgenda: View {
             Section(showsWeekStrip ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule") {
                 if timeline.isEmpty {
                     Text("Nothing planned").foregroundStyle(.secondary)
+                        .listRowSeparator(.hidden)
                 }
                 ForEach(timeline) { item in
                     switch item {
-                    case .event(let event): EventRow(event: event)
+                    case .event(let event, let start): EventRow(event: event, start: start)
                     case .task(let task): TaskRow(task: task, showsTime: true)
                     case .nowMarker(let date): NowRow(date: date)
                     }
@@ -47,6 +54,10 @@ struct DayAgenda: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    private var allDay: [OneEvent] {
+        events.filter { $0.isAllDay && !$0.occurs(on: day).isEmpty }
     }
 
     private var overdue: [OneTask] {
@@ -62,8 +73,8 @@ struct DayAgenda: View {
 
     private var timeline: [TimelineItem] {
         var items: [TimelineItem] = events
-            .filter { cal.isDate($0.start, inSameDayAs: day) }
-            .map { .event($0) }
+            .filter { !$0.isAllDay }
+            .flatMap { e in e.occurs(on: day).map { TimelineItem.event(e, $0) } }
         items += tasks.compactMap { task -> TimelineItem? in
             guard let start = task.plannedStart, cal.isDate(start, inSameDayAs: day) else { return nil }
             return .task(task)
@@ -76,13 +87,13 @@ struct DayAgenda: View {
 }
 
 enum TimelineItem: Identifiable {
-    case event(OneEvent)
+    case event(OneEvent, Date)
     case task(OneTask)
     case nowMarker(Date)
 
     var id: AnyHashable {
         switch self {
-        case .event(let e): return ObjectIdentifier(e)
+        case .event(let e, let d): return [AnyHashable(ObjectIdentifier(e)), AnyHashable(d)]
         case .task(let t): return ObjectIdentifier(t)
         case .nowMarker: return "now"
         }
@@ -90,7 +101,7 @@ enum TimelineItem: Identifiable {
 
     var start: Date {
         switch self {
-        case .event(let e): return e.start
+        case .event(_, let d): return d
         case .task(let t): return t.plannedStart ?? .distantFuture
         case .nowMarker(let d): return d
         }

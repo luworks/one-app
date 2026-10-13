@@ -124,7 +124,7 @@ struct HomeView: View {
             Group {
                 switch tab {
                 case .today: DayAgenda(day: .constant(Calendar.current.startOfDay(for: .now)), showsWeekStrip: false)
-                case .calendar: DayAgenda(day: $calendarDay, showsWeekStrip: true)
+                case .calendar: CalendarView(day: $calendarDay)
                 case .tasks: TasksView()
                 case .habits: HabitsView()
                 case .alarms: AlarmsView()
@@ -161,7 +161,7 @@ struct HomeView: View {
         for t in allTasks {
             h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
         }
-        for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes) }
+        for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay) }
         return h.finalize()
     }
 

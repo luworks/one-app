@@ -81,3 +81,31 @@ struct ChecklistItem: Codable, Hashable, Identifiable {
     var title: String
     var done = false
 }
+
+enum Recurrence {
+    /// Start dates of an event's occurrences that overlap `interval`.
+    static func occurrences(start: Date, duration: TimeInterval, rule: RepeatRule?, in interval: DateInterval,
+                            calendar: Calendar = .current, limit: Int = 1000) -> [Date] {
+        let length = max(duration, 1)
+        func overlaps(_ d: Date) -> Bool { d < interval.end && d.addingTimeInterval(length) > interval.start }
+        guard let rule else { return overlaps(start) ? [start] : [] }
+        var result: [Date] = []
+        var d = start
+        var n = 0
+        while d < interval.end && n < limit {
+            if overlaps(d) { result.append(d) }
+            d = rule.next(after: d, calendar: calendar)
+            n += 1
+        }
+        return result
+    }
+}
+
+enum DurationLabel {
+    /// "25 min", "1 h", "1 h 30 min".
+    static func text(minutes: Int) -> String {
+        if minutes < 60 { return "\(minutes) min" }
+        let h = minutes / 60, m = minutes % 60
+        return m == 0 ? "\(h) h" : "\(h) h \(m) min"
+    }
+}

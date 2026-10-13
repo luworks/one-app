@@ -156,6 +156,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 3 | 5 | 4 | 6 | 5 | 5 | 6 | 6 | 6 | 5.4 | Reminders: local notifications (verified firing in simulator), Due-style nags, Done/Snooze/Tomorrow actions, per-item offset, bell toggle, badge, permission card. Actions not yet demonstrated, so claims 3–5 not counted |
 | 4 | 5 | 4 | 6 | 5 | 5 | 8 | 7 | 6 | 5.75 | Sidebar (Yuan's ask), app icon "one." (C) and brand orange accent |
 | 5 | 5 | 9 | 6 | 5 | 5 | 8 | 7 | 7 | 6.5 | Tasks: lists, tags, flag, repeat (next occurrence on complete, verified), checklist, filter chips, undo toast. Undo not yet demonstrated end-to-end (tool latency), so Tasks 3 / Interaction 5 not counted. RepeatRule unit tests |
+| 6 | 9 | 9 | 6 | 5 | 5 | 8 | 7 | 7 | 7.0 | Calendar: Day / Week (time grid) / Month views, all-day and multi-day events, repeating events (occurrences expanded everywhere), event editor with all-day/repeat. Recurrence unit tests. EventKit still missing |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
@@ -174,6 +175,6 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 - ~~Round 4 — Sidebar + icon~~ done. Tab swiping was dropped so the edge swipe can open the sidebar.
 - ~~Round 5 — Tasks~~ done.
 - **Next — UI tests (XCUITest)** for J1–J7 so undo, notification actions and journeys are demonstrated by a program, not by hand.
-- **Round 6 — Calendar:** week and month views, all-day events, recurring.
+- ~~Round 6 — Calendar~~ done (EventKit still open).
 - **Round 7 — AI parser:** weekdays, dates, repeat, "at" cleanup (train/test rule).
 - Then re-score and keep climbing whatever is weakest.

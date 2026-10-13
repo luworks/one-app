@@ -92,7 +92,7 @@ struct Sidebar: View {
                 return false
             }.count
         case .calendar:
-            n = events.filter { cal.isDateInToday($0.start) }.count
+            n = events.reduce(0) { $0 + $1.occurs(on: .now).count }
         case .tasks:
             n = tasks.filter { !$0.isDone }.count
         case .habits:

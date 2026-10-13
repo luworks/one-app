@@ -160,10 +160,10 @@ struct AskView: View {
             if let d = task.due, cal.isDateInToday(d) { return true }
             return false
         }
-        let todayEvents = events.filter { cal.isDateInToday($0.start) && $0.start > .now }
+        let todayEvents = events.compactMap { e in e.occurs(on: .now).first { $0 > .now }.map { (e, $0) } }
         var lines = ["Today: \(open.count) open task\(open.count == 1 ? "" : "s") and \(todayEvents.count) upcoming event\(todayEvents.count == 1 ? "" : "s")."]
         lines += open.prefix(5).map { "· " + $0.title }
-        lines += todayEvents.prefix(3).map { "· " + $0.start.formatted(date: .omitted, time: .shortened) + " " + $0.title }
+        lines += todayEvents.prefix(3).map { "· " + $0.1.formatted(date: .omitted, time: .shortened) + " " + $0.0.title }
         lines.append("(No AI model connected yet. This is a summary of your local data.)")
         return lines.joined(separator: "\n")
     }

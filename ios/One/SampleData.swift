@@ -25,6 +25,12 @@ enum SampleData {
         for (title, start, minutes) in events {
             context.insert(OneEvent(title: title, start: start, durationMinutes: minutes))
         }
+        let standup = OneEvent(title: "Standup", start: at(0, 9, 45), durationMinutes: 15)
+        standup.repeatRule = RepeatRule.weekdays.rawValue
+        context.insert(standup)
+        let offsite = OneEvent(title: "Team offsite", start: at(2, 0, 0), durationMinutes: 2 * 1440)
+        offsite.isAllDay = true
+        context.insert(offsite)
 
         let demo = OneTask(title: "Prepare the demo", plannedStart: at(0, 13, 30), durationMinutes: 45, due: at(1, 17, 0))
         demo.listName = "Work"

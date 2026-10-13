@@ -51,3 +51,23 @@ final class RepeatRuleTests: XCTestCase {
         XCTAssertEqual(RepeatRule.weekly.next(after: date(2026, 10, 12), calendar: cal), date(2026, 10, 19))
     }
 }
+
+final class RecurrenceTests: XCTestCase {
+    let cal = Calendar(identifier: .gregorian)
+
+    func testWeeklyOccurrencesInAMonth() {
+        let start = cal.date(from: DateComponents(year: 2026, month: 10, day: 5, hour: 10))!
+        let month = DateInterval(start: cal.date(from: DateComponents(year: 2026, month: 10, day: 1))!,
+                                 end: cal.date(from: DateComponents(year: 2026, month: 11, day: 1))!)
+        let dates = Recurrence.occurrences(start: start, duration: 3600, rule: .weekly, in: month, calendar: cal)
+        XCTAssertEqual(dates.map { cal.component(.day, from: $0) }, [5, 12, 19, 26])
+    }
+
+    func testOneOffOnlyWhenOverlapping() {
+        let start = cal.date(from: DateComponents(year: 2026, month: 10, day: 5, hour: 23))!
+        let nextDay = DateInterval(start: cal.date(from: DateComponents(year: 2026, month: 10, day: 6))!, duration: 86400)
+        // 2-hour event crosses midnight, so it shows on the next day too.
+        XCTAssertEqual(Recurrence.occurrences(start: start, duration: 7200, rule: nil, in: nextDay, calendar: cal).count, 1)
+        XCTAssertEqual(Recurrence.occurrences(start: start, duration: 1800, rule: nil, in: nextDay, calendar: cal).count, 0)
+    }
+}
