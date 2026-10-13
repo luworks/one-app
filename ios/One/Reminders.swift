@@ -86,11 +86,8 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         for habit in habits {
             guard let hour = habit.reminderHour else { continue }
             let id = Self.key(habit.persistentModelID)
-            for n in 0..<7 {
-                guard let day = cal.date(byAdding: .day, value: n, to: cal.startOfDay(for: now)),
-                      !habit.isDone(on: day),
-                      let fire = cal.date(bySettingHour: hour, minute: habit.reminderMinute, second: 0, of: day),
-                      fire > now else { continue }
+            for (n, fire) in ReminderPlan.habitFires(checkins: habit.checkins, hour: hour, minute: habit.reminderMinute,
+                                                    now: now, calendar: cal).enumerated() {
                 let body = habit.isDaily ? "Keep your streak going" : "\(habit.thisWeek)/\(habit.targetPerWeek) this week"
                 requests.append((fire, request(id: "\(id)#\(n)", title: habit.title, body: body,
                                               category: Self.habitCategory, key: id, at: fire)))

@@ -4,6 +4,10 @@
 <dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>one. shows your Apple Calendar events next to your tasks, and can add events you create there.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>one. listens while you dictate, so you can say a task or a question instead of typing it.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>one. turns what you say into text in the AI input. Recognition runs on your iPhone when it can.</string>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>one. rings alarms you set on tasks and events, even on Silent.</string>
 	<key>UIApplicationShortcutItems</key>

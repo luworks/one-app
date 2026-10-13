@@ -198,3 +198,17 @@ enum DayPlanner {
         return base.addingTimeInterval(TimeInterval((extra == 0 ? 5 : extra) * 60))
     }
 }
+
+extension ReminderPlan {
+    /// Habit reminders for the next `days` days at hour:minute, skipping days already checked in.
+    static func habitFires(checkins: [Date], hour: Int, minute: Int, now: Date, days: Int = 7,
+                           calendar: Calendar = .current) -> [Date] {
+        (0..<days).compactMap { n in
+            guard let day = calendar.date(byAdding: .day, value: n, to: calendar.startOfDay(for: now)),
+                  !HabitMath.isDone(checkins, on: day, calendar: calendar),
+                  let fire = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day),
+                  fire > now else { return nil }
+            return fire
+        }
+    }
+}

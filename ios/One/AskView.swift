@@ -24,6 +24,7 @@ struct AskView: View {
     @State private var draft = ""
     @State private var pending: Capture?
     @State private var plan: [(task: OneTask, start: Date)] = []
+    @State private var voice = VoiceInput()
     @FocusState private var focused: Bool
 
     private let suggestions = [
@@ -107,12 +108,15 @@ struct AskView: View {
                         if text.hasSuffix("\n") { send(String(text.dropLast())) }
                     }
                     .padding(.vertical, 8)
-                if isEmpty {
-                    Image(systemName: "mic.fill")
-                        .font(.body)
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 36, height: 36)
-                        .accessibilityLabel("Voice input (coming soon)")
+                if isEmpty || voice.state == .listening {
+                    Button { Task { await voice.toggle() } } label: {
+                        Image(systemName: voice.state == .listening ? "stop.circle.fill" : "mic.fill")
+                            .font(voice.state == .listening ? .system(size: 28) : .body)
+                            .foregroundStyle(voice.state == .listening ? Color.red : Color.secondary)
+                            .symbolEffect(.pulse, isActive: voice.state == .listening)
+                            .frame(width: 36, height: 36)
+                    }
+                    .accessibilityLabel(voice.state == .listening ? "Stop dictation" : "Dictate")
                 } else {
                     Button { send(draft) } label: {
                         Image(systemName: "arrow.up.circle.fill").font(.system(size: 32))
@@ -129,6 +133,16 @@ struct AskView: View {
         .padding(.bottom, 6)
         .animation(.snappy, value: pending)
         .animation(.snappy, value: plan.count)
+        .onChange(of: voice.transcript) { _, text in
+            if !text.isEmpty { draft = text }
+        }
+        .onChange(of: voice.state) { _, state in
+            switch state {
+            case .denied: messages.append(ChatMessage(role: .ai, text: "Microphone or speech access is off. Turn it on in Settings to dictate."))
+            case .unavailable: messages.append(ChatMessage(role: .ai, text: "Dictation isn't available here. It works on iPhone."))
+            default: break
+            }
+        }
     }
 
     private var isEmpty: Bool {

@@ -139,3 +139,23 @@ final class DayPlannerTests: XCTestCase {
         XCTAssertTrue(plan.isEmpty)
     }
 }
+
+final class HabitReminderTests: XCTestCase {
+    var cal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        return c
+    }()
+    func at(_ d: Int, _ h: Int, _ m: Int = 0) -> Date { cal.date(from: DateComponents(year: 2026, month: 10, day: d, hour: h, minute: m))! }
+
+    func testSkipsCheckedInDaysAndPastTimes() {
+        // 10:00 on the 12th; reminder at 9:00 has passed today; the 13th is already checked in.
+        let fires = ReminderPlan.habitFires(checkins: [at(13, 0)], hour: 9, minute: 0, now: at(12, 10), days: 4, calendar: cal)
+        XCTAssertEqual(fires, [at(14, 9), at(15, 9)])
+    }
+
+    func testTodayStillPendingIfLater() {
+        let fires = ReminderPlan.habitFires(checkins: [], hour: 20, minute: 30, now: at(12, 10), days: 1, calendar: cal)
+        XCTAssertEqual(fires, [at(12, 20, 30)])
+    }
+}

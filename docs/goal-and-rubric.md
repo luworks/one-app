@@ -167,6 +167,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 14 | 10 | 10 | 8 | 9 | 9 | 10 | 9 | 9 | 9.25 | AI "Plan my day": first-fits overdue / due-today / flagged tasks into free time around fixed events (incl. system calendar), shown as a preview card; Apply with Undo. DayPlanner unit tests + testPlanMyDay UI test. Habits empty state |
 | 15 | 10 | 10 | 8 | 9 | 9 | 10 | 9 | 10 | 9.4 | Cold start measured in-app (process start → first frame): 2981 ms → 575 ms median by deferring EventKit store creation and only building the sidebar when open. `Eval/cold-start.sh` enforces < 1000 ms; LaunchTests guards regressions under automation. 12 UI tests pass, 1 device-only skipped |
 | 16 | 10 | 10 | 8 | 9 | 9 | 10 | 10 | 10 | 9.5 | Week grid: long-press and drag a planned task to a new time (15-min steps) or day; events stay fixed; deadline untouched. testDragTaskInWeekGrid passes |
+| 17 | 10 | 10 | 8 | 10 | 9 | 10 | 10 | 10 | 9.6 | Habit reminder schedule moved to Logic with tests (skips checked-in days and past times) on the same notification pipeline verified in round 3 (Habits 8). Dictation (Speech, on-device when possible) wired to the AI input; the simulator's CoreAudio input deadlocks, so it is device-only and not counted yet |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
@@ -195,7 +196,7 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 - ~~Round 12 — reminder logic tests, quick actions~~ done.
 - ~~Round 13 — EventKit~~ done.
 - ~~Round 14 — Plan my day~~ done.
-- **Next:** voice input (AI 10), habit reminder firing (Habits 8). Device-only: AlarmKit ringing, notification actions.
+- **Remaining (device-only):** dictation (AI 10), AlarmKit ringing (Alarms 7), notification Done/Snooze actions (Alarms 3). All built; they need the iPhone run.
 - Device-only: AlarmKit ringing, notification actions (needs the iPhone verified).
 
 - Then re-score and keep climbing whatever is weakest.
