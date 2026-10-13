@@ -8,3 +8,7 @@ node scripts/serve.mjs     # preview at http://localhost:8787
 ```
 
 See `CLAUDE.md` for the product principles, architecture, tests and deploy steps.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
