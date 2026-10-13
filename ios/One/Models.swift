@@ -68,18 +68,8 @@ final class OneEvent {
     }
 }
 
-enum DayLabel {
-    static func text(for date: Date, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(date) { return "Today" }
-        if calendar.isDateInTomorrow(date) { return "Tomorrow" }
-        if calendar.isDateInYesterday(date) { return "Yesterday" }
-        return date.formatted(.dateTime.month().day())
-    }
-
-    /// "Today 15:00", or just "Today" when the time is midnight (a whole-day date).
-    static func withTime(_ date: Date, calendar: Calendar = .current) -> String {
-        let parts = calendar.dateComponents([.hour, .minute], from: date)
-        if parts.hour == 0 && parts.minute == 0 { return text(for: date, calendar: calendar) }
-        return text(for: date, calendar: calendar) + " " + date.formatted(date: .omitted, time: .shortened)
+extension Capture {
+    func makeTask() -> OneTask {
+        OneTask(title: title, plannedStart: plannedStart, due: plannedStart == nil && hasDay ? day : nil)
     }
 }

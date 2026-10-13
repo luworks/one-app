@@ -16,7 +16,7 @@ final class Habit {
     }
 
     func isDone(on day: Date, calendar: Calendar = .current) -> Bool {
-        checkins.contains { calendar.isDate($0, inSameDayAs: day) }
+        HabitMath.isDone(checkins, on: day, calendar: calendar)
     }
 
     func toggle(on day: Date, calendar: Calendar = .current) {
@@ -27,20 +27,8 @@ final class Habit {
         }
     }
 
-    /// Consecutive days ending today (or yesterday, if today isn't checked yet).
     func streak(now: Date = .now, calendar: Calendar = .current) -> Int {
-        var day = calendar.startOfDay(for: now)
-        if !isDone(on: day, calendar: calendar) {
-            guard let y = calendar.date(byAdding: .day, value: -1, to: day) else { return 0 }
-            day = y
-        }
-        var count = 0
-        while isDone(on: day, calendar: calendar) {
-            count += 1
-            guard let prev = calendar.date(byAdding: .day, value: -1, to: day) else { break }
-            day = prev
-        }
-        return count
+        HabitMath.streak(checkins, now: now, calendar: calendar)
     }
 }
 

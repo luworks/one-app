@@ -8,6 +8,8 @@ struct Capture: Equatable {
     var hasDay: Bool
     var hour: Int?
     var minute: Int = 0
+    /// "daily" or "weekly"; nil = one-off.
+    var repeatRule: String? = nil
 
     var plannedStart: Date? {
         guard let hour else { return nil }
@@ -18,10 +20,6 @@ struct Capture: Equatable {
         if let start = plannedStart { return "Planned " + DayLabel.withTime(start) }
         if hasDay { return "Due " + DayLabel.text(for: day) }
         return "No time, goes to your task list"
-    }
-
-    func makeTask() -> OneTask {
-        OneTask(title: title, plannedStart: plannedStart, due: plannedStart == nil && hasDay ? day : nil)
     }
 }
 
