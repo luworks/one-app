@@ -2,39 +2,33 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>one. shows your Apple Calendar events next to your tasks, and can add events you create there.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>one. listens while you dictate, so you can say a task or a question instead of typing it.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>one. turns what you say into text in the AI input. Recognition runs on your iPhone when it can.</string>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>one. rings alarms you set on tasks and events, even on Silent.</string>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>com.luworks.one.ask</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>Ask AI</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>sparkles</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Ask AI</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.ask</string>
 		</dict>
 		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>com.luworks.one.newTask</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>New task</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>checklist</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New task</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.newTask</string>
 		</dict>
 		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>com.luworks.one.newEvent</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>New event</string>
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>calendar</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New event</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.newEvent</string>
 		</dict>
 	</array>
 </dict>
