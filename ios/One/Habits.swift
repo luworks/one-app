@@ -192,6 +192,7 @@ struct HabitEditor: View {
     @State private var target: Int
     @State private var remind: Bool
     @State private var time: Date
+    @FocusState private var titleFocused: Bool
 
     static let icons = ["circle.dashed", "drop", "book", "figure.run", "figure.walk", "dumbbell", "bed.double",
                         "leaf", "brain.head.profile", "pencil", "music.note", "pills", "fork.knife",
@@ -213,6 +214,7 @@ struct HabitEditor: View {
                 Section {
                     TextField("e.g. Drink 8 glasses of water", text: $title)
                         .font(.headline)
+                        .focused($titleFocused)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
                         ForEach(Self.icons, id: \.self) { name in
                             Button { icon = name } label: {
@@ -252,6 +254,7 @@ struct HabitEditor: View {
                     }
                 }
             }
+            .onAppear { if habit == nil { titleFocused = true } }
             .navigationTitle(habit == nil ? "New habit" : "Habit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

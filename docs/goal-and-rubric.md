@@ -159,13 +159,15 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 6 | 9 | 9 | 6 | 5 | 5 | 8 | 7 | 7 | 7.0 | Calendar: Day / Week (time grid) / Month views, all-day and multi-day events, repeating events (occurrences expanded everywhere), event editor with all-day/repeat. Recurrence unit tests. EventKit still missing |
 | 7 | 9 | 9 | 6 | 5 | 8 | 8 | 7 | 7 | 7.4 | AI parser rewrite (prepositions, weekdays, dates, repeat, noon, bare hours, time ranges) and task/event/habit detection with a switch on the preview card. NL eval v1: train 6→15/15, test 5→14/14. v2 cases (kind, duration) written before the code: train 24/24, test 22/22. Eval now saturated: next cases should come from Yuan's real inputs |
 | 8 | 9 | 9 | 6 | 9 | 8 | 8 | 7 | 7 | 7.9 | Habits: editor (name, 20 icons, weekly target, reminder time), 5-week history, current/best streak, "x/3 this week" for weekly goals, habit chips on Today, habit reminders with Check in action. weekCount/bestStreak tests |
+| 9 | 9 | 10 | 6 | 9 | 8 | 8 | 8 | 9 | 8.4 | XCUITest journeys J1–J7 + sidebar, all 8 pass on a fresh in-memory store (`run-eval.sh --ui`). Undo now demonstrated (J3). Taps: J1 2, J2 0, J3 1, J7 1. New-item editors and search open with the keyboard ready. Dev region set to English |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
 ## How to run the eval
 
 ```bash
-ios/Eval/run-eval.sh     # logic tests, NL-capture train/test scores, app build warnings
+ios/Eval/run-eval.sh       # logic tests, NL-capture train/test scores, app build warnings
+ios/Eval/run-eval.sh --ui  # plus the UI journeys J1–J7 on a simulator
 ```
 
 The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (split fixed; never read test failures while fixing). The ratchet is `CaptureEvalTests.ratchet`.
@@ -180,7 +182,7 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 - ~~Round 6 — Calendar~~ done (EventKit still open).
 - ~~Round 7 — AI parser~~ done. Saturated; needs new real-world cases.
 - ~~Round 8 — Habits~~ done.
-- **Round 9 — Reliability + Interaction:** XCUITest journeys (J1–J7) incl. undo; tap counts.
+- ~~Round 9 — UI tests~~ done.
 - **Round 10 — Design:** dark mode + largest Dynamic Type pass on every screen.
 - **Round 11 — Alarms:** AlarmKit alarms that ring through Silent; demonstrate notification actions.
 - **Round 12 — Calendar:** EventKit read/write. **AI:** plan-my-day preview, voice input.

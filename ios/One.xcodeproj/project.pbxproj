@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		0E1A00000000000000000018 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0E1A0000000000000000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0E1A00000000000000000006;
+			remoteInfo = One;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		0E1A00000000000000000001 /* One.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = One.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0E1A00000000000000000010 /* OneUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = One;
 			sourceTree = "<group>";
 		};
+		0E1A00000000000000000011 /* OneUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = OneUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		0E1A00000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0E1A00000000000000000012 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				0E1A00000000000000000002 /* One */,
+				0E1A00000000000000000011 /* OneUITests */,
 				0E1A00000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				0E1A00000000000000000001 /* One.app */,
+				0E1A00000000000000000010 /* OneUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = 0E1A00000000000000000001 /* One.app */;
 			productType = "com.apple.product-type.application";
 		};
+		0E1A00000000000000000013 /* OneUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0E1A00000000000000000014 /* Build configuration list for PBXNativeTarget "OneUITests" */;
+			buildPhases = (
+				0E1A00000000000000000015 /* Sources */,
+				0E1A00000000000000000012 /* Frameworks */,
+				0E1A00000000000000000016 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0E1A00000000000000000017 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0E1A00000000000000000011 /* OneUITests */,
+			);
+			name = OneUITests;
+			packageProductDependencies = (
+			);
+			productName = OneUITests;
+			productReference = 0E1A00000000000000000010 /* OneUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -83,13 +131,16 @@
 					0E1A00000000000000000006 = {
 						CreatedOnToolsVersion = 16.0;
 					};
+					0E1A00000000000000000013 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = 0E1A00000000000000000006;
+					};
 				};
 			};
 			buildConfigurationList = 0E1A0000000000000000000B /* Build configuration list for PBXProject "One" */;
-			developmentRegion = "zh-Hans";
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				"zh-Hans",
 				en,
 				Base,
 			);
@@ -101,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				0E1A00000000000000000006 /* One */,
+				0E1A00000000000000000013 /* OneUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		0E1A00000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0E1A00000000000000000016 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -123,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0E1A00000000000000000015 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0E1A00000000000000000017 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0E1A00000000000000000006 /* One */;
+			targetProxy = 0E1A00000000000000000018 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0E1A0000000000000000000C /* Debug */ = {
@@ -224,6 +298,38 @@
 			};
 			name = Release;
 		};
+		0E1A00000000000000000019 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.luworks.one.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = One;
+			};
+			name = Debug;
+		};
+		0E1A0000000000000000001A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.luworks.one.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = One;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -241,6 +347,15 @@
 			buildConfigurations = (
 				0E1A0000000000000000000C /* Debug */,
 				0E1A0000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0E1A00000000000000000014 /* Build configuration list for PBXNativeTarget "OneUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0E1A00000000000000000019 /* Debug */,
+				0E1A0000000000000000001A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

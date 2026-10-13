@@ -3,6 +3,11 @@ import SwiftData
 
 /// A few items around today so the first launch isn't empty. Inserted once; Delete all data removes them.
 enum SampleData {
+    static func resetFlags() {
+        UserDefaults.standard.removeObject(forKey: "one.sampleData.v1")
+        UserDefaults.standard.removeObject(forKey: "one.sampleHabits.v1")
+    }
+
     static func insertIfNeeded(_ context: ModelContext) {
         insertHabitsIfNeeded(context)
         let key = "one.sampleData.v1"

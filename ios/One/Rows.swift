@@ -84,6 +84,7 @@ struct TaskRow: View {
             }
             .buttonStyle(.borderless)
             .sensoryFeedback(.success, trigger: task.isDone) { _, done in done }
+            .accessibilityLabel(task.isDone ? "Reopen \(task.title)" : "Complete \(task.title)")
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
                     .strikethrough(task.isDone)

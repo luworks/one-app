@@ -6,6 +6,7 @@ struct SearchView: View {
     @Query(sort: \OneTask.createdAt, order: .reverse) private var tasks: [OneTask]
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @State private var query = ""
+    @State private var searching = true
 
     var body: some View {
         NavigationStack {
@@ -22,7 +23,8 @@ struct SearchView: View {
                 }
             }
             .listStyle(.plain)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks and events")
+            .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search tasks and events")
             .overlay {
                 if !query.isEmpty, matchedTasks.isEmpty, matchedEvents.isEmpty {
                     ContentUnavailableView.search(text: query)

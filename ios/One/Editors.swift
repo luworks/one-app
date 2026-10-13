@@ -27,6 +27,7 @@ struct TaskEditor: View {
     @State private var newItem = ""
     @State private var newList = ""
     @State private var addingList = false
+    @FocusState private var titleFocused: Bool
 
     init(task: OneTask? = nil) {
         self.task = task
@@ -56,6 +57,7 @@ struct TaskEditor: View {
                 Section {
                     TextField("Title", text: $title)
                         .font(.headline)
+                        .focused($titleFocused)
                     TextField("Notes", text: $note, axis: .vertical)
                         .lineLimit(2...6)
                 }
@@ -151,6 +153,7 @@ struct TaskEditor: View {
                         .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            .onAppear { if task == nil { titleFocused = true } }
             .alert("New list", isPresented: $addingList) {
                 TextField("List name", text: $newList)
                 Button("Cancel", role: .cancel) { newList = "" }
@@ -203,6 +206,7 @@ struct EventEditor: View {
     @State private var end: Date
     @State private var repeatRule: RepeatRule?
     @State private var reminder: Int?
+    @FocusState private var titleFocused: Bool
 
     init(event: OneEvent? = nil, day: Date = .now) {
         self.event = event
@@ -224,6 +228,7 @@ struct EventEditor: View {
                 Section {
                     TextField("Title", text: $title)
                         .font(.headline)
+                        .focused($titleFocused)
                 }
                 Section {
                     Toggle("All-day", isOn: $isAllDay.animation())
@@ -256,6 +261,7 @@ struct EventEditor: View {
                     }
                 }
             }
+            .onAppear { if event == nil { titleFocused = true } }
             .navigationTitle(event == nil ? "New event" : "Event")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
