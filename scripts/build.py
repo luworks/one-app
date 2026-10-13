@@ -8,8 +8,8 @@ import base64, hashlib, io, json, pathlib
 root = pathlib.Path(__file__).resolve().parent.parent
 src = root / 'src'
 dist = root / 'dist'; dist.mkdir(exist_ok=True)
-css = (src / 'style.css').read_text()
-js = (src / 'app.js').read_text()
+css = (src / 'style.css').read_text(encoding='utf-8')
+js = (src / 'app.js').read_text(encoding='utf-8')
 
 html = f"""<!doctype html>
 <html lang="en">
@@ -43,7 +43,7 @@ html = f"""<!doctype html>
 </body>
 </html>
 """
-(dist / 'index.html').write_text(html)
+(dist / 'index.html').write_text(html, encoding='utf-8')
 
 # icons
 svg = '<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192"><rect width="192" height="192" rx="42" fill="#257050"/><text x="96" y="118" text-anchor="middle" fill="#fff" font-family="-apple-system,system-ui,sans-serif" font-size="66" font-weight="800" letter-spacing="-4">one.</text></svg>'
@@ -74,12 +74,12 @@ export default {{async fetch(req){{const p=new URL(req.url).pathname,h=new Heade
  if(p==='/health'){{h.set('Content-Type','application/json');return new Response(HEALTH,{{headers:h}})}}
  h.set('Content-Type','text/plain');return new Response('Not found',{{status:404,headers:h}})}}}};
 """
-(dist / 'worker.js').write_text(worker)
-(dist / 'wrangler.toml').write_text('name = "one-calm-v8"\nmain = "worker.js"\ncompatibility_date = "2026-10-01"\nworkers_dev = true\n')
+(dist / 'worker.js').write_text(worker, encoding='utf-8')
+(dist / 'wrangler.toml').write_text('name = "one-calm-v8"\nmain = "worker.js"\ncompatibility_date = "2026-10-01"\nworkers_dev = true\n', encoding='utf-8')
 print('built', len(html), 'bytes html;', len(worker), 'bytes worker')
 
 # claude.ai artifact variant (host supplies doctype/head/body)
 body = html.split('<body>',1)[1].rsplit('</body>',1)[0]
 art = f"<title>one. V8</title>\n<style>{css}</style>\n{body}"
-(dist / 'artifact.html').write_text(art)
+(dist / 'artifact.html').write_text(art, encoding='utf-8')
 print('artifact', len(art))
