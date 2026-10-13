@@ -2,22 +2,22 @@ import SwiftUI
 import SwiftData
 
 enum HomeTab: CaseIterable, Identifiable {
-    case home, calendar, tasks, alarms
+    case today, calendar, tasks, alarms
 
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .home: "首页"
+        case .today: "今天"
         case .calendar: "日历"
         case .tasks: "任务"
-        case .alarms: "提醒"
+        case .alarms: "闹钟"
         }
     }
 
     var icon: String {
         switch self {
-        case .home: "house.fill"
+        case .today: "sun.max"
         case .calendar: "calendar"
         case .tasks: "checklist"
         case .alarms: "alarm"
@@ -25,152 +25,173 @@ enum HomeTab: CaseIterable, Identifiable {
     }
 }
 
-/// App shell, laid out like Notion mobile: tab pills on top, content in the middle,
-/// and an AI-style input pinned to the bottom.
+/// App shell, laid out like Notion mobile: avatar + tab pills on top, swipeable pages in the middle,
+/// and a bottom bar (search, Ask AI, new) that is always visible.
 struct HomeView: View {
     @Environment(\.modelContext) private var context
 
-    @State private var tab: HomeTab = .home
+    @State private var tab: HomeTab = .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
-    @State private var draft = ""
-    @State private var pending: Capture?
+    @State private var showsAsk = false
+    @State private var showsSearch = false
     @State private var confirmClear = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                header
-                TabPills(selection: $tab)
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: 0) {
+            topBar
+            TabView(selection: $tab) {
+                DayAgenda(day: .constant(Calendar.current.startOfDay(for: .now)), showsWeekStrip: false)
+                    .tag(HomeTab.today)
+                DayAgenda(day: $calendarDay, showsWeekStrip: true)
+                    .tag(HomeTab.calendar)
+                TasksView()
+                    .tag(HomeTab.tasks)
+                AlarmsView()
+                    .tag(HomeTab.alarms)
             }
-            .background(Color(.systemGroupedBackground))
-            .toolbar(.hidden, for: .navigationBar)
-            .safeAreaInset(edge: .bottom) { askBar }
-            .confirmationDialog("清空全部任务和日程？", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("清空", role: .destructive) {
-                    try? context.delete(model: OneTask.self)
-                    try? context.delete(model: OneEvent.self)
-                }
-            }
-            .task { SampleData.insertIfNeeded(context) }
+            .tabViewStyle(.page(indexDisplayMode: .never))
         }
+        .safeAreaInset(edge: .bottom) { bottomBar }
+        .fullScreenCover(isPresented: $showsAsk) {
+            AskView(onAdded: { capture in
+                if capture.hasDay { calendarDay = capture.day }
+            })
+        }
+        .sheet(isPresented: $showsSearch) { SearchView() }
+        .confirmationDialog("清空全部任务和日程？", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("清空", role: .destructive) {
+                try? context.delete(model: OneTask.self)
+                try? context.delete(model: OneEvent.self)
+            }
+        }
+        .task { SampleData.insertIfNeeded(context) }
     }
 
-    // MARK: Top
+    // MARK: Top: avatar + tab pills
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("One").font(.title2.bold())
-            Text(Date.now.formatted(.dateTime.month().day().weekday(.wide)))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer()
+    private var topBar: some View {
+        HStack(spacing: 8) {
             Menu {
                 Button("日历回到今天") { calendarDay = Calendar.current.startOfDay(for: .now) }
                 Button("清空全部数据", role: .destructive) { confirmClear = true }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 36, height: 36)
-                    .background(Color(.secondarySystemGroupedBackground), in: Circle())
+                Text("Y")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Color.accentColor.gradient, in: Circle())
             }
-            .tint(.primary)
-        }
-        .padding(.horizontal)
-        .padding(.top, 8)
-    }
+            .accessibilityLabel("设置")
 
-    @ViewBuilder
-    private var content: some View {
-        switch tab {
-        case .home:
-            DayAgenda(day: .constant(Calendar.current.startOfDay(for: .now)), showsWeekStrip: false)
-        case .calendar:
-            DayAgenda(day: $calendarDay, showsWeekStrip: true)
-        case .tasks:
-            TasksView()
-        case .alarms:
-            AlarmsView()
-        }
-    }
-
-    // MARK: Bottom: AI input
-
-    private var askBar: some View {
-        VStack(spacing: 8) {
-            if let capture = pending {
-                CaptureCard(capture: capture, onAdd: { add(capture) }, onCancel: { pending = nil })
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.purple)
-                TextField("问 AI，或记一件事…", text: $draft)
-                    .submitLabel(.send)
-                    .onSubmit(capture)
-                Button(action: capture) {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 28))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(HomeTab.allCases) { item in
+                        TabPill(tab: item, isSelected: item == tab) {
+                            withAnimation(.snappy) { tab = item }
+                        }
+                    }
                 }
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .padding(.leading, 16)
-            .padding(.trailing, 6)
-            .padding(.vertical, 6)
-            .background(Color(.systemBackground), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.secondary.opacity(0.2)))
-            .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: Bottom: search, Ask AI, new
+
+    private var bottomBar: some View {
+        HStack(spacing: 10) {
+            CircleButton(systemImage: "magnifyingglass", label: "搜索") { showsSearch = true }
+            Button { showsAsk = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
+                    Text("问 AI 或记一件事").foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+                .font(.body)
+                .padding(.horizontal, 18)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .glassCapsule()
+            }
+            .buttonStyle(PressScale())
+            CircleButton(systemImage: "square.and.pencil", label: "新建") { showsAsk = true }
+        }
+        .padding(.horizontal, 20)
         .padding(.top, 6)
         .padding(.bottom, 4)
-        .animation(.snappy, value: pending)
-    }
-
-    private func capture() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        pending = CaptureParser.parse(text)
-        draft = ""
-    }
-
-    private func add(_ capture: Capture) {
-        context.insert(capture.makeTask())
-        if capture.hasDay { calendarDay = capture.day }
-        pending = nil
     }
 }
 
-/// Notion-style tab row: the selected tab is a pill with icon + label, the others are icon-only circles.
-struct TabPills: View {
-    @Binding var selection: HomeTab
+/// Selected tab: a wide pill with its label. Others: icon-only capsules.
+struct TabPill: View {
+    let tab: HomeTab
+    let isSelected: Bool
+    var action: () -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(HomeTab.allCases) { tab in
-                    let isSelected = tab == selection
-                    Button {
-                        selection = tab
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: tab.icon)
-                            if isSelected { Text(tab.title) }
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, isSelected ? 14 : 0)
-                        .frame(minWidth: 40, minHeight: 40)
-                        .background(isSelected ? Color(.label) : Color(.secondarySystemGroupedBackground), in: Capsule())
-                        .foregroundStyle(isSelected ? Color(.systemBackground) : Color.primary)
-                    }
-                    .accessibilityLabel(tab.title)
-                }
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: tab.icon)
+                if isSelected { Text(tab.title) }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, isSelected ? 16 : 0)
+            .frame(minWidth: 54, minHeight: 44)
+            .background(isSelected ? Color(.label) : Color(.secondarySystemFill), in: Capsule())
+            .foregroundStyle(isSelected ? Color(.systemBackground) : Color.primary)
         }
-        .animation(.snappy, value: selection)
+        .buttonStyle(PressScale())
+        .accessibilityLabel(tab.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+struct CircleButton: View {
+    let systemImage: String
+    let label: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 50, height: 50)
+                .glassCircle()
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel(label)
+    }
+}
+
+/// 0.97 press scale with a light haptic.
+struct PressScale: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+            .sensoryFeedback(.impact(weight: .light), trigger: configuration.isPressed) { _, pressed in pressed }
+    }
+}
+
+extension View {
+    /// Liquid Glass on iOS 26+, material on older systems.
+    @ViewBuilder
+    func glassCapsule() -> some View {
+        if #available(iOS 26, *) {
+            glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            background(.regularMaterial, in: Capsule())
+        }
+    }
+
+    @ViewBuilder
+    func glassCircle() -> some View {
+        if #available(iOS 26, *) {
+            glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            background(.regularMaterial, in: Circle())
+        }
     }
 }
 

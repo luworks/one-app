@@ -13,7 +13,7 @@ struct TasksView: View {
                 .sorted { ($0.plannedStart ?? .distantFuture) < ($1.plannedStart ?? .distantFuture) })
             section("已完成", tasks.filter(\.isDone))
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .navigationTitle("任务")
         .overlay {
             if tasks.isEmpty {

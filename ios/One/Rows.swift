@@ -29,6 +29,8 @@ struct EventRow: View {
             }
             Spacer(minLength: 0)
         }
+        .frame(minHeight: 44)
+        .listRowSeparator(.hidden)
     }
 }
 
@@ -50,8 +52,10 @@ struct TaskRow: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(task.isDone ? Color.green : Color.secondary)
+                    .frame(width: 24)
             }
             .buttonStyle(.borderless)
+            .sensoryFeedback(.success, trigger: task.isDone) { _, done in done }
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
                     .strikethrough(task.isDone)
@@ -63,6 +67,12 @@ struct TaskRow: View {
                 }
             }
             Spacer(minLength: 0)
+        }
+        .frame(minHeight: 44)
+        .listRowSeparator(.hidden)
+        .swipeActions(edge: .leading) {
+            Button(task.isDone ? "未完成" : "完成") { withAnimation { task.toggleDone() } }
+                .tint(.green)
         }
         .swipeActions(edge: .trailing) {
             if task.plannedStart != nil {

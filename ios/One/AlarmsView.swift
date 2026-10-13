@@ -23,7 +23,7 @@ struct AlarmsView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .overlay {
             if items.isEmpty {
