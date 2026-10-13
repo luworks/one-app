@@ -160,6 +160,8 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 7 | 9 | 9 | 6 | 5 | 8 | 8 | 7 | 7 | 7.4 | AI parser rewrite (prepositions, weekdays, dates, repeat, noon, bare hours, time ranges) and task/event/habit detection with a switch on the preview card. NL eval v1: train 6→15/15, test 5→14/14. v2 cases (kind, duration) written before the code: train 24/24, test 22/22. Eval now saturated: next cases should come from Yuan's real inputs |
 | 8 | 9 | 9 | 6 | 9 | 8 | 8 | 7 | 7 | 7.9 | Habits: editor (name, 20 icons, weekly target, reminder time), 5-week history, current/best streak, "x/3 this week" for weekly goals, habit chips on Today, habit reminders with Check in action. weekCount/bestStreak tests |
 | 9 | 9 | 10 | 6 | 9 | 8 | 8 | 8 | 9 | 8.4 | XCUITest journeys J1–J7 + sidebar, all 8 pass on a fresh in-memory store (`run-eval.sh --ui`). Undo now demonstrated (J3). Taps: J1 2, J2 0, J3 1, J7 1. New-item editors and search open with the keyboard ready. Dev region set to English |
+| 10 | 9 | 10 | 6 | 9 | 8 | 9 | 8 | 9 | 8.5 | Design pass: dark mode checked on Today; largest accessibility text size: checkbox overlap and truncated details fixed, top/bottom chrome capped at XXXL; fade under the floating bar. Habits empty state still plain |
+| 11 | 9 | 10 | 6 | 9 | 8 | 9 | 8 | 9 | 8.5 | AlarmKit "Ring as alarm" on tasks/events (iOS 26+), usage string via OneInfo.plist, denied-state copy. Simulator always answers .denied, so ringing must be verified on a device: AlarmTests skips on simulator. Not counted yet |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
@@ -183,7 +185,8 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 - ~~Round 7 — AI parser~~ done. Saturated; needs new real-world cases.
 - ~~Round 8 — Habits~~ done.
 - ~~Round 9 — UI tests~~ done.
-- **Round 10 — Design:** dark mode + largest Dynamic Type pass on every screen.
-- **Round 11 — Alarms:** AlarmKit alarms that ring through Silent; demonstrate notification actions.
+- ~~Round 10 — Design~~ done.
+- ~~Round 11 — AlarmKit~~ built; needs a device run (blocked on the iPhone's Verify App step).
+- **Round 13 — Alarms:** demonstrate notification Done/Snooze actions via UI test.
 - **Round 12 — Calendar:** EventKit read/write. **AI:** plan-my-day preview, voice input.
 - Then re-score and keep climbing whatever is weakest.

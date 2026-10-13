@@ -151,6 +151,7 @@ struct HomeView: View {
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
             await Reminders.shared.resync()
+            await Ringer.sync(context)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await Reminders.shared.resync() } }
@@ -162,9 +163,10 @@ struct HomeView: View {
         var h = Hasher()
         for t in allTasks {
             h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
+            h.combine(t.ringsAsAlarm)
         }
         for hb in allHabits { h.combine(hb.reminderHour); h.combine(hb.reminderMinute); h.combine(hb.checkins.count) }
-        for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay) }
+        for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.ringsAsAlarm) }
         return h.finalize()
     }
 
@@ -194,6 +196,8 @@ struct HomeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
+        // Chrome stays usable at the largest text sizes; content below still scales fully.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // MARK: Bottom: search, Ask AI, new
@@ -202,6 +206,15 @@ struct HomeView: View {
         VStack(spacing: 8) {
             UndoToastView()
             bottomButtons
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .background(alignment: .bottom) {
+            // Fade the list out under the floating bar so text never collides with it.
+            LinearGradient(colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
+                           startPoint: .top, endPoint: .center)
+                .frame(height: 110)
+                .offset(y: 40)
+                .allowsHitTesting(false)
         }
     }
 

@@ -24,6 +24,7 @@ struct TaskEditor: View {
     @State private var flagged: Bool
     @State private var repeatRule: RepeatRule?
     @State private var checklist: [ChecklistItem]
+    @State private var ringsAsAlarm: Bool
     @State private var newItem = ""
     @State private var newList = ""
     @State private var addingList = false
@@ -45,6 +46,7 @@ struct TaskEditor: View {
         _flagged = State(initialValue: task?.flagged ?? false)
         _repeatRule = State(initialValue: task?.repeats)
         _checklist = State(initialValue: task?.checklist ?? [])
+        _ringsAsAlarm = State(initialValue: task?.ringsAsAlarm ?? false)
     }
 
     private var knownLists: [String] {
@@ -111,8 +113,14 @@ struct TaskEditor: View {
                         } label: {
                             Label("Remind me", systemImage: "bell")
                         }
+                        if Ringer.isAvailable, reminder != nil {
+                            Toggle(isOn: $ringsAsAlarm) { Label("Ring as alarm", systemImage: "alarm") }
+                        }
                     } footer: {
-                        Text("Keeps nudging every few minutes until you mark it done.")
+                        Text(ringsAsAlarm
+                             ? (Ringer.isDenied ? "Alarms are turned off for one. in Settings, so this will only notify."
+                                                : "Rings like an alarm, even on Silent. Stopping it doesn't complete the task.")
+                             : "Keeps nudging every few minutes until you mark it done.")
                     }
                 }
                 Section {
@@ -189,6 +197,7 @@ struct TaskEditor: View {
         t.flagged = flagged
         t.repeatRule = repeatRule?.rawValue
         t.checklist = checklist.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
+        t.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if task == nil { context.insert(t) }
         dismiss()
     }
@@ -206,6 +215,7 @@ struct EventEditor: View {
     @State private var end: Date
     @State private var repeatRule: RepeatRule?
     @State private var reminder: Int?
+    @State private var ringsAsAlarm: Bool
     @FocusState private var titleFocused: Bool
 
     init(event: OneEvent? = nil, day: Date = .now) {
@@ -220,6 +230,7 @@ struct EventEditor: View {
         _end = State(initialValue: start.addingTimeInterval(TimeInterval((event?.durationMinutes ?? 60) * 60)))
         _repeatRule = State(initialValue: event?.repeats)
         _reminder = State(initialValue: event == nil ? 10 : event?.reminderOffsetMinutes)
+        _ringsAsAlarm = State(initialValue: event?.ringsAsAlarm ?? false)
     }
 
     var body: some View {
@@ -250,6 +261,9 @@ struct EventEditor: View {
                         ForEach(ReminderOffset.choices, id: \.0) { label, value in Text(label).tag(value) }
                     } label: {
                         Label("Remind me", systemImage: "bell")
+                    }
+                    if Ringer.isAvailable, reminder != nil {
+                        Toggle(isOn: $ringsAsAlarm) { Label("Ring as alarm", systemImage: "alarm") }
                     }
                 }
                 if let event {
@@ -291,6 +305,7 @@ struct EventEditor: View {
         e.isAllDay = isAllDay
         e.repeatRule = repeatRule?.rawValue
         e.reminderOffsetMinutes = reminder
+        e.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if event == nil { context.insert(e) }
         dismiss()
     }

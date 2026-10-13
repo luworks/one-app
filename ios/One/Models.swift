@@ -23,6 +23,8 @@ final class OneTask {
     /// RepeatRule raw value; nil = one-off.
     var repeatRule: String? = nil
     var checklist: [ChecklistItem] = []
+    /// Ring like an alarm (AlarmKit) instead of a quiet notification.
+    var ringsAsAlarm: Bool = false
 
     init(title: String, note: String = "", plannedStart: Date? = nil, durationMinutes: Int = 25, due: Date? = nil) {
         self.title = title
@@ -75,6 +77,7 @@ final class OneTask {
         next.flagged = flagged
         next.repeatRule = repeatRule
         next.checklist = checklist.map { ChecklistItem(title: $0.title) }
+        next.ringsAsAlarm = ringsAsAlarm
         return next
     }
 
@@ -90,6 +93,7 @@ final class OneTask {
         t.flagged = flagged
         t.repeatRule = repeatRule
         t.checklist = checklist
+        t.ringsAsAlarm = ringsAsAlarm
         return t
     }
 
@@ -118,6 +122,7 @@ final class OneEvent {
     var calendarName: String
     var reminderOffsetMinutes: Int? = 10
     var isAllDay: Bool = false
+    var ringsAsAlarm: Bool = false
     /// RepeatRule raw value; nil = one-off.
     var repeatRule: String? = nil
 

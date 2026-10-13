@@ -65,6 +65,7 @@ struct EventRow: View {
 struct TaskRow: View {
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
+    @Environment(\.dynamicTypeSize) private var typeSize
     let task: OneTask
     var showsTime = false
     @State private var editing = false
@@ -80,7 +81,7 @@ struct TaskRow: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(task.isDone ? Color.green : Color.secondary)
-                    .frame(width: 24)
+                    .frame(minWidth: 24)
             }
             .buttonStyle(.borderless)
             .sensoryFeedback(.success, trigger: task.isDone) { _, done in done }
@@ -93,7 +94,7 @@ struct TaskRow: View {
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(task.isOverdue ? Color.red : Color.secondary)
-                        .lineLimit(1)
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
                 }
             }
             Spacer(minLength: 0)
