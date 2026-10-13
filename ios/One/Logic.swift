@@ -154,3 +154,47 @@ enum ReminderPlan {
         snoozeMinutes[action].map { now.addingTimeInterval(TimeInterval($0 * 60)) }
     }
 }
+
+/// "Plan my day": first-fit flexible tasks into free time between fixed events.
+enum DayPlanner {
+    struct Item: Equatable {
+        let id: Int
+        let minutes: Int
+    }
+
+    /// Assigns start times in `items` order, skipping anything that doesn't fit before the window ends.
+    /// Starts are rounded up to 5 minutes and keep `buffer` minutes after each busy block.
+    static func plan(_ items: [Item], busy: [DateInterval], window: DateInterval, buffer: Int = 5,
+                     calendar: Calendar = .current) -> [(id: Int, start: Date)] {
+        var blocks = busy.filter { $0.end > window.start && $0.start < window.end }.sorted { $0.start < $1.start }
+        var result: [(Int, Date)] = []
+        for item in items {
+            let length = TimeInterval(item.minutes * 60)
+            var cursor = roundUp(window.start, calendar: calendar)
+            var placed = false
+            while cursor.addingTimeInterval(length) <= window.end {
+                let slot = DateInterval(start: cursor, duration: length)
+                if let clash = blocks.first(where: { $0.intersects(slot) && $0.end > slot.start && $0.start < slot.end }) {
+                    cursor = roundUp(clash.end.addingTimeInterval(TimeInterval(buffer * 60)), calendar: calendar)
+                } else {
+                    result.append((item.id, cursor))
+                    blocks.append(slot)
+                    blocks.sort { $0.start < $1.start }
+                    placed = true
+                    break
+                }
+            }
+            _ = placed
+        }
+        return result
+    }
+
+    private static func roundUp(_ date: Date, calendar: Calendar) -> Date {
+        let m = calendar.component(.minute, from: date)
+        let s = calendar.component(.second, from: date)
+        let extra = (5 - m % 5) % 5
+        if extra == 0 && s == 0 { return date }
+        let base = calendar.date(bySetting: .second, value: 0, of: date) ?? date
+        return base.addingTimeInterval(TimeInterval((extra == 0 ? 5 : extra) * 60))
+    }
+}

@@ -113,3 +113,29 @@ final class ReminderPlanTests: XCTestCase {
         XCTAssertNil(ReminderPlan.snoozed("DONE", now: t0))
     }
 }
+
+final class DayPlannerTests: XCTestCase {
+    var cal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        return c
+    }()
+    func at(_ h: Int, _ m: Int = 0) -> Date { cal.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: h, minute: m))! }
+
+    func testFillsGapsAroundMeetingsInOrder() {
+        let busy = [DateInterval(start: at(10), end: at(11)), DateInterval(start: at(12), end: at(13))]
+        let plan = DayPlanner.plan([.init(id: 1, minutes: 45), .init(id: 2, minutes: 45), .init(id: 3, minutes: 30)],
+                                   busy: busy, window: DateInterval(start: at(9, 3), end: at(18)), calendar: cal)
+        // 9:05–9:50 fits before the 10:00 meeting; the next 45 min goes after it (+5 buffer); 30 min after that.
+        XCTAssertEqual(plan.map(\.id), [1, 2, 3])
+        XCTAssertEqual(plan[0].start, at(9, 5))
+        XCTAssertEqual(plan[1].start, at(11, 5))
+        XCTAssertEqual(plan[2].start, at(13, 5))
+    }
+
+    func testSkipsWhatDoesNotFit() {
+        let plan = DayPlanner.plan([.init(id: 1, minutes: 120)], busy: [],
+                                   window: DateInterval(start: at(17), end: at(18)), calendar: cal)
+        XCTAssertTrue(plan.isEmpty)
+    }
+}

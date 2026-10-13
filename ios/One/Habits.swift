@@ -62,11 +62,26 @@ struct HabitsView: View {
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
             } header: {
-                Text("\(habits.filter { $0.isDone(on: .now) }.count)/\(habits.count) done today")
+                if !habits.isEmpty {
+                    Text("\(habits.filter { $0.isDone(on: .now) }.count)/\(habits.count) done today")
+                }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .overlay {
+            if habits.isEmpty {
+                ContentUnavailableView {
+                    Label("No habits yet", systemImage: "flame")
+                } description: {
+                    Text("Small things you want to do every day or a few times a week.")
+                } actions: {
+                    Button("New habit") { adding = true }
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
+                }
+            }
+        }
         .sheet(isPresented: $adding) { HabitEditor(habit: nil) }
     }
 }

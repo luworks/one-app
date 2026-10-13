@@ -14,6 +14,7 @@ struct ChatMessage: Identifiable, Equatable {
 struct AskView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(UndoToast.self) private var toast: UndoToast?
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
 
@@ -22,9 +23,11 @@ struct AskView: View {
     @State private var messages: [ChatMessage] = []
     @State private var draft = ""
     @State private var pending: Capture?
+    @State private var plan: [(task: OneTask, start: Date)] = []
     @FocusState private var focused: Bool
 
     private let suggestions = [
+        "Plan my day",
         "Call Alex tomorrow at 3pm",
         "Send the Q3 report by Friday",
         "What's left today?",
@@ -86,6 +89,10 @@ struct AskView: View {
 
     private var inputArea: some View {
         VStack(spacing: 8) {
+            if !plan.isEmpty {
+                PlanCard(plan: plan, onApply: applyPlan, onCancel: { plan = [] })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             if let capture = pending {
                 CaptureCard(capture: Binding(get: { pending ?? capture }, set: { pending = $0 }),
                             onAdd: { add(pending ?? capture) }, onCancel: { pending = nil })
@@ -121,6 +128,7 @@ struct AskView: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
         .animation(.snappy, value: pending)
+        .animation(.snappy, value: plan.count)
     }
 
     private var isEmpty: Bool {
@@ -132,7 +140,11 @@ struct AskView: View {
         guard !text.isEmpty else { return }
         draft = ""
         messages.append(ChatMessage(role: .user, text: text))
-        if isQuestion(text) {
+        pending = nil
+        plan = []
+        if isPlanRequest(text) {
+            proposePlan()
+        } else if isQuestion(text) {
             messages.append(ChatMessage(role: .ai, text: todaySummary))
         } else {
             pending = CaptureParser.parse(text)
@@ -145,6 +157,63 @@ struct AskView: View {
         onAdded(capture)
         messages.append(ChatMessage(role: .ai, text: "Added “\(capture.title)” · \(capture.summary)."))
         pending = nil
+    }
+
+    private func isPlanRequest(_ text: String) -> Bool {
+        let t = text.lowercased()
+        return ["plan my day", "plan today", "schedule my day", "安排今天", "规划今天", "帮我安排"].contains { t.contains($0) }
+    }
+
+    /// Proposes start times for today's flexible tasks around fixed events. Nothing moves until Apply.
+    private func proposePlan() {
+        let cal = Calendar.current
+        let now = Date.now
+        guard let endOfDay = cal.date(bySettingHour: 21, minute: 0, second: 0, of: now), endOfDay > now else {
+            messages.append(ChatMessage(role: .ai, text: "It's late. Ask me to plan tomorrow instead."))
+            return
+        }
+        let start = max(now, cal.date(bySettingHour: 8, minute: 0, second: 0, of: now) ?? now)
+        let window = DateInterval(start: start, end: endOfDay)
+        var busy = events.filter { !$0.isAllDay }.flatMap { e in
+            e.occurs(on: now).map { DateInterval(start: $0, duration: e.duration) }
+        }
+        busy += CalendarSync.shared.events(on: now).filter { !$0.isAllDay }.map { DateInterval(start: $0.start, end: $0.end) }
+        busy += tasks.compactMap { t in
+            guard !t.isDone, let s = t.plannedStart, cal.isDateInToday(s) else { return nil }
+            return DateInterval(start: s, duration: TimeInterval(t.durationMinutes * 60))
+        }
+        func rank(_ t: OneTask) -> Int {
+            if t.isOverdue { return 0 }
+            if let d = t.due, cal.isDateInToday(d) { return 1 }
+            if t.flagged { return 2 }
+            return 3
+        }
+        let candidates = tasks.filter { !$0.isDone && $0.plannedStart == nil && rank($0) < 3 }
+            .sorted { (rank($0), $0.createdAt) < (rank($1), $1.createdAt) }
+        let items = candidates.enumerated().map { DayPlanner.Item(id: $0.offset, minutes: $0.element.durationMinutes) }
+        let result = DayPlanner.plan(items, busy: busy, window: window)
+        plan = result.map { (candidates[$0.id], $0.start) }
+        if plan.isEmpty {
+            messages.append(ChatMessage(role: .ai, text: candidates.isEmpty
+                ? "Nothing urgent to place: no overdue, due-today or flagged tasks without a time."
+                : "Your day is full. Nothing fits before 9 PM."))
+        } else {
+            let skipped = candidates.count - plan.count
+            messages.append(ChatMessage(role: .ai, text: "Here's a plan around your meetings. Meetings stay fixed; only tasks move. Nothing changes until you apply it."
+                + (skipped > 0 ? " \(skipped) task\(skipped == 1 ? "" : "s") didn't fit." : "")))
+        }
+    }
+
+    private func applyPlan() {
+        let applied = plan
+        withAnimation {
+            for p in applied { p.task.plannedStart = p.start }
+        }
+        plan = []
+        messages.append(ChatMessage(role: .ai, text: "Planned \(applied.count) task\(applied.count == 1 ? "" : "s") for today."))
+        toast?.show("Planned \(applied.count) task\(applied.count == 1 ? "" : "s")") {
+            withAnimation { for p in applied { p.task.plannedStart = nil } }
+        }
     }
 
     private func isQuestion(_ text: String) -> Bool {
@@ -188,5 +257,42 @@ struct MessageView: View {
             Text(message.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// AI plan preview: proposed start times, applied only on tap.
+struct PlanCard: View {
+    let plan: [(task: OneTask, start: Date)]
+    var onApply: () -> Void
+    var onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Plan for today", systemImage: "sparkles")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(Array(plan.enumerated()), id: \.offset) { _, p in
+                HStack(spacing: 10) {
+                    Text(p.start.formatted(date: .omitted, time: .shortened))
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 64, alignment: .leading)
+                    Text(p.task.title).font(.subheadline)
+                    Spacer(minLength: 0)
+                    Text(DurationLabel.text(minutes: p.task.durationMinutes))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Button("Cancel", action: onCancel).buttonStyle(.bordered)
+                Spacer()
+                Button("Apply", action: onApply).buttonStyle(.borderedProminent)
+            }
+            .padding(.top, 4)
+        }
+        .padding(14)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.secondary.opacity(0.25)))
     }
 }

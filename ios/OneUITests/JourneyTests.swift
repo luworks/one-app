@@ -103,4 +103,15 @@ final class JourneyTests: XCTestCase {
         tap(app.buttons["Open sidebar"])
         XCTAssertTrue(app.buttons["New chat"].waitForExistence(timeout: 3))
     }
+
+    /// AI claim 9: plan my day is a preview; nothing moves until Apply.
+    func testPlanMyDay() {
+        tap(app.buttons["Ask AI or add anything"])
+        tap(app.buttons["Plan my day"])
+        XCTAssertTrue(app.staticTexts["Plan for today"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Pay studio invoice"].exists, "overdue task is placed first")
+        tap(app.buttons["Apply"])
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Planned 3 tasks'")).firstMatch
+            .waitForExistence(timeout: 3))
+    }
 }
