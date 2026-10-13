@@ -163,6 +163,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 10 | 9 | 10 | 6 | 9 | 8 | 9 | 8 | 9 | 8.5 | Design pass: dark mode checked on Today; largest accessibility text size: checkbox overlap and truncated details fixed, top/bottom chrome capped at XXXL; fade under the floating bar. Habits empty state still plain |
 | 11 | 9 | 10 | 6 | 9 | 8 | 9 | 8 | 9 | 8.5 | AlarmKit "Ring as alarm" on tasks/events (iOS 26+), usage string via OneInfo.plist, denied-state copy. Simulator always answers .denied, so ringing must be verified on a device: AlarmTests skips on simulator. Not counted yet |
 | 12 | 9 | 10 | 8 | 9 | 8 | 9 | 9 | 9 | 8.9 | Reminder plan (first fire + 5/10/20-min nags, snooze 10 min / 1 h) moved to Logic.swift with unit tests (Alarms 4, 5). Home Screen quick actions Ask AI / New task / New event, verified in the simulator (Interaction 9) |
+| 13 | 10 | 10 | 8 | 9 | 8 | 9 | 9 | 9 | 9.0 | EventKit: sidebar toggle "Show Apple Calendar"; system events appear in Today / Week / Month; events created in one. are saved to the system calendar (with repeat) and deduplicated. CalendarSyncTests round-trips an event through the system calendar. Full suite: 10 UI tests pass, 1 device-only skipped |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
@@ -189,7 +190,7 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 - ~~Round 10 — Design~~ done.
 - ~~Round 11 — AlarmKit~~ built; needs a device run (blocked on the iPhone's Verify App step).
 - ~~Round 12 — reminder logic tests, quick actions~~ done.
-- **Round 13 — Calendar:** EventKit read/write.
+- ~~Round 13 — EventKit~~ done.
 - **Round 14 — AI:** plan-my-day preview; voice input. **Interaction:** drag to reschedule.
 - Device-only: AlarmKit ringing, notification actions (needs the iPhone verified).
 

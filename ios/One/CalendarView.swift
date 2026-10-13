@@ -180,6 +180,11 @@ struct WeekGrid: View {
                                     lengthMinutes: CGFloat(e.durationMinutes), isTask: false))
             }
         }
+        let mine = Set(events.compactMap(\.externalID))
+        for x in CalendarSync.shared.events(on: d, excluding: mine) where !x.isAllDay && cal.isDate(x.start, inSameDayAs: d) {
+            result.append(Block(id: "x" + x.id, title: x.title, startMinute: minutes(x.start),
+                                lengthMinutes: CGFloat(x.durationMinutes), isTask: false))
+        }
         for t in tasks where !t.isDone {
             if let s = t.plannedStart, cal.isDate(s, inSameDayAs: d) {
                 result.append(Block(id: "t\(t.persistentModelID.hashValue)", title: t.title, startMinute: minutes(s),
@@ -276,6 +281,7 @@ struct MonthGrid: View {
     private func cell(_ d: Date) -> some View {
         let isToday = cal.isDateInToday(d)
         let eventCount = events.reduce(0) { $0 + $1.occurs(on: d).count }
+            + CalendarSync.shared.events(on: d, excluding: Set(events.compactMap(\.externalID))).count
         let taskCount = tasks.filter { t in
             !t.isDone && ((t.plannedStart.map { cal.isDate($0, inSameDayAs: d) } ?? false)
                 || (t.due.map { cal.isDate($0, inSameDayAs: d) } ?? false))

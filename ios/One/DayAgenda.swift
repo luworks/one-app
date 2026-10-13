@@ -23,9 +23,10 @@ struct DayAgenda: View {
                 .listRowSeparator(.hidden)
             }
 
-            if !allDay.isEmpty {
+            if !allDay.isEmpty || !externalAllDay.isEmpty {
                 Section("All day") {
                     ForEach(allDay) { EventRow(event: $0) }
+                    ForEach(externalAllDay) { ExternalEventRow(event: $0) }
                 }
             }
             if cal.isDateInToday(day), !overdue.isEmpty {
@@ -49,6 +50,7 @@ struct DayAgenda: View {
                 ForEach(timeline) { item in
                     switch item {
                     case .event(let event, let start): EventRow(event: event, start: start)
+                    case .external(let e): ExternalEventRow(event: e)
                     case .task(let task): TaskRow(task: task, showsTime: true)
                     case .nowMarker(let date): NowRow(date: date)
                     }
@@ -58,6 +60,12 @@ struct DayAgenda: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
     }
+
+    private var external: [ExternalEvent] {
+        CalendarSync.shared.events(on: day, excluding: Set(events.compactMap(\.externalID)))
+    }
+
+    private var externalAllDay: [ExternalEvent] { external.filter(\.isAllDay) }
 
     private var allDay: [OneEvent] {
         events.filter { $0.isAllDay && !$0.occurs(on: day).isEmpty }
@@ -78,6 +86,7 @@ struct DayAgenda: View {
         var items: [TimelineItem] = events
             .filter { !$0.isAllDay }
             .flatMap { e in e.occurs(on: day).map { TimelineItem.event(e, $0) } }
+        items += external.filter { !$0.isAllDay }.map(TimelineItem.external)
         items += tasks.compactMap { task -> TimelineItem? in
             guard let start = task.plannedStart, cal.isDate(start, inSameDayAs: day) else { return nil }
             return .task(task)
@@ -91,12 +100,14 @@ struct DayAgenda: View {
 
 enum TimelineItem: Identifiable {
     case event(OneEvent, Date)
+    case external(ExternalEvent)
     case task(OneTask)
     case nowMarker(Date)
 
     var id: AnyHashable {
         switch self {
         case .event(let e, let d): return [AnyHashable(ObjectIdentifier(e)), AnyHashable(d)]
+        case .external(let e): return e.id
         case .task(let t): return ObjectIdentifier(t)
         case .nowMarker: return "now"
         }
@@ -105,6 +116,7 @@ enum TimelineItem: Identifiable {
     var start: Date {
         switch self {
         case .event(_, let d): return d
+        case .external(let e): return e.start
         case .task(let t): return t.plannedStart ?? .distantFuture
         case .nowMarker(let d): return d
         }

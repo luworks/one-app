@@ -123,6 +123,8 @@ final class OneEvent {
     var reminderOffsetMinutes: Int? = 10
     var isAllDay: Bool = false
     var ringsAsAlarm: Bool = false
+    /// Identifier of the copy in the system calendar, when calendar sync is on.
+    var externalID: String? = nil
     /// RepeatRule raw value; nil = one-off.
     var repeatRule: String? = nil
 

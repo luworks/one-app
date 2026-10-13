@@ -269,6 +269,7 @@ struct EventEditor: View {
                 if let event {
                     Section {
                         Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
+                            CalendarSync.shared.delete(externalID: event.externalID)
                             context.delete(event)
                             dismiss()
                         }
@@ -307,6 +308,7 @@ struct EventEditor: View {
         e.reminderOffsetMinutes = reminder
         e.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if event == nil { context.insert(e) }
+        if CalendarSync.shared.isOn { e.externalID = CalendarSync.shared.save(e) ?? e.externalID }
         dismiss()
     }
 }

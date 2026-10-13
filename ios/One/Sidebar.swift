@@ -65,6 +65,10 @@ struct Sidebar: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 24)
                         .padding(.bottom, 6)
+                    SidebarRow(icon: "calendar.badge.checkmark", title: "Show Apple Calendar",
+                               detail: CalendarSync.shared.isOn ? "On" : "Off", selected: false) {
+                        Task { await CalendarSync.shared.setEnabled(!CalendarSync.shared.isOn) }
+                    }
                     SidebarRow(icon: "arrow.uturn.backward", title: "Calendar: go to today", detail: nil, selected: false) {
                         onToday()
                         close()
