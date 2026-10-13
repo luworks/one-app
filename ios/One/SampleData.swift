@@ -1,9 +1,10 @@
 import Foundation
 import SwiftData
 
-/// A few items around today so the first launch isn't empty. Inserted once; 清空全部数据 removes them.
+/// A few items around today so the first launch isn't empty. Inserted once; Delete all data removes them.
 enum SampleData {
     static func insertIfNeeded(_ context: ModelContext) {
+        insertHabitsIfNeeded(context)
         let key = "one.sampleData.v1"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
         UserDefaults.standard.set(true, forKey: key)
@@ -16,19 +17,37 @@ enum SampleData {
         }
 
         let events: [(String, Date, Int)] = [
-            ("产品同步", at(0, 9, 0), 25),
-            ("和 Priya 吃午饭", at(0, 12, 15), 45),
-            ("牙医", at(0, 15, 0), 30),
-            ("周会", at(1, 10, 0), 30),
+            ("Product sync", at(0, 9, 0), 25),
+            ("Lunch with Priya", at(0, 12, 15), 45),
+            ("Dentist", at(0, 15, 0), 30),
+            ("Weekly review", at(1, 10, 0), 30),
         ]
         for (title, start, minutes) in events {
             context.insert(OneEvent(title: title, start: start, durationMinutes: minutes))
         }
 
-        context.insert(OneTask(title: "准备演示", plannedStart: at(0, 13, 30), durationMinutes: 45, due: at(1, 17, 0)))
-        context.insert(OneTask(title: "整理设计评审笔记", plannedStart: at(0, 16, 0)))
-        context.insert(OneTask(title: "买牛奶", due: today))
-        context.insert(OneTask(title: "付工作室发票", due: at(-1, 17, 0)))
-        context.insert(OneTask(title: "看看那篇设计文章"))
+        context.insert(OneTask(title: "Prepare the demo", plannedStart: at(0, 13, 30), durationMinutes: 45, due: at(1, 17, 0)))
+        context.insert(OneTask(title: "Write up design review notes", plannedStart: at(0, 16, 0)))
+        context.insert(OneTask(title: "Buy milk", due: today))
+        context.insert(OneTask(title: "Pay studio invoice", due: at(-1, 17, 0)))
+        context.insert(OneTask(title: "Read that design article"))
+    }
+
+    private static func insertHabitsIfNeeded(_ context: ModelContext) {
+        let key = "one.sampleHabits.v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        let days = { (offsets: [Int]) in offsets.compactMap { cal.date(byAdding: .day, value: -$0, to: today) } }
+
+        let water = Habit(title: "Drink 8 glasses of water", icon: "drop")
+        water.checkins = days([1, 2, 3, 5])
+        let read = Habit(title: "Read 20 minutes", icon: "book")
+        read.checkins = days([0, 1, 2, 3, 4, 5])
+        let run = Habit(title: "Run", icon: "figure.run")
+        run.checkins = days([2, 4])
+        [water, read, run].forEach(context.insert)
     }
 }

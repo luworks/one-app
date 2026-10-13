@@ -23,18 +23,18 @@ struct DayAgenda: View {
             }
 
             if cal.isDateInToday(day), !overdue.isEmpty {
-                Section("已过期") {
+                Section("Overdue") {
                     ForEach(overdue) { TaskRow(task: $0) }
                 }
             }
             if !dueOnDay.isEmpty {
-                Section(cal.isDateInToday(day) ? "今天到期" : "当天到期") {
+                Section(cal.isDateInToday(day) ? "Due today" : "Due") {
                     ForEach(dueOnDay) { TaskRow(task: $0) }
                 }
             }
-            Section(showsWeekStrip ? day.formatted(.dateTime.month().day().weekday(.wide)) : "今天的日程") {
+            Section(showsWeekStrip ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule") {
                 if timeline.isEmpty {
-                    Text("这一天还没有安排").foregroundStyle(.secondary)
+                    Text("Nothing planned").foregroundStyle(.secondary)
                 }
                 ForEach(timeline) { item in
                     switch item {

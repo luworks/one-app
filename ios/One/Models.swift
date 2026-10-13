@@ -60,7 +60,7 @@ final class OneEvent {
     var durationMinutes: Int
     var calendarName: String
 
-    init(title: String, start: Date, durationMinutes: Int, calendarName: String = "本地") {
+    init(title: String, start: Date, durationMinutes: Int, calendarName: String = "Local") {
         self.title = title
         self.start = start
         self.durationMinutes = durationMinutes
@@ -70,13 +70,13 @@ final class OneEvent {
 
 enum DayLabel {
     static func text(for date: Date, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(date) { return "今天" }
-        if calendar.isDateInTomorrow(date) { return "明天" }
-        if calendar.isDateInYesterday(date) { return "昨天" }
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInTomorrow(date) { return "Tomorrow" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
         return date.formatted(.dateTime.month().day())
     }
 
-    /// "今天 15:00", or just "今天" when the time is midnight (a whole-day date).
+    /// "Today 15:00", or just "Today" when the time is midnight (a whole-day date).
     static func withTime(_ date: Date, calendar: Calendar = .current) -> String {
         let parts = calendar.dateComponents([.hour, .minute], from: date)
         if parts.hour == 0 && parts.minute == 0 { return text(for: date, calendar: calendar) }

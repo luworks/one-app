@@ -15,9 +15,9 @@ struct Capture: Equatable {
     }
 
     var summary: String {
-        if let start = plannedStart { return "计划 " + DayLabel.withTime(start) }
-        if hasDay { return "截止 " + DayLabel.text(for: day) }
-        return "不安排时间，放进任务列表"
+        if let start = plannedStart { return "Planned " + DayLabel.withTime(start) }
+        if hasDay { return "Due " + DayLabel.text(for: day) }
+        return "No time, goes to your task list"
     }
 
     func makeTask() -> OneTask {
@@ -32,7 +32,7 @@ enum CaptureParser {
         var day = today
         var hasDay = false
 
-        let dayWords: [(String, Int)] = [("大后天", 3), ("后天", 2), ("明天", 1), ("今天", 0), ("tomorrow", 1), ("today", 0)]
+        let dayWords: [(String, Int)] = [("day after tomorrow", 2), ("大后天", 3), ("后天", 2), ("明天", 1), ("今天", 0), ("tomorrow", 1), ("tonight", 0), ("today", 0)]
         for (word, offset) in dayWords {
             if let r = text.range(of: word, options: .caseInsensitive) {
                 day = calendar.date(byAdding: .day, value: offset, to: today) ?? today

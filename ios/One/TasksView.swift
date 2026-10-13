@@ -7,18 +7,18 @@ struct TasksView: View {
 
     var body: some View {
         List {
-            section("未安排", tasks.filter { !$0.isDone && $0.plannedStart == nil })
-            section("已安排", tasks
+            section("Unscheduled", tasks.filter { !$0.isDone && $0.plannedStart == nil })
+            section("Scheduled", tasks
                 .filter { !$0.isDone && $0.plannedStart != nil }
                 .sorted { ($0.plannedStart ?? .distantFuture) < ($1.plannedStart ?? .distantFuture) })
-            section("已完成", tasks.filter(\.isDone))
+            section("Completed", tasks.filter(\.isDone))
         }
         .listStyle(.plain)
-        .navigationTitle("任务")
+        .navigationTitle("Tasks")
         .overlay {
             if tasks.isEmpty {
-                ContentUnavailableView("还没有任务", systemImage: "checklist",
-                                       description: Text("在首页底部输入一件事就能添加。"))
+                ContentUnavailableView("No tasks yet", systemImage: "checklist",
+                                       description: Text("Type one line in the bar at the bottom to add one."))
             }
         }
     }

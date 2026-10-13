@@ -14,6 +14,7 @@ struct TimeColumn: View {
 /// Events are fixed: no move actions here.
 struct EventRow: View {
     let event: OneEvent
+    @State private var editing = false
     var body: some View {
         HStack(spacing: 10) {
             TimeColumn(date: event.start)
@@ -22,7 +23,7 @@ struct EventRow: View {
                 .frame(width: 4, height: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.title)
-                Label("\(event.durationMinutes) 分钟 · 固定", systemImage: "lock.fill")
+                Label("\(event.durationMinutes) min · fixed", systemImage: "lock.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .labelStyle(.titleAndIcon)
@@ -30,7 +31,11 @@ struct EventRow: View {
             Spacer(minLength: 0)
         }
         .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .onTapGesture { editing = true }
+        .sheet(isPresented: $editing) { EventEditor(event: event) }
         .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
     }
 }
 
@@ -40,6 +45,7 @@ struct TaskRow: View {
     @Environment(\.modelContext) private var context
     let task: OneTask
     var showsTime = false
+    @State private var editing = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -69,45 +75,49 @@ struct TaskRow: View {
             Spacer(minLength: 0)
         }
         .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .onTapGesture { editing = true }
+        .sheet(isPresented: $editing) { TaskEditor(task: task) }
         .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
         .swipeActions(edge: .leading) {
-            Button(task.isDone ? "未完成" : "完成") { withAnimation { task.toggleDone() } }
+            Button(task.isDone ? "Undo" : "Done") { withAnimation { task.toggleDone() } }
                 .tint(.green)
         }
         .swipeActions(edge: .trailing) {
             if task.plannedStart != nil {
-                Button("推迟") { withAnimation { task.postpone(minutes: 30) } }
+                Button("+30m") { withAnimation { task.postpone(minutes: 30) } }
                     .tint(.orange)
             }
-            Button("明天") { withAnimation { task.moveToTomorrow() } }
+            Button("Tomorrow") { withAnimation { task.moveToTomorrow() } }
                 .tint(.indigo)
         }
         .contextMenu {
             Button { task.toggleDone() } label: {
-                Label(task.isDone ? "标记为未完成" : "标记完成", systemImage: "checkmark.circle")
+                Label(task.isDone ? "Mark as not done" : "Mark done", systemImage: "checkmark.circle")
             }
             if task.plannedStart != nil {
                 Button { task.postpone(minutes: 30) } label: {
-                    Label("推迟 30 分钟", systemImage: "clock.arrow.circlepath")
+                    Label("Postpone 30 min", systemImage: "clock.arrow.circlepath")
                 }
                 Button { task.plannedStart = nil } label: {
-                    Label("取消安排", systemImage: "calendar.badge.minus")
+                    Label("Unschedule", systemImage: "calendar.badge.minus")
                 }
             }
             Button { task.moveToTomorrow() } label: {
-                Label("移到明天", systemImage: "arrow.right.circle")
+                Label("Move to tomorrow", systemImage: "arrow.right.circle")
             }
             Button(role: .destructive) { context.delete(task) } label: {
-                Label("删除", systemImage: "trash")
+                Label("Delete", systemImage: "trash")
             }
         }
     }
 
     private var detail: String? {
         var parts: [String] = []
-        if task.isOverdue { parts.append("已过期") }
-        if !showsTime, let start = task.plannedStart { parts.append("计划 " + DayLabel.withTime(start)) }
-        if let due = task.due { parts.append("截止 " + DayLabel.withTime(due)) }
+        if task.isOverdue { parts.append("Overdue") }
+        if !showsTime, let start = task.plannedStart { parts.append("Planned " + DayLabel.withTime(start)) }
+        if let due = task.due { parts.append("Due " + DayLabel.withTime(due)) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
@@ -116,12 +126,13 @@ struct NowRow: View {
     let date: Date
     var body: some View {
         HStack(spacing: 8) {
-            Text("现在 " + date.formatted(date: .omitted, time: .shortened))
+            Text("Now " + date.formatted(date: .omitted, time: .shortened))
                 .font(.caption.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.red)
             Rectangle().fill(Color.red).frame(height: 1)
         }
         .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
     }
 }
 
@@ -132,15 +143,15 @@ struct CaptureCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("新任务", systemImage: "sparkles")
+            Label("New task", systemImage: "sparkles")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(capture.title).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
             HStack {
-                Button("取消", action: onCancel).buttonStyle(.bordered)
+                Button("Cancel", action: onCancel).buttonStyle(.bordered)
                 Spacer()
-                Button("添加", action: onAdd).buttonStyle(.borderedProminent)
+                Button("Add", action: onAdd).buttonStyle(.borderedProminent)
             }
             .padding(.top, 4)
         }

@@ -7,6 +7,6 @@ struct OneApp: App {
         WindowGroup {
             HomeView()
         }
-        .modelContainer(for: [OneTask.self, OneEvent.self])
+        .modelContainer(for: [OneTask.self, OneEvent.self, Habit.self])
     }
 }

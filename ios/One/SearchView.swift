@@ -11,27 +11,27 @@ struct SearchView: View {
         NavigationStack {
             List {
                 if !matchedTasks.isEmpty {
-                    Section("任务") {
+                    Section("Tasks") {
                         ForEach(matchedTasks) { TaskRow(task: $0) }
                     }
                 }
                 if !matchedEvents.isEmpty {
-                    Section("日程") {
+                    Section("Events") {
                         ForEach(matchedEvents) { EventRow(event: $0) }
                     }
                 }
             }
             .listStyle(.plain)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索任务和日程")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search tasks and events")
             .overlay {
                 if !query.isEmpty, matchedTasks.isEmpty, matchedEvents.isEmpty {
                     ContentUnavailableView.search(text: query)
                 }
             }
-            .navigationTitle("搜索")
+            .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
             }
         }
     }

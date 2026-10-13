@@ -2,16 +2,17 @@ import SwiftUI
 import SwiftData
 
 enum HomeTab: CaseIterable, Identifiable {
-    case today, calendar, tasks, alarms
+    case today, calendar, tasks, habits, alarms
 
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .today: "今天"
-        case .calendar: "日历"
-        case .tasks: "任务"
-        case .alarms: "闹钟"
+        case .today: "Today"
+        case .calendar: "Calendar"
+        case .tasks: "Tasks"
+        case .habits: "Habits"
+        case .alarms: "Alarms"
         }
     }
 
@@ -20,6 +21,7 @@ enum HomeTab: CaseIterable, Identifiable {
         case .today: "sun.max"
         case .calendar: "calendar"
         case .tasks: "checklist"
+        case .habits: "flame"
         case .alarms: "alarm"
         }
     }
@@ -34,6 +36,7 @@ struct HomeView: View {
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
     @State private var showsAsk = false
     @State private var showsSearch = false
+    @State private var newItem: NewItem?
     @State private var confirmClear = false
 
     var body: some View {
@@ -46,6 +49,8 @@ struct HomeView: View {
                     .tag(HomeTab.calendar)
                 TasksView()
                     .tag(HomeTab.tasks)
+                HabitsView()
+                    .tag(HomeTab.habits)
                 AlarmsView()
                     .tag(HomeTab.alarms)
             }
@@ -58,8 +63,14 @@ struct HomeView: View {
             })
         }
         .sheet(isPresented: $showsSearch) { SearchView() }
-        .confirmationDialog("清空全部任务和日程？", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("清空", role: .destructive) {
+        .sheet(item: $newItem) { item in
+            switch item {
+            case .task: TaskEditor()
+            case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
+            }
+        }
+        .confirmationDialog("Delete all tasks, events and habits?", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Delete all", role: .destructive) {
                 try? context.delete(model: OneTask.self)
                 try? context.delete(model: OneEvent.self)
             }
@@ -72,8 +83,8 @@ struct HomeView: View {
     private var topBar: some View {
         HStack(spacing: 8) {
             Menu {
-                Button("日历回到今天") { calendarDay = Calendar.current.startOfDay(for: .now) }
-                Button("清空全部数据", role: .destructive) { confirmClear = true }
+                Button("Calendar: go to today") { calendarDay = Calendar.current.startOfDay(for: .now) }
+                Button("Delete all data", role: .destructive) { confirmClear = true }
             } label: {
                 Text("Y")
                     .font(.headline)
@@ -81,7 +92,7 @@ struct HomeView: View {
                     .frame(width: 44, height: 44)
                     .background(Color.accentColor.gradient, in: Circle())
             }
-            .accessibilityLabel("设置")
+            .accessibilityLabel("Settings")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -101,11 +112,11 @@ struct HomeView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 10) {
-            CircleButton(systemImage: "magnifyingglass", label: "搜索") { showsSearch = true }
+            CircleButton(systemImage: "magnifyingglass", label: "Search") { showsSearch = true }
             Button { showsAsk = true } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
-                    Text("问 AI 或记一件事").foregroundStyle(.secondary)
+                    Text("Ask AI or add anything").foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .font(.body)
@@ -114,12 +125,29 @@ struct HomeView: View {
                 .glassCapsule()
             }
             .buttonStyle(PressScale())
-            CircleButton(systemImage: "square.and.pencil", label: "新建") { showsAsk = true }
+            Menu {
+                Button { newItem = .task } label: { Label("New task", systemImage: "checklist") }
+                Button { newItem = .event } label: { Label("New event", systemImage: "calendar") }
+                Button { tab = .habits } label: { Label("New habit", systemImage: "flame") }
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 50, height: 50)
+                    .glassCircle()
+            }
+            .tint(.primary)
+            .accessibilityLabel("New")
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
         .padding(.bottom, 4)
     }
+}
+
+enum NewItem: Identifiable {
+    case task, event
+    var id: Self { self }
 }
 
 /// Selected tab: a wide pill with its label. Others: icon-only capsules.
@@ -197,5 +225,5 @@ extension View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [OneTask.self, OneEvent.self], inMemory: true)
+        .modelContainer(for: [OneTask.self, OneEvent.self, Habit.self], inMemory: true)
 }

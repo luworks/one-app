@@ -27,8 +27,8 @@ struct AlarmsView: View {
         .scrollContentBackground(.hidden)
         .overlay {
             if items.isEmpty {
-                ContentUnavailableView("接下来 7 天没有提醒", systemImage: "alarm",
-                                       description: Text("带时间的任务和日程会出现在这里。"))
+                ContentUnavailableView("Nothing timed in the next 7 days", systemImage: "alarm",
+                                       description: Text("Tasks and events with a time show up here."))
             }
         }
     }
