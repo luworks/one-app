@@ -23,6 +23,7 @@ An HTML/JS prototype of **one.**, an AI-native all-in-one planning app for iPhon
 - `src/style.css` — tokens on `:root` + dark mode (`prefers-color-scheme` and `[data-theme]`).
 - `scripts/build.py` — inlines src into `dist/index.html`, `dist/artifact.html` (claude.ai artifact variant, no doctype/head) and `dist/worker.js` (self-contained Cloudflare Worker with a hashed CSP). Standard library only.
 - `scripts/serve.mjs` — local preview of the built worker on :8787.
+- `ios/` — the native SwiftUI app (`One.xcodeproj`, sources in `ios/One/`, SwiftData, iOS 17+). See `ios/README.md` for running it on a phone with a free Apple ID.
 - `tests/e2e_home.py`, `tests/e2e_core.py` — Playwright (Python) end-to-end checks at iPhone size with real touch events.
 
 ## Workflow
