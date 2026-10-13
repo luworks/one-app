@@ -52,6 +52,7 @@ struct HomeView: View {
             let width = min(geo.size.width * 0.82, 340)
             let offset = min(max((sidebarOpen ? width : 0) + drag, 0), width)
             ZStack(alignment: .leading) {
+                if offset > 0 {
                 Sidebar(tab: $tab,
                         onNewChat: { showsAsk = true },
                         onToday: { calendarDay = Calendar.current.startOfDay(for: .now) },
@@ -59,6 +60,7 @@ struct HomeView: View {
                         close: { setSidebar(false) })
                     .frame(width: width)
                     .offset(x: (offset - width) * 0.3)
+                }
 
                 main
                     .background(Color(.systemBackground))
@@ -148,6 +150,13 @@ struct HomeView: View {
             }
         }
         .task { SampleData.insertIfNeeded(context) }
+        .onAppear { LaunchTimer.markFirstFrame() }
+        .overlay(alignment: .topLeading) {
+            // UI tests read the cold start time from this invisible label.
+            if ProcessInfo.processInfo.arguments.contains("-uiTesting"), let ms = LaunchTimer.milliseconds {
+                Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier("coldStartMs").accessibilityLabel(String(ms))
+            }
+        }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
             await Reminders.shared.resync()

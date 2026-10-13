@@ -20,7 +20,14 @@ struct ExternalEvent: Identifiable, Hashable {
 final class CalendarSync {
     static let shared = CalendarSync()
 
-    private let store = EKEventStore()
+    /// Created on first use: EKEventStore is slow to set up and most launches don't need it.
+    @ObservationIgnored private lazy var store: EKEventStore = {
+        let s = EKEventStore()
+        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: s, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.version += 1 }
+        }
+        return s
+    }()
     private static let enabledKey = "one.calendarSync.enabled"
 
     /// Bumped when the system calendar changes so views refetch.
@@ -30,9 +37,20 @@ final class CalendarSync {
     var hasAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
     var isOn: Bool { enabled && hasAccess }
 
-    private init() {
-        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.version += 1 }
+    private init() {}
+
+    /// The store is created just after launch so the first frame never waits for EventKit.
+    @ObservationIgnored private var storeReady = false
+    @ObservationIgnored private var warming = false
+
+    private func warmUp() {
+        guard !warming else { return }
+        warming = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            _ = store
+            storeReady = true
+            version += 1
         }
     }
 
@@ -41,6 +59,7 @@ final class CalendarSync {
         if on && !hasAccess {
             _ = try? await store.requestFullAccessToEvents()
         }
+        storeReady = true
         enabled = on && hasAccess
         UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
         version += 1
@@ -50,6 +69,10 @@ final class CalendarSync {
     func events(in interval: DateInterval, excluding exclude: Set<String> = []) -> [ExternalEvent] {
         _ = version
         guard isOn else { return [] }
+        guard storeReady else {
+            warmUp()
+            return []
+        }
         let predicate = store.predicateForEvents(withStart: interval.start, end: interval.end, calendars: nil)
         return store.events(matching: predicate)
             .filter { !exclude.contains($0.eventIdentifier ?? "") }

@@ -7,6 +7,7 @@ struct OneApp: App {
     let container: ModelContainer
 
     init() {
+        LaunchTimer.mark("app init")
         do {
             // UI tests launch with -uiTesting: a fresh in-memory store with the sample data.
             let testing = ProcessInfo.processInfo.arguments.contains("-uiTesting")
@@ -16,7 +17,9 @@ struct OneApp: App {
         } catch {
             fatalError("Could not open the data store: \(error)")
         }
+        LaunchTimer.mark("container ready")
         Reminders.shared.configure(container)
+        LaunchTimer.mark("reminders configured")
     }
 
     var body: some Scene {

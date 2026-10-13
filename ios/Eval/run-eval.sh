@@ -14,5 +14,7 @@ if [[ "$1" == "--ui" ]]; then
   echo "== UI journeys"
   SIM=$(xcrun simctl list devices available | grep -m1 -E "iPhone .*\(" | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
   xcodebuild test -project One.xcodeproj -scheme One -destination "id=$SIM" -derivedDataPath .build/xcode-test 2>&1 \
-    | grep -E "Test Case .*(passed|failed)|error:|\*\* TEST" | sort -u
+    | grep -E "Test Case .*(passed|failed|skipped)|COLD START|error:|\*\* TEST" | sort -u
+  echo "== Cold start"
+  Eval/cold-start.sh .build/xcode-test/Build/Products/Debug-iphonesimulator/One.app
 fi
