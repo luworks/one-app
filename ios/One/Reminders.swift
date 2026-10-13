@@ -151,7 +151,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
               let task = context.model(for: id) as? OneTask else { return }
         switch Action(rawValue: action) {
         case .done:
-            if !task.isDone { task.toggleDone() }
+            if !task.isDone { TaskActions.toggleDone(task, context: context, toast: nil) }
         case .tomorrow:
             task.moveToTomorrow()
         default:

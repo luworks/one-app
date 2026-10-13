@@ -43,6 +43,7 @@ struct EventRow: View {
 /// Moving a task changes its planned time, never its deadline.
 struct TaskRow: View {
     @Environment(\.modelContext) private var context
+    @Environment(UndoToast.self) private var toast: UndoToast?
     let task: OneTask
     var showsTime = false
     @State private var editing = false
@@ -53,7 +54,7 @@ struct TaskRow: View {
                 TimeColumn(date: start)
             }
             Button {
-                withAnimation { task.toggleDone() }
+                TaskActions.toggleDone(task, context: context, toast: toast)
             } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
@@ -70,9 +71,16 @@ struct TaskRow: View {
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(task.isOverdue ? Color.red : Color.secondary)
+                        .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
+            if task.flagged {
+                Image(systemName: "flag.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityLabel("Flagged")
+            }
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
@@ -81,7 +89,7 @@ struct TaskRow: View {
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
         .swipeActions(edge: .leading) {
-            Button(task.isDone ? "Undo" : "Done") { withAnimation { task.toggleDone() } }
+            Button(task.isDone ? "Reopen" : "Done") { TaskActions.toggleDone(task, context: context, toast: toast) }
                 .tint(.green)
         }
         .swipeActions(edge: .trailing) {
@@ -91,10 +99,15 @@ struct TaskRow: View {
             }
             Button("Tomorrow") { withAnimation { task.moveToTomorrow() } }
                 .tint(.indigo)
+            Button(task.flagged ? "Unflag" : "Flag") { withAnimation { task.flagged.toggle() } }
+                .tint(Color.accentColor)
         }
         .contextMenu {
-            Button { task.toggleDone() } label: {
+            Button { TaskActions.toggleDone(task, context: context, toast: toast) } label: {
                 Label(task.isDone ? "Mark as not done" : "Mark done", systemImage: "checkmark.circle")
+            }
+            Button { task.flagged.toggle() } label: {
+                Label(task.flagged ? "Unflag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }
             if task.plannedStart != nil {
                 Button { task.postpone(minutes: 30) } label: {
@@ -107,7 +120,7 @@ struct TaskRow: View {
             Button { task.moveToTomorrow() } label: {
                 Label("Move to tomorrow", systemImage: "arrow.right.circle")
             }
-            Button(role: .destructive) { context.delete(task) } label: {
+            Button(role: .destructive) { TaskActions.delete(task, context: context, toast: toast) } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
@@ -118,6 +131,12 @@ struct TaskRow: View {
         if task.isOverdue { parts.append("Overdue") }
         if !showsTime, let start = task.plannedStart { parts.append("Planned " + DayLabel.withTime(start)) }
         if let due = task.due { parts.append("Due " + DayLabel.withTime(due)) }
+        if let rule = task.repeats { parts.append("↻ " + rule.label) }
+        if !task.checklist.isEmpty {
+            parts.append("\(task.checklist.filter(\.done).count)/\(task.checklist.count)")
+        }
+        if !task.listName.isEmpty { parts.append(task.listName) }
+        parts += task.tags.map { "#" + $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

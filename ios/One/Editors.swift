@@ -6,6 +6,8 @@ import SwiftData
 struct TaskEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(UndoToast.self) private var toast: UndoToast?
+    @Query private var allTasks: [OneTask]
 
     let task: OneTask?
 
@@ -17,6 +19,14 @@ struct TaskEditor: View {
     @State private var hasDue: Bool
     @State private var due: Date
     @State private var reminder: Int?
+    @State private var listName: String
+    @State private var tagsText: String
+    @State private var flagged: Bool
+    @State private var repeatRule: RepeatRule?
+    @State private var checklist: [ChecklistItem]
+    @State private var newItem = ""
+    @State private var newList = ""
+    @State private var addingList = false
 
     init(task: OneTask? = nil) {
         self.task = task
@@ -29,6 +39,15 @@ struct TaskEditor: View {
         _hasDue = State(initialValue: task?.due != nil)
         _due = State(initialValue: task?.due ?? Calendar.current.startOfDay(for: .now))
         _reminder = State(initialValue: task == nil ? 0 : task?.reminderOffsetMinutes)
+        _listName = State(initialValue: task?.listName ?? "")
+        _tagsText = State(initialValue: task?.tags.joined(separator: ", ") ?? "")
+        _flagged = State(initialValue: task?.flagged ?? false)
+        _repeatRule = State(initialValue: task?.repeats)
+        _checklist = State(initialValue: task?.checklist ?? [])
+    }
+
+    private var knownLists: [String] {
+        Array(Set(allTasks.map(\.listName).filter { !$0.isEmpty } + [listName].filter { !$0.isEmpty })).sorted()
     }
 
     var body: some View {
@@ -41,6 +60,28 @@ struct TaskEditor: View {
                         .lineLimit(2...6)
                 }
                 Section {
+                    ForEach($checklist) { $item in
+                        HStack {
+                            Button { item.done.toggle() } label: {
+                                Image(systemName: item.done ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(item.done ? Color.green : Color.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            TextField("Item", text: $item.title)
+                                .strikethrough(item.done)
+                        }
+                    }
+                    .onDelete { checklist.remove(atOffsets: $0) }
+                    HStack {
+                        Image(systemName: "plus").foregroundStyle(.secondary)
+                        TextField("Add checklist item", text: $newItem)
+                            .onSubmit(addItem)
+                            .submitLabel(.next)
+                    }
+                } header: {
+                    Text("Checklist")
+                }
+                Section {
                     Toggle(isOn: $hasStart.animation()) { Label("Plan a time", systemImage: "clock") }
                     if hasStart {
                         DatePicker("Starts", selection: $start)
@@ -50,9 +91,15 @@ struct TaskEditor: View {
                     Text("When you plan to work on it. Moving it never changes the deadline.")
                 }
                 Section {
-                    Toggle(isOn: $hasDue.animation()) { Label("Deadline", systemImage: "flag") }
+                    Toggle(isOn: $hasDue.animation()) { Label("Deadline", systemImage: "calendar.badge.exclamationmark") }
                     if hasDue {
                         DatePicker("Due", selection: $due)
+                    }
+                    Picker(selection: $repeatRule) {
+                        Text("Never").tag(RepeatRule?.none)
+                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                    } label: {
+                        Label("Repeat", systemImage: "repeat")
                     }
                 }
                 if hasStart || hasDue {
@@ -66,14 +113,30 @@ struct TaskEditor: View {
                         Text("Keeps nudging every few minutes until you mark it done.")
                     }
                 }
+                Section {
+                    Picker(selection: $listName) {
+                        Text("Inbox").tag("")
+                        ForEach(knownLists, id: \.self) { Text($0).tag($0) }
+                    } label: {
+                        Label("List", systemImage: "tray")
+                    }
+                    Button { addingList = true } label: { Label("New list…", systemImage: "plus") }
+                    HStack {
+                        Label("Tags", systemImage: "number")
+                        TextField("work, errands", text: $tagsText)
+                            .multilineTextAlignment(.trailing)
+                            .textInputAutocapitalization(.never)
+                    }
+                    Toggle(isOn: $flagged) { Label("Flag", systemImage: "flag") }
+                }
                 if let task {
                     Section {
                         Button(task.isDone ? "Mark as not done" : "Mark done") {
-                            task.toggleDone()
+                            TaskActions.toggleDone(task, context: context, toast: toast)
                             dismiss()
                         }
                         Button("Delete task", role: .destructive) {
-                            context.delete(task)
+                            TaskActions.delete(task, context: context, toast: toast)
                             dismiss()
                         }
                     }
@@ -88,10 +151,27 @@ struct TaskEditor: View {
                         .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            .alert("New list", isPresented: $addingList) {
+                TextField("List name", text: $newList)
+                Button("Cancel", role: .cancel) { newList = "" }
+                Button("Add") {
+                    let name = newList.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !name.isEmpty { listName = name }
+                    newList = ""
+                }
+            }
         }
     }
 
+    private func addItem() {
+        let t = newItem.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        checklist.append(ChecklistItem(title: t))
+        newItem = ""
+    }
+
     private func save() {
+        addItem()
         let t = task ?? OneTask(title: "")
         t.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         t.note = note
@@ -99,12 +179,18 @@ struct TaskEditor: View {
         t.durationMinutes = duration
         t.due = hasDue ? due : nil
         t.reminderOffsetMinutes = reminder
+        t.listName = listName
+        t.tags = tagsText.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#")) }
+            .filter { !$0.isEmpty }
+        t.flagged = flagged
+        t.repeatRule = repeatRule?.rawValue
+        t.checklist = checklist.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
         if task == nil { context.insert(t) }
         dismiss()
     }
 }
 
-/// Create or edit a calendar event. Events are fixed: only the user moves them, here.
 struct EventEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context

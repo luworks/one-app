@@ -16,6 +16,13 @@ final class OneTask {
     var createdAt: Date
     /// Minutes before the planned time (or a timed deadline) to remind. nil = no reminder.
     var reminderOffsetMinutes: Int? = 0
+    /// "" = Inbox.
+    var listName: String = ""
+    var tags: [String] = []
+    var flagged: Bool = false
+    /// RepeatRule raw value; nil = one-off.
+    var repeatRule: String? = nil
+    var checklist: [ChecklistItem] = []
 
     init(title: String, note: String = "", plannedStart: Date? = nil, durationMinutes: Int = 25, due: Date? = nil) {
         self.title = title
@@ -50,6 +57,40 @@ final class OneTask {
     func toggleDone() {
         isDone.toggle()
         doneAt = isDone ? .now : nil
+    }
+
+    var repeats: RepeatRule? { repeatRule.flatMap(RepeatRule.init(rawValue:)) }
+
+    /// The next occurrence of a repeating task: same task, dates moved by the rule, checklist reset.
+    func nextOccurrence() -> OneTask? {
+        guard let rule = repeats else { return nil }
+        let next = OneTask(title: title, note: note,
+                           plannedStart: plannedStart.map { rule.next(after: $0) },
+                           durationMinutes: durationMinutes,
+                           due: due.map { rule.next(after: $0) }
+                               ?? (plannedStart == nil ? rule.next(after: Calendar.current.startOfDay(for: .now)) : nil))
+        next.reminderOffsetMinutes = reminderOffsetMinutes
+        next.listName = listName
+        next.tags = tags
+        next.flagged = flagged
+        next.repeatRule = repeatRule
+        next.checklist = checklist.map { ChecklistItem(title: $0.title) }
+        return next
+    }
+
+    /// Everything needed to recreate a deleted task (for Undo).
+    func copy() -> OneTask {
+        let t = OneTask(title: title, note: note, plannedStart: plannedStart, durationMinutes: durationMinutes, due: due)
+        t.isDone = isDone
+        t.doneAt = doneAt
+        t.createdAt = createdAt
+        t.reminderOffsetMinutes = reminderOffsetMinutes
+        t.listName = listName
+        t.tags = tags
+        t.flagged = flagged
+        t.repeatRule = repeatRule
+        t.checklist = checklist
+        return t
     }
 
     func postpone(minutes: Int) {

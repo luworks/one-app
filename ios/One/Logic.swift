@@ -39,3 +39,45 @@ enum HabitMath {
         return count
     }
 }
+
+/// How a task repeats. Completing a repeating task creates the next one (OmniFocus / Reminders style).
+enum RepeatRule: String, CaseIterable, Codable {
+    case daily, weekdays, weekly, monthly, yearly
+
+    var label: String {
+        switch self {
+        case .daily: "Every day"
+        case .weekdays: "Every weekday"
+        case .weekly: "Every week"
+        case .monthly: "Every month"
+        case .yearly: "Every year"
+        }
+    }
+
+    /// The next occurrence strictly after `date`, keeping its time of day.
+    func next(after date: Date, calendar: Calendar = .current) -> Date {
+        switch self {
+        case .daily:
+            return calendar.date(byAdding: .day, value: 1, to: date) ?? date
+        case .weekdays:
+            var d = calendar.date(byAdding: .day, value: 1, to: date) ?? date
+            while calendar.isDateInWeekend(d) {
+                d = calendar.date(byAdding: .day, value: 1, to: d) ?? d
+            }
+            return d
+        case .weekly:
+            return calendar.date(byAdding: .day, value: 7, to: date) ?? date
+        case .monthly:
+            return calendar.date(byAdding: .month, value: 1, to: date) ?? date
+        case .yearly:
+            return calendar.date(byAdding: .year, value: 1, to: date) ?? date
+        }
+    }
+}
+
+/// A checklist line inside a task.
+struct ChecklistItem: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var title: String
+    var done = false
+}

@@ -26,9 +26,20 @@ enum SampleData {
             context.insert(OneEvent(title: title, start: start, durationMinutes: minutes))
         }
 
-        context.insert(OneTask(title: "Prepare the demo", plannedStart: at(0, 13, 30), durationMinutes: 45, due: at(1, 17, 0)))
+        let demo = OneTask(title: "Prepare the demo", plannedStart: at(0, 13, 30), durationMinutes: 45, due: at(1, 17, 0))
+        demo.listName = "Work"
+        demo.flagged = true
+        demo.checklist = [ChecklistItem(title: "Outline", done: true), ChecklistItem(title: "Slides"), ChecklistItem(title: "Rehearse")]
+        context.insert(demo)
         context.insert(OneTask(title: "Write up design review notes", plannedStart: at(0, 16, 0)))
-        context.insert(OneTask(title: "Buy milk", due: today))
+        let milk = OneTask(title: "Buy milk", due: today)
+        milk.listName = "Home"
+        milk.tags = ["errands"]
+        context.insert(milk)
+        let plants = OneTask(title: "Water the plants", due: today)
+        plants.listName = "Home"
+        plants.repeatRule = RepeatRule.weekly.rawValue
+        context.insert(plants)
         context.insert(OneTask(title: "Pay studio invoice", due: at(-1, 17, 0)))
         context.insert(OneTask(title: "Read that design article"))
     }

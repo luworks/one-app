@@ -43,6 +43,7 @@ struct HomeView: View {
     @State private var newItem: NewItem?
     @State private var confirmClear = false
     @State private var sidebarOpen = false
+    @State private var toast = UndoToast()
     @GestureState private var drag: CGFloat = 0
 
     var body: some View {
@@ -85,6 +86,7 @@ struct HomeView: View {
                     .offset(x: offset)
             }
         }
+        .environment(toast)
         .sensoryFeedback(.impact(weight: .light), trigger: sidebarOpen)
         .confirmationDialog("Delete all tasks, events and habits?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Delete all", role: .destructive) {
@@ -194,6 +196,13 @@ struct HomeView: View {
     // MARK: Bottom: search, Ask AI, new
 
     private var bottomBar: some View {
+        VStack(spacing: 8) {
+            UndoToastView()
+            bottomButtons
+        }
+    }
+
+    private var bottomButtons: some View {
         HStack(spacing: 10) {
             CircleButton(systemImage: "magnifyingglass", label: "Search") { showsSearch = true }
             Button { showsAsk = true } label: {
