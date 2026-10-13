@@ -176,16 +176,27 @@ struct NowRow: View {
     }
 }
 
+/// AI preview: what will be created. The user can switch task / event / habit before tapping Add.
 struct CaptureCard: View {
-    let capture: Capture
+    @Binding var capture: Capture
     var onAdd: () -> Void
     var onCancel: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("New task", systemImage: "sparkles")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack {
+                Label("New \(capture.kind.rawValue)", systemImage: "sparkles")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Picker("Kind", selection: $capture.kind) {
+                    Text("Task").tag(Capture.Kind.task)
+                    Text("Event").tag(Capture.Kind.event)
+                    Text("Habit").tag(Capture.Kind.habit)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
             Text(capture.title).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
             HStack {

@@ -159,6 +159,29 @@ final class OneEvent {
 
 extension Capture {
     func makeTask() -> OneTask {
-        OneTask(title: title, plannedStart: plannedStart, due: plannedStart == nil && hasDay ? day : nil)
+        let t = OneTask(title: title, plannedStart: plannedStart, durationMinutes: durationMinutes ?? 25,
+                        due: plannedStart == nil && hasDay ? day : nil)
+        t.repeatRule = repeatRule
+        return t
+    }
+
+    func makeEvent() -> OneEvent {
+        let start = plannedStart ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
+        let e = OneEvent(title: title, start: start, durationMinutes: durationMinutes ?? 60)
+        e.repeatRule = repeatRule
+        return e
+    }
+
+    func makeHabit() -> Habit {
+        Habit(title: title)
+    }
+
+    /// Creates the right model for `kind` in `context`. Only called after the user taps Add.
+    func insert(into context: ModelContext) {
+        switch kind {
+        case .task: context.insert(makeTask())
+        case .event: context.insert(makeEvent())
+        case .habit: context.insert(makeHabit())
+        }
     }
 }

@@ -87,7 +87,8 @@ struct AskView: View {
     private var inputArea: some View {
         VStack(spacing: 8) {
             if let capture = pending {
-                CaptureCard(capture: capture, onAdd: { add(capture) }, onCancel: { pending = nil })
+                CaptureCard(capture: Binding(get: { pending ?? capture }, set: { pending = $0 }),
+                            onAdd: { add(pending ?? capture) }, onCancel: { pending = nil })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: 8) {
@@ -140,7 +141,7 @@ struct AskView: View {
     }
 
     private func add(_ capture: Capture) {
-        context.insert(capture.makeTask())
+        capture.insert(into: context)
         onAdded(capture)
         messages.append(ChatMessage(role: .ai, text: "Added “\(capture.title)” · \(capture.summary)."))
         pending = nil

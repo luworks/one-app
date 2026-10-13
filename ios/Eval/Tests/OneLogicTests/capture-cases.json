@@ -1,36 +1,413 @@
 {
-  "now": "2026-10-12T09:41:00",
-  "timeZone": "America/Los_Angeles",
-  "note": "now is Monday. day = days after today; hasDay = a day was stated or implied; hour/minute = planned time; repeat = daily/weekly. Split is fixed: never read test failures while fixing the parser.",
-  "cases": [
-    {"split": "train", "input": "明天下午3点 打电话给 Alex", "title": "打电话给 Alex", "day": 1, "hasDay": true, "hour": 15, "minute": 0},
-    {"split": "train", "input": "Buy milk today", "title": "Buy milk", "day": 0, "hasDay": true},
-    {"split": "train", "input": "买牛奶", "title": "买牛奶", "day": 0, "hasDay": false},
-    {"split": "train", "input": "Call Alex tomorrow at 3pm", "title": "Call Alex", "day": 1, "hasDay": true, "hour": 15, "minute": 0},
-    {"split": "train", "input": "Standup 9:30am tomorrow", "title": "Standup", "day": 1, "hasDay": true, "hour": 9, "minute": 30},
-    {"split": "train", "input": "Gym at 7pm", "title": "Gym", "day": 0, "hasDay": false, "hour": 19, "minute": 0},
-    {"split": "train", "input": "后天上午10点 看牙医", "title": "看牙医", "day": 2, "hasDay": true, "hour": 10, "minute": 0},
-    {"split": "train", "input": "Pay rent on Friday", "title": "Pay rent", "day": 4, "hasDay": true},
-    {"split": "train", "input": "Lunch with Priya Wednesday 12:15", "title": "Lunch with Priya", "day": 2, "hasDay": true, "hour": 12, "minute": 15},
-    {"split": "train", "input": "Read every day", "title": "Read", "day": 0, "hasDay": false, "repeat": "daily"},
-    {"split": "train", "input": "晚上8点半 遛狗", "title": "遛狗", "day": 0, "hasDay": false, "hour": 20, "minute": 30},
-    {"split": "train", "input": "Submit report by Oct 20", "title": "Submit report", "day": 8, "hasDay": true},
-    {"split": "train", "input": "Call mom at noon", "title": "Call mom", "day": 0, "hasDay": false, "hour": 12, "minute": 0},
-    {"split": "train", "input": "Team sync next Monday 10am", "title": "Team sync", "day": 7, "hasDay": true, "hour": 10, "minute": 0},
-    {"split": "train", "input": "周五 交季度报告", "title": "交季度报告", "day": 4, "hasDay": true},
-    {"split": "test", "input": "Email Sam tomorrow", "title": "Email Sam", "day": 1, "hasDay": true},
-    {"split": "test", "input": "明天 买菜", "title": "买菜", "day": 1, "hasDay": true},
-    {"split": "test", "input": "Dinner at 8pm", "title": "Dinner", "day": 0, "hasDay": false, "hour": 20, "minute": 0},
-    {"split": "test", "input": "Review PR tomorrow 2:30pm", "title": "Review PR", "day": 1, "hasDay": true, "hour": 14, "minute": 30},
-    {"split": "test", "input": "下午3点 开会", "title": "开会", "day": 0, "hasDay": false, "hour": 15, "minute": 0},
-    {"split": "test", "input": "Haircut Saturday at 11am", "title": "Haircut", "day": 5, "hasDay": true, "hour": 11, "minute": 0},
-    {"split": "test", "input": "Meditate every day", "title": "Meditate", "day": 0, "hasDay": false, "repeat": "daily"},
-    {"split": "test", "input": "Flight on Oct 15 at 6:40am", "title": "Flight", "day": 3, "hasDay": true, "hour": 6, "minute": 40},
-    {"split": "test", "input": "下周一 上午9点 周会", "title": "周会", "day": 7, "hasDay": true, "hour": 9, "minute": 0},
-    {"split": "test", "input": "Call the bank at 4", "title": "Call the bank", "day": 0, "hasDay": false, "hour": 16, "minute": 0},
-    {"split": "test", "input": "Renew passport by Friday", "title": "Renew passport", "day": 4, "hasDay": true},
-    {"split": "test", "input": "周三晚上7点 和朋友吃饭", "title": "和朋友吃饭", "day": 2, "hasDay": true, "hour": 19, "minute": 0},
-    {"split": "test", "input": "Send invoice day after tomorrow", "title": "Send invoice", "day": 2, "hasDay": true},
-    {"split": "test", "input": "Water plants every week", "title": "Water plants", "day": 0, "hasDay": false, "repeat": "weekly"}
-  ]
+ "now": "2026-10-12T09:41:00",
+ "timeZone": "America/Los_Angeles",
+ "note": "now is Monday. day = days after today; hasDay = a day was stated or implied; hour/minute = planned time; repeat = daily/weekly. Split is fixed: never read test failures while fixing the parser. v2 cases (kind, duration) added in round 7 before the kind/duration code was written.",
+ "cases": [
+  {
+   "split": "train",
+   "input": "明天下午3点 打电话给 Alex",
+   "title": "打电话给 Alex",
+   "day": 1,
+   "hasDay": true,
+   "hour": 15,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "Buy milk today",
+   "title": "Buy milk",
+   "day": 0,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "买牛奶",
+   "title": "买牛奶",
+   "day": 0,
+   "hasDay": false
+  },
+  {
+   "split": "train",
+   "input": "Call Alex tomorrow at 3pm",
+   "title": "Call Alex",
+   "day": 1,
+   "hasDay": true,
+   "hour": 15,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "Standup 9:30am tomorrow",
+   "title": "Standup",
+   "day": 1,
+   "hasDay": true,
+   "hour": 9,
+   "minute": 30
+  },
+  {
+   "split": "train",
+   "input": "Gym at 7pm",
+   "title": "Gym",
+   "day": 0,
+   "hasDay": false,
+   "hour": 19,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "后天上午10点 看牙医",
+   "title": "看牙医",
+   "day": 2,
+   "hasDay": true,
+   "hour": 10,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "Pay rent on Friday",
+   "title": "Pay rent",
+   "day": 4,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "Lunch with Priya Wednesday 12:15",
+   "title": "Lunch with Priya",
+   "day": 2,
+   "hasDay": true,
+   "hour": 12,
+   "minute": 15
+  },
+  {
+   "split": "train",
+   "input": "Read every day",
+   "title": "Read",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "daily"
+  },
+  {
+   "split": "train",
+   "input": "晚上8点半 遛狗",
+   "title": "遛狗",
+   "day": 0,
+   "hasDay": false,
+   "hour": 20,
+   "minute": 30
+  },
+  {
+   "split": "train",
+   "input": "Submit report by Oct 20",
+   "title": "Submit report",
+   "day": 8,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "Call mom at noon",
+   "title": "Call mom",
+   "day": 0,
+   "hasDay": false,
+   "hour": 12,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "Team sync next Monday 10am",
+   "title": "Team sync",
+   "day": 7,
+   "hasDay": true,
+   "hour": 10,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "周五 交季度报告",
+   "title": "交季度报告",
+   "day": 4,
+   "hasDay": true
+  },
+  {
+   "split": "test",
+   "input": "Email Sam tomorrow",
+   "title": "Email Sam",
+   "day": 1,
+   "hasDay": true
+  },
+  {
+   "split": "test",
+   "input": "明天 买菜",
+   "title": "买菜",
+   "day": 1,
+   "hasDay": true
+  },
+  {
+   "split": "test",
+   "input": "Dinner at 8pm",
+   "title": "Dinner",
+   "day": 0,
+   "hasDay": false,
+   "hour": 20,
+   "minute": 0
+  },
+  {
+   "split": "test",
+   "input": "Review PR tomorrow 2:30pm",
+   "title": "Review PR",
+   "day": 1,
+   "hasDay": true,
+   "hour": 14,
+   "minute": 30
+  },
+  {
+   "split": "test",
+   "input": "下午3点 开会",
+   "title": "开会",
+   "day": 0,
+   "hasDay": false,
+   "hour": 15,
+   "minute": 0
+  },
+  {
+   "split": "test",
+   "input": "Haircut Saturday at 11am",
+   "title": "Haircut",
+   "day": 5,
+   "hasDay": true,
+   "hour": 11,
+   "minute": 0
+  },
+  {
+   "split": "test",
+   "input": "Meditate every day",
+   "title": "Meditate",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "daily"
+  },
+  {
+   "split": "test",
+   "input": "Flight on Oct 15 at 6:40am",
+   "title": "Flight",
+   "day": 3,
+   "hasDay": true,
+   "hour": 6,
+   "minute": 40
+  },
+  {
+   "split": "test",
+   "input": "下周一 上午9点 周会",
+   "title": "周会",
+   "day": 7,
+   "hasDay": true,
+   "hour": 9,
+   "minute": 0
+  },
+  {
+   "split": "test",
+   "input": "Call the bank at 4",
+   "title": "Call the bank",
+   "day": 0,
+   "hasDay": false,
+   "hour": 16,
+   "minute": 0
+  },
+  {
+   "split": "test",
+   "input": "Renew passport by Friday",
+   "title": "Renew passport",
+   "day": 4,
+   "hasDay": true
+  },
+  {
+   "split": "test",
+   "input": "周三晚上7点 和朋友吃饭",
+   "title": "和朋友吃饭",
+   "day": 2,
+   "hasDay": true,
+   "hour": 19,
+   "minute": 0
+  },
+  {
+   "split": "test",
+   "input": "Send invoice day after tomorrow",
+   "title": "Send invoice",
+   "day": 2,
+   "hasDay": true
+  },
+  {
+   "split": "test",
+   "input": "Water plants every week",
+   "title": "Water plants",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "weekly"
+  },
+  {
+   "split": "train",
+   "input": "Meeting with Bob 3-4pm",
+   "title": "Meeting with Bob",
+   "day": 0,
+   "hasDay": false,
+   "hour": 15,
+   "minute": 0,
+   "kind": "event",
+   "duration": 60
+  },
+  {
+   "split": "train",
+   "input": "Dentist appointment Thursday 10:30",
+   "title": "Dentist appointment",
+   "day": 3,
+   "hasDay": true,
+   "hour": 10,
+   "minute": 30,
+   "kind": "event"
+  },
+  {
+   "split": "train",
+   "input": "每天 喝水",
+   "title": "喝水",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "daily",
+   "kind": "habit"
+  },
+  {
+   "split": "train",
+   "input": "Read 20 pages daily",
+   "title": "Read 20 pages",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "daily",
+   "kind": "habit"
+  },
+  {
+   "split": "train",
+   "input": "Call mom tomorrow",
+   "title": "Call mom",
+   "day": 1,
+   "hasDay": true,
+   "kind": "task"
+  },
+  {
+   "split": "train",
+   "input": "Lunch with Sara Friday 12:30-1:30",
+   "title": "Lunch with Sara",
+   "day": 4,
+   "hasDay": true,
+   "hour": 12,
+   "minute": 30,
+   "kind": "event",
+   "duration": 60
+  },
+  {
+   "split": "train",
+   "input": "明天上午10点到11点 开会",
+   "title": "开会",
+   "day": 1,
+   "hasDay": true,
+   "hour": 10,
+   "minute": 0,
+   "kind": "event",
+   "duration": 60
+  },
+  {
+   "split": "train",
+   "input": "Take out trash every week",
+   "title": "Take out trash",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "weekly",
+   "kind": "task"
+  },
+  {
+   "split": "train",
+   "input": "Flight to NYC Oct 20 at 7am",
+   "title": "Flight to NYC",
+   "day": 8,
+   "hasDay": true,
+   "hour": 7,
+   "minute": 0,
+   "kind": "event"
+  },
+  {
+   "split": "test",
+   "input": "Team meeting tomorrow 2-3pm",
+   "title": "Team meeting",
+   "day": 1,
+   "hasDay": true,
+   "hour": 14,
+   "minute": 0,
+   "kind": "event",
+   "duration": 60
+  },
+  {
+   "split": "test",
+   "input": "Run every weekday",
+   "title": "Run",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "weekdays",
+   "kind": "habit"
+  },
+  {
+   "split": "test",
+   "input": "每天 冥想",
+   "title": "冥想",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "daily",
+   "kind": "habit"
+  },
+  {
+   "split": "test",
+   "input": "Doctor appointment Friday 4pm",
+   "title": "Doctor appointment",
+   "day": 4,
+   "hasDay": true,
+   "hour": 16,
+   "minute": 0,
+   "kind": "event"
+  },
+  {
+   "split": "test",
+   "input": "周四下午2点到3点 面试",
+   "title": "面试",
+   "day": 3,
+   "hasDay": true,
+   "hour": 14,
+   "minute": 0,
+   "kind": "event",
+   "duration": 60
+  },
+  {
+   "split": "test",
+   "input": "Submit expenses Friday",
+   "title": "Submit expenses",
+   "day": 4,
+   "hasDay": true,
+   "kind": "task"
+  },
+  {
+   "split": "test",
+   "input": "Dinner with Alex 7-9pm",
+   "title": "Dinner with Alex",
+   "day": 0,
+   "hasDay": false,
+   "hour": 19,
+   "minute": 0,
+   "kind": "event",
+   "duration": 120
+  },
+  {
+   "split": "test",
+   "input": "Floss daily",
+   "title": "Floss",
+   "day": 0,
+   "hasDay": false,
+   "repeat": "daily",
+   "kind": "habit"
+  }
+ ]
 }

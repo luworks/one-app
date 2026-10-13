@@ -4,7 +4,7 @@ import XCTest
 /// NL-capture eval. Prints accuracy per split; fails if a split drops below its ratchet.
 /// Raise the ratchet after a round that improves it; never lower it.
 final class CaptureEvalTests: XCTestCase {
-    static let ratchet = ["train": 6, "test": 5]
+    static let ratchet = ["train": 24, "test": 22]
 
     struct Case: Decodable {
         let split: String
@@ -15,6 +15,8 @@ final class CaptureEvalTests: XCTestCase {
         let hour: Int?
         let minute: Int?
         let `repeat`: String?
+        let kind: String?
+        let duration: Int?
     }
 
     struct Suite: Decodable {
@@ -49,6 +51,10 @@ final class CaptureEvalTests: XCTestCase {
             if got.hasDay != c.hasDay { problems.append("hasDay \(got.hasDay)≠\(c.hasDay)") }
             if got.hour != c.hour { problems.append("hour \(String(describing: got.hour))≠\(String(describing: c.hour))") }
             if c.hour != nil, got.minute != (c.minute ?? 0) { problems.append("minute \(got.minute)≠\(c.minute ?? 0)") }
+            if let kind = c.kind, got.kind.rawValue != kind { problems.append("kind \(got.kind.rawValue)≠\(kind)") }
+            if let duration = c.duration, got.durationMinutes != duration {
+                problems.append("duration \(String(describing: got.durationMinutes))≠\(duration)")
+            }
             if got.repeatRule != c.repeat { problems.append("repeat \(String(describing: got.repeatRule))≠\(String(describing: c.repeat))") }
 
             total[c.split, default: 0] += 1
