@@ -9,6 +9,8 @@ import FoundationModels
 enum Understander {
     static func parse(_ text: String, now: Date = .now, calendar: Calendar = .current) async -> Capture {
         let parsed = CaptureParser.parse(text, now: now, calendar: calendar)
+        // Clear cases are decided by rules (no model call): an explicit alarm request with a time, or a chore / errand verb with no event word.
+        if let kind = Understanding.ruleKind(text, parsed: parsed) { return Understanding.combine(parser: parsed, kind: kind, text: text) }
         // The first request after launch can take a long time while the model loads: the parser result is used instead.
         guard let kind = await ModelTimeout.run(seconds: 8, { await Understanding.classify(text) }) else { return parsed }
         // "Remind me" is not an alarm: the model's alarm answer only counts when the text asks for one.
@@ -250,6 +252,7 @@ enum Understanding {
         "Team sync Monday 10am" -> event
         "Brunch with the team on Sunday" -> event
         "Doctor appt Monday 9am" -> event
+        "后天早上9点体检" -> event
         "晚上8点给妈妈打电话" -> task
         "Call the bank at 3pm" -> task
         "Walk the dog at 6pm" -> task
@@ -271,7 +274,7 @@ enum Understanding {
 
     /// "Wake me up", "alarm", 闹钟, 起床, 叫醒. An alarm answer from the model without one of these is treated as a task.
     static func asksForAlarm(_ text: String) -> Bool {
-        text.range(of: #"wake\s+me|\balarm\b|闹钟|起床|叫醒|叫我"#, options: [.regularExpression, .caseInsensitive]) != nil
+        text.range(of: #"wake\s+me|\balarm\b|\btimer\b|计时|闹钟|起床|叫醒|叫我"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// Variant C: code decides the alarm (alarm words + a time); the parser's event words and the model's event vote are OR-ed.
@@ -285,6 +288,29 @@ enum Understanding {
             c.kind = (p.kind == .event || model == .event) ? .event : .task
         }
         return c
+    }
+
+    // MARK: Rules before the model
+
+    private static func matches(_ text: String, _ pattern: String) -> Bool {
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// Words that mean "ring me": the model may not say alarm without them, and with a time they decide it.
+    static func asksForAlarmStrict(_ text: String) -> Bool {
+        matches(text, #"wake\s+me|\balarm\b|\btimer\b|计时|闹钟|叫醒|叫我起床|起床"#)
+    }
+
+    private static let eventCue = #"\b(?:meeting|mtg|appointment|appt|interview|class|lecture|session|lunch|dinner|brunch|breakfast|party|wedding|flight|train|concert|show|movie|conference|standup|stand-up|sync|1:1|call with|catch up|date|exam|checkup|check-up|dentist|doctor|workshop|webinar|trip)\b|会议|开会|面试|上课|课程|聚餐|吃饭|午饭|晚饭|早饭|聚会|婚礼|航班|火车|高铁|演出|电影|音乐会|约会|见面|体检|复诊|门诊|看病|考试|周会|例会|站会|视频会|喝咖啡|看牙|培训"#
+    private static let taskLead = #"^(?:buy|pay|send|email|text|submit|sign|print|book|order|pack|clean|wash|write|finish|fix|water|take out|pick up|drop off|return|renew|file|read|study|prepare|update|reply|follow up|check|call|get|grab|cook|make|plan|gym|workout|run|jog|swim|yoga|walk|hike|hiking)\b|^(?:买|付|交|发|寄|回复|写|整理|订|预订|预约|打电话|取|拿|洗|收|倒垃圾|遛狗|充电|还|退|续|缴|健身|跑步|游泳|瑜伽)"#
+
+    /// A kind the words settle without the model, or nil.
+    static func ruleKind(_ text: String, parsed: Capture) -> SimpleKind? {
+        if asksForAlarmStrict(text), parsed.hour != nil { return .alarm }
+        if matches(text, eventCue) { return nil }
+        let title = parsed.title.lowercased().trimmingCharacters(in: .whitespaces)
+        if matches(title, taskLead) { return .task }
+        return nil
     }
 
     /// Variant A3: A2 with the stricter instructions and the alarm-word guard.
