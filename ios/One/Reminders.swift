@@ -63,6 +63,8 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         var requests: [(Date, UNNotificationRequest)] = []
         for task in tasks {
             guard let fire = task.reminderDate, fire < horizon else { continue }
+            // A synced reminder with only a due time is alerted by Apple Reminders itself; ours would be a duplicate.
+            if task.externalID != nil, task.plannedStart == nil { continue }
             let id = Self.key(task.persistentModelID)
             let when = task.plannedStart.map { DayLabel.withTime($0) } ?? task.due.map { "Due " + DayLabel.withTime($0) } ?? ""
             for (n, f) in ReminderPlan.taskFires(reminder: fire, now: now).enumerated() {

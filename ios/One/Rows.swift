@@ -76,6 +76,8 @@ struct TaskRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let task: OneTask
     var showsTime = false
+    /// Add the list name to the detail line. Off inside a list, where it is the title.
+    var showsList = true
     @State private var editing = false
 
     var body: some View {
@@ -159,7 +161,7 @@ struct TaskRow: View {
         if !task.checklist.isEmpty {
             parts.append("\(task.checklist.filter(\.done).count)/\(task.checklist.count)")
         }
-        if !task.listName.isEmpty { parts.append(ListName.display(task.listName)) }
+        if showsList, !task.listName.isEmpty { parts.append(ListName.display(task.listName)) }
         parts += task.tags.map { "#" + $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

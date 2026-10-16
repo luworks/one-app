@@ -10,7 +10,7 @@ enum HomeTab: CaseIterable, Identifiable {
         switch self {
         case .today: "Today"
         case .calendar: "Calendar"
-        case .tasks: "Lists"
+        case .tasks: "Reminders"
         case .alarms: "Alarms"
         }
     }
@@ -44,6 +44,8 @@ struct HomeView: View {
     @State private var newItem: NewItem?
     @State private var confirmClear = false
     @State private var sidebarOpen = false
+    /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
+    @State private var remindersPushed = false
     @State private var toast = UndoToast()
     @GestureState private var drag: CGFloat = 0
 
@@ -78,7 +80,7 @@ struct HomeView: View {
                     // Swipe right from the left edge opens the sidebar. The edge strip sits above the
                     // lists so it wins over row swipe actions; row swipes elsewhere stay free.
                     .overlay(alignment: .leading) {
-                        if offset == 0 {
+                        if offset == 0 && edgeSwipeEnabled {
                             Color.clear
                                 .frame(width: 24)
                                 .contentShape(Rectangle())
@@ -93,13 +95,20 @@ struct HomeView: View {
         .sensoryFeedback(.impact(weight: .light), trigger: sidebarOpen)
         .confirmationDialog("Delete all tasks and events?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Delete all", role: .destructive) {
+                // Wiping local data must never be mirrored to Apple Reminders: forget the link first.
+                RemindersSync.shared.forgetLink()
                 try? context.delete(model: OneTask.self)
                 try? context.delete(model: OneEvent.self)
                 try? context.delete(model: OneAlarm.self)
+                try? context.delete(model: OneList.self)
                 try? context.delete(model: Habit.self)
             }
+        } message: {
+            Text("This only clears data stored in Today. Your Apple Calendar and Apple Reminders are not changed.")
         }
     }
+
+    private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
 
     private func setSidebar(_ open: Bool) {
         withAnimation(.snappy(duration: 0.3)) {
@@ -110,12 +119,12 @@ struct HomeView: View {
     private func sidebarDrag(width: CGFloat, edgeOnly: Bool = false) -> some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .global)
             .updating($drag) { v, state, _ in
-                if edgeOnly && (sidebarOpen || v.startLocation.x > 44) { return }
+                if edgeOnly && (sidebarOpen || !edgeSwipeEnabled || v.startLocation.x > 44) { return }
                 guard abs(v.translation.width) > abs(v.translation.height) else { return }
                 state = v.translation.width
             }
             .onEnded { v in
-                if edgeOnly && (sidebarOpen || v.startLocation.x > 44) { return }
+                if edgeOnly && (sidebarOpen || !edgeSwipeEnabled || v.startLocation.x > 44) { return }
                 guard abs(v.translation.width) > abs(v.translation.height) else { return }
                 let projected = (sidebarOpen ? width : 0) + v.predictedEndTranslation.width
                 setSidebar(projected > width / 2)
@@ -133,7 +142,7 @@ struct HomeView: View {
                         todayDay = picked
                         withAnimation(.snappy) { tab = .today }
                     }
-                case .tasks: TasksView()
+                case .tasks: RemindersView(isPushed: $remindersPushed)
                 case .alarms: AlarmsView()
                 }
             }
@@ -158,6 +167,7 @@ struct HomeView: View {
             if let path = DevImport.requestedPath {
                 do {
                     let (e, t) = try DevImport.run(path: path, into: context)
+                    ListActions.ensureLists(in: context)
                     print("IMPORT ok: \(e) events, \(t) reminders")
                 } catch {
                     print("IMPORT failed: \(error)")
@@ -166,6 +176,7 @@ struct HomeView: View {
             }
             #endif
             SampleData.insertIfNeeded(context)
+            ListActions.ensureLists(in: context)
         }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {

@@ -257,6 +257,7 @@
 				INFOPLIST_FILE = OneInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Today;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Today shows your Apple Calendar events next to your tasks, and can add events you create there.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Today shows your Apple Reminders and lists, and saves the reminders you add there, so you can see everything in one place.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Today listens while you dictate, so you can say a task or a question instead of typing it.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Today turns what you say into text in the AI input. Recognition runs on your iPhone when it can.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -289,6 +290,7 @@
 				INFOPLIST_FILE = OneInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Today;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Today shows your Apple Calendar events next to your tasks, and can add events you create there.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Today shows your Apple Reminders and lists, and saves the reminders you add there, so you can see everything in one place.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Today listens while you dictate, so you can say a task or a question instead of typing it.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Today turns what you say into text in the AI input. Recognition runs on your iPhone when it can.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

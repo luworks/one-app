@@ -15,6 +15,23 @@ struct DayAgenda: View {
     @State private var showsAllOverdue = false
 
     var body: some View {
+        ScrollViewReader { proxy in
+            list
+                .onAppear { scrollToNow(proxy) }
+                .onChange(of: day) { _, _ in scrollToNow(proxy) }
+        }
+    }
+
+    /// Open on what is happening now: the day's schedule scrolls to the "now" line.
+    private func scrollToNow(_ proxy: ScrollViewProxy) {
+        guard cal.isDateInToday(day) else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            withAnimation(.snappy) { proxy.scrollTo("now-line", anchor: .center) }
+        }
+    }
+
+    private var list: some View {
         List {
             if !showsWeekStrip, !cal.isDateInToday(day) {
                 Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
@@ -72,7 +89,7 @@ struct DayAgenda: View {
                     case .external(let e): ExternalEventRow(event: e)
                     case .task(let task): TaskRow(task: task, showsTime: true)
                     case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
-                    case .nowMarker(let date): NowRow(date: date)
+                    case .nowMarker(let date): NowRow(date: date).id("now-line")
                     }
                 }
             }

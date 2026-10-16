@@ -14,6 +14,7 @@ final class OneList {
     var order: Int
     /// EKCalendar.calendarIdentifier when this list is mirrored from / to Apple Reminders.
     var externalID: String? = nil
+    var createdAt: Date = Date.now
 
     init(name: String, colorIndex: Int = 6, symbol: String = "list.bullet", order: Int = 0) {
         self.name = name

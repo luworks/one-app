@@ -68,6 +68,14 @@ struct Sidebar: View {
                                detail: CalendarSync.shared.isOn ? "On" : "Off", selected: false) {
                         Task { await CalendarSync.shared.setEnabled(!CalendarSync.shared.isOn) }
                     }
+                    SidebarRow(icon: "checklist.checked", title: "Sync Apple Reminders",
+                               detail: RemindersSync.shared.isConnected ? "On" : "Off", selected: false) {
+                        if RemindersSync.shared.isConnected {
+                            RemindersSync.shared.disconnect()
+                        } else {
+                            Task { await RemindersSync.shared.connect() }
+                        }
+                    }
                     SidebarRow(icon: "arrow.uturn.backward", title: "Calendar: go to today", detail: nil, selected: false) {
                         onToday()
                         close()

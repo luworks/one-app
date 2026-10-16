@@ -72,6 +72,19 @@ final class JourneyTests: XCTestCase {
         XCTAssertLessThanOrEqual(taps, 6)
     }
 
+    /// J5: add a reminder to a list, inline.
+    func testJ5_addReminderToList() {
+        tab("Reminders")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Today, '")).firstMatch.waitForExistence(timeout: 5),
+                      "smart-list cards show live counts")
+        tap(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Home, '")).firstMatch)
+        XCTAssertTrue(app.staticTexts["Buy milk"].waitForExistence(timeout: 5), "the list shows its reminders")
+        tap(app.textFields["New Reminder"])
+        app.textFields["New Reminder"].typeText("Call plumber\n")
+        XCTAssertTrue(app.staticTexts["Call plumber"].waitForExistence(timeout: 5), "the new reminder appears in the list")
+        XCTAssertLessThanOrEqual(taps, 3, "J5 tap budget")
+    }
+
     /// J6: add a real alarm, see it on the Alarms page and in Today's schedule.
     func testJ6_addAlarmAndSeeItInToday() {
         tab("Alarms")

@@ -25,6 +25,8 @@ final class OneTask {
     var checklist: [ChecklistItem] = []
     /// Ring like an alarm (AlarmKit) instead of a quiet notification.
     var ringsAsAlarm: Bool = false
+    /// EKReminder.calendarItemIdentifier when this task is synced with Apple Reminders.
+    var externalID: String? = nil
 
     init(title: String, note: String = "", plannedStart: Date? = nil, durationMinutes: Int = 25, due: Date? = nil) {
         self.title = title

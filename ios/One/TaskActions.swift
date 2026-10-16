@@ -44,7 +44,8 @@ enum TaskActions {
             withAnimation { task.toggleDone() }
             return
         }
-        let next = task.nextOccurrence()
+        // Apple Reminders rolls its own repeating reminders forward, so only local-only tasks spawn the next one here.
+        let next = task.externalID == nil ? task.nextOccurrence() : nil
         withAnimation {
             task.toggleDone()
             if let next { context.insert(next) }
@@ -60,6 +61,7 @@ enum TaskActions {
 
     static func delete(_ task: OneTask, context: ModelContext, toast: UndoToast?) {
         let backup = task.copy()
+        if task.externalID != nil { backup.createdAt = .now }   // Undo creates it again in Apple Reminders too
         withAnimation { context.delete(task) }
         toast?.show("Deleted “\(backup.title)”") {
             withAnimation { context.insert(backup) }
