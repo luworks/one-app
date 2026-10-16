@@ -10,6 +10,9 @@ struct DayAgenda: View {
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
     @Query private var alarms: [OneAlarm]
+    @AppStorage(SettingsKey.showOverdue) private var showsOverdue = true
+    @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
+    @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
 
     private let cal = Calendar.current
     @State private var showsAllOverdue = false
@@ -24,7 +27,7 @@ struct DayAgenda: View {
 
     /// Open on what is happening now: the day's schedule scrolls to the "now" line.
     private func scrollToNow(_ proxy: ScrollViewProxy) {
-        guard cal.isDateInToday(day) else { return }
+        guard cal.isDateInToday(day), jumpsToNow else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
             withAnimation(.snappy) { proxy.scrollTo("now-line", anchor: .center) }
@@ -54,7 +57,7 @@ struct DayAgenda: View {
                     ForEach(externalAllDay) { ExternalEventRow(event: $0) }
                 }
             }
-            if cal.isDateInToday(day), !overdue.isEmpty {
+            if cal.isDateInToday(day), showsOverdue, !overdue.isEmpty {
                 Section {
                     Button {
                         withAnimation(.snappy) { showsAllOverdue.toggle() }
@@ -129,7 +132,7 @@ struct DayAgenda: View {
             guard let start = task.plannedStart, cal.isDate(start, inSameDayAs: day) else { return nil }
             return .task(task)
         }
-        items += alarms.compactMap { a in a.fires(on: day).map { TimelineItem.alarm(a, $0) } }
+        if showsAlarms { items += alarms.compactMap { a in a.fires(on: day).map { TimelineItem.alarm(a, $0) } } }
         if cal.isDateInToday(day), !items.isEmpty {
             items.append(.nowMarker(Date.now))
         }

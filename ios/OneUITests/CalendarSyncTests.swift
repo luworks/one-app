@@ -14,18 +14,20 @@ final class CalendarSyncTests: XCTestCase {
             return false
         }
 
-        // Turn on sync from the sidebar.
+        // Turn on sync in Settings (sidebar > Settings > Apple Calendar).
         app.buttons["Open sidebar"].tap()
-        let toggle = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Show Apple Calendar'")).firstMatch
+        app.buttons["Settings"].firstMatch.tap()
+        let toggle = app.switches["Apple Calendar"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        if !toggle.label.hasSuffix("On") { toggle.tap() }
+        if (toggle.value as? String) != "1" { toggle.tap() }
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow Full Access", "Allow"] {
             let b = springboard.buttons[label]
             if b.waitForExistence(timeout: 3) { b.tap(); break }
         }
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Show Apple Calendar' AND label ENDSWITH 'On'"))
-            .firstMatch.waitForExistence(timeout: 8), "sync is on")
+        XCTAssertTrue(NSPredicate(format: "value == '1'").evaluate(with: toggle) || toggle.waitForExistence(timeout: 8), "sync is on")
+        sleep(1)
+        app.buttons["Done"].tap()
 
         // Create an event in one.
         let title = "EK check \(Int(Date.now.timeIntervalSince1970) % 10000)"

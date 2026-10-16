@@ -6,8 +6,7 @@ import SwiftData
 struct Sidebar: View {
     @Binding var tab: HomeTab
     var onNewChat: () -> Void
-    var onToday: () -> Void
-    var onDeleteAll: () -> Void
+    var onSettings: () -> Void
     var close: () -> Void
 
     @Query private var tasks: [OneTask]
@@ -58,34 +57,15 @@ struct Sidebar: View {
                         }
                     }
 
-                    Text("Settings")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 24)
-                        .padding(.bottom, 6)
-                    SidebarRow(icon: "calendar.badge.checkmark", title: "Show Apple Calendar",
-                               detail: CalendarSync.shared.isOn ? "On" : "Off", selected: false) {
-                        Task { await CalendarSync.shared.setEnabled(!CalendarSync.shared.isOn) }
-                    }
-                    SidebarRow(icon: "checklist.checked", title: "Sync Apple Reminders",
-                               detail: RemindersSync.shared.isConnected ? "On" : "Off", selected: false) {
-                        if RemindersSync.shared.isConnected {
-                            RemindersSync.shared.disconnect()
-                        } else {
-                            Task { await RemindersSync.shared.connect() }
-                        }
-                    }
-                    SidebarRow(icon: "arrow.uturn.backward", title: "Calendar: go to today", detail: nil, selected: false) {
-                        onToday()
-                        close()
-                    }
-                    SidebarRow(icon: "trash", title: "Delete all data", detail: nil, selected: false, role: .destructive) {
-                        close()
-                        onDeleteAll()
-                    }
                 }
             }
+
+            Divider().padding(.horizontal, 20)
+            SidebarRow(icon: "gearshape", title: "Settings", detail: nil, selected: false) {
+                close()
+                onSettings()
+            }
+            .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemBackground))

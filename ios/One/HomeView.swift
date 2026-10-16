@@ -42,7 +42,7 @@ struct HomeView: View {
     @State private var showsAsk = false
     @State private var showsSearch = false
     @State private var newItem: NewItem?
-    @State private var confirmClear = false
+    @State private var showsSettings = false
     @State private var sidebarOpen = false
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
     @State private var remindersPushed = false
@@ -57,8 +57,7 @@ struct HomeView: View {
                 if offset > 0 {
                 Sidebar(tab: $tab,
                         onNewChat: { showsAsk = true },
-                        onToday: { calendarDay = Calendar.current.startOfDay(for: .now); todayDay = calendarDay },
-                        onDeleteAll: { confirmClear = true },
+                        onSettings: { showsSettings = true },
                         close: { setSidebar(false) })
                     .frame(width: width)
                     .offset(x: (offset - width) * 0.3)
@@ -93,22 +92,17 @@ struct HomeView: View {
         }
         .environment(toast)
         .sensoryFeedback(.impact(weight: .light), trigger: sidebarOpen)
-        .confirmationDialog("Delete all tasks and events?", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("Delete all", role: .destructive) {
-                // Wiping local data must never be mirrored to Apple Reminders: forget the link first.
-                RemindersSync.shared.forgetLink()
-                try? context.delete(model: OneTask.self)
-                try? context.delete(model: OneEvent.self)
-                try? context.delete(model: OneAlarm.self)
-                try? context.delete(model: OneList.self)
-                try? context.delete(model: Habit.self)
-            }
-        } message: {
-            Text("This only clears data stored in Today. Your Apple Calendar and Apple Reminders are not changed.")
-        }
+        .sheet(isPresented: $showsSettings) { SettingsView() }
     }
 
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
+
+    /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
+    private static func seedUITestReminder(_ context: ModelContext) {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingAddReminder"), i + 1 < args.count else { return }
+        context.insert(OneTask(title: args[i + 1]))
+    }
 
     private func setSidebar(_ open: Bool) {
         withAnimation(.snappy(duration: 0.3)) {
@@ -177,6 +171,7 @@ struct HomeView: View {
             #endif
             SampleData.insertIfNeeded(context)
             ListActions.ensureLists(in: context)
+            Self.seedUITestReminder(context)
             await CalendarSync.shared.connectIfFirstRun()
         }
         .onAppear { LaunchTimer.markFirstFrame() }

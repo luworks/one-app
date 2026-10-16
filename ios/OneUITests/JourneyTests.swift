@@ -144,4 +144,21 @@ final class JourneyTests: XCTestCase {
             .matching(NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned' AND label != %@", before)).firstMatch
         XCTAssertTrue(moved.waitForExistence(timeout: 3), "planned time changed after drag (was: \(before))")
     }
+
+    /// Settings is its own screen; Delete All Data is last and needs two confirmations (the second needs typing DELETE).
+    func testSettingsDeleteAllDataNeedsTwoConfirmations() {
+        tap(app.buttons["Open sidebar"])
+        XCTAssertFalse(app.buttons["Delete all data"].exists, "no destructive row in the sidebar")
+        tap(app.buttons["Settings"].firstMatch)
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let delete = app.buttons["Delete All Data…"]
+        for _ in 0..<4 where !delete.isHittable { app.swipeUp() }
+        tap(delete)
+        tap(app.buttons["Continue…"])   // first confirmation
+        let final = app.buttons["Delete All Data"]
+        XCTAssertTrue(final.waitForExistence(timeout: 5), "second confirmation")
+        XCTAssertFalse(final.isEnabled, "the button stays off until DELETE is typed")
+        tap(app.buttons["Cancel"].firstMatch)
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5), "cancel leaves everything as it was")
+    }
 }
