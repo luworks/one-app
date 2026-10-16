@@ -57,8 +57,8 @@ struct HomeView: View {
             ZStack(alignment: .leading) {
                 if drawer.isBuilt {
                     Sidebar(drawer: drawer, width: width,
-                            onNewChat: { openAsk(nil) },
-                            onOpen: { openAsk($0) },
+                            onNewChat: { openAsk(nil, fromSidebar: true) },
+                            onOpen: { openAsk($0, fromSidebar: true) },
                             onSettings: { showsSettings = true },
                             close: { drawer.set(open: false) })
                         .frame(width: width)
@@ -81,6 +81,16 @@ struct HomeView: View {
                     .modifier(DrawerMainSlide(model: drawer, width: width))
             }
         }
+        // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
+        // open, and the sidebar is put back underneath this screen when it goes back.
+        .fullScreenCover(item: $ask) { route in
+            AskView(thread: route.thread, onBack: { show in
+                // Put the sidebar back underneath, so closing or swiping right lands on it.
+                if route.fromSidebar { drawer.set(open: show, animated: false) }
+            }, onAdded: { capture in
+                if capture.hasDay { calendarDay = capture.day }
+            })
+        }
         .environment(toast)
         .sheet(isPresented: $showsSettings) { SettingsView() }
         .task {
@@ -92,10 +102,11 @@ struct HomeView: View {
 
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
 
-    /// Opens the AI screen on a new chat, or on a saved conversation.
-    private func openAsk(_ thread: ChatThread?) {
+    /// Opens the AI screen on a new chat, or on a saved conversation. Opened from the sidebar, closing it
+    /// (close button or swipe right) goes back to the sidebar.
+    private func openAsk(_ thread: ChatThread?, fromSidebar: Bool = false) {
         drawer.set(open: false, animated: false)   // snaps shut behind the AI screen as it covers the page
-        ask = AskRoute(thread: thread)
+        ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
     }
 
     /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
@@ -123,11 +134,6 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
-        .fullScreenCover(item: $ask) { route in
-            AskView(thread: route.thread, onAdded: { capture in
-                if capture.hasDay { calendarDay = capture.day }
-            })
-        }
         .sheet(isPresented: $showsSearch) { SearchView() }
         .sheet(item: $newItem) { item in
             switch item {
@@ -288,6 +294,8 @@ struct HomeView: View {
 struct AskRoute: Identifiable {
     let id = UUID()
     let thread: ChatThread?
+    /// Opened from the sidebar: going back returns there instead of to the page.
+    var fromSidebar = false
 }
 
 enum NewItem: Identifiable {
