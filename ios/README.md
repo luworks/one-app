@@ -2,7 +2,7 @@
 
 The native app. The HTML prototype in `src/` stays the design reference; this is what runs on the phone.
 
-Requires Xcode 16 or later and iOS 17 or later.
+Requires Xcode 27 and iOS 27.
 
 ## Run it on your iPhone (free Apple ID, no paid account)
 
