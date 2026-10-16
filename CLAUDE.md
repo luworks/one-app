@@ -6,7 +6,7 @@ The native SwiftUI app in `ios/` is the product and is ahead of the HTML/JS prot
 
 ## Product principles (do not break these)
 1. **AI prepares, the user decides.** AI never sends, moves or creates anything without an explicit tap. Every AI change appears as a preview card (`planCard`, `captureCard`) with Apply/Add and Undo.
-2. **Meetings stay fixed; tasks flex.** Events are never moved by AI or drag. Only flexible tasks move; linked alarms follow the task.
+2. **Meetings stay fixed by default; tasks flex.** Events are never moved by drag, by plan cards (`DayPlanner` treats them as fixed obstacles) or by AI on its own. Flexible tasks move; linked alarms follow the task. The one exception: the user asks the AI to move a meeting (or taps an AI conflict card), and the AI shows a preview card that says who is affected (e.g. "invitation update goes to 4 attendees"). Only the user's Apply writes it, to this occurrence only, with Undo. Details: `docs/apple-intelligence.md` §2.6.
 3. **Planned time ≠ deadline.** Moving work never moves `due`/`dueTime`.
 4. **Stopping an alarm ≠ finishing a task.** Only "Mark task done" completes.
 5. **Ideas aren't obligations.** Notes never become tasks unless the user taps "Make a task".

@@ -202,7 +202,8 @@ final class CalendarSync {
     }
 
     /// Saves a copy of `event` to the default calendar and returns its identifier.
-    func save(_ event: OneEvent) -> String? {
+    /// `span` is what a repeating event's change applies to; the default keeps the old behavior, AI edits pass `.thisEvent`.
+    func save(_ event: OneEvent, span: EKSpan = .futureEvents) -> String? {
         guard isOn, let calendar = store.defaultCalendarForNewEvents else {
             log.error("save skipped isOn=\(self.isOn) default=\(self.store.defaultCalendarForNewEvents != nil)")
             return nil
@@ -229,7 +230,7 @@ final class CalendarSync {
             ek.recurrenceRules = nil
         }
         do {
-            try store.save(ek, span: .futureEvents)
+            try store.save(ek, span: span)
             log.info("saved \(ek.eventIdentifier ?? "nil", privacy: .public)")
             return ek.eventIdentifier
         } catch {
@@ -238,9 +239,15 @@ final class CalendarSync {
         }
     }
 
-    func delete(externalID: String?) {
+    func delete(externalID: String?, span: EKSpan = .futureEvents) {
         guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else { return }
-        try? store.remove(ek, span: .futureEvents)
+        try? store.remove(ek, span: span)
+    }
+
+    /// Who a change to the system copy of an event reaches: attendee count and whether you organize it. Nil without a system copy.
+    func audience(externalID: String?) -> (attendees: Int, isOrganizer: Bool)? {
+        guard isOn, storeReady, let id = externalID, let ek = store.event(withIdentifier: id) else { return nil }
+        return (ek.attendees?.count ?? 0, ek.organizer?.isCurrentUser ?? true)
     }
 }
 

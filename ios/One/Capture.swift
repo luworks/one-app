@@ -16,6 +16,8 @@ struct Capture: Equatable {
     var durationMinutes: Int? = nil
     /// What the line most likely is. The user can switch it on the preview card.
     var kind: Kind = .task
+    /// Ring like an alarm (AlarmKit). Only set by the on-device model for "wake me at 7"; needs a time.
+    var ringsAsAlarm: Bool = false
     /// A whole-day event (no start time). Only the Apple Intelligence path sets it today.
     var isAllDay: Bool = false
     /// True when the on-device model (Apple Intelligence) produced this proposal; shown as a small label on the card.
@@ -40,6 +42,7 @@ struct Capture: Equatable {
             else if hasDay { parts.append("Due " + DayLabel.text(for: day)) }
             else { parts.append("No date, goes to your Inbox") }
             if let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)) { parts.append(rule.label) }
+            if ringsAsAlarm { parts.append("Rings as alarm") }
         }
         return parts.joined(separator: " · ")
     }
@@ -71,6 +74,16 @@ enum CaptureParser {
         }
         func offset(_ n: Int) -> Date? { calendar.date(byAdding: .day, value: n, to: today) }
 
+        // "每周三" / "every Monday": weekly, first on the next such weekday.
+        let englishDays = weekdayNames.map(\.0).joined(separator: "|")
+        if let m = take(#"每(?:个)?(?:周|星期|礼拜)([一二三四五六日天])"#, from: &text) {
+            repeatRule = RepeatRule.weekly.rawValue
+            setDay(upcoming(chinese(m[0]), today: today, calendar: calendar, allowToday: true))
+        } else if let m = take(#"\bevery\s+("# + englishDays + #")\b"#, from: &text) {
+            repeatRule = RepeatRule.weekly.rawValue
+            setDay(upcoming(weekday(m[0]), today: today, calendar: calendar, allowToday: true))
+        }
+
         // Repeat ("every day", "weekly", "每天"…). Weekday first so "every weekday" isn't read as "every week".
         let repeats: [(String, RepeatRule)] = [
             (#"\bevery\s+weekday\b|\bweekdays\b|工作日|每个工作日"#, .weekdays),
@@ -84,14 +97,54 @@ enum CaptureParser {
             break
         }
 
+        // Chinese numerals in clock times and dates ("七点半", "九点", "下个月三号") become digits first.
+        text = normalizeChinese(text)
+        text = normalizeEnglishClock(text)
+
+        // Relative times: "30分钟后", "半小时后", "in 2 hours", "in half an hour". Gives the day and the time at once.
+        var relativeHour: Int?
+        var relativeMinute = 0
+        if let minutes = takeRelativeMinutes(from: &text) {
+            let target = now.addingTimeInterval(TimeInterval(minutes * 60))
+            let c = calendar.dateComponents([.hour, .minute], from: target)
+            relativeHour = c.hour
+            relativeMinute = c.minute ?? 0
+            setDay(target)
+        }
+
         // Relative day words.
-        let dayWords: [(String, Int)] = [
-            (#"\bday\s+after\s+tomorrow\b"#, 2), ("大后天", 3), ("后天", 2), ("明天", 1), ("今天", 0), ("今晚", 0),
-            (#"\btomorrow\b"#, 1), (#"\btonight\b"#, 0), (#"\btoday\b"#, 0),
+        // Some day words also say which half of the day a bare hour means ("今晚8点" is 20:00, "明早6点" is 06:00).
+        let dayWords: [(String, Int, String?)] = [
+            (#"\bday\s+after\s+tomorrow\b"#, 2, nil), ("大后天", 3, nil), ("后天", 2, nil), ("后儿个", 2, nil), ("后儿", 2, nil), ("明天", 1, nil), ("明儿个", 1, nil), ("明儿", 1, nil),
+            ("今天", 0, nil), ("今儿个", 0, nil), ("今儿", 0, nil),
+            ("明早", 1, "上午"), ("明晚", 1, "晚上"), ("今早", 0, "上午"), ("今晚", 0, "晚上"),
+            (#"\b(?:tomorrow|tomorow|tommorow|tmrw|tmr|2morrow|2mrw)\b"#, 1, nil), (#"\btonight\b"#, 0, "晚上"), (#"\btoday\b"#, 0, nil),
         ]
-        for (word, n) in dayWords where take(lead + word, from: &text) != nil {
+        var impliedPeriod: String?
+        for (word, n, period) in dayWords where take(lead + word, from: &text) != nil {
             setDay(offset(n))
+            impliedPeriod = period
             break
+        }
+        // An alarm request means a morning hour unless it says otherwise ("wake me at 6:30" is 06:30, not 18:30).
+        let isAlarm = raw.range(of: #"wake\s+me|\balarm\b|闹钟|起床|叫醒"#, options: [.regularExpression, .caseInsensitive]) != nil
+        let defaultPeriod = impliedPeriod ?? (isAlarm ? "上午" : nil)
+
+        // Weekend (= Saturday), end of month, "下个月3号", "下下周一".
+        if !hasDay {
+            if let m = take(#"下下(?:周|星期|礼拜)([一二三四五六日天])"#, from: &text) {
+                setDay(nextWeek(chinese(m[0]), today: today, calendar: calendar).flatMap { calendar.date(byAdding: .day, value: 7, to: $0) })
+            } else if take(#"下(?:个)?(?:周末|星期末)|\bnext\s+weekend\b"#, from: &text) != nil {
+                setDay(nextWeek(7, today: today, calendar: calendar))
+            } else if take(#"(?:这个?|本)?(?:周末|星期末)|\b(?:this\s+|on\s+the\s+)?weekend\b"#, from: &text) != nil {
+                setDay(upcoming(7, today: today, calendar: calendar, allowToday: true))
+            } else if take(#"下个?月[底末](?:之?前)?|\b(?:the\s+)?end\s+of\s+next\s+month\b"#, from: &text) != nil {
+                setDay(monthEnd(offset: 1, today: today, calendar: calendar))
+            } else if take(#"(?:本|这个)?月[底末](?:之?前)?|\b(?:the\s+)?end\s+of\s+(?:the\s+|this\s+)?month\b|\bmonth[-\s]end\b"#, from: &text) != nil {
+                setDay(monthEnd(offset: 0, today: today, calendar: calendar))
+            } else if let m = take(#"下个?月\s*(\d{1,2})\s*[号日]"#, from: &text), let d = Int(m[0] ?? "") {
+                setDay(dayInMonth(d, offset: 1, today: today, calendar: calendar))
+            }
         }
 
         // Weekdays: "next Monday" / 下周一 = next week's; "Friday" / 周五 = the next one after today.
@@ -99,12 +152,14 @@ enum CaptureParser {
             let english = weekdayNames.map(\.0).joined(separator: "|")
             if let m = take(lead + #"\bnext\s+("# + english + #")\b"#, from: &text) {
                 setDay(nextWeek(weekday(m[0]), today: today, calendar: calendar))
-            } else if let m = take(#"下(?:周|星期|礼拜)([一二三四五六日天])"#, from: &text) {
+            } else if let m = take(#"(?<!一)下(?:周|星期|礼拜)([一二三四五六日天])"#, from: &text) {
                 setDay(nextWeek(chinese(m[0]), today: today, calendar: calendar))
             } else if let m = take(lead + #"\b("# + english + #")\b"#, from: &text) {
                 setDay(upcoming(weekday(m[0]), today: today, calendar: calendar))
-            } else if let m = take(#"(?:这|本)?(?:周|星期|礼拜)([一二三四五六日天])"#, from: &text) {
+            } else if let m = take(#"(?:这个?|本)(?:周|星期|礼拜)([一二三四五六日天])"#, from: &text) {
                 setDay(upcoming(chinese(m[0]), today: today, calendar: calendar, allowToday: true))
+            } else if let m = take(#"(?:周|星期|礼拜)([一二三四五六日天])"#, from: &text) {
+                setDay(upcoming(chinese(m[0]), today: today, calendar: calendar))
             }
         }
 
@@ -118,15 +173,20 @@ enum CaptureParser {
                 setDay(date(month: mo, day: d, today: today, calendar: calendar))
             } else if let m = take(lead + #"\b(\d{1,2})/(\d{1,2})\b"#, from: &text), let mo = Int(m[0] ?? ""), let d = Int(m[1] ?? "") {
                 setDay(date(month: mo, day: d, today: today, calendar: calendar))
+            } else if let m = take(#"\b(?:on|by|before|until|the)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)\b"#, from: &text), let d = Int(m[0] ?? "") {
+                // "the 22nd", "on the 1st": this month if it hasn't passed, else next month.
+                setDay(dayInMonth(d, offset: nil, today: today, calendar: calendar))
+            } else if let m = take(#"(?<![\d月])(\d{1,2})\s*[号日](?![楼线门口店])"#, from: &text), let d = Int(m[0] ?? "") {
+                setDay(dayInMonth(d, offset: nil, today: today, calendar: calendar))
             }
         }
 
         // Times. A range ("3-4pm", "10点到11点") gives a start and a duration.
-        var hour: Int?
-        var minute = 0
+        var hour: Int? = relativeHour
+        var minute = relativeMinute
         var duration: Int?
-        let rangeEN = lead + #"\b(\d{1,2})(?:[:：](\d{2}))?\s*(am|pm)?\s*(?:-|–|to|~)\s*(\d{1,2})(?:[:：](\d{2}))?\s*(am|pm)\b"#
-        let rangeZH = #"(上午|早上|中午|下午|晚上)?\s*(\d{1,2})(?:[:：](\d{2})|点(半)?)?\s*(?:到|至|-|~)\s*(\d{1,2})(?:[:：](\d{2})|点(半)?)"#
+        let rangeEN = lead + #"(?<![:：.\d])\b(\d{1,2})(?:[:：](\d{2}))?\s*(am|pm)?\s*(?:-|–|to|~)\s*(\d{1,2})(?:[:：](\d{2}))?\s*(am|pm)\b"#
+        let rangeZH = #"(凌晨|清晨|早晨|上午|早上|中午|下午|傍晚|晚上)?\s*(?<![:：.\d])(\d{1,2})(?:[:：](\d{2})|点(半)?)?\s*(?:到|至|-|~)\s*(\d{1,2})(?:[:：](\d{2})|点(半)?)"#
         if let m = take(rangeEN, from: &text) {
             let endPeriod = m[5]
             let endH = adjust(Int(m[3] ?? ""), period: endPeriod)
@@ -138,29 +198,37 @@ enum CaptureParser {
             minute = Int(m[1] ?? "") ?? 0
             if let h = hour, let e = endH { duration = (e * 60 + endM) - (h * 60 + minute) }
         } else if let m = take(rangeZH, from: &text) {
-            hour = adjust(Int(m[1] ?? ""), period: m[0])
+            hour = adjust(Int(m[1] ?? ""), period: m[0] ?? defaultPeriod)
             minute = m[3] != nil ? 30 : Int(m[2] ?? "") ?? 0
-            let endH = adjust(Int(m[4] ?? ""), period: m[0])
+            let endH = adjust(Int(m[4] ?? ""), period: m[0] ?? defaultPeriod)
             let endM = m[6] != nil ? 30 : Int(m[5] ?? "") ?? 0
             if let h = hour, let e = endH { duration = (e * 60 + endM) - (h * 60 + minute) }
         }
         if let d = duration, d <= 0 { duration = nil }
+        let rangeDuration = duration
+        // A length in words ("开会两个小时", "for 90 minutes", "2-hour") is a duration but does not make it an event by itself.
+        if duration == nil, let d = takeDurationMinutes(from: &text) { duration = d }
         if hour != nil {
             // already set by a range
-        } else if let m = take(lead + #"(上午|早上|中午|下午|晚上)?\s*(\d{1,2})[:：](\d{2})\s*(am|pm)?\b"#, from: &text) {
-            hour = adjust(Int(m[1] ?? ""), period: m[0] ?? m[3])
+        } else if let m = take(lead + #"(凌晨|清晨|早晨|上午|早上|中午|下午|傍晚|晚上)?\s*(\d{1,2})[:：](\d{2})\s*(am|pm)?\b"#, from: &text) {
+            hour = adjust(Int(m[1] ?? ""), period: m[0] ?? m[3] ?? defaultPeriod)
             minute = Int(m[2] ?? "") ?? 0
         } else if let m = take(lead + #"\b(\d{1,2})\s*(am|pm)\b"#, from: &text) {
             hour = adjust(Int(m[0] ?? ""), period: m[1])
-        } else if let m = take(#"(上午|早上|中午|下午|晚上)?\s*(\d{1,2})\s*点\s*(半|(\d{1,2})\s*分?)?"#, from: &text) {
-            hour = adjust(Int(m[1] ?? ""), period: m[0])
+        } else if let m = take(#"(凌晨|清晨|早晨|上午|早上|中午|下午|傍晚|晚上)?\s*(\d{1,2})\s*点\s*(半|(\d{1,2})\s*分?)?\s*(之?前)?"#, from: &text) {
+            hour = adjust(Int(m[1] ?? ""), period: m[0] ?? defaultPeriod)
             minute = m[2] == "半" ? 30 : Int(m[3] ?? "") ?? 0
+            // "下午5点前" with no day is a deadline today.
+            if m[4] != nil, !hasDay { setDay(today) }
         } else if take(lead + #"\bnoon\b|中午"#, from: &text) != nil {
             hour = 12
         } else if take(lead + #"\bmidnight\b"#, from: &text) != nil {
             hour = 0
         } else if let m = take(#"\bat\s+(\d{1,2})\b(?![:/])"#, from: &text) {
-            hour = adjust(Int(m[0] ?? ""), period: nil)
+            hour = adjust(Int(m[0] ?? ""), period: defaultPeriod)
+        } else if impliedPeriod != nil, let m = take(#"(?<![\d:/.-])\b(\d{1,2})\b(?![:/.\d-]|\s*(?:%|个|人|号|日|月|块|元|st|nd|rd|th))"#, from: &text) {
+            // "tonight 8", "明早 9": a bare number after a day word that says morning / evening.
+            hour = adjust(Int(m[0] ?? ""), period: defaultPeriod)
         }
         if let h = hour, !(0...23).contains(h) || !(0...59).contains(minute) {
             hour = nil
@@ -185,7 +253,7 @@ enum CaptureParser {
         let finalTitle = title.isEmpty ? raw : title
         return Capture(title: finalTitle, day: day, hasDay: hasDay, hour: hour, minute: minute,
                        repeatRule: repeatRule, durationMinutes: duration,
-                       kind: kind(title: finalTitle, hour: hour, duration: duration, repeatRule: repeatRule))
+                       kind: kind(title: finalTitle, hour: hour, duration: rangeDuration, repeatRule: repeatRule))
     }
 
     private static let eventWords = [
@@ -237,12 +305,159 @@ enum CaptureParser {
         return d < today ? calendar.date(byAdding: .year, value: 1, to: d) : d
     }
 
+    // MARK: Chinese numerals, month days, relative times
+
+    private static let englishHours: [String: Int] = ["one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                                                      "nine": 9, "ten": 10, "eleven": 11, "twelve": 12]
+
+    /// "three pm" → "3 pm"; "to like four thirty" → "at 4:30"; "at five" → "at 5". Only after a time preposition or before am/pm,
+    /// so "one more thing" and "at one point" stay words.
+    private static func normalizeEnglishClock(_ text: String) -> String {
+        let words = englishHours.keys.joined(separator: "|")
+        let minutes = ["thirty": ":30", "fifteen": ":15", "forty five": ":45", "forty-five": ":45", "o'clock": "", "oclock": ""]
+        var s = text
+        func rewrite(_ pattern: String, _ build: (NSTextCheckingResult, NSString) -> String) {
+            guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return }
+            var ns = s as NSString
+            for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)).reversed() {
+                ns = ns.replacingCharacters(in: m.range, with: build(m, ns)) as NSString
+            }
+            s = ns as String
+        }
+        // "three pm"
+        rewrite(#"\b("# + words + #")\s*(a\.?m\.?|p\.?m\.?)(?![a-z])"#) { m, ns in
+            "\(englishHours[ns.substring(with: m.range(at: 1)).lowercased()] ?? 0) " + ns.substring(with: m.range(at: 2))
+        }
+        // "at five", "to like four thirty", "around six o'clock"
+        let after = #"(?=\s*(?:$|[,.!?;:)]|(?:am|pm|on|tomorrow|today|tonight|instead|please|thanks|then|and|for|with|in)\b))"#
+        rewrite(#"\b(?:at|to|by|around|about|until|till)\s+(?:like\s+)?("# + words + #")(?:\s+(thirty|fifteen|forty[- ]five|o'?clock))?"# + after) { m, ns in
+            let h = englishHours[ns.substring(with: m.range(at: 1)).lowercased()] ?? 0
+            let mm = m.range(at: 2).location == NSNotFound ? "" : (minutes[ns.substring(with: m.range(at: 2)).lowercased()] ?? "")
+            return "at \(h)\(mm)"
+        }
+        return s
+    }
+
+    private static let digits: [Character: Int] = ["零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9]
+
+    /// 0–99: 九, 十, 十二, 二十, 二十三.
+    private static func chineseNumber(_ s: String) -> Int? {
+        if let ten = s.firstIndex(of: "十") {
+            let left = s[s.startIndex..<ten], right = s[s.index(after: ten)...]
+            guard left.count <= 1, right.count <= 1 else { return nil }
+            let l = left.isEmpty ? 1 : digits[left.first!]
+            let r = right.isEmpty ? 0 : digits[right.first!]
+            guard let l, let r, l >= 1 else { return nil }
+            return l * 10 + r
+        }
+        guard s.count == 1 else { return nil }
+        return digits[s.first!]
+    }
+
+    /// 七点半 → 7点半, 十点十分 → 10点10分, 下个月三号 → 下个月3号, 十月二十日 → 10月20日. "一点" only counts as a clock time after a period word or 到/至/在/约/于
+    /// (so "晚一点" stays a phrase).
+    private static func normalizeChinese(_ text: String) -> String {
+        var s = text.replacingOccurrences(of: "点一刻", with: "点15分").replacingOccurrences(of: "点三刻", with: "点45分")
+            .replacingOccurrences(of: "点钟", with: "点")
+        func replace(_ pattern: String, _ transform: (NSString, NSTextCheckingResult) -> String?) {
+            guard let re = try? NSRegularExpression(pattern: pattern) else { return }
+            var result = s as NSString
+            for m in re.matches(in: s, range: NSRange(location: 0, length: (s as NSString).length)).reversed() {
+                if let r = transform(result, m) { result = result.replacingCharacters(in: m.range(at: 1), with: r) as NSString }
+            }
+            s = result as String
+        }
+        let allowedBeforeOne = ["上午", "下午", "中午", "晚上", "凌晨", "早上", "清晨", "早晨", "傍晚", "到", "至", "在", "约", "于", "改到", "提前到"]
+        replace(#"([零一二两三四五六七八九十]{1,3})(?:点|号|月)"#) { str, m in
+            let numeral = str.substring(with: m.range(at: 1))
+            let end = m.range.location + m.range.length
+            let unit = str.substring(with: NSRange(location: end - 1, length: 1))
+            if unit == "号", end < str.length, "楼线门口店".contains(str.substring(with: NSRange(location: end, length: 1))) { return nil }
+            if numeral == "一", unit == "点" {
+                let before = str.substring(to: m.range.location)
+                if !before.trimmingCharacters(in: .whitespaces).isEmpty,
+                   !allowedBeforeOne.contains(where: { before.hasSuffix($0) }) { return nil }
+            }
+            return chineseNumber(numeral).map(String.init)
+        }
+        replace(#"(?<=月)([一二三四五六七八九十]{1,3})(?=[日号])"#) { str, m in chineseNumber(str.substring(with: m.range(at: 1))).map(String.init) }
+        replace(#"(?<=点)((?:[二三四五]十[一二三四五六七八九]?)|(?:十[一二三四五六七八九]))"#) { str, m in chineseNumber(str.substring(with: m.range(at: 1))).map(String.init) }
+        replace(#"(?<=点)(零[一二三四五六七八九])"#) { str, m in String(digits[str.substring(with: m.range(at: 1)).last!] ?? 0) }
+        replace(#"(?<=点)([一二三四五六七八九十]{1,3})(?=分)"#) { str, m in chineseNumber(str.substring(with: m.range(at: 1))).map(String.init) }
+        return s
+    }
+
+    /// Minutes from now for "30分钟后", "半小时后", "一个半小时后", "in 2 hours", "in an hour", "in half an hour". Removes the match.
+    private static func takeRelativeMinutes(from text: inout String) -> Int? {
+        let num = #"\d+|[零一二两三四五六七八九十]{1,3}"#
+        if let m = take("(" + num + #")\s*个半小时\s*(?:以后|之后|后)"#, from: &text), let n = amount(m[0]) { return n * 60 + 30 }
+        if let m = take("(" + num + #"|半)\s*(?:个)?\s*(小时|钟头|分钟)\s*(?:以后|之后|后)"#, from: &text) {
+            let unit = (m[1] ?? "").hasPrefix("分") ? 1 : 60
+            if m[0] == "半" { return unit == 60 ? 30 : nil }
+            return amount(m[0]).map { $0 * unit }
+        }
+        let words = "a|an|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty|forty|forty-five"
+        if take(#"\bin\s+half\s+an?\s+hour\b"#, from: &text) != nil { return 30 }
+        if let m = take(#"\bin\s+(\d+|"# + words + #")\s*(hours?|hrs?|minutes?|mins?)\b"#, from: &text) {
+            let unit = (m[1] ?? "").hasPrefix("h") ? 60 : 1
+            return amount(m[0]).map { $0 * unit }
+        }
+        return nil
+    }
+
+    /// "两个小时", "半小时", "一个半小时", "90分钟", "for 2 hours", "2-hour", "half an hour" → minutes. Not "...后" (that is a relative time).
+    private static func takeDurationMinutes(from text: inout String) -> Int? {
+        let num = #"\d+|[零一二两三四五六七八九十]{1,3}"#
+        if let m = take("(" + num + #")\s*个半(?:小时|钟头)(?!\s*(?:以后|之后|后))"#, from: &text), let n = amount(m[0]) { return n * 60 + 30 }
+        if let m = take("(" + num + #"|半)\s*(?:个)?\s*(小时|钟头|分钟)(?!\s*(?:以后|之后|后))(?:的)?"#, from: &text) {
+            let unit = (m[1] ?? "").hasPrefix("分") ? 1 : 60
+            if m[0] == "半" { return unit == 60 ? 30 : nil }
+            return amount(m[0]).map { $0 * unit }
+        }
+        if take(#"\b(?:for\s+)?half\s+an?\s+hour\b"#, from: &text) != nil { return 30 }
+        let words = "a|an|one|two|three|four|five|six|ten|fifteen|twenty|thirty|forty-five|ninety"
+        if let m = take(#"\b(?:for\s+)?(\d+|"# + words + #")[\s-]*(hours?|hrs?|minutes?|mins?)\b"#, from: &text) {
+            let unit = (m[1] ?? "").hasPrefix("h") ? 60 : 1
+            return amount(m[0]).map { $0 * unit }
+        }
+        return nil
+    }
+
+    private static func amount(_ s: String?) -> Int? {
+        guard let s else { return nil }
+        if let n = Int(s) { return n }
+        if let n = chineseNumber(s) { return n }
+        let words: [String: Int] = ["a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                                    "nine": 9, "ten": 10, "fifteen": 15, "twenty": 20, "thirty": 30, "forty": 40, "forty-five": 45]
+        return words[s.lowercased()]
+    }
+
+    /// The `n`th of this month if it hasn't passed (offset nil) or of the month `offset` months ahead; nil if the month is too short.
+    private static func dayInMonth(_ n: Int, offset: Int?, today: Date, calendar: Calendar) -> Date? {
+        guard (1...31).contains(n), let start = calendar.dateInterval(of: .month, for: today)?.start else { return nil }
+        func make(_ months: Int) -> Date? {
+            guard let base = calendar.date(byAdding: .month, value: months, to: start),
+                  let days = calendar.range(of: .day, in: .month, for: base)?.count, n <= days else { return nil }
+            return calendar.date(byAdding: .day, value: n - 1, to: base)
+        }
+        if let offset { return make(offset) }
+        if n >= calendar.component(.day, from: today), let d = make(0) { return d }
+        return make(1)
+    }
+
+    private static func monthEnd(offset: Int, today: Date, calendar: Calendar) -> Date? {
+        guard let start = calendar.dateInterval(of: .month, for: today)?.start,
+              let base = calendar.date(byAdding: .month, value: offset, to: start),
+              let days = calendar.range(of: .day, in: .month, for: base)?.count else { return nil }
+        return calendar.date(byAdding: .day, value: days - 1, to: base)
+    }
+
     private static func adjust(_ hour: Int?, period: String?) -> Int? {
         guard var h = hour else { return nil }
         switch period?.lowercased() {
-        case "pm"?, "下午"?, "晚上"?: if h < 12 { h += 12 }
+        case "pm"?, "下午"?, "晚上"?, "傍晚"?: if h < 12 { h += 12 }
         case "中午"?: if h < 11 { h += 12 }
-        case "am"?, "上午"?, "早上"?: if h == 12 { h = 0 }
+        case "am"?, "上午"?, "早上"?, "凌晨"?, "清晨"?, "早晨"?: if h == 12 { h = 0 }
         case nil: if (1...6).contains(h) { h += 12 } // "3点开会" / "at 4" almost always means PM
         default: break
         }

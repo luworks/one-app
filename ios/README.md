@@ -2,7 +2,7 @@
 
 The native app (formerly "one."). It puts calendar, reminders and alarms in one place. Direction: AI-native, data stays on the device, Apple Calendar and Apple Reminders are the source of truth (EventKit), alarms use AlarmKit. The HTML prototype in `src/` is the older design reference; the iOS app is now ahead of it. See `docs/goal-and-rubric.md` for the goal, roadmap and eval.
 
-Requires Xcode 16 or later and iOS 17 or later (AlarmKit alarms need iOS 26).
+Requires Xcode 27 and iOS 27.
 
 The display name is **Today**. The bundle id (`com.luworks.one`), the Xcode project and the target names (`One`, `OneUITests`) are unchanged.
 

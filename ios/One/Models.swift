@@ -170,6 +170,16 @@ final class OneEvent {
         return next.addingTimeInterval(-lead)
     }
 
+    /// Everything needed to recreate a deleted event (for Undo).
+    func copy() -> OneEvent {
+        let e = OneEvent(title: title, start: start, durationMinutes: durationMinutes, calendarName: calendarName)
+        e.reminderOffsetMinutes = reminderOffsetMinutes
+        e.isAllDay = isAllDay
+        e.ringsAsAlarm = ringsAsAlarm
+        e.repeatRule = repeatRule
+        return e
+    }
+
     init(title: String, start: Date, durationMinutes: Int, calendarName: String = "Local") {
         self.title = title
         self.start = start
@@ -183,6 +193,7 @@ extension Capture {
         let t = OneTask(title: title, plannedStart: plannedStart, durationMinutes: durationMinutes ?? 25,
                         due: plannedStart == nil && hasDay ? day : nil)
         t.repeatRule = repeatRule
+        t.ringsAsAlarm = ringsAsAlarm && plannedStart != nil
         return t
     }
 
