@@ -2,11 +2,10 @@ import SwiftUI
 import SwiftData
 
 /// One alarm in the list, as Clock draws it: a big light time with a small AM/PM, the label and repeat under it,
-/// and a green switch. Disabled alarms are gray. In Edit mode the switch becomes a chevron.
+/// and a green switch. Disabled alarms are gray.
 struct AlarmRow: View {
     @Bindable var alarm: OneAlarm
     var state: AlarmLiveState?
-    var isEditing: Bool
     var onEdit: () -> Void
 
     @ScaledMetric(relativeTo: .largeTitle) private var timeSize = 48
@@ -42,12 +41,7 @@ struct AlarmRow: View {
             .accessibilityLabel("\(parts.time) \(parts.suffix ?? ""), \(subtitle)")
             .accessibilityIdentifier("alarm.row")
 
-            if isEditing {
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color(.tertiaryLabel))
-                    .accessibilityHidden(true)
-            } else if isRinging {
+            if isRinging {
                 Button("Stop") { if let id = alarm.alarmKitID { Ringer.stop(id) } }
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.capsule)
