@@ -256,9 +256,14 @@ struct AskView: View {
         let candidates = editCandidates()
         thinking = true
         captureTask = Task { @MainActor in
-            let plan = try? await Editing.plan(text, items: candidates.items, now: .now, calendar: .current)
+            let items = candidates.items
+            let plan = await ModelTimeout.run(seconds: 20) { try? await Editing.plan(text, items: items, now: .now, calendar: .current) }
             guard !Task.isCancelled else { return }
             thinking = false
+            if plan == nil {
+                messages.append(ChatMessage(role: .ai, text: "The on-device model didn't answer in time. Try again in a moment, or open the item to edit it."))
+                return
+            }
             let decision = Editing.decide(text: text, plan: plan, items: candidates.items, now: .now, calendar: .current)
             switch decision.op {
             case .none:
@@ -275,8 +280,9 @@ struct AskView: View {
     private func clarifyQuestion(_ d: EditDecision, plan: EditPlan?, items: [EditItem]) -> String {
         if d.reason.hasPrefix("several items match:") {
             let ids = d.reason.dropFirst("several items match:".count).split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
-            let names = ids.compactMap { id in items.first { $0.id == id }?.title }.map { "“\($0)”" }
-            return "Which one do you mean: " + names.joined(separator: ", ") + "?"
+            let all = ids.compactMap { id in items.first { $0.id == id }?.title }.map { "“\($0)”" }
+            let names = all.prefix(4).joined(separator: ", ") + (all.count > 4 ? ", or another one" : "")
+            return "Which one do you mean: " + names + "?"
         }
         switch d.reason {
         case "several items": return "I change one item at a time. Which one first?"
@@ -303,7 +309,8 @@ struct AskView: View {
             }
             notes.append("Meetings move only when you ask. This changes this one event.")
             change = PendingChange(subject: .event(event), delete: d.op == .delete, title: event.title,
-                                   oldText: DayLabel.withTime(event.start), newStart: d.newStart, notes: notes)
+                                   oldText: DayLabel.withTime(event.start), newStart: d.newStart, notes: notes,
+                                   attendees: audience?.attendees ?? 0)
         } else if let task = candidates.tasks[id] {
             var notes: [String] = []
             if d.op == .move {
@@ -311,7 +318,8 @@ struct AskView: View {
                 if task.ringsAsAlarm { notes.append("Its alarm follows the new time.") }
             }
             change = PendingChange(subject: .task(task), delete: d.op == .delete, title: task.title,
-                                   oldText: task.plannedStart.map { DayLabel.withTime($0) } ?? "Not scheduled", newStart: d.newStart, notes: notes)
+                                   oldText: task.plannedStart.map { DayLabel.withTime($0) } ?? "Not scheduled", newStart: d.newStart, notes: notes,
+                                   attendees: 0)
         } else { return }
         messages.append(ChatMessage(role: .ai, text: "Here's the change. Nothing changes until you apply it."))
     }
@@ -336,7 +344,7 @@ struct AskView: View {
                 CalendarSync.shared.delete(externalID: event.externalID, span: .thisEvent)
                 withAnimation { context.delete(event) }
                 messages.append(ChatMessage(role: .ai, text: "Deleted “\(backup.title)”."))
-                offerUndo("Deleted “\(backup.title)”. Attendee updates already sent can't be recalled.") {
+                offerUndo("Deleted “\(backup.title)”." + recallNote(c)) {
                     backup.externalID = CalendarSync.shared.save(backup, span: .thisEvent)
                     context.insert(backup)
                 }
@@ -349,12 +357,16 @@ struct AskView: View {
                     return
                 }
                 messages.append(ChatMessage(role: .ai, text: "Moved “\(event.title)” to \(DayLabel.withTime(new))."))
-                offerUndo("Moved “\(event.title)”. Attendee updates already sent can't be recalled.") {
+                offerUndo("Moved “\(event.title)”." + recallNote(c)) {
                     event.start = old
                     if event.externalID != nil { _ = CalendarSync.shared.save(event, span: .thisEvent) }
                 }
             }
         }
+    }
+
+    private func recallNote(_ c: PendingChange) -> String {
+        c.attendees > 0 ? " Attendee updates already sent can't be recalled." : ""
     }
 
     /// The app's toast sits behind this full-screen page, so Undo lives here.
@@ -555,6 +567,7 @@ struct PendingChange: Equatable, Identifiable {
     let oldText: String
     let newStart: Date?
     let notes: [String]
+    let attendees: Int
 
     static func == (a: PendingChange, b: PendingChange) -> Bool { a.id == b.id }
 

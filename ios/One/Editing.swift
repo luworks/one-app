@@ -111,7 +111,12 @@ enum Editing {
         let specific = items.filter { titleMatches($0.title) }
         if !specific.isEmpty { return specific }
         let meetingWord = lower.range(of: #"meeting|会议|开会|[把将的]会(?=[推改挪提延移取都])"#, options: .regularExpression) != nil
-        if meetingWord { return items.filter { $0.type == "event" && $0.attendees > 0 } }
+        if meetingWord {
+            // With attendee info, meetings are the events other people are on; without it (no calendar access) any event could be it.
+            let events = items.filter { $0.type == "event" }
+            let withPeople = events.filter { $0.attendees > 0 }
+            return withPeople.isEmpty ? events : withPeople
+        }
         return []
     }
 

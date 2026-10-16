@@ -9,7 +9,8 @@ import FoundationModels
 enum Understander {
     static func parse(_ text: String, now: Date = .now, calendar: Calendar = .current) async -> Capture {
         let parsed = CaptureParser.parse(text, now: now, calendar: calendar)
-        guard let kind = await Understanding.classify(text) else { return parsed }
+        // The first request after launch can take a long time while the model loads: the parser result is used instead.
+        guard let kind = await ModelTimeout.run(seconds: 8, { await Understanding.classify(text) }) else { return parsed }
         // "Remind me" is not an alarm: the model's alarm answer only counts when the text asks for one.
         return Understanding.combine(parser: parsed, kind: kind, text: text)
     }
@@ -17,6 +18,31 @@ enum Understander {
     /// Loads the model ahead of the first request. No-op where the model isn't available.
     static func prewarm() {
         Understanding.prewarm()
+    }
+}
+
+/// Whichever finishes first: the work, or nil when the time is up (a late result is dropped).
+enum ModelTimeout {
+    static func run<T: Sendable>(seconds: Double, _ work: @escaping @Sendable () async -> T?) async -> T? {
+        await withCheckedContinuation { (cont: CheckedContinuation<T?, Never>) in
+            let once = Once<T>(cont)
+            let job = Task { once.resume(await work()) }
+            Task {
+                try? await Task.sleep(for: .seconds(seconds))
+                once.resume(nil)
+                job.cancel()
+            }
+        }
+    }
+
+    private final class Once<T: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cont: CheckedContinuation<T?, Never>?
+        init(_ cont: CheckedContinuation<T?, Never>) { self.cont = cont }
+        func resume(_ value: T?) {
+            lock.lock(); let c = cont; cont = nil; lock.unlock()
+            c?.resume(returning: value)
+        }
     }
 }
 
