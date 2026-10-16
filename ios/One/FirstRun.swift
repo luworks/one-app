@@ -27,4 +27,12 @@ enum FirstRun {
             await RemindersSync.shared.connectIfFirstRun()
         }
     }
+
+    /// Opening the Alarms tab asks for what alarms need: AlarmKit access, then notifications. iOS shows each prompt only
+    /// once (and only the user can tap Allow); after a "Don't Allow" nothing is shown and Settings explains how to turn it on.
+    static func alarms() async {
+        guard !testing else { return }
+        if Ringer.authorization == .notDetermined { await Ringer.requestAuthorization() }
+        if await Reminders.shared.authorizationStatus() == .notDetermined { await Reminders.shared.requestPermission() }
+    }
 }

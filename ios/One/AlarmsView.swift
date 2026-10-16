@@ -58,6 +58,7 @@ struct AlarmsView: View {
         .task { await center.watch(context: context) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await FirstRun.alarms()
             notificationStatus = await Reminders.shared.authorizationStatus()
             await Ringer.sync(context)
         }

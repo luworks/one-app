@@ -84,6 +84,9 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(close.waitForExistence(timeout: 3))
         close.tap()
         XCTAssertTrue(app.buttons["Calendar"].firstMatch.waitForExistence(timeout: 8), "the page is back")
-        XCTAssertTrue(app.buttons["New chat"].waitForNonExistence(timeout: 8))
+        // The closed sidebar stays built (so opening is instant) but sits behind the page: it can't be touched.
+        let newChat = app.buttons["New chat"]
+        let covered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == false"), object: newChat)
+        XCTAssertEqual(XCTWaiter().wait(for: [covered], timeout: 8), .completed, "the sidebar is out of reach once closed")
     }
 }

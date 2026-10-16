@@ -32,6 +32,8 @@ struct Sidebar: View {
         .background(Color(.systemBackground))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sidebar")
+        // On the container itself: a hide applied from outside does not reach an explicit accessibility container.
+        .accessibilityHidden(!drawer.isOpen)
         .onChange(of: drawer.isOpen) { _, open in
             if open { now = .now }
         }

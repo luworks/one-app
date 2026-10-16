@@ -209,16 +209,41 @@ struct NowRow: View {
     }
 }
 
-/// AI preview: what will be created. The user can switch task / event before tapping Add.
+/// AI preview: what will be created. The user can switch task / event / alarm before tapping Add.
 struct CaptureCard: View {
     @Binding var capture: Capture
     var onAdd: () -> Void
     var onCancel: () -> Void
 
+    enum Mode: Hashable { case task, event, alarm }
+
+    /// An alarm is a task that rings; it needs a time, so switching to Alarm with none picks the next full hour.
+    private var mode: Binding<Mode> {
+        Binding(
+            get: { capture.kind == .event ? .event : (capture.ringsAsAlarm ? .alarm : .task) },
+            set: { new in
+                switch new {
+                case .task: capture.kind = .task; capture.ringsAsAlarm = false
+                case .event: capture.kind = .event; capture.ringsAsAlarm = false
+                case .alarm:
+                    capture.kind = .task
+                    capture.ringsAsAlarm = true
+                    capture.isAllDay = false
+                    if capture.hour == nil {
+                        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+                        let c = Calendar.current.dateComponents([.hour], from: next)
+                        capture.hour = c.hour ?? 9
+                        capture.minute = 0
+                        if !Calendar.current.isDateInToday(next) { capture.day = Calendar.current.startOfDay(for: next); capture.hasDay = true }
+                    }
+                }
+            })
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("New \(capture.kind.rawValue)", systemImage: "sparkles")
+                Label("New \(capture.ringsAsAlarm && capture.kind == .task ? "alarm" : capture.kind.rawValue)", systemImage: "sparkles")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if capture.fromAppleIntelligence {
@@ -228,9 +253,10 @@ struct CaptureCard: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Picker("Kind", selection: $capture.kind) {
-                    Text("Task").tag(Capture.Kind.task)
-                    Text("Event").tag(Capture.Kind.event)
+                Picker("Kind", selection: mode) {
+                    Text("Task").tag(Mode.task)
+                    Text("Event").tag(Mode.event)
+                    Text("Alarm").tag(Mode.alarm)
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
