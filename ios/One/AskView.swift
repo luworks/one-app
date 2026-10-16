@@ -19,6 +19,9 @@ struct AskView: View {
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
 
     var onAdded: (Capture) -> Void = { _ in }
+    /// Asks the presenter to show what this screen goes back to (`true`), underneath it, or to undo that
+    /// when a back swipe is cancelled (`false`). Called before the screen closes, by the close button or a swipe.
+    var onBack: (Bool) -> Void = { _ in }
 
     /// The saved conversation this screen continues. nil = a new chat; the thread is created on the first user message.
     @State private var thread: ChatThread?
@@ -38,9 +41,18 @@ struct AskView: View {
     /// Title of the item the conversation touched last: what "it" means.
     @State private var lastTouched: String?
     @FocusState private var focused: Bool
+    /// Swipe right to go back: horizontal offset of the screen while the finger moves, 0 otherwise.
+    @State private var backDrag: CGFloat = 0
+    /// nil until the first event of a drag decides whether it is a back swipe.
+    @State private var backClaim: Bool?
+    @GestureState private var backActive = false
+    @State private var screenWidth: CGFloat = 0
+    /// Drags that start on the "which one?" chips scroll them instead of going back.
+    @State private var choiceFrame: CGRect = .zero
 
-    init(thread: ChatThread? = nil, onAdded: @escaping (Capture) -> Void = { _ in }) {
+    init(thread: ChatThread? = nil, onBack: @escaping (Bool) -> Void = { _ in }, onAdded: @escaping (Capture) -> Void = { _ in }) {
         self.onAdded = onAdded
+        self.onBack = onBack
         _thread = State(initialValue: thread)
         _messages = State(initialValue: thread?.messages ?? [])
     }
@@ -83,7 +95,7 @@ struct AskView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                    Button { close() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Close")
                 }
             }
@@ -92,6 +104,77 @@ struct AskView: View {
                 if messages.isEmpty { focused = true }
                 Understander.prewarm()
             }
+        }
+        .background(Color(.systemBackground).ignoresSafeArea())
+        // A soft edge on the left while the screen slides away, like the drawer's page.
+        .background(alignment: .leading) {
+            LinearGradient(colors: [.clear, .black.opacity(0.10)], startPoint: .leading, endPoint: .trailing)
+                .frame(width: 14)
+                .offset(x: -14)
+                .ignoresSafeArea()
+                .opacity(backDrag > 0 ? 1 : 0)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { screenWidth = $0 }
+        .offset(x: backDrag)
+        .simultaneousGesture(backSwipe)
+        // `onEnded` is skipped when the system cancels a drag; settle a claimed one by position.
+        .onChange(of: backActive) { _, isActive in
+            guard !isActive else { return }
+            Task { @MainActor in
+                if backClaim == true { settleBack(projected: backDrag) } else { backClaim = nil }
+            }
+        }
+        // Clear, so what this screen goes back to (the sidebar or the page) shows underneath during a back swipe.
+        .presentationBackground(.clear)
+    }
+
+    // MARK: Going back
+
+    /// Closes the screen and returns to where it was opened from (the sidebar, when opened there).
+    private func close(animated: Bool = true) {
+        onBack(true)
+        if animated {
+            dismiss()
+        } else {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { dismiss() }
+        }
+    }
+
+    /// Swipe right anywhere to go back, like a pushed screen. Mostly-horizontal rightward drags only,
+    /// so scrolling the conversation is left alone.
+    private var backSwipe: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .updating($backActive) { _, state, _ in state = true }
+            .onChanged { v in
+                if backClaim == nil {
+                    let t = v.translation
+                    let rightward = t.width > 0 && t.width > abs(t.height) * 1.2
+                    backClaim = rightward && !choiceFrame.contains(v.startLocation)
+                    if backClaim == true {
+                        focused = false
+                        onBack(true)
+                    }
+                }
+                guard backClaim == true else { return }
+                backDrag = max(v.translation.width, 0)
+            }
+            .onEnded { v in
+                guard backClaim == true else { backClaim = nil; return }
+                settleBack(projected: v.predictedEndTranslation.width)
+            }
+    }
+
+    /// Finishes the back swipe when the finger was heading past half the screen (`projected` includes momentum), otherwise springs back.
+    private func settleBack(projected: CGFloat) {
+        backClaim = nil
+        let width = max(screenWidth, 1)
+        if max(projected, backDrag) > width / 2 && projected > 0 {
+            withAnimation(DrawerModel.spring) { backDrag = width } completion: { close(animated: false) }
+        } else {
+            withAnimation(DrawerModel.spring) { backDrag = 0 }
+            onBack(false)
         }
     }
 
@@ -102,6 +185,8 @@ struct AskView: View {
         if let thread {
             thread.messages = messages
             thread.updatedAt = .now
+            // Continuing an archived conversation brings it back to the main list.
+            thread.archived = false
         } else {
             let created = ChatThread(title: ConversationHistory.title(from: first.text), messages: messages)
             context.insert(created)
@@ -154,6 +239,8 @@ struct AskView: View {
             }
             if case .chooseItem(_, let options)? = followup {
                 ChoiceBar(options: options, onPick: tapChoice)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { choiceFrame = $0 }
+                    .onDisappear { choiceFrame = .zero }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let change {

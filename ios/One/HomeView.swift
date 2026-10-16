@@ -49,6 +49,8 @@ struct HomeView: View {
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
     @State private var remindersPushed = false
     @State private var toast = UndoToast()
+    /// Counts tab switches made by swiping; drives their haptic (pill taps already have one).
+    @State private var tabSwipes = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -57,8 +59,8 @@ struct HomeView: View {
             ZStack(alignment: .leading) {
                 if drawer.isBuilt {
                     Sidebar(drawer: drawer, width: width,
-                            onNewChat: { openAsk(nil) },
-                            onOpen: { openAsk($0) },
+                            onNewChat: { openAsk(nil, fromSidebar: true) },
+                            onOpen: { openAsk($0, fromSidebar: true) },
                             onSettings: { showsSettings = true },
                             close: { drawer.set(open: false) })
                         .frame(width: width)
@@ -81,6 +83,16 @@ struct HomeView: View {
                     .modifier(DrawerMainSlide(model: drawer, width: width))
             }
         }
+        // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
+        // open, and the sidebar is put back underneath this screen when it goes back.
+        .fullScreenCover(item: $ask) { route in
+            AskView(thread: route.thread, onBack: { show in
+                // Put the sidebar back underneath, so closing or swiping right lands on it.
+                if route.fromSidebar { drawer.set(open: show, animated: false) }
+            }, onAdded: { capture in
+                if capture.hasDay { calendarDay = capture.day }
+            })
+        }
         .environment(toast)
         .sheet(isPresented: $showsSettings) { SettingsView() }
         .task {
@@ -90,12 +102,23 @@ struct HomeView: View {
         }
     }
 
+    /// Moves one tab left (-1) or right (+1), stopping at the ends. Used by `TabSwipe`.
+    private func switchTab(by step: Int) {
+        let all = HomeTab.allCases
+        guard let i = all.firstIndex(of: tab) else { return }
+        let next = i + step
+        guard all.indices.contains(next) else { return }
+        withAnimation(.snappy) { tab = all[next] }
+        tabSwipes += 1
+    }
+
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
 
-    /// Opens the AI screen on a new chat, or on a saved conversation.
-    private func openAsk(_ thread: ChatThread?) {
+    /// Opens the AI screen on a new chat, or on a saved conversation. Opened from the sidebar, closing it
+    /// (close button or swipe right) goes back to the sidebar.
+    private func openAsk(_ thread: ChatThread?, fromSidebar: Bool = false) {
         drawer.set(open: false, animated: false)   // snaps shut behind the AI screen as it covers the page
-        ask = AskRoute(thread: thread)
+        ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
     }
 
     /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
@@ -108,6 +131,7 @@ struct HomeView: View {
     private var main: some View {
         VStack(spacing: 0) {
             topBar
+                .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
             Group {
                 switch tab {
                 case .today: DayAgenda(day: $todayDay, showsWeekStrip: false)
@@ -123,11 +147,7 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
-        .fullScreenCover(item: $ask) { route in
-            AskView(thread: route.thread, onAdded: { capture in
-                if capture.hasDay { calendarDay = capture.day }
-            })
-        }
+        .sensoryFeedback(.selection, trigger: tabSwipes)
         .sheet(isPresented: $showsSearch) { SearchView() }
         .sheet(item: $newItem) { item in
             switch item {
@@ -199,21 +219,30 @@ struct HomeView: View {
     private var topBar: some View {
         HStack(spacing: 8) {
             // No avatar button: the sidebar opens with a swipe from the left edge (VoiceOver: the "Open menu" action).
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(HomeTab.allCases) { item in
-                        TabPill(tab: item, isSelected: item == tab) {
-                            withAnimation(.snappy) { tab = item }
-                        }
-                    }
-                }
+            // Only scrolls when the pills don't fit (very large text). Otherwise there is no scroll view
+            // to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
+            ViewThatFits(in: .horizontal) {
+                pills
+                ScrollView(.horizontal, showsIndicators: false) { pills }
             }
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
         .accessibilityAction(named: "Open menu") { drawer.set(open: true) }
         // Chrome stays usable at the largest text sizes; content below still scales fully.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    private var pills: some View {
+        HStack(spacing: 8) {
+            ForEach(HomeTab.allCases) { item in
+                TabPill(tab: item, isSelected: item == tab) {
+                    withAnimation(.snappy) { tab = item }
+                }
+            }
+        }
     }
 
     // MARK: Bottom: search, Ask AI, new
@@ -223,6 +252,8 @@ struct HomeView: View {
             // While the sidebar is open it shows its own toast: never two Undo buttons at once.
             if !drawer.isOpen { UndoToastView() }
             bottomButtons
+                .contentShape(Rectangle())
+                .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
         }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .background(alignment: .bottom) {
@@ -284,10 +315,41 @@ struct HomeView: View {
     }
 }
 
+/// Swipe left or right to move to the next or previous tab.
+///
+/// Where it works: only on the top bar (the tab pills) and the bottom bar (search, Ask AI, +). These two
+/// strips hold no rows, so they never compete with row swipe actions (Delete / Flag on reminders,
+/// alarms and events), with Calendar's own month/week paging, or with scrolling in the middle of the
+/// page. The middle of the page does not switch tabs on purpose.
+/// What it ignores: drags that start within 44pt of the left edge (they open the sidebar), drags that
+/// are not clearly sideways (horizontal under 2x vertical), and short ones. A drag on a button cancels
+/// its tap, so swiping across "Ask AI" does not open it.
+struct TabSwipe: ViewModifier {
+    var isEnabled: Bool
+    /// -1 = previous tab (finger moves right), +1 = next tab (finger moves left).
+    let move: (Int) -> Void
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .global)
+                .onEnded { v in
+                    guard isEnabled, v.startLocation.x > 44 else { return }
+                    let dx = v.translation.width, dy = v.translation.height
+                    guard abs(dx) > 2 * abs(dy) else { return }
+                    // A quick flick counts even if the finger only moved a little.
+                    let reach = abs(v.predictedEndTranslation.width) > abs(dx) ? v.predictedEndTranslation.width : dx
+                    guard abs(reach) > 60 else { return }
+                    move(reach < 0 ? 1 : -1)
+                })
+    }
+}
+
 /// What the AI screen opens on. A fresh id per presentation, so "New chat" always starts clean.
 struct AskRoute: Identifiable {
     let id = UUID()
     let thread: ChatThread?
+    /// Opened from the sidebar: going back returns there instead of to the page.
+    var fromSidebar = false
 }
 
 enum NewItem: Identifiable {
