@@ -1,9 +1,9 @@
 import SwiftUI
 import SwiftData
 
-struct ChatMessage: Identifiable, Equatable {
-    enum Role { case user, ai }
-    let id = UUID()
+struct ChatMessage: Identifiable, Equatable, Codable {
+    enum Role: String, Codable { case user, ai }
+    var id = UUID()
     let role: Role
     let text: String
 }
@@ -20,7 +20,9 @@ struct AskView: View {
 
     var onAdded: (Capture) -> Void = { _ in }
 
-    @State private var messages: [ChatMessage] = []
+    /// The saved conversation this screen continues. nil = a new chat; the thread is created on the first user message.
+    @State private var thread: ChatThread?
+    @State private var messages: [ChatMessage]
     @State private var draft = ""
     @State private var pending: Capture?
     /// Further items from the same line; each is shown, and confirmed or skipped, one at a time.
@@ -30,6 +32,12 @@ struct AskView: View {
     @State private var plan: [(task: OneTask, start: Date)] = []
     @State private var voice = VoiceInput()
     @FocusState private var focused: Bool
+
+    init(thread: ChatThread? = nil, onAdded: @escaping (Capture) -> Void = { _ in }) {
+        self.onAdded = onAdded
+        _thread = State(initialValue: thread)
+        _messages = State(initialValue: thread?.messages ?? [])
+    }
 
     private let suggestions = [
         "Plan my day",
@@ -58,7 +66,9 @@ struct AskView: View {
                     }
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .defaultScrollAnchor(messages.isEmpty ? .top : .bottom)
                 .onChange(of: messages) {
+                    persist()
                     if let last = messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }
             }
@@ -71,8 +81,24 @@ struct AskView: View {
                         .accessibilityLabel("Close")
                 }
             }
-            .task { focused = true }
+            // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
+            .task { if messages.isEmpty { focused = true } }
         }
+    }
+
+    /// Saves the conversation as it grows: the thread is created with the first user message and updated after
+    /// every later message (AI replies included). Only text is kept.
+    private func persist() {
+        guard let first = messages.first(where: { $0.role == .user }) else { return }
+        if let thread {
+            thread.messages = messages
+            thread.updatedAt = .now
+        } else {
+            let created = ChatThread(title: ConversationHistory.title(from: first.text), messages: messages)
+            context.insert(created)
+            thread = created
+        }
+        try? context.save()
     }
 
     private var emptyState: some View {
