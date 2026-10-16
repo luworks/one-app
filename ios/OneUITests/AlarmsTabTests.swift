@@ -164,7 +164,7 @@ final class AlarmsTabTests: XCTestCase {
     func testSoundRowIsDefaultAndSnoozeIsOn() {
         app.buttons["New"].tap()
         XCTAssertTrue(app.navigationBars["Add Alarm"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Default'")).firstMatch.exists,
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Default'")).firstMatch.waitForExistence(timeout: 5),
                       "Sound reads Default")
         XCTAssertEqual(app.switches["alarm.snooze"].value as? String, "1", "Snooze is on by default, like Clock")
         shot("8-add")

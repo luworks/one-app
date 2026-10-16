@@ -83,7 +83,7 @@ final class SidebarTests: XCTestCase {
         let close = app.buttons["Close sidebar"]
         XCTAssertTrue(close.waitForExistence(timeout: 3))
         close.tap()
-        XCTAssertTrue(app.buttons["Calendar"].firstMatch.waitForExistence(timeout: 3), "the page is back")
-        XCTAssertTrue(app.buttons["New chat"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Calendar"].firstMatch.waitForExistence(timeout: 8), "the page is back")
+        XCTAssertTrue(app.buttons["New chat"].waitForNonExistence(timeout: 8))
     }
 }

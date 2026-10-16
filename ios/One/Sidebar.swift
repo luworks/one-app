@@ -127,8 +127,11 @@ struct Sidebar: View {
 
     private var footer: some View {
         VStack(spacing: 0) {
-            UndoToastView()
-                .padding(.bottom, 8)
+            // The page has its own toast; only one of the two may exist at a time (two Undo buttons confuse VoiceOver).
+            if drawer.isOpen {
+                UndoToastView()
+                    .padding(.bottom, 8)
+            }
             Divider().padding(.horizontal, 20)
             SidebarRow(icon: "gearshape", title: "Settings") {
                 close()

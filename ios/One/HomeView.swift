@@ -220,7 +220,8 @@ struct HomeView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 8) {
-            UndoToastView()
+            // While the sidebar is open it shows its own toast: never two Undo buttons at once.
+            if !drawer.isOpen { UndoToastView() }
             bottomButtons
         }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
