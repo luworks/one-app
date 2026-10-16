@@ -408,6 +408,173 @@
    "hasDay": false,
    "repeat": "daily",
    "kind": "habit"
+  },
+  {
+   "split": "train",
+   "input": "今晚8点健身",
+   "title": "健身",
+   "day": 0,
+   "hasDay": true,
+   "hour": 20,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "明早6点半闹钟",
+   "title": "闹钟",
+   "day": 1,
+   "hasDay": true,
+   "hour": 6,
+   "minute": 30
+  },
+  {
+   "split": "train",
+   "input": "Wake me up at 6:30 tomorrow",
+   "title": "Wake me up",
+   "day": 1,
+   "hasDay": true,
+   "hour": 6,
+   "minute": 30
+  },
+  {
+   "split": "train",
+   "input": "Call 妈妈 今晚8点",
+   "title": "Call 妈妈",
+   "day": 0,
+   "hasDay": true,
+   "hour": 20,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "这周末去爬山",
+   "title": "去爬山",
+   "day": 5,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "月底交季度报告",
+   "title": "交季度报告",
+   "day": 19,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "下个月3号续交物业费",
+   "title": "续交物业费",
+   "day": 22,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "30分钟后提醒我关火",
+   "title": "提醒我关火",
+   "day": 0,
+   "hasDay": true,
+   "hour": 10,
+   "minute": 11
+  },
+  {
+   "split": "train",
+   "input": "每周三晚上7点上英语课",
+   "title": "上英语课",
+   "day": 2,
+   "hasDay": true,
+   "hour": 19,
+   "minute": 0,
+   "repeat": "weekly"
+  },
+  {
+   "split": "train",
+   "input": "明晚七点半看电影",
+   "title": "看电影",
+   "day": 1,
+   "hasDay": true,
+   "hour": 19,
+   "minute": 30
+  },
+  {
+   "split": "train",
+   "input": "10月28日上午九点体检",
+   "title": "体检",
+   "day": 16,
+   "hasDay": true,
+   "hour": 9,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "下下周一交作业",
+   "title": "交作业",
+   "day": 14,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "Lunch with Sarah on the 22nd at noon",
+   "title": "Lunch with Sarah",
+   "day": 10,
+   "hasDay": true,
+   "hour": 12,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "Pay rent on the 1st",
+   "title": "Pay rent",
+   "day": 20,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "Call mom in 2 hours",
+   "title": "Call mom",
+   "day": 0,
+   "hasDay": true,
+   "hour": 11,
+   "minute": 41
+  },
+  {
+   "split": "train",
+   "input": "Pick up dry cleaning this weekend",
+   "title": "Pick up dry cleaning",
+   "day": 5,
+   "hasDay": true
+  },
+  {
+   "split": "train",
+   "input": "Review PR 下午5点前",
+   "title": "Review PR",
+   "day": 0,
+   "hasDay": true,
+   "hour": 17,
+   "minute": 0
+  },
+  {
+   "split": "train",
+   "input": "半小时后关烤箱",
+   "title": "关烤箱",
+   "day": 0,
+   "hasDay": true,
+   "hour": 10,
+   "minute": 11
+  },
+  {
+   "split": "train",
+   "input": "Alarm in 20 minutes",
+   "title": "Alarm",
+   "day": 0,
+   "hasDay": true,
+   "hour": 10,
+   "minute": 1
+  },
+  {
+   "split": "train",
+   "input": "早点睡，晚一点再看手机",
+   "title": "早点睡，晚一点再看手机",
+   "day": 0,
+   "hasDay": false
   }
  ]
 }
