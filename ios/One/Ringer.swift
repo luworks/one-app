@@ -155,7 +155,7 @@ enum AlarmScheduler {
             }
             let ok = await schedule(id: id, title: alarm.label.isEmpty ? AlarmPlan.defaultLabel : alarm.label,
                                     schedule: schedule(hour: alarm.hour, minute: alarm.minute, weekdays: alarm.weekdays),
-                                    snooze: alarm.snooze)
+                                    snooze: alarm.snooze, sound: alarm.sound, snoozeMinutes: alarm.snoozeMinutes)
             alarm.alarmKitSignature = ok ? signature : nil
         }
 
@@ -190,7 +190,8 @@ enum AlarmScheduler {
         return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
     }
 
-    private static func schedule(id: UUID, title: String, schedule: Alarm.Schedule, snooze: Bool) async -> Bool {
+    private static func schedule(id: UUID, title: String, schedule: Alarm.Schedule, snooze: Bool,
+                                 sound: String = "", snoozeMinutes: Int = 9) async -> Bool {
         let resource = LocalizedStringResource(stringLiteral: title)
         let snoozeButton = AlarmButton(text: "Snooze", textColor: .white, systemImageName: "zzz")
         let secondary = snooze ? snoozeButton : nil
@@ -208,10 +209,10 @@ enum AlarmScheduler {
                                              countdown: snooze ? AlarmPresentation.Countdown(title: resource) : nil)
         let attributes = AlarmAttributes<Meta>(presentation: presentation, tintColor: .orange)
         let configuration = AlarmManager.AlarmConfiguration<Meta>(
-            countdownDuration: snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: AlarmPlan.snoozeSeconds) : nil,
+            countdownDuration: snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(snoozeMinutes * 60)) : nil,
             schedule: schedule,
             attributes: attributes,
-            sound: .default)
+            sound: AlarmSound.named(sound)?.alertSound ?? .default)
         do {
             _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
             log.info("scheduled \(title, privacy: .public)")

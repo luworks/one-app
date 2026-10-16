@@ -32,11 +32,9 @@ final class AlarmsTabTests: XCTestCase {
     private func addAlarm(days: [String] = []) -> XCUIElement {
         let before = rows.count
         app.buttons["New"].tap()
-        XCTAssertTrue(app.navigationBars["Add Alarm"].waitForExistence(timeout: 5), "the editor is titled Add Alarm")
+        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5), "the editor is titled Add Alarm")
         if !days.isEmpty {
-            app.buttons["alarm.repeat"].tap()
             for day in days { app.buttons["Every " + day].tap() }
-            app.navigationBars["Repeat"].buttons.firstMatch.tap()   // Back
         }
         app.buttons["alarm.save"].tap()
         XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
@@ -75,17 +73,15 @@ final class AlarmsTabTests: XCTestCase {
         XCTAssertTrue(row.label.hasSuffix(", Alarm, Every Mon, Wed"), row.label)
         // The editor shows the same value, and the check marks stick.
         row.tap()
-        XCTAssertTrue(app.navigationBars["Edit Alarm"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.buttons["alarm.repeat"].label, "Repeat, Every Mon, Wed")
+        XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
+        let repeatRow = app.descendants(matching: .any)["alarm.repeat"]
+        XCTAssertEqual(repeatRow.label, "Repeat, Every Mon, Wed")
         shot("4-edit")
-        app.buttons["alarm.repeat"].tap()
-        XCTAssertTrue(app.buttons["Every Monday"].isSelected, "Monday is checked")
+        XCTAssertTrue(app.buttons["Every Monday"].isSelected, "Monday is on")
         XCTAssertFalse(app.buttons["Every Tuesday"].isSelected)
-        shot("5-repeat")
         app.buttons["Every Monday"].tap()
         app.buttons["Every Wednesday"].tap()
-        app.navigationBars["Repeat"].buttons.firstMatch.tap()
-        XCTAssertEqual(app.buttons["alarm.repeat"].label, "Repeat, Never", "no days means Never")
+        XCTAssertEqual(repeatRow.label, "Repeat, Never", "no days means Never")
         app.buttons["Cancel"].tap()
         XCTAssertTrue(rows.firstMatch.label.hasSuffix(", Alarm, Every Mon, Wed"), "Cancel keeps the alarm as it was")
     }
@@ -93,7 +89,7 @@ final class AlarmsTabTests: XCTestCase {
     func testEditTimeAndLabel() {
         addAlarm()
         rows.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["Edit Alarm"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
         let wheels = app.pickerWheels
         XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
         // The simulator may be on a 12- or 24-hour clock: set only the minutes, which read the same on both.
@@ -132,13 +128,36 @@ final class AlarmsTabTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 5))
     }
 
-    /// Sound is the system's alarm sound only (AlarmKit): the row says so and is not tappable.
-    func testSoundRowIsDefaultAndSnoozeIsOn() {
+    /// Sound opens a list of the app's tones (the system sound, then ours); a choice sticks after saving.
+    func testChoosingATone() {
         app.buttons["New"].tap()
-        XCTAssertTrue(app.navigationBars["Add Alarm"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Default'")).firstMatch.waitForExistence(timeout: 5),
-                      "Sound reads Default")
+        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.switches["alarm.snooze"].value as? String, "1", "Snooze is on by default, like Clock")
+        XCTAssertTrue(app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
         shot("8-add")
+        app.buttons["alarm.sound"].tap()
+        XCTAssertTrue(app.navigationBars["Sound"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Default"].isSelected, "the system sound is the default")
+        for name in ["Daybreak", "Chimes", "Marimba", "Glass", "Ripple", "Morning Piano", "Beacon", "Crystal"] {
+            XCTAssertTrue(app.buttons[name].exists, "tone \(name)")
+        }
+        shot("9-sounds")
+        app.buttons["Daybreak"].tap()
+        XCTAssertTrue(app.buttons["Daybreak"].isSelected)
+        app.navigationBars["Sound"].buttons.firstMatch.tap()   // Back
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Daybreak'")).firstMatch.waitForExistence(timeout: 3),
+                      "the row shows the chosen tone")
+        app.buttons["alarm.save"].tap()
+        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+        rows.firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Daybreak'")).firstMatch.waitForExistence(timeout: 5),
+                      "it is still chosen when the alarm is opened again")
+    }
+
+    func testSnoozeOffHidesDuration() {
+        app.buttons["New"].tap()
+        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+        app.switches["alarm.snooze"].tap()
+        XCTAssertTrue(app.buttons["alarm.snoozeDuration"].waitForNonExistence(timeout: 3))
     }
 }

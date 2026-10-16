@@ -69,8 +69,9 @@ struct AlarmRow: View {
     }
 }
 
-/// Add Alarm / Edit Alarm, laid out like Clock's sheet: Cancel · title · Save, a wheel, then Repeat, Label,
-/// Sound and Snooze, and a red Delete Alarm when editing.
+/// Add Alarm / Edit Alarm, copied from Clock's sheet: a round close button, the title and an orange round check; a full-width
+/// wheel; a card with Repeat and the seven weekday circles; a card with Label, Sound, Snooze and Snooze Duration; and a red
+/// Delete Alarm when editing.
 struct AlarmEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -81,6 +82,10 @@ struct AlarmEditor: View {
     @State private var label: String
     @State private var weekdays: Set<Int>
     @State private var snooze: Bool
+    @State private var sound: String
+    @State private var snoozeMinutes: Int
+
+    static let snoozeChoices = [1, 3, 5, 7, 9, 10, 15, 20, 30]
 
     init(alarm: OneAlarm? = nil) {
         self.alarm = alarm
@@ -91,77 +96,160 @@ struct AlarmEditor: View {
         _label = State(initialValue: alarm?.label ?? "")
         _weekdays = State(initialValue: Set(alarm?.weekdays ?? []))
         _snooze = State(initialValue: alarm?.snooze ?? true)
+        _sound = State(initialValue: alarm?.sound ?? "")
+        _snoozeMinutes = State(initialValue: alarm?.snoozeMinutes ?? 9)
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
                     DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
                         .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 19)
+                        .padding(.top, 14)
                         .accessibilityIdentifier("alarm.time")
+                    repeatCard.padding(.top, 20)
+                    optionsCard.padding(.top, 33)
+                    if let alarm { deleteButton(alarm).padding(.top, 33) }
                 }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+                .padding(.bottom, 30)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .background(Color(.systemGroupedBackground))
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .presentationDetents([.large])
+    }
 
-                Section {
-                    NavigationLink {
-                        RepeatScreen(weekdays: $weekdays)
-                    } label: {
-                        LabeledContent("Repeat", value: AlarmPlan.repeatValue(weekdays: weekdays.sorted()))
-                    }
-                    .accessibilityIdentifier("alarm.repeat")
+    // MARK: Header
 
-                    HStack {
-                        Text("Label")
-                        TextField(AlarmPlan.defaultLabel, text: $label)
-                            .multilineTextAlignment(.trailing)
-                            .submitLabel(.done)
-                            .accessibilityIdentifier("alarm.label")
-                    }
-
-                    // AlarmKit offers only the system alert sound (or a sound file bundled with the app), not Apple's ringtones.
-                    LabeledContent("Sound", value: "Default")
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("alarm.sound")
-
-                    Toggle("Snooze", isOn: $snooze)
-                        .tint(Color(.systemGreen))
-                        .accessibilityIdentifier("alarm.snooze")
-                } footer: {
-                    Text("Alarms use the standard alarm sound. Snooze rings again after 9 minutes.")
+    private var header: some View {
+        ZStack {
+            Text(alarm == nil ? "Add Alarm" : "Edit Alarm")
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .background(Color(.tertiarySystemFill), in: Circle())
+                        .contentShape(Circle())
                 }
+                .accessibilityLabel("Cancel")
+                Spacer()
+                Button(action: save) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color(.systemOrange), in: Circle())
+                        .contentShape(Circle())
+                }
+                .accessibilityLabel("Save")
+                .accessibilityIdentifier("alarm.save")
+            }
+        }
+        .padding(.horizontal, 19)
+        .padding(.top, 16)
+        .buttonStyle(.plain)
+    }
 
-                if let alarm {
-                    Section {
-                        Button(role: .destructive) {
-                            let backup = alarm.copy()
-                            context.delete(alarm)
-                            Task { await Ringer.sync(context) }
-                            toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
-                                withAnimation(.snappy) { context.insert(backup) }
-                                Task { await Ringer.sync(context) }
-                            }
-                            dismiss()
-                        } label: {
-                            Text("Delete Alarm").frame(maxWidth: .infinity)
-                        }
-                        .accessibilityIdentifier("alarm.delete")
+    // MARK: Cards
+
+    private var repeatCard: some View {
+        Card {
+            Row {
+                Text("Repeat")
+                Spacer()
+                Text(AlarmPlan.repeatValue(weekdays: weekdays.sorted())).foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("alarm.repeat")
+            Divider().padding(.horizontal, 18)
+            HStack(spacing: 0) {
+                ForEach(AlarmPlan.orderedWeekdays(), id: \.self) { day in
+                    DayCircle(day: day, isOn: weekdays.contains(day)) {
+                        if weekdays.contains(day) { weekdays.remove(day) } else { weekdays.insert(day) }
                     }
+                    if day != AlarmPlan.orderedWeekdays().last { Spacer(minLength: 0) }
                 }
             }
-            .navigationTitle(alarm == nil ? "Add Alarm" : "Edit Alarm")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.fontWeight(.semibold).accessibilityIdentifier("alarm.save")
+            .padding(.horizontal, 18)
+            .padding(.vertical, 13)
+        }
+    }
+
+    private var optionsCard: some View {
+        Card {
+            Row {
+                Text("Label")
+                TextField(AlarmPlan.defaultLabel, text: $label)
+                    .multilineTextAlignment(.trailing)
+                    .submitLabel(.done)
+                    .accessibilityIdentifier("alarm.label")
+            }
+            Divider().padding(.horizontal, 18)
+            NavigationLink {
+                SoundScreen(sound: $sound)
+            } label: {
+                Row {
+                    Text("Sound").foregroundStyle(.primary)
+                    Spacer()
+                    Text(sound.isEmpty ? "Default" : sound).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color(.tertiaryLabel))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("alarm.sound")
+            Divider().padding(.horizontal, 18)
+            Row {
+                Toggle("Snooze", isOn: $snooze.animation(.snappy))
+                    .tint(Color(.systemGreen))
+                    .accessibilityIdentifier("alarm.snooze")
+            }
+            if snooze {
+                Divider().padding(.horizontal, 18)
+                Row {
+                    Text("Snooze Duration")
+                    Spacer()
+                    Menu {
+                        Picker("Snooze Duration", selection: $snoozeMinutes) {
+                            ForEach(Self.snoozeChoices, id: \.self) { Text("\($0) min").tag($0) }
+                        }
+                    } label: {
+                        Text("\(snoozeMinutes) min").foregroundStyle(Color(.systemOrange))
+                    }
+                    .accessibilityIdentifier("alarm.snoozeDuration")
                 }
             }
         }
-        .presentationDetents([.large])
+    }
+
+    private func deleteButton(_ alarm: OneAlarm) -> some View {
+        Button(role: .destructive) {
+            let backup = alarm.copy()
+            context.delete(alarm)
+            Task { await Ringer.sync(context) }
+            toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
+                withAnimation(.snappy) { context.insert(backup) }
+                Task { await Ringer.sync(context) }
+            }
+            dismiss()
+        } label: {
+            Text("Delete Alarm")
+                .frame(maxWidth: .infinity, minHeight: 47)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        }
+        .padding(.horizontal, 19)
+        .accessibilityIdentifier("alarm.delete")
     }
 
     private func save() {
@@ -172,6 +260,8 @@ struct AlarmEditor: View {
         target.label = label.trimmingCharacters(in: .whitespaces)
         target.weekdays = weekdays.sorted()
         target.snooze = snooze
+        target.sound = sound
+        target.snoozeMinutes = snoozeMinutes
         target.isOn = true
         target.createdAt = .now   // a one-time alarm counts from the last save
         target.alarmKitSignature = nil   // forces a reschedule of exactly this alarm
@@ -181,32 +271,90 @@ struct AlarmEditor: View {
     }
 }
 
-/// Repeat: one row per weekday ("Every Sunday" …) with a check mark, in the calendar's weekday order.
-private struct RepeatScreen: View {
-    @Binding var weekdays: Set<Int>
+/// A rounded group like Clock's: one card, rows separated by hairlines.
+private struct Card<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        VStack(spacing: 0) { content }
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .padding(.horizontal, 19)
+    }
+}
+
+/// One 47-point row with Clock's 18-point text inset.
+private struct Row<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        HStack { content }
+            .font(.body)
+            .padding(.horizontal, 18)
+            .frame(minHeight: 47)
+            .contentShape(Rectangle())
+    }
+}
+
+/// A weekday circle: gray, orange when the alarm repeats that day. Reads as "Every Monday".
+private struct DayCircle: View {
+    let day: Int
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let name = "Every " + Calendar.current.weekdaySymbols[day - 1]
+        Button(action: action) {
+            Text(Calendar.current.veryShortWeekdaySymbols[day - 1])
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(isOn ? Color.white : Color.primary)
+                .frame(width: 32, height: 32)
+                .background(isOn ? Color(.systemOrange) : Color(.tertiarySystemFill), in: Circle())
+                .frame(width: 40, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityIdentifier("alarm.day.\(day)")
+    }
+}
+
+/// Sound: the system alarm sound and the app's own tones, with a check mark on the chosen one. Tapping a tone plays it.
+private struct SoundScreen: View {
+    @Binding var sound: String
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         List {
-            ForEach(AlarmPlan.orderedWeekdays(), id: \.self) { day in
-                let name = "Every " + Calendar.current.weekdaySymbols[day - 1]
-                Button {
-                    if weekdays.contains(day) { weekdays.remove(day) } else { weekdays.insert(day) }
-                } label: {
-                    HStack {
-                        Text(name).foregroundStyle(.primary)
-                        Spacer()
-                        if weekdays.contains(day) {
-                            Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
-                        }
-                    }
-                    .contentShape(Rectangle())
+            Section {
+                row(title: "Default", value: "", subtitle: "The standard alarm sound")
+            }
+            Section("Tones") {
+                ForEach(AlarmSound.all) { tone in
+                    row(title: tone.name, value: tone.name, subtitle: nil)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(name)
-                .accessibilityAddTraits(weekdays.contains(day) ? .isSelected : [])
             }
         }
-        .navigationTitle("Repeat")
+        .navigationTitle("Sound")
         .navigationBarTitleDisplayMode(.inline)
+        .onDisappear { SoundPreview.shared.stop() }
+    }
+
+    private func row(title: String, value: String, subtitle: String?) -> some View {
+        Button {
+            sound = value
+            if let tone = AlarmSound.named(value) { SoundPreview.shared.play(tone) } else { SoundPreview.shared.stop() }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundStyle(.primary)
+                    if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary) }
+                }
+                Spacer()
+                if sound == value { Image(systemName: "checkmark").foregroundStyle(Color(.systemOrange)).fontWeight(.semibold) }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(sound == value ? .isSelected : [])
     }
 }

@@ -18,6 +18,10 @@ final class OneAlarm {
     var createdAt: Date
     /// Shows a Snooze button when the alarm rings (nine minutes, like Clock). Additive field: older stores get true.
     var snooze: Bool = true
+    /// The tone's name (see `AlarmSound`); empty = the system alarm sound. Additive field: older stores get the default.
+    var sound: String = ""
+    /// Minutes between a snooze and the next ring (Clock's "Snooze Duration"). Older stores get nine.
+    var snoozeMinutes: Int = 9
     /// The id of this alarm's AlarmKit alarm. Set the first time it is scheduled; never changes after that.
     var alarmKitID: UUID?
     /// What was last handed to AlarmKit for this id (see `scheduleSignature`), so a sync can tell whether
@@ -37,6 +41,8 @@ final class OneAlarm {
     func copy() -> OneAlarm {
         let a = OneAlarm(hour: hour, minute: minute, label: label, weekdays: weekdays, snooze: snooze)
         a.isOn = isOn
+        a.sound = sound
+        a.snoozeMinutes = snoozeMinutes
         return a
     }
 
@@ -52,7 +58,7 @@ final class OneAlarm {
 
     /// Everything that changes what AlarmKit has to ring, as a string (a `Hasher` seed changes per launch).
     var scheduleSignature: String {
-        "\(isOn)|\(hour):\(minute)|\(weekdays.sorted())|\(label)|\(snooze)"
+        "\(isOn)|\(hour):\(minute)|\(weekdays.sorted())|\(label)|\(snooze)|\(sound)|\(snoozeMinutes)"
     }
 
     /// Switching on a one-time alarm sets it for the next occurrence of its time, like Clock does.
