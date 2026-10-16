@@ -156,6 +156,105 @@ enum DayPlanner {
     }
 }
 
+/// Calendar tab: month grids, week starts and weekday letters. Follows the calendar's first weekday (the device setting), like Apple Calendar.
+enum CalendarMath {
+    /// The month containing `date` as rows of 7 slots, like Apple's Month: nil before the 1st and after the last day.
+    static func monthWeeks(of date: Date, calendar: Calendar = .current) -> [[Date?]] {
+        guard let first = calendar.dateInterval(of: .month, for: date)?.start,
+              let count = calendar.range(of: .day, in: .month, for: first)?.count else { return [] }
+        let lead = (calendar.component(.weekday, from: first) - calendar.firstWeekday + 7) % 7
+        var slots: [Date?] = Array(repeating: nil, count: lead)
+        for i in 0..<count { slots.append(calendar.date(byAdding: .day, value: i, to: first)) }
+        while slots.count % 7 != 0 { slots.append(nil) }
+        return stride(from: 0, to: slots.count, by: 7).map { Array(slots[$0..<$0 + 7]) }
+    }
+
+    /// First day of the month `offset` months away from the month of `reference`.
+    static func monthStart(offset: Int, from reference: Date, calendar: Calendar = .current) -> Date {
+        let first = calendar.dateInterval(of: .month, for: reference)?.start ?? reference
+        return calendar.date(byAdding: .month, value: offset, to: first) ?? first
+    }
+
+    /// How many months `date` is from `reference` (negative = earlier).
+    static func monthOffset(of date: Date, from reference: Date, calendar: Calendar = .current) -> Int {
+        let a = calendar.dateComponents([.year, .month], from: reference)
+        let b = calendar.dateComponents([.year, .month], from: date)
+        return ((b.year ?? 0) - (a.year ?? 0)) * 12 + (b.month ?? 0) - (a.month ?? 0)
+    }
+
+    /// First day of the week containing `date`.
+    static func weekStart(of date: Date, calendar: Calendar = .current) -> Date {
+        let day = calendar.startOfDay(for: date)
+        let back = (calendar.component(.weekday, from: day) - calendar.firstWeekday + 7) % 7
+        return calendar.date(byAdding: .day, value: -back, to: day) ?? day
+    }
+
+    /// One letter per weekday, starting at the calendar's first weekday ("S M T W T F S" on a Sunday-first device).
+    static func weekdayLetters(calendar: Calendar = .current) -> [String] {
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let i = calendar.firstWeekday - 1
+        return Array(symbols[i...] + symbols[..<i])
+    }
+
+    /// Where the 1st of the month goes when you land on it: today inside the current month, else the 1st.
+    static func landingDay(inMonthOf month: Date, today: Date = .now, calendar: Calendar = .current) -> Date {
+        if calendar.isDate(month, equalTo: today, toGranularity: .month) { return calendar.startOfDay(for: today) }
+        return calendar.dateInterval(of: .month, for: month)?.start ?? month
+    }
+}
+
+/// Layout helpers for the Week grid. Pure, so they can be tested.
+enum CalendarLayout {
+    /// Lane (row) for each banner in the all-day strip. `spans` are inclusive day columns (0...6) of one week.
+    /// Banners that overlap in days never share a lane; earlier and longer banners go first.
+    static func lanes(for spans: [(start: Int, end: Int)]) -> [Int] {
+        let order = spans.indices.sorted {
+            (spans[$0].start, spans[$1].end - spans[$1].start, $0) < (spans[$1].start, spans[$0].end - spans[$0].start, $1)
+        }
+        var laneEnds: [Int] = []          // last column used in each lane
+        var result = Array(repeating: 0, count: spans.count)
+        for i in order {
+            if let lane = laneEnds.firstIndex(where: { $0 < spans[i].start }) {
+                laneEnds[lane] = spans[i].end
+                result[i] = lane
+            } else {
+                laneEnds.append(spans[i].end)
+                result[i] = laneEnds.count - 1
+            }
+        }
+        return result
+    }
+
+    /// Side-by-side placement for timed items in one day column: each item gets a column and the number of columns
+    /// in its overlap cluster, so overlapping items share the width instead of covering each other.
+    static func columns(for items: [(start: Double, end: Double)]) -> [(column: Int, count: Int)] {
+        let order = items.indices.sorted { (items[$0].start, items[$1].end, $0) < (items[$1].start, items[$0].end, $1) }
+        var result = Array(repeating: (column: 0, count: 1), count: items.count)
+        var cluster: [Int] = []
+        var clusterEnd = -Double.infinity
+        var columnEnds: [Double] = []
+        func close() {
+            for i in cluster { result[i].count = max(1, columnEnds.count) }
+            cluster = []
+            columnEnds = []
+        }
+        for i in order {
+            if items[i].start >= clusterEnd { close() }
+            if let c = columnEnds.firstIndex(where: { $0 <= items[i].start }) {
+                columnEnds[c] = items[i].end
+                result[i].column = c
+            } else {
+                columnEnds.append(items[i].end)
+                result[i].column = columnEnds.count - 1
+            }
+            cluster.append(i)
+            clusterEnd = max(clusterEnd, items[i].end)
+        }
+        close()
+        return result
+    }
+}
+
 enum ListName {
     /// "01 工作" → "工作". Numbered names keep their order for sorting; the number is noise when shown.
     static func display(_ name: String) -> String {

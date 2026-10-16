@@ -212,12 +212,15 @@ struct EventEditor: View {
     @State private var reminder: Int?
     @State private var ringsAsAlarm: Bool
     @FocusState private var titleFocused: Bool
+    /// Where a new event starts: the next full hour today, or 9:00 on the chosen day.
+    private let defaultStart: Date
 
     init(event: OneEvent? = nil, day: Date = .now) {
         self.event = event
         let cal = Calendar.current
         let base = cal.isDateInToday(day) ? Date.now : (cal.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
         let rounded = cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
+        defaultStart = rounded
         let start = event?.start ?? rounded
         _title = State(initialValue: event?.title ?? "")
         _isAllDay = State(initialValue: event?.isAllDay ?? false)
@@ -229,6 +232,15 @@ struct EventEditor: View {
     }
 
     var body: some View {
+        if event == nil && CalendarSync.shared.usesNativeEditor {
+            // Calendar access is on: a new event is made with Apple's own editor and lives in the system calendar.
+            NativeEventEditor(start: defaultStart).ignoresSafeArea()
+        } else {
+            form
+        }
+    }
+
+    private var form: some View {
         NavigationStack {
             Form {
                 Section {

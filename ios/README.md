@@ -23,7 +23,7 @@ With a free account the install expires after 7 days; just press ⌘R again with
 Four tabs: **Today · Calendar · Reminders · Alarms**, plus a left sidebar, search, and an "Ask AI or add anything" bar at the bottom.
 
 - **Today** — one day: all-day events, overdue (one "N overdue" row that expands), due today, and the timeline with a "now" line. Tapping a day in Calendar opens it here, with a "Back to today" row.
-- **Calendar** — Week (time grid) and Month. Events are fixed; flexible tasks can be long-pressed and dragged to a new time or day.
+- **Calendar** — modeled on Apple Calendar: Month (default; grid with colored dots and the selected day's events below), Week (time grid) and Year; Day opens the Today tab. Top row: year button, Today, Calendars (Apple's own list; the choice filters every view). With Calendar access on, + opens Apple's own event editor. Events are fixed; flexible tasks can be long-pressed and dragged in Week.
 - **Reminders** — the older task list for now: filter chips (All / Inbox / Flagged / lists / tags), Unscheduled / Scheduled / Completed sections. Still labelled "Lists" and still stored locally. Being rebuilt to match Apple Reminders (smart lists, My Lists, live EventKit data); see the rubric.
 - **Alarms** — real alarms (time, label, repeat weekdays, on/off) that ring through Silent and Focus via AlarmKit, plus items you marked "Ring as alarm".
 - **Gestures** (follow Apple Reminders / Calendar) — tap the circle to complete; swipe left for Delete (with an Undo toast) and Flag; long-press for Show Details / Flag / Today / Tomorrow / Unschedule / Delete. Apple Calendar events open in Apple's own event viewer.
@@ -39,12 +39,12 @@ Four tabs: **Today · Calendar · Reminders · Alarms**, plus a left sidebar, se
 - `Habits.swift` — retired `Habit` model, kept only for schema migration.
 - `Logic.swift` — pure logic with no SwiftUI/SwiftData so it is unit-testable: repeat rules, recurrence, day labels, `DayPlanner`, `ReminderPlan`, `AlarmPlan`.
 - `HomeView.swift` — app shell: tab pills, bottom bar (search, Ask AI, new), sidebar drawer.
-- `DayAgenda.swift` — the day view used by Today. `CalendarView.swift` — Week and Month.
+- `DayAgenda.swift` — the day view used by Today. `CalendarView.swift` — Month, Week and Year; `CalendarEntries.swift` — merges system events, own events and planned tasks for it.
 - `TasksView.swift` — the Reminders tab (still the older list). `AlarmsView.swift` — the Alarms tab.
 - `Rows.swift` — event and task rows with the swipe and long-press gestures; `TaskActions.swift` — complete, delete and undo toast.
 - `Editors.swift` — task and event editors. `SearchView.swift` — search across tasks and events.
 - `Capture.swift` — turns "明天下午3点 打电话给 Alex" (or English) into a preview card. `AskView.swift` — the AI page; `VoiceInput.swift` — dictation.
-- `CalendarSync.swift` — EventKit bridge for Apple Calendar events.
+- `CalendarSync.swift` — EventKit bridge for Apple Calendar events, plus wrappers for Apple's own event editor, viewer and calendar chooser. Debug builds accept `-seedCalendarDemo` (`CalendarDemoSeed.swift`) to fill the system calendar with sample events.
 - `Reminders.swift` — local notifications (Done / Snooze / Tomorrow actions, overdue badge). Despite the name this is not Apple Reminders. `Ringer.swift` — AlarmKit scheduling for alarms and "Ring as alarm" items.
 - `Sidebar.swift`, `QuickActions.swift` (Home Screen quick actions), `LaunchTimer.swift`, `SampleData.swift` (first-launch items; sidebar → Delete all data removes them), `DevImport.swift` (debug-only import of a private export).
 

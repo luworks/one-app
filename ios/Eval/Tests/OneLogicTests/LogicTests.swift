@@ -146,3 +146,108 @@ final class AlarmPlanTests: XCTestCase {
         XCTAssertNil(AlarmPlan.fire(on: at(15, 0, 0), hour: 7, minute: 0, weekdays: [4], now: now, calendar: cal))
     }
 }
+
+final class CalendarMathTests: XCTestCase {
+    private func calendar(firstWeekday: Int) -> Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        c.locale = Locale(identifier: "en_US")
+        c.firstWeekday = firstWeekday
+        return c
+    }
+    private func at(_ cal: Calendar, _ y: Int, _ m: Int, _ d: Int) -> Date {
+        cal.date(from: DateComponents(year: y, month: m, day: d, hour: 12))!
+    }
+
+    /// October 2026 starts on a Thursday and has 31 days.
+    func testMonthGridSundayFirst() {
+        let cal = calendar(firstWeekday: 1)
+        let weeks = CalendarMath.monthWeeks(of: at(cal, 2026, 10, 15), calendar: cal)
+        XCTAssertEqual(weeks.count, 5)
+        XCTAssertTrue(weeks.allSatisfy { $0.count == 7 })
+        XCTAssertEqual(weeks[0].map { $0 == nil }, [true, true, true, true, false, false, false], "1st sits under Thursday")
+        XCTAssertEqual(cal.component(.day, from: weeks[0][4]!), 1)
+        XCTAssertEqual(cal.component(.day, from: weeks[4][6]!), 31)
+        XCTAssertEqual(weeks.flatMap { $0 }.compactMap { $0 }.count, 31)
+    }
+
+    func testRowCountDependsOnTheFirstWeekday() {
+        // August 2026 starts on a Saturday: six rows either way.
+        XCTAssertEqual(CalendarMath.monthWeeks(of: at(calendar(firstWeekday: 1), 2026, 8, 10), calendar: calendar(firstWeekday: 1)).count, 6)
+        // February 2026 starts on a Sunday and has 28 days: four rows Sunday-first, five Monday-first.
+        XCTAssertEqual(CalendarMath.monthWeeks(of: at(calendar(firstWeekday: 1), 2026, 2, 10), calendar: calendar(firstWeekday: 1)).count, 4)
+        XCTAssertEqual(CalendarMath.monthWeeks(of: at(calendar(firstWeekday: 2), 2026, 2, 10), calendar: calendar(firstWeekday: 2)).count, 5)
+    }
+
+    func testFebruaryOfALeapYear() {
+        let cal = calendar(firstWeekday: 1)
+        let days = CalendarMath.monthWeeks(of: at(cal, 2028, 2, 1), calendar: cal).flatMap { $0 }.compactMap { $0 }
+        XCTAssertEqual(days.count, 29)
+    }
+
+    func testMonthOffsets() {
+        let cal = calendar(firstWeekday: 1)
+        let ref = at(cal, 2026, 10, 15)
+        XCTAssertEqual(CalendarMath.monthOffset(of: at(cal, 2027, 1, 3), from: ref, calendar: cal), 3)
+        XCTAssertEqual(CalendarMath.monthOffset(of: at(cal, 2025, 12, 31), from: ref, calendar: cal), -10)
+        XCTAssertEqual(CalendarMath.monthOffset(of: ref, from: ref, calendar: cal), 0)
+        let start = CalendarMath.monthStart(offset: 3, from: ref, calendar: cal)
+        XCTAssertEqual(cal.dateComponents([.year, .month, .day], from: start), DateComponents(year: 2027, month: 1, day: 1))
+    }
+
+    func testWeekStartAndLetters() {
+        let sun = calendar(firstWeekday: 1), mon = calendar(firstWeekday: 2)
+        // Thu Oct 15 2026
+        XCTAssertEqual(sun.component(.day, from: CalendarMath.weekStart(of: at(sun, 2026, 10, 15), calendar: sun)), 11)
+        XCTAssertEqual(mon.component(.day, from: CalendarMath.weekStart(of: at(mon, 2026, 10, 15), calendar: mon)), 12)
+        XCTAssertEqual(CalendarMath.weekdayLetters(calendar: sun), ["S", "M", "T", "W", "T", "F", "S"])
+        XCTAssertEqual(CalendarMath.weekdayLetters(calendar: mon).first, "M")
+        XCTAssertEqual(CalendarMath.weekdayLetters(calendar: mon).last, "S")
+    }
+
+    func testLandingDay() {
+        let cal = calendar(firstWeekday: 1)
+        let today = at(cal, 2026, 10, 15)
+        XCTAssertEqual(cal.component(.day, from: CalendarMath.landingDay(inMonthOf: at(cal, 2026, 10, 3), today: today, calendar: cal)), 15,
+                       "landing on the current month selects today")
+        XCTAssertEqual(cal.component(.day, from: CalendarMath.landingDay(inMonthOf: at(cal, 2026, 11, 20), today: today, calendar: cal)), 1)
+    }
+}
+
+final class CalendarLayoutTests: XCTestCase {
+    func testAllDayLanesStackOverlappingBanners() {
+        // Mon-Wed, Tue-Thu overlap; Fri does not.
+        let lanes = CalendarLayout.lanes(for: [(1, 3), (2, 4), (5, 5)])
+        XCTAssertEqual(lanes, [0, 1, 0])
+    }
+
+    func testAllDayLanesPutTheLongerBannerFirst() {
+        let lanes = CalendarLayout.lanes(for: [(0, 0), (0, 6)])
+        XCTAssertEqual(lanes, [1, 0], "the week-long banner takes the top lane")
+    }
+
+    func testAllDayLanesReuseFreedLane() {
+        let lanes = CalendarLayout.lanes(for: [(0, 1), (0, 0), (1, 1), (2, 3)])
+        XCTAssertEqual(lanes[0], 0)
+        XCTAssertEqual(lanes[3], 0, "a lane is reused once its banner ended")
+        XCTAssertNotEqual(lanes[1], lanes[0])
+    }
+
+    func testOverlappingEventsShareTheWidth() {
+        // 9-10 and 9:30-10:30 overlap; 11-12 stands alone.
+        let cols = CalendarLayout.columns(for: [(540, 600), (570, 630), (660, 720)])
+        XCTAssertEqual(cols.map(\.column), [0, 1, 0])
+        XCTAssertEqual(cols.map(\.count), [2, 2, 1])
+    }
+
+    func testBackToBackEventsDoNotOverlap() {
+        let cols = CalendarLayout.columns(for: [(540, 600), (600, 660)])
+        XCTAssertEqual(cols.map(\.count), [1, 1])
+    }
+
+    func testThreeWayOverlapUsesThreeColumns() {
+        let cols = CalendarLayout.columns(for: [(540, 660), (550, 600), (560, 580)])
+        XCTAssertEqual(Set(cols.map(\.column)), [0, 1, 2])
+        XCTAssertEqual(cols.map(\.count), [3, 3, 3])
+    }
+}
