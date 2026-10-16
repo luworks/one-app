@@ -39,90 +39,70 @@ struct HomeView: View {
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
     /// The day Today shows. Picking a day in Calendar opens it here.
     @State private var todayDay = Calendar.current.startOfDay(for: .now)
-    @State private var showsAsk = false
+    /// The AI screen: a new chat, or a saved conversation to continue. nil = closed.
+    @State private var ask: AskRoute?
     @State private var showsSearch = false
     @State private var newItem: NewItem?
     @State private var showsSettings = false
-    @State private var sidebarOpen = false
+    /// The left drawer (conversation history). See `Drawer.swift` for how the drag works.
+    @State private var drawer = DrawerModel()
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
     @State private var remindersPushed = false
     @State private var toast = UndoToast()
-    @GestureState private var drag: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
-            let width = min(geo.size.width * 0.82, 340)
-            let offset = min(max((sidebarOpen ? width : 0) + drag, 0), width)
+            // The sidebar is a full screen: as wide as the page, which slides all the way off to the right.
+            let width = geo.size.width
             ZStack(alignment: .leading) {
-                if offset > 0 {
-                Sidebar(tab: $tab,
-                        onNewChat: { showsAsk = true },
-                        onSettings: { showsSettings = true },
-                        close: { setSidebar(false) })
-                    .frame(width: width)
-                    .offset(x: (offset - width) * 0.3)
+                if drawer.isBuilt {
+                    Sidebar(drawer: drawer, width: width,
+                            onNewChat: { openAsk(nil) },
+                            onOpen: { openAsk($0) },
+                            onSettings: { showsSettings = true },
+                            close: { drawer.set(open: false) })
+                        .frame(width: width)
+                        .modifier(DrawerSidebarSlide(model: drawer, width: width))
                 }
 
                 main
                     .background(Color(.systemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: offset > 0 ? 32 : 0))
-                    .shadow(color: .black.opacity(offset > 0 ? 0.12 : 0), radius: 16)
-                    .overlay {
-                        // Dim + tap/drag to close while open.
-                        if offset > 0 {
-                            Color.black.opacity(0.08 * offset / width)
-                                .clipShape(RoundedRectangle(cornerRadius: 32))
-                                .onTapGesture { setSidebar(false) }
-                                .highPriorityGesture(sidebarDrag(width: width))
-                        }
-                    }
                     // Swipe right from the left edge opens the sidebar. The edge strip sits above the
                     // lists so it wins over row swipe actions; row swipes elsewhere stay free.
                     .overlay(alignment: .leading) {
-                        if offset == 0 && edgeSwipeEnabled {
+                        if edgeSwipeEnabled {
                             Color.clear
                                 .frame(width: 24)
                                 .contentShape(Rectangle())
-                                .highPriorityGesture(sidebarDrag(width: width))
+                                .modifier(DrawerDrag(model: drawer, width: width, kind: .edgeStrip))
                         }
                     }
-                    .simultaneousGesture(sidebarDrag(width: width, edgeOnly: true))
-                    .offset(x: offset)
+                    .modifier(DrawerDrag(model: drawer, width: width, kind: .edgeOnly, enabled: edgeSwipeEnabled))
+                    .modifier(DrawerMainSlide(model: drawer, width: width))
             }
         }
         .environment(toast)
-        .sensoryFeedback(.impact(weight: .light), trigger: sidebarOpen)
         .sheet(isPresented: $showsSettings) { SettingsView() }
+        .task {
+            // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.
+            try? await Task.sleep(for: .seconds(1.5))
+            drawer.isBuilt = true
+        }
     }
 
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
+
+    /// Opens the AI screen on a new chat, or on a saved conversation.
+    private func openAsk(_ thread: ChatThread?) {
+        drawer.set(open: false, animated: false)   // snaps shut behind the AI screen as it covers the page
+        ask = AskRoute(thread: thread)
+    }
 
     /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
     private static func seedUITestReminder(_ context: ModelContext) {
         let args = ProcessInfo.processInfo.arguments
         guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingAddReminder"), i + 1 < args.count else { return }
         context.insert(OneTask(title: args[i + 1]))
-    }
-
-    private func setSidebar(_ open: Bool) {
-        withAnimation(.snappy(duration: 0.3)) {
-            sidebarOpen = open
-        }
-    }
-
-    private func sidebarDrag(width: CGFloat, edgeOnly: Bool = false) -> some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .global)
-            .updating($drag) { v, state, _ in
-                if edgeOnly && (sidebarOpen || !edgeSwipeEnabled || v.startLocation.x > 44) { return }
-                guard abs(v.translation.width) > abs(v.translation.height) else { return }
-                state = v.translation.width
-            }
-            .onEnded { v in
-                if edgeOnly && (sidebarOpen || !edgeSwipeEnabled || v.startLocation.x > 44) { return }
-                guard abs(v.translation.width) > abs(v.translation.height) else { return }
-                let projected = (sidebarOpen ? width : 0) + v.predictedEndTranslation.width
-                setSidebar(projected > width / 2)
-            }
     }
 
     private var main: some View {
@@ -143,8 +123,8 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
-        .fullScreenCover(isPresented: $showsAsk) {
-            AskView(onAdded: { capture in
+        .fullScreenCover(item: $ask) { route in
+            AskView(thread: route.thread, onAdded: { capture in
                 if capture.hasDay { calendarDay = capture.day }
             })
         }
@@ -191,7 +171,7 @@ struct HomeView: View {
             guard let type else { return }
             QuickAction.shared.pending = nil
             switch type {
-            case "com.luworks.one.ask": showsAsk = true
+            case "com.luworks.one.ask": openAsk(nil)
             case "com.luworks.one.newTask": newItem = .task
             case "com.luworks.one.newEvent": newItem = .event
             default: break
@@ -231,7 +211,7 @@ struct HomeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
-        .accessibilityAction(named: "Open menu") { setSidebar(true) }
+        .accessibilityAction(named: "Open menu") { drawer.set(open: true) }
         // Chrome stays usable at the largest text sizes; content below still scales fully.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
@@ -266,7 +246,7 @@ struct HomeView: View {
     private var bottomButtons: some View {
         HStack(spacing: 10) {
             CircleButton(systemImage: "magnifyingglass", label: "Search") { showsSearch = true }
-            Button { showsAsk = true } label: {
+            Button { openAsk(nil) } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
                     Text("Ask AI or add anything").foregroundStyle(.secondary).lineLimit(1)
@@ -301,6 +281,12 @@ struct HomeView: View {
         .padding(.top, 6)
         .padding(.bottom, 4)
     }
+}
+
+/// What the AI screen opens on. A fresh id per presentation, so "New chat" always starts clean.
+struct AskRoute: Identifiable {
+    let id = UUID()
+    let thread: ChatThread?
 }
 
 enum NewItem: Identifiable {
@@ -391,5 +377,5 @@ extension View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self], inMemory: true)
+        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self], inMemory: true)
 }

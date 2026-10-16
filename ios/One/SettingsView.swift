@@ -192,6 +192,7 @@ enum DataReset {
         try? context.delete(model: OneAlarm.self)
         try? context.delete(model: OneList.self)
         try? context.delete(model: Habit.self)
+        try? context.delete(model: ChatThread.self)
         try? context.save()
     }
 }
