@@ -186,7 +186,8 @@ extension Capture {
 
     func makeEvent() -> OneEvent {
         let start = plannedStart ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
-        let e = OneEvent(title: title, start: start, durationMinutes: durationMinutes ?? 60)
+        let e = OneEvent(title: title, start: isAllDay ? day : start, durationMinutes: isAllDay ? 1440 : durationMinutes ?? 60)
+        e.isAllDay = isAllDay
         e.repeatRule = repeatRule
         return e
     }

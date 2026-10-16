@@ -16,6 +16,10 @@ struct Capture: Equatable {
     var durationMinutes: Int? = nil
     /// What the line most likely is. The user can switch it on the preview card.
     var kind: Kind = .task
+    /// A whole-day event (no start time). Only the Apple Intelligence path sets it today.
+    var isAllDay: Bool = false
+    /// True when the on-device model (Apple Intelligence) produced this proposal; shown as a small label on the card.
+    var fromAppleIntelligence: Bool = false
 
     var plannedStart: Date? {
         guard let hour else { return nil }
@@ -25,6 +29,8 @@ struct Capture: Equatable {
     var summary: String {
         var parts: [String] = []
         switch kind {
+        case .event where isAllDay:
+            parts.append(DayLabel.text(for: day) + " · All day")
         case .event:
             let start = plannedStart ?? day
             parts.append(DayLabel.withTime(start))
@@ -253,5 +259,146 @@ enum CaptureParser {
         }
         text.replaceSubrange(whole, with: " ")
         return groups
+    }
+}
+
+// MARK: - Apple Intelligence mapping (pure Foundation, no FoundationModels)
+
+/// One item as the on-device model proposes it. Mirrors the `@Generable` struct in AICapture.swift,
+/// but with plain strings so the mapping below can be unit tested without the model.
+struct CaptureDraft: Equatable {
+    /// "task" or "event".
+    var kind: String
+    var title: String
+    /// "yyyy-MM-dd", or nil when the line names no day.
+    var date: String? = nil
+    /// 24-hour "HH:mm", or nil when the line names no time.
+    var time: String? = nil
+    var durationMinutes: Int? = nil
+    /// "daily", "weekdays", "weekly", "monthly", "yearly"; nil or "none" = one-off.
+    var repeatRule: String? = nil
+    var isAllDay: Bool = false
+}
+
+enum CaptureDraftMapper {
+    /// Turns model output into the `Capture` shown on the preview card. Returns nil when the draft is unusable
+    /// (empty title), so the caller can fall back to the rule parser. Never trusts the model: bad dates, times,
+    /// durations and repeat names are dropped instead of guessed.
+    static func capture(from draft: CaptureDraft, now: Date = .now, calendar: Calendar = .current) -> Capture? {
+        let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+
+        let today = calendar.startOfDay(for: now)
+        let kind: Capture.Kind = draft.kind.lowercased() == "event" ? .event : .task
+        let allDay = kind == .event && draft.isAllDay
+
+        // A date in the past is far more likely a model slip than something the user meant.
+        var day = today
+        var hasDay = false
+        if let parsed = parseDay(draft.date, calendar: calendar), parsed >= today {
+            day = parsed
+            hasDay = true
+        }
+
+        var hour: Int?
+        var minute = 0
+        if !allDay, let (h, m) = parseTime(draft.time) { (hour, minute) = (h, m) }
+
+        // Same rule as the rule parser: a time with no day that has already passed today means tomorrow.
+        if let h = hour, !hasDay,
+           let t = calendar.date(bySettingHour: h, minute: minute, second: 0, of: today), t < now,
+           let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) {
+            day = tomorrow
+            hasDay = true
+        }
+
+        var duration: Int?
+        if !allDay, let d = draft.durationMinutes, (1...1440).contains(d) { duration = d }
+
+        return Capture(title: title, day: day, hasDay: hasDay, hour: hour, minute: minute,
+                       repeatRule: repeatRule(draft.repeatRule), durationMinutes: duration, kind: kind,
+                       isAllDay: allDay, fromAppleIntelligence: true)
+    }
+
+    /// "yyyy-MM-dd" (a trailing "T..." or " ..." is ignored) to a start-of-day Date; nil if it is not a real date.
+    static func parseDay(_ text: String?, calendar: Calendar) -> Date? {
+        guard let text else { return nil }
+        let head = text.trimmingCharacters(in: .whitespaces).prefix { $0 != "T" && $0 != " " }
+        let fields = head.split(separator: "-", omittingEmptySubsequences: false)
+        let parts = fields.compactMap { Int($0) }
+        guard fields.count == 3, parts.count == 3 else { return nil }
+        guard let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) else { return nil }
+        // Rejects overflow such as 2026-02-31, which Calendar silently rolls into March.
+        let back = calendar.dateComponents([.year, .month, .day], from: date)
+        guard back.year == parts[0], back.month == parts[1], back.day == parts[2] else { return nil }
+        return calendar.startOfDay(for: date)
+    }
+
+    /// 24-hour "HH:mm" (or "H:mm").
+    static func parseTime(_ text: String?) -> (Int, Int)? {
+        guard let text else { return nil }
+        let parts = text.trimmingCharacters(in: .whitespaces).split(separator: ":", omittingEmptySubsequences: false).compactMap { Int($0) }
+        guard parts.count == 2, (0...23).contains(parts[0]), (0...59).contains(parts[1]) else { return nil }
+        return (parts[0], parts[1])
+    }
+
+    /// Model repeat name to a `RepeatRule` raw value; "none", empty or anything unknown is a one-off.
+    static func repeatRule(_ name: String?) -> String? {
+        let n = (name ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        return (n == "weekday" ? RepeatRule.weekdays : RepeatRule(rawValue: n))?.rawValue
+    }
+
+    /// System instructions for the model: today's date, weekday, time zone, locale, and a 14-day lookup table so the
+    /// model copies dates instead of doing calendar arithmetic. The weekday rules match the rule parser.
+    static func instructions(now: Date = .now, calendar: Calendar = .current, localeIdentifier: String = Locale.current.identifier) -> String {
+        var cal = calendar
+        cal.locale = Locale(identifier: "en_US_POSIX")
+        let today = cal.startOfDay(for: now)
+
+        func iso(_ d: Date) -> String {
+            let c = cal.dateComponents([.year, .month, .day], from: d)
+            return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+        }
+        func weekdayName(_ d: Date) -> String {
+            ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][cal.component(.weekday, from: d) - 1]
+        }
+        var monday = cal
+        monday.firstWeekday = 2
+        let thisWeekStart = monday.dateInterval(of: .weekOfYear, for: today)?.start
+        let nextWeekStart = thisWeekStart.flatMap { monday.date(byAdding: .day, value: 7, to: $0) }
+        let weekAfterStart = nextWeekStart.flatMap { monday.date(byAdding: .day, value: 7, to: $0) }
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)
+
+        let table = (0..<14).compactMap { cal.date(byAdding: .day, value: $0, to: today) }.map { d -> String in
+            var line = "\(iso(d)) \(weekdayName(d))"
+            if d == today { line += " (today)" } else if d == tomorrow { line += " (tomorrow)" }
+            if let a = nextWeekStart, let b = weekAfterStart, d >= a, d < b { line += " (next week)" }
+            return line
+        }.joined(separator: "\n")
+
+        let clock = String(format: "%02d:%02d", cal.component(.hour, from: now), cal.component(.minute, from: now))
+        return """
+        You turn one line the user typed or dictated into proposed events and tasks for a planner app. \
+        You only propose; the user reviews every item before anything is created. Never invent details that are not in the text.
+
+        Today is \(iso(today)), \(weekdayName(today)). The current time is \(clock). \
+        Time zone: \(cal.timeZone.identifier). User locale: \(localeIdentifier). Weeks start on Monday.
+
+        The next 14 days (copy dates from this table):
+        \(table)
+
+        Rules:
+        - Return one item per separate thing the user mentions, in the order mentioned, at most 5.
+        - kind is "event" for something at a fixed time with other people or a place (meeting, appointment, lunch, flight, class) \
+        or with a start and end time; otherwise "task" (things to do, buy, send, call, pay).
+        - title is short, without the date, time or repeat words. Keep the user's language.
+        - date is yyyy-MM-dd. A bare weekday ("Friday") is its next occurrence after today. "next <weekday>" is that weekday in the \
+        following week, marked (next week) in the table. For dates beyond the table use the year of today, or next year if the date has passed. \
+        Leave date empty when the text names no day.
+        - time is 24-hour HH:mm. A bare hour from 1 to 6 with no am/pm means the afternoon. Leave time empty when none is given.
+        - durationMinutes only when a length or an end time is given ("3-4pm" is 60). Otherwise leave it empty.
+        - repeat only when the text says it repeats (every day, weekdays, weekly, monthly, yearly). Otherwise never.
+        - allDay is true only for an event on a whole day (birthday, holiday, trip day) with no time.
+        """
     }
 }

@@ -23,6 +23,10 @@ struct AskView: View {
     @State private var messages: [ChatMessage] = []
     @State private var draft = ""
     @State private var pending: Capture?
+    /// Further items from the same line; each is shown, and confirmed or skipped, one at a time.
+    @State private var queue: [Capture] = []
+    @State private var thinking = false
+    @State private var captureTask: Task<Void, Never>?
     @State private var plan: [(task: OneTask, start: Date)] = []
     @State private var voice = VoiceInput()
     @FocusState private var focused: Bool
@@ -43,6 +47,12 @@ struct AskView: View {
                     } else {
                         LazyVStack(alignment: .leading, spacing: 16) {
                             ForEach(messages) { MessageView(message: $0).id($0.id) }
+                            if thinking {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("Thinking…").foregroundStyle(.secondary)
+                                }
+                            }
                         }
                         .padding(20)
                     }
@@ -96,7 +106,7 @@ struct AskView: View {
             }
             if let capture = pending {
                 CaptureCard(capture: Binding(get: { pending ?? capture }, set: { pending = $0 }),
-                            onAdd: { add(pending ?? capture) }, onCancel: { pending = nil })
+                            onAdd: { add(pending ?? capture) }, onCancel: advance)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: 8) {
@@ -153,24 +163,55 @@ struct AskView: View {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
+        captureTask?.cancel()
+        thinking = false
         messages.append(ChatMessage(role: .user, text: text))
         pending = nil
+        queue = []
         plan = []
         if isPlanRequest(text) {
             proposePlan()
         } else if isQuestion(text) {
             messages.append(ChatMessage(role: .ai, text: todaySummary))
         } else {
-            pending = CaptureParser.parse(text)
-            messages.append(ChatMessage(role: .ai, text: "Here's what I understood. Nothing is added until you confirm."))
+            propose(text)
         }
+    }
+
+    /// Apple Intelligence (on device) when it is available, otherwise the rule-based parser. A failure of the
+    /// model also falls back to the parser, so a line always produces a preview. Only the preview is set here.
+    private func propose(_ text: String) {
+        guard AICapture.isAvailable else {
+            show([CaptureParser.parse(text)])
+            return
+        }
+        thinking = true
+        captureTask = Task { @MainActor in
+            let proposed = await AICapture.propose(text)
+            guard !Task.isCancelled else { return }
+            thinking = false
+            show(proposed ?? [CaptureParser.parse(text)])
+        }
+    }
+
+    private func show(_ captures: [Capture]) {
+        pending = captures.first
+        queue = Array(captures.dropFirst())
+        messages.append(ChatMessage(role: .ai, text: queue.isEmpty
+            ? "Here's what I understood. Nothing is added until you confirm."
+            : "I found \(captures.count) items. Here's the first; the next one shows after you add or cancel this one. Nothing is added until you confirm."))
+    }
+
+    /// Shows the next item from the same line, if any.
+    private func advance() {
+        pending = queue.isEmpty ? nil : queue.removeFirst()
     }
 
     private func add(_ capture: Capture) {
         capture.insert(into: context)
         onAdded(capture)
         messages.append(ChatMessage(role: .ai, text: "Added “\(capture.title)” · \(capture.summary)."))
-        pending = nil
+        advance()
     }
 
     private func isPlanRequest(_ text: String) -> Bool {
