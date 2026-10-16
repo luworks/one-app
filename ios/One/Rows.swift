@@ -49,7 +49,15 @@ struct EventRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let event: OneEvent
     var start: Date? = nil
+    /// The list that holds this row asks "this event or the series?" for a repeating one (see `entryDeleteDialog`).
+    @Binding var pendingDelete: CalEntry?
     @State private var editing = false
+
+    init(event: OneEvent, start: Date? = nil, pendingDelete: Binding<CalEntry?> = .constant(nil)) {
+        self.event = event
+        self.start = start
+        _pendingDelete = pendingDelete
+    }
 
     private var detail: String {
         var parts: [String] = []
@@ -90,18 +98,15 @@ struct EventRow: View {
                                               end: (start ?? event.start).addingTimeInterval(event.duration), isAllDay: event.isAllDay,
                                               calendar: CalendarSync.shared.calendar(forExternalID: event.externalID)?.title ?? event.calendarName))
         .accessibilityAddTraits(.isButton)
-        .swipeActions(edge: .trailing, allowsFullSwipe: event.repeats == nil) {
-            Button(role: .destructive) { delete() } label: { Label("Delete", systemImage: "trash") }
-        }
-        .contextMenu {
-            Button { editing = true } label: { Label("Show Details", systemImage: "info.circle") }
-            Button(role: .destructive) { delete() } label: { Label("Delete", systemImage: "trash") }
-        }
+        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in editing = true }, edit: { _ in editing = true })
     }
 
-    private func delete() {
-        CalendarSync.shared.delete(externalID: event.externalID)
-        withAnimation { context.delete(event) }
+    /// The same swipe and long-press actions as in the Calendar tab.
+    private var entry: CalEntry {
+        let begin = start ?? event.start
+        return CalEntry(id: "r\(event.persistentModelID.hashValue)@\(begin.timeIntervalSince1970)", source: .local(event), title: event.title,
+                        start: begin, end: begin.addingTimeInterval(event.duration), isAllDay: event.isAllDay,
+                        color: CalendarSync.shared.color(forExternalID: event.externalID) ?? .blue, repeats: event.repeats != nil)
     }
 }
 

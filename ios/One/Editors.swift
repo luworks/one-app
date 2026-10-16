@@ -201,6 +201,7 @@ struct TaskEditor: View {
 struct EventEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(UndoToast.self) private var toast: UndoToast?
 
     let event: OneEvent?
 
@@ -276,8 +277,13 @@ struct EventEditor: View {
                 if let event {
                     Section {
                         Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
+                            let backup = event.copy()
                             CalendarSync.shared.delete(externalID: event.externalID)
                             context.delete(event)
+                            toast?.show("Deleted “\(backup.title)”") {
+                                backup.externalID = CalendarSync.shared.save(backup)
+                                withAnimation(.snappy) { context.insert(backup) }
+                            }
                             dismiss()
                         }
                     }

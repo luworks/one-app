@@ -33,6 +33,13 @@ final class OneAlarm {
         self.createdAt = .now
     }
 
+    /// An unsaved copy with the same settings, to put a deleted alarm back (Undo). It gets its own AlarmKit id.
+    func copy() -> OneAlarm {
+        let a = OneAlarm(hour: hour, minute: minute, label: label, weekdays: weekdays, snooze: snooze)
+        a.isOn = isOn
+        return a
+    }
+
     /// The time of day as a date today (for pickers and display).
     var timeToday: Date {
         Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now

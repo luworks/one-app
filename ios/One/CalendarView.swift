@@ -24,7 +24,7 @@ struct CalendarView: View {
             Group {
                 switch mode {
                 case .week:
-                    WeekView(day: $day, dayCount: 7, open: open, openDay: openDay)
+                    WeekView(day: $day, dayCount: 7, open: open, edit: edit, openDay: openDay)
                 case .month:
                     MonthView(day: $day, open: open, edit: edit, openDay: openDay)
                 case .year:
@@ -97,6 +97,7 @@ private struct ModePill: View {
         }
         .buttonStyle(PressScale())
         .accessibilityLabel(title)
+        .accessibilityIdentifier("calendar.mode.\(title.lowercased())")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
@@ -304,38 +305,37 @@ private struct DayAgendaList: View {
     let tasks: [OneTask]
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void
+    @State private var pendingDelete: CalEntry?
     private let cal = Calendar.current
 
     var body: some View {
         let interval = cal.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 86400)
         let items = CalendarEntries.on(day, in: CalendarEntries.make(in: interval, events: events, tasks: tasks))
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                if items.isEmpty {
-                    Text("No Events")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
-                } else {
-                    ForEach(items) { entry in
-                        AgendaRow(entry: entry, day: day)
-                            .onTapGesture { open(entry) }
-                            .contextMenu { entryMenu(entry) }
-                    }
-                }
+        List {
+            ForEach(items) { entry in
+                AgendaRow(entry: entry, day: day)
+                    .onTapGesture { open(entry) }
+                    .entryActions(entry, pendingDelete: $pendingDelete, open: open, edit: edit)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
-            .padding(.bottom, 12)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .overlay {
+            if items.isEmpty {
+                Text("No Events")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 40)
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.snappy, value: items.map(\.id))
+        .entryDeleteDialog($pendingDelete)
         .accessibilityIdentifier("calendar.dayList")
-    }
-
-    @ViewBuilder
-    private func entryMenu(_ entry: CalEntry) -> some View {
-        Button { open(entry) } label: { Label("Show Details", systemImage: "info.circle") }
-        if case .system = entry.source {
-            Button { edit(entry) } label: { Label("Edit", systemImage: "pencil") }
-        }
     }
 }
 
@@ -503,6 +503,7 @@ private struct WeekView: View {
     /// 7 = a calendar week; 3 = the next 3 days starting today.
     var dayCount = 7
     var open: (CalEntry) -> Void
+    var edit: (CalEntry) -> Void = { _ in }
     var openDay: (Date) -> Void
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
@@ -534,7 +535,7 @@ private struct WeekView: View {
                 LazyHStack(spacing: 0) {
                     ForEach(range, id: \.self) { o in
                         WeekPage(weekStart: weekStart(o), dayCount: dayCount, selected: day, events: events, tasks: tasks,
-                                 topHour: $topHour, open: open, openDay: openDay)
+                                 topHour: $topHour, open: open, edit: edit, openDay: openDay)
                             .containerRelativeFrame([.horizontal, .vertical])
                             .id(o)
                     }
@@ -566,7 +567,9 @@ private struct WeekPage: View {
     let tasks: [OneTask]
     @Binding var topHour: Int?
     var open: (CalEntry) -> Void
+    var edit: (CalEntry) -> Void = { _ in }
     var openDay: (Date) -> Void
+    @State private var pendingDelete: CalEntry?
 
     private let hourHeight: CGFloat = 48
     private let gutter: CGFloat = 44
@@ -582,6 +585,7 @@ private struct WeekPage: View {
             Rectangle().fill(Color(.separator)).frame(height: 0.5)
             grid(days, entries.filter { !$0.isAllDay })
         }
+        .entryDeleteDialog($pendingDelete)
     }
 
     // MARK: Header
@@ -651,6 +655,7 @@ private struct WeekPage: View {
                                 .background(EventTint.fill(e.color), in: RoundedRectangle(cornerRadius: 5))
                                 .offset(x: CGFloat(spans[i].start) * colW + 1, y: CGFloat(lanes[i]) * rowHeight)
                                 .onTapGesture { open(e) }
+                                .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false)
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel(e.speech)
                                 .accessibilityAddTraits(.isButton)
@@ -793,6 +798,7 @@ private struct WeekPage: View {
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .contentShape(Rectangle())
             .onTapGesture { open(e) }
+            .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(e.speech)
             .accessibilityAddTraits(.isButton)

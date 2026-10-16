@@ -244,6 +244,12 @@ final class CalendarSync {
         try? store.remove(ek, span: span)
     }
 
+    /// Whether the system copy of an event repeats (Delete then asks: this event or the series).
+    func isRepeating(externalID: String?) -> Bool {
+        guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else { return false }
+        return ek.hasRecurrenceRules
+    }
+
     /// Who a change to the system copy of an event reaches: attendee count and whether you organize it. Nil without a system copy.
     func audience(externalID: String?) -> (attendees: Int, isOrganizer: Bool)? {
         guard isOn, storeReady, let id = externalID, let ek = store.event(withIdentifier: id) else { return nil }
@@ -256,6 +262,15 @@ struct ExternalEventRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let event: ExternalEvent
     @State private var showing = false
+    @State private var showingEditor = false
+    /// The list that holds this row asks "this event or the series?" (see `entryDeleteDialog`).
+    @Binding var pendingDelete: CalEntry?
+
+    /// The same swipe and long-press actions as in the Calendar tab.
+    private var entry: CalEntry {
+        CalEntry(id: event.id, source: .system(event.eventIdentifier), title: event.title, location: event.location,
+                 start: event.start, end: event.end, isAllDay: event.isAllDay, color: event.color, calendarTitle: event.calendarTitle)
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -277,8 +292,9 @@ struct ExternalEventRow: View {
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .onTapGesture { showing = true }
-        .contextMenu { Button { showing = true } label: { Label("Show Details", systemImage: "info.circle") } }
+        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in showing = true }, edit: { _ in showingEditor = true })
         .sheet(isPresented: $showing) { NativeEventSheet(identifier: event.eventIdentifier) }
+        .sheet(isPresented: $showingEditor) { NativeEventEditor(identifier: event.eventIdentifier).ignoresSafeArea() }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .combine)
@@ -288,36 +304,14 @@ struct ExternalEventRow: View {
     }
 }
 
-/// Apple's own event viewer (EventKitUI): editing, deleting and repeating-event prompts behave exactly like Calendar.
-struct NativeEventSheet: UIViewControllerRepresentable {
+/// Opening a system event goes straight to Apple's editor (EventKitUI): title, start and end, all-day, calendar, alerts and
+/// Delete Event are all editable at once, Done saves. Apple's read-only viewer made you tap Edit first and drew its own
+/// Delete, so it is not used.
+struct NativeEventSheet: View {
     let identifier: String
-    @Environment(\.dismiss) private var dismiss
 
-    func makeUIViewController(context: Context) -> UINavigationController {
-        guard let (event, store) = CalendarSync.shared.nativeEvent(identifier: identifier) else {
-            return UINavigationController(rootViewController: UIViewController())
-        }
-        let vc = EKEventViewController()
-        vc.event = event
-        vc.allowsEditing = true
-        vc.allowsCalendarPreview = true
-        vc.delegate = context.coordinator
-        _ = store
-        return UINavigationController(rootViewController: vc)
-    }
-
-    func updateUIViewController(_ controller: UINavigationController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
-
-    final class Coordinator: NSObject, EKEventViewDelegate {
-        let dismiss: () -> Void
-        init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
-        func eventViewController(_ controller: EKEventViewController, didCompleteWith action: EKEventViewAction) {
-            // Edit and Delete happen inside Apple's viewer; refetch so lists match.
-            Task { @MainActor in CalendarSync.shared.refresh() }
-            dismiss()
-        }
+    var body: some View {
+        NativeEventEditor(identifier: identifier).ignoresSafeArea()
     }
 }
 

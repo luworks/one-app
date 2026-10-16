@@ -8,10 +8,20 @@ final class UndoToast {
     private(set) var message: String?
     private var undo: (() -> Void)?
     private var token = UUID()
+    /// The window's undo manager: every undoable change is registered there too, so shaking the iPhone offers
+    /// the system's "Undo ..." prompt for it, like in any other app. Set by `HomeView`.
+    @ObservationIgnored var undoManager: UndoManager?
 
     func show(_ message: String, undo: @escaping () -> Void) {
         let t = UUID()
         token = t
+        if let undoManager {
+            undoManager.registerUndo(withTarget: self) { target in
+                undo()
+                if target.token == t { target.dismiss() }
+            }
+            undoManager.setActionName(Self.actionName(for: message))
+        }
         withAnimation(.snappy) {
             self.message = message
             self.undo = undo
@@ -23,8 +33,18 @@ final class UndoToast {
     }
 
     func performUndo() {
+        // The toast's button and the shake prompt undo the same change; once it is undone, forget the shake entry.
+        undoManager?.removeAllActions(withTarget: self)
         undo?()
         dismiss()
+    }
+
+    /// "Deleted “Buy milk”" reads as "Undo Delete" in the shake prompt.
+    private static func actionName(for message: String) -> String {
+        let lower = message.lowercased()
+        for (key, name) in [("deleted", "Delete"), ("completed", "Complete"), ("archived", "Archive"), ("unarchived", "Unarchive")]
+        where lower.contains(key) { return name }
+        return message
     }
 
     func dismiss() {

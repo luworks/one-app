@@ -74,6 +74,7 @@ struct AlarmRow: View {
 struct AlarmEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(UndoToast.self) private var toast: UndoToast?
     let alarm: OneAlarm?
 
     @State private var time: Date
@@ -136,8 +137,13 @@ struct AlarmEditor: View {
                 if let alarm {
                     Section {
                         Button(role: .destructive) {
+                            let backup = alarm.copy()
                             context.delete(alarm)
                             Task { await Ringer.sync(context) }
+                            toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
+                                withAnimation(.snappy) { context.insert(backup) }
+                                Task { await Ringer.sync(context) }
+                            }
                             dismiss()
                         } label: {
                             Text("Delete Alarm").frame(maxWidth: .infinity)

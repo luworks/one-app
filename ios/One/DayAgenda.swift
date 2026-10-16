@@ -16,6 +16,8 @@ struct DayAgenda: View {
 
     private let cal = Calendar.current
     @State private var showsAllOverdue = false
+    /// A repeating system event whose Delete is waiting for "this event or the series?".
+    @State private var pendingDelete: CalEntry?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -54,8 +56,8 @@ struct DayAgenda: View {
 
             if !allDay.isEmpty || !externalAllDay.isEmpty {
                 Section {
-                    ForEach(allDay) { EventRow(event: $0) }
-                    ForEach(externalAllDay) { ExternalEventRow(event: $0) }
+                    ForEach(allDay) { EventRow(event: $0, pendingDelete: $pendingDelete) }
+                    ForEach(externalAllDay) { ExternalEventRow(event: $0, pendingDelete: $pendingDelete) }
                 } header: { AgendaHeader(title: "All day") }
             }
             if cal.isDateInToday(day), showsOverdue, !overdue.isEmpty {
@@ -92,8 +94,8 @@ struct DayAgenda: View {
                 }
                 ForEach(timeline) { item in
                     switch item {
-                    case .event(let event, let start): EventRow(event: event, start: start)
-                    case .external(let e): ExternalEventRow(event: e)
+                    case .event(let event, let start): EventRow(event: event, start: start, pendingDelete: $pendingDelete)
+                    case .external(let e): ExternalEventRow(event: e, pendingDelete: $pendingDelete)
                     case .task(let task): TaskRow(task: task, showsTime: true, compact: true)
                     case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
                     case .nowMarker(let date): NowRow(date: date).id("now-line")
@@ -108,6 +110,7 @@ struct DayAgenda: View {
         .environment(\.defaultMinListRowHeight, 24)
         .listSectionSpacing(6)
         .scrollContentBackground(.hidden)
+        .entryDeleteDialog($pendingDelete)
     }
 
     private var external: [ExternalEvent] {
@@ -138,7 +141,8 @@ struct DayAgenda: View {
             .flatMap { e in e.occurs(on: day).map { TimelineItem.event(e, $0) } }
         items += external.filter { !$0.isAllDay }.map(TimelineItem.external)
         items += tasks.compactMap { task -> TimelineItem? in
-            guard let start = task.plannedStart, cal.isDate(start, inSameDayAs: day) else { return nil }
+            // A completed task leaves the day (Undo in the toast brings it back).
+            guard !task.isDone, let start = task.plannedStart, cal.isDate(start, inSameDayAs: day) else { return nil }
             return .task(task)
         }
         if showsAlarms { items += alarms.compactMap { a in a.fires(on: day).map { TimelineItem.alarm(a, $0) } } }

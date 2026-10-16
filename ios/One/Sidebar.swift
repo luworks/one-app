@@ -125,12 +125,15 @@ struct Sidebar: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .alert("Rename Conversation", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+        // `presenting:` hands the thread to the buttons: the alert clears `renaming` as it closes, which can happen
+        // before Save's action runs.
+        .alert("Rename Conversation", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
+               presenting: renaming) { thread in
             TextField("Title", text: $renameText)
             Button("Cancel", role: .cancel) {}
             Button("Save") {
                 let title = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let thread = renaming, !title.isEmpty {
+                if !title.isEmpty {
                     thread.title = title
                     try? context.save()
                 }

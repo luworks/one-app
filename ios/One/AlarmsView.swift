@@ -11,6 +11,7 @@ struct AlarmsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
+    @Environment(UndoToast.self) private var toast: UndoToast?
     @Query(sort: [SortDescriptor(\OneAlarm.hour), SortDescriptor(\OneAlarm.minute)]) private var alarms: [OneAlarm]
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
@@ -102,8 +103,13 @@ struct AlarmsView: View {
     }
 
     private func delete(_ alarm: OneAlarm) {
-        withAnimation { context.delete(alarm) }
+        let backup = alarm.copy()
+        withAnimation(.snappy) { context.delete(alarm) }
         Task { await Ringer.sync(context) }
+        toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
+            withAnimation(.snappy) { context.insert(backup) }
+            Task { await Ringer.sync(context) }
+        }
     }
 
     private var emptyState: some View {

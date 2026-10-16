@@ -651,6 +651,12 @@ struct AskView: View {
     /// One item per line: the rule parser reads the day / time / title and the on-device model only says task / event / alarm.
     /// A line that lists several things goes to the multi-item model path when it is available.
     private func propose(_ text: String) {
+        // UI tests only (`-uiTesting -uiTestingMultiCapture`): the simulator has no on-device model, so a line with ";"
+        // is split by the rule parser into several proposals, to exercise the multi-item card.
+        if ProcessInfo.processInfo.arguments.contains("-uiTestingMultiCapture"), text.contains(";") {
+            show(text.split(separator: ";").map { CaptureParser.parse(String($0).trimmingCharacters(in: .whitespaces)) })
+            return
+        }
         if AICapture.isAvailable, text.range(of: #"[；;\n]|然后|另外还|\band then\b"#, options: [.regularExpression, .caseInsensitive]) != nil {
             proposeList(text)
         } else {

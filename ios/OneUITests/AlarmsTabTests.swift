@@ -117,6 +117,9 @@ final class AlarmsTabTests: XCTestCase {
         let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
         start.press(forDuration: 0.05, thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: -0.3, dy: 0.5)))
         for _ in 0..<20 where rows.count > 0 { _ = app.buttons["New"].waitForExistence(timeout: 0.25) }
+        // A full swipe deletes at once; a shorter one (or the simulator's synthetic drag) leaves the Delete button open.
+        let delete = app.buttons["Delete"]
+        if delete.waitForExistence(timeout: 1) { delete.tap() }
         XCTAssertEqual(rows.count, 0, "swipe left deletes the alarm")
         XCTAssertTrue(app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 3))
     }

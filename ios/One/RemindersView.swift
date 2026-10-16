@@ -363,12 +363,15 @@ struct RemindersView: View {
                     Button { editing = list } label: { Label("Info", systemImage: "info.circle") }
                         .tint(Color(.systemGray))
                 }
-                .contextMenu {
-                    Button { editing = list } label: { Label("Show List Info", systemImage: "info.circle") }
-                    Button { ListActions.togglePinned(list, in: context) } label: {
-                        Label(list.pinned ? "Unpin" : "Pin to Top", systemImage: list.pinned ? "pin.slash" : "pin")
-                    }
-                    Button(role: .destructive) { askDelete(list) } label: { Label("Delete", systemImage: "trash") }
+                // No context menu on these rows: a long press has to pick the row up for reordering, and a menu
+                // would take that touch (sliding the finger would pick a menu item instead). Pin, Info and Delete
+                // are on the row's swipe actions and in Edit.
+                // Long press lifts the row (system drag); dropping it on another row puts it just before that row.
+                .draggable(list.name) { row.padding(.horizontal, 16).background(.background, in: RoundedRectangle(cornerRadius: 12)) }
+                .dropDestination(for: String.self) { names, _ in
+                    guard let name = names.first else { return false }
+                    moveList(named: name, before: list)
+                    return true
                 }
         }
     }
@@ -379,6 +382,19 @@ struct RemindersView: View {
     /// The default list hides when it has nothing and other lists exist.
     private func showsDefaultList(_ stats: Stats) -> Bool {
         (stats.total[""] ?? 0) > 0 || lists.isEmpty
+    }
+
+    /// Moves the list called `name` to sit just before `target` (a long-press drag and drop in My Lists).
+    private func moveList(named name: String, before target: OneList) {
+        var ordered = sortedLists
+        guard let from = ordered.firstIndex(where: { $0.name == name }), ordered[from] !== target else { return }
+        let moved = ordered.remove(at: from)
+        guard let to = ordered.firstIndex(where: { $0 === target }) else { return }
+        ordered.insert(moved, at: to)
+        withAnimation(.snappy) {
+            ListActions.reorder(ordered, in: context)
+            listsReordered = true
+        }
     }
 
     private func askDelete(_ list: OneList) {

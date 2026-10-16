@@ -49,6 +49,7 @@ struct HomeView: View {
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
     @State private var remindersPushed = false
     @State private var toast = UndoToast()
+    @Environment(\.undoManager) private var undoManager
     /// Counts tab switches made by swiping; drives their haptic (pill taps already have one).
     @State private var tabSwipes = 0
 
@@ -94,6 +95,8 @@ struct HomeView: View {
             })
         }
         .environment(toast)
+        .onAppear { toast.undoManager = undoManager }
+        .onChange(of: undoManager) { _, new in toast.undoManager = new }
         .sheet(isPresented: $showsSettings) { SettingsView() }
         .task {
             // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.

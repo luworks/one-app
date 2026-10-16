@@ -17,7 +17,10 @@ final class CalendarTabTests: XCTestCase {
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
 
     /// The Calendar tab opens on the next 3 days; the Month tests switch to Month first.
-    private func showMonth() { app.segmentedControls.buttons["Month"].tap() }
+    private func showMonth() { modeButton("Month").tap() }
+
+    /// The Week / Month / Year pills (buttons, not a segmented control).
+    private func modeButton(_ title: String) -> XCUIElement { app.buttons["calendar.mode.\(title.lowercased())"] }
 
     private func monthName(_ date: Date) -> String { date.formatted(.dateTime.month(.wide)) }
 
@@ -28,11 +31,13 @@ final class CalendarTabTests: XCTestCase {
 
     /// The default view is Week: one switcher row (Week / Month / Year), no Day segment, no Today or Calendars buttons.
     func testWeekIsTheDefault() {
-        let segments = app.segmentedControls.firstMatch
-        XCTAssertTrue(segments.waitForExistence(timeout: 5))
-        XCTAssertEqual(segments.buttons.allElementsBoundByIndex.map(\.label), ["Week", "Month", "Year"],
+        XCTAssertTrue(modeButton("Week").waitForExistence(timeout: 5))
+        let pills = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'calendar.mode.'"))
+        XCTAssertEqual(pills.allElementsBoundByIndex.map(\.label), ["Week", "Month", "Year"],
                        "one switcher: Week / Month / Year (Day is the Today tab)")
-        XCTAssertTrue(segments.buttons["Week"].isSelected, "Week is selected when the tab opens")
+        XCTAssertFalse(app.segmentedControls.buttons["Month"].exists, "pills, not a segmented control")
+        XCTAssertTrue(modeButton("Week").isSelected, "Week is selected when the tab opens")
+        XCTAssertFalse(modeButton("Month").isSelected)
         XCTAssertTrue(element("calendar.weekTitle").waitForExistence(timeout: 5), "a time grid with a month title")
         XCTAssertFalse(app.buttons["calendar.today"].exists || app.buttons["calendar.calendars"].exists || app.buttons["calendar.year"].exists)
     }
@@ -88,7 +93,7 @@ final class CalendarTabTests: XCTestCase {
 
     /// Year: twelve mini months; tapping one opens it as Month.
     func testYearViewOpensAMonth() {
-        app.segmentedControls.buttons["Year"].tap()
+        modeButton("Year").tap()
         XCTAssertTrue(element("calendar.year.scroll").waitForExistence(timeout: 5))
         let year = cal.component(.year, from: .now)
         let january = element(String(format: "miniMonth.%04d-01", year))
@@ -103,7 +108,7 @@ final class CalendarTabTests: XCTestCase {
 
     /// Week keeps the time grid with all-day banners on top.
     func testWeekShowsAllDayBanner() {
-        app.segmentedControls.buttons["Week"].tap()
+        modeButton("Week").tap()
         XCTAssertTrue(element("calendar.weekTitle").waitForExistence(timeout: 5))
         // "Team offsite" is two days from now: this week or, near the weekend, the next one.
         let banner = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Team offsite'")).firstMatch
