@@ -17,6 +17,9 @@ struct Sidebar: View {
     @Query(sort: \ChatThread.updatedAt, order: .reverse) private var threads: [ChatThread]
     /// Refreshed each time the sidebar opens, so "Today" is right after the app sat open overnight.
     @State private var now = Date.now
+    @State private var showArchived = false
+    @State private var renaming: ChatThread?
+    @State private var renameText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -86,36 +89,124 @@ struct Sidebar: View {
             .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
     }
 
+    private var activeThreads: [ChatThread] { threads.filter { !$0.archived } }
+    private var archivedThreads: [ChatThread] { threads.filter(\.archived) }
+
     private var conversationList: some View {
         List {
-            ForEach(ConversationHistory.group(threads, date: \.updatedAt, now: now), id: \.bucket) { group in
+            ForEach(ConversationHistory.group(activeThreads, date: \.updatedAt, now: now), id: \.bucket) { group in
                 Section {
                     ForEach(group.items) { thread in
-                        ConversationRow(thread: thread, now: now) { onOpen(thread) }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-                            // Swipe left to delete, like every list in the app; Undo brings it back.
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) { delete(thread) } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
+                        row(thread)
                     }
                 } header: {
-                    Text(group.bucket.title)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(nil)
+                    sectionHeader(group.bucket.title)
+                }
+                .listSectionSeparator(.hidden)
+            }
+            if !archivedThreads.isEmpty {
+                Section {
+                    if showArchived {
+                        ForEach(archivedThreads) { thread in
+                            row(thread)
+                        }
+                    }
+                } header: {
+                    Button {
+                        withAnimation(.snappy) { showArchived.toggle() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            sectionHeader("Archived (\(archivedThreads.count))")
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(showArchived ? 90 : 0))
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Archived, \(archivedThreads.count)")
+                    .accessibilityValue(showArchived ? "Expanded" : "Collapsed")
+                    .accessibilityIdentifier("conversation.archived")
                 }
                 .listSectionSeparator(.hidden)
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .alert("Rename Conversation", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                let title = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let thread = renaming, !title.isEmpty {
+                    thread.title = title
+                    try? context.save()
+                }
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(nil)
+    }
+
+    /// Swipe right to left archives (a full swipe archives at once), swipe left to right shows Delete,
+    /// press and hold for Rename / Archive / Delete. Archive and Delete both have Undo.
+    private func row(_ thread: ChatThread) -> some View {
+        ConversationRow(thread: thread, now: now) { onOpen(thread) }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                archiveButton(thread)
+            }
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                Button(role: .destructive) { delete(thread) } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+            .contextMenu {
+                Button {
+                    renameText = thread.title
+                    renaming = thread
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+                archiveButton(thread)
+                Divider()
+                Button(role: .destructive) { delete(thread) } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+    }
+
+    private func archiveButton(_ thread: ChatThread) -> some View {
+        Button { setArchived(thread, !thread.archived) } label: {
+            if thread.archived {
+                Label("Unarchive", systemImage: "tray.and.arrow.up")
+            } else {
+                Label("Archive", systemImage: "archivebox")
+            }
+        }
+        .tint(.indigo)
+    }
+
+    private func setArchived(_ thread: ChatThread, _ archived: Bool) {
+        withAnimation { thread.archived = archived }
+        try? context.save()
+        toast?.show(archived ? "Conversation archived" : "Conversation unarchived") {
+            withAnimation { thread.archived = !archived }
+            try? context.save()
+        }
     }
 
     private func delete(_ thread: ChatThread) {
+        if renaming === thread { renaming = nil }
         let backup = thread.copy()
         withAnimation { context.delete(thread) }
         try? context.save()
