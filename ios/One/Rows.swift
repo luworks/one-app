@@ -258,8 +258,11 @@ struct NowRow: View {
 /// AI preview: what will be created. The user can switch task / event / alarm before tapping Add.
 struct CaptureCard: View {
     @Binding var capture: Capture
+    /// The user's Reminders lists; when given, a task shows which one it goes to, changeable with one tap.
+    var lists: [String] = []
     var onAdd: () -> Void
     var onCancel: () -> Void
+    var cancelTitle = "Cancel"
 
     enum Mode: Hashable { case task, event, alarm }
 
@@ -309,8 +312,11 @@ struct CaptureCard: View {
             }
             Text(capture.title).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
+            if capture.kind == .task, !lists.isEmpty {
+                ListMenu(capture: $capture, lists: lists).font(.subheadline)
+            }
             HStack {
-                Button("Cancel", action: onCancel).buttonStyle(.bordered)
+                Button(cancelTitle, action: onCancel).buttonStyle(.bordered)
                 Spacer()
                 Button("Add", action: onAdd).buttonStyle(.borderedProminent)
             }

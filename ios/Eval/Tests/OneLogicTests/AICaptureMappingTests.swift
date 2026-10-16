@@ -184,4 +184,20 @@ final class AICaptureMappingTests: XCTestCase {
         XCTAssertTrue(text.contains("2027-01-01 Friday"))
         XCTAssertTrue(text.contains("2027-01-04 Monday (next week)"))
     }
+
+    // MARK: Keeping the user's words
+
+    func testLabelledContentReplacesATranslatedTitle() {
+        let line = "给我添加两个 reminder：\n\n1. 今天下午 4 点\n2. 今天晚上 8 点\n\n提醒内容：去走路，今天一定要走到 5 万步吧"
+        XCTAssertEqual(CaptureDraftMapper.userWording("walk", source: line), "去走路，今天一定要走到 5 万步吧")
+        XCTAssertEqual(CaptureDraftMapper.userWording("走路", source: line), "去走路，今天一定要走到 5 万步吧",
+                       "a shortened copy of the labelled text becomes the full text")
+    }
+
+    func testTitleWithoutALabelIsKept() {
+        XCTAssertEqual(CaptureDraftMapper.userWording("Call Alex", source: "call Alex tomorrow at 3pm"), "Call Alex")
+        XCTAssertEqual(CaptureDraftMapper.userWording("walk", source: "明天早上 7 点去走路"), "walk")
+        XCTAssertEqual(CaptureDraftMapper.labelledContent("Title: Dentist\nTomorrow 3pm"), "Dentist")
+        XCTAssertNil(CaptureDraftMapper.labelledContent("Add a reminder: buy milk"), "“reminder:” introduces the request, not the title")
+    }
 }

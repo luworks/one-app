@@ -67,7 +67,7 @@ private struct ProposedItems {
 @available(iOS 26, *)
 @Generable(description: "One task or event to propose")
 private struct ProposedItem {
-    @Guide(description: "Short title without the date, time or repeat words, in the user's language")
+    @Guide(description: "The user's own words for the thing, without the date, time or repeat words. Copy them; never translate or shorten to one word")
     var title: String
     @Guide(description: "event: fixed time or place or start and end; task: something to do")
     var kind: ProposedKind
@@ -110,8 +110,10 @@ private enum OnDeviceCapture {
         options.maximumResponseTokens = 700
         do {
             let result = try await session.respond(to: text, generating: ProposedItems.self, options: options)
-            let captures = result.content.items.compactMap {
-                CaptureDraftMapper.capture(from: draft($0), now: now, calendar: calendar)
+            let captures = result.content.items.compactMap { item -> Capture? in
+                guard var c = CaptureDraftMapper.capture(from: draft(item), now: now, calendar: calendar) else { return nil }
+                c.title = CaptureDraftMapper.userWording(c.title, source: text)
+                return c
             }
             return captures.isEmpty ? nil : captures
         } catch {
