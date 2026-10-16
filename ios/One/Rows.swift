@@ -214,6 +214,12 @@ struct CaptureCard: View {
                 Label("New \(capture.kind.rawValue)", systemImage: "sparkles")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if capture.fromAppleIntelligence {
+                    Text("· Apple Intelligence")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
                 Spacer()
                 Picker("Kind", selection: $capture.kind) {
                     Text("Task").tag(Capture.Kind.task)
