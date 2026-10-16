@@ -60,14 +60,44 @@ struct CalendarView: View {
 
     // MARK: One control row: the view switcher
 
+    /// Week / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned.
     private var controlRow: some View {
-        Picker("View", selection: Binding(get: { mode }, set: { picked in withAnimation(.snappy) { mode = picked } })) {
-            ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
+        HStack(spacing: 8) {
+            ForEach(Mode.allCases) { item in
+                ModePill(title: item.rawValue, isSelected: item == mode) {
+                    withAnimation(.snappy) { mode = item }
+                }
+            }
+            Spacer(minLength: 0)
         }
-        .pickerStyle(.segmented)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 6)
+        .padding(.horizontal, 20)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("View")
+    }
+}
+
+/// A text-only pill matching `TabPill`: black selected capsule with a white label, light gray otherwise.
+/// The visible capsule is 34pt tall; the tap target stays 44pt.
+private struct ModePill: View {
+    let title: String
+    let isSelected: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, 14)
+                .frame(minHeight: 34)
+                .background(isSelected ? Color(.label) : Color(.secondarySystemFill), in: Capsule())
+                .foregroundStyle(isSelected ? Color(.systemBackground) : Color.primary)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
