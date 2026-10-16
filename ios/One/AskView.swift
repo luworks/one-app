@@ -25,6 +25,7 @@ struct AskView: View {
     @State private var pending: Capture?
     @State private var plan: [(task: OneTask, start: Date)] = []
     @State private var voice = VoiceInput()
+    @State private var understanding: Task<Void, Never>?
     @FocusState private var focused: Bool
 
     private let suggestions = [
@@ -61,7 +62,10 @@ struct AskView: View {
                         .accessibilityLabel("Close")
                 }
             }
-            .task { focused = true }
+            .task {
+                focused = true
+                Understander.prewarm()
+            }
         }
     }
 
@@ -93,6 +97,9 @@ struct AskView: View {
             if !plan.isEmpty {
                 PlanCard(plan: plan, onApply: applyPlan, onCancel: { plan = [] })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if understanding != nil {
+                ProgressView().frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 16)
             }
             if let capture = pending {
                 CaptureCard(capture: Binding(get: { pending ?? capture }, set: { pending = $0 }),
@@ -154,6 +161,8 @@ struct AskView: View {
         guard !text.isEmpty else { return }
         draft = ""
         messages.append(ChatMessage(role: .user, text: text))
+        understanding?.cancel()
+        understanding = nil
         pending = nil
         plan = []
         if isPlanRequest(text) {
@@ -161,7 +170,17 @@ struct AskView: View {
         } else if isQuestion(text) {
             messages.append(ChatMessage(role: .ai, text: todaySummary))
         } else {
-            pending = CaptureParser.parse(text)
+            understand(text)
+        }
+    }
+
+    /// On-device model when available, scripted parser otherwise. Only produces the preview card.
+    private func understand(_ text: String) {
+        understanding = Task {
+            let capture = await Understander.parse(text)
+            guard !Task.isCancelled else { return }
+            pending = capture
+            understanding = nil
             messages.append(ChatMessage(role: .ai, text: "Here's what I understood. Nothing is added until you confirm."))
         }
     }

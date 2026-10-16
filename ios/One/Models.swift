@@ -169,6 +169,7 @@ extension Capture {
         let t = OneTask(title: title, plannedStart: plannedStart, durationMinutes: durationMinutes ?? 25,
                         due: plannedStart == nil && hasDay ? day : nil)
         t.repeatRule = repeatRule
+        t.ringsAsAlarm = ringsAsAlarm && plannedStart != nil
         return t
     }
 
