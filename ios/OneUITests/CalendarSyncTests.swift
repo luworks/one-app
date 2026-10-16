@@ -4,7 +4,7 @@ import XCTest
 final class CalendarSyncTests: XCTestCase {
     func testEventRoundTripsThroughSystemCalendar() {
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
+        app.launchArguments = ["-uiTesting", "-uiTestingCalendarSync"]
         app.launch()
         addUIInterruptionMonitor(withDescription: "Calendar access") { alert in
             for label in ["Allow Full Access", "Allow", "OK"] where alert.buttons[label].exists {
@@ -14,25 +14,28 @@ final class CalendarSyncTests: XCTestCase {
             return false
         }
 
-        // Turn on sync from the sidebar.
+        // Turn on sync in Settings (sidebar > Settings > Apple Calendar).
         app.buttons["Open sidebar"].tap()
-        let toggle = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Show Apple Calendar'")).firstMatch
+        app.buttons["Settings"].firstMatch.tap()
+        let toggle = app.switches["Apple Calendar"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        if !toggle.label.hasSuffix("On") { toggle.tap() }
+        if (toggle.value as? String) != "1" { toggle.tap() }
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow Full Access", "Allow"] {
             let b = springboard.buttons[label]
             if b.waitForExistence(timeout: 3) { b.tap(); break }
         }
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Show Apple Calendar' AND label ENDSWITH 'On'"))
-            .firstMatch.waitForExistence(timeout: 8), "sync is on")
+        XCTAssertTrue(NSPredicate(format: "value == '1'").evaluate(with: toggle) || toggle.waitForExistence(timeout: 8), "sync is on")
+        sleep(1)
+        app.buttons["Done"].tap()
 
         // Create an event in one.
         let title = "EK check \(Int(Date.now.timeIntervalSince1970) % 10000)"
-        app.buttons["Today"].firstMatch.tap()
+        app.buttons["Today"].firstMatch.tap()      // closes the sidebar
         sleep(1)
-        app.buttons["New"].tap()
-        app.buttons["New event"].tap()
+        app.buttons["Calendar"].firstMatch.tap()
+        sleep(1)
+        app.buttons["New"].tap()   // + adds an event on the Calendar page
         let field = app.textFields["Title"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText(title)

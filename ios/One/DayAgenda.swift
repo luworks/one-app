@@ -9,12 +9,39 @@ struct DayAgenda: View {
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
+    @Query private var alarms: [OneAlarm]
+    @AppStorage(SettingsKey.showOverdue) private var showsOverdue = true
+    @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
+    @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
 
     private let cal = Calendar.current
     @State private var showsAllOverdue = false
 
     var body: some View {
+        ScrollViewReader { proxy in
+            list
+                .onAppear { scrollToNow(proxy) }
+                .onChange(of: day) { _, _ in scrollToNow(proxy) }
+        }
+    }
+
+    /// Open on what is happening now: the day's schedule scrolls to the "now" line.
+    private func scrollToNow(_ proxy: ScrollViewProxy) {
+        guard cal.isDateInToday(day), jumpsToNow else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            withAnimation(.snappy) { proxy.scrollTo("now-line", anchor: .center) }
+        }
+    }
+
+    private var list: some View {
         List {
+            if !showsWeekStrip, !cal.isDateInToday(day) {
+                Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
+                    Label("Back to today", systemImage: "arrow.uturn.backward").font(.subheadline)
+                }
+                .listRowSeparator(.hidden)
+            }
             if showsWeekStrip {
                 Section {
                     WeekStrip(selected: $day)
@@ -30,18 +57,23 @@ struct DayAgenda: View {
                     ForEach(externalAllDay) { ExternalEventRow(event: $0) }
                 }
             }
-            if cal.isDateInToday(day), !overdue.isEmpty {
-                Section("Overdue \(overdue.count)") {
-                    ForEach(showsAllOverdue ? overdue : Array(overdue.prefix(3))) { TaskRow(task: $0) }
-                    if overdue.count > 3 {
-                        Button(showsAllOverdue ? "Show less" : "Show \(overdue.count - 3) more") {
-                            withAnimation(.snappy) { showsAllOverdue.toggle() }
+            if cal.isDateInToday(day), showsOverdue, !overdue.isEmpty {
+                Section {
+                    Button {
+                        withAnimation(.snappy) { showsAllOverdue.toggle() }
+                    } label: {
+                        HStack {
+                            Text("\(overdue.count) overdue").font(.body.weight(.semibold)).foregroundStyle(.red)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(showsAllOverdue ? 90 : 0))
                         }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 54, bottom: 4, trailing: 20))
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(showsAllOverdue ? "Hides the overdue tasks" : "Shows the overdue tasks")
+                    if showsAllOverdue { ForEach(overdue) { TaskRow(task: $0) } }
                 }
             }
             if !dueOnDay.isEmpty {
@@ -49,10 +81,7 @@ struct DayAgenda: View {
                     ForEach(dueOnDay) { TaskRow(task: $0) }
                 }
             }
-            if !showsWeekStrip {
-                TodayHabits()
-            }
-            Section(showsWeekStrip ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule") {
+            Section(showsWeekStrip || !cal.isDateInToday(day) ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule") {
                 if timeline.isEmpty {
                     Text("Nothing planned").foregroundStyle(.secondary)
                         .listRowSeparator(.hidden)
@@ -62,7 +91,8 @@ struct DayAgenda: View {
                     case .event(let event, let start): EventRow(event: event, start: start)
                     case .external(let e): ExternalEventRow(event: e)
                     case .task(let task): TaskRow(task: task, showsTime: true)
-                    case .nowMarker(let date): NowRow(date: date)
+                    case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
+                    case .nowMarker(let date): NowRow(date: date).id("now-line")
                     }
                 }
             }
@@ -102,6 +132,7 @@ struct DayAgenda: View {
             guard let start = task.plannedStart, cal.isDate(start, inSameDayAs: day) else { return nil }
             return .task(task)
         }
+        if showsAlarms { items += alarms.compactMap { a in a.fires(on: day).map { TimelineItem.alarm(a, $0) } } }
         if cal.isDateInToday(day), !items.isEmpty {
             items.append(.nowMarker(Date.now))
         }
@@ -113,6 +144,7 @@ enum TimelineItem: Identifiable {
     case event(OneEvent, Date)
     case external(ExternalEvent)
     case task(OneTask)
+    case alarm(OneAlarm, Date)
     case nowMarker(Date)
 
     var id: AnyHashable {
@@ -120,6 +152,7 @@ enum TimelineItem: Identifiable {
         case .event(let e, let d): return [AnyHashable(ObjectIdentifier(e)), AnyHashable(d)]
         case .external(let e): return e.id
         case .task(let t): return ObjectIdentifier(t)
+        case .alarm(let a, _): return ObjectIdentifier(a)
         case .nowMarker: return "now"
         }
     }
@@ -129,6 +162,7 @@ enum TimelineItem: Identifiable {
         case .event(_, let d): return d
         case .external(let e): return e.start
         case .task(let t): return t.plannedStart ?? .distantFuture
+        case .alarm(_, let d): return d
         case .nowMarker(let d): return d
         }
     }

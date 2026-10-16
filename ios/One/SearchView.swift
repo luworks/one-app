@@ -12,7 +12,7 @@ struct SearchView: View {
         NavigationStack {
             List {
                 if !matchedTasks.isEmpty {
-                    Section("Tasks") {
+                    Section("Reminders") {
                         ForEach(matchedTasks) { TaskRow(task: $0) }
                     }
                 }
@@ -24,7 +24,7 @@ struct SearchView: View {
             }
             .listStyle(.plain)
             .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: "Search tasks and events")
+                        prompt: "Search reminders and events")
             .overlay {
                 if !query.isEmpty, matchedTasks.isEmpty, matchedEvents.isEmpty {
                     ContentUnavailableView.search(text: query)

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSAlarmKitUsageDescription</key>
-	<string>one. rings alarms you set on tasks and events, even on Silent.</string>
+	<string>Today rings alarms you set on tasks and events, even on Silent.</string>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>

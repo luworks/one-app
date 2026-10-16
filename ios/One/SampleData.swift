@@ -5,11 +5,9 @@ import SwiftData
 enum SampleData {
     static func resetFlags() {
         UserDefaults.standard.removeObject(forKey: "one.sampleData.v1")
-        UserDefaults.standard.removeObject(forKey: "one.sampleHabits.v1")
     }
 
     static func insertIfNeeded(_ context: ModelContext) {
-        insertHabitsIfNeeded(context)
         let key = "one.sampleData.v1"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
         UserDefaults.standard.set(true, forKey: key)
@@ -53,24 +51,5 @@ enum SampleData {
         context.insert(plants)
         context.insert(OneTask(title: "Pay studio invoice", due: at(-1, 17, 0)))
         context.insert(OneTask(title: "Read that design article"))
-    }
-
-    private static func insertHabitsIfNeeded(_ context: ModelContext) {
-        let key = "one.sampleHabits.v1"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-        UserDefaults.standard.set(true, forKey: key)
-
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: .now)
-        let days = { (offsets: [Int]) in offsets.compactMap { cal.date(byAdding: .day, value: -$0, to: today) } }
-
-        let water = Habit(title: "Drink 8 glasses of water", icon: "drop")
-        water.checkins = days([1, 2, 3, 5])
-        let read = Habit(title: "Read 20 minutes", icon: "book")
-        read.checkins = days([0, 1, 2, 3, 4, 5])
-        let run = Habit(title: "Run", icon: "figure.run")
-        run.targetPerWeek = 3
-        run.checkins = days([2, 4])
-        [water, read, run].forEach(context.insert)
     }
 }

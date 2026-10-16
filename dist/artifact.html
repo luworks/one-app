@@ -1,4 +1,4 @@
-<title>one. V8</title>
+<title>Today</title>
 <style>:root{--fs:1;color-scheme:light;
 --bg:#F6F6F2;--surface:#FFFFFF;--fill:#EDEEE8;--fill2:#E4E6DF;--ink:#1A201E;--ink2:#424B47;--ink3:#5C6560;--line:#E0E2DA;
 --event:#2A64A6;--event-soft:#E6EEF8;--task:#257050;--task-soft:#E2F0E8;--alarm:#9E540B;--alarm-soft:#FAEDDD;--ai:#5F44AA;--ai-soft:#EDE8F8;--danger:#B93525;--danger-soft:#FAE7E3;
@@ -469,9 +469,19 @@ h1,h2,h3,p{margin:0}
 .pill .mic{width:40px;height:44px}
 
 .kind{width:max-content;flex-wrap:nowrap}
+/* Home: just the items. One quiet overdue line; Month grid in Calendar. */
+.cal-pane.solo{flex:1;height:auto!important;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+.od-line{display:flex;align-items:center;justify-content:space-between;width:calc(100% - 32px);margin:8px 16px 0;padding:0;min-height:44px;border-top:.5px solid var(--line);border-bottom:.5px solid var(--line);color:var(--danger);font-size:.95rem;text-align:left}
+.od-line b{font-weight:600}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);padding:8px 10px 0;row-gap:2px;text-align:center}
+.mgrid small{font-size:.72rem;color:var(--ink3);font-weight:600;padding:4px 0}
+.md{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:46px;border-radius:12px;font-size:1rem;font-variant-numeric:tabular-nums}
+.md i{width:5px;height:5px;border-radius:50%;background:var(--event)}
+.md.out{color:var(--ink3);opacity:.55}
+.md.today{color:var(--danger);font-weight:700}
 </style>
 
-<aside class="side"><b>one.</b><p>V8 prototype. Open this page on your iPhone and use “Add to Home Screen” for the full-screen feel.</p><p>Swipe from the left edge (or tap ☰) for every view. Swipe tasks · long-press anything · drag dashed tasks in Calendar · pull sheets down by the handle.</p></aside>
+<aside class="side"><b>Today</b><p>V8 prototype. Open this page on your iPhone and use “Add to Home Screen” for the full-screen feel.</p><p>Swipe from the left edge (or tap ☰) for every view. Swipe tasks · long-press anything · drag dashed tasks in Calendar · pull sheets down by the handle.</p></aside>
 <div class="app" id="app">
 <header class="navbar" id="navbar"></header>
 <main class="main" id="main" tabindex="-1"></main>
@@ -555,7 +565,7 @@ function seed(){
 }
 
 /* ---------- State & persistence ---------- */
-let data,msgs=[],threads=[],prefs={fs:1,theme:'system',shake:false},taught={},ui={tab:'today',scroll:{},cal:{date:D0,mode:'day'},tasks:{seg:'tasks',filter:'all',q:'',project:''},alarmSeg:'alarm',showAllNext:false,showDone:false,collapsed:{someday:true,done:true},aiSeg:'chat',split:'half'};
+let data,msgs=[],threads=[],prefs={fs:1,theme:'system',shake:false},taught={},ui={tab:'today',scroll:{},cal:{date:D0,mode:'week'},tasks:{seg:'tasks',filter:'all',q:'',project:''},alarmSeg:'alarm',showAllNext:false,showDone:false,collapsed:{someday:true,done:true},aiSeg:'chat',split:'half'};
 let undoBuf=null,storageOK=true;const HOST_THEME=document.documentElement.getAttribute('data-theme');
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&s.data&&s.data.v===8&&Array.isArray(s.data.tasks)){data=s.data;msgs=Array.isArray(s.msgs)?s.msgs:[];threads=Array.isArray(s.threads)?s.threads:[];ui.split=s.split||'half';prefs={...prefs,...(s.prefs||{})};taught=s.taught||{};return}}catch(e){storageOK=false}data=seed()}
 function save(){try{localStorage.setItem(KEY,JSON.stringify({data,msgs,threads,prefs,taught,split:ui.split}))}catch(e){storageOK=false}}
@@ -639,23 +649,17 @@ function vToday(){
  h+=`<p class="footnote">Swipe from the left edge (or tap ${ic('menu','s')}) for Calendar, Tasks and Alarms.<br>Swipe a task right to finish, left for options. Long-press anything.<br><button data-act="system">See it on your Lock Screen →</button></p>`;
  return h}
 
-function vCalendar(){const c=ui.cal,d=c.date,w=(wd(d)+6)%7,mon=addDays(d,-w);
+function vCalendar(){const c=ui.cal,d=c.date,w=(wd(d)+6)%7,mon=addDays(d,-w),month=c.mode==='month';
  let h=`<div class="lt-wrap"><p class="kicker">${d.slice(0,4)}</p><h1 class="lt">${new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'long',timeZone:'UTC'})}</h1></div>`;
- h+=`<div class="seg" role="tablist"><button class="${c.mode==='day'?'on':''}" data-act="cal-mode" data-v="day">Day</button><button class="${c.mode==='week'?'on':''}" data-act="cal-mode" data-v="week">Week</button></div>`;
- if(c.mode==='day'){
-  h+=`<div class="week"><button class="arr" data-act="cal-shift" data-v="-7" aria-label="Previous week">${ic('back','s')}</button>${Array.from({length:7},(_,i)=>{const dd=addDays(mon,i),n=dayItems(dd).length;return `<button class="wd ${dd===d?'on':''} ${dd===D0?'today':''}" data-act="cal-day" data-v="${dd}" aria-label="${longDate(dd)}"><small>${'MTWTFSS'[i]}</small>${Number(dd.slice(8))}${n?'<i></i>':'<i style="opacity:0"></i>'}</button>`}).join('')}<button class="arr" data-act="cal-shift" data-v="7" aria-label="Next week">${ic('chev','s')}</button></div>`;
-  const rp=repairs(d),pairs=overlaps(d);
-  if(rp.length)h+=`<div class="banner">${ic('cal')}<span class="grow">${esc(rp[0].with)} overlaps ${esc(T(rp[0].taskId).title)}${rp[0].to?` · move to ${fmt(rp[0].to)}?`:''}</span>${rp[0].to?`<button class="btn sm pri" data-act="fix-apply" data-key="${rp[0].key}">Fix</button>`:''}</div>`;
-  else if(pairs.length)h+=`<div class="banner">${ic('cal')}<span class="grow">${pairs.length} overlap${pairs.length>1?'s':''} between fixed events — your call.</span></div>`;
-  const uns=data.tasks.filter(t=>!t.done&&t.status==='next'&&!t.time&&(!t.date||t.date===d)).sort((a,b)=>(b.date===d)-(a.date===d)||(a.due||'9').localeCompare(b.due||'9'));
-  h+=`<div class="tray"><div class="tray-h"><b>Unscheduled · ${uns.length}</b><span>Hold &amp; drag onto the day</span></div><div class="tray-list">${uns.map(t=>`<div class="tchip" data-drag="tray" data-id="${t.id}" role="button" tabindex="0">${esc(t.title)}<small>${durL(t.dur)}${t.due?' · due '+dLow(t.due):''}</small></div>`).join('')||'<span class="kicker" style="padding:8px 4px">Everything has a time.</span>'}</div></div>`;
-  h+=`<div class="legend"><span><i style="background:var(--event)"></i>Fixed</span><span><i style="border:1.5px dashed var(--task);background:var(--task-soft)"></i>Flexible · drag to move</span><span style="color:var(--alarm)">${ic('alarm','s')}Alarm</span></div>`;
-  h+=timeline(d)}
- else{h+=`<div class="week" style="justify-content:space-between;padding:10px 16px 0"><button class="arr" data-act="cal-shift" data-v="-7" aria-label="Previous week">${ic('back','s')}</button><span class="kicker">${dLabel(mon)==='Today'?'This week':new Date(mon+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})+' – '+new Date(addDays(mon,6)+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}</span><button class="arr" data-act="cal-shift" data-v="7" aria-label="Next week">${ic('chev','s')}</button></div><div class="group" style="margin-top:10px">`;
-  for(let i=0;i<7;i++){const dd=addDays(mon,i),it=dayItems(dd),ev=it.filter(x=>x.kind==='event').length,span=(H1-H0)*60;
-   h+=`<button class="wk-row ${dd===D0?'today':''}" data-act="cal-open-day" data-v="${dd}"><span class="d"><small>${DN[wd(dd)].slice(0,3).toUpperCase()}</small><b>${Number(dd.slice(8))}</b></span><span class="track">${it.map(x=>`<i class="${x.kind==='event'?'ev':'task'}" style="left:${Math.max(0,(mins(x.time)-H0*60)/span*100)}%;width:${Math.max(1.2,x.dur/span*100)}%"></i>`).join('')}</span><span class="c">${ev} event${ev===1?'':'s'}<br>${it.length-ev} task${it.length-ev===1?'':'s'}</span></button>`}
-  h+=`</div><p class="footnote">Tap a day to plan it. Bars run 7 AM – 11 PM.</p>`}
- return h}
+ h+=`<div class="seg" role="tablist"><button class="${month?'':'on'}" data-act="cal-mode" data-v="week">Week</button><button class="${month?'on':''}" data-act="cal-mode" data-v="month">Month</button></div>`;
+ if(month){const first=d.slice(0,8)+'01',lead=(wd(first)+6)%7,start=addDays(first,-lead),rows=Math.ceil((lead+new Date(Date.UTC(+d.slice(0,4),+d.slice(5,7),0)).getUTCDate())/7);
+  h+=`<div class="week" style="justify-content:space-between;padding:10px 16px 0"><button class="arr" data-act="cal-mshift" data-v="-1" aria-label="Previous month">${ic('back','s')}</button><span class="kicker">${new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'})}</span><button class="arr" data-act="cal-mshift" data-v="1" aria-label="Next month">${ic('chev','s')}</button></div>`;
+  h+=`<div class="mgrid">${'MTWTFSS'.split('').map(x=>`<small>${x}</small>`).join('')}${Array.from({length:rows*7},(_,i)=>{const dd=addDays(start,i),n=dayItems(dd).length;return `<button class="md ${dd.slice(0,7)===d.slice(0,7)?'':'out'} ${dd===D0?'today':''}" data-act="cal-open-day" data-v="${dd}" aria-label="${longDate(dd)}">${Number(dd.slice(8))}<i style="opacity:${n?1:0}"></i></button>`}).join('')}</div>`;
+  return h}
+ h+=`<div class="week" style="justify-content:space-between;padding:10px 16px 0"><button class="arr" data-act="cal-shift" data-v="-7" aria-label="Previous week">${ic('back','s')}</button><span class="kicker">${dLabel(mon)==='Today'?'This week':new Date(mon+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})+' – '+new Date(addDays(mon,6)+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'})}</span><button class="arr" data-act="cal-shift" data-v="7" aria-label="Next week">${ic('chev','s')}</button></div><div class="group" style="margin-top:10px">`;
+ for(let i=0;i<7;i++){const dd=addDays(mon,i),it=dayItems(dd),ev=it.filter(x=>x.kind==='event').length,span=(H1-H0)*60;
+  h+=`<button class="wk-row ${dd===D0?'today':''}" data-act="cal-open-day" data-v="${dd}"><span class="d"><small>${DN[wd(dd)].slice(0,3).toUpperCase()}</small><b>${Number(dd.slice(8))}</b></span><span class="track">${it.map(x=>`<i class="${x.kind==='event'?'ev':'task'}" style="left:${Math.max(0,(mins(x.time)-H0*60)/span*100)}%;width:${Math.max(1.2,x.dur/span*100)}%"></i>`).join('')}</span><span class="c">${ev} event${ev===1?'':'s'}<br>${it.length-ev} task${it.length-ev===1?'':'s'}</span></button>`}
+ return h+`</div>`}
 function timeline(d){const it=dayItems(d);let h=`<div class="tl" id="tl" data-date="${d}" style="height:${(H1-H0)*HPX+10}px">`;
  for(let i=H0;i<=H1;i++)h+=`<div class="hr" style="top:${(i-H0)*HPX}px"><span>${i===12?'Noon':(i%12||12)+(i<12?' AM':' PM')}</span></div>`;
  // lane layout for overlaps
@@ -667,7 +671,7 @@ function timeline(d){const it=dayItems(d);let h=`<div class="tl" id="tl" data-da
  if(d===D0)h+=`<div class="now-m" style="top:${(NOW-H0*60)/60*HPX}px"></div>`;
  return h+`</div>`}
 
-function vTasks(){const s=ui.tasks;let h=`<div class="lt-wrap"><h1 class="lt">${s.project?esc(s.project):'Tasks'}</h1></div>`;
+function vTasks(){const s=ui.tasks;let h=`<div class="lt-wrap"><h1 class="lt">${s.project?esc(s.project):'Reminders'}</h1></div>`;
  if(s.project)return h+`<button class="sh-btn pad" data-act="proj-clear">${ic('back','s')} All projects</button><div class="group" style="margin-top:8px">${data.tasks.filter(t=>t.project===s.project&&!t.done).map(taskRow).join('')||'<p class="footnote">No open tasks.</p>'}</div>`;
  h+=`<div class="seg"><button class="${s.seg==='tasks'?'on':''}" data-act="t-seg" data-v="tasks">Tasks</button><button class="${s.seg==='projects'?'on':''}" data-act="t-seg" data-v="projects">Projects</button><button class="${s.seg==='notes'?'on':''}" data-act="t-seg" data-v="notes">Notes</button></div>`;
  h+=`<button class="search" data-act="search">${ic('search','s')}<span>Search everything</span></button>`;
@@ -685,7 +689,7 @@ function vTasks(){const s=ui.tasks;let h=`<div class="lt-wrap"><h1 class="lt">${
  if(!pool.length)h+=`<p class="footnote">Nothing here. Tap “Ask or add” to capture something.</p>`;
  return h}
 
-function vAlarms(){const kind=ui.alarmSeg;let h=`<div class="lt-wrap"><h1 class="lt">Alarms</h1></div><div class="seg"><button class="${kind==='alarm'?'on':''}" data-act="al-seg" data-v="alarm">Alarms</button><button class="${kind==='reminder'?'on':''}" data-act="al-seg" data-v="reminder">Nagging reminders</button></div>`;
+function vAlarms(){const kind='alarm';let h=`<div class="lt-wrap"><h1 class="lt">Alarms</h1></div>`;
  const nx=nextAlarm(kind);
  if(nx)h+=`<button class="hero" data-act="al-open" data-id="${nx.a.id}">${ic(kind==='alarm'?'alarm':'clock','l')}<span class="rm"><small>Next ${kind==='alarm'?'alarm':'reminder'} · ${nx.o.date===D0?until(mins(nx.o.time)):dLabel(nx.o.date)}</small><b>${fmt(nx.o.time)}</b><small style="color:var(--ink2)">${esc(nx.o.title)}</small></span></button>`;
  const rows=data.alerts.filter(a=>a.kind===kind).map(a=>({a,o:occ(a,true)}));const up=x=>x.o&&(x.o.date>D0||(x.o.date===D0&&mins(x.o.time)>=NOW));
@@ -697,18 +701,6 @@ function vAlarms(){const kind=ui.alarmSeg;let h=`<div class="lt-wrap"><h1 class=
 
 
 /* ---------- Home: calendar on top, conversation below ---------- */
-function needsCards(nd){let h='';nd.forEach(n=>{
- if(n.type==='draft')h+=`<div class="need"><div class="need-top"><span class="need-ic ai">${ic('spark')}</span><div class="rm"><h3>Proposal email to Alex is ready</h3><p>Drafted from your notes. One detail to confirm before it can go.</p><div class="meta"><span class="chip ai">Draft · not sent</span></div></div></div><div class="acts"><button class="btn ai sm" data-act="draft">Review draft</button></div></div>`;
- if(n.type==='fix'){const t=T(n.taskId);h+=`<div class="need"><div class="need-top"><span class="need-ic fix">${ic('cal')}</span><div class="rm"><h3>${esc(n.with)} overlaps ${esc(t.title)}</h3>${n.to?`<div class="diff"><del>${fmt(n.from)}</del>${ic('arrow','s')}<b>${fmt(n.to)}</b></div><p>${n.withKind==='event'?'The meeting stays put. ':''}Deadline unchanged; its alarm follows.</p>`:`<p>No free slot before the deadline today.</p>`}</div></div><div class="acts">${n.to?`<button class="btn pri sm" data-act="fix-apply" data-key="${n.key}">Move to ${fmt(n.to)}</button>`:''}<button class="btn sec sm" data-act="t-open" data-id="${t.id}">Other time</button><button class="btn plain sm" data-act="fix-dismiss" data-key="${n.key}">Keep both</button></div></div>`}
- if(n.type==='overdue')h+=`<div class="need"><div class="need-top"><span class="need-ic late">${ic('flag')}</span><div class="rm"><h3>${n.items.length} overdue</h3><p>I won’t move these on my own. Decide each one.</p></div></div><div style="margin-top:6px">${n.items.map(t=>`<div class="od-row"><button class="rm" data-act="t-open" data-id="${t.id}"><div>${esc(t.title)}</div><div class="meta"><span class="chip late">Due ${dLow(t.due)}</span></div></button><button class="btn sm sec" data-act="od-today" data-id="${t.id}">Due today</button><button class="btn sm sec" data-act="t-menu" data-id="${t.id}" aria-label="More options">${ic('more','s')}</button></div>`).join('')}</div></div>`});return h}
-function briefHTML(){const nd=needs(),nc=needsCount(),w=data.tasks.filter(t=>!t.done&&t.status==='waiting'),doneT=data.tasks.filter(t=>t.done&&t.doneAt===D0).length;
- let h=`<div class="msg-a brief"><div class="who">${ic('spark','s')}one. · ${fmt(hm(NOW))}</div>`;
- if(!taught.welcome)h+=`<div class="welcome"><h3>How I work</h3><ul><li><b>I prepare, you decide.</b> Nothing is sent or moved without your OK.</li><li><b>Meetings stay fixed; tasks flex.</b> Plans bend around what can’t move.</li><li><b>Ideas aren’t obligations.</b> Notes never turn into to-dos on their own.</li></ul><button class="btn pri sm" data-act="welcome-x">Got it</button></div>`;
- h+=`<p>Good morning. ${nc?`${nc} thing${nc>1?'s':''} need${nc>1?'':'s'} your decision before the day fills up.`:'Nothing needs your decision right now.'}</p>`;
- if(nd.length)h+=`<div class="needs">${needsCards(nd)}</div>`;
- h+=`<p class="sub">${w.length} waiting on others · next check ${w.length?dLow(w.map(t=>t.check).sort()[0]):'—'}${doneT?` · ${doneT} done today`:''}</p>`;
- if(!msgs.length)h+=`<div class="try">${['What should I do next?','I have too much today','Get the proposal to Alex by Friday. Remind me Thursday.','Wake me up tomorrow at 6:30 am'].map(q=>`<button data-act="ai-ask" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div>`;
- return h+`</div>`}
 function captureCard(c,mi){const items=c.items;if(c.status==='saved')return `<div class="plan-done">${ic('check','s')} Added ${items.filter(x=>x.on).length} item${items.filter(x=>x.on).length>1?'s':''}. <button class="btn plain sm" data-act="undo">Undo</button></div>`;if(c.status==='discarded')return `<div class="plan-note">Not added.</div>`;
  const n=items.filter(x=>x.on).length,needT=items.some(x=>x.on&&x.kind==='reminder'&&x.needTime);
  return `<div class="plan"><div class="plan-h">${ic('plus','s')} Will add · tap a label to change it</div>${items.map(it=>{const K={task:'Task',event:'Event',alarm:'Alarm',reminder:'Reminder',note:'Note'}[it.kind];let m='';
@@ -722,16 +714,18 @@ function captureCard(c,mi){const items=c.items;if(c.status==='saved')return `<di
 function msgHTML(m,mi){if(m.role==='user')return `<div class="msg-u">${esc(m.text)}</div>`;
  return `<div class="msg-a">${m.text.split('\n\n').map(p=>`<p>${esc(p).replace(/\n/g,'<br>')}</p>`).join('')}${m.plan?planCard(m.plan,mi):''}${m.capture?captureCard(m.capture,mi):''}${m.draft?`<div class="plan"><div class="plan-h">${ic('mail','s')} Draft · ${data.draft.stage==='review'?'not sent':'sent'}</div><p style="margin-top:6px;font-weight:600">${esc(data.draft.subject)}</p><p class="kicker">To ${esc(data.draft.to)}</p><div class="acts"><button class="btn ai sm" data-act="draft">${data.draft.stage==='review'?'Review draft':'View'}</button></div></div>`:''}</div>`}
 function paneSizes(){const m=$('#main'),top=parseFloat(getComputedStyle(m).paddingTop)||0,avail=m.clientHeight-top-86;return {peek:104,half:Math.round(avail*.46),full:Math.max(200,avail-150)}}
-function sizePane(anim){const p=$('#cal-pane');if(!p)return;p.style.transition=anim?'height .28s cubic-bezier(.2,.85,.25,1)':'none';p.style.height=paneSizes()[ui.split||'half']+'px'}
-function vHome(){const d=ui.cal.date,w=(wd(d)+6)%7,mon=addDays(d,-w);
+function sizePane(anim){const p=$('#cal-pane');if(!p||p.classList.contains('solo'))return;p.style.transition=anim?'height .28s cubic-bezier(.2,.85,.25,1)':'none';p.style.height=paneSizes()[ui.split||'half']+'px'}
+function vHome(){const d=ui.cal.date,w=(wd(d)+6)%7,mon=addDays(d,-w),od=overdue(),rp=repairs(d);
  const it=dayItems(d),nx=d===D0?it.find(x=>mins(x.time)+x.dur>NOW):it[0];
  const due=data.tasks.filter(t=>!t.done&&t.status==='next'&&!t.time&&!isOverdue(t)&&(t.due===d||t.date===d)).sort((a,b)=>(a.dueTime||'99').localeCompare(b.dueTime||'99'));
- let h=`<section class="cal-pane scroller" id="cal-pane" aria-label="Calendar"><div class="week mini">${Array.from({length:7},(_,i)=>{const dd=addDays(mon,i);return `<button class="wd ${dd===d?'on':''} ${dd===D0?'today':''}" data-act="cal-day" data-v="${dd}" aria-label="${longDate(dd)}"><small>${'MTWTFSS'[i]}</small>${Number(dd.slice(8))}</button>`}).join('')}</div>
+ let h=`<section class="cal-pane scroller${msgs.length?'':' solo'}" id="cal-pane" aria-label="Calendar"><div class="week mini">${Array.from({length:7},(_,i)=>{const dd=addDays(mon,i);return `<button class="wd ${dd===d?'on':''} ${dd===D0?'today':''}" data-act="cal-day" data-v="${dd}" aria-label="${longDate(dd)}"><small>${'MTWTFSS'[i]}</small>${Number(dd.slice(8))}</button>`}).join('')}</div>
  <button class="pane-next" data-act="${nx?(nx.kind==='event'?'ev-open':'t-open'):'split-toggle'}" ${nx?`data-id="${nx.id}"`:''}><span class="tl-bar ${nx?.kind==='task'?'task':'ev'}"></span><span class="rm"><small>${d===D0?(nx&&mins(nx.time)<=NOW?'Now':'Next'):dLabel(d)}</small><b>${nx?`${fmt(nx.time)} · ${esc(nx.title)}`:'Nothing else scheduled'}</b></span><span class="kicker">${d===D0&&nx&&mins(nx.time)>NOW?until(mins(nx.time)):`${it.length} plans`}</span></button>
+ ${rp.length?`<div class="banner">${ic('cal')}<span class="grow">${esc(rp[0].with)} overlaps ${esc(T(rp[0].taskId).title)}${rp[0].to?` · move to ${fmt(rp[0].to)}?`:''}</span>${rp[0].to?`<button class="btn sm pri" data-act="fix-apply" data-key="${rp[0].key}">Fix</button>`:''}</div>`:''}
+ ${od.length&&d===D0?`<button class="od-line" data-act="dr-go" data-v="tasks"><b>${od.length} overdue</b>${ic('chev','s')}</button>`:''}
  ${due.length?`<div class="tray"><div class="tray-h"><b>${d===D0?'Due today':'Planned '+dLow(d)} · ${due.length}</b><span>Hold &amp; drag onto the day</span></div><div class="tray-list">${due.map(t=>`<div class="tchip" data-drag="tray" data-id="${t.id}" role="button" tabindex="0" data-act="t-open">${esc(t.title)}<small>${durL(t.dur)}${t.dueTime?' · by '+fmt(t.dueTime):''}</small></div>`).join('')}</div></div>`:''}
  ${timeline(d)}</section>
- <div class="split-grab" data-split role="separator" aria-orientation="horizontal" aria-label="Drag to resize the calendar" tabindex="0"><i></i></div>
- <section class="chat-pane scroller" id="chat-pane" aria-label="Conversation"><div class="chat">${briefHTML()}${msgs.map(msgHTML).join('')}</div></section>`;
+ ${msgs.length?`<div class="split-grab" data-split role="separator" aria-orientation="horizontal" aria-label="Drag to resize the calendar" tabindex="0"><i></i></div>
+ <section class="chat-pane scroller" id="chat-pane" aria-label="Conversation"><div class="chat">${msgs.map(msgHTML).join('')}</div></section>`:''}`;
  return h}
 /* Split handle: drag to resize; tap to toggle */
 let SP=null;
@@ -749,9 +743,9 @@ function render(preserve=false){const main=$('#main'),st=main.scrollTop,ps=$('#c
  document.documentElement.style.setProperty('--fs',prefs.fs);if(prefs.theme==='system'){if(HOST_THEME)document.documentElement.dataset.theme=HOST_THEME;else document.documentElement.removeAttribute('data-theme')}else document.documentElement.dataset.theme=prefs.theme;
  main.className='main'+(ui.tab==='today'?' home':'');main.innerHTML={today:vHome,calendar:vCalendar,tasks:vTasks,alarms:vAlarms}[ui.tab]();
  if(ui.tab==='today'){sizePane(false);const p=$('#cal-pane'),c=$('#chat-pane');if(preserve&&ps!=null){p.scrollTop=ps;if(cs!=null)c.scrollTop=cs}else scrollPaneToNow();if(ui.chatEnd||(!preserve&&msgs.length)){c.scrollTop=c.scrollHeight;ui.chatEnd=false}}
- const title={today:new Date(ui.cal.date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',timeZone:'UTC'}),calendar:'Calendar',tasks:ui.tasks.project||'Tasks',alarms:'Alarms'}[ui.tab];
+ const title={today:new Date(ui.cal.date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',timeZone:'UTC'}),calendar:'Calendar',tasks:ui.tasks.project||'Reminders',alarms:'Alarms'}[ui.tab];
  const right=ui.tab==='alarms'?`<button class="nbtn" data-act="al-new" aria-label="New alarm">${ic('plus')}</button>`:ui.tab==='calendar'&&ui.cal.date!==D0?`<button class="nbtn txt" data-act="cal-day" data-v="${D0}">Today</button>`:'';
- const nc=needsCount();$('#navbar').innerHTML=`<div class="nb-l"><button class="nbtn" data-act="drawer" aria-label="Open menu${nc?', '+nc+' need you':''}">${ic('menu')}${nc&&ui.tab!=='today'?`<span class="dotn">${nc}</span>`:''}</button></div><div class="nb-title">${esc(title)}</div><div class="nb-r">${right}<button class="nbtn" data-act="search" aria-label="Search everything">${ic('search')}</button></div>`;
+ $('#navbar').innerHTML=`<div class="nb-l"><button class="nbtn" data-act="drawer" aria-label="Open menu">${ic('menu')}</button></div><div class="nb-title">${esc(title)}</div><div class="nb-r">${right}<button class="nbtn" data-act="search" aria-label="Search everything">${ic('search')}</button></div>`;
  if(ui.drawer)renderDrawer();
  if(preserve)main.scrollTop=st;onScroll();
  if(ui.tab==='calendar'&&ui.cal.mode==='day'&&!preserve&&ui.cal.needScroll!==false){const tl=$('#tl');if(tl){const target=ui.cal.date===D0?(NOW-H0*60)/60*HPX-80:(9-H0)*HPX;main.scrollTop=tl.offsetTop+target-140}}
@@ -814,7 +808,7 @@ function shAI(s){const seg='activity';let h=`<div class="sh-head" data-grab><but
  if(seg==='activity'){h+=`<p class="kicker" style="margin:10px 2px 6px">What AI did, and what you approved. Today.</p><div class="form" style="padding:4px 14px">${data.activity.map(a=>`<div class="act-row"><span class="act-dot ${a.who}">${ic(a.who==='ai'?'spark':'check','s')}</span><div class="rm"><b>${esc(a.label)}</b><small>${fmt(a.at)} · ${a.who==='ai'?'by AI':'approved by you'} · ${esc(a.detail)}</small></div></div>`).join('')}</div>`}
  else if(!msgs.length)h+=`<div class="ai-empty"><div class="orb">${ic('spark','l')}</div><h3>What’s on your mind?</h3><p>Think out loud. I’ll suggest; you decide.<br>Chat alone never changes anything.</p></div><div class="sugg">${[['What should I do next?','A plan for the next few hours','sun'],['I have too much today','Lighten the day without dropping deadlines','hour'],['Move Prepare demo to 3:30 pm','Preview the change before it happens','cal'],['What is waiting on others?','See what to check, not chase','inbox']].map(([q,s2,i])=>`<button data-act="ai-ask" data-v="${esc(q)}">${ic(i)}<span>${q}<small>${s2}</small></span></button>`).join('')}</div>`;
  else h+=`<div class="chat">${msgs.map((m,mi)=>m.role==='user'?`<div class="msg-u">${esc(m.text)}</div>`:`<div class="msg-a">${m.text.split('\n\n').map(p=>`<p>${esc(p).replace(/\n/g,'<br>')}</p>`).join('')}${m.plan?planCard(m.plan,mi):''}${m.draft?`<div class="plan"><div class="plan-h">${ic('mail','s')} Draft · not sent</div><p style="margin-top:6px;font-weight:600">${esc(data.draft.subject)}</p><p class="kicker">To ${esc(data.draft.to)}</p><div class="acts"><button class="btn ai" data-act="draft">Review draft</button></div></div>`:''}</div>`).join('')}</div>`;
- h+=`</div>`;if(false)h+=`<div class="sh-foot"><form class="ai-input" id="ai-form"><textarea id="ai-in" rows="1" placeholder="Ask, plan, or think out loud…" aria-label="Message one. AI" ${s.prefill?'':'data-autofocus'}>${esc(s.prefill||'')}</textarea><button class="send" type="submit" aria-label="Send">${ic('up','s')}</button></form></div>`;return h}
+ h+=`</div>`;if(false)h+=`<div class="sh-foot"><form class="ai-input" id="ai-form"><textarea id="ai-in" rows="1" placeholder="Ask, plan, or think out loud…" aria-label="Message Today AI" ${s.prefill?'':'data-autofocus'}>${esc(s.prefill||'')}</textarea><button class="send" type="submit" aria-label="Send">${ic('up','s')}</button></form></div>`;return h}
 function planCard(p,mi){const stale=p.status==='pending'&&p.rev!==data.rev;const n=p.items.filter(x=>x.on).length;
  return `<div class="plan"><div class="plan-h">${ic('spark','s')} Proposed changes · ${p.items.length}</div>${p.items.map((x,i)=>{const t=T(x.id);return `<div class="plan-i">${p.status==='pending'&&p.items.length>1?`<button class="chk ${x.on?'done':''}" data-act="plan-item" data-m="${mi}" data-v="${i}" aria-label="Include ${esc(t?.title)}"><i>${x.on?ic('check'):''}</i></button>`:''}<div class="rm"><b>${esc(t?.title||'Removed task')}</b><div class="diff" style="margin-top:2px;font-size:.86rem;flex-wrap:wrap;row-gap:0"><del style="white-space:nowrap">${fmt(x.from)}</del>${ic('arrow','s')}<b style="white-space:nowrap">${x.fromDate!==x.date?dLabel(x.date)+', ':''}${fmt(x.time)}</b></div></div></div>`}).join('')}
  <p class="plan-note">${ic('lock','s')}Meetings and deadlines stay unchanged. Linked alarms follow.</p>
@@ -902,7 +896,7 @@ function shSystem(){const nx=dayItems(D0).filter(x=>mins(x.time)>NOW)[0],na=next
  return head('Beyond the app','Done')+`<div class="sh-body"><p class="f-help" style="margin:4px 4px 0">“Less managing” mostly happens without opening the app.</p>
  <div class="mock-h">Lock Screen widgets + Live Activity</div><div class="lock-mock"><div class="dt">Monday, October 12</div><div class="clk">9:41</div><div class="lw"><div><b>${nx?fmt(nx.time):'—'}</b>${esc(nx?.title||'Free')}</div><div><b>${ic('alarm','s')} ${na?fmt(na.o.time):'—'}</b>${esc(na?.o.title||'No alarm')}</div></div><div class="la" style="margin-top:6px"><span class="dot">${ic('play','s')}</span><span><b>Prepare demo</b><small>Focus · until 1:45 PM</small></span><span class="tm">45:00</span></div></div>
  <div class="mock-h">Home Screen widgets</div><div class="home-w"><div class="hw"><span class="k">Needs you</span><b>${needsCount()} decisions</b><div class="r" style="color:var(--ai)">${ic('spark','s')}Proposal draft</div><div class="r">${ic('cal','s')}1 overlap</div></div><div class="hw"><span class="k">Today</span><b>${dayItems(D0).filter(x=>mins(x.time)>NOW).length} things left</b>${dayItems(D0).filter(x=>mins(x.time)>NOW).slice(0,3).map(x=>`<div class="r"><i class="${x.kind==='task'?'t':''}"></i>${fmt(x.time)} ${esc(x.title.slice(0,14))}</div>`).join('')}</div></div>
- <div class="mock-h">Share sheet — from Mail, Safari, Messages</div><div class="share"><div class="one"><span>one.</span>Add to one.</div><div><span>${ic('mail')}</span>Mail</div><div><span>${ic('note')}</span>Notes</div><div><span>${ic('more')}</span>More</div></div><p class="f-help">Sharing an email turns it into a task with the thread attached — you confirm what gets created.</p>
+ <div class="mock-h">Share sheet — from Mail, Safari, Messages</div><div class="share"><div class="one"><span>Today</span>Add to Today</div><div><span>${ic('mail')}</span>Mail</div><div><span>${ic('note')}</span>Notes</div><div><span>${ic('more')}</span>More</div></div><p class="f-help">Sharing an email turns it into a task with the thread attached — you confirm what gets created.</p>
  <div class="mock-h">Siri, Shortcuts & Action Button</div><div class="siri"><p>“Add pick up dry cleaning tomorrow”<small>Creates a task · no app launch</small></p><p>“What’s next on one?”<small>Reads your next fixed event and flexible task</small></p><p>“Wake me at 6:30”<small>Real alarm via AlarmKit</small></p><p>Action Button → Capture<small>Opens “Ask or add” with dictation on</small></p></div></div>`}
 function shFocus(s){const t=T(s.id),left=s.left??t.dur*60;const mm=String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');
  return head('Focus','Close')+`<div class="sh-body"><div class="focus"><span class="chip plan">${ic('clock')}Flexible · ${durL(t.dur)} reserved</span><h2 style="font-size:1.5rem;margin-top:14px">${esc(t.title)}</h2><div class="big" id="focus-t">${mm}</div><p class="kicker">${esc(t.note||'')}</p><div class="la"><span class="dot">${ic('play','s')}</span><span><b>${esc(t.title)}</b><small>Live Activity on your Lock Screen</small></span><span class="tm" id="focus-la">${mm}</span></div><div class="acts" style="justify-content:center;margin-top:24px"><button class="btn pri" data-act="t-done" data-id="${t.id}">${ic('check','s')} Done</button><button class="btn sec" data-act="sheet-close">Pause</button></div></div></div>`}
@@ -934,7 +928,6 @@ const A={
  'dr-go':(b)=>{const v=b.dataset.v;ui.tasks.project='';if(v==='notes'){ui.tasks.seg='notes';closeDrawer();goTab('tasks')}else{if(v==='tasks'&&ui.tasks.seg==='notes')ui.tasks.seg='tasks';closeDrawer();goTab(v)}},
  'ai-activity':()=>{closeDrawer();openSheet('ai',{})},
  undo:()=>{closeMenu();undo()},'toast-x':()=>{$('#toast-root').innerHTML=''},
- 'welcome-x':()=>{taught.welcome=1;save();render(true)},
  settings:()=>openSheet('settings'),search:()=>openSheet('search',{q:''}),system:()=>{closeSheet();setTimeout(()=>openSheet('system'),ui.sheet?320:0)},
  'next-all':()=>{ui.showAllNext=!ui.showAllNext;render(true)},'show-done':()=>{ui.showDone=!ui.showDone;render(true)},
  'goto-tasks':(b)=>{closeSheet();ui.tasks={...ui.tasks,seg:'tasks',filter:b.dataset.v||'all',project:''};goTab('tasks')},
@@ -956,7 +949,7 @@ const A={
  'ev-alarm':(b)=>{closeMenu();const e=Ev(b.dataset.id);commit('“Leave by” alarm added',d=>d.alerts.push({id:uid('a'),kind:'alarm',title:'Leave for '+e.title,link:{type:'event',id:e.id,offset:15},repeat:'once',on:true}))},
  'ev-cal':(b)=>{const e=Ev(b.dataset.id);closeSheet();ui.cal={...ui.cal,date:e.date,mode:'day'};goTab('calendar')},
  'cal-mode':(b)=>{ui.cal.mode=b.dataset.v;render()},'cal-day':(b)=>{ui.cal.date=b.dataset.v;render()},'cal-shift':(b)=>{ui.cal.date=addDays(ui.cal.date,+b.dataset.v);render()},
- 'cal-open-day':(b)=>{ui.cal.date=b.dataset.v;ui.cal.mode='day';render()},
+ 'cal-open-day':(b)=>{ui.cal.date=b.dataset.v;ui.tab='today';render()},'cal-mshift':(b)=>{const x=new Date(ui.cal.date+'T12:00:00Z');x.setUTCDate(1);x.setUTCMonth(x.getUTCMonth()+ +b.dataset.v);ui.cal.date=x.toISOString().slice(0,10);render()},
  't-seg':(b)=>{ui.tasks.seg=b.dataset.v;render()},'t-filter':(b)=>{ui.tasks.filter=b.dataset.v;render(true)},
  collapse:(b)=>{ui.collapsed[b.dataset.v]=!ui.collapsed[b.dataset.v];render(true)},'show-all-g':(b)=>{ui.collapsed['all-'+b.dataset.v]=1;render(true)},
  proj:(b)=>{ui.tasks.project=b.dataset.v;render();$('#main').scrollTop=0},'proj-clear':()=>{ui.tasks.project='';render()},
@@ -1065,21 +1058,21 @@ document.addEventListener('contextmenu',e=>{if(e.target.closest('[data-lp],[data
 
 
 /* ---------- Side drawer: views, conversations, settings ---------- */
-function renderDrawer(){const nc=needsCount(),left=dayItems(D0).filter(x=>mins(x.time)+x.dur>NOW),na=nextAlarm(),open=data.tasks.filter(t=>!t.done&&t.status!=='someday').length,due=data.tasks.filter(t=>!t.done&&(t.due===D0||isOverdue(t))).length;
+function renderDrawer(){const open=data.tasks.filter(t=>!t.done&&t.status!=='someday').length;
  const cur=ui.tab==='tasks'&&ui.tasks.seg==='notes'?'notes':ui.tab;
  const item=(k,icn,label,sub,cnt,q)=>`<button class="dr-item ${cur===k?'on':''}" data-act="dr-go" data-v="${k}" ${cur===k?'aria-current="page"':''}>${ic(icn)}<span class="rm"><b>${label}</b>${sub?`<small>${sub}</small>`:''}</span>${cnt?`<span class="cnt ${q?'q':''}">${cnt}</span>`:''}</button>`;
  const firstQ=msgs.find(m=>m.role==='user');
- $('#drawer-root').innerHTML=`<div class="dr-scrim" data-act="drawer-close"></div><nav class="drawer" aria-label="Menu"><div class="dr-head"><b>one.</b><button class="nbtn" data-act="search" aria-label="Search everything">${ic('search')}</button></div>
+ $('#drawer-root').innerHTML=`<div class="dr-scrim" data-act="drawer-close"></div><nav class="drawer" aria-label="Menu"><div class="dr-head"><b>Today</b><button class="nbtn" data-act="search" aria-label="Search everything">${ic('search')}</button></div>
  <button class="dr-new" data-act="chat-new">${ic('plus')}New conversation</button>
  <div class="dr-body">
-  ${item('today','sun','Today',nc?`${nc} need${nc===1?'s':''} your decision`:'All clear',nc)}
-  ${item('calendar','cal','Calendar',left.length?`${left.length} left today · next ${fmt(left.find(x=>mins(x.time)>=NOW)?.time||left[0].time)}`:'Nothing else today')}
-  ${item('tasks','task','Tasks',`${due} due today${overdue().length?' · '+overdue().length+' overdue':''}`,open,1)}
-  ${item('notes','note','Notes','Ideas, not obligations',data.notes.length,1)}
-  ${item('alarms','alarm','Alarms',na?`Next ${fmt(na.o.time)}${na.o.date===D0?'':' '+dLabel(na.o.date)} · ${esc(na.o.title)}`:'None set')}
+  ${item('today','sun','Today','')}
+  ${item('calendar','cal','Calendar','')}
+  ${item('tasks','task','Reminders','',open,1)}
+  ${item('notes','note','Notes','',data.notes.length,1)}
+  ${item('alarms','alarm','Alarms','')}
   <div class="dr-label">Conversations</div>
-  ${firstQ?`<button class="dr-item dr-chat ${cur==='today'?'':''}" data-act="ai">${ic('spark')}<span class="rm"><b>${esc(firstQ.text.length>34?firstQ.text.slice(0,34)+'…':firstQ.text)}</b><small>Current · ${msgs.filter(m=>m.role==='user').length} message${msgs.filter(m=>m.role==='user').length>1?'s':''}</small></span></button>`:`<p class="dr-hint">Ask one. anything — conversations show up here.</p>`}${threads.map(t=>`<button class="dr-item dr-chat" data-act="chat-open" data-id="${t.id}">${ic('spark')}<span class="rm"><b>${esc(t.title.length>34?t.title.slice(0,34)+'…':t.title)}</b><small>Today · ${fmt(t.at)}</small></span></button>`).join('')}
-  <button class="dr-item" data-act="ai-activity">${ic('clock')}<span class="rm"><b>AI activity</b><small>What AI did and what you approved</small></span><span class="cnt q">${data.activity.length}</span></button>
+  ${firstQ?`<button class="dr-item dr-chat ${cur==='today'?'':''}" data-act="ai">${ic('spark')}<span class="rm"><b>${esc(firstQ.text.length>34?firstQ.text.slice(0,34)+'…':firstQ.text)}</b><small>Current · ${msgs.filter(m=>m.role==='user').length} message${msgs.filter(m=>m.role==='user').length>1?'s':''}</small></span></button>`:`<p class="dr-hint">Ask Today anything — conversations show up here.</p>`}${threads.map(t=>`<button class="dr-item dr-chat" data-act="chat-open" data-id="${t.id}">${ic('spark')}<span class="rm"><b>${esc(t.title.length>34?t.title.slice(0,34)+'…':t.title)}</b><small>Today · ${fmt(t.at)}</small></span></button>`).join('')}
+  <button class="dr-item" data-act="ai-activity">${ic('clock')}<span class="rm"><b>AI activity</b></span><span class="cnt q">${data.activity.length}</span></button>
  </div>
  <div class="dr-foot"><button class="dr-item" data-act="system">${ic('phone')}<span class="rm"><b>Lock Screen &amp; widgets</b></span></button><button class="dr-item" data-act="settings">${ic('gear')}<span class="rm"><b>Settings</b></span></button></div></nav>`;
  if(ui.drawer){const d=$('.drawer'),sc=$('.dr-scrim');d.style.transition='none';d.style.transform='translateX(0)';sc.style.transition='none';sc.style.opacity=1;sc.classList.add('show');requestAnimationFrame(()=>{d.style.transition='';sc.style.transition=''})}}
@@ -1132,7 +1125,7 @@ let lastShake=0,shakes=0;
 window.addEventListener('devicemotion',e=>{if(!prefs.shake||!undoBuf)return;const a=e.accelerationIncludingGravity||{};const g=Math.sqrt((a.x||0)**2+(a.y||0)**2+(a.z||0)**2);if(g>24){const n=Date.now();shakes=n-lastShake<600?shakes+1:1;lastShake=n;if(shakes>=2&&!$('.menu')){shakes=0;openMenu('confirm-undo')}}});
 
 /* Boot */
-$('#dock').innerHTML=`<form class="pill" id="ask-form"><span class="ai-btn" aria-hidden="true">${ic('spark')}</span><textarea id="ask" rows="1" placeholder="Ask or add anything" aria-label="Message one." enterkeyhint="send"></textarea><button type="button" class="mic" data-act="mic" aria-label="Dictate">${ic('mic')}</button><button class="send" type="submit" aria-label="Send">${ic('up','s')}</button></form>`;
+$('#dock').innerHTML=`<form class="pill" id="ask-form"><span class="ai-btn" aria-hidden="true">${ic('spark')}</span><textarea id="ask" rows="1" placeholder="Ask or add anything" aria-label="Message Today" enterkeyhint="send"></textarea><button type="button" class="mic" data-act="mic" aria-label="Dictate">${ic('mic')}</button><button class="send" type="submit" aria-label="Send">${ic('up','s')}</button></form>`;
 function growAsk(){const a=$('#ask');a.style.height='auto';a.style.height=Math.min(120,a.scrollHeight)+'px'}
 function focusAsk(){if(ui.sheet)closeSheet();if(ui.drawer)closeDrawer();if(ui.tab!=='today'){ui.tab='today';render()}setTimeout(()=>$('#ask').focus(),ui.sheet?340:30)}
 

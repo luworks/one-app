@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 enum HomeTab: CaseIterable, Identifiable {
-    case today, calendar, tasks, habits, alarms
+    case today, calendar, tasks, alarms
 
     var id: Self { self }
 
@@ -10,8 +10,7 @@ enum HomeTab: CaseIterable, Identifiable {
         switch self {
         case .today: "Today"
         case .calendar: "Calendar"
-        case .tasks: "Tasks"
-        case .habits: "Habits"
+        case .tasks: "Reminders"
         case .alarms: "Alarms"
         }
     }
@@ -21,7 +20,6 @@ enum HomeTab: CaseIterable, Identifiable {
         case .today: "sun.max"
         case .calendar: "calendar"
         case .tasks: "checklist"
-        case .habits: "flame"
         case .alarms: "alarm"
         }
     }
@@ -35,15 +33,19 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var allTasks: [OneTask]
     @Query private var allEvents: [OneEvent]
-    @Query private var allHabits: [Habit]
+    @Query private var allAlarms: [OneAlarm]
 
     @State private var tab: HomeTab = .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
+    /// The day Today shows. Picking a day in Calendar opens it here.
+    @State private var todayDay = Calendar.current.startOfDay(for: .now)
     @State private var showsAsk = false
     @State private var showsSearch = false
     @State private var newItem: NewItem?
-    @State private var confirmClear = false
+    @State private var showsSettings = false
     @State private var sidebarOpen = false
+    /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
+    @State private var remindersPushed = false
     @State private var toast = UndoToast()
     @GestureState private var drag: CGFloat = 0
 
@@ -55,8 +57,7 @@ struct HomeView: View {
                 if offset > 0 {
                 Sidebar(tab: $tab,
                         onNewChat: { showsAsk = true },
-                        onToday: { calendarDay = Calendar.current.startOfDay(for: .now) },
-                        onDeleteAll: { confirmClear = true },
+                        onSettings: { showsSettings = true },
                         close: { setSidebar(false) })
                     .frame(width: width)
                     .offset(x: (offset - width) * 0.3)
@@ -78,7 +79,7 @@ struct HomeView: View {
                     // Swipe right from the left edge opens the sidebar. The edge strip sits above the
                     // lists so it wins over row swipe actions; row swipes elsewhere stay free.
                     .overlay(alignment: .leading) {
-                        if offset == 0 {
+                        if offset == 0 && edgeSwipeEnabled {
                             Color.clear
                                 .frame(width: 24)
                                 .contentShape(Rectangle())
@@ -91,13 +92,16 @@ struct HomeView: View {
         }
         .environment(toast)
         .sensoryFeedback(.impact(weight: .light), trigger: sidebarOpen)
-        .confirmationDialog("Delete all tasks, events and habits?", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("Delete all", role: .destructive) {
-                try? context.delete(model: OneTask.self)
-                try? context.delete(model: OneEvent.self)
-                try? context.delete(model: Habit.self)
-            }
-        }
+        .sheet(isPresented: $showsSettings) { SettingsView() }
+    }
+
+    private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
+
+    /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
+    private static func seedUITestReminder(_ context: ModelContext) {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingAddReminder"), i + 1 < args.count else { return }
+        context.insert(OneTask(title: args[i + 1]))
     }
 
     private func setSidebar(_ open: Bool) {
@@ -109,12 +113,12 @@ struct HomeView: View {
     private func sidebarDrag(width: CGFloat, edgeOnly: Bool = false) -> some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .global)
             .updating($drag) { v, state, _ in
-                if edgeOnly && (sidebarOpen || v.startLocation.x > 44) { return }
+                if edgeOnly && (sidebarOpen || !edgeSwipeEnabled || v.startLocation.x > 44) { return }
                 guard abs(v.translation.width) > abs(v.translation.height) else { return }
                 state = v.translation.width
             }
             .onEnded { v in
-                if edgeOnly && (sidebarOpen || v.startLocation.x > 44) { return }
+                if edgeOnly && (sidebarOpen || !edgeSwipeEnabled || v.startLocation.x > 44) { return }
                 guard abs(v.translation.width) > abs(v.translation.height) else { return }
                 let projected = (sidebarOpen ? width : 0) + v.predictedEndTranslation.width
                 setSidebar(projected > width / 2)
@@ -126,10 +130,13 @@ struct HomeView: View {
             topBar
             Group {
                 switch tab {
-                case .today: DayAgenda(day: .constant(Calendar.current.startOfDay(for: .now)), showsWeekStrip: false)
-                case .calendar: CalendarView(day: $calendarDay)
-                case .tasks: TasksView()
-                case .habits: HabitsView()
+                case .today: DayAgenda(day: $todayDay, showsWeekStrip: false)
+                case .calendar:
+                    CalendarView(day: $calendarDay) { picked in
+                        todayDay = picked
+                        withAnimation(.snappy) { tab = .today }
+                    }
+                case .tasks: RemindersView(isPushed: $remindersPushed)
                 case .alarms: AlarmsView()
                 }
             }
@@ -146,7 +153,7 @@ struct HomeView: View {
             switch item {
             case .task: TaskEditor()
             case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
-            case .habit: HabitEditor(habit: nil)
+            case .alarm: AlarmEditor()
             }
         }
         .task {
@@ -154,6 +161,7 @@ struct HomeView: View {
             if let path = DevImport.requestedPath {
                 do {
                     let (e, t) = try DevImport.run(path: path, into: context)
+                    ListActions.ensureLists(in: context)
                     print("IMPORT ok: \(e) events, \(t) reminders")
                 } catch {
                     print("IMPORT failed: \(error)")
@@ -162,6 +170,9 @@ struct HomeView: View {
             }
             #endif
             SampleData.insertIfNeeded(context)
+            ListActions.ensureLists(in: context)
+            Self.seedUITestReminder(context)
+            await FirstRun.calendar()
         }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {
@@ -172,6 +183,7 @@ struct HomeView: View {
         }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
+            allAlarms.forEach { $0.retireIfRung() }
             await Reminders.shared.resync()
             await Ringer.sync(context)
         }
@@ -197,7 +209,7 @@ struct HomeView: View {
             h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
             h.combine(t.ringsAsAlarm)
         }
-        for hb in allHabits { h.combine(hb.reminderHour); h.combine(hb.reminderMinute); h.combine(hb.checkins.count) }
+        for a in allAlarms { h.combine(a.scheduleSignature) }
         for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.ringsAsAlarm) }
         return h.finalize()
     }
@@ -250,6 +262,15 @@ struct HomeView: View {
         }
     }
 
+    /// What + adds right now: the thing this page is about.
+    private var smartNewItem: NewItem {
+        switch tab {
+        case .calendar: .event
+        case .alarms: .alarm
+        case .today, .tasks: .task
+        }
+    }
+
     private var bottomButtons: some View {
         HStack(spacing: 10) {
             CircleButton(systemImage: "magnifyingglass", label: "Search") { showsSearch = true }
@@ -265,19 +286,24 @@ struct HomeView: View {
                 .glassCapsule()
             }
             .buttonStyle(PressScale())
+            // +: tap adds what fits the page you are on (alarm on Alarms, event on Calendar, otherwise a
+            // reminder); press and hold to pick.
             Menu {
-                Button { newItem = .task } label: { Label("New task", systemImage: "checklist") }
+                Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
                 Button { newItem = .event } label: { Label("New event", systemImage: "calendar") }
-                Button { newItem = .habit } label: { Label("New habit", systemImage: "flame") }
+                Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
             } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.body.weight(.semibold))
+                Image(systemName: "plus")
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 50, height: 50)
                     .glassCircle()
+            } primaryAction: {
+                newItem = smartNewItem
             }
             .tint(.primary)
             .accessibilityLabel("New")
+            .accessibilityHint("Adds \(smartNewItem.noun). Press and hold for more.")
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
@@ -286,8 +312,16 @@ struct HomeView: View {
 }
 
 enum NewItem: Identifiable {
-    case task, event, habit
+    case task, event, alarm
     var id: Self { self }
+
+    var noun: String {
+        switch self {
+        case .task: "a reminder"
+        case .event: "an event"
+        case .alarm: "an alarm"
+        }
+    }
 }
 
 /// Selected tab: a wide pill with its label. Others: icon-only capsules.
@@ -365,5 +399,5 @@ extension View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [OneTask.self, OneEvent.self, Habit.self], inMemory: true)
+        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self], inMemory: true)
 }

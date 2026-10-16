@@ -6,13 +6,11 @@ import SwiftData
 struct Sidebar: View {
     @Binding var tab: HomeTab
     var onNewChat: () -> Void
-    var onToday: () -> Void
-    var onDeleteAll: () -> Void
+    var onSettings: () -> Void
     var close: () -> Void
 
     @Query private var tasks: [OneTask]
     @Query private var events: [OneEvent]
-    @Query private var habits: [Habit]
 
     private let cal = Calendar.current
 
@@ -26,7 +24,7 @@ struct Sidebar: View {
                     .background(Color.accentColor.gradient, in: Circle())
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Yuan").font(.headline)
-                    Text("one.").font(.caption).foregroundStyle(.secondary)
+                    Text("Today").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
@@ -59,26 +57,15 @@ struct Sidebar: View {
                         }
                     }
 
-                    Text("Settings")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 24)
-                        .padding(.bottom, 6)
-                    SidebarRow(icon: "calendar.badge.checkmark", title: "Show Apple Calendar",
-                               detail: CalendarSync.shared.isOn ? "On" : "Off", selected: false) {
-                        Task { await CalendarSync.shared.setEnabled(!CalendarSync.shared.isOn) }
-                    }
-                    SidebarRow(icon: "arrow.uturn.backward", title: "Calendar: go to today", detail: nil, selected: false) {
-                        onToday()
-                        close()
-                    }
-                    SidebarRow(icon: "trash", title: "Delete all data", detail: nil, selected: false, role: .destructive) {
-                        close()
-                        onDeleteAll()
-                    }
                 }
             }
+
+            Divider().padding(.horizontal, 20)
+            SidebarRow(icon: "gearshape", title: "Settings", detail: nil, selected: false) {
+                close()
+                onSettings()
+            }
+            .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemBackground))
@@ -99,9 +86,6 @@ struct Sidebar: View {
             n = events.reduce(0) { $0 + $1.occurs(on: .now).count }
         case .tasks:
             n = tasks.filter { !$0.isDone }.count
-        case .habits:
-            let done = habits.filter { $0.isDone(on: .now) }.count
-            return habits.isEmpty ? nil : "\(done)/\(habits.count)"
         case .alarms:
             n = tasks.filter { $0.reminderDate.map { $0 > .now && cal.isDateInToday($0) } ?? false }.count
                 + events.filter { $0.reminderDate.map { $0 > .now && cal.isDateInToday($0) } ?? false }.count

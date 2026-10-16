@@ -13,6 +13,7 @@ struct TimeColumn: View {
 
 /// Events are fixed: no move actions here. `start` is the occurrence shown (repeating events).
 struct EventRow: View {
+    @Environment(\.modelContext) private var context
     let event: OneEvent
     var start: Date? = nil
     @State private var editing = false
@@ -35,7 +36,7 @@ struct EventRow: View {
                 TimeColumn(date: start ?? event.start)
             }
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color.blue)
+                .fill(CalendarSync.shared.color(forExternalID: event.externalID) ?? Color.blue)
                 .frame(width: 4, height: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.title)
@@ -52,10 +53,27 @@ struct EventRow: View {
         .sheet(isPresented: $editing) { EventEditor(event: event) }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(EventSpeech.label(title: event.title, start: start ?? event.start,
+                                              end: (start ?? event.start).addingTimeInterval(event.duration), isAllDay: event.isAllDay,
+                                              calendar: CalendarSync.shared.calendar(forExternalID: event.externalID)?.title ?? event.calendarName))
+        .accessibilityAddTraits(.isButton)
+        .swipeActions(edge: .trailing, allowsFullSwipe: event.repeats == nil) {
+            Button(role: .destructive) { delete() } label: { Label("Delete", systemImage: "trash") }
+        }
+        .contextMenu {
+            Button { editing = true } label: { Label("Show Details", systemImage: "info.circle") }
+            Button(role: .destructive) { delete() } label: { Label("Delete", systemImage: "trash") }
+        }
+    }
+
+    private func delete() {
+        CalendarSync.shared.delete(externalID: event.externalID)
+        withAnimation { context.delete(event) }
     }
 }
 
-/// Tasks flex: they can be postponed or moved, and only the checkbox completes them.
+/// Tasks flex: they can be moved, and only the circle completes them (like Apple Reminders).
 /// Moving a task changes its planned time, never its deadline.
 struct TaskRow: View {
     @Environment(\.modelContext) private var context
@@ -63,6 +81,8 @@ struct TaskRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let task: OneTask
     var showsTime = false
+    /// Add the list name to the detail line. Off inside a list, where it is the title.
+    var showsList = true
     @State private var editing = false
 
     var body: some View {
@@ -106,37 +126,28 @@ struct TaskRow: View {
         .sheet(isPresented: $editing) { TaskEditor(task: task) }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
-        .swipeActions(edge: .leading) {
-            Button(task.isDone ? "Reopen" : "Done") { TaskActions.toggleDone(task, context: context, toast: toast) }
-                .tint(.green)
-        }
-        .swipeActions(edge: .trailing) {
-            if task.plannedStart != nil {
-                Button("+30m") { withAnimation { task.postpone(minutes: 30) } }
-                    .tint(.orange)
+        // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
+        // long-press for the menu. (Delete has an Undo toast.)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) { TaskActions.delete(task, context: context, toast: toast) } label: {
+                Label("Delete", systemImage: "trash")
             }
-            Button("Tomorrow") { withAnimation { task.moveToTomorrow() } }
-                .tint(.indigo)
-            Button(task.flagged ? "Unflag" : "Flag") { withAnimation { task.flagged.toggle() } }
-                .tint(Color.accentColor)
+            Button { withAnimation { task.flagged.toggle() } } label: {
+                Label(task.flagged ? "Unflag" : "Flag", systemImage: task.flagged ? "flag.slash.fill" : "flag.fill")
+            }
+            .tint(.orange)
         }
         .contextMenu {
-            Button { TaskActions.toggleDone(task, context: context, toast: toast) } label: {
-                Label(task.isDone ? "Mark as not done" : "Mark done", systemImage: "checkmark.circle")
-            }
+            Button { editing = true } label: { Label("Show Details", systemImage: "info.circle") }
             Button { task.flagged.toggle() } label: {
-                Label(task.flagged ? "Unflag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
+                Label(task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }
+            Button { withAnimation { task.moveToToday() } } label: { Label("Today", systemImage: "calendar") }
+            Button { withAnimation { task.moveToTomorrow() } } label: { Label("Tomorrow", systemImage: "sunrise") }
             if task.plannedStart != nil {
-                Button { task.postpone(minutes: 30) } label: {
-                    Label("Postpone 30 min", systemImage: "clock.arrow.circlepath")
-                }
-                Button { task.plannedStart = nil } label: {
+                Button { withAnimation { task.plannedStart = nil } } label: {
                     Label("Unschedule", systemImage: "calendar.badge.minus")
                 }
-            }
-            Button { task.moveToTomorrow() } label: {
-                Label("Move to tomorrow", systemImage: "arrow.right.circle")
             }
             Button(role: .destructive) { TaskActions.delete(task, context: context, toast: toast) } label: {
                 Label("Delete", systemImage: "trash")
@@ -155,9 +166,32 @@ struct TaskRow: View {
         if !task.checklist.isEmpty {
             parts.append("\(task.checklist.filter(\.done).count)/\(task.checklist.count)")
         }
-        if !task.listName.isEmpty { parts.append(ListName.display(task.listName)) }
+        if showsList, !task.listName.isEmpty { parts.append(ListName.display(task.listName)) }
         parts += task.tags.map { "#" + $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+/// An alarm in the day's schedule, so the whole day reads in one list.
+struct AlarmMarkRow: View {
+    let alarm: OneAlarm
+    let date: Date
+
+    var body: some View {
+        HStack(spacing: 10) {
+            TimeColumn(date: date)
+            Image(systemName: "alarm")
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 4 + 6)
+            Text(alarm.label.isEmpty ? "Alarm" : alarm.label)
+                .foregroundStyle(alarm.isOn ? Color.primary : Color.secondary)
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: 36)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Alarm \(alarm.label) at \(date.formatted(date: .omitted, time: .shortened))")
     }
 }
 
@@ -175,7 +209,7 @@ struct NowRow: View {
     }
 }
 
-/// AI preview: what will be created. The user can switch task / event / habit before tapping Add.
+/// AI preview: what will be created. The user can switch task / event before tapping Add.
 struct CaptureCard: View {
     @Binding var capture: Capture
     var onAdd: () -> Void
@@ -187,11 +221,16 @@ struct CaptureCard: View {
                 Label("New \(capture.kind.rawValue)", systemImage: "sparkles")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if capture.fromAppleIntelligence {
+                    Text("· Apple Intelligence")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
                 Spacer()
                 Picker("Kind", selection: $capture.kind) {
                     Text("Task").tag(Capture.Kind.task)
                     Text("Event").tag(Capture.Kind.event)
-                    Text("Habit").tag(Capture.Kind.habit)
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()

@@ -228,7 +228,6 @@ enum Understanding {
     /// Variant C: code decides the alarm (alarm words + a time); the parser's event words and the model's event vote are OR-ed.
     /// With no model kind it is the parser plus the alarm rule.
     static func combineRules(parser p: Capture, text: String, model: SimpleKind?) -> Capture {
-        guard p.kind != .habit else { return p }
         var c = p
         if asksForAlarm(text), p.hour != nil {
             c.kind = .task
@@ -249,10 +248,9 @@ enum Understanding {
         combine(parser: p, intent: KindIntent(alarm: kind == .alarm, event: kind == .event))
     }
 
-    /// Variant A: the parser's fields plus the model's kind / alarm flag. Habits (repeats) stay as the parser made them.
+    /// Variant A: the parser's fields plus the model's kind / alarm flag.
     /// `keepParserEvent` also keeps "event" when the parser already said so (time range, meeting words).
     static func combine(parser p: Capture, intent: KindIntent, keepParserEvent: Bool = false) -> Capture {
-        guard p.kind != .habit else { return p }
         var c = p
         c.kind = (intent.event || (keepParserEvent && p.kind == .event)) ? .event : .task
         // An alarm needs a time to ring at.
@@ -293,7 +291,6 @@ enum Understanding {
             c.kind = .task
             c.ringsAsAlarm = true
         }
-        if p.kind == .habit { c.kind = .habit }
         return c
     }
 

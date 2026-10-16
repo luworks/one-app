@@ -7,7 +7,7 @@ struct TaskEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
-    @Query private var allTasks: [OneTask]
+    @Query(sort: \OneList.order) private var lists: [OneList]
 
     let task: OneTask?
 
@@ -26,7 +26,6 @@ struct TaskEditor: View {
     @State private var checklist: [ChecklistItem]
     @State private var ringsAsAlarm: Bool
     @State private var newItem = ""
-    @State private var newList = ""
     @State private var addingList = false
     @FocusState private var titleFocused: Bool
 
@@ -49,8 +48,10 @@ struct TaskEditor: View {
         _ringsAsAlarm = State(initialValue: task?.ringsAsAlarm ?? false)
     }
 
+    /// List names to pick from: My Lists, plus the task's current list if it has no OneList yet.
     private var knownLists: [String] {
-        Array(Set(allTasks.map(\.listName).filter { !$0.isEmpty } + [listName].filter { !$0.isEmpty })).sorted()
+        let names = lists.map(\.name)
+        return listName.isEmpty || names.contains(listName) ? names : names + [listName]
     }
 
     var body: some View {
@@ -118,17 +119,17 @@ struct TaskEditor: View {
                         }
                     } footer: {
                         Text(ringsAsAlarm
-                             ? (Ringer.isDenied ? "Alarms are turned off for one. in Settings, so this will only notify."
+                             ? (Ringer.isDenied ? "Alarms are turned off for Today in Settings, so this will only notify."
                                                 : "Rings like an alarm, even on Silent. Stopping it doesn't complete the task.")
                              : "Keeps nudging every few minutes until you mark it done.")
                     }
                 }
                 Section {
                     Picker(selection: $listName) {
-                        Text("Inbox").tag("")
-                        ForEach(knownLists, id: \.self) { Text($0).tag($0) }
+                        Text("Reminders").tag("")
+                        ForEach(knownLists, id: \.self) { Text(ListName.display($0)).tag($0) }
                     } label: {
-                        Label("List", systemImage: "tray")
+                        Label("List", systemImage: "list.bullet")
                     }
                     Button { addingList = true } label: { Label("New list…", systemImage: "plus") }
                     HStack {
@@ -152,7 +153,7 @@ struct TaskEditor: View {
                     }
                 }
             }
-            .navigationTitle(task == nil ? "New task" : "Task")
+            .navigationTitle(task == nil ? "New reminder" : "Reminder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -162,14 +163,8 @@ struct TaskEditor: View {
                 }
             }
             .onAppear { if task == nil { titleFocused = true } }
-            .alert("New list", isPresented: $addingList) {
-                TextField("List name", text: $newList)
-                Button("Cancel", role: .cancel) { newList = "" }
-                Button("Add") {
-                    let name = newList.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !name.isEmpty { listName = name }
-                    newList = ""
-                }
+            .sheet(isPresented: $addingList) {
+                ListEditor { created in listName = created.name }
             }
         }
     }
@@ -217,12 +212,15 @@ struct EventEditor: View {
     @State private var reminder: Int?
     @State private var ringsAsAlarm: Bool
     @FocusState private var titleFocused: Bool
+    /// Where a new event starts: the next full hour today, or 9:00 on the chosen day.
+    private let defaultStart: Date
 
     init(event: OneEvent? = nil, day: Date = .now) {
         self.event = event
         let cal = Calendar.current
         let base = cal.isDateInToday(day) ? Date.now : (cal.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
         let rounded = cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
+        defaultStart = rounded
         let start = event?.start ?? rounded
         _title = State(initialValue: event?.title ?? "")
         _isAllDay = State(initialValue: event?.isAllDay ?? false)
@@ -234,6 +232,15 @@ struct EventEditor: View {
     }
 
     var body: some View {
+        if event == nil && CalendarSync.shared.usesNativeEditor {
+            // Calendar access is on: a new event is made with Apple's own editor and lives in the system calendar.
+            NativeEventEditor(start: defaultStart).ignoresSafeArea()
+        } else {
+            form
+        }
+    }
+
+    private var form: some View {
         NavigationStack {
             Form {
                 Section {

@@ -25,6 +25,8 @@ final class OneTask {
     var checklist: [ChecklistItem] = []
     /// Ring like an alarm (AlarmKit) instead of a quiet notification.
     var ringsAsAlarm: Bool = false
+    /// EKReminder.calendarItemIdentifier when this task is synced with Apple Reminders.
+    var externalID: String? = nil
 
     init(title: String, note: String = "", plannedStart: Date? = nil, durationMinutes: Int = 25, due: Date? = nil) {
         self.title = title
@@ -100,6 +102,18 @@ final class OneTask {
     func postpone(minutes: Int) {
         guard let start = plannedStart else { return }
         plannedStart = start.addingTimeInterval(TimeInterval(minutes * 60))
+    }
+
+    /// Today at the same time of day, or the next full hour when it has no planned time yet.
+    func moveToToday() {
+        let cal = Calendar.current
+        if let start = plannedStart {
+            let t = cal.dateComponents([.hour, .minute], from: start)
+            plannedStart = cal.date(bySettingHour: t.hour ?? 9, minute: t.minute ?? 0, second: 0, of: .now)
+        } else {
+            let next = cal.date(byAdding: .hour, value: 1, to: .now) ?? .now
+            plannedStart = cal.date(bySetting: .minute, value: 0, of: next).map { cal.date(bySetting: .second, value: 0, of: $0) ?? $0 }
+        }
     }
 
     func moveToTomorrow() {
@@ -185,13 +199,10 @@ extension Capture {
 
     func makeEvent() -> OneEvent {
         let start = plannedStart ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
-        let e = OneEvent(title: title, start: start, durationMinutes: durationMinutes ?? 60)
+        let e = OneEvent(title: title, start: isAllDay ? day : start, durationMinutes: isAllDay ? 1440 : durationMinutes ?? 60)
+        e.isAllDay = isAllDay
         e.repeatRule = repeatRule
         return e
-    }
-
-    func makeHabit() -> Habit {
-        Habit(title: title)
     }
 
     /// Creates the right model for `kind` in `context`. Only called after the user taps Add.
@@ -199,7 +210,6 @@ extension Capture {
         switch kind {
         case .task: context.insert(makeTask())
         case .event: context.insert(makeEvent())
-        case .habit: context.insert(makeHabit())
         }
     }
 }

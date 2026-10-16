@@ -41,7 +41,7 @@ final class JourneyTests: XCTestCase {
 
     /// J2: see what's left today.
     func testJ2_todayShowsWhatsLeft() {
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Overdue'")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label ENDSWITH 'overdue'")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Due today"].exists)
         XCTAssertTrue(app.staticTexts["Schedule"].exists)
         XCTAssertTrue(app.staticTexts["Buy milk"].exists)
@@ -60,32 +60,52 @@ final class JourneyTests: XCTestCase {
         XCTAssertLessThanOrEqual(taps, 1, "J3 tap budget")
     }
 
-    /// J4: add an event.
+    /// J4: add an event. (Under -uiTesting there is no Calendar permission, so the in-app editor is used, not Apple's.)
     func testJ4_addEvent() {
-        tap(app.buttons["New"])
-        tap(app.buttons["New event"])
+        tab("Calendar")
+        tap(app.buttons["New"])   // + adds an event on the Calendar page (Month is the default view)
         let title = app.textFields["Title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         title.typeText("Design review")
         tap(app.buttons["Done"])
-        tab("Calendar")
+        // The Month view lists the selected day's events under the grid; the new one starts at the next full hour today.
+        // (After 23:00 "the next full hour" is tomorrow, so only check the list before then.)
+        if Calendar.current.component(.hour, from: .now) < 23 {
+            let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Design review'")).firstMatch
+            let list = app.descendants(matching: .any)["calendar.dayList"]
+            for _ in 0..<5 where !row.exists { list.swipeUp() }
+            XCTAssertTrue(row.waitForExistence(timeout: 3), "the new event shows in the day's list")
+        }
         tap(app.buttons["Week"])
-        tap(app.buttons["Day"])
         XCTAssertLessThanOrEqual(taps, 6)
     }
 
-    /// J5: check in a habit from Today.
-    func testJ5_checkInHabitFromToday() {
-        let chip = app.buttons["Drink 8 glasses of water"]
-        tap(chip)
-        tab("Habits")
-        XCTAssertTrue(app.buttons["Undo today's check-in for Drink 8 glasses of water"].waitForExistence(timeout: 3))
+    /// J5: add a reminder to a list, inline.
+    func testJ5_addReminderToList() {
+        tab("Reminders")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Today, '")).firstMatch.waitForExistence(timeout: 5),
+                      "smart-list cards show live counts")
+        tap(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Home, '")).firstMatch)
+        XCTAssertTrue(app.staticTexts["Buy milk"].waitForExistence(timeout: 5), "the list shows its reminders")
+        tap(app.textFields["New Reminder"])
+        app.textFields["New Reminder"].typeText("Call plumber\n")
+        XCTAssertTrue(app.staticTexts["Call plumber"].waitForExistence(timeout: 5), "the new reminder appears in the list")
+        XCTAssertLessThanOrEqual(taps, 3, "J5 tap budget")
     }
 
-    /// J6: reminders are visible and adjustable per item.
-    func testJ6_alarmsListsTimedItemsWithBells() {
+    /// J6: add a real alarm, see it on the Alarms page and in Today's schedule.
+    func testJ6_addAlarmAndSeeItInToday() throws {
+        // A new alarm starts at the top of the next hour; in the last hour of the day that is tomorrow.
+        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 23, "the default alarm time is tomorrow")
         tab("Alarms")
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reminder:'")).firstMatch.waitForExistence(timeout: 5))
+        tap(app.buttons["New"])   // + adds an alarm on the Alarms page
+        tap(app.buttons["Save"])
+        XCTAssertTrue(app.buttons["alarm.row"].waitForExistence(timeout: 5), "the alarm is listed on the Alarms page")
+        tab("Today")
+        // The list is lazy: scroll until the row has been created.
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Alarm ' AND label CONTAINS ' at '")).firstMatch
+        for _ in 0..<6 where !row.exists { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 3), "a one-time alarm shows in the day it rings")
     }
 
     /// J7: find something.
@@ -105,7 +125,9 @@ final class JourneyTests: XCTestCase {
     }
 
     /// AI claim 9: plan my day is a preview; nothing moves until Apply.
-    func testPlanMyDay() {
+    func testPlanMyDay() throws {
+        // The planner only fills free time until 9 PM, so late in the evening there is nothing to place.
+        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 18, "needs free time before 9 PM")
         tap(app.buttons["Ask AI or add anything"])
         tap(app.buttons["Plan my day"])
         XCTAssertTrue(app.staticTexts["Plan for today"].waitForExistence(timeout: 5))
@@ -130,5 +152,22 @@ final class JourneyTests: XCTestCase {
         let moved = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned' AND label != %@", before)).firstMatch
         XCTAssertTrue(moved.waitForExistence(timeout: 3), "planned time changed after drag (was: \(before))")
+    }
+
+    /// Settings is its own screen; Delete All Data is last and needs two confirmations (the second needs typing DELETE).
+    func testSettingsDeleteAllDataNeedsTwoConfirmations() {
+        tap(app.buttons["Open sidebar"])
+        XCTAssertFalse(app.buttons["Delete all data"].exists, "no destructive row in the sidebar")
+        tap(app.buttons["Settings"].firstMatch)
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let delete = app.buttons["Delete All Data…"]
+        for _ in 0..<4 where !delete.isHittable { app.swipeUp() }
+        tap(delete)
+        tap(app.buttons["Continue…"])   // first confirmation
+        let final = app.buttons["Delete All Data"]
+        XCTAssertTrue(final.waitForExistence(timeout: 5), "second confirmation")
+        XCTAssertFalse(final.isEnabled, "the button stays off until DELETE is typed")
+        tap(app.buttons["Cancel"].firstMatch)
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5), "cancel leaves everything as it was")
     }
 }

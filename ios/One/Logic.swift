@@ -18,49 +18,6 @@ enum DayLabel {
     }
 }
 
-enum HabitMath {
-    static func isDone(_ checkins: [Date], on day: Date, calendar: Calendar = .current) -> Bool {
-        checkins.contains { calendar.isDate($0, inSameDayAs: day) }
-    }
-
-    /// Check-ins in the week containing `now` (weeks start on Monday).
-    static func weekCount(_ checkins: [Date], now: Date = .now, calendar: Calendar = .current) -> Int {
-        var cal = calendar
-        cal.firstWeekday = 2
-        guard let week = cal.dateInterval(of: .weekOfYear, for: now) else { return 0 }
-        return Set(checkins.filter { week.contains($0) }.map { cal.startOfDay(for: $0) }).count
-    }
-
-    /// Longest run of consecutive checked-in days ever.
-    static func bestStreak(_ checkins: [Date], calendar: Calendar = .current) -> Int {
-        let days = Set(checkins.map { calendar.startOfDay(for: $0) }).sorted()
-        var best = 0, run = 0
-        var previous: Date?
-        for d in days {
-            if let p = previous, calendar.date(byAdding: .day, value: 1, to: p) == d { run += 1 } else { run = 1 }
-            best = max(best, run)
-            previous = d
-        }
-        return best
-    }
-
-    /// Consecutive checked-in days ending today, or ending yesterday if today isn't checked yet.
-    static func streak(_ checkins: [Date], now: Date = .now, calendar: Calendar = .current) -> Int {
-        var day = calendar.startOfDay(for: now)
-        if !isDone(checkins, on: day, calendar: calendar) {
-            guard let y = calendar.date(byAdding: .day, value: -1, to: day) else { return 0 }
-            day = y
-        }
-        var count = 0
-        while isDone(checkins, on: day, calendar: calendar) {
-            count += 1
-            guard let prev = calendar.date(byAdding: .day, value: -1, to: day) else { break }
-            day = prev
-        }
-        return count
-    }
-}
-
 /// How a task repeats. Completing a repeating task creates the next one (OmniFocus / Reminders style).
 enum RepeatRule: String, CaseIterable, Codable {
     case daily, weekdays, weekly, monthly, yearly
@@ -199,17 +156,102 @@ enum DayPlanner {
     }
 }
 
-extension ReminderPlan {
-    /// Habit reminders for the next `days` days at hour:minute, skipping days already checked in.
-    static func habitFires(checkins: [Date], hour: Int, minute: Int, now: Date, days: Int = 7,
-                           calendar: Calendar = .current) -> [Date] {
-        (0..<days).compactMap { n in
-            guard let day = calendar.date(byAdding: .day, value: n, to: calendar.startOfDay(for: now)),
-                  !HabitMath.isDone(checkins, on: day, calendar: calendar),
-                  let fire = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day),
-                  fire > now else { return nil }
-            return fire
+/// Calendar tab: month grids, week starts and weekday letters. Follows the calendar's first weekday (the device setting), like Apple Calendar.
+enum CalendarMath {
+    /// The month containing `date` as rows of 7 slots, like Apple's Month: nil before the 1st and after the last day.
+    static func monthWeeks(of date: Date, calendar: Calendar = .current) -> [[Date?]] {
+        guard let first = calendar.dateInterval(of: .month, for: date)?.start,
+              let count = calendar.range(of: .day, in: .month, for: first)?.count else { return [] }
+        let lead = (calendar.component(.weekday, from: first) - calendar.firstWeekday + 7) % 7
+        var slots: [Date?] = Array(repeating: nil, count: lead)
+        for i in 0..<count { slots.append(calendar.date(byAdding: .day, value: i, to: first)) }
+        while slots.count % 7 != 0 { slots.append(nil) }
+        return stride(from: 0, to: slots.count, by: 7).map { Array(slots[$0..<$0 + 7]) }
+    }
+
+    /// First day of the month `offset` months away from the month of `reference`.
+    static func monthStart(offset: Int, from reference: Date, calendar: Calendar = .current) -> Date {
+        let first = calendar.dateInterval(of: .month, for: reference)?.start ?? reference
+        return calendar.date(byAdding: .month, value: offset, to: first) ?? first
+    }
+
+    /// How many months `date` is from `reference` (negative = earlier).
+    static func monthOffset(of date: Date, from reference: Date, calendar: Calendar = .current) -> Int {
+        let a = calendar.dateComponents([.year, .month], from: reference)
+        let b = calendar.dateComponents([.year, .month], from: date)
+        return ((b.year ?? 0) - (a.year ?? 0)) * 12 + (b.month ?? 0) - (a.month ?? 0)
+    }
+
+    /// First day of the week containing `date`.
+    static func weekStart(of date: Date, calendar: Calendar = .current) -> Date {
+        let day = calendar.startOfDay(for: date)
+        let back = (calendar.component(.weekday, from: day) - calendar.firstWeekday + 7) % 7
+        return calendar.date(byAdding: .day, value: -back, to: day) ?? day
+    }
+
+    /// One letter per weekday, starting at the calendar's first weekday ("S M T W T F S" on a Sunday-first device).
+    static func weekdayLetters(calendar: Calendar = .current) -> [String] {
+        let symbols = calendar.veryShortStandaloneWeekdaySymbols
+        let i = calendar.firstWeekday - 1
+        return Array(symbols[i...] + symbols[..<i])
+    }
+
+    /// Where the 1st of the month goes when you land on it: today inside the current month, else the 1st.
+    static func landingDay(inMonthOf month: Date, today: Date = .now, calendar: Calendar = .current) -> Date {
+        if calendar.isDate(month, equalTo: today, toGranularity: .month) { return calendar.startOfDay(for: today) }
+        return calendar.dateInterval(of: .month, for: month)?.start ?? month
+    }
+}
+
+/// Layout helpers for the Week grid. Pure, so they can be tested.
+enum CalendarLayout {
+    /// Lane (row) for each banner in the all-day strip. `spans` are inclusive day columns (0...6) of one week.
+    /// Banners that overlap in days never share a lane; earlier and longer banners go first.
+    static func lanes(for spans: [(start: Int, end: Int)]) -> [Int] {
+        let order = spans.indices.sorted {
+            (spans[$0].start, spans[$1].end - spans[$1].start, $0) < (spans[$1].start, spans[$0].end - spans[$0].start, $1)
         }
+        var laneEnds: [Int] = []          // last column used in each lane
+        var result = Array(repeating: 0, count: spans.count)
+        for i in order {
+            if let lane = laneEnds.firstIndex(where: { $0 < spans[i].start }) {
+                laneEnds[lane] = spans[i].end
+                result[i] = lane
+            } else {
+                laneEnds.append(spans[i].end)
+                result[i] = laneEnds.count - 1
+            }
+        }
+        return result
+    }
+
+    /// Side-by-side placement for timed items in one day column: each item gets a column and the number of columns
+    /// in its overlap cluster, so overlapping items share the width instead of covering each other.
+    static func columns(for items: [(start: Double, end: Double)]) -> [(column: Int, count: Int)] {
+        let order = items.indices.sorted { (items[$0].start, items[$1].end, $0) < (items[$1].start, items[$0].end, $1) }
+        var result = Array(repeating: (column: 0, count: 1), count: items.count)
+        var cluster: [Int] = []
+        var clusterEnd = -Double.infinity
+        var columnEnds: [Double] = []
+        func close() {
+            for i in cluster { result[i].count = max(1, columnEnds.count) }
+            cluster = []
+            columnEnds = []
+        }
+        for i in order {
+            if items[i].start >= clusterEnd { close() }
+            if let c = columnEnds.firstIndex(where: { $0 <= items[i].start }) {
+                columnEnds[c] = items[i].end
+                result[i].column = c
+            } else {
+                columnEnds.append(items[i].end)
+                result[i].column = columnEnds.count - 1
+            }
+            cluster.append(i)
+            clusterEnd = max(clusterEnd, items[i].end)
+        }
+        close()
+        return result
     }
 }
 
@@ -220,4 +262,111 @@ enum ListName {
         let rest = name[r.upperBound...]
         return rest.isEmpty ? name : String(rest)
     }
+}
+
+/// Real alarms (AlarmKit): which day they ring and how to label the repeat.
+enum AlarmPlan {
+    /// "Once", "Every day", "Weekdays", "Weekends", or short day names in Monday-first order.
+    static func repeatLabel(weekdays: [Int], calendar: Calendar = .current) -> String {
+        let set = Set(weekdays)
+        if set.isEmpty { return "Once" }
+        if set.count == 7 { return "Every day" }
+        if set == [2, 3, 4, 5, 6] { return "Weekdays" }
+        if set == [1, 7] { return "Weekends" }
+        return [2, 3, 4, 5, 6, 7, 1].filter(set.contains).map { calendar.shortWeekdaySymbols[$0 - 1] }.joined(separator: ", ")
+    }
+
+    /// The next time hour:minute occurs after `date` on an allowed weekday (any day when `weekdays` is empty).
+    static func nextFire(hour: Int, minute: Int, weekdays: [Int], after date: Date, calendar: Calendar = .current) -> Date? {
+        let start = calendar.startOfDay(for: date)
+        for offset in 0...7 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: start),
+                  let candidate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day),
+                  candidate > date else { continue }
+            if weekdays.isEmpty || weekdays.contains(calendar.component(.weekday, from: candidate)) { return candidate }
+        }
+        return nil
+    }
+
+    /// When the alarm rings on `day`: a repeating alarm on its weekdays, a one-time alarm on the day of its next occurrence.
+    static func fire(on day: Date, hour: Int, minute: Int, weekdays: [Int], now: Date, calendar: Calendar = .current) -> Date? {
+        if weekdays.isEmpty {
+            guard let next = nextFire(hour: hour, minute: minute, weekdays: [], after: now, calendar: calendar),
+                  calendar.isDate(next, inSameDayAs: day) else { return nil }
+            return next
+        }
+        guard weekdays.contains(calendar.component(.weekday, from: day)) else { return nil }
+        return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
+    }
+
+    // MARK: Apple Clock wording
+
+    /// Clock's name for an alarm with no label.
+    static let defaultLabel = "Alarm"
+
+    /// Weekdays in the order the calendar shows them (Sunday first in the US, Monday first in most of Europe).
+    static func orderedWeekdays(calendar: Calendar = .current) -> [Int] {
+        (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 }
+    }
+
+    /// The repeat value the way Clock words it: "Never", "Every day", "Weekdays", "Weekends",
+    /// "Every Monday", or "Every Mon, Wed" for several days.
+    static func repeatValue(weekdays: [Int], calendar: Calendar = .current) -> String {
+        let set = Set(weekdays)
+        if set.isEmpty { return "Never" }
+        if set.count == 7 { return "Every day" }
+        if set == [2, 3, 4, 5, 6] { return "Weekdays" }
+        if set == [1, 7] { return "Weekends" }
+        let days = orderedWeekdays(calendar: calendar).filter(set.contains)
+        if days.count == 1 { return "Every " + calendar.weekdaySymbols[days[0] - 1] }
+        return "Every " + days.map { calendar.shortWeekdaySymbols[$0 - 1] }.joined(separator: ", ")
+    }
+
+    /// The line under the time in the list: the label (or "Alarm"), then the repeat when there is one.
+    /// "Alarm", "Alarm, Every day", "Wake up, Weekdays".
+    static func rowSubtitle(label: String, weekdays: [Int], calendar: Calendar = .current) -> String {
+        let name = label.trimmingCharacters(in: .whitespaces)
+        let head = name.isEmpty ? defaultLabel : name
+        return weekdays.isEmpty ? head : head + ", " + repeatValue(weekdays: weekdays, calendar: calendar)
+    }
+
+    /// The time the way the user's clock shows it, split so the AM/PM can be set small:
+    /// ("7:05", "AM") on a 12-hour clock, ("07:05", nil) on a 24-hour one.
+    static func timeParts(hour: Int, minute: Int, locale: Locale = .current) -> (time: String, suffix: String?) {
+        let pattern = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: locale) ?? "h a"
+        let mm = String(format: "%02d", minute)
+        guard pattern.contains("a") else { return (String(format: "%02d:", hour) + mm, nil) }
+        let f = DateFormatter()
+        f.locale = locale
+        let h = hour % 12 == 0 ? 12 : hour % 12
+        return ("\(h):" + mm, hour < 12 ? f.amSymbol : f.pmSymbol)
+    }
+
+    /// When an alarm will next ring, or nil when it won't: a repeating alarm at its next weekday, a
+    /// one-time alarm at its next occurrence after it was last switched on, unless that has already passed.
+    static func nextRing(hour: Int, minute: Int, weekdays: [Int], switchedOn: Date, now: Date, calendar: Calendar = .current) -> Date? {
+        if weekdays.isEmpty {
+            guard let ring = nextFire(hour: hour, minute: minute, weekdays: [], after: switchedOn, calendar: calendar), ring > now else { return nil }
+            return ring
+        }
+        return nextFire(hour: hour, minute: minute, weekdays: weekdays, after: now, calendar: calendar)
+    }
+
+    /// "7 hr 12 min", "12 min", "2 days 3 hr": how long until `date`, rounded up to the minute.
+    static func intervalText(from now: Date, to date: Date) -> String {
+        let minutes = max(1, Int((date.timeIntervalSince(now) / 60).rounded(.up)))
+        let days = minutes / 1440, hours = minutes % 1440 / 60, mins = minutes % 60
+        if days > 0 { return "\(days) \(days == 1 ? "day" : "days")" + (hours > 0 ? " \(hours) hr" : "") }
+        if hours > 0 { return "\(hours) hr" + (mins > 0 ? " \(mins) min" : "") }
+        return "\(mins) min"
+    }
+
+    /// "Next alarm in 7 hr 12 min", or nil when nothing will ring.
+    static func nextAlarmText(rings: [Date], now: Date) -> String? {
+        guard let next = rings.filter({ $0 > now }).min() else { return nil }
+        return "Next alarm in " + intervalText(from: now, to: next)
+    }
+
+    /// What Clock calls "Snooze": nine minutes.
+    static let snoozeSeconds: TimeInterval = 9 * 60
 }

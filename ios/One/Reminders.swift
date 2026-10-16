@@ -12,8 +12,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
 
     static let taskCategory = "ONE_TASK"
     static let eventCategory = "ONE_EVENT"
-    static let habitCategory = "ONE_HABIT"
-    enum Action: String { case checkIn = "CHECK_IN", done = "DONE", snooze10 = "SNOOZE_10", snooze60 = "SNOOZE_60", tomorrow = "TOMORROW" }
+    enum Action: String { case done = "DONE", snooze10 = "SNOOZE_10", snooze60 = "SNOOZE_60", tomorrow = "TOMORROW" }
 
     /// iOS keeps at most 64 pending requests per app.
     static let maxPending = 60
@@ -32,9 +31,6 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Self.taskCategory, actions: [done, s10, s60, tomorrow], intentIdentifiers: []),
             UNNotificationCategory(identifier: Self.eventCategory, actions: [s10], intentIdentifiers: []),
-            UNNotificationCategory(identifier: Self.habitCategory,
-                                   actions: [UNNotificationAction(identifier: Action.checkIn.rawValue, title: "Check in", options: []), s60],
-                                   intentIdentifiers: []),
         ])
     }
 
@@ -67,6 +63,8 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         var requests: [(Date, UNNotificationRequest)] = []
         for task in tasks {
             guard let fire = task.reminderDate, fire < horizon else { continue }
+            // A synced reminder with only a due time is alerted by Apple Reminders itself; ours would be a duplicate.
+            if task.externalID != nil, task.plannedStart == nil { continue }
             let id = Self.key(task.persistentModelID)
             let when = task.plannedStart.map { DayLabel.withTime($0) } ?? task.due.map { "Due " + DayLabel.withTime($0) } ?? ""
             for (n, f) in ReminderPlan.taskFires(reminder: fire, now: now).enumerated() {
@@ -79,19 +77,6 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
             let id = Self.key(event.persistentModelID)
             let body = event.start.formatted(date: .omitted, time: .shortened) + " · \(event.durationMinutes) min"
             requests.append((fire, request(id: "\(id)#0", title: event.title, body: body, category: Self.eventCategory, key: id, at: fire)))
-        }
-
-        let habits = (try? context.fetch(FetchDescriptor<Habit>())) ?? []
-        let cal = Calendar.current
-        for habit in habits {
-            guard let hour = habit.reminderHour else { continue }
-            let id = Self.key(habit.persistentModelID)
-            for (n, fire) in ReminderPlan.habitFires(checkins: habit.checkins, hour: hour, minute: habit.reminderMinute,
-                                                    now: now, calendar: cal).enumerated() {
-                let body = habit.isDaily ? "Keep your streak going" : "\(habit.thisWeek)/\(habit.targetPerWeek) this week"
-                requests.append((fire, request(id: "\(id)#\(n)", title: habit.title, body: body,
-                                              category: Self.habitCategory, key: id, at: fire)))
-            }
         }
 
         let pending = await center.pendingNotificationRequests()
@@ -152,13 +137,6 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         }
 
         guard let context = container?.mainContext, let id = Self.identifier(from: key) else { return }
-        if Action(rawValue: action) == .checkIn, let habit = context.model(for: id) as? Habit {
-            if !habit.isDone(on: .now) { habit.toggle(on: .now) }
-            try? context.save()
-            await clearDelivered(key: key)
-            await resync()
-            return
-        }
         guard let task = context.model(for: id) as? OneTask else { return }
         switch Action(rawValue: action) {
         case .done:
