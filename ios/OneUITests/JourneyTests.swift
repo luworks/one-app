@@ -111,16 +111,37 @@ final class JourneyTests: XCTestCase {
     /// J7: find something.
     func testJ7_search() {
         tap(app.buttons["Search"])
-        let field = app.searchFields.firstMatch
+        let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText("milk")
         XCTAssertTrue(app.staticTexts["Buy milk"].waitForExistence(timeout: 3))
         XCTAssertLessThanOrEqual(taps, 1, "J7 tap budget")
     }
 
-    /// Sidebar opens from the avatar and shows the views.
-    func testSidebarOpensFromAvatar() {
-        tap(app.buttons["Open sidebar"])
+    /// Search covers reminders and calendar events together, grouped, with scopes.
+    func testSearchFindsEventsAndRemindersTogether() {
+        tap(app.buttons["Search"])
+        let field = app.textFields["search.field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("priya")
+        XCTAssertTrue(app.staticTexts["Lunch with Priya"].waitForExistence(timeout: 5), "an event is found")
+        XCTAssertTrue(app.segmentedControls.buttons["Alarms"].exists && app.segmentedControls.buttons["Reminders"].exists,
+                      "scopes: All / Reminders / Events / Alarms")
+    }
+
+    /// Search opens straight onto suggestions (no empty pop-up), a suggestion lists things, and Cancel closes Search.
+    func testSearchSuggestionsAndCancelClosesIt() {
+        tap(app.buttons["Search"])
+        XCTAssertTrue(app.staticTexts["Suggestions"].waitForExistence(timeout: 5), "suggested searches show first")
+        tap(app.buttons["Due today"])
+        XCTAssertTrue(app.staticTexts["Buy milk"].waitForExistence(timeout: 5), "a suggestion lists reminders without typing")
+        tap(app.buttons["Close search"])
+        XCTAssertTrue(app.textFields["search.field"].waitForNonExistence(timeout: 5), "the X closes Search entirely")
+    }
+
+    /// The sidebar opens with a swipe from the left edge (there is no avatar button).
+    func testSidebarOpensWithEdgeSwipe() {
+        app.openSidebar()
         XCTAssertTrue(app.buttons["New chat"].waitForExistence(timeout: 3))
     }
 
@@ -156,7 +177,7 @@ final class JourneyTests: XCTestCase {
 
     /// Settings is its own screen; Delete All Data is last and needs two confirmations (the second needs typing DELETE).
     func testSettingsDeleteAllDataNeedsTwoConfirmations() {
-        tap(app.buttons["Open sidebar"])
+        app.openSidebar()
         XCTAssertFalse(app.buttons["Delete all data"].exists, "no destructive row in the sidebar")
         tap(app.buttons["Settings"].firstMatch)
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))

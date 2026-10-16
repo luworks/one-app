@@ -1,9 +1,9 @@
 import SwiftUI
 import SwiftData
 
-struct ChatMessage: Identifiable, Equatable {
-    enum Role { case user, ai }
-    let id = UUID()
+struct ChatMessage: Identifiable, Equatable, Codable {
+    enum Role: String, Codable { case user, ai }
+    var id = UUID()
     let role: Role
     let text: String
 }
@@ -20,7 +20,9 @@ struct AskView: View {
 
     var onAdded: (Capture) -> Void = { _ in }
 
-    @State private var messages: [ChatMessage] = []
+    /// The saved conversation this screen continues. nil = a new chat; the thread is created on the first user message.
+    @State private var thread: ChatThread?
+    @State private var messages: [ChatMessage]
     @State private var draft = ""
     @State private var pending: Capture?
     /// Further items from the same line; each is shown, and confirmed or skipped, one at a time.
@@ -31,7 +33,17 @@ struct AskView: View {
     @State private var voice = VoiceInput()
     @State private var change: PendingChange?
     @State private var undoRow: UndoRow?
+    /// What the last turn left open (a "which one?" with real items, or a "when?"), so the next message can answer it.
+    @State private var followup: Followup?
+    /// Title of the item the conversation touched last: what "it" means.
+    @State private var lastTouched: String?
     @FocusState private var focused: Bool
+
+    init(thread: ChatThread? = nil, onAdded: @escaping (Capture) -> Void = { _ in }) {
+        self.onAdded = onAdded
+        _thread = State(initialValue: thread)
+        _messages = State(initialValue: thread?.messages ?? [])
+    }
 
     private let suggestions = [
         "Plan my day",
@@ -60,7 +72,9 @@ struct AskView: View {
                     }
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .defaultScrollAnchor(messages.isEmpty ? .top : .bottom)
                 .onChange(of: messages) {
+                    persist()
                     if let last = messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }
             }
@@ -74,10 +88,26 @@ struct AskView: View {
                 }
             }
             .task {
-                focused = true
+                // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
+                if messages.isEmpty { focused = true }
                 Understander.prewarm()
             }
         }
+    }
+
+    /// Saves the conversation as it grows: the thread is created with the first user message and updated after
+    /// every later message (AI replies included). Only text is kept.
+    private func persist() {
+        guard let first = messages.first(where: { $0.role == .user }) else { return }
+        if let thread {
+            thread.messages = messages
+            thread.updatedAt = .now
+        } else {
+            let created = ChatThread(title: ConversationHistory.title(from: first.text), messages: messages)
+            context.insert(created)
+            thread = created
+        }
+        try? context.save()
     }
 
     private var emptyState: some View {
@@ -121,6 +151,10 @@ struct AskView: View {
                 .padding(.vertical, 12)
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if case .chooseItem(_, let options)? = followup {
+                ChoiceBar(options: options, onPick: tapChoice)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let change {
                 ChangeCard(change: change, onApply: { apply(change) }, onCancel: { self.change = nil })
@@ -166,6 +200,7 @@ struct AskView: View {
         .animation(.snappy, value: pending)
         .animation(.snappy, value: plan.count)
         .animation(.snappy, value: change)
+        .animation(.snappy, value: followup)
         .animation(.snappy, value: undoRow?.id)
         .onChange(of: voice.transcript) { _, text in
             if !text.isEmpty { draft = text }
@@ -189,21 +224,138 @@ struct AskView: View {
         draft = ""
         captureTask?.cancel()
         thinking = false
+        let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
         messages.append(ChatMessage(role: .user, text: text))
-        pending = nil
-        queue = []
         plan = []
-        change = nil
         undoRow = nil
+        // The message may answer what the last turn left open, or edit the preview that is showing.
+        if answerOpenTurn(text, history: history) { return }
+        followup = nil
         if isPlanRequest(text) {
+            clearPreviews()
             proposePlan()
         } else if isQuestion(text) {
+            // A question does not throw away the card the user is looking at.
             messages.append(ChatMessage(role: .ai, text: todaySummary))
         } else if Editing.looksLikeEdit(text, items: editCandidates().items) {
-            proposeEdit(text)
+            clearPreviews()
+            proposeEdit(text, history: history)
         } else {
+            clearPreviews()
             propose(text)
         }
+    }
+
+    private func clearPreviews() {
+        pending = nil
+        queue = []
+        change = nil
+    }
+
+    // MARK: Multi-turn
+
+    /// A turn that asked something. The options are real items; tapping one and typing "the second one" take the same path.
+    enum Followup: Equatable {
+        case chooseItem(text: String, options: [ChoiceOption])
+        case needTime(ChoiceOption)
+        case alarmTime
+    }
+
+    struct ChoiceOption: Identifiable, Equatable {
+        let id = UUID()
+        let title: String
+        let type: String
+        let when: Date?
+    }
+
+    /// Reads `text` as the answer to the previous turn. False means it is something new.
+    private func answerOpenTurn(_ text: String, history: String) -> Bool {
+        let now = Date.now
+        let cal = Calendar.current
+        switch followup {
+        case .chooseItem(let original, let options):
+            if let i = Dialogue.pick(text, from: options.map(\.title)) {
+                followup = nil
+                choose(options[i], original: original, history: history)
+                return true
+            }
+        case .needTime(let option):
+            let candidates = editCandidates()
+            if let item = fresh(option, in: candidates.items) {
+                if let start = Dialogue.answerTime(text, keeping: item.start, now: now, calendar: cal) {
+                    followup = nil
+                    present(EditDecision(op: .move, target: item.id, newStart: start, reason: "ok"), id: item.id, candidates: candidates)
+                    return true
+                }
+            } else {
+                followup = nil
+            }
+        case .alarmTime:
+            if let capture = pending, case .updated(let c) = Dialogue.refine(capture, with: "alarm " + text, now: now, calendar: cal) {
+                followup = nil
+                pending = c
+                messages.append(ChatMessage(role: .ai, text: "Set as an alarm. Nothing is added until you confirm."))
+                return true
+            }
+        case nil: break
+        }
+
+        if Dialogue.refine(Capture(title: "_", day: .now, hasDay: false), with: text) == .dismissed, pending != nil || change != nil {
+            clearPreviews()
+            followup = nil
+            messages.append(ChatMessage(role: .ai, text: "OK, dropped it."))
+            return true
+        }
+        if let capture = pending {
+            switch Dialogue.refine(capture, with: text, now: now, calendar: cal) {
+            case .updated(let c):
+                pending = c
+                messages.append(ChatMessage(role: .ai, text: "Updated. Nothing is added until you confirm."))
+                return true
+            case .needsTime:
+                followup = .alarmTime
+                messages.append(ChatMessage(role: .ai, text: "What time should it ring?"))
+                return true
+            case .dismissed, .notARefinement:
+                break
+            }
+        }
+        if let current = change, !current.delete, Dialogue.isOnlyWhen(text),
+           let new = Dialogue.answerTime(text, keeping: current.newStart, now: now, calendar: cal) {
+            var updated = current
+            updated.newStart = new
+            change = updated
+            messages.append(ChatMessage(role: .ai, text: "Updated. Nothing changes until you apply it."))
+            return true
+        }
+        return false
+    }
+
+    /// The item for an option, looked up again in today's candidates (ids are only valid within one request).
+    private func fresh(_ option: ChoiceOption, in items: [EditItem]) -> EditItem? {
+        items.first { $0.title == option.title && $0.type == option.type }
+    }
+
+    private func option(_ item: EditItem) -> ChoiceOption {
+        ChoiceOption(title: item.title, type: item.type, when: item.start)
+    }
+
+    /// The user picked one of the offered items (tap or words): continue the sentence that raised the question.
+    private func choose(_ option: ChoiceOption, original: String, history: String) {
+        let candidates = editCandidates()
+        guard let item = fresh(option, in: candidates.items) else {
+            messages.append(ChatMessage(role: .ai, text: "“\(option.title)” isn't in your next week any more."))
+            return
+        }
+        let d = Editing.decide(text: original, chosen: item, delete: false, now: .now, calendar: .current)
+        handle(d, text: original, plan: nil, candidates: candidates, history: history)
+    }
+
+    private func tapChoice(_ option: ChoiceOption) {
+        guard case .chooseItem(let original, _)? = followup else { return }
+        messages.append(ChatMessage(role: .user, text: option.title))
+        followup = nil
+        choose(option, original: original, history: Dialogue.recap(messages.map { ($0.role == .user, $0.text) }))
     }
 
     /// On-device model when available, scripted parser otherwise. Only produces the preview card.
@@ -248,11 +400,12 @@ struct AskView: View {
     }
 
     /// Edit sentence → a ChangeCard, a question in the chat, or (not an edit after all) a capture. Nothing is written here.
-    private func proposeEdit(_ text: String) {
+    private func proposeEdit(_ text: String, history: String) {
         let candidates = editCandidates()
         // The words usually settle which item is meant; the model is asked only when they do not.
         guard Editing.needsModel(text, items: candidates.items) else {
-            handle(Editing.decide(text: text, plan: nil, items: candidates.items, now: .now, calendar: .current), text: text, plan: nil, candidates: candidates)
+            handle(Editing.decide(text: text, plan: nil, items: candidates.items, now: .now, calendar: .current, focus: focusItem(candidates.items)),
+                   text: text, plan: nil, candidates: candidates, history: history)
             return
         }
         guard Understanding.unavailableReason(localeID: Locale.current.identifier) == nil else {
@@ -262,40 +415,56 @@ struct AskView: View {
         thinking = true
         captureTask = Task { @MainActor in
             let items = candidates.items
-            let plan = await ModelTimeout.run(seconds: 20) { try? await Editing.plan(text, items: items, now: .now, calendar: .current) }
+            let plan = await ModelTimeout.run(seconds: 20) { try? await Editing.plan(text, items: items, now: .now, calendar: .current, history: history) }
             guard !Task.isCancelled else { return }
             thinking = false
             if plan == nil {
                 messages.append(ChatMessage(role: .ai, text: "The on-device model didn't answer in time. Try again in a moment, or name the item."))
                 return
             }
-            handle(Editing.decide(text: text, plan: plan, items: items, now: .now, calendar: .current), text: text, plan: plan, candidates: candidates)
+            handle(Editing.decide(text: text, plan: plan, items: items, now: .now, calendar: .current, focus: focusItem(items)),
+                   text: text, plan: plan, candidates: candidates, history: history)
         }
     }
 
-    private func handle(_ decision: EditDecision, text: String, plan: EditPlan?, candidates: (items: [EditItem], tasks: [String: OneTask], events: [String: OneEvent])) {
+    private func focusItem(_ items: [EditItem]) -> EditItem? {
+        lastTouched.flatMap { title in items.first { $0.title == title } }
+    }
+
+    private func handle(_ decision: EditDecision, text: String, plan: EditPlan?,
+                        candidates: (items: [EditItem], tasks: [String: OneTask], events: [String: OneEvent]), history: String) {
         switch decision.op {
         case .none:
             propose(text)
         case .clarify:
-            messages.append(ChatMessage(role: .ai, text: clarifyQuestion(decision, plan: plan, items: candidates.items)))
+            clarify(decision, text: text, plan: plan, items: candidates.items)
         case .move, .delete:
             guard let id = decision.target else { return }
             present(decision, id: id, candidates: candidates)
         }
     }
 
-    private func clarifyQuestion(_ d: EditDecision, plan: EditPlan?, items: [EditItem]) -> String {
+    /// Asks one question and remembers it. When the answer is a choice between items, the choices are real items and are tappable.
+    private func clarify(_ d: EditDecision, text: String, plan: EditPlan?, items: [EditItem]) {
         if d.reason.hasPrefix("several items match:") {
             let ids = d.reason.dropFirst("several items match:".count).split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
-            let all = ids.compactMap { id in items.first { $0.id == id }?.title }.map { "“\($0)”" }
-            let names = all.prefix(4).joined(separator: ", ") + (all.count > 4 ? ", or another one" : "")
-            return "Which one do you mean: " + names + "?"
+            let options = ids.compactMap { id in items.first { $0.id == id } }.prefix(5).map(option)
+            followup = .chooseItem(text: text, options: Array(options))
+            messages.append(ChatMessage(role: .ai, text: "Which one do you mean?"))
+        } else if d.reason == "no new time", let id = d.target, let item = items.first(where: { $0.id == id }) {
+            followup = .needTime(option(item))
+            messages.append(ChatMessage(role: .ai, text: "When should I move “\(item.title)” to?"))
+        } else if d.reason == "no item named", !items.isEmpty {
+            followup = .chooseItem(text: text, options: items.prefix(5).map(option))
+            messages.append(ChatMessage(role: .ai, text: "Which item do you mean?"))
+        } else {
+            messages.append(ChatMessage(role: .ai, text: clarifyQuestion(d, plan: plan, items: items)))
         }
+    }
+
+    private func clarifyQuestion(_ d: EditDecision, plan: EditPlan?, items: [EditItem]) -> String {
         switch d.reason {
         case "several items": return "I change one item at a time. Which one first?"
-        case "no item named": return "Which item do you mean?"
-        case "no new time": return "When should I move it to?"
         case "model unavailable": return "I couldn't read that. Try rephrasing, or open the item to edit it."
         default: return "Which item do you mean, and to when?"
         }
@@ -316,6 +485,7 @@ struct AskView: View {
                 notes.append("Only on your calendar. No one else is notified.")
             }
             notes.append("Meetings move only when you ask. This changes this one event.")
+            lastTouched = event.title
             change = PendingChange(subject: .event(event), delete: d.op == .delete, title: event.title,
                                    oldText: DayLabel.withTime(event.start), newStart: d.newStart, notes: notes,
                                    attendees: audience?.attendees ?? 0)
@@ -325,6 +495,7 @@ struct AskView: View {
                 notes.append("Only the planned time changes." + (task.due != nil ? " The deadline stays." : ""))
                 if task.ringsAsAlarm { notes.append("Its alarm follows the new time.") }
             }
+            lastTouched = task.title
             change = PendingChange(subject: .task(task), delete: d.op == .delete, title: task.title,
                                    oldText: task.plannedStart.map { DayLabel.withTime($0) } ?? "Not scheduled", newStart: d.newStart, notes: notes,
                                    attendees: 0)
@@ -422,6 +593,7 @@ struct AskView: View {
 
     private func add(_ capture: Capture) {
         capture.insert(into: context)
+        lastTouched = capture.title
         onAdded(capture)
         messages.append(ChatMessage(role: .ai, text: "Added “\(capture.title)” · \(capture.summary)."))
         advance()
@@ -502,7 +674,6 @@ struct AskView: View {
         var lines = ["Today: \(open.count) open task\(open.count == 1 ? "" : "s") and \(todayEvents.count) upcoming event\(todayEvents.count == 1 ? "" : "s")."]
         lines += open.prefix(5).map { "· " + $0.title }
         lines += todayEvents.prefix(3).map { "· " + $0.1.formatted(date: .omitted, time: .shortened) + " " + $0.0.title }
-        lines.append("(No AI model connected yet. This is a summary of your local data.)")
         return lines.joined(separator: "\n")
     }
 }
@@ -573,7 +744,7 @@ struct PendingChange: Equatable, Identifiable {
     let delete: Bool
     let title: String
     let oldText: String
-    let newStart: Date?
+    var newStart: Date?
     let notes: [String]
     let attendees: Int
 
@@ -630,6 +801,36 @@ struct ChangeCard: View {
         case (false, true): "Move event"
         case (true, false): "Delete task"
         case (true, true): "Delete event"
+        }
+    }
+}
+
+/// The items a "which one?" question offers. Each is a real item from the calendar or task list; tapping one answers the question.
+struct ChoiceBar: View {
+    let options: [AskView.ChoiceOption]
+    var onPick: (AskView.ChoiceOption) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(options) { option in
+                    Button { onPick(option) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.title).font(.subheadline).lineLimit(1)
+                            if let when = option.when {
+                                Text(DayLabel.withTime(when)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(PressScale())
+                    .tint(.primary)
+                    .accessibilityIdentifier("ask-choice")
+                }
+            }
+            .padding(.horizontal, 2)
         }
     }
 }

@@ -1,0 +1,149 @@
+import Foundation
+
+/// Multi-turn rules for the AI page, as plain functions so they can be tested without a model or a UI.
+/// A turn can leave something open (a preview card, a "which one?" question, a "when?" question); the next message
+/// is first read as an answer to that, and only becomes a new item when it is not one.
+/// Nothing here writes data: it only edits the preview that is already on screen.
+enum Dialogue {
+    // MARK: Answering "which one?"
+
+    private static func has(_ text: String, _ pattern: String) -> Bool {
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private static let ordinals: [(pattern: String, index: Int)] = [
+        (#"第?(?:一|1)个|^\s*1\s*$|\bfirst\b|\b1st\b"#, 0),
+        (#"第?(?:二|两|2)个|^\s*2\s*$|\bsecond\b|\b2nd\b"#, 1),
+        (#"第?(?:三|3)个|^\s*3\s*$|\bthird\b|\b3rd\b"#, 2),
+        (#"第?(?:四|4)个|^\s*4\s*$|\bfourth\b|\b4th\b"#, 3),
+    ]
+
+    /// Which of `titles` the answer points at: "the second one", "第一个", "2", or words from the title.
+    /// Nil when it names none or more than one (the caller then treats the message as something new, or asks again).
+    static func pick(_ answer: String, from titles: [String]) -> Int? {
+        let text = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !titles.isEmpty else { return nil }
+        if has(text, #"最后(?:一个)?|\blast\b"#) { return titles.count - 1 }
+        for (pattern, index) in ordinals where index < titles.count && has(text, pattern) { return index }
+        // Words from the title, either way round ("the product one", "产品周会").
+        let lower = text.lowercased()
+        let hits = titles.indices.filter { i in
+            let title = titles[i].lowercased()
+            if title.contains(lower) || (lower.count >= 2 && lower.contains(title)) { return true }
+            let words = title.split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { $0.count >= 3 }
+            return words.contains { lower.contains($0) }
+        }
+        return hits.count == 1 ? hits[0] : nil
+    }
+
+    // MARK: Changing the preview card
+
+    enum Refinement: Equatable {
+        case updated(Capture)
+        /// The user asked for an alarm but the preview has no time to ring at.
+        case needsTime
+        /// "No", "never mind", "算了": drop the preview.
+        case dismissed
+        case notARefinement
+    }
+
+    /// Words that only carry an instruction about the preview ("make it", "改成", "instead").
+    private static let filler = #"actually|make it|change (?:it )?to|set (?:it )?to|move (?:it )?to|should be|instead|please|rather|no,?|oh,?|and|as|for|it|the|to|at|on|改成|改到|改为|换成|设为|设成|还是|不是|应该是|应该|是|要|吧|啊|呢|的|,|，|。|\.|!"#
+
+    /// Reads a follow-up as an edit of the preview: "make it an alarm", "改成下午4点", "tomorrow instead", "call it Quarterly report".
+    /// A message that has its own action text ("Call Mia at 5pm") is not a refinement, even though it has a time.
+    static func refine(_ capture: Capture, with raw: String, now: Date = .now, calendar: Calendar = .current) -> Refinement {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if has(text, #"^(?:no|nope|cancel|never ?mind|forget it|算了|不用了|取消|不要了)[.!。！]?$"#) { return .dismissed }
+
+        // Rename: "call it X", "rename it to X", "标题改成X".
+        if let range = text.range(of: #"(?:call it|rename (?:it )?(?:to)?|title (?:it|to)|叫做|改名(?:为|成)|标题(?:改成|改为|是))\s*[:：]?\s*"#,
+                                  options: [.regularExpression, .caseInsensitive]) {
+            let name = String(text[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty {
+                var c = capture
+                c.title = name
+                return .updated(c)
+            }
+        }
+
+        var c = capture
+        var changed = false
+        var rest = text
+
+        // Kind: alarm / event / task.
+        let wantsAlarm = has(text, #"alarm|wake me|闹钟|叫我起床|叫醒"#)
+        let wantsEvent = !wantsAlarm && has(text, #"\bevent\b|\bmeeting\b|appointment|日程|会议|日历"#)
+        let wantsTask = !wantsAlarm && !wantsEvent && has(text, #"\btask\b|\bto-?do\b|reminder|待办|任务|提醒"#)
+        if wantsAlarm {
+            // Words like "an alarm" are the instruction, not a time; the time (if any) is read below.
+            let said = CaptureParser.parse(text, now: now, calendar: calendar)
+            if let h = said.hour { c.hour = h; c.minute = said.minute }
+            guard c.hour != nil else { return .needsTime }
+            c.kind = .task
+            c.ringsAsAlarm = true
+            c.isAllDay = false
+            changed = true
+        } else if wantsEvent {
+            c.kind = .event
+            c.ringsAsAlarm = false
+            changed = true
+        } else if wantsTask {
+            c.kind = .task
+            c.ringsAsAlarm = false
+            changed = true
+        }
+        rest = rest.replacingOccurrences(of: #"alarm|wake me( up)?|闹钟|叫我起床|叫醒|event|meeting|appointment|日程|会议|日历|task|to-?do|reminder|待办|任务|提醒|\ban?\b|\bone\b"#,
+                                         with: " ", options: [.regularExpression, .caseInsensitive])
+
+        // Day / time / repeat: only the parts the message gives replace the old ones.
+        let parsed = CaptureParser.parse(rest, now: now, calendar: calendar)
+        if parsed.hasDay { c.day = parsed.day; c.hasDay = true; changed = true }
+        if let h = parsed.hour, !wantsAlarm {
+            c.hour = h
+            c.minute = parsed.minute
+            changed = true
+        }
+        if parsed.repeatRule != nil { c.repeatRule = parsed.repeatRule; changed = true }
+        if let d = parsed.durationMinutes { c.durationMinutes = d; changed = true }
+        if wantsAlarm, parsed.hasDay { c.hasDay = true }
+
+        // Anything left over is its own text: this is a new item, not an edit of the preview.
+        // (The parser falls back to the whole text when nothing is left of the title.)
+        var leftover = parsed.title.trimmingCharacters(in: .whitespacesAndNewlines) == rest.trimmingCharacters(in: .whitespacesAndNewlines) && changed ? "" : parsed.title
+        if parsed.hasDay || parsed.hour != nil || parsed.repeatRule != nil || changed {
+            leftover = leftover.replacingOccurrences(of: "(?:\(filler))", with: " ", options: [.regularExpression, .caseInsensitive])
+        }
+        leftover = leftover.trimmingCharacters(in: .whitespacesAndNewlines)
+        if changed && leftover.isEmpty { return .updated(c) }
+        return .notARefinement
+    }
+
+    /// True for a message that only gives a day and/or time ("5pm", "tomorrow instead", "改成下午4点").
+    static func isOnlyWhen(_ text: String, now: Date = .now, calendar: Calendar = .current) -> Bool {
+        let probe = Capture(title: "_", day: calendar.startOfDay(for: now), hasDay: false, hour: nil)
+        guard case .updated(let r) = refine(probe, with: text, now: now, calendar: calendar) else { return false }
+        return r.kind == probe.kind && !r.ringsAsAlarm && r.title == probe.title && (r.hasDay || r.hour != nil)
+    }
+
+    // MARK: Answering "when?"
+
+    /// The new start for a "when should I move it to?" answer: "5pm", "tomorrow", "明天下午3点". Nil when it gives no time.
+    static func answerTime(_ text: String, keeping old: Date?, now: Date = .now, calendar: Calendar = .current) -> Date? {
+        let today = calendar.startOfDay(for: now)
+        let parsed = CaptureParser.parse(text, now: today, calendar: calendar)
+        guard parsed.hasDay || parsed.hour != nil else { return nil }
+        let day = parsed.hasDay ? parsed.day : (old.map { calendar.startOfDay(for: $0) } ?? today)
+        let oldTime = old.map { calendar.dateComponents([.hour, .minute], from: $0) }
+        let hour = parsed.hour ?? oldTime?.hour ?? 9
+        let minute = parsed.hour != nil ? parsed.minute : (oldTime?.minute ?? 0)
+        return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
+    }
+
+    // MARK: Context for the model
+
+    /// The last few messages, short, for the model's instructions. Only text: the 4096-token window is small, so each line is cut.
+    static func recap(_ lines: [(isUser: Bool, text: String)], limit: Int = 4) -> String {
+        lines.suffix(limit).map { ($0.isUser ? "User: " : "Assistant: ") + String($0.text.prefix(120)) }.joined(separator: "\n")
+    }
+}

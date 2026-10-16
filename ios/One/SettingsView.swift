@@ -23,6 +23,7 @@ struct SettingsView: View {
     @State private var calendarOn = CalendarSync.shared.isOn
     @State private var remindersOn = RemindersSync.shared.isConnected
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var showsCalendars = false
     @State private var askingFirst = false
     @State private var askingSecond = false
 
@@ -32,6 +33,16 @@ struct SettingsView: View {
                 Section {
                     Toggle(isOn: $calendarOn) { Label("Apple Calendar", systemImage: "calendar") }
                     Toggle(isOn: $remindersOn) { Label("Apple Reminders", systemImage: "checklist") }
+                    Button { showsCalendars = true } label: {
+                        HStack {
+                            Label("Calendars", systemImage: "calendar.badge.checkmark")
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Choose which calendars show in Today")
                     statusRow(title: "Alarms", icon: "alarm",
                               value: Ringer.isAvailable ? (Ringer.isDenied ? "Not allowed" : "Allowed") : "Needs iOS 26",
                               showsSettings: Ringer.isDenied)
@@ -102,6 +113,7 @@ struct SettingsView: View {
             } message: {
                 Text("This deletes the reminders, events, alarms and lists Today keeps on this device. It can't be undone.")
             }
+            .sheet(isPresented: $showsCalendars) { CalendarsSheet() }
             .sheet(isPresented: $askingSecond) {
                 DeleteDataConfirmation {
                     DataReset.run(context)
@@ -180,6 +192,7 @@ enum DataReset {
         try? context.delete(model: OneAlarm.self)
         try? context.delete(model: OneList.self)
         try? context.delete(model: Habit.self)
+        try? context.delete(model: ChatThread.self)
         try? context.save()
     }
 }

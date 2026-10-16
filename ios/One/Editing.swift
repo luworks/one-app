@@ -38,7 +38,7 @@ struct EditDecision: Equatable {
 enum Editing {
     // MARK: Model
 
-    static func instructions(items: [EditItem], now: Date, calendar: Calendar) -> String {
+    static func instructions(items: [EditItem], now: Date, calendar: Calendar, history: String = "") -> String {
         let day = DateFormatter()
         day.calendar = calendar; day.timeZone = calendar.timeZone; day.locale = Locale(identifier: "en_US_POSIX")
         day.dateFormat = "EEEE yyyy-MM-dd HH:mm"
@@ -58,12 +58,14 @@ enum Editing {
             rows.joined(separator: "\n"),
             "op: move = reschedule ONE item. delete = remove ONE item. clarify = you cannot tell which item or what time. none = the message is not an edit.",
             "target is the id of the item the message names. Never invent an id.",
-        ].joined(separator: "\n")
+        ]
+        .appending(history.isEmpty ? [] : ["The conversation so far (\"it\" and \"that one\" mean the item talked about last):", history])
+        .joined(separator: "\n")
     }
 
     /// One request, one fresh session. Throws on any model error.
-    static func plan(_ text: String, items: [EditItem], now: Date, calendar: Calendar) async throws -> EditPlan {
-        let session = LanguageModelSession(instructions: instructions(items: items, now: now, calendar: calendar))
+    static func plan(_ text: String, items: [EditItem], now: Date, calendar: Calendar, history: String = "") async throws -> EditPlan {
+        let session = LanguageModelSession(instructions: instructions(items: items, now: now, calendar: calendar, history: history))
         return try await session.respond(to: text, generating: EditPlan.self).content
     }
 
@@ -265,7 +267,7 @@ enum Editing {
     /// Message (+ the model's target when the words name no item) + code rules → what the preview card should propose.
     /// The operation comes from the words too (cancel / delete cue = delete, move cue = move): the model only breaks the tie on which item.
     /// `plan` nil means the model was not asked or failed.
-    static func decide(text: String, plan: EditPlan?, items: [EditItem], now: Date, calendar: Calendar) -> EditDecision {
+    static func decide(text: String, plan: EditPlan?, items: [EditItem], now: Date, calendar: Calendar, focus: EditItem? = nil) -> EditDecision {
         func ask(_ why: String) -> EditDecision { EditDecision(op: .clarify, target: nil, newStart: nil, reason: why) }
         if !looksLikeEdit(text, items: items, now: now, calendar: calendar) { return EditDecision(op: .none, target: nil, newStart: nil, reason: "not an edit") }
         if mentionsEverything(text) { return ask("several items") }
@@ -276,6 +278,8 @@ enum Editing {
         let item: EditItem
         if let only = matches.first {
             item = only
+        } else if usesPronoun(text), let focus, items.contains(where: { $0.id == focus.id }) {
+            item = focus   // "move it to 5pm": it = the item the conversation touched last
         } else if usesPronoun(text) {
             return ask("no item named")
         } else if let plan, let id = plan.target, let found = items.first(where: { $0.id == id }) {
@@ -284,7 +288,22 @@ enum Editing {
             return ask(plan == nil ? "model unavailable" : "no item named")
         }
         if wantsDelete { return EditDecision(op: .delete, target: item.id, newStart: nil, reason: "ok") }
-        guard let start = newStart(for: item, text: text, now: now, calendar: calendar) else { return ask("no new time") }
+        guard let start = newStart(for: item, text: text, now: now, calendar: calendar) else {
+            return EditDecision(op: .clarify, target: item.id, newStart: nil, reason: "no new time")
+        }
         return EditDecision(op: .move, target: item.id, newStart: start, reason: "ok")
     }
+
+    /// The user already chose the item (tapped it, or said "the second one"): only the operation and the new time are left to read.
+    static func decide(text: String, chosen item: EditItem, delete: Bool, now: Date, calendar: Calendar) -> EditDecision {
+        if delete || (has(text, deleteCue) && !has(text, moveCue)) { return EditDecision(op: .delete, target: item.id, newStart: nil, reason: "ok") }
+        guard let start = newStart(for: item, text: text, now: now, calendar: calendar) else {
+            return EditDecision(op: .clarify, target: item.id, newStart: nil, reason: "no new time")
+        }
+        return EditDecision(op: .move, target: item.id, newStart: start, reason: "ok")
+    }
+}
+
+private extension Array {
+    func appending(_ other: [Element]) -> [Element] { self + other }
 }

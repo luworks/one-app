@@ -3,7 +3,7 @@ import SwiftData
 import UserNotifications
 
 /// The Alarms tab, modeled on the Alarms tab of Apple's Clock app: "Edit" and "+" in the bar, a large
-/// "Alarms" title, big light times with a small AM/PM, a green switch per row, and an "Other" section.
+/// "Alarms" title, big light times with a small AM/PM and a green switch per row. Adding is the app-wide + at the bottom right.
 /// Alarms are real: each one is an AlarmKit alarm (they ring through Silent and Focus). The tasks and events
 /// you marked "Ring as alarm" follow in their own section. Reminders and event alerts live in Apple Reminders / Calendar.
 struct AlarmsView: View {
@@ -35,7 +35,7 @@ struct AlarmsView: View {
                             }
                     }
                     .onDelete { offsets in offsets.map { alarms[$0] }.forEach(delete) }
-                } header: { SectionTitle("Other") }
+                }
 
                 if !ringing.isEmpty {
                     Section {
@@ -58,6 +58,7 @@ struct AlarmsView: View {
         .task { await center.watch(context: context) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await FirstRun.alarms()
             notificationStatus = await Reminders.shared.authorizationStatus()
             await Ringer.sync(context)
         }
@@ -65,7 +66,7 @@ struct AlarmsView: View {
 
     // MARK: Bar and title
 
-    /// Clock's bar: Edit (Done) on the left, + on the right. Drawn here, like the Reminders tab, so it sits
+    /// Clock's bar: Edit (Done) on the left. The + is the app-wide one at the bottom right. Drawn here, like the Reminders tab, so it sits
     /// under the app's own top bar and keeps its size at the largest text sizes.
     private var barButtons: some View {
         HStack {
@@ -80,15 +81,6 @@ struct AlarmsView: View {
             .disabled(alarms.isEmpty)
             .accessibilityIdentifier("alarms.edit")
             Spacer()
-            Button { adding = true } label: {
-                Image(systemName: "plus")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 40, height: 40)
-                    .glassCircle()
-            }
-            .accessibilityLabel("Add Alarm")
-            .accessibilityIdentifier("alarms.add")
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 20)

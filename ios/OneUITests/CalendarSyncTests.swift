@@ -2,7 +2,9 @@ import XCTest
 
 /// Calendar claim 10: events saved to the system calendar come back as system events after a fresh start.
 final class CalendarSyncTests: XCTestCase {
-    func testEventRoundTripsThroughSystemCalendar() {
+    func testEventRoundTripsThroughSystemCalendar() throws {
+        // A new event starts at the next full hour; in the last hour of the day that is tomorrow, not in today's list.
+        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 23, "the default event time is tomorrow")
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-uiTestingCalendarSync"]
         app.launch()
@@ -15,11 +17,11 @@ final class CalendarSyncTests: XCTestCase {
         }
 
         // Turn on sync in Settings (sidebar > Settings > Apple Calendar).
-        app.buttons["Open sidebar"].tap()
+        app.openSidebar()
         app.buttons["Settings"].firstMatch.tap()
         let toggle = app.switches["Apple Calendar"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        if (toggle.value as? String) != "1" { toggle.tap() }
+        if (toggle.value as? String) != "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow Full Access", "Allow"] {
             let b = springboard.buttons[label]

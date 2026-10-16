@@ -1,32 +1,31 @@
 import SwiftUI
 import SwiftData
 
-/// Calendar tab, modeled on Apple Calendar: Month (a compact grid with the selected day's events listed below),
-/// Week (time grid) and Year (twelve mini months). The day view is the Today tab: "Day" opens it.
+/// Calendar tab, modeled on Apple Calendar: Week (time grid, the default), Month (a compact grid with the selected
+/// day's events listed below) and Year (twelve mini months). The day view is the Today tab: tapping a day's header
+/// opens it there. One control row under the tab pills: the view switcher. Which calendars show is a Setting.
 /// System events open in Apple's own viewer; new events use Apple's own editor when Calendar access is on.
 struct CalendarView: View {
     enum Mode: String, CaseIterable, Identifiable {
-        case day = "Day", week = "Week", month = "Month", year = "Year"
+        case week = "Week", month = "Month", year = "Year"
         var id: Self { self }
     }
 
     @Binding var day: Date
     var onOpenDay: (Date) -> Void
 
-    @State private var mode: Mode = .month
-    @State private var showsCalendars = false
+    @State private var mode: Mode = .week
     @State private var opened: OpenedEntry?
     private let cal = Calendar.current
 
     var body: some View {
         VStack(spacing: 0) {
-            topRow
-            modePicker
+            controlRow
             Group {
                 switch mode {
                 case .week:
-                    WeekView(day: $day, open: open, openDay: openDay)
-                case .month, .day:
+                    WeekView(day: $day, dayCount: 7, open: open, openDay: openDay)
+                case .month:
                     MonthView(day: $day, open: open, edit: edit, openDay: openDay)
                 case .year:
                     YearView(day: $day) { month in
@@ -39,7 +38,6 @@ struct CalendarView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .sheet(isPresented: $showsCalendars) { CalendarsSheet() }
         .sheet(item: $opened) { item in
             switch item {
             case .system(let id): NativeEventSheet(identifier: id)
@@ -60,56 +58,10 @@ struct CalendarView: View {
     /// Tapping a day that is already selected opens it in Today (the day view).
     private func openDay(_ date: Date) { onOpenDay(cal.startOfDay(for: date)) }
 
-    // MARK: Top row: year, Today, Calendars
+    // MARK: One control row: the view switcher
 
-    private var topRow: some View {
-        HStack(spacing: 10) {
-            if mode != .year {
-                Button { withAnimation(.snappy) { mode = .year } } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left").font(.body.weight(.semibold))
-                        Text(day.formatted(.dateTime.year()))
-                    }
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: 44)
-                    .glassCapsule()
-                }
-                .buttonStyle(PressScale())
-                .accessibilityLabel(day.formatted(.dateTime.year()))
-                .accessibilityHint("Shows the whole year")
-                .accessibilityIdentifier("calendar.year")
-            }
-            Spacer(minLength: 0)
-            Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
-                Text("Today")
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 44)
-                    .glassCapsule()
-            }
-            .buttonStyle(PressScale())
-            .accessibilityIdentifier("calendar.today")
-            .accessibilityHint("Jumps to today")
-            Button { showsCalendars = true } label: {
-                Image(systemName: "calendar")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 50, height: 44)
-                    .glassCapsule()
-            }
-            .buttonStyle(PressScale())
-            .accessibilityLabel("Calendars")
-            .accessibilityIdentifier("calendar.calendars")
-        }
-        .foregroundStyle(.primary)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 6)
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-    }
-
-    /// Day / Week / Month / Year like Apple's switcher. Day is the Today tab.
-    private var modePicker: some View {
-        Picker("View", selection: Binding(get: { mode }, set: { picked in
-            if picked == .day { onOpenDay(cal.startOfDay(for: day)) } else { withAnimation(.snappy) { mode = picked } }
-        })) {
+    private var controlRow: some View {
+        Picker("View", selection: Binding(get: { mode }, set: { picked in withAnimation(.snappy) { mode = picked } })) {
             ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
         }
         .pickerStyle(.segmented)
@@ -120,7 +72,7 @@ struct CalendarView: View {
 }
 
 /// The Calendars list: Apple's own EKCalendarChooser (accounts, color dots, checkmarks) when access is on.
-private struct CalendarsSheet: View {
+struct CalendarsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -518,6 +470,8 @@ private struct MiniMonth: View {
 /// 7-day time grid. Events are tinted blocks in their calendar's color (fixed); planned tasks are accent outlines (flexible).
 private struct WeekView: View {
     @Binding var day: Date
+    /// 7 = a calendar week; 3 = the next 3 days starting today.
+    var dayCount = 7
     var open: (CalEntry) -> Void
     var openDay: (Date) -> Void
 
@@ -527,18 +481,19 @@ private struct WeekView: View {
     /// The hour at the top of the grid, shared by all pages so paging keeps your place.
     @State private var topHour: Int? = 7
     private let cal = Calendar.current
-    private let base = CalendarMath.weekStart(of: .now)
+    private var base: Date { dayCount == 7 ? CalendarMath.weekStart(of: .now) : cal.startOfDay(for: .now) }
     private let range = -800...800
 
-    private func weekStart(_ offset: Int) -> Date { cal.date(byAdding: .day, value: offset * 7, to: base) ?? base }
+    private func weekStart(_ offset: Int) -> Date { cal.date(byAdding: .day, value: offset * dayCount, to: base) ?? base }
     private func offset(of date: Date) -> Int {
-        let days = cal.dateComponents([.day], from: base, to: CalendarMath.weekStart(of: date)).day ?? 0
-        return Int((Double(days) / 7).rounded())
+        let start = dayCount == 7 ? CalendarMath.weekStart(of: date) : cal.startOfDay(for: date)
+        let days = cal.dateComponents([.day], from: base, to: start).day ?? 0
+        return Int((Double(days) / Double(dayCount)).rounded(.down))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(weekStart(pos ?? 0).addingTimeInterval(3 * 86400).formatted(.dateTime.month(.wide).year()))
+            Text(weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).formatted(.dateTime.month(.wide).year()))
                 .font(.title2.bold())
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
@@ -548,7 +503,7 @@ private struct WeekView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 0) {
                     ForEach(range, id: \.self) { o in
-                        WeekPage(weekStart: weekStart(o), selected: day, events: events, tasks: tasks,
+                        WeekPage(weekStart: weekStart(o), dayCount: dayCount, selected: day, events: events, tasks: tasks,
                                  topHour: $topHour, open: open, openDay: openDay)
                             .containerRelativeFrame([.horizontal, .vertical])
                             .id(o)
@@ -567,7 +522,7 @@ private struct WeekView: View {
             guard let new, offset(of: day) != new else { return }
             // Keep the same weekday in the new week.
             let shift = new - offset(of: day)
-            day = cal.date(byAdding: .day, value: shift * 7, to: day) ?? day
+            day = cal.date(byAdding: .day, value: shift * dayCount, to: day) ?? day
         }
         .onAppear { pos = offset(of: day) }
     }
@@ -575,6 +530,7 @@ private struct WeekView: View {
 
 private struct WeekPage: View {
     let weekStart: Date
+    let dayCount: Int
     let selected: Date
     let events: [OneEvent]
     let tasks: [OneTask]
@@ -587,8 +543,8 @@ private struct WeekPage: View {
     private let cal = Calendar.current
 
     var body: some View {
-        let days = (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: weekStart) }
-        let interval = DateInterval(start: weekStart, end: cal.date(byAdding: .day, value: 7, to: weekStart) ?? weekStart)
+        let days = (0..<dayCount).compactMap { cal.date(byAdding: .day, value: $0, to: weekStart) }
+        let interval = DateInterval(start: weekStart, end: cal.date(byAdding: .day, value: dayCount, to: weekStart) ?? weekStart)
         let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks)
         VStack(spacing: 0) {
             header(days)
@@ -609,7 +565,7 @@ private struct WeekPage: View {
                 let isSelected = cal.isDate(d, inSameDayAs: selected)
                 Button { openDay(d) } label: {
                     VStack(spacing: 2) {
-                        Text(letters[i])
+                        Text(dayCount == 7 ? letters[i] : d.formatted(.dateTime.weekday(.abbreviated)))
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(cal.isDateInWeekend(d) ? Color.secondary : Color.primary)
                         Text("\(cal.component(.day, from: d))")
@@ -641,7 +597,7 @@ private struct WeekPage: View {
             let spans: [(start: Int, end: Int)] = items.map { e in
                 let first = cal.dateComponents([.day], from: weekStart, to: cal.startOfDay(for: e.start)).day ?? 0
                 let last = (cal.dateComponents([.day], from: weekStart, to: cal.startOfDay(for: e.end.addingTimeInterval(-1))).day ?? 0)
-                return (max(0, first), min(6, max(first, last)))
+                return (max(0, first), min(dayCount - 1, max(first, last)))
             }
             let lanes = CalendarLayout.lanes(for: spans)
             let laneCount = min((lanes.max() ?? 0) + 1, 4)
@@ -653,7 +609,7 @@ private struct WeekPage: View {
                     .frame(width: gutter - 4, height: rowHeight, alignment: .trailing)
                     .padding(.trailing, 4)
                 GeometryReader { geo in
-                    let colW = (geo.size.width - 8) / 7
+                    let colW = (geo.size.width - 8) / CGFloat(dayCount)
                     ForEach(Array(items.enumerated()), id: \.offset) { i, e in
                         if lanes[i] < laneCount {
                             Text(e.title)
@@ -707,7 +663,7 @@ private struct WeekPage: View {
                 .accessibilityHidden(true)
 
                 GeometryReader { geo in
-                    let colW = (geo.size.width - gutter - 8) / 7
+                    let colW = (geo.size.width - gutter - 8) / CGFloat(dayCount)
                     ForEach(Array(days.enumerated()), id: \.offset) { index, d in
                         let x = gutter + CGFloat(index) * colW
                         let placed = place(timed, on: d)
@@ -736,7 +692,7 @@ private struct WeekPage: View {
         let y = minutes(now) / 60 * hourHeight
         let index = days.firstIndex(where: { cal.isDateInToday($0) }) ?? 0
         return ZStack(alignment: .topLeading) {
-            Rectangle().fill(Color.red.opacity(0.35)).frame(width: colW * 7, height: 1)
+            Rectangle().fill(Color.red.opacity(0.35)).frame(width: colW * CGFloat(days.count), height: 1)
                 .offset(x: gutter, y: y)
             Rectangle().fill(Color.red).frame(width: colW, height: 1.5)
                 .offset(x: gutter + CGFloat(index) * colW, y: y - 0.5)

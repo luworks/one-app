@@ -9,7 +9,7 @@ let package = Package(
         .target(
             name: "OneLogic",
             path: "One",
-            sources: ["Capture.swift", "Logic.swift"]
+            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift"]
         ),
         .testTarget(
             name: "OneLogicTests",

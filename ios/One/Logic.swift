@@ -370,3 +370,14 @@ enum AlarmPlan {
     /// What Clock calls "Snooze": nine minutes.
     static let snoozeSeconds: TimeInterval = 9 * 60
 }
+
+/// Search matching: every word of the query must appear in one of the fields; case, accents and width are ignored.
+enum SearchMatch {
+    static func matches(_ query: String, in fields: [String]) -> Bool {
+        let words = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard !words.isEmpty else { return false }
+        return words.allSatisfy { word in
+            fields.contains { $0.range(of: word, options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]) != nil }
+        }
+    }
+}
