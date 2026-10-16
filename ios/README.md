@@ -38,7 +38,7 @@ Four tabs: **Today · Calendar · Reminders · Alarms**, plus a left sidebar, se
 - `OneAlarm.swift` — `OneAlarm` model (with its stable AlarmKit id). `AlarmEditor.swift` — the Clock-style row and the Add/Edit Alarm sheet. `AlarmCenter.swift` — live AlarmKit state (ringing, snoozing, authorization).
 - `Habits.swift` — retired `Habit` model, kept only for schema migration.
 - `Logic.swift` — pure logic with no SwiftUI/SwiftData so it is unit-testable: repeat rules, recurrence, day labels, `DayPlanner`, `ReminderPlan`, `AlarmPlan`.
-- `HomeView.swift` — app shell: tab pills, bottom bar (search, Ask AI, new), sidebar drawer.
+- `HomeView.swift` — app shell: tab pills, bottom bar (search, Ask AI, new), sidebar drawer. `Drawer.swift` — the drawer drag/slide mechanics (state model + small modifiers, so a drag frame does not rebuild the page).
 - `DayAgenda.swift` — the day view used by Today. `CalendarView.swift` — Month, Week and Year; `CalendarEntries.swift` — merges system events, own events and planned tasks for it.
 - `TasksView.swift` — the Reminders tab (still the older list). `AlarmsView.swift` — the Alarms tab.
 - `Rows.swift` — event and task rows with the swipe and long-press gestures; `TaskActions.swift` — complete, delete and undo toast.
@@ -46,7 +46,7 @@ Four tabs: **Today · Calendar · Reminders · Alarms**, plus a left sidebar, se
 - `Capture.swift` — turns "明天下午3点 打电话给 Alex" (or English) into a preview card. `AskView.swift` — the AI page; `VoiceInput.swift` — dictation.
 - `CalendarSync.swift` — EventKit bridge for Apple Calendar events, plus wrappers for Apple's own event editor, viewer and calendar chooser. Debug builds accept `-seedCalendarDemo` (`CalendarDemoSeed.swift`) to fill the system calendar with sample events.
 - `Reminders.swift` — local notifications (Done / Snooze / Tomorrow actions, overdue badge). Despite the name this is not Apple Reminders. `Ringer.swift` — AlarmKit scheduling for alarms and "Ring as alarm" items.
-- `Sidebar.swift`, `QuickActions.swift` (Home Screen quick actions), `LaunchTimer.swift`, `SampleData.swift` (first-launch items; sidebar → Delete all data removes them), `DevImport.swift` (debug-only import of a private export).
+- `Sidebar.swift` (full-screen conversation history: New chat, past chats grouped by day, Settings), `ChatThread.swift` (saved AI conversations, text only), `ConversationHistory.swift` (pure grouping/title logic), `QuickActions.swift` (Home Screen quick actions), `LaunchTimer.swift`, `SampleData.swift` (first-launch items; sidebar → Delete all data removes them), `DevImport.swift` (debug-only import of a private export).
 
 Tests: `ios/Eval/` (logic unit tests, NL-capture eval, `run-eval.sh`, `cold-start.sh`) and `ios/OneUITests/` (XCUITest journeys). Run `ios/Eval/run-eval.sh` or `ios/Eval/run-eval.sh --ui`.
 
