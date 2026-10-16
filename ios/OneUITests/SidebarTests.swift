@@ -50,21 +50,75 @@ final class SidebarTests: XCTestCase {
         XCTAssertFalse(reply.exists)
     }
 
-    func testSwipeLeftDeletesAConversationAndUndoBringsItBack() {
+    func testSwipeRightDeletesAConversationAndUndoBringsItBack() {
         haveAConversation()
         app.openSidebar()
         let row = app.buttons["Anything left today?"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.swipeLeft()
+        row.swipeRight()
         let delete = app.buttons["Delete"]
-        // A full swipe deletes straight away; a shorter one reveals the red Delete button first.
-        if delete.waitForExistence(timeout: 2) { delete.tap() }
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "swiping left to right reveals Delete")
+        delete.tap()
         XCTAssertTrue(row.waitForNonExistence(timeout: 5), "the conversation is gone")
         XCTAssertTrue(app.staticTexts["Your conversations with AI will appear here."].waitForExistence(timeout: 3))
         let undo = app.buttons["Undo"]
         XCTAssertTrue(undo.waitForExistence(timeout: 3), "there is an Undo")
         undo.tap()
         XCTAssertTrue(app.buttons["Anything left today?"].waitForExistence(timeout: 5), "Undo puts it back")
+    }
+
+    /// Opened from the sidebar, the chat goes back to the sidebar: by the close button, and by swiping right.
+    func testChatOpenedFromSidebarGoesBackToSidebar() {
+        haveAConversation()
+        app.openSidebar()
+        let row = app.buttons["Anything left today?"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "Close returns to the sidebar, not the page")
+
+        row.tap()
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.4)))
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "a right swipe returns to the sidebar")
+        XCTAssertFalse(reply.exists)
+    }
+
+    func testSwipeLeftArchivesAConversationIntoTheArchivedSection() {
+        haveAConversation()
+        app.openSidebar()
+        let row = app.buttons["Anything left today?"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.swipeLeft()
+        let archive = app.buttons["Archive"]
+        // A full swipe archives straight away; a shorter one reveals the Archive button first.
+        if archive.waitForExistence(timeout: 2) { archive.tap() }
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "the conversation leaves the main list")
+        let archived = app.buttons["conversation.archived"]
+        XCTAssertTrue(archived.waitForExistence(timeout: 3), "an Archived section appears")
+        archived.tap()
+        XCTAssertTrue(app.buttons["Anything left today?"].waitForExistence(timeout: 5), "it is still reachable under Archived")
+    }
+
+    func testLongPressOffersRenameArchiveAndDelete() {
+        haveAConversation()
+        app.openSidebar()
+        let row = app.buttons["Anything left today?"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.press(forDuration: 1.0)
+        for name in ["Rename", "Archive", "Delete"] {
+            XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 3), "the menu has \(name)")
+        }
+        app.buttons["Rename"].tap()
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 3), "Rename asks for a new title")
+        field.tap()
+        // The field starts with the current title; clear it before typing the new one.
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40) + "Renamed chat")
+        app.alerts.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["Renamed chat"].waitForExistence(timeout: 5), "the new title shows in the list")
     }
 
     func testSidebarHasNoTabRowsAndShowsTheEmptyState() {
