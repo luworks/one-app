@@ -6,6 +6,7 @@ import FoundationModels
 struct Case: Decodable {
     let lang: String, input: String
     let level: Int?
+    let scenario: String?
     let title: String?
     let kind: String
     let day: Int
@@ -81,6 +82,8 @@ func run() async {
     for lang in ["zh", "en", "mixed"] { summarize("  CaptureParser [\(lang)]", parserRows.filter { $0.0.lang == lang }) }
     let levels = Set(suite.cases.compactMap(\.level)).sorted()
     for lv in levels { summarize("  CaptureParser [L\(lv)]", parserRows.filter { $0.0.level == lv }) }
+    let scenarios = Array(Set(suite.cases.compactMap(\.scenario))).sorted()
+    for sc in scenarios { summarize("  CaptureParser <\(sc.prefix(14))>", parserRows.filter { $0.0.scenario == sc }) }
     // Ceiling for variant A: how often the parser's own day/time/duration/title are right (kind ignored).
     let ceiling = parserRows.filter { var r = $0.1; r.kind = true; return r.all }.count
     print("variant-A ceiling (parser day/hasDay/hour/min/dur/title all right, kind ignored): \(ceiling)/\(suite.cases.count)")
@@ -183,6 +186,7 @@ func run() async {
             summarize(label, rows[label] ?? [], times: label == order[0] ? times : [])
             if label == order[0] { for lang in ["zh", "en", "mixed"] { summarize("  [\(lang)]", (rows[label] ?? []).filter { $0.0.lang == lang }) } }
             for lv in levels { summarize("  [L\(lv)] \(label.prefix(12))", (rows[label] ?? []).filter { $0.0.level == lv }) }
+            for sc in scenarios { summarize("  <\(sc.prefix(14))> \(label.prefix(6))", (rows[label] ?? []).filter { $0.0.scenario == sc }) }
         }
         print("returned nil (would fall back): \(fallbacks);  errors: \(errors.isEmpty ? "none" : "\(errors)")")
         print("Failures (any trial, first label shown per trial plus extras):")

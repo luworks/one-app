@@ -215,7 +215,7 @@ enum CaptureParser {
             minute = Int(m[2] ?? "") ?? 0
         } else if let m = take(lead + #"\b(\d{1,2})\s*(am|pm)\b"#, from: &text) {
             hour = adjust(Int(m[0] ?? ""), period: m[1])
-        } else if let m = take(#"(凌晨|清晨|早晨|上午|早上|中午|下午|傍晚|晚上)?\s*(\d{1,2})\s*点\s*(半|(\d{1,2})\s*分?)?\s*(之?前)?"#, from: &text) {
+        } else if let m = take(#"(凌晨|清晨|早晨|上午|早上|中午|下午|傍晚|晚上)?\s*(\d{1,2})\s*点\s*(半|(\d{1,2})\s*分?)?\s*整?\s*(之?前)?"#, from: &text) {
             hour = adjust(Int(m[1] ?? ""), period: m[0] ?? defaultPeriod)
             minute = m[2] == "半" ? 30 : Int(m[3] ?? "") ?? 0
             // "下午5点前" with no day is a deadline today.
