@@ -339,8 +339,10 @@ final class RemindersSync {
                 fp["list:" + id] = Self.fingerprint(of: local)
                 listBase.insert(id)
             } else {
+                // Apple's default list goes first, like in Apple Reminders.
+                let isDefault = cal.calendarIdentifier == store.defaultCalendarForNewReminders()?.calendarIdentifier
                 let o = OneList(name: cal.title, colorIndex: Self.colorIndex(for: cal.cgColor), symbol: "list.bullet",
-                                order: (lists.map(\.order).max() ?? -1) + 1)
+                                order: isDefault ? (lists.map(\.order).min() ?? 0) - 1 : (lists.map(\.order).max() ?? -1) + 1)
                 o.externalID = id
                 context.insert(o)
                 lists.append(o)
@@ -391,6 +393,11 @@ final class RemindersSync {
                 fp[r.id] = Self.fingerprint(of: t) == r.fingerprint ? r.fingerprint : nil
                 base.insert(r.id)
             }
+        }
+
+        // Tasks with no list belong to Apple's default list: name it, so the default list is one row, not two.
+        if let defaultTitle = defaultCal?.title {
+            for t in tasks where t.listName.isEmpty { t.listName = defaultTitle }
         }
 
         // Apple -> app (new reminders and Apple-side edits)

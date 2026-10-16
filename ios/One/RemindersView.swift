@@ -165,7 +165,7 @@ struct RemindersView: View {
         .sheet(isPresented: $addingList) { ListEditor() }
         .sheet(item: $editing) { ListEditor(list: $0) }
         .deleteListAlert($pendingDelete)
-        .task { await RemindersSync.shared.connectIfFirstRun() }
+        .task { await FirstRun.reminders() }
         .onChange(of: path.count) { _, n in isPushed = n > 0 }
         .onAppear { isPushed = !path.isEmpty }
         .onDisappear { isPushed = false }

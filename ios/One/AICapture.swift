@@ -13,19 +13,45 @@ import FoundationModels
 enum AICapture {
     /// True when the on-device model can answer right now. Cheap; call it per request.
     static var isAvailable: Bool {
-        #if canImport(FoundationModels)
+        #if targetEnvironment(simulator)
+        return false   // the simulator has no on-device model; asking it would only hang
+        #elseif canImport(FoundationModels)
         if #available(iOS 26, *) { return OnDeviceCapture.isAvailable }
-        #endif
         return false
+        #else
+        return false
+        #endif
     }
 
     /// Up to 5 proposals for one line, in the order mentioned, or nil when the caller should fall back to the
     /// rule parser (model unavailable, generation failed, nothing usable came back).
     static func propose(_ text: String, now: Date = .now, calendar: Calendar = .current) async -> [Capture]? {
         #if canImport(FoundationModels)
-        if #available(iOS 26, *) { return await OnDeviceCapture.propose(text, now: now, calendar: calendar) }
+        if #available(iOS 26, *) {
+            // The model can stall (still warming up, busy): after 8 seconds the caller falls back to the rule parser.
+            return await withTimeout(.seconds(8)) { await OnDeviceCapture.propose(text, now: now, calendar: calendar) }
+        }
         #endif
         return nil
+    }
+
+    /// Whichever finishes first: the work, or nil when the time is up (the late result is dropped).
+    private static func withTimeout(_ limit: Duration, _ work: @escaping @Sendable () async -> [Capture]?) async -> [Capture]? {
+        await withCheckedContinuation { (cont: CheckedContinuation<[Capture]?, Never>) in
+            let once = Once(cont)
+            Task { once.resume(await work()) }
+            Task { try? await Task.sleep(for: limit); once.resume(nil) }
+        }
+    }
+
+    private final class Once: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cont: CheckedContinuation<[Capture]?, Never>?
+        init(_ cont: CheckedContinuation<[Capture]?, Never>) { self.cont = cont }
+        func resume(_ value: [Capture]?) {
+            lock.lock(); let c = cont; cont = nil; lock.unlock()
+            c?.resume(returning: value)
+        }
     }
 }
 

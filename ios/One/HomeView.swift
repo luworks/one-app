@@ -172,7 +172,7 @@ struct HomeView: View {
             SampleData.insertIfNeeded(context)
             ListActions.ensureLists(in: context)
             Self.seedUITestReminder(context)
-            await CalendarSync.shared.connectIfFirstRun()
+            await FirstRun.calendar()
         }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {

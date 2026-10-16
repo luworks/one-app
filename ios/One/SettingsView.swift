@@ -20,6 +20,9 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.showAlarms) private var showAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpToNow = true
 
+    @State private var calendarOn = false
+    @State private var remindersOn = false
+    @State private var loaded = false
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var askingFirst = false
     @State private var askingSecond = false
@@ -28,23 +31,21 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle(isOn: Binding(get: { CalendarSync.shared.isOn },
-                                         set: { on in Task { await CalendarSync.shared.setEnabled(on) } })) {
-                        Label("Apple Calendar", systemImage: "calendar")
-                    }
-                    Toggle(isOn: Binding(get: { RemindersSync.shared.isConnected },
-                                         set: { on in
-                                             if on { Task { await RemindersSync.shared.connect() } } else { RemindersSync.shared.disconnect() }
-                                         })) {
-                        Label("Apple Reminders", systemImage: "checklist")
-                    }
+                    Toggle(isOn: $calendarOn) { Label("Apple Calendar", systemImage: "calendar") }
+                    Toggle(isOn: $remindersOn) { Label("Apple Reminders", systemImage: "checklist") }
                     statusRow(title: "Alarms", icon: "alarm",
                               value: Ringer.isAvailable ? (Ringer.isDenied ? "Not allowed" : "Allowed") : "Needs iOS 26",
                               showsSettings: Ringer.isDenied)
                     statusRow(title: "Notifications", icon: "bell.badge",
                               value: notificationStatus == .authorized || notificationStatus == .provisional ? "Allowed"
-                                  : (notificationStatus == .denied ? "Not allowed" : "Not asked yet"),
-                              showsSettings: notificationStatus == .denied)
+                                  : (notificationStatus == .denied ? "Not allowed" : "Off"),
+                              showsSettings: notificationStatus == .denied,
+                              turnOn: notificationStatus == .notDetermined ? {
+                                  Task {
+                                      await Reminders.shared.requestPermission()
+                                      notificationStatus = await Reminders.shared.authorizationStatus()
+                                  }
+                              } : nil)
                 } header: {
                     Text("Apple Calendar, Reminders and Alarms")
                 } footer: {
@@ -79,7 +80,26 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .task { notificationStatus = await Reminders.shared.authorizationStatus() }
+            .task {
+                notificationStatus = await Reminders.shared.authorizationStatus()
+                calendarOn = CalendarSync.shared.isOn
+                remindersOn = RemindersSync.shared.isConnected
+                loaded = true
+            }
+            .onChange(of: calendarOn) { _, on in
+                guard loaded, on != CalendarSync.shared.isOn else { return }
+                Task {
+                    await CalendarSync.shared.setEnabled(on)
+                    calendarOn = CalendarSync.shared.isOn   // stays off if access was refused
+                }
+            }
+            .onChange(of: remindersOn) { _, on in
+                guard loaded, on != RemindersSync.shared.isConnected else { return }
+                Task {
+                    if on { await RemindersSync.shared.connect() } else { RemindersSync.shared.disconnect() }
+                    remindersOn = RemindersSync.shared.isConnected
+                }
+            }
             .confirmationDialog("Delete all data stored in Today?", isPresented: $askingFirst, titleVisibility: .visible) {
                 Button("Continue…", role: .destructive) { askingSecond = true }
                 Button("Cancel", role: .cancel) {}
@@ -95,11 +115,13 @@ struct SettingsView: View {
         }
     }
 
-    private func statusRow(title: String, icon: String, value: String, showsSettings: Bool) -> some View {
+    private func statusRow(title: String, icon: String, value: String, showsSettings: Bool, turnOn: (() -> Void)? = nil) -> some View {
         HStack {
             Label(title, systemImage: icon)
             Spacer()
-            if showsSettings {
+            if let turnOn {
+                Button("Turn On", action: turnOn).font(.subheadline)
+            } else if showsSettings {
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                 }
