@@ -199,4 +199,75 @@ enum AlarmPlan {
         guard weekdays.contains(calendar.component(.weekday, from: day)) else { return nil }
         return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
     }
+
+    // MARK: Apple Clock wording
+
+    /// Clock's name for an alarm with no label.
+    static let defaultLabel = "Alarm"
+
+    /// Weekdays in the order the calendar shows them (Sunday first in the US, Monday first in most of Europe).
+    static func orderedWeekdays(calendar: Calendar = .current) -> [Int] {
+        (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 }
+    }
+
+    /// The repeat value the way Clock words it: "Never", "Every day", "Weekdays", "Weekends",
+    /// "Every Monday", or "Every Mon, Wed" for several days.
+    static func repeatValue(weekdays: [Int], calendar: Calendar = .current) -> String {
+        let set = Set(weekdays)
+        if set.isEmpty { return "Never" }
+        if set.count == 7 { return "Every day" }
+        if set == [2, 3, 4, 5, 6] { return "Weekdays" }
+        if set == [1, 7] { return "Weekends" }
+        let days = orderedWeekdays(calendar: calendar).filter(set.contains)
+        if days.count == 1 { return "Every " + calendar.weekdaySymbols[days[0] - 1] }
+        return "Every " + days.map { calendar.shortWeekdaySymbols[$0 - 1] }.joined(separator: ", ")
+    }
+
+    /// The line under the time in the list: the label (or "Alarm"), then the repeat when there is one.
+    /// "Alarm", "Alarm, Every day", "Wake up, Weekdays".
+    static func rowSubtitle(label: String, weekdays: [Int], calendar: Calendar = .current) -> String {
+        let name = label.trimmingCharacters(in: .whitespaces)
+        let head = name.isEmpty ? defaultLabel : name
+        return weekdays.isEmpty ? head : head + ", " + repeatValue(weekdays: weekdays, calendar: calendar)
+    }
+
+    /// The time the way the user's clock shows it, split so the AM/PM can be set small:
+    /// ("7:05", "AM") on a 12-hour clock, ("07:05", nil) on a 24-hour one.
+    static func timeParts(hour: Int, minute: Int, locale: Locale = .current) -> (time: String, suffix: String?) {
+        let pattern = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: locale) ?? "h a"
+        let mm = String(format: "%02d", minute)
+        guard pattern.contains("a") else { return (String(format: "%02d:", hour) + mm, nil) }
+        let f = DateFormatter()
+        f.locale = locale
+        let h = hour % 12 == 0 ? 12 : hour % 12
+        return ("\(h):" + mm, hour < 12 ? f.amSymbol : f.pmSymbol)
+    }
+
+    /// When an alarm will next ring, or nil when it won't: a repeating alarm at its next weekday, a
+    /// one-time alarm at its next occurrence after it was last switched on, unless that has already passed.
+    static func nextRing(hour: Int, minute: Int, weekdays: [Int], switchedOn: Date, now: Date, calendar: Calendar = .current) -> Date? {
+        if weekdays.isEmpty {
+            guard let ring = nextFire(hour: hour, minute: minute, weekdays: [], after: switchedOn, calendar: calendar), ring > now else { return nil }
+            return ring
+        }
+        return nextFire(hour: hour, minute: minute, weekdays: weekdays, after: now, calendar: calendar)
+    }
+
+    /// "7 hr 12 min", "12 min", "2 days 3 hr": how long until `date`, rounded up to the minute.
+    static func intervalText(from now: Date, to date: Date) -> String {
+        let minutes = max(1, Int((date.timeIntervalSince(now) / 60).rounded(.up)))
+        let days = minutes / 1440, hours = minutes % 1440 / 60, mins = minutes % 60
+        if days > 0 { return "\(days) \(days == 1 ? "day" : "days")" + (hours > 0 ? " \(hours) hr" : "") }
+        if hours > 0 { return "\(hours) hr" + (mins > 0 ? " \(mins) min" : "") }
+        return "\(mins) min"
+    }
+
+    /// "Next alarm in 7 hr 12 min", or nil when nothing will ring.
+    static func nextAlarmText(rings: [Date], now: Date) -> String? {
+        guard let next = rings.filter({ $0 > now }).min() else { return nil }
+        return "Next alarm in " + intervalText(from: now, to: next)
+    }
+
+    /// What Clock calls "Snooze": nine minutes.
+    static let snoozeSeconds: TimeInterval = 9 * 60
 }

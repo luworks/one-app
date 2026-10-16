@@ -90,8 +90,7 @@ final class JourneyTests: XCTestCase {
         tab("Alarms")
         tap(app.buttons["New"])   // + adds an alarm on the Alarms page
         tap(app.buttons["Save"])
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Alarm '")).firstMatch.waitForExistence(timeout: 5),
-                      "the alarm is listed on the Alarms page")
+        XCTAssertTrue(app.buttons["alarm.row"].waitForExistence(timeout: 5), "the alarm is listed on the Alarms page")
         tab("Today")
         // The list is lazy: scroll until the row has been created.
         let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Alarm ' AND label CONTAINS ' at '")).firstMatch
