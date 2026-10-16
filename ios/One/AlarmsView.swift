@@ -2,8 +2,9 @@ import SwiftUI
 import SwiftData
 import UserNotifications
 
-/// The Alarms tab, modeled on the Alarms tab of Apple's Clock app: "Edit" and "+" in the bar, a large
-/// "Alarms" title, big light times with a small AM/PM and a green switch per row. Adding is the app-wide + at the bottom right.
+/// The Alarms tab, modeled on the Alarms tab of Apple's Clock app: big light times with a small AM/PM and a green switch per row.
+/// No Edit button or large title (the app's top bar already says "Alarms"); swipe left or long-press a row to delete.
+/// Adding is the app-wide + at the bottom right.
 /// Alarms are real: each one is an AlarmKit alarm (they ring through Silent and Focus). The tasks and events
 /// you marked "Ring as alarm" follow in their own section. Reminders and event alerts live in Apple Reminders / Calendar.
 struct AlarmsView: View {
@@ -16,19 +17,17 @@ struct AlarmsView: View {
     @State private var notificationStatus: UNAuthorizationStatus = .authorized
     @State private var editing: OneAlarm?
     @State private var adding = false
-    @State private var editMode: EditMode = .inactive
     @State private var center = AlarmCenter.shared
 
     var body: some View {
         VStack(spacing: 0) {
-            barButtons
             List {
-                titleRow
+                nextAlarmRow
                 authorizationBanner
                 Section {
                     if alarms.isEmpty { emptyState }
                     ForEach(alarms) { alarm in
-                        AlarmRow(alarm: alarm, state: center.state(of: alarm), isEditing: editMode.isEditing) { editing = alarm }
+                        AlarmRow(alarm: alarm, state: center.state(of: alarm)) { editing = alarm }
                             .contextMenu {
                                 Button { editing = alarm } label: { Label("Edit", systemImage: "pencil") }
                                 Button(role: .destructive) { delete(alarm) } label: { Label("Delete", systemImage: "trash") }
@@ -49,12 +48,10 @@ struct AlarmsView: View {
                 }
             }
             .listStyle(.plain)
-            .environment(\.editMode, $editMode)
         }
         .background(Color(.systemBackground))
         .sheet(item: $editing) { AlarmEditor(alarm: $0) }
         .sheet(isPresented: $adding) { AlarmEditor() }
-        .onChange(of: alarms.isEmpty) { _, empty in if empty { editMode = .inactive } }
         .task { await center.watch(context: context) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -64,45 +61,18 @@ struct AlarmsView: View {
         }
     }
 
-    // MARK: Bar and title
+    // MARK: Next alarm
 
-    /// Clock's bar: Edit (Done) on the left. The + is the app-wide one at the bottom right. Drawn here, like the Reminders tab, so it sits
-    /// under the app's own top bar and keeps its size at the largest text sizes.
-    private var barButtons: some View {
-        HStack {
-            Button(editMode.isEditing ? "Done" : "Edit") {
-                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
-            }
-            .font(.body)
-            .foregroundStyle(alarms.isEmpty ? Color.secondary : Color.accentColor)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 40)
-            .glassCapsule()
-            .disabled(alarms.isEmpty)
-            .accessibilityIdentifier("alarms.edit")
-            Spacer()
+    /// "Next alarm in 7 hr 12 min" while an alarm is on. The "Alarms" title is the app's top bar, so it isn't repeated here.
+    @ViewBuilder private var nextAlarmRow: some View {
+        if let hint = nextAlarmHint {
+            Text(hint)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("alarms.next")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .plainRow(top: 4, bottom: 8)
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 4)
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-    }
-
-    /// The large title, with "Next alarm in 7 hr 12 min" under it while an alarm is on.
-    private var titleRow: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Alarms")
-                .font(.largeTitle.weight(.bold))
-                .accessibilityAddTraits(.isHeader)
-            if let hint = nextAlarmHint {
-                Text(hint)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("alarms.next")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .plainRow(top: 4, bottom: 8)
     }
 
     // MARK: Data

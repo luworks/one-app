@@ -13,6 +13,8 @@ final class ChatThread {
     var updatedAt: Date = Date.now
     /// JSON of `[ChatMessage]`. Kept as plain data so the stored shape never depends on a Swift type.
     var messagesData: Data = Data()
+    /// Archived conversations leave the main list and wait under "Archived" in the sidebar.
+    var archived: Bool = false
 
     init(title: String, messages: [ChatMessage], createdAt: Date = .now, updatedAt: Date = .now, id: UUID = UUID()) {
         self.id = id
@@ -35,6 +37,7 @@ final class ChatThread {
     func copy() -> ChatThread {
         let c = ChatThread(title: title, messages: [], createdAt: createdAt, updatedAt: updatedAt, id: id)
         c.messagesData = messagesData
+        c.archived = archived
         return c
     }
 }

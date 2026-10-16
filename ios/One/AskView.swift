@@ -185,6 +185,8 @@ struct AskView: View {
         if let thread {
             thread.messages = messages
             thread.updatedAt = .now
+            // Continuing an archived conversation brings it back to the main list.
+            thread.archived = false
         } else {
             let created = ChatThread(title: ConversationHistory.title(from: first.text), messages: messages)
             context.insert(created)
