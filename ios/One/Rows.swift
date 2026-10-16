@@ -11,9 +11,42 @@ struct TimeColumn: View {
     }
 }
 
+/// A row's title with its detail caption. Both sit on one line when they fit; otherwise the detail drops below.
+/// Long titles stop at `titleLines` so one item can't fill the screen (the full title is in Show Details).
+struct TitleDetail<Detail: View>: View {
+    let title: Text
+    var titleLines: Int? = 2
+    @ViewBuilder var detail: Detail
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                title.lineLimit(1)
+                detail
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                title.lineLimit(titleLines)
+                detail
+            }
+        }
+    }
+}
+
+/// The calendar color bar beside an event; it stretches to the height of the row's text.
+struct CalendarBar: View {
+    let color: Color
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(color)
+            .frame(width: 4)
+            .frame(minHeight: 18, maxHeight: .infinity)
+    }
+}
+
 /// Events are fixed: no move actions here. `start` is the occurrence shown (repeating events).
 struct EventRow: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dynamicTypeSize) private var typeSize
     let event: OneEvent
     var start: Date? = nil
     @State private var editing = false
@@ -35,24 +68,23 @@ struct EventRow: View {
             if !event.isAllDay {
                 TimeColumn(date: start ?? event.start)
             }
-            RoundedRectangle(cornerRadius: 2)
-                .fill(CalendarSync.shared.color(forExternalID: event.externalID) ?? Color.blue)
-                .frame(width: 4, height: 34)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(event.title)
+            CalendarBar(color: CalendarSync.shared.color(forExternalID: event.externalID) ?? Color.blue)
+            TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
                 Label(detail, systemImage: "lock.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .onTapGesture { editing = true }
         .sheet(isPresented: $editing) { EventEditor(event: event) }
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+        .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(EventSpeech.label(title: event.title, start: start ?? event.start,
                                               end: (start ?? event.start).addingTimeInterval(event.duration), isAllDay: event.isAllDay,
@@ -83,6 +115,8 @@ struct TaskRow: View {
     var showsTime = false
     /// Add the list name to the detail line. Off inside a list, where it is the title.
     var showsList = true
+    /// Day view: detail on the title's line when it fits, titles capped at two lines, tighter insets.
+    var compact = false
     @State private var editing = false
 
     var body: some View {
@@ -101,15 +135,12 @@ struct TaskRow: View {
             .buttonStyle(.borderless)
             .sensoryFeedback(.success, trigger: task.isDone) { _, done in done }
             .accessibilityLabel(task.isDone ? "Reopen \(task.title)" : "Complete \(task.title)")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(task.title)
-                    .strikethrough(task.isDone)
-                    .foregroundStyle(task.isDone ? .secondary : .primary)
-                if let detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(task.isOverdue ? Color.red : Color.secondary)
-                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+            if compact {
+                TitleDetail(title: title, titleLines: typeSize.isAccessibilitySize ? nil : 2) { detailText }
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    title
+                    detailText
                 }
             }
             Spacer(minLength: 0)
@@ -125,7 +156,7 @@ struct TaskRow: View {
         .onTapGesture { editing = true }
         .sheet(isPresented: $editing) { TaskEditor(task: task) }
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+        .listRowInsets(EdgeInsets(top: compact ? 1 : 4, leading: 20, bottom: compact ? 1 : 4, trailing: 20))
         // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
         // long-press for the menu. (Delete has an Undo toast.)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -152,6 +183,21 @@ struct TaskRow: View {
             Button(role: .destructive) { TaskActions.delete(task, context: context, toast: toast) } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+    }
+
+    private var title: Text {
+        Text(task.title)
+            .strikethrough(task.isDone)
+            .foregroundStyle(task.isDone ? .secondary : .primary)
+    }
+
+    @ViewBuilder private var detailText: some View {
+        if let detail {
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(task.isOverdue ? Color.red : Color.secondary)
+                .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
         }
     }
 
@@ -187,9 +233,9 @@ struct AlarmMarkRow: View {
                 .foregroundStyle(alarm.isOn ? Color.primary : Color.secondary)
             Spacer(minLength: 0)
         }
-        .frame(minHeight: 36)
+        .frame(minHeight: 32)
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
+        .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Alarm \(alarm.label) at \(date.formatted(date: .omitted, time: .shortened))")
     }
@@ -205,7 +251,7 @@ struct NowRow: View {
             Rectangle().fill(Color.red).frame(height: 1)
         }
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
     }
 }
 

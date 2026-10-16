@@ -62,8 +62,34 @@ enum ReminderTarget: Hashable {
     case defaultList
 }
 
-/// The Reminders tab: smart-list cards, My Lists, Add List. Everything else is pushed inside this stack,
-/// below the app's own top bar.
+/// Which smart lists show at the top of Reminders, and in what order (Edit on the Reminders tab).
+/// Stored as comma-separated raw values so it fits in `@AppStorage`.
+struct SmartListLayout {
+    static let orderKey = "reminders.smartOrder"
+    static let hiddenKey = "reminders.smartHidden"
+
+    var order: [SmartList]
+    var hidden: Set<SmartList>
+
+    init(order raw: String, hidden rawHidden: String) {
+        var seen = Set<SmartList>()
+        var o: [SmartList] = []
+        for s in raw.split(separator: ",").compactMap({ SmartList(rawValue: String($0)) }) where seen.insert(s).inserted {
+            o.append(s)
+        }
+        // Smart lists added in a later version show up at the end.
+        order = o + SmartList.allCases.filter { !seen.contains($0) }
+        hidden = Set(rawHidden.split(separator: ",").compactMap { SmartList(rawValue: String($0)) })
+    }
+
+    var visible: [SmartList] { order.filter { !hidden.contains($0) } }
+    var orderString: String { order.map(\.rawValue).joined(separator: ",") }
+    var hiddenString: String { hidden.map(\.rawValue).sorted().joined(separator: ",") }
+}
+
+/// The Reminders tab: pinned cards (smart lists and pinned lists), My Lists, Add List. Everything else is
+/// pushed inside this stack, below the app's own top bar. Edit (top right) chooses which smart lists are
+/// pinned and in what order, reorders My Lists and pins or deletes them, like Apple Reminders.
 struct RemindersView: View {
     /// True while a list screen is pushed, so the shell can leave the left-edge swipe to "back".
     @Binding var isPushed: Bool
@@ -73,73 +99,48 @@ struct RemindersView: View {
     @Query(sort: \OneList.order) private var lists: [OneList]
     @Query private var tasks: [OneTask]
 
+    @AppStorage(SmartListLayout.orderKey) private var smartOrder = ""
+    @AppStorage(SmartListLayout.hiddenKey) private var smartHidden = ""
+    /// False until the user first drags My Lists; until then numbered lists ("01 工作") sort by their number.
+    @AppStorage("reminders.listsReordered") private var listsReordered = false
+
     @State private var path: [ReminderTarget] = []
     @State private var addingList = false
     @State private var editing: OneList?
     @State private var pendingDelete: PendingListDeletion?
+    @State private var editMode: EditMode = .inactive
 
     private let sync = RemindersSync.shared
+
+    private var isEditing: Bool { editMode.isEditing }
+
+    /// My Lists in display order: the user's own order once they have dragged, else numbered lists first by number.
+    private var sortedLists: [OneList] {
+        guard !listsReordered else { return lists }
+        return lists.enumerated().sorted { a, b in
+            let na = ListName.number(a.element.name), nb = ListName.number(b.element.name)
+            switch (na, nb) {
+            case let (x?, y?) where x != y: return x < y
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return a.offset < b.offset
+            }
+        }.map(\.element)
+    }
+    private var layout: SmartListLayout { SmartListLayout(order: smartOrder, hidden: smartHidden) }
 
     var body: some View {
         let stats = Stats(tasks: tasks)
         NavigationStack(path: $path) {
             List {
-                Section {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: typeSize.isAccessibilitySize ? 1 : 2),
-                              spacing: 12) {
-                        ForEach(SmartList.allCases) { smart in
-                            SmartListCard(list: smart, count: stats.smart[smart] ?? 0) { path.append(.smart(smart)) }
-                        }
-                    }
-                    .padding(.top, 8)
+                if isEditing {
+                    smartListEditor
+                } else {
+                    pinnedCards(stats)
                 }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-
-                Section {
-                    if showsDefaultList(stats) {
-                        NavigationLink(value: ReminderTarget.defaultList) {
-                            ListRow(name: "Reminders", color: ReminderPalette.color(6), symbol: "list.bullet", count: stats.open[""] ?? 0)
-                        }
-                        .accessibilityIdentifier("list.default")
-                    }
-                    ForEach(lists) { list in
-                        NavigationLink(value: ReminderTarget.list(list.persistentModelID)) {
-                            ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol,
-                                    count: stats.open[list.name] ?? 0)
-                        }
-                        .accessibilityIdentifier("list.\(list.name)")
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) { askDelete(list) } label: { Label("Delete", systemImage: "trash") }
-                                .tint(.red)
-                            Button { editing = list } label: { Label("Info", systemImage: "info.circle") }
-                                .tint(Color(.systemGray))
-                        }
-                        .contextMenu {
-                            Button { editing = list } label: { Label("Show List Info", systemImage: "info.circle") }
-                            Button(role: .destructive) { askDelete(list) } label: { Label("Delete", systemImage: "trash") }
-                        }
-                    }
-                } header: {
-                    Text("My Lists")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Color(.label))
-                        .textCase(nil)
-                        .accessibilityAddTraits(.isHeader)
-                }
-
-                Section {
-                    HStack {
-                        Spacer()
-                        Button("Add List") { addingList = true }
-                            .font(.body)
-                            .buttonStyle(.borderless)
-                            .accessibilityIdentifier("addList")
-                    }
-                    .listRowBackground(Color.clear)
-
-                    if showsAccessOff {
+                myLists(stats)
+                if showsAccessOff {
+                    Section {
                         Button {
                             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                         } label: {
@@ -149,12 +150,16 @@ struct RemindersView: View {
                         }
                         .listRowBackground(Color.clear)
                     }
+                    .listSectionSeparator(.hidden)
                 }
-                .listSectionSeparator(.hidden)
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
+            // Room to scroll the last row clear of the app's floating bottom bar (search, Ask AI, +): the bar's
+            // safe-area inset doesn't reach this list through the NavigationStack, so the rows ran under it.
+            .contentMargins(.bottom, 96, for: .scrollContent)
+            .environment(\.editMode, $editMode)
             // The app's own top bar is above; this is the title the pushed screen's back button shows.
             .navigationTitle("Lists")
             .toolbar(.hidden, for: .navigationBar)
@@ -168,7 +173,204 @@ struct RemindersView: View {
         .task { await FirstRun.reminders() }
         .onChange(of: path.count) { _, n in isPushed = n > 0 }
         .onAppear { isPushed = !path.isEmpty }
-        .onDisappear { isPushed = false }
+        .onDisappear {
+            isPushed = false
+            editMode = .inactive
+        }
+    }
+
+    // MARK: Top
+
+    /// Edit / Done, top right like Apple's (the app's own top bar replaces the navigation bar here).
+    private var editButton: some View {
+        HStack {
+            Spacer()
+            Button(isEditing ? "Done" : "Edit") {
+                withAnimation(.snappy) { editMode = isEditing ? .inactive : .active }
+            }
+            .fontWeight(isEditing ? .semibold : .regular)
+            .buttonStyle(.borderless)
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("reminders.edit")
+        }
+    }
+
+    /// The pinned cards: the smart lists that are shown, then pinned lists.
+    private func pinnedCards(_ stats: Stats) -> some View {
+        let pinned = sortedLists.filter(\.pinned)
+        return Section {
+            editButton
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            if !layout.visible.isEmpty || !pinned.isEmpty {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: typeSize.isAccessibilitySize ? 1 : 2),
+                          spacing: 12) {
+                    ForEach(layout.visible) { smart in
+                        ListCard(title: smart.title, color: smart.color, symbol: smart.symbol, showsDay: smart == .today,
+                                 count: stats.smart[smart] ?? 0) { path.append(.smart(smart)) }
+                            .accessibilityIdentifier("smart.\(smart.rawValue)")
+                    }
+                    ForEach(pinned) { list in
+                        ListCard(title: ListName.display(list.name), color: list.color, symbol: list.symbol,
+                                 count: stats.open[list.name] ?? 0) { path.append(.list(list.persistentModelID)) }
+                            .accessibilityIdentifier("pinned.\(list.name)")
+                            .contextMenu {
+                                Button { ListActions.togglePinned(list, in: context) } label: { Label("Unpin", systemImage: "pin.slash") }
+                                Button { editing = list } label: { Label("Show List Info", systemImage: "info.circle") }
+                            }
+                    }
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+        }
+    }
+
+    /// Edit mode: tap the circle to pin or unpin a smart list, drag to reorder (Apple Reminders' Edit Lists).
+    private var smartListEditor: some View {
+        Section {
+            editButton
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .moveDisabled(true)
+            ForEach(layout.order) { smart in
+                let shown = !layout.hidden.contains(smart)
+                HStack(spacing: 12) {
+                    Button { toggle(smart) } label: {
+                        Image(systemName: shown ? "checkmark.circle.fill" : "circle")
+                            .font(.title2)
+                            .foregroundStyle(shown ? Color(.systemBlue) : Color(.tertiaryLabel))
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(smart.title)
+                    .accessibilityValue(shown ? "Pinned" : "Not pinned")
+                    .accessibilityIdentifier("smartToggle.\(smart.rawValue)")
+                    ListGlyph(color: smart.color, symbol: smart.symbol, size: 30)
+                    Text(smart.title)
+                }
+                .frame(minHeight: 36)
+            }
+            .onMove { from, to in
+                var l = layout
+                l.order.move(fromOffsets: from, toOffset: to)
+                smartOrder = l.orderString
+            }
+        } footer: {
+            Text("Checked lists are pinned to the top. Pin your own lists with the pin button below.")
+        }
+    }
+
+    private func toggle(_ smart: SmartList) {
+        var l = layout
+        if l.hidden.contains(smart) { l.hidden.remove(smart) } else { l.hidden.insert(smart) }
+        withAnimation(.snappy) { smartHidden = l.hiddenString }
+    }
+
+    // MARK: My Lists
+
+    private func myLists(_ stats: Stats) -> some View {
+        Section {
+            if showsDefaultList(stats) {
+                Group {
+                    if isEditing {
+                        ListRow(name: "Reminders", color: ReminderPalette.color(6), symbol: "list.bullet", count: stats.open[""] ?? 0)
+                    } else {
+                        NavigationLink(value: ReminderTarget.defaultList) {
+                            ListRow(name: "Reminders", color: ReminderPalette.color(6), symbol: "list.bullet", count: stats.open[""] ?? 0)
+                        }
+                    }
+                }
+                .moveDisabled(true)
+                .deleteDisabled(true)
+                .accessibilityIdentifier("list.default")
+            }
+            // .onMove also lets a row be long-pressed and dragged outside Edit mode (iOS 16+), like Apple Reminders:
+            // a long press opens the context menu, and moving the finger without lifting picks the row up.
+            let ordered = sortedLists
+            ForEach(ordered) { list in
+                listRow(list, stats: stats)
+            }
+            .onMove { from, to in
+                var reordered = ordered
+                reordered.move(fromOffsets: from, toOffset: to)
+                ListActions.reorder(reordered, in: context)
+                listsReordered = true
+            }
+            .onDelete { offsets in
+                if let i = offsets.first, ordered.indices.contains(i) { askDelete(ordered[i]) }
+            }
+
+            // An inline row at the end of the list, not a floating button: the app's own bottom bar owns
+            // the bottom of the screen, so this stays visible and tappable.
+            Button { addingList = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 26))
+                        .frame(width: 30)
+                    Text("Add List")
+                }
+                .frame(minHeight: 36)
+            }
+            .moveDisabled(true)
+            .deleteDisabled(true)
+            .accessibilityIdentifier("addList")
+        } header: {
+            Text("My Lists")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Color(.label))
+                .textCase(nil)
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    @ViewBuilder
+    private func listRow(_ list: OneList, stats: Stats) -> some View {
+        let row = ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol,
+                          count: stats.open[list.name] ?? 0, pinned: list.pinned)
+        if isEditing {
+            HStack(spacing: 8) {
+                row
+                Button { ListActions.togglePinned(list, in: context) } label: {
+                    Image(systemName: list.pinned ? "pin.fill" : "pin")
+                        .foregroundStyle(list.pinned ? Color(.systemOrange) : Color(.tertiaryLabel))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(list.pinned ? "Unpin \(ListName.display(list.name))" : "Pin \(ListName.display(list.name))")
+                .accessibilityIdentifier("pin.\(list.name)")
+                Button { editing = list } label: {
+                    Image(systemName: "info.circle").frame(width: 32, height: 32)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Show List Info")
+            }
+            .accessibilityIdentifier("list.\(list.name)")
+        } else {
+            NavigationLink(value: ReminderTarget.list(list.persistentModelID)) { row }
+                .accessibilityIdentifier("list.\(list.name)")
+                .swipeActions(edge: .leading) {
+                    Button { ListActions.togglePinned(list, in: context) } label: {
+                        Label(list.pinned ? "Unpin" : "Pin", systemImage: list.pinned ? "pin.slash.fill" : "pin.fill")
+                    }
+                    .tint(.orange)
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) { askDelete(list) } label: { Label("Delete", systemImage: "trash") }
+                        .tint(.red)
+                    Button { editing = list } label: { Label("Info", systemImage: "info.circle") }
+                        .tint(Color(.systemGray))
+                }
+                .contextMenu {
+                    Button { editing = list } label: { Label("Show List Info", systemImage: "info.circle") }
+                    Button { ListActions.togglePinned(list, in: context) } label: {
+                        Label(list.pinned ? "Unpin" : "Pin to Top", systemImage: list.pinned ? "pin.slash" : "pin")
+                    }
+                    Button(role: .destructive) { askDelete(list) } label: { Label("Delete", systemImage: "trash") }
+                }
+        }
     }
 
     /// Only when the user said "Don't Allow": the first request is iOS's own prompt, shown when this tab first opens.
@@ -200,9 +402,12 @@ struct RemindersView: View {
     }
 }
 
-/// A smart-list card: colored circle top-left, big count top-right, title below.
-private struct SmartListCard: View {
-    let list: SmartList
+/// A pinned card: colored circle top-left, big count top-right, title below. Today's circle shows the date.
+private struct ListCard: View {
+    let title: String
+    let color: Color
+    let symbol: String
+    var showsDay = false
     let count: Int
     var action: () -> Void
 
@@ -212,15 +417,15 @@ private struct SmartListCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top) {
-                    if list == .today {
-                        Circle().fill(list.color).frame(width: glyph, height: glyph)
+                    if showsDay {
+                        Circle().fill(color).frame(width: glyph, height: glyph)
                             .overlay {
                                 Text("\(Calendar.current.component(.day, from: .now))")
                                     .font(.system(size: glyph * 0.5, weight: .bold, design: .rounded))
                                     .foregroundStyle(.white)
                             }
                     } else {
-                        ListGlyph(color: list.color, symbol: list.symbol, size: glyph)
+                        ListGlyph(color: color, symbol: symbol, size: glyph)
                     }
                     Spacer(minLength: 4)
                     Text("\(count)")
@@ -230,19 +435,19 @@ private struct SmartListCard: View {
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
                 }
-                Text(list.title)
+                Text(title)
                     .font(.headline)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(list.title), \(reminderCountText(count))")
+            .accessibilityLabel("\(title), \(reminderCountText(count))")
         }
         .buttonStyle(CardPress())
-        .accessibilityIdentifier("smart.\(list.rawValue)")
     }
 }
 
@@ -264,6 +469,7 @@ private struct ListRow: View {
     let color: Color
     let symbol: String
     let count: Int
+    var pinned = false
 
     @ScaledMetric private var glyph = 30
 
@@ -271,6 +477,11 @@ private struct ListRow: View {
         HStack(spacing: 12) {
             ListGlyph(color: color, symbol: symbol, size: glyph)
             Text(name)
+            if pinned {
+                Image(systemName: "pin.fill")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
             Spacer(minLength: 8)
             Text("\(count)")
                 .font(.body.monospacedDigit())
@@ -278,6 +489,6 @@ private struct ListRow: View {
         }
         .frame(minHeight: 36)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(name), \(reminderCountText(count))")
+        .accessibilityLabel(pinned ? "\(name), pinned, \(reminderCountText(count))" : "\(name), \(reminderCountText(count))")
     }
 }

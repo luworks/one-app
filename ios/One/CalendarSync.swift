@@ -253,6 +253,7 @@ final class CalendarSync {
 
 /// Row for a system calendar event (read-only, opens nothing).
 struct ExternalEventRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let event: ExternalEvent
     @State private var showing = false
 
@@ -261,26 +262,25 @@ struct ExternalEventRow: View {
             if !event.isAllDay {
                 TimeColumn(date: event.start)
             }
-            RoundedRectangle(cornerRadius: 2)
-                .fill(event.color)
-                .frame(width: 4, height: 34)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(event.title)
+            CalendarBar(color: event.color)
+            TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
                 Label(event.isAllDay ? event.calendarTitle : "\(DurationLabel.text(minutes: event.durationMinutes)) · \(event.calendarTitle)",
                       systemImage: "calendar")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .onTapGesture { showing = true }
         .contextMenu { Button { showing = true } label: { Label("Show Details", systemImage: "info.circle") } }
         .sheet(isPresented: $showing) { NativeEventSheet(identifier: event.eventIdentifier) }
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+        .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(EventSpeech.label(title: event.title, start: event.start, end: event.end, isAllDay: event.isAllDay,
                                               location: event.location, calendar: event.calendarTitle))
