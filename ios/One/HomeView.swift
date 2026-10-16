@@ -392,5 +392,5 @@ extension View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, Habit.self], inMemory: true)
+        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self], inMemory: true)
 }
