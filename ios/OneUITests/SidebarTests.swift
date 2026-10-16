@@ -67,6 +67,25 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(app.buttons["Anything left today?"].waitForExistence(timeout: 5), "Undo puts it back")
     }
 
+    /// Opened from the sidebar, the chat goes back to the sidebar: by the close button, and by swiping right.
+    func testChatOpenedFromSidebarGoesBackToSidebar() {
+        haveAConversation()
+        app.openSidebar()
+        let row = app.buttons["Anything left today?"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        app.buttons["Close"].tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "Close returns to the sidebar, not the page")
+
+        row.tap()
+        XCTAssertTrue(reply.waitForExistence(timeout: 5))
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4))
+        start.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.4)))
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "a right swipe returns to the sidebar")
+        XCTAssertFalse(reply.exists)
+    }
+
     func testSwipeLeftArchivesAConversationIntoTheArchivedSection() {
         haveAConversation()
         app.openSidebar()
