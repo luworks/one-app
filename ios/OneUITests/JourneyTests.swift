@@ -94,7 +94,9 @@ final class JourneyTests: XCTestCase {
     }
 
     /// J6: add a real alarm, see it on the Alarms page and in Today's schedule.
-    func testJ6_addAlarmAndSeeItInToday() {
+    func testJ6_addAlarmAndSeeItInToday() throws {
+        // A new alarm starts at the top of the next hour; in the last hour of the day that is tomorrow.
+        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 23, "the default alarm time is tomorrow")
         tab("Alarms")
         tap(app.buttons["New"])   // + adds an alarm on the Alarms page
         tap(app.buttons["Save"])

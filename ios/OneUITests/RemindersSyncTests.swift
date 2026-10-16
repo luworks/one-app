@@ -7,7 +7,7 @@ import XCTest
 final class RemindersSyncTests: XCTestCase {
     private func launch(adding title: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"] + (title.map { ["-uiTestingAddReminder", $0] } ?? [])
+        app.launchArguments = ["-uiTesting", "-uiTestingRemindersSync"] + (title.map { ["-uiTestingAddReminder", $0] } ?? [])
         app.launch()
         return app
     }

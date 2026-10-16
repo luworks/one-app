@@ -20,9 +20,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.showAlarms) private var showAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpToNow = true
 
-    @State private var calendarOn = false
-    @State private var remindersOn = false
-    @State private var loaded = false
+    @State private var calendarOn = CalendarSync.shared.isOn
+    @State private var remindersOn = RemindersSync.shared.isConnected
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var askingFirst = false
     @State private var askingSecond = false
@@ -82,19 +81,16 @@ struct SettingsView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task {
                 notificationStatus = await Reminders.shared.authorizationStatus()
-                calendarOn = CalendarSync.shared.isOn
-                remindersOn = RemindersSync.shared.isConnected
-                loaded = true
             }
             .onChange(of: calendarOn) { _, on in
-                guard loaded, on != CalendarSync.shared.isOn else { return }
+                guard on != CalendarSync.shared.isOn else { return }
                 Task {
                     await CalendarSync.shared.setEnabled(on)
                     calendarOn = CalendarSync.shared.isOn   // stays off if access was refused
                 }
             }
             .onChange(of: remindersOn) { _, on in
-                guard loaded, on != RemindersSync.shared.isConnected else { return }
+                guard on != RemindersSync.shared.isConnected else { return }
                 Task {
                     if on { await RemindersSync.shared.connect() } else { RemindersSync.shared.disconnect() }
                     remindersOn = RemindersSync.shared.isConnected

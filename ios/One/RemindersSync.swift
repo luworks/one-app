@@ -45,7 +45,10 @@ final class RemindersSync {
     /// Bumped after each finished pass so views that care can refresh.
     private(set) var version = 0
     private(set) var lastError: String?
+    /// UI tests start with Apple Reminders off (a saved "on" from an earlier run would upload and pull test data);
+    /// the test that needs it passes `-uiTestingRemindersSync`.
     private(set) var enabled = UserDefaults.standard.bool(forKey: RemindersSync.enabledKey)
+        && (!ProcessInfo.processInfo.arguments.contains("-uiTesting") || ProcessInfo.processInfo.arguments.contains("-uiTestingRemindersSync"))
 
     var hasAccess: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
     /// True once the user allowed access to Apple Reminders and sync is on.

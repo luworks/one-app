@@ -9,7 +9,7 @@ final class CalendarTabTests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
+        app.launchArguments = ["-uiTesting", "-uiTestingCalendarSync"]
         app.launch()
         app.buttons["Calendar"].firstMatch.tap()
     }
@@ -131,18 +131,20 @@ final class CalendarTabTests: XCTestCase {
             }
             return false
         }
+        // Turn Apple Calendar on in Settings (sidebar > Settings > Apple Calendar); iOS asks for access the first time.
         app.buttons["Open sidebar"].tap()
-        let toggle = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Show Apple Calendar'")).firstMatch
-        if toggle.waitForExistence(timeout: 3) {
-            if !toggle.label.hasSuffix("On") { toggle.tap() }
+        app.buttons["Settings"].firstMatch.tap()
+        let toggle = app.switches["Apple Calendar"]
+        if toggle.waitForExistence(timeout: 5), (toggle.value as? String) != "1" {
+            toggle.tap()
             let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
             for label in ["Allow Full Access", "Allow"] {
                 let b = springboard.buttons[label]
                 if b.waitForExistence(timeout: 3) { b.tap(); break }
             }
+            sleep(1)
         }
-        let goToday = app.buttons["Calendar: go to today"]   // closes the sidebar; we are already on the Calendar tab
-        if goToday.exists { goToday.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap() }
+        app.buttons["Done"].tap()
         app.buttons["calendar.calendars"].tap()
         try XCTSkipIf(app.buttons["Turn On"].waitForExistence(timeout: 3), "Calendar sync is off in this simulator")
         XCTAssertTrue(app.navigationBars["Calendars"].waitForExistence(timeout: 5))

@@ -48,7 +48,10 @@ final class CalendarSync {
 
     /// Bumped when the system calendar changes so views refetch.
     private(set) var version = 0
+    /// UI tests start with Apple Calendar off (a saved "on" from an earlier run would leak test events into the
+    /// system calendar); the tests that need it pass `-uiTestingCalendarSync`.
     private(set) var enabled = UserDefaults.standard.bool(forKey: CalendarSync.enabledKey)
+        && (!ProcessInfo.processInfo.arguments.contains("-uiTesting") || ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSync"))
     /// Calendars turned off in the Calendars list. Stored as "hidden" so new calendars show by default, like Apple's.
     /// (UI tests start with every calendar shown, so an earlier run can't hide events from a later one.)
     private(set) var hiddenCalendarIDs: Set<String> = ProcessInfo.processInfo.arguments.contains("-uiTesting")

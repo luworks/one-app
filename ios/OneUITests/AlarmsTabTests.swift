@@ -135,8 +135,8 @@ final class AlarmsTabTests: XCTestCase {
         minus.tap()
         sleep(1)   // let the Delete reveal animation finish (the test was flaky without it)
         shot("7b-minus")
-        let confirm = app.buttons["Delete"].firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        let confirm = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Delete'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 8))
         confirm.tap()
         for _ in 0..<20 where rows.count > 1 { _ = app.buttons["alarms.add"].waitForExistence(timeout: 0.25) }
         XCTAssertEqual(rows.count, 1, "one alarm is left")

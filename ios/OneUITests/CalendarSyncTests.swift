@@ -4,7 +4,7 @@ import XCTest
 final class CalendarSyncTests: XCTestCase {
     func testEventRoundTripsThroughSystemCalendar() {
         let app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
+        app.launchArguments = ["-uiTesting", "-uiTestingCalendarSync"]
         app.launch()
         addUIInterruptionMonitor(withDescription: "Calendar access") { alert in
             for label in ["Allow Full Access", "Allow", "OK"] where alert.buttons[label].exists {
