@@ -3,8 +3,8 @@
 import Foundation
 import FoundationModels
 
-struct RawItem: Decodable { let id: String, type: String, title: String, start: String?, minutes: Int, attendees: Int }
-struct EditCase: Decodable { let lang: String, input: String, op: String, target: String?, start: String?, level: Int? }
+struct RawItem: Decodable { let id: String, type: String, title: String, start: String?, minutes: Int?, attendees: Int? }
+struct EditCase: Decodable { let lang: String, input: String, op: String, target: String?, start: String?, level: Int?, scenario: String? }
 struct EditSuite: Decodable { let now: String, timeZone: String, items: [RawItem], cases: [EditCase] }
 
 func nul(_ v: Any?) -> Any { v ?? NSNull() }
@@ -19,7 +19,8 @@ func run() async {
     let f = DateFormatter(); f.calendar = cal; f.timeZone = cal.timeZone
     f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"; let now = f.date(from: suite.now)!
     f.dateFormat = "yyyy-MM-dd'T'HH:mm"
-    let items = suite.items.map { EditItem(id: $0.id, type: $0.type, title: $0.title, start: $0.start.flatMap { f.date(from: $0) }, minutes: $0.minutes, attendees: $0.attendees) }
+    func parseDate(_ s: String) -> Date? { f.date(from: String(s.prefix(16))) }
+    let items = suite.items.map { EditItem(id: $0.id, type: $0.type, title: $0.title, start: $0.start.flatMap { parseDate($0) }, minutes: $0.minutes ?? 30, attendees: $0.attendees ?? 0) }
     guard case .available = SystemLanguageModel.default.availability else { print("MODEL NOT AVAILABLE"); return }
     _ = try? await Editing.plan("What's on tomorrow?", items: items, now: now, calendar: cal) // warm-up
 
@@ -59,7 +60,7 @@ func run() async {
         }
         if r.c.op == "move" {
             timeN += 1
-            let exp = r.c.start.flatMap { f.date(from: $0) }
+            let exp = r.c.start.flatMap { parseDate($0) }
             let exact = r.d.op == .move && r.d.newStart == exp
             if exact { timeOK += 1 }
             if r.d.op == .move && r.d.target == r.c.target { timeGivenN += 1; if exact { timeGivenOK += 1 } }
@@ -77,22 +78,36 @@ func run() async {
     t += String(format: "| latency p50 / p90 / max | %.2fs / %.2fs / %.2fs | |\n", secs[secs.count / 2], secs[Int(Double(secs.count - 1) * 0.9)], secs.last!)
     print("\n== edit summary (\(args[1]))\n" + t)
     try? t.write(toFile: args[2].replacingOccurrences(of: ".json", with: "-summary.md"), atomically: true, encoding: .utf8)
+    // Unsafe: a card that would move / delete the wrong item, or act when it should ask or ignore.
+    let unsafe = results.filter { r in
+        (r.d.op == .move || r.d.op == .delete) && !(r.d.op.rawValue == r.c.op && r.d.target == r.c.target)
+    }.count
+    print("unsafe edit rate: \(ratio(unsafe, results.count))")
     // Per level: the whole decision (op + target + new time when moving) right, and the model-alone op.
     let lvls = Set(results.compactMap(\.c.level)).sorted()
     if !lvls.isEmpty {
         print("| level | cases x trials | decision right (op+target+time) | op | model-alone op |\n|---|---|---|---|---|")
         for lv in lvls {
             let rs = results.filter { $0.c.level == lv }
-            let right = rs.filter { r in r.d.op.rawValue == r.c.op && r.d.target == r.c.target && (r.c.op != "move" || r.d.newStart == r.c.start.flatMap { f.date(from: $0) }) }.count
+            let right = rs.filter { r in r.d.op.rawValue == r.c.op && r.d.target == r.c.target && (r.c.op != "move" || r.d.newStart == r.c.start.flatMap { parseDate($0) }) }.count
             let op = rs.filter { $0.d.op.rawValue == $0.c.op }.count
             let raw = rs.filter { $0.raw?.op.rawValue == $0.c.op }.count
             print("| L\(lv) | \(rs.count) | \(ratio(right, rs.count)) | \(ratio(op, rs.count)) | \(ratio(raw, rs.count)) |")
         }
     }
+    let scenarios = Array(Set(results.compactMap(\.c.scenario))).sorted()
+    if !scenarios.isEmpty {
+        print("| scenario | n | decision right |\n|---|---|---|")
+        for sc in scenarios {
+            let rs = results.filter { $0.c.scenario == sc }
+            let right = rs.filter { r in r.d.op.rawValue == r.c.op && r.d.target == r.c.target && (r.c.op != "move" || r.d.newStart == r.c.start.flatMap { parseDate($0) }) }.count
+            print("| \(sc) | \(rs.count) | \(ratio(right, rs.count)) |")
+        }
+    }
     // Final misses, one line per distinct (input, outcome).
     var seen = Set<String>()
     for r in results {
-        let ok = r.d.op.rawValue == r.c.op && r.d.target == r.c.target && (r.c.op != "move" || r.d.newStart == r.c.start.flatMap { f.date(from: $0) })
+        let ok = r.d.op.rawValue == r.c.op && r.d.target == r.c.target && (r.c.op != "move" || r.d.newStart == r.c.start.flatMap { parseDate($0) })
         guard !ok else { continue }
         f.dateFormat = "yyyy-MM-dd'T'HH:mm"
         let line = "✗ \(r.c.input) | want \(r.c.op) \(r.c.target ?? "-") \(r.c.start ?? "-") | got \(r.d.op.rawValue) \(r.d.target ?? "-") \(r.d.newStart.map { f.string(from: $0) } ?? "-") [\(r.d.reason)] raw \(r.raw.map { "\($0.op.rawValue) \($0.target ?? "-")" } ?? "ERR")"

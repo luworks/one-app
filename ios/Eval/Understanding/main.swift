@@ -5,18 +5,23 @@ import FoundationModels
 
 struct Case: Decodable {
     let lang: String, input: String
+    let repeatRule: String?
+    let allDay: Bool?
     let level: Int?
+    let scenario: String?
     let title: String?
     let kind: String
     let day: Int
     let hasDay: Bool
     let hour: Int?, minute: Int?, duration: Int?
 }
-struct Suite: Decodable { let now: String, timeZone: String, cases: [Case] }
+struct Suite: Decodable { let now: String, timeZone: String, cases: [Case], scoresRepeat: Bool? }
+extension Case { enum CodingKeys: String, CodingKey { case lang, input, level, scenario, title, kind, day, hasDay, hour, minute, duration, allDay; case repeatRule = "repeat" } }
 
 struct Row {
+    var repeats = true
     var kind = false, day = false, hasDay = false, hour = false, minute = false, title = false, titleExact = false, duration = false
-    var all: Bool { kind && day && hasDay && hour && minute && title && duration }
+    var all: Bool { repeats && kind && day && hasDay && hour && minute && title && duration }
 }
 
 func run() async {
@@ -38,19 +43,40 @@ func run() async {
     guard Understanding.unavailableReason(localeID: "zh_CN") == nil else { print("MODEL NOT USABLE: stopping, no results to report."); return }
 
     func norm(_ s: String) -> String { s.lowercased().filter { !$0.isWhitespace && !"，。,.、".contains($0) } }
+    /// Overlap of content words (English words without articles, abbreviations expanded) and Chinese characters.
+    func titleUnits(_ s: String) -> [String] {
+        var t = s.lowercased()
+        for (a, b) in [("appts", "appointment"), ("appt", "appointment"), ("mtg", "meeting"), ("w/", "with")] { t = t.replacingOccurrences(of: a, with: b) }
+        var out: [String] = []
+        for w in t.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init) {
+            if w.unicodeScalars.allSatisfy({ $0.value < 0x2E80 }) { if !["the", "a", "an", "my", "to", "for", "of", "on", "at", "i", "and", "with", "in"].contains(w) { out.append(w) } }
+            else { out += w.map { String($0) }.filter { !["把", "的", "了", "个", "给", "跟", "和", "去", "一", "下"].contains($0) } }
+        }
+        return out
+    }
+    func titleF1(_ a: String, _ b: String) -> Double {
+        let x = titleUnits(a), y = titleUnits(b)
+        guard !x.isEmpty, !y.isEmpty else { return x.isEmpty && y.isEmpty ? 1 : 0 }
+        var pool = y
+        var hit = 0
+        for u in x { if let i = pool.firstIndex(of: u) { pool.remove(at: i); hit += 1 } }
+        let p = Double(hit) / Double(x.count), r = Double(hit) / Double(y.count)
+        return p + r == 0 ? 0 : 2 * p * r / (p + r)
+    }
     func score(_ c: Case, _ got: Capture) -> Row {
         var r = Row()
         let gotKind = got.ringsAsAlarm ? "alarm" : got.kind.rawValue
         r.kind = gotKind == c.kind
         r.day = (cal.dateComponents([.day], from: today, to: cal.startOfDay(for: got.day)).day ?? -99) == c.day
         r.hasDay = got.hasDay == c.hasDay
+        if suite.scoresRepeat == true { r.repeats = got.repeatRule == c.repeatRule }
         r.hour = got.hour == c.hour
         r.minute = c.hour == nil || got.minute == (c.minute ?? 0)
         r.duration = c.duration == nil || got.durationMinutes == c.duration
         if let t = c.title {
             let a = norm(got.title), b = norm(t)
             r.titleExact = a == b
-            r.title = a == b || a.contains(b) || b.contains(a)
+            r.title = a == b || titleF1(got.title, t) >= 0.7
         } else { r.title = true; r.titleExact = true }
         return r
     }
@@ -81,12 +107,15 @@ func run() async {
     for lang in ["zh", "en", "mixed"] { summarize("  CaptureParser [\(lang)]", parserRows.filter { $0.0.lang == lang }) }
     let levels = Set(suite.cases.compactMap(\.level)).sorted()
     for lv in levels { summarize("  CaptureParser [L\(lv)]", parserRows.filter { $0.0.level == lv }) }
+    let scenarios = Array(Set(suite.cases.compactMap(\.scenario))).sorted()
+    for sc in scenarios { summarize("  CaptureParser <\(sc.prefix(14))>", parserRows.filter { $0.0.scenario == sc }) }
     // Ceiling for variant A: how often the parser's own day/time/duration/title are right (kind ignored).
     let ceiling = parserRows.filter { var r = $0.1; r.kind = true; return r.all }.count
     print("variant-A ceiling (parser day/hasDay/hour/min/dur/title all right, kind ignored): \(ceiling)/\(suite.cases.count)")
     // Non-kind misses only (kind is the model's job in variant A2).
+    func failedFields(_ r: Row) -> String { [("day", r.day), ("hasDay", r.hasDay), ("hour", r.hour), ("min", r.minute), ("dur", r.duration), ("title", r.title)].filter { !$0.1 }.map(\.0).joined(separator: ",") }
     for (c, r) in parserRows where !(r.day && r.hasDay && r.hour && r.minute && r.duration && r.title) {
-        print("  ✗ \(c.input) → \(show(CaptureParser.parse(c.input, now: now, calendar: cal)))  [expected \(c.kind) day \(c.day) hour \(c.hour.map(String.init) ?? "nil")]")
+        print("  ✗ \(c.input) → \(show(CaptureParser.parse(c.input, now: now, calendar: cal)))  [expected \(c.kind) day \(c.day) hour \(c.hour.map(String.init) ?? "nil") title '\(c.title ?? "-")' FAIL \(failedFields(r))]")
     }
 
     /// A variant maps one case to several labelled captures (nil = would fall back) and a debug line.
@@ -118,9 +147,12 @@ func run() async {
             return ([("A2: parser + model kind enum", Understanding.combine(parser: p, kind: k.kind))], "kind \(k.kind)")
         },
         Variant(key: "A2g", name: "A2g: as wired in the app (A2 instructions + alarm-word guard)") { c in
-            let k = try await Understanding.extractKindOnly(c.input, localeID: deviceLocale)
             let p = CaptureParser.parse(c.input, now: now, calendar: cal)
-            return ([("A2g: parser + kind + alarm guard", Understanding.combine(parser: p, kind: k.kind, text: c.input))], "kind \(k.kind)")
+            // Same path as the app: rules first, then the model.
+            let ruled = Understanding.ruleKind(c.input, parsed: p)
+            let k: SimpleKind
+            if let ruled { k = ruled } else { k = try await Understanding.extractKindOnly(c.input, localeID: deviceLocale).kind }
+            return ([("A2g: parser + kind + alarm guard", Understanding.combine(parser: p, kind: k, text: c.input))], "kind \(k)\(ruled == nil ? "" : " (rule)")")
         },
         // Prompt experiments: KIND_PROMPT=<file with {LOCALE}>, KIND_VOTES=<odd number> (majority of that many samples).
         Variant(key: "KP", name: "KP: prompt file + A2g combination") { c in
@@ -183,6 +215,7 @@ func run() async {
             summarize(label, rows[label] ?? [], times: label == order[0] ? times : [])
             if label == order[0] { for lang in ["zh", "en", "mixed"] { summarize("  [\(lang)]", (rows[label] ?? []).filter { $0.0.lang == lang }) } }
             for lv in levels { summarize("  [L\(lv)] \(label.prefix(12))", (rows[label] ?? []).filter { $0.0.level == lv }) }
+            for sc in scenarios { summarize("  <\(sc.prefix(14))> \(label.prefix(6))", (rows[label] ?? []).filter { $0.0.scenario == sc }) }
         }
         print("returned nil (would fall back): \(fallbacks);  errors: \(errors.isEmpty ? "none" : "\(errors)")")
         print("Failures (any trial, first label shown per trial plus extras):")

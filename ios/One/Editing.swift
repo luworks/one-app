@@ -86,24 +86,25 @@ enum Editing {
     }
 
     static func usesPronoun(_ text: String) -> Bool {
-        has(text, #"\b(it|that|this|them)\b|这个|那个|它"#)
+        has(text, #"\b(it|that|this|them)\b|这个|那个|它|just added|刚才|刚刚|刚加|上一个|\bthe last one\b|\bfirst one\b|\bother one\b|上面那个|下面那个|另一个|previous one"#)
     }
 
-    private static let deleteCue = #"取消|删掉|删除|删了|不要了|不去了|\bcancel(l?ed)?\b|\bdelete\b|\bremove\b"#
-    private static let moveCue = #"推迟|延后|延期|顺延|提前|推到|改到|改成|改约|约到|约在|调到|调整|换到|换成|调成|挪|移到|移至|排到|拖到|往后推|改一下|改下|修改|\bpostpone|\breschedule|\bmove\b|\bpush\b|\bdelay\b|\bchange\b|\badjust\b|\bupdate\b|bring forward|安排在|安排到|定在|订在|放到|\binstead\b|can we (?:do|make|have|move)|how about|同一?时间|same time"#
+    private static let deleteCue = #"取消|删掉|删除|删了|不要了|不去了|不做了|不用了|不需要了|算了|去掉|划掉|\bget rid of\b|\bscratch\b|\bforget\b|\bdrop\b|\bcall off\b|\bnix\b|\bcancel(l?ed)?\b|\bdelete\b|\bremove\b"#
+    private static let moveCue = #"推迟|延后|延期|顺延|提前|推到|改到|改成|改约|约到|约在|调到|调整|换到|换成|调成|挪|移到|移至|排到|拖到|往后推|改一下|改下|修改|晚一点|晚点|早点|早一点|推后|延迟|挪后|往前|换个时间|换时间|对调|互换|\bbump\b|\bshift\b|\bswap\b|\bswitch\b|\bearlier\b|\blater\b|\bpostpone|\breschedule|\bmove\b|\bpush\b|\bdelay\b|\bchange\b|\badjust\b|\bupdate\b|bring forward|安排在|安排到|定在|订在|放到|\binstead\b|can we (?:do|make|have|move)|how about|同一?时间|same time"#
 
     /// Does this sentence talk about existing items (edit) rather than add something new (capture)?
     /// Cancel / delete verbs always do. Move-like verbs only when the message also names an item, "it", a meeting or "everything".
-    static func looksLikeEdit(_ text: String, items: [EditItem]) -> Bool {
+    static func looksLikeEdit(_ text: String, items: [EditItem], now: Date = .now, calendar: Calendar = .current) -> Bool {
         if isQuestion(text) { return false }
         if has(text, deleteCue) { return true }
         guard has(text, moveCue) else { return false }
-        return !matchingItems(text, in: items).isEmpty || usesPronoun(text) || mentionsEverything(text)
+        return !matchingItems(text, in: items, now: now, calendar: calendar).isEmpty || usesPronoun(text) || mentionsEverything(text)
     }
 
     /// True when the words alone do not settle which item is meant, so the model's pick is needed.
-    static func needsModel(_ text: String, items: [EditItem]) -> Bool {
-        looksLikeEdit(text, items: items) && !mentionsEverything(text) && !usesPronoun(text) && matchingItems(text, in: items).isEmpty
+    static func needsModel(_ text: String, items: [EditItem], now: Date = .now, calendar: Calendar = .current) -> Bool {
+        looksLikeEdit(text, items: items, now: now, calendar: calendar) && !mentionsEverything(text) && !usesPronoun(text)
+            && matchingItems(text, in: items, now: now, calendar: calendar).isEmpty
     }
 
     // MARK: Which item?
@@ -114,8 +115,12 @@ enum Editing {
         ["meeting", "会议", "开会"], ["dentist", "牙医", "牙科"], ["doctor", "医生", "门诊", "看病"],
         ["weekly report", "周报"], ["report", "报告"], ["email", "邮件", "mail"], ["milk", "牛奶"], ["standup", "stand-up", "站会"],
         ["review", "评审", "复盘"], ["call", "电话"], ["gym", "健身"], ["interview", "面试"], ["flight", "航班", "机票"],
-        ["budget", "预算"], ["1:1", "一对一", "one on one"], ["invoice", "发票"], ["groceries", "买菜"],
+        ["budget", "预算"], ["1:1", "一对一", "one on one"], ["invoice", "发票"], ["groceries", "grocery", "买菜"],
+        ["design", "设计"], ["contract", "合同"], ["slides", "幻灯片", "ppt"], ["rent", "房租"], ["mom", "妈妈", "mother"], ["dad", "爸爸", "father"],
+        ["sales", "销售"], ["quarterly", "季度"], ["rent", "租金"], ["haircut", "理发"], ["train", "火车", "高铁"], ["exam", "考试"],
     ]
+    /// Everyday words that appear in many titles say little about which item is meant; they weigh less than specific ones.
+    private static let genericConcepts: Set<String> = ["call", "meeting", "review", "report", "email", "lunch", "dinner", "breakfast", "doctor"]
 
     private static let englishStopWords: Set<String> = ["with", "the", "and", "for", "to", "my", "of", "in", "on", "at", "a", "an", "is", "it",
                                                        "or", "by", "be", "move", "push", "delay", "cancel", "delete", "remove", "up", "back"]
@@ -142,15 +147,26 @@ enum Editing {
 
     /// The items the words point at: all items sharing the most pieces with the message. Several = ambiguous.
     /// A generic "meeting / 会议 / 把会…" with no specific hit means any event with other people on it.
-    static func matchingItems(_ text: String, in items: [EditItem]) -> [EditItem] {
+    static func matchingItems(_ text: String, in items: [EditItem], now: Date = .now, calendar: Calendar = .current) -> [EditItem] {
         let t = units(text)
-        let hits = items.map { (item: $0, matched: units($0.title).intersection(t)) }
-        let best = hits.map(\.matched.count).max() ?? 0
+        let ref = referencedTime(in: text, now: now, calendar: calendar)
+        let generic = Set(conceptGroups.enumerated().filter { genericConcepts.contains($0.element[0]) }.map { "c\($0.offset)" })
+        func weight(_ unit: String) -> Int { generic.contains(unit) ? 1 : 2 }
+        let hits = items.map { item -> (item: EditItem, matched: Set<String>) in
+            var matched = units(item.title).intersection(t)
+            if let ref, let s = item.start {
+                let c = calendar.dateComponents([.hour, .minute], from: s)
+                if c.hour == ref.hour, c.minute == ref.minute, ref.day.map({ calendar.isDate($0, inSameDayAs: s) }) ?? true { matched.insert("time") }
+            }
+            return (item, matched)
+        }
+        func score(_ matched: Set<String>) -> Int { matched.reduce(0) { $0 + weight($1) } }
+        let best = hits.map { score($0.matched) }.max() ?? 0
         if best > 0 {
-            let top = hits.filter { $0.matched.count == best }
+            let top = hits.filter { score($0.matched) == best }
             // A weaker item that matches on something the best one does not is a second item the message names ("牙医和产品周会").
             let covered = top.reduce(into: Set<String>()) { $0.formUnion($1.matched) }
-            let others = hits.filter { $0.matched.count > 0 && $0.matched.count < best && !$0.matched.isSubset(of: covered) }
+            let others = hits.filter { score($0.matched) > 0 && score($0.matched) < best && !$0.matched.isSubset(of: covered) }
             return (top + others).map(\.item)
         }
         if has(text, #"meeting|会议|开会|[把将的]会(?=[推改挪提延移取都])"#) {
@@ -160,6 +176,18 @@ enum Editing {
             return withPeople.isEmpty ? events : withPeople
         }
         return []
+    }
+
+    /// "the 3pm one", "三点那个会改到四点半", "move the 4:30 to 5:30": the clock time that names an item is the one before the
+    /// destination ("to ...", 改到 ...), or the only time when there is no destination.
+    static func referencedTime(in text: String, now: Date, calendar: Calendar) -> (hour: Int, minute: Int, day: Date?)? {
+        var zone = text
+        if let r = text.range(of: #"[改推挪调换约拖延][到成在至]|提前到|推迟到|安排[到在]|\bto\b|→|\binstead\b"#, options: [.regularExpression, .caseInsensitive]) {
+            zone = String(text[text.startIndex..<r.lowerBound])
+        }
+        let parsed = CaptureParser.parse(zone, now: calendar.startOfDay(for: now), calendar: calendar)
+        guard let h = parsed.hour else { return nil }
+        return (h, parsed.minute, parsed.hasDay ? parsed.day : nil)
     }
 
     // MARK: New time
@@ -179,6 +207,9 @@ enum Editing {
         var minutes: Int?
         if first(#"一个半小时"#) != nil { minutes = 90 }
         else if first(#"半(?:个)?(?:小时|钟头)|half an? hour"#) != nil { minutes = 30 }
+        else if first(#"一刻钟|一刻|quarter of an hour|a quarter hour|quarter-hour"#) != nil { minutes = 15 }
+        else if first(#"两刻钟"#) != nil { minutes = 30 }
+        else if first(#"三刻钟"#) != nil { minutes = 45 }
         else if let g = first(#"(\d+|[一二两三四五六七八九十])\s*(?:个)?\s*(小时|钟头|分钟|天)(?!后)"#), let u = g[1] {
             let n = g[0].flatMap { Int($0) ?? ($0.count == 1 ? chineseDigits[$0.first!] : nil) }
             minutes = n.map { $0 * (u == "分钟" ? 1 : u == "天" ? 1440 : 60) }
@@ -197,15 +228,28 @@ enum Editing {
     /// Nil when the message gives no new time.
     static func newStart(for item: EditItem, text: String, now: Date, calendar: Calendar) -> Date? {
         let today = calendar.startOfDay(for: now)
+        // Where it goes: the words after "to / 改到 / →". An item named by its clock time ("the 3pm one") has no other time in the sentence.
+        var dest = text
+        if let r = text.range(of: #"[改推挪调换约拖延][到成在至]|提前到|推迟到|安排[到在]|\bto\b|→|\binstead\b"#, options: [.regularExpression, .caseInsensitive]) {
+            dest = String(text[r.upperBound...])
+            // "can we do three pm instead": the new time comes before "instead".
+            if text[r].lowercased() == "instead" { dest = String(text[text.startIndex..<r.lowerBound]) }
+            if dest.range(of: #"^\s*(?:like\s+)?(?:\d{1,2}(?::\d{2})?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b(?!\s*(?:点|号|日|月|am|pm|a\.m|p\.m))"#, options: [.regularExpression, .caseInsensitive]) != nil { dest = "at " + dest }
+        } else if let ref = referencedTime(in: text, now: now, calendar: calendar), let s = item.start,
+                  calendar.dateComponents([.hour, .minute], from: s).hour == ref.hour {
+            dest = text.replacingOccurrences(of: #"\d{1,2}(?::\d{2})?\s*(?:am|pm|点半?|点\d{0,2}分?)?|[零一二两三四五六七八九十]{1,3}点半?"#, with: " ", options: [.regularExpression, .caseInsensitive])
+        }
         // Parse as of midnight so "move it to 8am" is not rolled to tomorrow.
-        let parsed = CaptureParser.parse(text, now: today, calendar: calendar)
-        let keepsTime = has(text, #"同一?时间|同一个时间|same time"#)
+        let parsed = CaptureParser.parse(dest, now: today, calendar: calendar)
+        let keepsTime = has(text, #"同一?时间|同一个时间|same time|同一时刻"#)
         if parsed.hasDay || (parsed.hour != nil && !keepsTime) {
             var day = item.start.map { calendar.startOfDay(for: $0) } ?? today
             if parsed.hasDay { day = parsed.day }
             let hour: Int, minute: Int
             if let h = parsed.hour, !keepsTime {
                 (hour, minute) = (h, parsed.minute)
+            } else if item.attendees > 0, !keepsTime {
+                return nil // a day with no time for a meeting other people are on: ask for the time rather than invite them to a guess
             } else if let s = item.start {
                 let c = calendar.dateComponents([.hour, .minute], from: s)
                 (hour, minute) = (c.hour ?? 9, c.minute ?? 0)
@@ -225,11 +269,11 @@ enum Editing {
     /// `plan` nil means the model was not asked or failed.
     static func decide(text: String, plan: EditPlan?, items: [EditItem], now: Date, calendar: Calendar, focus: EditItem? = nil) -> EditDecision {
         func ask(_ why: String) -> EditDecision { EditDecision(op: .clarify, target: nil, newStart: nil, reason: why) }
-        if !looksLikeEdit(text, items: items) { return EditDecision(op: .none, target: nil, newStart: nil, reason: "not an edit") }
+        if !looksLikeEdit(text, items: items, now: now, calendar: calendar) { return EditDecision(op: .none, target: nil, newStart: nil, reason: "not an edit") }
         if mentionsEverything(text) { return ask("several items") }
         let wantsDelete = has(text, deleteCue), wantsMove = has(text, moveCue)
         if wantsDelete && wantsMove { return ask("several items") }
-        let matches = matchingItems(text, in: items)
+        let matches = matchingItems(text, in: items, now: now, calendar: calendar)
         if matches.count > 1 { return ask("several items match: " + matches.map(\.id).joined(separator: ",")) }
         let item: EditItem
         if let only = matches.first {

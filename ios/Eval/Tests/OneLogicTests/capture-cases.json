@@ -469,7 +469,7 @@
   {
    "split": "train",
    "input": "30分钟后提醒我关火",
-   "title": "提醒我关火",
+   "title": "关火",
    "day": 0,
    "hasDay": true,
    "hour": 10,
