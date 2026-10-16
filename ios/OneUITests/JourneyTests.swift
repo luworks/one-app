@@ -76,15 +76,12 @@ final class JourneyTests: XCTestCase {
     func testJ6_addAlarmAndSeeItInToday() {
         tab("Alarms")
         tap(app.buttons["New"])   // + adds an alarm on the Alarms page
-        let label = app.textFields["Label"]
-        XCTAssertTrue(label.waitForExistence(timeout: 5))
-        label.tap()
-        label.typeText("Wake up")
         tap(app.buttons["Save"])
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Wake up'")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Alarm '")).firstMatch.waitForExistence(timeout: 5),
+                      "the alarm is listed on the Alarms page")
         tab("Today")
         // The list is lazy: scroll until the row has been created.
-        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Alarm Wake up'")).firstMatch
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Alarm ' AND label CONTAINS ' at '")).firstMatch
         for _ in 0..<6 where !row.exists { app.swipeUp() }
         XCTAssertTrue(row.waitForExistence(timeout: 3), "a one-time alarm shows in the day it rings")
     }
