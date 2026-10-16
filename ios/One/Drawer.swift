@@ -59,8 +59,11 @@ final class DrawerModel {
 
     /// For a drag the system cancelled: settle by position so the drawer is never left half open.
     func dragCancelled(width: CGFloat) {
-        guard claim == .claimed else { return }
-        dragEnded(width: width, projected: nil)
+        switch claim {
+        case .claimed: dragEnded(width: width, projected: nil)
+        case .rejected: claim = .undecided   // a cancelled vertical drag must not swallow the next edge swipe
+        case .undecided: break
+        }
     }
 }
 

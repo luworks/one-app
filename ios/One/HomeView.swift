@@ -94,7 +94,7 @@ struct HomeView: View {
 
     /// Opens the AI screen on a new chat, or on a saved conversation.
     private func openAsk(_ thread: ChatThread?) {
-        drawer.set(open: false)
+        drawer.set(open: false, animated: false)   // snaps shut behind the AI screen as it covers the page
         ask = AskRoute(thread: thread)
     }
 
