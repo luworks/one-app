@@ -209,7 +209,7 @@ struct HomeView: View {
             h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
             h.combine(t.ringsAsAlarm)
         }
-        for a in allAlarms { h.combine(a.hour); h.combine(a.minute); h.combine(a.weekdays); h.combine(a.isOn); h.combine(a.label) }
+        for a in allAlarms { h.combine(a.scheduleSignature) }
         for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.ringsAsAlarm) }
         return h.finalize()
     }

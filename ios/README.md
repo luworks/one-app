@@ -25,7 +25,7 @@ Four tabs: **Today · Calendar · Reminders · Alarms**, plus a left sidebar, se
 - **Today** — one day: all-day events, overdue (one "N overdue" row that expands), due today, and the timeline with a "now" line. Tapping a day in Calendar opens it here, with a "Back to today" row.
 - **Calendar** — modeled on Apple Calendar: Month (default; grid with colored dots and the selected day's events below), Week (time grid) and Year; Day opens the Today tab. Top row: year button, Today, Calendars (Apple's own list; the choice filters every view). With Calendar access on, + opens Apple's own event editor. Events are fixed; flexible tasks can be long-pressed and dragged in Week.
 - **Reminders** — the older task list for now: filter chips (All / Inbox / Flagged / lists / tags), Unscheduled / Scheduled / Completed sections. Still labelled "Lists" and still stored locally. Being rebuilt to match Apple Reminders (smart lists, My Lists, live EventKit data); see the rubric.
-- **Alarms** — real alarms (time, label, repeat weekdays, on/off) that ring through Silent and Focus via AlarmKit, plus items you marked "Ring as alarm".
+- **Alarms** — modeled on the Alarms tab of Apple Clock: Edit and + in the bar, big light times with AM/PM, green switches, "Next alarm in …", Add/Edit Alarm sheet (wheel, Repeat, Label, Sound, Snooze). Every alarm is a real AlarmKit alarm that rings through Silent and Focus; items you marked "Ring as alarm" follow in "From reminders and events". AlarmKit only shows alarms this app scheduled: Apple's own Clock alarms cannot be read.
 - **Gestures** (follow Apple Reminders / Calendar) — tap the circle to complete; swipe left for Delete (with an Undo toast) and Flag; long-press for Show Details / Flag / Today / Tomorrow / Unschedule / Delete. Apple Calendar events open in Apple's own event viewer.
 - **Ask AI** — a typed or dictated line becomes a preview card (reminder or event); nothing is created until you tap Add. Questions get a local answer, and "Plan my day" proposes a schedule you apply or undo. There is no live model yet.
 - **Apple Calendar** — sidebar → "Show Apple Calendar" reads system events (and saves new events there). Reminders are not read from Apple Reminders yet.
@@ -35,7 +35,7 @@ Four tabs: **Today · Calendar · Reminders · Alarms**, plus a left sidebar, se
 
 - `OneApp.swift` — app entry; builds the SwiftData container (`OneTask`, `OneEvent`, `OneAlarm`, `Habit`); `-uiTesting` uses an in-memory store.
 - `Models.swift` — `OneTask` (planned time flexes, `due` never moves) and `OneEvent` (fixed).
-- `OneAlarm.swift` — `OneAlarm` model, its row and editor.
+- `OneAlarm.swift` — `OneAlarm` model (with its stable AlarmKit id). `AlarmEditor.swift` — the Clock-style row and the Add/Edit Alarm sheet. `AlarmCenter.swift` — live AlarmKit state (ringing, snoozing, authorization).
 - `Habits.swift` — retired `Habit` model, kept only for schema migration.
 - `Logic.swift` — pure logic with no SwiftUI/SwiftData so it is unit-testable: repeat rules, recurrence, day labels, `DayPlanner`, `ReminderPlan`, `AlarmPlan`.
 - `HomeView.swift` — app shell: tab pills, bottom bar (search, Ask AI, new), sidebar drawer.

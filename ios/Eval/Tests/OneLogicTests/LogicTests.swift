@@ -138,6 +138,65 @@ final class AlarmPlanTests: XCTestCase {
         XCTAssertEqual(AlarmPlan.nextFire(hour: 7, minute: 0, weekdays: [2, 3, 4, 5, 6], after: at(16, 9, 41), calendar: cal), at(19, 7, 0))
     }
 
+    func testClockRepeatWording() {
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [], calendar: cal), "Never")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [1, 2, 3, 4, 5, 6, 7], calendar: cal), "Every day")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 3, 4, 5, 6], calendar: cal), "Weekdays")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [1, 7], calendar: cal), "Weekends")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2], calendar: cal), "Every Monday")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [4, 2], calendar: cal), "Every Mon, Wed")
+        // Sunday-first calendar (US): Sunday leads, so Sun + Mon reads "Sun, Mon".
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 1], calendar: cal), "Every Sun, Mon")
+        XCTAssertEqual(AlarmPlan.orderedWeekdays(calendar: cal), [1, 2, 3, 4, 5, 6, 7])
+        var monday = cal
+        monday.firstWeekday = 2
+        XCTAssertEqual(AlarmPlan.orderedWeekdays(calendar: monday), [2, 3, 4, 5, 6, 7, 1])
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 1], calendar: monday), "Every Mon, Sun")
+    }
+
+    func testRowSubtitle() {
+        XCTAssertEqual(AlarmPlan.rowSubtitle(label: "", weekdays: [], calendar: cal), "Alarm")
+        XCTAssertEqual(AlarmPlan.rowSubtitle(label: "  ", weekdays: [1, 2, 3, 4, 5, 6, 7], calendar: cal), "Alarm, Every day")
+        XCTAssertEqual(AlarmPlan.rowSubtitle(label: "Gym", weekdays: [2, 3, 4, 5, 6], calendar: cal), "Gym, Weekdays")
+        XCTAssertEqual(AlarmPlan.rowSubtitle(label: "Gym", weekdays: [], calendar: cal), "Gym")
+    }
+
+    func testTimePartsFollowTheClockSetting() {
+        let us = Locale(identifier: "en_US")
+        XCTAssertEqual(AlarmPlan.timeParts(hour: 7, minute: 5, locale: us).time, "7:05")
+        XCTAssertEqual(AlarmPlan.timeParts(hour: 7, minute: 5, locale: us).suffix, "AM")
+        XCTAssertEqual(AlarmPlan.timeParts(hour: 0, minute: 0, locale: us).time, "12:00")
+        XCTAssertEqual(AlarmPlan.timeParts(hour: 12, minute: 30, locale: us).suffix, "PM")
+        XCTAssertEqual(AlarmPlan.timeParts(hour: 19, minute: 45, locale: us).time, "7:45")
+        let de = Locale(identifier: "de_DE")
+        XCTAssertEqual(AlarmPlan.timeParts(hour: 7, minute: 5, locale: de).time, "07:05")
+        XCTAssertNil(AlarmPlan.timeParts(hour: 19, minute: 45, locale: de).suffix)
+        XCTAssertEqual(AlarmPlan.timeParts(hour: 19, minute: 45, locale: de).time, "19:45")
+    }
+
+    func testNextRing() {
+        let now = at(12, 9, 41)   // Monday
+        // One-time alarm switched on at 9:00 for 18:00 rings today; for 7:00 it rings tomorrow.
+        XCTAssertEqual(AlarmPlan.nextRing(hour: 18, minute: 0, weekdays: [], switchedOn: at(12, 9, 0), now: now, calendar: cal), at(12, 18, 0))
+        XCTAssertEqual(AlarmPlan.nextRing(hour: 7, minute: 0, weekdays: [], switchedOn: at(12, 9, 0), now: now, calendar: cal), at(13, 7, 0))
+        // A one-time alarm that already rang (switched on yesterday for 7:00) has nothing next.
+        XCTAssertNil(AlarmPlan.nextRing(hour: 7, minute: 0, weekdays: [], switchedOn: at(11, 20, 0), now: now, calendar: cal))
+        // Repeating alarms count from now.
+        XCTAssertEqual(AlarmPlan.nextRing(hour: 7, minute: 0, weekdays: [2, 3, 4, 5, 6], switchedOn: at(1, 0, 0), now: at(16, 9, 41), calendar: cal), at(19, 7, 0))
+    }
+
+    func testNextAlarmText() {
+        let now = at(12, 9, 41)
+        XCTAssertEqual(AlarmPlan.nextAlarmText(rings: [at(12, 16, 53)], now: now), "Next alarm in 7 hr 12 min")
+        XCTAssertEqual(AlarmPlan.nextAlarmText(rings: [at(13, 7, 0), at(12, 10, 41)], now: now), "Next alarm in 1 hr")
+        XCTAssertEqual(AlarmPlan.nextAlarmText(rings: [at(12, 9, 53)], now: now), "Next alarm in 12 min")
+        XCTAssertEqual(AlarmPlan.nextAlarmText(rings: [now.addingTimeInterval(20)], now: now), "Next alarm in 1 min")
+        XCTAssertEqual(AlarmPlan.nextAlarmText(rings: [at(14, 12, 41)], now: now), "Next alarm in 2 days 3 hr")
+        XCTAssertEqual(AlarmPlan.nextAlarmText(rings: [at(13, 9, 41)], now: now), "Next alarm in 1 day")
+        XCTAssertNil(AlarmPlan.nextAlarmText(rings: [], now: now))
+        XCTAssertNil(AlarmPlan.nextAlarmText(rings: [at(12, 8, 0)], now: now), "an alarm in the past is not next")
+    }
+
     func testFireOnDay() {
         let now = at(12, 9, 41)
         XCTAssertEqual(AlarmPlan.fire(on: at(12, 0, 0), hour: 18, minute: 0, weekdays: [], now: now, calendar: cal), at(12, 18, 0))
