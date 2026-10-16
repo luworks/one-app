@@ -61,11 +61,36 @@ enum ListActions {
         return true
     }
 
-    /// Deletes the list and every reminder in it (the UI asks first, with the count).
-    static func delete(_ list: OneList, in context: ModelContext) {
+    /// Deletes the list (the UI asks first, with the count). Its reminders are deleted with it, or, with
+    /// `keepingTasks`, moved to the default list.
+    static func delete(_ list: OneList, keepingTasks: Bool = false, in context: ModelContext) {
         RemindersSync.shared.noteDeleted(list: list.externalID)
-        for task in tasks(in: list.name, context: context) { context.delete(task) }
+        for task in tasks(in: list.name, context: context) {
+            if keepingTasks {
+                task.listName = ""
+                // Apple deletes a list's reminders with the list, so kept ones go up again as new reminders
+                // in Apple's default list instead of following their old link into the deleted list.
+                if list.externalID != nil, task.externalID != nil {
+                    task.externalID = nil
+                    task.createdAt = .now
+                }
+            } else {
+                context.delete(task)
+            }
+        }
         context.delete(list)
+        try? context.save()
+    }
+
+    /// Pins the list as a card at the top of Reminders, or unpins it.
+    static func togglePinned(_ list: OneList, in context: ModelContext) {
+        list.pinned.toggle()
+        try? context.save()
+    }
+
+    /// Saves a new My Lists order (after a drag in Edit mode).
+    static func reorder(_ lists: [OneList], in context: ModelContext) {
+        for (i, list) in lists.enumerated() where list.order != i { list.order = i }
         try? context.save()
     }
 

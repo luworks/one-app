@@ -15,6 +15,8 @@ final class OneList {
     /// EKCalendar.calendarIdentifier when this list is mirrored from / to Apple Reminders.
     var externalID: String? = nil
     var createdAt: Date = Date.now
+    /// Shown as a card at the top of the Reminders tab, next to the smart lists. Local to this app.
+    var pinned: Bool = false
 
     init(name: String, colorIndex: Int = 6, symbol: String = "list.bullet", order: Int = 0) {
         self.name = name
