@@ -24,9 +24,9 @@ struct AskView: View {
     @State private var thread: ChatThread?
     @State private var messages: [ChatMessage]
     @State private var draft = ""
-    @State private var pending: Capture?
-    /// Further items from the same line; each is shown, and confirmed or skipped, one at a time.
-    @State private var queue: [Capture] = []
+    /// Every item proposed from the last line, shown together. Added ones stay a moment as a check, then leave.
+    @State private var proposals: [CaptureProposal] = []
+    @Query(sort: \OneList.order) private var lists: [OneList]
     @State private var thinking = false
     @State private var captureTask: Task<Void, Never>?
     @State private var plan: [(task: OneTask, start: Date)] = []
@@ -160,9 +160,9 @@ struct AskView: View {
                 ChangeCard(change: change, onApply: { apply(change) }, onCancel: { self.change = nil })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            if let capture = pending {
-                CaptureCard(capture: Binding(get: { pending ?? capture }, set: { pending = $0 }),
-                            onAdd: { add(pending ?? capture) }, onCancel: advance)
+            if !proposals.isEmpty {
+                CaptureStack(proposals: $proposals, lists: lists.map(\.name),
+                             onAdd: add, onSkip: skip, onAddAll: addAll)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: 8) {
@@ -197,7 +197,7 @@ struct AskView: View {
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
-        .animation(.snappy, value: pending)
+        .animation(.snappy, value: proposals)
         .animation(.snappy, value: plan.count)
         .animation(.snappy, value: change)
         .animation(.snappy, value: followup)
@@ -247,9 +247,17 @@ struct AskView: View {
     }
 
     private func clearPreviews() {
-        pending = nil
-        queue = []
+        proposals = []
         change = nil
+    }
+
+    /// The first item still waiting for Add: what a follow-up like "make it 5pm" edits. Setting nil drops them all.
+    private var pending: Capture? {
+        get { proposals.first { $0.state == .open }?.capture }
+        nonmutating set {
+            guard let newValue else { proposals = []; return }
+            if let i = proposals.firstIndex(where: { $0.state == .open }) { proposals[i].capture = newValue }
+        }
     }
 
     // MARK: Multi-turn
@@ -579,24 +587,58 @@ struct AskView: View {
     }
 
     private func show(_ captures: [Capture]) {
-        pending = captures.first
-        queue = Array(captures.dropFirst())
-        messages.append(ChatMessage(role: .ai, text: queue.isEmpty
+        proposals = captures.map { CaptureProposal(capture: filed($0), batchSize: captures.count) }
+        messages.append(ChatMessage(role: .ai, text: captures.count == 1
             ? "Here's what I understood. Nothing is added until you confirm."
-            : "I found \(captures.count) items. Here's the first; the next one shows after you add or cancel this one. Nothing is added until you confirm."))
+            : "I found \(captures.count) items. Add them one by one or all at once; nothing is added until you confirm."))
     }
 
-    /// Shows the next item from the same line, if any.
-    private func advance() {
-        pending = queue.isEmpty ? nil : queue.removeFirst()
+    /// A task goes to the list it clearly belongs to, else the Inbox. Never silently to whatever list is the default.
+    private func filed(_ capture: Capture) -> Capture {
+        guard capture.kind == .task, capture.listName == nil else { return capture }
+        var c = capture
+        let names = lists.map(\.name)
+        let candidates = lists.map { list in
+            ListGuess.Candidate(name: list.name, titles: tasks.filter { $0.listName == list.name }.suffix(300).map(\.title))
+        }
+        c.listName = ListGuess.guess(c.title, lists: candidates).list ?? ListGuess.inbox(in: names)
+        return c
     }
 
-    private func add(_ capture: Capture) {
+    private func add(_ id: UUID) {
+        guard let capture = commit(id) else { return }
+        messages.append(ChatMessage(role: .ai, text: "Added “\(capture.title)” · \(addedDetail(capture))."))
+    }
+
+    private func addAll() {
+        let added = proposals.filter { $0.state == .open }.compactMap { commit($0.id) }
+        guard !added.isEmpty else { return }
+        messages.append(ChatMessage(role: .ai, text: "Added \(added.count) items:\n"
+            + added.map { "· “\($0.title)” · \(addedDetail($0))" }.joined(separator: "\n")))
+    }
+
+    /// Writes one proposal, marks it added (the card turns into a check), and lets it leave a moment later.
+    private func commit(_ id: UUID) -> Capture? {
+        guard let i = proposals.firstIndex(where: { $0.id == id && $0.state == .open }) else { return nil }
+        let capture = proposals[i].capture
         capture.insert(into: context)
         lastTouched = capture.title
         onAdded(capture)
-        messages.append(ChatMessage(role: .ai, text: "Added “\(capture.title)” · \(capture.summary)."))
-        advance()
+        withAnimation(.snappy) { proposals[i].state = .added }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.4))
+            withAnimation(.snappy) { proposals.removeAll { $0.id == id } }
+        }
+        return capture
+    }
+
+    private func skip(_ id: UUID) {
+        withAnimation(.snappy) { proposals.removeAll { $0.id == id } }
+    }
+
+    private func addedDetail(_ c: Capture) -> String {
+        guard c.kind == .task, let list = c.listName else { return c.summary }
+        return c.summary + " · " + list
     }
 
     private func isPlanRequest(_ text: String) -> Bool {

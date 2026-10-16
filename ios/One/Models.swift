@@ -194,6 +194,7 @@ extension Capture {
                         due: plannedStart == nil && hasDay ? day : nil)
         t.repeatRule = repeatRule
         t.ringsAsAlarm = ringsAsAlarm && plannedStart != nil
+        if let listName { t.listName = listName }
         return t
     }
 

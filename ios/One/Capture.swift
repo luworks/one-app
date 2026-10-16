@@ -22,6 +22,9 @@ struct Capture: Equatable {
     var isAllDay: Bool = false
     /// True when the on-device model (Apple Intelligence) produced this proposal; shown as a small label on the card.
     var fromAppleIntelligence: Bool = false
+    /// The Reminders list a task goes to (`OneTask.listName`). nil = the app's default; the AI screen fills in the Inbox
+    /// or a confident `ListGuess`, and the user can change it on the card.
+    var listName: String? = nil
 
     var plannedStart: Date? {
         guard let hour else { return nil }
@@ -656,6 +659,25 @@ enum CaptureDraftMapper {
         return Capture(title: title, day: day, hasDay: hasDay, hour: hour, minute: minute,
                        repeatRule: repeatRule(draft.repeatRule), durationMinutes: duration, kind: kind,
                        isAllDay: allDay, fromAppleIntelligence: true)
+    }
+
+    /// Keeps the user's own words as the title. The model tends to shorten or translate ("walk" for
+    /// "去走路，今天一定要走到 5 万步吧"). When the line labels its content ("提醒内容：…", "内容：…", "title: …"), that text
+    /// is the title unless the model's title is other words copied from the line; otherwise the model's title stays.
+    static func userWording(_ title: String, source: String) -> String {
+        guard let labelled = labelledContent(source) else { return title }
+        let copied = source.localizedCaseInsensitiveContains(title)
+        return !copied || labelled.localizedCaseInsensitiveContains(title) ? labelled : title
+    }
+
+    /// The text after a content label, up to the end of its line, or nil.
+    static func labelledContent(_ source: String) -> String? {
+        let pattern = #"(?:提醒内容|内容|事项|标题|(?i:content|title|note))\s*[:：]\s*([^\n]+)"#
+        guard let re = try? NSRegularExpression(pattern: pattern),
+              let m = re.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)),
+              let r = Range(m.range(at: 1), in: source) else { return nil }
+        let text = source[r].trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
     }
 
     /// "yyyy-MM-dd" (a trailing "T..." or " ..." is ignored) to a start-of-day Date; nil if it is not a real date.
