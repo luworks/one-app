@@ -139,14 +139,15 @@ struct RemindersView: View {
                     }
                     .listRowBackground(Color.clear)
 
-                    if showsConnect {
-                        Button { Task { await RemindersSync.shared.connect() } } label: {
-                            Label("Connect Apple Reminders", systemImage: "arrow.triangle.2.circlepath")
+                    if showsAccessOff {
+                        Button {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                        } label: {
+                            Label("Apple Reminders is off for Today. Open Settings", systemImage: "exclamationmark.circle")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                         .listRowBackground(Color.clear)
-                        .accessibilityHint("Shows your Apple Reminders lists here")
                     }
                 }
                 .listSectionSeparator(.hidden)
@@ -164,14 +165,14 @@ struct RemindersView: View {
         .sheet(isPresented: $addingList) { ListEditor() }
         .sheet(item: $editing) { ListEditor(list: $0) }
         .deleteListAlert($pendingDelete)
+        .task { await RemindersSync.shared.connectIfFirstRun() }
         .onChange(of: path.count) { _, n in isPushed = n > 0 }
         .onAppear { isPushed = !path.isEmpty }
         .onDisappear { isPushed = false }
     }
 
-    private var showsConnect: Bool {
-        !sync.isConnected && !ProcessInfo.processInfo.arguments.contains("-uiTesting")
-    }
+    /// Only when the user said "Don't Allow": the first request is iOS's own prompt, shown when this tab first opens.
+    private var showsAccessOff: Bool { sync.isDenied }
 
     /// The default list hides when it has nothing and other lists exist.
     private func showsDefaultList(_ stats: Stats) -> Bool {

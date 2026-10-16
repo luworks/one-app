@@ -59,6 +59,13 @@ final class CalendarSync {
         }
     }
 
+    /// On the first launch show iOS's own Calendar permission prompt. Does nothing afterwards.
+    func connectIfFirstRun() async {
+        guard !ProcessInfo.processInfo.arguments.contains("-uiTesting"),
+              EKEventStore.authorizationStatus(for: .event) == .notDetermined else { return }
+        await setEnabled(true)
+    }
+
     /// Turns sync on (asking for access the first time) or off.
     func setEnabled(_ on: Bool) async {
         if on && !hasAccess {

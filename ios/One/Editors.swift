@@ -153,7 +153,7 @@ struct TaskEditor: View {
                     }
                 }
             }
-            .navigationTitle(task == nil ? "New task" : "Task")
+            .navigationTitle(task == nil ? "New reminder" : "Reminder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

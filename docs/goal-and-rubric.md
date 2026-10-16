@@ -95,20 +95,20 @@ Re-scoped in round 19: the Alarms page lists real alarms only; reminders live on
 ### 4. Reminders parity (benchmark: Apple Reminders)
 Replaces "Habits (benchmark: Streaks)", retired in round 19: habits were removed from the product (no tab, chips or streaks; the `Habit` SwiftData model stays in the schema, unused, so existing installs migrate without data loss).
 
-Status checked against `ios/One/` in round 19. "Built" means it exists in the code but is not yet demonstrated by a screenshot or UI test, so by rule 1 it does not count in a score yet. Today the Reminders tab is still the older "Lists" screen (`TasksView`: filter chips, no smart lists, label "Lists") and reminders live in SwiftData, not in Apple Reminders.
+Status after round 20 (checked in the iOS simulator, see the log). "Demonstrated" = seen working on screen or covered by a UI test. "Built" = in the code, not yet demonstrated, so it does not count in a score yet.
 
-1. Smart lists Today, Scheduled, All, Flagged and Completed, each with a live count. **Not met** (chips: All / Inbox / Flagged / list / tag; only Completed shows a count)
-2. My Lists, each with a color and an icon. **Not met** (a list is just a name on the reminder)
-3. Create, rename and delete a list. **Not met** (a list can be created from the reminder editor's "New list…"; there is no rename or delete)
-4. New reminder with date and time, notes, flag and repeat. **Built** (reminder editor: Notes, planned time, deadline, repeat, flag; J1 covers the one-line path)
+1. Smart lists Today, Scheduled, All, Flagged and Completed, each with a live count. **Demonstrated** (screenshot: 16 / 71 / 78 / 0 / 201 on real imported data)
+2. My Lists, each with a color and an icon. **Demonstrated** (screenshot; lists from Apple get the nearest palette color; the icon is Today-only because EventKit has no list icon)
+3. Create, rename and delete a list. **Built** (Add List sheet verified on screen; rename and delete have a confirm alert, not yet exercised)
+4. New reminder with date and time, notes, flag and repeat. **Built** (reminder editor; J1 covers the one-line path; J5 adds a reminder inline to a list)
 5. Swipe left on a row shows Delete (full swipe, with Undo toast) and Flag. **Built** (`Rows.swift`)
 6. Long-press menu: Show Details, Flag, Today, Tomorrow, Delete. **Built** (`Rows.swift`; it also has Unschedule)
-7. Completed section, collapsed by default, with a count. **Built** (`TasksView`)
+7. Completed section, collapsed by default, with a count. **Built** (list screen: "N Completed · Show")
 8. Search reminders by title. **Demonstrated** (`SearchView`, UI test J7)
-9. Reads and writes real Apple Reminders (EventKit, live, two-way). **Not met** (no `EKReminder` code; data is local SwiftData)
-10. List order and colors match Apple Reminders. **Not met** (depends on 2 and 9)
+9. Reads and writes real Apple Reminders (EventKit, live, two-way). **Demonstrated** (a reminder added in Today appeared in the system Reminders app and one added there appeared in Today; `RemindersSyncTests` repeats the round trip). Not covered yet: completing, editing and deleting in both directions, repeating reminders, and many lists
+10. List order and colors match Apple Reminders. **Built** (colors map to the nearest of 12 palette colors; Apple's own order is not exposed by EventKit, so lists are ordered by creation)
 
-Round 19 count: 1 demonstrated, 4 built (not yet counted), 5 not met. No score is given until the Reminders tab is rebuilt and the "built" claims have tests or screenshots.
+Round 20 count: 4 demonstrated (1, 2, 8, 9), 6 built (3, 4, 5, 6, 7, 10). No score is given until the "built" claims have tests or screenshots.
 
 ### 5. AI (benchmark: ChatGPT, Todoist natural language)
 1. Understands day words (today, tomorrow, 明天…)
@@ -186,6 +186,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 17 | 10 | 10 | 8 | 10 | 9 | 10 | 10 | 10 | 9.6 | Habit reminder schedule moved to Logic with tests (skips checked-in days and past times) on the same notification pipeline verified in round 3 (Habits 8). Dictation (Speech, on-device when possible) wired to the AI input; the simulator's CoreAudio input deadlocks, so it is device-only and not counted yet |
 | 18 | 10 | 10 | 8 | 10 | 9 | 10 | 10 | 10 | 9.6 | Real data (debug-only `-importData`, Yuan's Calendar + Reminders export, never committed): 458 events, 277 reminders, mostly Chinese titles. Fixed what it exposed: noisy task details (deadline first, repeat as ↻, no duplicate "Overdue"), numbered list names shown without the number, Overdue collapsed to 3 + "Show N more" and sorted oldest first, redundant "All day" labels, empty built-in Inbox chip hidden, Unscheduled sorted by deadline. CalendarSyncTests made robust to leftover simulator events |
 | 19 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | Re-scope, no new measurement. (1) App renamed **Today** (bundle id and targets unchanged). (2) Direction: AI-native, local data, Apple Calendar/Reminders as the source of truth via EventKit, AlarmKit alarms; roadmap aggregate, then optimize, then surpass; Apple Intelligence (on-device) later, always as a preview. (3) 4 tabs Today / Calendar / Reminders / Alarms; Habits removed (model kept in schema); Calendar is Week/Month; Alarms lists real alarms only; the nag-until-done reminder is dropped; the bottom-right button becomes a + (tap adds what fits, hold for the menu). (4) Gestures follow Apple (tap the circle, swipe left Delete + Flag, long-press menu, system events in Apple's viewer). (5) HTML prototype simplified the same way (the iOS app is now ahead of it). Dimensions were re-scoped (Habits retired for Reminders parity; Alarms, AI, Interaction and Reliability claims reworded), so scores restart at the next full eval and round 18 numbers are not comparable. Reminders parity by code read: 1 demonstrated, 4 built, 5 not met |
+| 20 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | Aggregation step. (1) Reminders tab modeled on Apple Reminders: smart-list cards with counts, My Lists with color and symbol, Add List sheet, list screens with an inline New Reminder row. (2) Two-way sync with Apple Reminders through EventKit (`RemindersSync`): lists and reminders, Apple wins on conflict, nothing written before the user connects, only items created after connecting are uploaded, a pass never deletes more than 10 Apple items, "Delete all data" forgets the link first, planned time stays local. Verified in the simulator both ways; a same-value write looped the sync and was fixed. (3) Alarms page lists real alarms (AlarmKit, new `OneAlarm`), alarms also appear in Today's schedule; + button adds what fits the page. (4) Apple Intelligence (on-device) capture with the rule parser as fallback, compile-checked only. Known: the simulator's Apple Calendar accumulates the test events UI tests create |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 

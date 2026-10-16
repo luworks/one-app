@@ -177,6 +177,7 @@ struct HomeView: View {
             #endif
             SampleData.insertIfNeeded(context)
             ListActions.ensureLists(in: context)
+            await CalendarSync.shared.connectIfFirstRun()
         }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {

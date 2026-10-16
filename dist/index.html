@@ -688,7 +688,7 @@ function timeline(d){const it=dayItems(d);let h=`<div class="tl" id="tl" data-da
  if(d===D0)h+=`<div class="now-m" style="top:${(NOW-H0*60)/60*HPX}px"></div>`;
  return h+`</div>`}
 
-function vTasks(){const s=ui.tasks;let h=`<div class="lt-wrap"><h1 class="lt">${s.project?esc(s.project):'Lists'}</h1></div>`;
+function vTasks(){const s=ui.tasks;let h=`<div class="lt-wrap"><h1 class="lt">${s.project?esc(s.project):'Reminders'}</h1></div>`;
  if(s.project)return h+`<button class="sh-btn pad" data-act="proj-clear">${ic('back','s')} All projects</button><div class="group" style="margin-top:8px">${data.tasks.filter(t=>t.project===s.project&&!t.done).map(taskRow).join('')||'<p class="footnote">No open tasks.</p>'}</div>`;
  h+=`<div class="seg"><button class="${s.seg==='tasks'?'on':''}" data-act="t-seg" data-v="tasks">Tasks</button><button class="${s.seg==='projects'?'on':''}" data-act="t-seg" data-v="projects">Projects</button><button class="${s.seg==='notes'?'on':''}" data-act="t-seg" data-v="notes">Notes</button></div>`;
  h+=`<button class="search" data-act="search">${ic('search','s')}<span>Search everything</span></button>`;
@@ -760,7 +760,7 @@ function render(preserve=false){const main=$('#main'),st=main.scrollTop,ps=$('#c
  document.documentElement.style.setProperty('--fs',prefs.fs);if(prefs.theme==='system'){if(HOST_THEME)document.documentElement.dataset.theme=HOST_THEME;else document.documentElement.removeAttribute('data-theme')}else document.documentElement.dataset.theme=prefs.theme;
  main.className='main'+(ui.tab==='today'?' home':'');main.innerHTML={today:vHome,calendar:vCalendar,tasks:vTasks,alarms:vAlarms}[ui.tab]();
  if(ui.tab==='today'){sizePane(false);const p=$('#cal-pane'),c=$('#chat-pane');if(preserve&&ps!=null){p.scrollTop=ps;if(cs!=null)c.scrollTop=cs}else scrollPaneToNow();if(ui.chatEnd||(!preserve&&msgs.length)){c.scrollTop=c.scrollHeight;ui.chatEnd=false}}
- const title={today:new Date(ui.cal.date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',timeZone:'UTC'}),calendar:'Calendar',tasks:ui.tasks.project||'Lists',alarms:'Alarms'}[ui.tab];
+ const title={today:new Date(ui.cal.date+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric',timeZone:'UTC'}),calendar:'Calendar',tasks:ui.tasks.project||'Reminders',alarms:'Alarms'}[ui.tab];
  const right=ui.tab==='alarms'?`<button class="nbtn" data-act="al-new" aria-label="New alarm">${ic('plus')}</button>`:ui.tab==='calendar'&&ui.cal.date!==D0?`<button class="nbtn txt" data-act="cal-day" data-v="${D0}">Today</button>`:'';
  $('#navbar').innerHTML=`<div class="nb-l"><button class="nbtn" data-act="drawer" aria-label="Open menu">${ic('menu')}</button></div><div class="nb-title">${esc(title)}</div><div class="nb-r">${right}<button class="nbtn" data-act="search" aria-label="Search everything">${ic('search')}</button></div>`;
  if(ui.drawer)renderDrawer();
@@ -1084,7 +1084,7 @@ function renderDrawer(){const open=data.tasks.filter(t=>!t.done&&t.status!=='som
  <div class="dr-body">
   ${item('today','sun','Today','')}
   ${item('calendar','cal','Calendar','')}
-  ${item('tasks','task','Lists','',open,1)}
+  ${item('tasks','task','Reminders','',open,1)}
   ${item('notes','note','Notes','',data.notes.length,1)}
   ${item('alarms','alarm','Alarms','')}
   <div class="dr-label">Conversations</div>

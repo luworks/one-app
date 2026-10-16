@@ -60,6 +60,7 @@ enum TaskActions {
     }
 
     static func delete(_ task: OneTask, context: ModelContext, toast: UndoToast?) {
+        RemindersSync.shared.noteDeleted(reminder: task.externalID)
         let backup = task.copy()
         if task.externalID != nil { backup.createdAt = .now }   // Undo creates it again in Apple Reminders too
         withAnimation { context.delete(task) }

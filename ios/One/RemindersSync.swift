@@ -24,6 +24,8 @@ final class RemindersSync {
     private static let listBaseKey = "today.remindersSync.listBase"
     private static let fpKey = "today.remindersSync.fp"              // id -> fingerprint both sides agreed on
     private static let uploadFromKey = "today.remindersSync.uploadFrom"
+    private static let pendingKey = "today.remindersSync.pendingDeletes"          // reminders the user deleted in the app
+    private static let pendingListsKey = "today.remindersSync.pendingListDeletes" // lists the user deleted in the app
     static let maxRemoteDeletes = 10
 
     /// Created on first use: EKEventStore is slow to set up.
@@ -51,6 +53,13 @@ final class RemindersSync {
 
     private init() {}
 
+    /// Titles are personal: they are only logged in debug builds.
+    private func debugLog(_ message: String) {
+        #if DEBUG
+        log.info("\(message, privacy: .public)")
+        #endif
+    }
+
     // MARK: Lifecycle
 
     /// Call once at launch. Starts watching local saves; syncs right away when already connected.
@@ -62,11 +71,30 @@ final class RemindersSync {
         if isConnected { scheduleReconcile(after: .seconds(2)) }
     }
 
+    /// iOS lets the app ask only once; after a "Don't Allow" the user has to change it in Settings.
+    var isDenied: Bool {
+        let s = EKEventStore.authorizationStatus(for: .reminder)
+        return s == .denied || s == .restricted
+    }
+
+    /// The first time the Reminders tab opens, show iOS's own permission prompt. Does nothing afterwards.
+    func connectIfFirstRun() async {
+        guard !ProcessInfo.processInfo.arguments.contains("-uiTesting"),
+              EKEventStore.authorizationStatus(for: .reminder) == .notDetermined else { return }
+        await connect()
+    }
+
     /// Asks for access (the first time) and turns sync on.
     func connect() async {
         if !hasAccess {
-            _ = try? await store.requestFullAccessToReminders()
+            do {
+                let granted = try await store.requestFullAccessToReminders()
+                log.info("reminders access request: granted \(granted)")
+            } catch {
+                log.error("reminders access request failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
+        log.info("reminders authorization status: \(EKEventStore.authorizationStatus(for: .reminder).rawValue)")
         enabled = hasAccess
         UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
         guard enabled else { return }
@@ -85,7 +113,24 @@ final class RemindersSync {
 
     /// Forget the linkage (not the data). Call before wiping local data so the wipe is never mirrored to Apple.
     func forgetLink() {
-        for k in [Self.baseKey, Self.listBaseKey, Self.fpKey, Self.uploadFromKey] { UserDefaults.standard.removeObject(forKey: k) }
+        for k in [Self.baseKey, Self.listBaseKey, Self.fpKey, Self.uploadFromKey, Self.pendingKey, Self.pendingListsKey] {
+            UserDefaults.standard.removeObject(forKey: k)
+        }
+    }
+
+    /// The user deleted a synced reminder in the app: delete it in Apple Reminders too.
+    /// Only explicit deletes like this are mirrored; a reminder that is merely missing locally (a wiped or
+    /// rebuilt local store) is restored from Apple instead of being deleted there.
+    func noteDeleted(reminder externalID: String?) {
+        guard let externalID, isConnected else { return }
+        saveSet(loadSet(Self.pendingKey).union([externalID]), Self.pendingKey)
+        scheduleReconcile()
+    }
+
+    func noteDeleted(list externalID: String?) {
+        guard let externalID, isConnected else { return }
+        saveSet(loadSet(Self.pendingListsKey).union([externalID]), Self.pendingListsKey)
+        scheduleReconcile()
     }
 
     func scheduleReconcile(after delay: Duration = .milliseconds(1200)) {
@@ -245,28 +290,46 @@ final class RemindersSync {
     }
 
     private func pass(_ context: ModelContext) async throws {
+        // Only items created after connecting are uploaded. A missing mark (e.g. after forgetLink) means "from now".
+        if UserDefaults.standard.object(forKey: Self.uploadFromKey) == nil {
+            UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.uploadFromKey)
+        }
         let uploadFrom = Date(timeIntervalSince1970: UserDefaults.standard.double(forKey: Self.uploadFromKey))
         var fp = storedFP
 
         // ---- Lists ----
-        let calendars = store.calendars(for: .reminder)
-        let calByID = Dictionary(uniqueKeysWithValues: calendars.map { ($0.calendarIdentifier, $0) })
+        let allCalendars = store.calendars(for: .reminder)
+        let calByID = Dictionary(uniqueKeysWithValues: allCalendars.map { ($0.calendarIdentifier, $0) })
         var lists = try context.fetch(FetchDescriptor<OneList>())
         var listBase = loadSet(Self.listBaseKey)
         var remoteDeletes = 0
+        var pendingLists = loadSet(Self.pendingListsKey)
+        for id in pendingLists {
+            if let cal = calByID[id] {
+                remoteDeletes += 1
+                if remoteDeletes <= Self.maxRemoteDeletes { try? store.removeCalendar(cal, commit: true) }
+            }
+            listBase.remove(id)
+            fp["list:" + id] = nil
+        }
+        let deletedLists = pendingLists
+        pendingLists = []
+        saveSet(pendingLists, Self.pendingListsKey)
+        let calendars = allCalendars.filter { !deletedLists.contains($0.calendarIdentifier) }
 
         for cal in calendars {
             let id = cal.calendarIdentifier
             let remoteFP = "\(cal.title)\u{1F}\(Self.colorIndex(for: cal.cgColor))"
             if let local = lists.first(where: { $0.externalID == id }) ?? lists.first(where: { $0.externalID == nil && $0.name == cal.title }) {
-                local.externalID = id
+                if local.externalID != id { local.externalID = id }
                 let localFP = Self.fingerprint(of: local)
                 let agreed = fp["list:" + id]
                 if agreed == nil || (remoteFP != agreed) {
                     // Apple changed (or first link): take Apple's name and color.
                     if local.name != cal.title { renameTasks(from: local.name, to: cal.title, in: context) }
-                    local.name = cal.title
-                    local.colorIndex = Self.colorIndex(for: cal.cgColor)
+                    if local.name != cal.title { local.name = cal.title }
+                    let ci = Self.colorIndex(for: cal.cgColor)
+                    if local.colorIndex != ci { local.colorIndex = ci }
                 } else if localFP != agreed, cal.allowsContentModifications {
                     // Only the app changed: write it to Apple.
                     cal.title = local.name
@@ -293,14 +356,6 @@ final class RemindersSync {
                 listBase.remove(id)
             }
         }
-        for id in listBase where !lists.contains(where: { $0.externalID == id }) {
-            if let cal = calByID[id] {
-                remoteDeletes += 1
-                if remoteDeletes <= Self.maxRemoteDeletes { try? store.removeCalendar(cal, commit: true) }
-            }
-            listBase.remove(id)
-            fp["list:" + id] = nil
-        }
         // New local lists (created after connecting) go to Apple.
         for l in lists where l.externalID == nil && l.createdAt >= uploadFrom {
             guard let source = store.defaultCalendarForNewReminders()?.source else { break }
@@ -315,20 +370,22 @@ final class RemindersSync {
             }
         }
         saveSet(listBase, Self.listBaseKey)
-        try context.save()
+        if context.hasChanges { try context.save() }
 
         // ---- Reminders ----
         let remote = await fetchRemote()
         let remoteByID = Dictionary(remote.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var tasks = try context.fetch(FetchDescriptor<OneTask>())
         var base = loadSet(Self.baseKey)
+        let pending = loadSet(Self.pendingKey)
         let calendarByTitle = Dictionary(calendars.map { ($0.title, $0) }, uniquingKeysWith: { a, _ in a })
         let defaultCal = store.defaultCalendarForNewReminders()
 
         // Link unlinked local tasks to an Apple reminder with the same title and list (never duplicate).
         var claimed = Set(tasks.compactMap(\.externalID))
         for r in remote where !claimed.contains(r.id) {
-            if let t = tasks.first(where: { $0.externalID == nil && $0.title == r.title && $0.listName == r.listTitle }) {
+            // A task with no list lives in Apple's default list.
+            if let t = tasks.first(where: { $0.externalID == nil && $0.title == r.title && ($0.listName.isEmpty ? defaultCal?.title : $0.listName) == r.listTitle }) {
                 t.externalID = r.id
                 claimed.insert(r.id)
                 fp[r.id] = Self.fingerprint(of: t) == r.fingerprint ? r.fingerprint : nil
@@ -350,7 +407,16 @@ final class RemindersSync {
                     fp[r.id] = Self.fingerprint(of: t)
                 }
                 base.insert(r.id)
-            } else if !base.contains(r.id) {
+            } else if pending.contains(r.id) {
+                // The user deleted it in the app.
+                remoteDeletes += 1
+                if remoteDeletes <= Self.maxRemoteDeletes,
+                   let ek = store.calendarItem(withIdentifier: r.id) as? EKReminder { try? store.remove(ek, commit: true) }
+                base.remove(r.id)
+                fp[r.id] = nil
+            } else {
+                // New in Apple, or missing locally for any other reason (e.g. a rebuilt local store): bring it in.
+                debugLog("pull \(r.title)")
                 let t = OneTask(title: r.title)
                 t.externalID = r.id
                 apply(r, to: t)
@@ -358,13 +424,6 @@ final class RemindersSync {
                 tasks.append(t)
                 fp[r.id] = r.fingerprint
                 base.insert(r.id)
-            } else {
-                // Known on both sides before, gone locally: the user deleted it here.
-                remoteDeletes += 1
-                if remoteDeletes <= Self.maxRemoteDeletes,
-                   let ek = store.calendarItem(withIdentifier: r.id) as? EKReminder { try? store.remove(ek, commit: true) }
-                base.remove(r.id)
-                fp[r.id] = nil
             }
         }
 
@@ -394,6 +453,7 @@ final class RemindersSync {
         for t in tasks where t.externalID == nil && t.createdAt >= uploadFrom {
             let cal = (t.listName.isEmpty ? nil : calendarByTitle[t.listName]) ?? defaultCal
             guard let cal else { continue }
+            debugLog("upload \(t.title)")
             let ek = EKReminder(eventStore: store)
             ek.calendar = cal
             try write(t, to: ek)
@@ -404,8 +464,10 @@ final class RemindersSync {
         }
 
         saveSet(base, Self.baseKey)
+        saveSet([], Self.pendingKey)
         storedFP = fp
-        try context.save()
+        if context.hasChanges { try context.save() }
+        log.info("sync ok: \(tasks.count) local, \(remote.count) in Apple Reminders, \(calendars.count) lists, \(remoteDeletes) Apple deletes")
     }
 
     // MARK: Field mapping
@@ -416,17 +478,18 @@ final class RemindersSync {
     }
 
     /// Apple -> app. Planned time, duration, tags, checklist and reminder offsets stay as they are.
+    /// Only changed fields are written: SwiftData counts a same-value write as a change, which would loop the sync.
     private func apply(_ r: Remote, to t: OneTask) {
-        t.title = r.title
-        t.note = r.notes
+        if t.title != r.title { t.title = r.title }
+        if t.note != r.notes { t.note = r.notes }
         if r.isDone != t.isDone {
             t.isDone = r.isDone
             t.doneAt = r.isDone ? (r.doneAt ?? .now) : nil
         }
-        t.due = r.due
-        t.listName = r.listTitle
-        t.flagged = r.flagged
-        t.repeatRule = r.repeatRule
+        if t.due != r.due { t.due = r.due }
+        if t.listName != r.listTitle { t.listName = r.listTitle }
+        if t.flagged != r.flagged { t.flagged = r.flagged }
+        if t.repeatRule != r.repeatRule { t.repeatRule = r.repeatRule }
     }
 
     /// App -> Apple for an existing reminder.

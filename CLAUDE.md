@@ -23,8 +23,8 @@ The native SwiftUI app in `ios/` is the product and is ahead of the HTML/JS prot
 ## Layout: HTML prototype (`src/`)
 - **Home (`ui.tab==='today'`, `vHome`)**: calendar pane on top (week strip, next item, due-today tray, timeline) + resizable split handle (peek / half / full) + conversation pane below. With no messages the calendar pane fills the screen (just the items: one quiet "N overdue" line, the overlap banner, due-today tray, timeline); the split handle and conversation pane appear with the first message. There is no AI brief card (removed on purpose: the page shows items, AI lives in the composer).
 - **Composer**: always-visible bottom input (`#ask`). Statements are parsed into a capture card (`parse` → `captureCard`); questions go to `aiReply` (scripted). `isQuestion` decides.
-- **Side drawer** (`renderDrawer`): ☰ button or left-edge swipe. Today / Calendar / Lists / Notes / Alarms (no live summaries), conversations (`threads`), AI activity, Lock Screen & widgets mock, Settings.
-- Secondary full views: `vCalendar` (week/month only; the day view is Home), `vTasks` (shown as "Lists": tasks/projects/notes), `vAlarms` (real alarms only; reminders are a per-item alert, not a list).
+- **Side drawer** (`renderDrawer`): ☰ button or left-edge swipe. Today / Calendar / Reminders / Notes / Alarms (no live summaries), conversations (`threads`), AI activity, Lock Screen & widgets mock, Settings.
+- Secondary full views: `vCalendar` (week/month only; the day view is Home), `vTasks` (shown as "Reminders": tasks/projects/notes), `vAlarms` (real alarms only; reminders are a per-item alert, not a list).
 - Sheets with detents (`openSheet`/`renderSheet`), iOS action sheets (`openMenu`), ring screen (`showRing`), toasts with Undo.
 - `vToday` is the older list-style Today; it is no longer routed but kept for reference.
 
