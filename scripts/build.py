@@ -19,19 +19,19 @@ html = f"""<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="one.">
+<meta name="apple-mobile-web-app-title" content="Today">
 <meta name="theme-color" content="#F6F6F2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101312" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex,nofollow">
-<meta name="description" content="one. V8 — an iOS-feel interactive prototype. Today, Calendar, Tasks, Alarms and AI in one calm system.">
-<title>one.</title>
+<meta name="description" content="Today — an iOS-feel interactive prototype. Today, Calendar, Tasks, Alarms and AI in one calm system.">
+<title>Today</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>{css}</style>
 </head>
 <body>
-<aside class="side"><b>one.</b><p>V8 prototype. Open this page on your iPhone and use “Add to Home Screen” for the full-screen feel.</p><p>Swipe from the left edge (or tap ☰) for every view. Swipe tasks · long-press anything · drag dashed tasks in Calendar · pull sheets down by the handle.</p></aside>
+<aside class="side"><b>Today</b><p>V8 prototype. Open this page on your iPhone and use “Add to Home Screen” for the full-screen feel.</p><p>Swipe from the left edge (or tap ☰) for every view. Swipe tasks · long-press anything · drag dashed tasks in Calendar · pull sheets down by the handle.</p></aside>
 <div class="app" id="app">
 <header class="navbar" id="navbar"></header>
 <main class="main" id="main" tabindex="-1"></main>
@@ -50,7 +50,7 @@ svg = '<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox=
 png_bytes = (src / 'apple-touch-icon.png').read_bytes(); png_b64 = base64.b64encode(png_bytes).decode()
 (dist / 'apple-touch-icon.png').write_bytes(png_bytes)
 
-manifest = json.dumps({"name": "one. — your day, connected", "short_name": "one.", "start_url": "/", "scope": "/", "display": "standalone",
+manifest = json.dumps({"name": "Today — your day, connected", "short_name": "Today", "start_url": "/", "scope": "/", "display": "standalone",
     "background_color": "#F6F6F2", "theme_color": "#F6F6F2", "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml"}, {"src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}]})
 
 script_hash = base64.b64encode(hashlib.sha256(js.encode()).digest()).decode()
@@ -80,6 +80,6 @@ print('built', len(html), 'bytes html;', len(worker), 'bytes worker')
 
 # claude.ai artifact variant (host supplies doctype/head/body)
 body = html.split('<body>',1)[1].rsplit('</body>',1)[0]
-art = f"<title>one. V8</title>\n<style>{css}</style>\n{body}"
+art = f"<title>Today</title>\n<style>{css}</style>\n{body}"
 (dist / 'artifact.html').write_text(art, encoding='utf-8')
 print('artifact', len(art))

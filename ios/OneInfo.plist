@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Today rings alarms you set on tasks and events, even on Silent.</string>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>sparkles</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Ask AI</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.ask</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>checklist</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New task</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.newTask</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>calendar</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New event</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.newEvent</string>
+		</dict>
+	</array>
+</dict>
+</plist>
