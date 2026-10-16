@@ -5,7 +5,17 @@ node_modules/
 __pycache__/
 .DS_Store
 
-# secrets
+# secrets: API keys live in .env, never commit them
 .env
 .env.*
 !.env.example
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# local model eval: generated outputs and downloaded weights
+*.gguf
+ios/Eval/open/results/
