@@ -39,6 +39,7 @@ struct DayAgenda: View {
             if !showsWeekStrip, !cal.isDateInToday(day) {
                 Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
                     Label("Back to today", systemImage: "arrow.uturn.backward").font(.subheadline)
+                        .frame(minHeight: 44)
                 }
                 .listRowSeparator(.hidden)
             }
@@ -52,10 +53,10 @@ struct DayAgenda: View {
             }
 
             if !allDay.isEmpty || !externalAllDay.isEmpty {
-                Section("All day") {
+                Section {
                     ForEach(allDay) { EventRow(event: $0) }
                     ForEach(externalAllDay) { ExternalEventRow(event: $0) }
-                }
+                } header: { AgendaHeader(title: "All day") }
             }
             if cal.isDateInToday(day), showsOverdue, !overdue.isEmpty {
                 Section {
@@ -63,25 +64,28 @@ struct DayAgenda: View {
                         withAnimation(.snappy) { showsAllOverdue.toggle() }
                     } label: {
                         HStack {
-                            Text("\(overdue.count) overdue").font(.body.weight(.semibold)).foregroundStyle(.red)
+                            Text("\(overdue.count) overdue").font(.subheadline.weight(.semibold)).foregroundStyle(.red)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .rotationEffect(.degrees(showsAllOverdue ? 90 : 0))
                         }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                     .accessibilityHint(showsAllOverdue ? "Hides the overdue tasks" : "Shows the overdue tasks")
-                    if showsAllOverdue { ForEach(overdue) { TaskRow(task: $0) } }
+                    if showsAllOverdue { ForEach(overdue) { TaskRow(task: $0, compact: true) } }
                 }
             }
             if !dueOnDay.isEmpty {
-                Section(cal.isDateInToday(day) ? "Due today" : "Due") {
-                    ForEach(dueOnDay) { TaskRow(task: $0) }
-                }
+                Section {
+                    ForEach(dueOnDay) { TaskRow(task: $0, compact: true) }
+                } header: { AgendaHeader(title: cal.isDateInToday(day) ? "Due today" : "Due") }
             }
-            Section(showsWeekStrip || !cal.isDateInToday(day) ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule") {
+            Section {
                 if timeline.isEmpty {
                     Text("Nothing planned").foregroundStyle(.secondary)
                         .listRowSeparator(.hidden)
@@ -90,14 +94,19 @@ struct DayAgenda: View {
                     switch item {
                     case .event(let event, let start): EventRow(event: event, start: start)
                     case .external(let e): ExternalEventRow(event: e)
-                    case .task(let task): TaskRow(task: task, showsTime: true)
+                    case .task(let task): TaskRow(task: task, showsTime: true, compact: true)
                     case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
                     case .nowMarker(let date): NowRow(date: date).id("now-line")
                     }
                 }
+            } header: {
+                AgendaHeader(title: showsWeekStrip || !cal.isDateInToday(day) ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule")
             }
         }
         .listStyle(.plain)
+        // Rows set their own 44pt minimum where they can be tapped; this lets the alarm and now lines sit tighter.
+        .environment(\.defaultMinListRowHeight, 24)
+        .listSectionSpacing(6)
         .scrollContentBackground(.hidden)
     }
 
@@ -165,5 +174,17 @@ enum TimelineItem: Identifiable {
         case .alarm(_, let d): return d
         case .nowMarker(let d): return d
         }
+    }
+}
+
+/// Small section label for the day view, so headers take less space than the default plain-list header.
+struct AgendaHeader: View {
+    let title: String
+    var body: some View {
+        Text(title)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(nil)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 2, trailing: 20))
     }
 }
