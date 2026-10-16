@@ -4,7 +4,7 @@ import Foundation
 import FoundationModels
 
 struct RawItem: Decodable { let id: String, type: String, title: String, start: String?, minutes: Int, attendees: Int }
-struct EditCase: Decodable { let lang: String, input: String, op: String, target: String?, start: String? }
+struct EditCase: Decodable { let lang: String, input: String, op: String, target: String?, start: String?, level: Int? }
 struct EditSuite: Decodable { let now: String, timeZone: String, items: [RawItem], cases: [EditCase] }
 
 func nul(_ v: Any?) -> Any { v ?? NSNull() }
@@ -24,7 +24,7 @@ func run() async {
     _ = try? await Editing.plan("What's on tomorrow?", items: items, now: now, calendar: cal) // warm-up
 
     var entries: [[String: Any]] = []
-    struct R { var c: EditCase; var raw: EditPlan?; var d: EditDecision; var dm: EditDecision; var err: Bool }
+    struct R { var c: EditCase; var raw: EditPlan?; var d: EditDecision; var err: Bool }
     var results: [R] = []
     for trial in 1...trials {
         for c in suite.cases {
@@ -32,23 +32,19 @@ func run() async {
             var plan: EditPlan?; var err: String?
             do { plan = try await Editing.plan(c.input, items: items, now: now, calendar: cal) } catch { err = String("\(error)".prefix(120)) }
             let secs = Date().timeIntervalSince(t0)
-            let d = Editing.decide(text: c.input, plan: plan, items: items, now: now, calendar: cal, codeAmounts: true)
-            let dm = Editing.decide(text: c.input, plan: plan, items: items, now: now, calendar: cal, codeAmounts: false)
+            let d = Editing.decide(text: c.input, plan: plan, items: items, now: now, calendar: cal)
             f.dateFormat = "yyyy-MM-dd'T'HH:mm"
             entries.append(["input": c.input, "trial": trial,
-                            "raw": plan.map { ["op": $0.op.rawValue, "target": nul($0.target), "postponeMinutes": nul($0.postponeMinutes), "targetHour": nul($0.targetHour),
-                                               "targetMinute": nul($0.targetMinute), "dayShift": nul($0.dayShift)] as [String: Any] } ?? NSNull(),
+                            "raw": plan.map { ["op": $0.op.rawValue, "target": nul($0.target)] as [String: Any] } ?? NSNull(),
                             "final": ["op": d.op.rawValue, "target": nul(d.target), "start": nul(d.newStart.map { f.string(from: $0) }), "reason": d.reason] as [String: Any],
-                            "final_model_number": ["op": dm.op.rawValue, "target": nul(dm.target), "start": nul(dm.newStart.map { f.string(from: $0) }), "reason": dm.reason] as [String: Any],
                             "error": nul(err), "seconds": secs])
-            results.append(R(c: c, raw: plan, d: d, dm: dm, err: err != nil))
+            results.append(R(c: c, raw: plan, d: d, err: err != nil))
         }
         print("trial \(trial)/\(trials) done")
     }
     try! JSONSerialization.data(withJSONObject: entries, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]).write(to: URL(fileURLWithPath: args[2]))
 
     func ratio(_ a: Int, _ b: Int) -> String { b == 0 ? "-" : String(format: "%.1f%% (%d/%d)", 100 * Double(a) / Double(b), a, b) }
-    var timeOKm = 0, timeGivenOKm = 0, timeGivenNm = 0
     var opRaw = 0, opFinal = 0, tgtRaw = 0, tgtFinal = 0, tgtN = 0, timeOK = 0, timeN = 0, timeGivenOK = 0, timeGivenN = 0, errN = 0
     var perOp: [String: (Int, Int)] = [:]
     for r in results {
@@ -66,9 +62,6 @@ func run() async {
             let exp = r.c.start.flatMap { f.date(from: $0) }
             let exact = r.d.op == .move && r.d.newStart == exp
             if exact { timeOK += 1 }
-            let exactM = r.dm.op == .move && r.dm.newStart == exp
-            if exactM { timeOKm += 1 }
-            if r.dm.op == .move && r.dm.target == r.c.target { timeGivenNm += 1; if exactM { timeGivenOKm += 1 } }
             if r.d.op == .move && r.d.target == r.c.target { timeGivenN += 1; if exact { timeGivenOK += 1 } }
         }
     }
@@ -77,22 +70,32 @@ func run() async {
     t += "| op accuracy | \(ratio(opRaw, n)) | \(ratio(opFinal, n)) |\n"
     for op in ["move", "delete", "clarify", "none"] { let v = perOp[op] ?? (0, 0); t += "|   op=\(op) (clarify recall for clarify) | - | \(ratio(v.0, v.1)) |\n" }
     t += "| target accuracy (move/delete cases) | \(ratio(tgtRaw, tgtN)) | \(ratio(tgtFinal, tgtN)) |\n"
-    t += "| move time exact (all move cases), amount from the words | - | \(ratio(timeOK, timeN)) |\n"
-    t += "| move time exact given op=move and right target, amount from the words | - | \(ratio(timeGivenOK, timeGivenN)) |\n"
-    t += "| move time exact (all move cases), amount from the model's number | - | \(ratio(timeOKm, timeN)) |\n"
-    t += "| move time exact given op=move and right target, model's number | - | \(ratio(timeGivenOKm, timeGivenNm)) |\n"
+    t += "| move time exact (all move cases) | - | \(ratio(timeOK, timeN)) |\n"
+    t += "| move time exact given op=move and right target | - | \(ratio(timeGivenOK, timeGivenN)) |\n"
     t += "| model errors | \(errN)/\(n) | |\n"
     let secs = entries.compactMap { $0["seconds"] as? Double }.sorted()
     t += String(format: "| latency p50 / p90 / max | %.2fs / %.2fs / %.2fs | |\n", secs[secs.count / 2], secs[Int(Double(secs.count - 1) * 0.9)], secs.last!)
     print("\n== edit summary (\(args[1]))\n" + t)
     try? t.write(toFile: args[2].replacingOccurrences(of: ".json", with: "-summary.md"), atomically: true, encoding: .utf8)
+    // Per level: the whole decision (op + target + new time when moving) right, and the model-alone op.
+    let lvls = Set(results.compactMap(\.c.level)).sorted()
+    if !lvls.isEmpty {
+        print("| level | cases x trials | decision right (op+target+time) | op | model-alone op |\n|---|---|---|---|---|")
+        for lv in lvls {
+            let rs = results.filter { $0.c.level == lv }
+            let right = rs.filter { r in r.d.op.rawValue == r.c.op && r.d.target == r.c.target && (r.c.op != "move" || r.d.newStart == r.c.start.flatMap { f.date(from: $0) }) }.count
+            let op = rs.filter { $0.d.op.rawValue == $0.c.op }.count
+            let raw = rs.filter { $0.raw?.op.rawValue == $0.c.op }.count
+            print("| L\(lv) | \(rs.count) | \(ratio(right, rs.count)) | \(ratio(op, rs.count)) | \(ratio(raw, rs.count)) |")
+        }
+    }
     // Final misses, one line per distinct (input, outcome).
     var seen = Set<String>()
     for r in results {
         let ok = r.d.op.rawValue == r.c.op && r.d.target == r.c.target && (r.c.op != "move" || r.d.newStart == r.c.start.flatMap { f.date(from: $0) })
         guard !ok else { continue }
         f.dateFormat = "yyyy-MM-dd'T'HH:mm"
-        let line = "✗ \(r.c.input) | want \(r.c.op) \(r.c.target ?? "-") \(r.c.start ?? "-") | got \(r.d.op.rawValue) \(r.d.target ?? "-") \(r.d.newStart.map { f.string(from: $0) } ?? "-") [\(r.d.reason)] raw \(r.raw.map { "\($0.op.rawValue) \($0.target ?? "-") pm\($0.postponeMinutes.map(String.init) ?? "-") h\($0.targetHour.map(String.init) ?? "-") ds\($0.dayShift.map(String.init) ?? "-")" } ?? "ERR")"
+        let line = "✗ \(r.c.input) | want \(r.c.op) \(r.c.target ?? "-") \(r.c.start ?? "-") | got \(r.d.op.rawValue) \(r.d.target ?? "-") \(r.d.newStart.map { f.string(from: $0) } ?? "-") [\(r.d.reason)] raw \(r.raw.map { "\($0.op.rawValue) \($0.target ?? "-")" } ?? "ERR")"
         if seen.insert(line).inserted { print(line) }
     }
 }

@@ -5,6 +5,7 @@ import FoundationModels
 
 struct Case: Decodable {
     let lang: String, input: String
+    let level: Int?
     let title: String?
     let kind: String
     let day: Int
@@ -78,6 +79,8 @@ func run() async {
     let parserRows = suite.cases.map { c in (c, score(c, CaptureParser.parse(c.input, now: now, calendar: cal))) }
     summarize("CaptureParser", parserRows)
     for lang in ["zh", "en", "mixed"] { summarize("  CaptureParser [\(lang)]", parserRows.filter { $0.0.lang == lang }) }
+    let levels = Set(suite.cases.compactMap(\.level)).sorted()
+    for lv in levels { summarize("  CaptureParser [L\(lv)]", parserRows.filter { $0.0.level == lv }) }
     // Ceiling for variant A: how often the parser's own day/time/duration/title are right (kind ignored).
     let ceiling = parserRows.filter { var r = $0.1; r.kind = true; return r.all }.count
     print("variant-A ceiling (parser day/hasDay/hour/min/dur/title all right, kind ignored): \(ceiling)/\(suite.cases.count)")
@@ -118,6 +121,18 @@ func run() async {
             let k = try await Understanding.extractKindOnly(c.input, localeID: deviceLocale)
             let p = CaptureParser.parse(c.input, now: now, calendar: cal)
             return ([("A2g: parser + kind + alarm guard", Understanding.combine(parser: p, kind: k.kind, text: c.input))], "kind \(k.kind)")
+        },
+        // Prompt experiments: KIND_PROMPT=<file with {LOCALE}>, KIND_VOTES=<odd number> (majority of that many samples).
+        Variant(key: "KP", name: "KP: prompt file + A2g combination") { c in
+            let env = ProcessInfo.processInfo.environment
+            let file = env["KIND_PROMPT"] ?? ""
+            let prompt = try String(contentsOfFile: file, encoding: .utf8).replacingOccurrences(of: "{LOCALE}", with: deviceLocale)
+            let votes = max(1, Int(env["KIND_VOTES"] ?? "1") ?? 1)
+            var counts: [SimpleKind: Int] = [:]
+            for _ in 0..<votes { counts[try await Understanding.extractKindOnly(c.input, localeID: deviceLocale, instructions: prompt).kind, default: 0] += 1 }
+            let k = counts.max { $0.value < $1.value }!.key
+            let p = CaptureParser.parse(c.input, now: now, calendar: cal)
+            return ([("KP: parser + kind (prompt file)", Understanding.combine(parser: p, kind: k, text: c.input))], "kind \(k) votes \(counts)")
         },
         Variant(key: "A3", name: "A3: A2 + stricter instructions + alarm-word guard") { c in
             let k = try await Understanding.extractKindOnly(c.input, localeID: deviceLocale, strict: true)
@@ -167,6 +182,7 @@ func run() async {
         for label in order {
             summarize(label, rows[label] ?? [], times: label == order[0] ? times : [])
             if label == order[0] { for lang in ["zh", "en", "mixed"] { summarize("  [\(lang)]", (rows[label] ?? []).filter { $0.0.lang == lang }) } }
+            for lv in levels { summarize("  [L\(lv)] \(label.prefix(12))", (rows[label] ?? []).filter { $0.0.level == lv }) }
         }
         print("returned nil (would fall back): \(fallbacks);  errors: \(errors.isEmpty ? "none" : "\(errors)")")
         print("Failures (any trial, first label shown per trial plus extras):")

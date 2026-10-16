@@ -233,16 +233,39 @@ enum Understanding {
                 "Ignore dates and times.",
             ].joined(separator: "\n")
         }
-        return [
-            "You classify ONE message for a planner app.",
-            "The person's locale is \(localeID).",
-            "task = something to do. event = a meeting, appointment, meal, trip or class. "
-                + "alarm = the user asks to be woken up or rung at a time. Ignore dates and times.",
-        ].joined(separator: "\n")
+        // Few-shot prompt chosen on the ladder dev set and checked on a held-out set (Eval/Understanding/prompts/kind-p2.txt).
+        return """
+        You classify ONE message for a day planner. The person's locale is \(localeID).
+        Answer with exactly one kind:
+        - event: a meeting (including standup, sync, 1:1, review), appointment, interview, class, show, flight or trip, meeting someone in person, or a meal or outing with other people. It happens at a booked time, with someone else or somewhere else.
+        - alarm: ONLY when the person asks to be woken up or asks for an alarm.
+        - task: everything else. Things the person does alone (calls, emails, reports, errands, chores, workouts, payments), booking or buying something, and every "remind me" request, even when a day or time is given.
+        Ignore dates and times when deciding.
+        Examples:
+        "周三下午2点和客户开会" -> event
+        "明天上午10点牙科复诊" -> event
+        "Dinner with Mia on Saturday 7pm" -> event
+        "周六下午和老同学见面" -> event
+        "Flight to Tokyo Friday 8:15am" -> event
+        "Team sync Monday 10am" -> event
+        "Brunch with the team on Sunday" -> event
+        "Doctor appt Monday 9am" -> event
+        "晚上8点给妈妈打电话" -> task
+        "Call the bank at 3pm" -> task
+        "Walk the dog at 6pm" -> task
+        "Pick up the dry cleaning at 5" -> task
+        "Book a hotel in Rome for March" -> task
+        "提醒我周五交报销单" -> task
+        "Remind me to take my pills at 9pm" -> task
+        "Pay rent on the 1st" -> task
+        "下班后去超市买菜" -> task
+        "明早6点半叫我起床" -> alarm
+        "Set an alarm for 7am" -> alarm
+        """
     }
 
-    static func extractKindOnly(_ text: String, localeID: String, strict: Bool = false) async throws -> KindOnly {
-        let session = LanguageModelSession(instructions: kindOnlyInstructions(localeID: localeID, strict: strict))
+    static func extractKindOnly(_ text: String, localeID: String, strict: Bool = false, instructions: String? = nil) async throws -> KindOnly {
+        let session = LanguageModelSession(instructions: instructions ?? kindOnlyInstructions(localeID: localeID, strict: strict))
         return try await session.respond(to: text, generating: KindOnly.self).content
     }
 

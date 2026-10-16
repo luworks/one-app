@@ -249,11 +249,16 @@ struct AskView: View {
 
     /// Edit sentence → a ChangeCard, a question in the chat, or (not an edit after all) a capture. Nothing is written here.
     private func proposeEdit(_ text: String) {
-        guard Understanding.unavailableReason(localeID: Locale.current.identifier) == nil else {
-            messages.append(ChatMessage(role: .ai, text: "Apple Intelligence isn't available on this device, so I can't change existing items from a sentence. Open the item to edit it. Adding new things still works."))
+        let candidates = editCandidates()
+        // The words usually settle which item is meant; the model is asked only when they do not.
+        guard Editing.needsModel(text, items: candidates.items) else {
+            handle(Editing.decide(text: text, plan: nil, items: candidates.items, now: .now, calendar: .current), text: text, plan: nil, candidates: candidates)
             return
         }
-        let candidates = editCandidates()
+        guard Understanding.unavailableReason(localeID: Locale.current.identifier) == nil else {
+            messages.append(ChatMessage(role: .ai, text: "Apple Intelligence isn't available on this device, so I can't tell which item you mean from that sentence. Name the item, or open it to edit it."))
+            return
+        }
         thinking = true
         captureTask = Task { @MainActor in
             let items = candidates.items
@@ -261,19 +266,22 @@ struct AskView: View {
             guard !Task.isCancelled else { return }
             thinking = false
             if plan == nil {
-                messages.append(ChatMessage(role: .ai, text: "The on-device model didn't answer in time. Try again in a moment, or open the item to edit it."))
+                messages.append(ChatMessage(role: .ai, text: "The on-device model didn't answer in time. Try again in a moment, or name the item."))
                 return
             }
-            let decision = Editing.decide(text: text, plan: plan, items: candidates.items, now: .now, calendar: .current)
-            switch decision.op {
-            case .none:
-                understand(text)
-            case .clarify:
-                messages.append(ChatMessage(role: .ai, text: clarifyQuestion(decision, plan: plan, items: candidates.items)))
-            case .move, .delete:
-                guard let id = decision.target else { return }
-                present(decision, id: id, candidates: candidates)
-            }
+            handle(Editing.decide(text: text, plan: plan, items: items, now: .now, calendar: .current), text: text, plan: plan, candidates: candidates)
+        }
+    }
+
+    private func handle(_ decision: EditDecision, text: String, plan: EditPlan?, candidates: (items: [EditItem], tasks: [String: OneTask], events: [String: OneEvent])) {
+        switch decision.op {
+        case .none:
+            propose(text)
+        case .clarify:
+            messages.append(ChatMessage(role: .ai, text: clarifyQuestion(decision, plan: plan, items: candidates.items)))
+        case .move, .delete:
+            guard let id = decision.target else { return }
+            present(decision, id: id, candidates: candidates)
         }
     }
 
