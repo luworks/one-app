@@ -1,21 +1,20 @@
 import SwiftUI
 import SwiftData
 
-/// Calendar tab, modeled on Apple Calendar: the next 3 days (time grid, the default), Week (time grid), Month (a compact
-/// grid with the selected day's events listed below) and Year (twelve mini months). The day view is the Today tab:
-/// tapping a day's header opens it there. One control row under the tab pills: the view switcher, Today, Calendars.
+/// Calendar tab, modeled on Apple Calendar: Week (time grid, the default), Month (a compact grid with the selected
+/// day's events listed below) and Year (twelve mini months). The day view is the Today tab: tapping a day's header
+/// opens it there. One control row under the tab pills: the view switcher. Which calendars show is a Setting.
 /// System events open in Apple's own viewer; new events use Apple's own editor when Calendar access is on.
 struct CalendarView: View {
     enum Mode: String, CaseIterable, Identifiable {
-        case threeDays = "3 Days", week = "Week", month = "Month", year = "Year"
+        case week = "Week", month = "Month", year = "Year"
         var id: Self { self }
     }
 
     @Binding var day: Date
     var onOpenDay: (Date) -> Void
 
-    @State private var mode: Mode = .threeDays
-    @State private var showsCalendars = false
+    @State private var mode: Mode = .week
     @State private var opened: OpenedEntry?
     private let cal = Calendar.current
 
@@ -24,8 +23,6 @@ struct CalendarView: View {
             controlRow
             Group {
                 switch mode {
-                case .threeDays:
-                    WeekView(day: $day, dayCount: 3, open: open, openDay: openDay)
                 case .week:
                     WeekView(day: $day, dayCount: 7, open: open, openDay: openDay)
                 case .month:
@@ -41,7 +38,6 @@ struct CalendarView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .sheet(isPresented: $showsCalendars) { CalendarsSheet() }
         .sheet(item: $opened) { item in
             switch item {
             case .system(let id): NativeEventSheet(identifier: id)
@@ -62,47 +58,21 @@ struct CalendarView: View {
     /// Tapping a day that is already selected opens it in Today (the day view).
     private func openDay(_ date: Date) { onOpenDay(cal.startOfDay(for: date)) }
 
-    // MARK: One control row: view switcher, Today, Calendars
+    // MARK: One control row: the view switcher
 
     private var controlRow: some View {
-        HStack(spacing: 8) {
-            Picker("View", selection: Binding(get: { mode }, set: { picked in withAnimation(.snappy) { mode = picked } })) {
-                ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            if !cal.isDateInToday(day) {
-                Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
-                    Text("Today")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 36)
-                        .glassCapsule()
-                }
-                .buttonStyle(PressScale())
-                .accessibilityIdentifier("calendar.today")
-                .accessibilityHint("Jumps to today")
-                .transition(.opacity)
-            }
-            Button { showsCalendars = true } label: {
-                Image(systemName: "calendar")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 42, height: 36)
-                    .glassCapsule()
-            }
-            .buttonStyle(PressScale())
-            .accessibilityLabel("Calendars")
-            .accessibilityIdentifier("calendar.calendars")
+        Picker("View", selection: Binding(get: { mode }, set: { picked in withAnimation(.snappy) { mode = picked } })) {
+            ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
         }
-        .foregroundStyle(.primary)
+        .pickerStyle(.segmented)
         .padding(.horizontal, 16)
         .padding(.bottom, 6)
-        .animation(.snappy, value: cal.isDateInToday(day))
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 }
 
 /// The Calendars list: Apple's own EKCalendarChooser (accounts, color dots, checkmarks) when access is on.
-private struct CalendarsSheet: View {
+struct CalendarsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

@@ -26,15 +26,15 @@ final class CalendarTabTests: XCTestCase {
         return String(format: "day.%04d-%02d-%02d", c.year!, c.month!, c.day!)
     }
 
-    /// The default view is the next 3 days: one control row, a 3-day time grid starting today, no Day segment.
-    func testThreeDaysIsTheDefault() {
+    /// The default view is Week: one switcher row (Week / Month / Year), no Day segment, no Today or Calendars buttons.
+    func testWeekIsTheDefault() {
         let segments = app.segmentedControls.firstMatch
         XCTAssertTrue(segments.waitForExistence(timeout: 5))
-        XCTAssertEqual(segments.buttons.allElementsBoundByIndex.map(\.label), ["3 Days", "Week", "Month", "Year"],
-                       "one switcher: 3 Days / Week / Month / Year (no Day: that is the Today tab)")
-        XCTAssertTrue(segments.buttons["3 Days"].isSelected, "3 Days is selected when the tab opens")
+        XCTAssertEqual(segments.buttons.allElementsBoundByIndex.map(\.label), ["Week", "Month", "Year"],
+                       "one switcher: Week / Month / Year (Day is the Today tab)")
+        XCTAssertTrue(segments.buttons["Week"].isSelected, "Week is selected when the tab opens")
         XCTAssertTrue(element("calendar.weekTitle").waitForExistence(timeout: 5), "a time grid with a month title")
-        XCTAssertFalse(app.buttons["calendar.year"].exists, "the old year button row is gone")
+        XCTAssertFalse(app.buttons["calendar.today"].exists || app.buttons["calendar.calendars"].exists || app.buttons["calendar.year"].exists)
     }
 
     /// Month: big month title, weekday letters, grid, and today's events below.
@@ -51,8 +51,8 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertTrue(first.waitForExistence(timeout: 5), "today's events are listed under the grid")
     }
 
-    /// Swipe the grid sideways to change month; Today brings you back.
-    func testMonthPagingAndTodayButton() {
+    /// Swipe the grid sideways to change month (no Today button appears).
+    func testMonthPaging() {
         showMonth()
         let title = element("calendar.monthTitle")
         XCTAssertTrue(title.waitForExistence(timeout: 5))
@@ -69,9 +69,7 @@ final class CalendarTabTests: XCTestCase {
         let prev = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@",
                                                                     monthName(cal.date(byAdding: .month, value: -1, to: .now)!)), object: title)
         XCTAssertEqual(XCTWaiter().wait(for: [prev], timeout: 5), .completed, "previous month")
-        app.buttons["calendar.today"].tap()
-        let today = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", monthName(.now)), object: title)
-        XCTAssertEqual(XCTWaiter().wait(for: [today], timeout: 5), .completed, "Today jumps back to this month")
+        XCTAssertFalse(app.buttons["calendar.today"].exists, "paging does not add a Today button")
     }
 
     /// Tapping a day selects it and lists its events below the grid, all-day first.
@@ -116,11 +114,17 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertTrue(banner.label.contains("all-day"))
     }
 
-    /// The Calendars button opens Apple's calendar list when Calendar access is on, otherwise an explanation.
-    func testCalendarsButtonOpensTheList() {
-        app.buttons["calendar.calendars"].tap()
+    /// Which calendars show is a Setting (sidebar > Settings > Calendars), not a button on the Calendar tab.
+    func testCalendarsListLivesInSettings() throws {
+        XCTAssertFalse(app.buttons["calendar.calendars"].exists, "no Calendars button on the Calendar tab")
+        app.openSidebar()
+        app.buttons["Settings"].firstMatch.tap()
+        let row = app.buttons["Calendars"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "Settings has a Calendars row")
+        row.tap()
         let chooser = app.navigationBars["Calendars"]
-        XCTAssertTrue(chooser.waitForExistence(timeout: 5), "Calendars sheet opens")
+        let off = app.buttons["Turn On"]
+        XCTAssertTrue(chooser.waitForExistence(timeout: 5) || off.waitForExistence(timeout: 2), "the Calendars list opens")
     }
 
     /// Hiding the calendar an event lives in removes it from the Calendar tab; showing it brings it back.
@@ -150,11 +154,7 @@ final class CalendarTabTests: XCTestCase {
             sleep(1)
         }
         if app.buttons["Done"].waitForExistence(timeout: 5) { app.buttons["Done"].tap() }
-        app.buttons["calendar.calendars"].tap()
-        try XCTSkipIf(app.buttons["Turn On"].waitForExistence(timeout: 3), "Calendar sync is off in this simulator")
-        XCTAssertTrue(app.navigationBars["Calendars"].waitForExistence(timeout: 5))
-        app.navigationBars["Calendars"].buttons.firstMatch.tap()   // Done
-        XCTAssertTrue(app.navigationBars["Calendars"].waitForNonExistence(timeout: 5))
+        showMonth()
 
         // An all-day event sorts first in the day's list, so it is on screen without scrolling.
         let name = "Filter check \(Int(Date.now.timeIntervalSince1970) % 100000)"
@@ -175,13 +175,16 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertFalse(calendarName.isEmpty, "row names its calendar: \(label)")
 
         func toggleCalendar() {
-            app.buttons["calendar.calendars"].tap()
+            app.openSidebar()
+            app.buttons["Settings"].firstMatch.tap()
+            app.buttons["Calendars"].firstMatch.tap()
             XCTAssertTrue(app.navigationBars["Calendars"].waitForExistence(timeout: 5))
             let cell = app.cells.containing(.staticText, identifier: calendarName).firstMatch
             XCTAssertTrue(cell.waitForExistence(timeout: 5), "Apple's list has \(calendarName)")
             cell.tap()
             app.navigationBars["Calendars"].buttons.firstMatch.tap()   // Done
             XCTAssertTrue(app.navigationBars["Calendars"].waitForNonExistence(timeout: 5))
+            app.buttons["Done"].firstMatch.tap()                        // leave Settings
         }
         toggleCalendar()
         XCTAssertTrue(row.waitForNonExistence(timeout: 5), "hidden calendar: the event is gone from the list")

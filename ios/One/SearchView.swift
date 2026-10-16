@@ -26,18 +26,60 @@ struct SearchView: View {
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query private var alarms: [OneAlarm]
     @State private var query = ""
-    @State private var searching = true
+    @FocusState private var focused: Bool
     @State private var scope: Scope = .all
     @State private var opened: Opened?
     @State private var recents = Recents.load()
+    @State private var quick: Quick?
 
     private let limit = 25
+
+    /// Suggested searches shown before you type: they list things without needing words.
+    enum Quick: String, CaseIterable, Identifiable {
+        case overdue = "Overdue", today = "Due today", flagged = "Flagged", events = "Upcoming events", alarms = "Alarms on"
+        var id: Self { self }
+        var symbol: String {
+            switch self {
+            case .overdue: "exclamationmark.circle"
+            case .today: "sun.max"
+            case .flagged: "flag"
+            case .events: "calendar"
+            case .alarms: "alarm"
+            }
+        }
+        var tint: Color {
+            switch self {
+            case .overdue: .red
+            case .today: .blue
+            case .flagged: .orange
+            case .events: .indigo
+            case .alarms: .orange
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
             let r = results
             List {
-                if query.isEmpty {
+                if !query.isEmpty {
+                    Picker("Search in", selection: $scope) {
+                        ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                }
+                if query.isEmpty, quick == nil {
+                    Section("Suggestions") {
+                        ForEach(Quick.allCases) { q in
+                            Button { quick = q } label: {
+                                Label { Text(q.rawValue).foregroundStyle(.primary) } icon: {
+                                    Image(systemName: q.symbol).foregroundStyle(q.tint)
+                                }
+                            }
+                        }
+                    }
                     if !recents.isEmpty {
                         Section {
                             ForEach(recents, id: \.self) { term in
@@ -54,6 +96,13 @@ struct SearchView: View {
                         }
                     }
                 } else {
+                    if let quick {
+                        Section {
+                            Button { self.quick = nil } label: {
+                                Label("\(quick.rawValue) · Clear", systemImage: "xmark.circle.fill").foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                     if !r.tasks.isEmpty {
                         Section(header: header("Reminders", r.tasks.count)) {
                             ForEach(r.tasks.prefix(limit)) { task in
@@ -83,21 +132,14 @@ struct SearchView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .searchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: "Reminders, events, alarms")
-            .searchScopes($scope) { ForEach(Scope.allCases) { Text($0.rawValue).tag($0) } }
-            .onSubmit(of: .search) { Recents.add(query); recents = Recents.load() }
+            .safeAreaInset(edge: .top, spacing: 0) { searchBar }
             .overlay {
-                if query.isEmpty, recents.isEmpty {
-                    ContentUnavailableView("Search everything", systemImage: "magnifyingglass",
-                                           description: Text("Find reminders, calendar events and alarms in one place."))
-                } else if !query.isEmpty, r.isEmpty {
+                if (!query.isEmpty || quick != nil), r.isEmpty {
                     ContentUnavailableView.search(text: query)
                 }
             }
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .toolbar(.hidden, for: .navigationBar)
+            .onAppear { focused = true }
             .sheet(item: $opened) { item in
                 switch item {
                 case .task(let t): TaskEditor(task: t)
@@ -107,6 +149,42 @@ struct SearchView: View {
                 }
             }
         }
+    }
+
+    /// Our own search bar: the field, and an X that closes Search straight away (no empty page or pop-up left behind).
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Reminders, events, alarms", text: $query)
+                    .focused($focused)
+                    .submitLabel(.search)
+                    .autocorrectionDisabled()
+                    .onSubmit { Recents.add(query); recents = Recents.load() }
+                    .accessibilityIdentifier("search.field")
+                if !query.isEmpty {
+                    Button { query = ""; focused = true } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("Clear text")
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 44)
+            .background(Color(.secondarySystemFill), in: Capsule())
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .glassCircle()
+            }
+            .buttonStyle(PressScale())
+            .accessibilityLabel("Close search")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.bar)
     }
 
     private func header(_ title: String, _ count: Int) -> some View {
@@ -132,6 +210,7 @@ struct SearchView: View {
     }
 
     private var results: Results {
+        if query.trimmingCharacters(in: .whitespaces).isEmpty, let quick { return quickResults(quick) }
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return Results() }
         var out = Results()
@@ -160,6 +239,40 @@ struct SearchView: View {
         if scope == .all || scope == .alarms {
             out.alarms = alarms.filter { SearchMatch.matches(q, in: [$0.label, alarmTime($0), $0.repeatValue, "alarm"]) }
                 .sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
+        }
+        return out
+    }
+
+    private func quickResults(_ q: Quick) -> Results {
+        let cal = Calendar.current
+        var out = Results()
+        switch q {
+        case .overdue:
+            out.tasks = tasks.filter(\.isOverdue).sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
+        case .today:
+            out.tasks = tasks.filter { t in
+                guard !t.isDone else { return false }
+                if let d = t.due, cal.isDateInToday(d) { return true }
+                if let p = t.plannedStart, cal.isDateInToday(p) { return true }
+                return false
+            }
+        case .flagged:
+            out.tasks = tasks.filter { $0.flagged && !$0.isDone }
+        case .events:
+            let end = cal.date(byAdding: .day, value: 7, to: .now) ?? .now
+            let window = DateInterval(start: .now, end: end)
+            var hits: [EventHit] = events.compactMap { e in
+                guard let next = e.occurrences(in: window).first(where: { $0 >= .now }) else { return nil }
+                return EventHit(id: "o\(e.persistentModelID.hashValue)", title: e.title,
+                                detail: DayLabel.withTime(next) + " · " + e.calendarName, start: next, color: .blue, opened: .event(e))
+            }
+            for s in CalendarSync.shared.events(in: window, excluding: Set(events.compactMap(\.externalID))) where s.start >= .now {
+                hits.append(EventHit(id: "s\(s.id)", title: s.title, detail: DayLabel.withTime(s.start) + " · " + s.calendarTitle,
+                                     start: s.start, color: s.color, opened: .system(s.eventIdentifier)))
+            }
+            out.events = hits.sorted { $0.start < $1.start }
+        case .alarms:
+            out.alarms = alarms.filter(\.isOn).sorted { ($0.hour, $0.minute) < ($1.hour, $1.minute) }
         }
         return out
     }

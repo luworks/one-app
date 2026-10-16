@@ -14,7 +14,7 @@ final class AlarmsTabTests: XCTestCase {
         let alarms = app.buttons["Alarms"].firstMatch
         XCTAssertTrue(alarms.waitForExistence(timeout: 5))
         alarms.tap()
-        XCTAssertTrue(app.buttons["alarms.add"].waitForExistence(timeout: 5), "the Alarms tab has Clock's + button")
+        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5), "the app-wide + is there to add an alarm")
     }
 
     /// Set TEST_RUNNER_ALARM_SHOTS=<folder> to save screenshots of each step (for design review).
@@ -31,7 +31,7 @@ final class AlarmsTabTests: XCTestCase {
     @discardableResult
     private func addAlarm(days: [String] = []) -> XCUIElement {
         let before = rows.count
-        app.buttons["alarms.add"].tap()
+        app.buttons["New"].tap()
         XCTAssertTrue(app.navigationBars["Add Alarm"].waitForExistence(timeout: 5), "the editor is titled Add Alarm")
         if !days.isEmpty {
             app.buttons["alarm.repeat"].tap()
@@ -39,9 +39,9 @@ final class AlarmsTabTests: XCTestCase {
             app.navigationBars["Repeat"].buttons.firstMatch.tap()   // Back
         }
         app.buttons["alarm.save"].tap()
-        XCTAssertTrue(app.buttons["alarms.add"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
         let expected = before + 1
-        for _ in 0..<20 where rows.count < expected { _ = app.buttons["alarms.add"].waitForExistence(timeout: 0.25) }
+        for _ in 0..<20 where rows.count < expected { _ = app.buttons["New"].waitForExistence(timeout: 0.25) }
         XCTAssertEqual(rows.count, expected, "the saved alarm is listed")
         return rows.element(boundBy: before)
     }
@@ -102,7 +102,7 @@ final class AlarmsTabTests: XCTestCase {
         field.tap()
         field.typeText("Gym")
         app.buttons["alarm.save"].tap()
-        XCTAssertTrue(app.buttons["alarms.add"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
         let row = rows.firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         XCTAssertTrue(row.label.contains(":30"), row.label)
@@ -116,7 +116,7 @@ final class AlarmsTabTests: XCTestCase {
         // A full swipe across the row deletes, like Clock.
         let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
         start.press(forDuration: 0.05, thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: -0.3, dy: 0.5)))
-        for _ in 0..<20 where rows.count > 0 { _ = app.buttons["alarms.add"].waitForExistence(timeout: 0.25) }
+        for _ in 0..<20 where rows.count > 0 { _ = app.buttons["New"].waitForExistence(timeout: 0.25) }
         XCTAssertEqual(rows.count, 0, "swipe left deletes the alarm")
         XCTAssertTrue(app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 3))
     }
@@ -142,7 +142,7 @@ final class AlarmsTabTests: XCTestCase {
         let confirm = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Delete'")).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 8))
         confirm.tap()
-        for _ in 0..<20 where rows.count > 1 { _ = app.buttons["alarms.add"].waitForExistence(timeout: 0.25) }
+        for _ in 0..<20 where rows.count > 1 { _ = app.buttons["New"].waitForExistence(timeout: 0.25) }
         XCTAssertEqual(rows.count, 1, "one alarm is left")
         // Tapping a row in Edit mode opens the editor.
         rows.firstMatch.tap()
@@ -162,7 +162,7 @@ final class AlarmsTabTests: XCTestCase {
 
     /// Sound is the system's alarm sound only (AlarmKit): the row says so and is not tappable.
     func testSoundRowIsDefaultAndSnoozeIsOn() {
-        app.buttons["alarms.add"].tap()
+        app.buttons["New"].tap()
         XCTAssertTrue(app.navigationBars["Add Alarm"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Default'")).firstMatch.exists,
                       "Sound reads Default")
