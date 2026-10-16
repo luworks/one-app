@@ -5,6 +5,8 @@ import FoundationModels
 
 struct Case: Decodable {
     let lang: String, input: String
+    let repeatRule: String?
+    let allDay: Bool?
     let level: Int?
     let scenario: String?
     let title: String?
@@ -13,11 +15,13 @@ struct Case: Decodable {
     let hasDay: Bool
     let hour: Int?, minute: Int?, duration: Int?
 }
-struct Suite: Decodable { let now: String, timeZone: String, cases: [Case] }
+struct Suite: Decodable { let now: String, timeZone: String, cases: [Case], scoresRepeat: Bool? }
+extension Case { enum CodingKeys: String, CodingKey { case lang, input, level, scenario, title, kind, day, hasDay, hour, minute, duration, allDay; case repeatRule = "repeat" } }
 
 struct Row {
+    var repeats = true
     var kind = false, day = false, hasDay = false, hour = false, minute = false, title = false, titleExact = false, duration = false
-    var all: Bool { kind && day && hasDay && hour && minute && title && duration }
+    var all: Bool { repeats && kind && day && hasDay && hour && minute && title && duration }
 }
 
 func run() async {
@@ -65,6 +69,7 @@ func run() async {
         r.kind = gotKind == c.kind
         r.day = (cal.dateComponents([.day], from: today, to: cal.startOfDay(for: got.day)).day ?? -99) == c.day
         r.hasDay = got.hasDay == c.hasDay
+        if suite.scoresRepeat == true { r.repeats = got.repeatRule == c.repeatRule }
         r.hour = got.hour == c.hour
         r.minute = c.hour == nil || got.minute == (c.minute ?? 0)
         r.duration = c.duration == nil || got.durationMinutes == c.duration
