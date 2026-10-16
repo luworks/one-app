@@ -179,16 +179,11 @@ extension Capture {
         return e
     }
 
-    func makeHabit() -> Habit {
-        Habit(title: title)
-    }
-
     /// Creates the right model for `kind` in `context`. Only called after the user taps Add.
     func insert(into context: ModelContext) {
         switch kind {
         case .task: context.insert(makeTask())
         case .event: context.insert(makeEvent())
-        case .habit: context.insert(makeHabit())
         }
     }
 }

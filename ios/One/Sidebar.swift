@@ -12,7 +12,6 @@ struct Sidebar: View {
 
     @Query private var tasks: [OneTask]
     @Query private var events: [OneEvent]
-    @Query private var habits: [Habit]
 
     private let cal = Calendar.current
 
@@ -99,9 +98,6 @@ struct Sidebar: View {
             n = events.reduce(0) { $0 + $1.occurs(on: .now).count }
         case .tasks:
             n = tasks.filter { !$0.isDone }.count
-        case .habits:
-            let done = habits.filter { $0.isDone(on: .now) }.count
-            return habits.isEmpty ? nil : "\(done)/\(habits.count)"
         case .alarms:
             n = tasks.filter { $0.reminderDate.map { $0 > .now && cal.isDateInToday($0) } ?? false }.count
                 + events.filter { $0.reminderDate.map { $0 > .now && cal.isDateInToday($0) } ?? false }.count

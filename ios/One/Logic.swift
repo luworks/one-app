@@ -18,49 +18,6 @@ enum DayLabel {
     }
 }
 
-enum HabitMath {
-    static func isDone(_ checkins: [Date], on day: Date, calendar: Calendar = .current) -> Bool {
-        checkins.contains { calendar.isDate($0, inSameDayAs: day) }
-    }
-
-    /// Check-ins in the week containing `now` (weeks start on Monday).
-    static func weekCount(_ checkins: [Date], now: Date = .now, calendar: Calendar = .current) -> Int {
-        var cal = calendar
-        cal.firstWeekday = 2
-        guard let week = cal.dateInterval(of: .weekOfYear, for: now) else { return 0 }
-        return Set(checkins.filter { week.contains($0) }.map { cal.startOfDay(for: $0) }).count
-    }
-
-    /// Longest run of consecutive checked-in days ever.
-    static func bestStreak(_ checkins: [Date], calendar: Calendar = .current) -> Int {
-        let days = Set(checkins.map { calendar.startOfDay(for: $0) }).sorted()
-        var best = 0, run = 0
-        var previous: Date?
-        for d in days {
-            if let p = previous, calendar.date(byAdding: .day, value: 1, to: p) == d { run += 1 } else { run = 1 }
-            best = max(best, run)
-            previous = d
-        }
-        return best
-    }
-
-    /// Consecutive checked-in days ending today, or ending yesterday if today isn't checked yet.
-    static func streak(_ checkins: [Date], now: Date = .now, calendar: Calendar = .current) -> Int {
-        var day = calendar.startOfDay(for: now)
-        if !isDone(checkins, on: day, calendar: calendar) {
-            guard let y = calendar.date(byAdding: .day, value: -1, to: day) else { return 0 }
-            day = y
-        }
-        var count = 0
-        while isDone(checkins, on: day, calendar: calendar) {
-            count += 1
-            guard let prev = calendar.date(byAdding: .day, value: -1, to: day) else { break }
-            day = prev
-        }
-        return count
-    }
-}
-
 /// How a task repeats. Completing a repeating task creates the next one (OmniFocus / Reminders style).
 enum RepeatRule: String, CaseIterable, Codable {
     case daily, weekdays, weekly, monthly, yearly
@@ -196,20 +153,6 @@ enum DayPlanner {
         if extra == 0 && s == 0 { return date }
         let base = calendar.date(bySetting: .second, value: 0, of: date) ?? date
         return base.addingTimeInterval(TimeInterval((extra == 0 ? 5 : extra) * 60))
-    }
-}
-
-extension ReminderPlan {
-    /// Habit reminders for the next `days` days at hour:minute, skipping days already checked in.
-    static func habitFires(checkins: [Date], hour: Int, minute: Int, now: Date, days: Int = 7,
-                           calendar: Calendar = .current) -> [Date] {
-        (0..<days).compactMap { n in
-            guard let day = calendar.date(byAdding: .day, value: n, to: calendar.startOfDay(for: now)),
-                  !HabitMath.isDone(checkins, on: day, calendar: calendar),
-                  let fire = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day),
-                  fire > now else { return nil }
-            return fire
-        }
     }
 }
 

@@ -41,7 +41,7 @@ final class JourneyTests: XCTestCase {
 
     /// J2: see what's left today.
     func testJ2_todayShowsWhatsLeft() {
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Overdue'")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label ENDSWITH 'overdue'")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Due today"].exists)
         XCTAssertTrue(app.staticTexts["Schedule"].exists)
         XCTAssertTrue(app.staticTexts["Buy milk"].exists)
@@ -69,17 +69,8 @@ final class JourneyTests: XCTestCase {
         title.typeText("Design review")
         tap(app.buttons["Done"])
         tab("Calendar")
-        tap(app.buttons["Week"])
-        tap(app.buttons["Day"])
+        tap(app.buttons["Month"])
         XCTAssertLessThanOrEqual(taps, 6)
-    }
-
-    /// J5: check in a habit from Today.
-    func testJ5_checkInHabitFromToday() {
-        let chip = app.buttons["Drink 8 glasses of water"]
-        tap(chip)
-        tab("Habits")
-        XCTAssertTrue(app.buttons["Undo today's check-in for Drink 8 glasses of water"].waitForExistence(timeout: 3))
     }
 
     /// J6: reminders are visible and adjustable per item.

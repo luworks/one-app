@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 enum HomeTab: CaseIterable, Identifiable {
-    case today, calendar, tasks, habits, alarms
+    case today, calendar, tasks, alarms
 
     var id: Self { self }
 
@@ -10,8 +10,7 @@ enum HomeTab: CaseIterable, Identifiable {
         switch self {
         case .today: "Today"
         case .calendar: "Calendar"
-        case .tasks: "Tasks"
-        case .habits: "Habits"
+        case .tasks: "Lists"
         case .alarms: "Alarms"
         }
     }
@@ -21,7 +20,6 @@ enum HomeTab: CaseIterable, Identifiable {
         case .today: "sun.max"
         case .calendar: "calendar"
         case .tasks: "checklist"
-        case .habits: "flame"
         case .alarms: "alarm"
         }
     }
@@ -35,10 +33,11 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var allTasks: [OneTask]
     @Query private var allEvents: [OneEvent]
-    @Query private var allHabits: [Habit]
 
     @State private var tab: HomeTab = .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
+    /// The day Today shows. Picking a day in Calendar opens it here.
+    @State private var todayDay = Calendar.current.startOfDay(for: .now)
     @State private var showsAsk = false
     @State private var showsSearch = false
     @State private var newItem: NewItem?
@@ -55,7 +54,7 @@ struct HomeView: View {
                 if offset > 0 {
                 Sidebar(tab: $tab,
                         onNewChat: { showsAsk = true },
-                        onToday: { calendarDay = Calendar.current.startOfDay(for: .now) },
+                        onToday: { calendarDay = Calendar.current.startOfDay(for: .now); todayDay = calendarDay },
                         onDeleteAll: { confirmClear = true },
                         close: { setSidebar(false) })
                     .frame(width: width)
@@ -91,7 +90,7 @@ struct HomeView: View {
         }
         .environment(toast)
         .sensoryFeedback(.impact(weight: .light), trigger: sidebarOpen)
-        .confirmationDialog("Delete all tasks, events and habits?", isPresented: $confirmClear, titleVisibility: .visible) {
+        .confirmationDialog("Delete all tasks and events?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Delete all", role: .destructive) {
                 try? context.delete(model: OneTask.self)
                 try? context.delete(model: OneEvent.self)
@@ -126,10 +125,13 @@ struct HomeView: View {
             topBar
             Group {
                 switch tab {
-                case .today: DayAgenda(day: .constant(Calendar.current.startOfDay(for: .now)), showsWeekStrip: false)
-                case .calendar: CalendarView(day: $calendarDay)
+                case .today: DayAgenda(day: $todayDay, showsWeekStrip: false)
+                case .calendar:
+                    CalendarView(day: $calendarDay) { picked in
+                        todayDay = picked
+                        withAnimation(.snappy) { tab = .today }
+                    }
                 case .tasks: TasksView()
-                case .habits: HabitsView()
                 case .alarms: AlarmsView()
                 }
             }
@@ -146,7 +148,6 @@ struct HomeView: View {
             switch item {
             case .task: TaskEditor()
             case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
-            case .habit: HabitEditor(habit: nil)
             }
         }
         .task {
@@ -197,7 +198,6 @@ struct HomeView: View {
             h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
             h.combine(t.ringsAsAlarm)
         }
-        for hb in allHabits { h.combine(hb.reminderHour); h.combine(hb.reminderMinute); h.combine(hb.checkins.count) }
         for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.ringsAsAlarm) }
         return h.finalize()
     }
@@ -268,7 +268,6 @@ struct HomeView: View {
             Menu {
                 Button { newItem = .task } label: { Label("New task", systemImage: "checklist") }
                 Button { newItem = .event } label: { Label("New event", systemImage: "calendar") }
-                Button { newItem = .habit } label: { Label("New habit", systemImage: "flame") }
             } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.body.weight(.semibold))
@@ -286,7 +285,7 @@ struct HomeView: View {
 }
 
 enum NewItem: Identifiable {
-    case task, event, habit
+    case task, event
     var id: Self { self }
 }
 

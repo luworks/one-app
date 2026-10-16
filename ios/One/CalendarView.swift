@@ -1,12 +1,13 @@
 import SwiftUI
 import SwiftData
 
-/// Calendar tab: Day (agenda), Week (time grid) and Month (grid) views, like Apple Calendar.
+/// Calendar tab: Week (time grid) and Month (grid). The day view is Today: picking a day opens it there.
 struct CalendarView: View {
-    enum Mode: String, CaseIterable { case day = "Day", week = "Week", month = "Month" }
+    enum Mode: String, CaseIterable { case week = "Week", month = "Month" }
 
     @Binding var day: Date
-    @State private var mode: Mode = .day
+    var onOpenDay: (Date) -> Void
+    @State private var mode: Mode = .week
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,17 +19,15 @@ struct CalendarView: View {
             .padding(.bottom, 6)
 
             switch mode {
-            case .day:
-                DayAgenda(day: $day, showsWeekStrip: true)
             case .week:
                 WeekGrid(day: $day) { picked in
                     day = picked
-                    withAnimation(.snappy) { mode = .day }
+                    onOpenDay(picked)
                 }
             case .month:
                 MonthGrid(day: $day) { picked in
                     day = picked
-                    withAnimation(.snappy) { mode = .day }
+                    onOpenDay(picked)
                 }
             }
         }

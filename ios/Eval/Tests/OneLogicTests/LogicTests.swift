@@ -1,28 +1,6 @@
 import XCTest
 @testable import OneLogic
 
-final class HabitMathTests: XCTestCase {
-    let cal = Calendar(identifier: .gregorian)
-    var today: Date { cal.startOfDay(for: Date(timeIntervalSince1970: 1_791_000_000)) }
-    func day(_ offset: Int) -> Date { cal.date(byAdding: .day, value: offset, to: today)! }
-
-    func testStreakCountsBackFromToday() {
-        XCTAssertEqual(HabitMath.streak([day(0), day(-1), day(-2), day(-4)], now: today, calendar: cal), 3)
-    }
-
-    func testStreakStillCountsWhenTodayNotCheckedYet() {
-        XCTAssertEqual(HabitMath.streak([day(-1), day(-2)], now: today, calendar: cal), 2)
-    }
-
-    func testStreakBreaksAfterAMissedDay() {
-        XCTAssertEqual(HabitMath.streak([day(-2), day(-3)], now: today, calendar: cal), 0)
-    }
-
-    func testEmpty() {
-        XCTAssertEqual(HabitMath.streak([], now: today, calendar: cal), 0)
-    }
-}
-
 final class RepeatRuleTests: XCTestCase {
     var cal: Calendar = {
         var c = Calendar(identifier: .gregorian)
@@ -72,25 +50,6 @@ final class RecurrenceTests: XCTestCase {
     }
 }
 
-final class HabitStatsTests: XCTestCase {
-    var cal: Calendar = {
-        var c = Calendar(identifier: .gregorian)
-        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
-        return c
-    }()
-    func d(_ day: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: 8))! }
-
-    func testWeekCountStartsMonday() {
-        // Wed Oct 14; week is Mon 12 – Sun 18. Sun 11 belongs to the previous week.
-        XCTAssertEqual(HabitMath.weekCount([d(11), d(12), d(14), d(14)], now: d(14), calendar: cal), 2)
-    }
-
-    func testBestStreak() {
-        XCTAssertEqual(HabitMath.bestStreak([d(1), d(2), d(3), d(5), d(6)], calendar: cal), 3)
-        XCTAssertEqual(HabitMath.bestStreak([], calendar: cal), 0)
-    }
-}
-
 final class ReminderPlanTests: XCTestCase {
     let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -137,26 +96,6 @@ final class DayPlannerTests: XCTestCase {
         let plan = DayPlanner.plan([.init(id: 1, minutes: 120)], busy: [],
                                    window: DateInterval(start: at(17), end: at(18)), calendar: cal)
         XCTAssertTrue(plan.isEmpty)
-    }
-}
-
-final class HabitReminderTests: XCTestCase {
-    var cal: Calendar = {
-        var c = Calendar(identifier: .gregorian)
-        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
-        return c
-    }()
-    func at(_ d: Int, _ h: Int, _ m: Int = 0) -> Date { cal.date(from: DateComponents(year: 2026, month: 10, day: d, hour: h, minute: m))! }
-
-    func testSkipsCheckedInDaysAndPastTimes() {
-        // 10:00 on the 12th; reminder at 9:00 has passed today; the 13th is already checked in.
-        let fires = ReminderPlan.habitFires(checkins: [at(13, 0)], hour: 9, minute: 0, now: at(12, 10), days: 4, calendar: cal)
-        XCTAssertEqual(fires, [at(14, 9), at(15, 9)])
-    }
-
-    func testTodayStillPendingIfLater() {
-        let fires = ReminderPlan.habitFires(checkins: [], hour: 20, minute: 30, now: at(12, 10), days: 1, calendar: cal)
-        XCTAssertEqual(fires, [at(12, 20, 30)])
     }
 }
 

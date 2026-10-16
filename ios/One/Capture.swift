@@ -3,7 +3,7 @@ import Foundation
 /// What the composer understood from a line of text. Shown as a preview card;
 /// nothing is created until the user taps 添加.
 struct Capture: Equatable {
-    enum Kind: String, CaseIterable { case task, event, habit }
+    enum Kind: String, CaseIterable { case task, event }
 
     var title: String
     var day: Date
@@ -25,8 +25,6 @@ struct Capture: Equatable {
     var summary: String {
         var parts: [String] = []
         switch kind {
-        case .habit:
-            parts.append(repeatRule.flatMap(RepeatRule.init(rawValue:))?.label ?? "Every day")
         case .event:
             let start = plannedStart ?? day
             parts.append(DayLabel.withTime(start))
@@ -189,9 +187,8 @@ enum CaptureParser {
         "party", "class", "会议", "开会", "面试", "午饭", "晚饭", "早饭", "聚餐", "航班", "约会", "上课",
     ]
 
-    /// Habit: repeats daily / on weekdays with no time. Event: a time range, or meeting-like words.
+    /// Event: a time range, or meeting-like words. Everything else is a task (a repeat stays a repeating task).
     private static func kind(title: String, hour: Int?, duration: Int?, repeatRule: String?) -> Capture.Kind {
-        if hour == nil, repeatRule == RepeatRule.daily.rawValue || repeatRule == RepeatRule.weekdays.rawValue { return .habit }
         if duration != nil { return .event }
         let lower = title.lowercased() + " "
         if eventWords.contains(where: { lower.contains($0) }) { return .event }

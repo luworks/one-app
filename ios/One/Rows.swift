@@ -175,7 +175,7 @@ struct NowRow: View {
     }
 }
 
-/// AI preview: what will be created. The user can switch task / event / habit before tapping Add.
+/// AI preview: what will be created. The user can switch task / event before tapping Add.
 struct CaptureCard: View {
     @Binding var capture: Capture
     var onAdd: () -> Void
@@ -191,7 +191,6 @@ struct CaptureCard: View {
                 Picker("Kind", selection: $capture.kind) {
                     Text("Task").tag(Capture.Kind.task)
                     Text("Event").tag(Capture.Kind.event)
-                    Text("Habit").tag(Capture.Kind.habit)
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()

@@ -271,7 +271,7 @@
    "day": 0,
    "hasDay": false,
    "repeat": "daily",
-   "kind": "habit"
+   "kind": "task"
   },
   {
    "split": "train",
@@ -280,7 +280,7 @@
    "day": 0,
    "hasDay": false,
    "repeat": "daily",
-   "kind": "habit"
+   "kind": "task"
   },
   {
    "split": "train",
@@ -349,7 +349,7 @@
    "day": 0,
    "hasDay": false,
    "repeat": "weekdays",
-   "kind": "habit"
+   "kind": "task"
   },
   {
    "split": "test",
@@ -358,7 +358,7 @@
    "day": 0,
    "hasDay": false,
    "repeat": "daily",
-   "kind": "habit"
+   "kind": "task"
   },
   {
    "split": "test",
@@ -407,7 +407,7 @@
    "day": 0,
    "hasDay": false,
    "repeat": "daily",
-   "kind": "habit"
+   "kind": "task"
   }
  ]
 }

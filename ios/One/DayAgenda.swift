@@ -15,6 +15,12 @@ struct DayAgenda: View {
 
     var body: some View {
         List {
+            if !showsWeekStrip, !cal.isDateInToday(day) {
+                Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
+                    Label("Back to today", systemImage: "arrow.uturn.backward").font(.subheadline)
+                }
+                .listRowSeparator(.hidden)
+            }
             if showsWeekStrip {
                 Section {
                     WeekStrip(selected: $day)
@@ -31,17 +37,22 @@ struct DayAgenda: View {
                 }
             }
             if cal.isDateInToday(day), !overdue.isEmpty {
-                Section("Overdue \(overdue.count)") {
-                    ForEach(showsAllOverdue ? overdue : Array(overdue.prefix(3))) { TaskRow(task: $0) }
-                    if overdue.count > 3 {
-                        Button(showsAllOverdue ? "Show less" : "Show \(overdue.count - 3) more") {
-                            withAnimation(.snappy) { showsAllOverdue.toggle() }
+                Section {
+                    Button {
+                        withAnimation(.snappy) { showsAllOverdue.toggle() }
+                    } label: {
+                        HStack {
+                            Text("\(overdue.count) overdue").font(.body.weight(.semibold)).foregroundStyle(.red)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(showsAllOverdue ? 90 : 0))
                         }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 54, bottom: 4, trailing: 20))
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(showsAllOverdue ? "Hides the overdue tasks" : "Shows the overdue tasks")
+                    if showsAllOverdue { ForEach(overdue) { TaskRow(task: $0) } }
                 }
             }
             if !dueOnDay.isEmpty {
@@ -49,10 +60,7 @@ struct DayAgenda: View {
                     ForEach(dueOnDay) { TaskRow(task: $0) }
                 }
             }
-            if !showsWeekStrip {
-                TodayHabits()
-            }
-            Section(showsWeekStrip ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule") {
+            Section(showsWeekStrip || !cal.isDateInToday(day) ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule") {
                 if timeline.isEmpty {
                     Text("Nothing planned").foregroundStyle(.secondary)
                         .listRowSeparator(.hidden)
