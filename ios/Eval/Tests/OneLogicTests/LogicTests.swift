@@ -310,3 +310,23 @@ final class CalendarLayoutTests: XCTestCase {
         XCTAssertEqual(cols.map(\.count), [3, 3, 3])
     }
 }
+
+final class SearchMatchTests: XCTestCase {
+    func testAllWordsMustMatchAnywhere() {
+        XCTAssertTrue(SearchMatch.matches("milk home", in: ["Buy milk", "Home"]))
+        XCTAssertFalse(SearchMatch.matches("milk work", in: ["Buy milk", "Home"]))
+    }
+
+    func testIgnoresCaseAndAccents() {
+        XCTAssertTrue(SearchMatch.matches("CAFE", in: ["Café with Priya"]))
+    }
+
+    func testWorksForChinese() {
+        XCTAssertTrue(SearchMatch.matches("牙医", in: ["下午 牙医 复诊"]))
+        XCTAssertFalse(SearchMatch.matches("牙医", in: ["开会"]))
+    }
+
+    func testEmptyQueryMatchesNothing() {
+        XCTAssertFalse(SearchMatch.matches("  ", in: ["Buy milk"]))
+    }
+}

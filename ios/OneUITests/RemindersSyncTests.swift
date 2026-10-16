@@ -16,12 +16,12 @@ final class RemindersSyncTests: XCTestCase {
         // 1. Turn sync on in Settings and allow access.
         var app = launch()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        app.buttons["Open sidebar"].tap()
+        app.openSidebar()
         app.buttons["Settings"].firstMatch.tap()
         let sync = app.switches["Apple Reminders"]
         XCTAssertTrue(sync.waitForExistence(timeout: 5))
         if (sync.value as? String) != "1" {
-            sync.tap()
+            sync.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()   // the knob is at the right edge
             for name in ["Allow Full Access", "Allow"] {
                 let allow = springboard.buttons[name]
                 if allow.waitForExistence(timeout: 5) { allow.tap(); break }

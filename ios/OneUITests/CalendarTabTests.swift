@@ -16,6 +16,9 @@ final class CalendarTabTests: XCTestCase {
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
 
+    /// The Calendar tab opens on the next 3 days; the Month tests switch to Month first.
+    private func showMonth() { app.segmentedControls.buttons["Month"].tap() }
+
     private func monthName(_ date: Date) -> String { date.formatted(.dateTime.month(.wide)) }
 
     private func dayID(_ date: Date) -> String {
@@ -23,8 +26,20 @@ final class CalendarTabTests: XCTestCase {
         return String(format: "day.%04d-%02d-%02d", c.year!, c.month!, c.day!)
     }
 
-    /// Month is the default view: big month title, weekday letters, grid, and today's events below.
-    func testMonthIsTheDefaultAndListsTodaysEvents() {
+    /// The default view is the next 3 days: one control row, a 3-day time grid starting today, no Day segment.
+    func testThreeDaysIsTheDefault() {
+        let segments = app.segmentedControls.firstMatch
+        XCTAssertTrue(segments.waitForExistence(timeout: 5))
+        XCTAssertEqual(segments.buttons.allElementsBoundByIndex.map(\.label), ["3 Days", "Week", "Month", "Year"],
+                       "one switcher: 3 Days / Week / Month / Year (no Day: that is the Today tab)")
+        XCTAssertTrue(segments.buttons["3 Days"].isSelected, "3 Days is selected when the tab opens")
+        XCTAssertTrue(element("calendar.weekTitle").waitForExistence(timeout: 5), "a time grid with a month title")
+        XCTAssertFalse(app.buttons["calendar.year"].exists, "the old year button row is gone")
+    }
+
+    /// Month: big month title, weekday letters, grid, and today's events below.
+    func testMonthListsTodaysEvents() {
+        showMonth()
         let title = element("calendar.monthTitle")
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         XCTAssertEqual(title.label, monthName(.now))
@@ -34,12 +49,11 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 3), .completed, "and selected: \(today.debugDescription)")
         let first = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Product sync'")).firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 5), "today's events are listed under the grid")
-        XCTAssertTrue(app.segmentedControls.buttons["Week"].exists && app.segmentedControls.buttons["Year"].exists
-                      && app.segmentedControls.buttons["Day"].exists, "Day / Week / Month / Year switcher")
     }
 
     /// Swipe the grid sideways to change month; Today brings you back.
     func testMonthPagingAndTodayButton() {
+        showMonth()
         let title = element("calendar.monthTitle")
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         let next = cal.date(byAdding: .month, value: 1, to: .now)!
@@ -64,6 +78,7 @@ final class CalendarTabTests: XCTestCase {
     func testSelectingADayListsItsEvents() throws {
         let twoDays = cal.date(byAdding: .day, value: 2, to: .now)!
         try XCTSkipUnless(cal.isDate(twoDays, equalTo: .now, toGranularity: .month), "needs the sample events in this month's grid")
+        showMonth()
         let cell = element(dayID(twoDays))
         XCTAssertTrue(cell.waitForExistence(timeout: 5))
         cell.tap()
@@ -88,18 +103,6 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertEqual(title.label, monthName(january1), "tapping a mini month opens it")
     }
 
-    /// The year button in the top row goes to the Year view, like Apple's back button.
-    func testYearButtonGoesToYear() {
-        app.buttons["calendar.year"].tap()
-        XCTAssertTrue(element("calendar.year.scroll").waitForExistence(timeout: 5))
-    }
-
-    /// Day is the Today tab: the switcher's Day segment opens the selected day there.
-    func testDaySegmentOpensToday() {
-        app.segmentedControls.buttons["Day"].tap()
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5), "Today's schedule is showing")
-    }
-
     /// Week keeps the time grid with all-day banners on top.
     func testWeekShowsAllDayBanner() {
         app.segmentedControls.buttons["Week"].tap()
@@ -122,6 +125,8 @@ final class CalendarTabTests: XCTestCase {
 
     /// Hiding the calendar an event lives in removes it from the Calendar tab; showing it brings it back.
     func testCalendarsFilterHidesEvents() throws {
+        // The new event starts at the next full hour; in the last hour of the day that is tomorrow.
+        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 23, "the default event time is tomorrow")
         // Needs Calendar sync on. Where the sidebar still has the "Show Apple Calendar" row, turn it on from there
         // (iOS asks for access the first time); otherwise rely on it having been enabled in Settings already.
         addUIInterruptionMonitor(withDescription: "Calendar access") { alert in
@@ -132,11 +137,11 @@ final class CalendarTabTests: XCTestCase {
             return false
         }
         // Turn Apple Calendar on in Settings (sidebar > Settings > Apple Calendar); iOS asks for access the first time.
-        app.buttons["Open sidebar"].tap()
+        app.openSidebar()
         app.buttons["Settings"].firstMatch.tap()
         let toggle = app.switches["Apple Calendar"]
         if toggle.waitForExistence(timeout: 5), (toggle.value as? String) != "1" {
-            toggle.tap()
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()   // the knob is at the right edge
             let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
             for label in ["Allow Full Access", "Allow"] {
                 let b = springboard.buttons[label]
@@ -144,7 +149,7 @@ final class CalendarTabTests: XCTestCase {
             }
             sleep(1)
         }
-        app.buttons["Done"].tap()
+        if app.buttons["Done"].waitForExistence(timeout: 5) { app.buttons["Done"].tap() }
         app.buttons["calendar.calendars"].tap()
         try XCTSkipIf(app.buttons["Turn On"].waitForExistence(timeout: 3), "Calendar sync is off in this simulator")
         XCTAssertTrue(app.navigationBars["Calendars"].waitForExistence(timeout: 5))

@@ -218,16 +218,7 @@ struct HomeView: View {
 
     private var topBar: some View {
         HStack(spacing: 8) {
-            Button { setSidebar(true) } label: {
-                Text("Y")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.accentColor.gradient, in: Circle())
-            }
-            .buttonStyle(PressScale())
-            .accessibilityLabel("Open sidebar")
-
+            // No avatar button: the sidebar opens with a swipe from the left edge (VoiceOver: the "Open menu" action).
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(HomeTab.allCases) { item in
@@ -240,6 +231,7 @@ struct HomeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
+        .accessibilityAction(named: "Open menu") { setSidebar(true) }
         // Chrome stays usable at the largest text sizes; content below still scales fully.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
