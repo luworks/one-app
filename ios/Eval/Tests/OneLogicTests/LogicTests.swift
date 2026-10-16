@@ -107,3 +107,42 @@ final class ListNameTests: XCTestCase {
         XCTAssertEqual(ListName.display("2026 plans"), "2026 plans")
     }
 }
+
+final class AlarmPlanTests: XCTestCase {
+    private var cal: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        c.locale = Locale(identifier: "en_US")
+        return c
+    }
+    /// Oct 12 2026 is a Monday.
+    private func at(_ day: Int, _ h: Int, _ m: Int) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: h, minute: m))!
+    }
+
+    func testRepeatLabels() {
+        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [], calendar: cal), "Once")
+        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [1, 2, 3, 4, 5, 6, 7], calendar: cal), "Every day")
+        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [2, 3, 4, 5, 6], calendar: cal), "Weekdays")
+        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [7, 1], calendar: cal), "Weekends")
+        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [4, 2], calendar: cal), "Mon, Wed")
+    }
+
+    func testOneTimeAlarmRingsTodayIfStillAhead_elseTomorrow() {
+        XCTAssertEqual(AlarmPlan.nextFire(hour: 18, minute: 0, weekdays: [], after: at(12, 9, 41), calendar: cal), at(12, 18, 0))
+        XCTAssertEqual(AlarmPlan.nextFire(hour: 7, minute: 0, weekdays: [], after: at(12, 9, 41), calendar: cal), at(13, 7, 0))
+    }
+
+    func testWeekdayAlarmSkipsTheWeekend() {
+        // Friday 9:41 → 7:00 alarm on weekdays next rings Monday.
+        XCTAssertEqual(AlarmPlan.nextFire(hour: 7, minute: 0, weekdays: [2, 3, 4, 5, 6], after: at(16, 9, 41), calendar: cal), at(19, 7, 0))
+    }
+
+    func testFireOnDay() {
+        let now = at(12, 9, 41)
+        XCTAssertEqual(AlarmPlan.fire(on: at(12, 0, 0), hour: 18, minute: 0, weekdays: [], now: now, calendar: cal), at(12, 18, 0))
+        XCTAssertNil(AlarmPlan.fire(on: at(13, 0, 0), hour: 18, minute: 0, weekdays: [], now: now, calendar: cal), "once rings only on its next day")
+        XCTAssertEqual(AlarmPlan.fire(on: at(14, 0, 0), hour: 7, minute: 0, weekdays: [4], now: now, calendar: cal), at(14, 7, 0))
+        XCTAssertNil(AlarmPlan.fire(on: at(15, 0, 0), hour: 7, minute: 0, weekdays: [4], now: now, calendar: cal))
+    }
+}

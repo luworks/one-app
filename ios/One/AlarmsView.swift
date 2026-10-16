@@ -2,15 +2,18 @@ import SwiftUI
 import SwiftData
 import UserNotifications
 
-/// Everything with a reminder in the next 7 days, plus the notification permission state.
+/// Real alarms only (AlarmKit: they ring through Silent and Focus), plus the tasks and events you
+/// marked "Ring as alarm". Reminders and event alerts live in Apple Reminders / Calendar, not here.
 struct AlarmsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var context
+    @Query(sort: [SortDescriptor(\OneAlarm.hour), SortDescriptor(\OneAlarm.minute)]) private var alarms: [OneAlarm]
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
     @State private var status: UNAuthorizationStatus = .authorized
-
-    private let cal = Calendar.current
+    @State private var editing: OneAlarm?
+    @State private var adding = false
 
     var body: some View {
         List {
@@ -19,54 +22,105 @@ struct AlarmsView: View {
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             }
-            ForEach(days, id: \.self) { day in
-                Section(DayLabel.text(for: day)) {
-                    ForEach(items.filter { cal.isDate($0.start, inSameDayAs: day) }) { item in
-                        switch item {
-                        case .event(let event, let start):
-                            HStack(spacing: 0) {
-                                EventRow(event: event, start: start)
-                                ReminderMenu(minutes: Binding(get: { event.reminderOffsetMinutes },
-                                                              set: { event.reminderOffsetMinutes = $0 }))
+            if Ringer.isDenied {
+                deniedRow
+            }
+            Section {
+                ForEach(alarms) { alarm in
+                    AlarmRow(alarm: alarm) { editing = alarm }
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) { withAnimation { context.delete(alarm) } } label: {
+                                Label("Delete", systemImage: "trash")
                             }
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 8))
-                        case .task(let task):
-                            HStack(spacing: 0) {
-                                TaskRow(task: task, showsTime: true)
-                                ReminderMenu(minutes: Binding(get: { task.reminderOffsetMinutes },
-                                                              set: { task.reminderOffsetMinutes = $0 }))
-                            }
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 8))
-                        case .nowMarker, .external:
-                            EmptyView()
                         }
+                        .contextMenu {
+                            Button { editing = alarm } label: { Label("Edit", systemImage: "pencil") }
+                            Button(role: .destructive) { withAnimation { context.delete(alarm) } } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                }
+                Button { adding = true } label: {
+                    Label("New alarm", systemImage: "plus")
+                }
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            }
+            if !ringing.isEmpty {
+                Section("From your items") {
+                    ForEach(ringing) { item in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.title)
+                                Text("Rings " + DayLabel.withTime(item.fire))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "alarm").foregroundStyle(Color.accentColor)
+                        }
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
                     }
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .overlay {
-            if items.isEmpty {
-                ContentUnavailableView("Nothing timed in the next 7 days", systemImage: "alarm",
-                                       description: Text("Tasks and events with a time show up here."))
-            }
-        }
+        .sheet(item: $editing) { AlarmEditor(alarm: $0) }
+        .sheet(isPresented: $adding) { AlarmEditor() }
         .task(id: scenePhase) { status = await Reminders.shared.authorizationStatus() }
+    }
+
+    private struct Ringing: Identifiable {
+        let id: String
+        let title: String
+        let fire: Date
+    }
+
+    /// Items that will ring as an alarm, soonest first.
+    private var ringing: [Ringing] {
+        let now = Date.now
+        let t = tasks.filter { $0.ringsAsAlarm && !$0.isDone }.compactMap { task in
+            task.reminderDate.map { Ringing(id: "t\(task.persistentModelID.hashValue)", title: task.title, fire: $0) }
+        }
+        let e = events.filter(\.ringsAsAlarm).compactMap { event in
+            event.reminderDate.map { Ringing(id: "e\(event.persistentModelID.hashValue)", title: event.title, fire: $0) }
+        }
+        return (t + e).filter { $0.fire > now }.sorted { $0.fire < $1.fire }
+    }
+
+    private var deniedRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Alarms are off for Today", systemImage: "alarm.slash").font(.headline)
+            Text("Turn alarms on in Settings so Today can ring through Silent and Focus.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16))
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 
     private var permissionCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Reminders are off", systemImage: "bell.slash")
+            Label("Notifications are off", systemImage: "bell.slash")
                 .font(.headline)
             Text(status == .denied
-                 ? "Notifications are turned off for one. Turn them on in Settings to get reminded at the right time."
-                 : "Allow notifications so one. can remind you when a task or event starts, and keep nudging until it's done.")
+                 ? "Notifications are turned off for Today. Turn them on in Settings to get reminded at the right time."
+                 : "Allow notifications so Today can remind you when a task or event starts.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Button(status == .denied ? "Open Settings" : "Turn on reminders") {
+            Button(status == .denied ? "Open Settings" : "Turn on notifications") {
                 if status == .denied {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
                 } else {
@@ -82,47 +136,5 @@ struct AlarmsView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    private var items: [TimelineItem] {
-        let now = Date.now
-        guard let end = cal.date(byAdding: .day, value: 7, to: now) else { return [] }
-        let window = DateInterval(start: now, end: end)
-        let upcoming = events.flatMap { e in e.occurrences(in: window).filter { $0 >= now }.map { TimelineItem.event(e, $0) } }
-            + tasks.filter { task in
-                guard !task.isDone, let start = task.plannedStart else { return false }
-                return start >= now && start < end
-            }.map(TimelineItem.task)
-        return upcoming.sorted { $0.start < $1.start }
-    }
-
-    private var days: [Date] {
-        var seen: [Date] = []
-        for item in items {
-            let d = cal.startOfDay(for: item.start)
-            if seen.last != d { seen.append(d) }
-        }
-        return seen
-    }
-}
-
-/// Bell button: shows whether an item reminds you, and lets you pick when.
-struct ReminderMenu: View {
-    @Binding var minutes: Int?
-
-    var body: some View {
-        Menu {
-            Picker("Remind me", selection: $minutes) {
-                ForEach(ReminderOffset.choices, id: \.0) { label, value in
-                    Text(label).tag(value)
-                }
-            }
-        } label: {
-            Image(systemName: minutes == nil ? "bell.slash" : "bell.fill")
-                .font(.subheadline)
-                .foregroundStyle(minutes == nil ? Color.secondary : Color.accentColor)
-                .frame(width: 44, height: 44)
-        }
-        .accessibilityLabel("Reminder: \(ReminderOffset.label(minutes))")
     }
 }

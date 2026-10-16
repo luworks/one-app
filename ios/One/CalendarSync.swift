@@ -1,10 +1,13 @@
 import EventKit
+import EventKitUI
 import SwiftUI
 import os
 
 /// A read-only event from the system calendar (Apple Calendar, Google, Exchange…).
 struct ExternalEvent: Identifiable, Hashable {
     let id: String
+    /// EventKit identifier, for opening the event in Apple's own viewer.
+    let eventIdentifier: String
     let title: String
     let start: Date
     let end: Date
@@ -67,7 +70,7 @@ final class CalendarSync {
         version += 1
     }
 
-    /// System events overlapping `interval`, excluding ones one. created itself (`exclude`).
+    /// System events overlapping `interval`, excluding ones Today created itself (`exclude`).
     func events(in interval: DateInterval, excluding exclude: Set<String> = []) -> [ExternalEvent] {
         _ = version
         guard isOn else { return [] }
@@ -80,6 +83,7 @@ final class CalendarSync {
             .filter { !exclude.contains($0.eventIdentifier ?? "") }
             .map { e in
                 ExternalEvent(id: (e.eventIdentifier ?? UUID().uuidString) + "@\(e.startDate.timeIntervalSince1970)",
+                              eventIdentifier: e.eventIdentifier ?? "",
                               title: e.title ?? "Untitled", start: e.startDate, end: e.endDate, isAllDay: e.isAllDay,
                               calendarTitle: e.calendar.title, color: Color(cgColor: e.calendar.cgColor))
             }
@@ -88,6 +92,12 @@ final class CalendarSync {
     func events(on day: Date, excluding exclude: Set<String> = []) -> [ExternalEvent] {
         guard let interval = Calendar.current.dateInterval(of: .day, for: day) else { return [] }
         return events(in: interval, excluding: exclude)
+    }
+
+    /// A system event and the store it belongs to, for Apple's event viewer.
+    func nativeEvent(identifier: String) -> (EKEvent, EKEventStore)? {
+        guard isOn, let e = store.event(withIdentifier: identifier) else { return nil }
+        return (e, store)
     }
 
     /// Saves a copy of `event` to the default calendar and returns its identifier.
@@ -136,6 +146,7 @@ final class CalendarSync {
 /// Row for a system calendar event (read-only, opens nothing).
 struct ExternalEventRow: View {
     let event: ExternalEvent
+    @State private var showing = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -156,8 +167,42 @@ struct ExternalEventRow: View {
             Spacer(minLength: 0)
         }
         .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .onTapGesture { showing = true }
+        .contextMenu { Button { showing = true } label: { Label("Show Details", systemImage: "info.circle") } }
+        .sheet(isPresented: $showing) { NativeEventSheet(identifier: event.eventIdentifier) }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// Apple's own event viewer (EventKitUI): editing, deleting and repeating-event prompts behave exactly like Calendar.
+struct NativeEventSheet: UIViewControllerRepresentable {
+    let identifier: String
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> UINavigationController {
+        guard let (event, store) = CalendarSync.shared.nativeEvent(identifier: identifier) else {
+            return UINavigationController(rootViewController: UIViewController())
+        }
+        let vc = EKEventViewController()
+        vc.event = event
+        vc.allowsEditing = true
+        vc.allowsCalendarPreview = true
+        vc.delegate = context.coordinator
+        _ = store
+        return UINavigationController(rootViewController: vc)
+    }
+
+    func updateUIViewController(_ controller: UINavigationController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
+
+    final class Coordinator: NSObject, EKEventViewDelegate {
+        let dismiss: () -> Void
+        init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
+        func eventViewController(_ controller: EKEventViewController, didCompleteWith action: EKEventViewAction) { dismiss() }
     }
 }

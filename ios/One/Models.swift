@@ -102,6 +102,18 @@ final class OneTask {
         plannedStart = start.addingTimeInterval(TimeInterval(minutes * 60))
     }
 
+    /// Today at the same time of day, or the next full hour when it has no planned time yet.
+    func moveToToday() {
+        let cal = Calendar.current
+        if let start = plannedStart {
+            let t = cal.dateComponents([.hour, .minute], from: start)
+            plannedStart = cal.date(bySettingHour: t.hour ?? 9, minute: t.minute ?? 0, second: 0, of: .now)
+        } else {
+            let next = cal.date(byAdding: .hour, value: 1, to: .now) ?? .now
+            plannedStart = cal.date(bySetting: .minute, value: 0, of: next).map { cal.date(bySetting: .second, value: 0, of: $0) ?? $0 }
+        }
+    }
+
     func moveToTomorrow() {
         let cal = Calendar.current
         if let start = plannedStart {

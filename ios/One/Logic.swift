@@ -164,3 +164,39 @@ enum ListName {
         return rest.isEmpty ? name : String(rest)
     }
 }
+
+/// Real alarms (AlarmKit): which day they ring and how to label the repeat.
+enum AlarmPlan {
+    /// "Once", "Every day", "Weekdays", "Weekends", or short day names in Monday-first order.
+    static func repeatLabel(weekdays: [Int], calendar: Calendar = .current) -> String {
+        let set = Set(weekdays)
+        if set.isEmpty { return "Once" }
+        if set.count == 7 { return "Every day" }
+        if set == [2, 3, 4, 5, 6] { return "Weekdays" }
+        if set == [1, 7] { return "Weekends" }
+        return [2, 3, 4, 5, 6, 7, 1].filter(set.contains).map { calendar.shortWeekdaySymbols[$0 - 1] }.joined(separator: ", ")
+    }
+
+    /// The next time hour:minute occurs after `date` on an allowed weekday (any day when `weekdays` is empty).
+    static func nextFire(hour: Int, minute: Int, weekdays: [Int], after date: Date, calendar: Calendar = .current) -> Date? {
+        let start = calendar.startOfDay(for: date)
+        for offset in 0...7 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: start),
+                  let candidate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day),
+                  candidate > date else { continue }
+            if weekdays.isEmpty || weekdays.contains(calendar.component(.weekday, from: candidate)) { return candidate }
+        }
+        return nil
+    }
+
+    /// When the alarm rings on `day`: a repeating alarm on its weekdays, a one-time alarm on the day of its next occurrence.
+    static func fire(on day: Date, hour: Int, minute: Int, weekdays: [Int], now: Date, calendar: Calendar = .current) -> Date? {
+        if weekdays.isEmpty {
+            guard let next = nextFire(hour: hour, minute: minute, weekdays: [], after: now, calendar: calendar),
+                  calendar.isDate(next, inSameDayAs: day) else { return nil }
+            return next
+        }
+        guard weekdays.contains(calendar.component(.weekday, from: day)) else { return nil }
+        return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
+    }
+}

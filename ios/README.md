@@ -1,4 +1,4 @@
-# one. — iOS app (SwiftUI)
+# Today — iOS app (SwiftUI)
 
 The native app. The HTML prototype in `src/` stays the design reference; this is what runs on the phone.
 

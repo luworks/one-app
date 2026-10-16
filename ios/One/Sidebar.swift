@@ -25,7 +25,7 @@ struct Sidebar: View {
                     .background(Color.accentColor.gradient, in: Circle())
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Yuan").font(.headline)
-                    Text("one.").font(.caption).foregroundStyle(.secondary)
+                    Text("Today").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
             }

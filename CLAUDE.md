@@ -1,6 +1,6 @@
-# one. — interactive iOS prototype
+# Today — interactive iOS prototype
 
-An HTML/JS prototype of **one.**, an AI-native all-in-one planning app for iPhone (calendar, tasks, alarms, notes, AI). It is a design prototype, not the production app: fictional data, a fixed clock, no network calls.
+An HTML/JS prototype of **Today** (formerly "one."), an AI-native all-in-one planning app for iPhone (calendar, tasks, alarms, notes, AI). It is a design prototype, not the production app: fictional data, a fixed clock, no network calls.
 
 ## Product principles (do not break these)
 1. **AI prepares, the user decides.** AI never sends, moves or creates anything without an explicit tap. Every AI change appears as a preview card (`planCard`, `captureCard`) with Apply/Add and Undo.

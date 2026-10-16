@@ -9,6 +9,7 @@ struct DayAgenda: View {
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
+    @Query private var alarms: [OneAlarm]
 
     private let cal = Calendar.current
     @State private var showsAllOverdue = false
@@ -70,6 +71,7 @@ struct DayAgenda: View {
                     case .event(let event, let start): EventRow(event: event, start: start)
                     case .external(let e): ExternalEventRow(event: e)
                     case .task(let task): TaskRow(task: task, showsTime: true)
+                    case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
                     case .nowMarker(let date): NowRow(date: date)
                     }
                 }
@@ -110,6 +112,7 @@ struct DayAgenda: View {
             guard let start = task.plannedStart, cal.isDate(start, inSameDayAs: day) else { return nil }
             return .task(task)
         }
+        items += alarms.compactMap { a in a.fires(on: day).map { TimelineItem.alarm(a, $0) } }
         if cal.isDateInToday(day), !items.isEmpty {
             items.append(.nowMarker(Date.now))
         }
@@ -121,6 +124,7 @@ enum TimelineItem: Identifiable {
     case event(OneEvent, Date)
     case external(ExternalEvent)
     case task(OneTask)
+    case alarm(OneAlarm, Date)
     case nowMarker(Date)
 
     var id: AnyHashable {
@@ -128,6 +132,7 @@ enum TimelineItem: Identifiable {
         case .event(let e, let d): return [AnyHashable(ObjectIdentifier(e)), AnyHashable(d)]
         case .external(let e): return e.id
         case .task(let t): return ObjectIdentifier(t)
+        case .alarm(let a, _): return ObjectIdentifier(a)
         case .nowMarker: return "now"
         }
     }
@@ -137,6 +142,7 @@ enum TimelineItem: Identifiable {
         case .event(_, let d): return d
         case .external(let e): return e.start
         case .task(let t): return t.plannedStart ?? .distantFuture
+        case .alarm(_, let d): return d
         case .nowMarker(let d): return d
         }
     }

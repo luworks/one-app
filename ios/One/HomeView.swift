@@ -33,6 +33,7 @@ struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query private var allTasks: [OneTask]
     @Query private var allEvents: [OneEvent]
+    @Query private var allAlarms: [OneAlarm]
 
     @State private var tab: HomeTab = .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
@@ -94,6 +95,7 @@ struct HomeView: View {
             Button("Delete all", role: .destructive) {
                 try? context.delete(model: OneTask.self)
                 try? context.delete(model: OneEvent.self)
+                try? context.delete(model: OneAlarm.self)
                 try? context.delete(model: Habit.self)
             }
         }
@@ -148,6 +150,7 @@ struct HomeView: View {
             switch item {
             case .task: TaskEditor()
             case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
+            case .alarm: AlarmEditor()
             }
         }
         .task {
@@ -198,6 +201,7 @@ struct HomeView: View {
             h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
             h.combine(t.ringsAsAlarm)
         }
+        for a in allAlarms { h.combine(a.hour); h.combine(a.minute); h.combine(a.weekdays); h.combine(a.isOn); h.combine(a.label) }
         for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.ringsAsAlarm) }
         return h.finalize()
     }
@@ -268,6 +272,7 @@ struct HomeView: View {
             Menu {
                 Button { newItem = .task } label: { Label("New task", systemImage: "checklist") }
                 Button { newItem = .event } label: { Label("New event", systemImage: "calendar") }
+                Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
             } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.body.weight(.semibold))
@@ -285,7 +290,7 @@ struct HomeView: View {
 }
 
 enum NewItem: Identifiable {
-    case task, event
+    case task, event, alarm
     var id: Self { self }
 }
 
@@ -364,5 +369,5 @@ extension View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [OneTask.self, OneEvent.self, Habit.self], inMemory: true)
+        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, Habit.self], inMemory: true)
 }

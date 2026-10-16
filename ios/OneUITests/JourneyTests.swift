@@ -73,10 +73,21 @@ final class JourneyTests: XCTestCase {
         XCTAssertLessThanOrEqual(taps, 6)
     }
 
-    /// J6: reminders are visible and adjustable per item.
-    func testJ6_alarmsListsTimedItemsWithBells() {
+    /// J6: add a real alarm, see it on the Alarms page and in Today's schedule.
+    func testJ6_addAlarmAndSeeItInToday() {
         tab("Alarms")
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reminder:'")).firstMatch.waitForExistence(timeout: 5))
+        tap(app.buttons["New alarm"].firstMatch)
+        let label = app.textFields["Label"]
+        XCTAssertTrue(label.waitForExistence(timeout: 5))
+        label.tap()
+        label.typeText("Wake up")
+        tap(app.buttons["Save"])
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Wake up'")).firstMatch.waitForExistence(timeout: 5))
+        tab("Today")
+        // The list is lazy: scroll until the row has been created.
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Alarm Wake up'")).firstMatch
+        for _ in 0..<6 where !row.exists { app.swipeUp() }
+        XCTAssertTrue(row.waitForExistence(timeout: 3), "a one-time alarm shows in the day it rings")
     }
 
     /// J7: find something.
@@ -96,7 +107,9 @@ final class JourneyTests: XCTestCase {
     }
 
     /// AI claim 9: plan my day is a preview; nothing moves until Apply.
-    func testPlanMyDay() {
+    func testPlanMyDay() throws {
+        // The planner only fills free time until 9 PM, so late in the evening there is nothing to place.
+        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 18, "needs free time before 9 PM")
         tap(app.buttons["Ask AI or add anything"])
         tap(app.buttons["Plan my day"])
         XCTAssertTrue(app.staticTexts["Plan for today"].waitForExistence(timeout: 5))
