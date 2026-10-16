@@ -77,6 +77,15 @@ enum Editing {
 
     // MARK: Code rules (pure)
 
+    /// Does this sentence talk about an existing item (edit) rather than add something new (capture)?
+    /// Cancel / delete verbs always do. Move-like verbs only when the message also names an item, "it", or a meeting.
+    static func looksLikeEdit(_ text: String, items: [EditItem]) -> Bool {
+        func has(_ pattern: String) -> Bool { text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil }
+        if has(#"取消|删掉|删除|删了|\bcancel(l?ed)?\b|\bdelete\b|\bremove\b"#) { return true }
+        guard has(#"推迟|延后|延期|提前|推到|改到|改成|挪|移到|排到|往后推|\bpostpone|\breschedule|\bmove\b|\bpush\b|\bdelay\b|bring forward"#) else { return false }
+        return !matchingItems(text, in: items).isEmpty || usesPronoun(text)
+    }
+
     /// Same test the composer uses to route questions away from capture.
     static func isQuestion(_ text: String) -> Bool {
         text.hasSuffix("?") || text.hasSuffix("？") || ["什么", "怎么", "吗", "多少", "几"].contains { text.contains($0) }
@@ -106,11 +115,11 @@ enum Editing {
         return []
     }
 
-    private static func mentionsEverything(_ text: String) -> Bool {
+    static func mentionsEverything(_ text: String) -> Bool {
         text.range(of: #"所有|全部|每一?个|\ball\b|\bevery\b|everything"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    private static func usesPronoun(_ text: String) -> Bool {
+    static func usesPronoun(_ text: String) -> Bool {
         text.range(of: #"\b(it|that|this|them)\b|这个|那个|它"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
