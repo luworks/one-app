@@ -36,7 +36,7 @@ struct EventRow: View {
                 TimeColumn(date: start ?? event.start)
             }
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color.blue)
+                .fill(CalendarSync.shared.color(forExternalID: event.externalID) ?? Color.blue)
                 .frame(width: 4, height: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.title)
@@ -53,6 +53,11 @@ struct EventRow: View {
         .sheet(isPresented: $editing) { EventEditor(event: event) }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(EventSpeech.label(title: event.title, start: start ?? event.start,
+                                              end: (start ?? event.start).addingTimeInterval(event.duration), isAllDay: event.isAllDay,
+                                              calendar: CalendarSync.shared.calendar(forExternalID: event.externalID)?.title ?? event.calendarName))
+        .accessibilityAddTraits(.isButton)
         .swipeActions(edge: .trailing, allowsFullSwipe: event.repeats == nil) {
             Button(role: .destructive) { delete() } label: { Label("Delete", systemImage: "trash") }
         }

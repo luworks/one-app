@@ -60,15 +60,23 @@ final class JourneyTests: XCTestCase {
         XCTAssertLessThanOrEqual(taps, 1, "J3 tap budget")
     }
 
-    /// J4: add an event.
+    /// J4: add an event. (Under -uiTesting there is no Calendar permission, so the in-app editor is used, not Apple's.)
     func testJ4_addEvent() {
         tab("Calendar")
-        tap(app.buttons["New"])   // + adds an event on the Calendar page
+        tap(app.buttons["New"])   // + adds an event on the Calendar page (Month is the default view)
         let title = app.textFields["Title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         title.typeText("Design review")
         tap(app.buttons["Done"])
-        tap(app.buttons["Month"])
+        // The Month view lists the selected day's events under the grid; the new one starts at the next full hour today.
+        // (After 23:00 "the next full hour" is tomorrow, so only check the list before then.)
+        if Calendar.current.component(.hour, from: .now) < 23 {
+            let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Design review'")).firstMatch
+            let list = app.descendants(matching: .any)["calendar.dayList"]
+            for _ in 0..<5 where !row.exists { list.swipeUp() }
+            XCTAssertTrue(row.waitForExistence(timeout: 3), "the new event shows in the day's list")
+        }
+        tap(app.buttons["Week"])
         XCTAssertLessThanOrEqual(taps, 6)
     }
 
