@@ -11,10 +11,10 @@ An HTML/JS prototype of **one.**, an AI-native all-in-one planning app for iPhon
 6. Overdue items stay visible and are never silently moved.
 
 ## Layout (current)
-- **Home (`ui.tab==='today'`, `vHome`)**: calendar pane on top (week strip, next item, due-today tray, timeline) + resizable split handle (peek / half / full) + conversation pane below. The first message is the AI morning brief (`briefHTML`), which holds the "needs you" cards.
+- **Home (`ui.tab==='today'`, `vHome`)**: calendar pane on top (week strip, next item, due-today tray, timeline) + resizable split handle (peek / half / full) + conversation pane below. With no messages the calendar pane fills the screen (just the items: one quiet "N overdue" line, the overlap banner, due-today tray, timeline); the split handle and conversation pane appear with the first message. There is no AI brief card (removed on purpose: the page shows items, AI lives in the composer).
 - **Composer**: always-visible bottom input (`#ask`). Statements are parsed into a capture card (`parse` → `captureCard`); questions go to `aiReply` (scripted). `isQuestion` decides.
-- **Side drawer** (`renderDrawer`): ☰ button or left-edge swipe. Today / Calendar / Tasks / Notes / Alarms with live one-line summaries, conversations (`threads`), AI activity, Lock Screen & widgets mock, Settings.
-- Secondary full views: `vCalendar` (day/week), `vTasks` (tasks/projects/notes), `vAlarms`.
+- **Side drawer** (`renderDrawer`): ☰ button or left-edge swipe. Today / Calendar / Lists / Notes / Alarms (no live summaries), conversations (`threads`), AI activity, Lock Screen & widgets mock, Settings.
+- Secondary full views: `vCalendar` (week/month only; the day view is Home), `vTasks` (shown as "Lists": tasks/projects/notes), `vAlarms` (real alarms only; reminders are a per-item alert, not a list).
 - Sheets with detents (`openSheet`/`renderSheet`), iOS action sheets (`openMenu`), ring screen (`showRing`), toasts with Undo.
 - `vToday` is the older list-style Today; it is no longer routed but kept for reference.
 
