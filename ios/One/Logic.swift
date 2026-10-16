@@ -262,6 +262,12 @@ enum ListName {
         let rest = name[r.upperBound...]
         return rest.isEmpty ? name : String(rest)
     }
+
+    /// 1 for "01 工作", nil for names without a number prefix.
+    static func number(_ name: String) -> Int? {
+        guard let r = name.range(of: #"^\d{1,3}(?=[\s._-])"#, options: .regularExpression) else { return nil }
+        return Int(name[r])
+    }
 }
 
 /// Real alarms (AlarmKit): which day they ring and how to label the repeat.

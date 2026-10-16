@@ -37,7 +37,8 @@ struct PendingListDeletion {
     }
 
     var message: String {
-        count == 0 ? "This list is empty." : "This also deletes \(reminderCountText(count)) in it. This can't be undone."
+        count == 0 ? "This list is empty."
+            : "It has \(reminderCountText(count)). Keep them in your default list, or delete them with the list. Deleting can't be undone."
     }
 }
 
@@ -58,9 +59,20 @@ private struct DeleteListAlert: ViewModifier {
             isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
             presenting: pending
         ) { item in
-            Button("Delete", role: .destructive) {
-                ListActions.delete(item.list, in: context)
-                item.afterDelete?()
+            if item.count == 0 {
+                Button("Delete", role: .destructive) {
+                    ListActions.delete(item.list, in: context)
+                    item.afterDelete?()
+                }
+            } else {
+                Button("Delete List, Keep Reminders") {
+                    ListActions.delete(item.list, keepingTasks: true, in: context)
+                    item.afterDelete?()
+                }
+                Button("Delete List and Reminders", role: .destructive) {
+                    ListActions.delete(item.list, in: context)
+                    item.afterDelete?()
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: { item in
