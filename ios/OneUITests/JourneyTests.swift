@@ -62,13 +62,12 @@ final class JourneyTests: XCTestCase {
 
     /// J4: add an event.
     func testJ4_addEvent() {
-        tap(app.buttons["New"])
-        tap(app.buttons["New event"])
+        tab("Calendar")
+        tap(app.buttons["New"])   // + adds an event on the Calendar page
         let title = app.textFields["Title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         title.typeText("Design review")
         tap(app.buttons["Done"])
-        tab("Calendar")
         tap(app.buttons["Month"])
         XCTAssertLessThanOrEqual(taps, 6)
     }
@@ -76,7 +75,7 @@ final class JourneyTests: XCTestCase {
     /// J6: add a real alarm, see it on the Alarms page and in Today's schedule.
     func testJ6_addAlarmAndSeeItInToday() {
         tab("Alarms")
-        tap(app.buttons["New alarm"].firstMatch)
+        tap(app.buttons["New"])   // + adds an alarm on the Alarms page
         let label = app.textFields["Label"]
         XCTAssertTrue(label.waitForExistence(timeout: 5))
         label.tap()

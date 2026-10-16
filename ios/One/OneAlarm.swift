@@ -28,6 +28,14 @@ final class OneAlarm {
 
     var repeatLabel: String { AlarmPlan.repeatLabel(weekdays: weekdays) }
 
+    /// A one-time alarm turns itself off after it has rung, like Apple Clock.
+    func retireIfRung(now: Date = .now) {
+        guard isOn, weekdays.isEmpty,
+              let ring = AlarmPlan.nextFire(hour: hour, minute: minute, weekdays: [], after: createdAt),
+              ring < now else { return }
+        isOn = false
+    }
+
     /// When this alarm rings on `day`, if it does. A one-time alarm rings on the day of its next occurrence.
     func fires(on day: Date, now: Date = .now, calendar: Calendar = .current) -> Date? {
         guard isOn else { return nil }
@@ -142,6 +150,7 @@ struct AlarmEditor: View {
         target.label = label.trimmingCharacters(in: .whitespaces)
         target.weekdays = weekdays.sorted()
         target.isOn = true
+        target.createdAt = .now   // a one-time alarm counts from the last save
         if alarm == nil { context.insert(target) }
         dismiss()
     }

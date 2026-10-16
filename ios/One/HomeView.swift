@@ -176,6 +176,7 @@ struct HomeView: View {
         }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
+            allAlarms.forEach { $0.retireIfRung() }
             await Reminders.shared.resync()
             await Ringer.sync(context)
         }
@@ -254,6 +255,15 @@ struct HomeView: View {
         }
     }
 
+    /// What + adds right now: the thing this page is about.
+    private var smartNewItem: NewItem {
+        switch tab {
+        case .calendar: .event
+        case .alarms: .alarm
+        case .today, .tasks: .task
+        }
+    }
+
     private var bottomButtons: some View {
         HStack(spacing: 10) {
             CircleButton(systemImage: "magnifyingglass", label: "Search") { showsSearch = true }
@@ -269,19 +279,24 @@ struct HomeView: View {
                 .glassCapsule()
             }
             .buttonStyle(PressScale())
+            // +: tap adds what fits the page you are on (alarm on Alarms, event on Calendar, otherwise a
+            // reminder); press and hold to pick.
             Menu {
-                Button { newItem = .task } label: { Label("New task", systemImage: "checklist") }
+                Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
                 Button { newItem = .event } label: { Label("New event", systemImage: "calendar") }
                 Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
             } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.body.weight(.semibold))
+                Image(systemName: "plus")
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 50, height: 50)
                     .glassCircle()
+            } primaryAction: {
+                newItem = smartNewItem
             }
             .tint(.primary)
             .accessibilityLabel("New")
+            .accessibilityHint("Adds \(smartNewItem.noun). Press and hold for more.")
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
@@ -292,6 +307,14 @@ struct HomeView: View {
 enum NewItem: Identifiable {
     case task, event, alarm
     var id: Self { self }
+
+    var noun: String {
+        switch self {
+        case .task: "a reminder"
+        case .event: "an event"
+        case .alarm: "an alarm"
+        }
+    }
 }
 
 /// Selected tab: a wide pill with its label. Others: icon-only capsules.

@@ -29,10 +29,11 @@ final class CalendarSyncTests: XCTestCase {
 
         // Create an event in one.
         let title = "EK check \(Int(Date.now.timeIntervalSince1970) % 10000)"
-        app.buttons["Today"].firstMatch.tap()
+        app.buttons["Today"].firstMatch.tap()      // closes the sidebar
         sleep(1)
-        app.buttons["New"].tap()
-        app.buttons["New event"].tap()
+        app.buttons["Calendar"].firstMatch.tap()
+        sleep(1)
+        app.buttons["New"].tap()   // + adds an event on the Calendar page
         let field = app.textFields["Title"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText(title)

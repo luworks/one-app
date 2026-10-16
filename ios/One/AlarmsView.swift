@@ -13,7 +13,6 @@ struct AlarmsView: View {
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
     @State private var status: UNAuthorizationStatus = .authorized
     @State private var editing: OneAlarm?
-    @State private var adding = false
 
     var body: some View {
         List {
@@ -42,11 +41,6 @@ struct AlarmsView: View {
                             }
                         }
                 }
-                Button { adding = true } label: {
-                    Label("New alarm", systemImage: "plus")
-                }
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             }
             if !ringing.isEmpty {
                 Section("From your items") {
@@ -69,8 +63,13 @@ struct AlarmsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .overlay {
+            if alarms.isEmpty && ringing.isEmpty {
+                ContentUnavailableView("No alarms", systemImage: "alarm",
+                                       description: Text("Tap + to add one. Alarms ring through Silent and Focus."))
+            }
+        }
         .sheet(item: $editing) { AlarmEditor(alarm: $0) }
-        .sheet(isPresented: $adding) { AlarmEditor() }
         .task(id: scenePhase) { status = await Reminders.shared.authorizationStatus() }
     }
 
@@ -92,23 +91,22 @@ struct AlarmsView: View {
         return (t + e).filter { $0.fire > now }.sorted { $0.fire < $1.fire }
     }
 
+    /// One quiet line, not a card: alarms need the user's OK in Settings.
     private var deniedRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Alarms are off for Today", systemImage: "alarm.slash").font(.headline)
-            Text("Turn alarms on in Settings so Today can ring through Silent and Focus.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Button("Open Settings") {
+        HStack(spacing: 10) {
+            Image(systemName: "alarm.slash").foregroundStyle(.secondary)
+            Text("Alarms are off for Today").font(.subheadline)
+            Spacer(minLength: 8)
+            Button("Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
             }
-            .buttonStyle(.borderedProminent)
+            .font(.subheadline.weight(.semibold))
+            .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16))
+        .padding(.vertical, 4)
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
     }
 
     private var permissionCard: some View {
