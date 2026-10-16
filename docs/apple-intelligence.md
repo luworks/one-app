@@ -191,3 +191,70 @@ If no time is given, leave hour and minute empty.
 - [Adding server-side intelligence with Private Cloud Compute](https://developer.apple.com/documentation/foundationmodels/adding-server-side-intelligence-with-private-cloud-compute)
 - [AlarmKit 官方示例](https://developer.apple.com/documentation/alarmkit/scheduling-an-alarm-with-alarmkit)、[WWDC25 session 230](https://developer.apple.com/wwdc25/230)
 - 第三方（仅作补充，未当作事实依据）：[Natasha The Robot](https://www.natashatherobot.com/p/apple-foundation-models)、[Blake Crosley](https://blakecrosley.com/blog/apple-foundation-models-framework)
+
+## 7. 技术选型结论（2026-10-16，实测）
+
+### 7.1 目标与方法
+
+目标（评测前设定）：在难度更高的新句子集上，「从一句话生成预览卡」全字段正确率 ≥ 90%，类型判断 ≥ 95%，调整类请求（改期 / 取消 / 问清楚）≥ 90%；p50 延迟 ≤ 1 秒（Mac 上的代理指标）；离线可用、数据不出设备、新手机无需下载大文件；任何情况下都能回落到 `CaptureParser`；用户点 Add / Apply 前不写入任何东西。
+
+方法：同一批人工标注的句子（r1 33、r3 37、r4 41 条捕获；20 条编辑，标签在跑任何模型之前写好），同一份 prompt 和字段名，开源模型用 llama.cpp 的 JSON schema 语法约束（等价于 `@Generable`）、温度 0、Q4_K_M；Apple FM 来自 spike（温度默认，5 次）。评分脚本：`ios/Eval/open/score_open.py`，与 spike 的 Swift 评分一致。三种任务：
+- **kind**：只判断 task / event / alarm，其余字段用 `CaptureParser`（方案 A2）。
+- **full**：模型直接抽取全部字段。
+- **edit**：给 8 个候选条目，输出 move / delete / clarify / none + 目标 id + 新日期时间。
+
+### 7.2 结果（百分比；r4 是最难的一套）
+
+| 模型 | 类型 kind r3/r4 | A2 全字段 r3/r4 | 直出 full r3/r4 | 调整 op / 目标 / 时间 | p50 kind / full / edit（Mac，秒） |
+|---|---|---|---|---|---|
+| `CaptureParser` 单独 | 73 / 66 | 68 / 39 | - | - | - |
+| **Apple FM（端侧，macOS 26.6 的模型）** | 96 / 93 | 96 / 63 | 26 / 20 | 79 / 85 / **26**（从不 clarify） | 0.35 / 1.0 / 1.0 |
+| Qwen3.5-0.8B | 70 / 66 | 78 / 51 | 5 / 0 | 80 / 75 / 40 | 0.2 / 0.7 / 0.4 |
+| Qwen3.5-2B | 86 / 80 | 92 / 59 | 27 / 17 | 85 / 85 / 60 | 0.3 / 0.9 / 0.6 |
+| **Qwen3.5-4B** | 97 / 90 | 97 / 61 | 57 / 41 | **95 / 95 / 100** | 0.4 / 1.6 / 1.3 |
+| Qwen3-1.7B（Core AI 注册表有） | 46 / 39 | 46 / 29 | 27 / 15 | 80 / 75 / 60 | 0.2 / 0.7 / 0.6 |
+| Qwen3-4B（Core AI 注册表有） | 65 / 59 | 68 / 41 | 38 / 20 | 85 / 85 / 85 | 0.3 / 1.2 / 1.1 |
+| Gemma 4 E2B | 86 / 93 | 86 / 63 | 27 / 24（近半输出为空） | 15（17/20 请求失败）| 0.5 / 2.7 / 3.4 |
+| **gpt-6-luna（云）** | 97 / 95 | 97 / 63 | **95 / 80** | 90 / 90 / 90 | 1.2 / 2.2 / 1.7 |
+
+说明：表中编辑类样本只有 20 条，每条 = 5 个百分点；其余套 33–41 条，每条 2.4–3 个百分点，差几个点不显著。Apple FM 的 A2 / full 数字来自 spike（`ios/Eval/open/apple-fm-r4-*-summary.md`），Gemma 4 E2B 的 full / edit 大量输出为空，结果不可靠，没有继续排查。Qwen3.5-9B 因为太慢、占用过高，只跑了一小部分后停止，不计入结论；gpt-6-luna 是云端的质量上限参照。
+
+### 7.3 发现
+
+1. **「捕获」的瓶颈是解析器的日期覆盖，不是模型。** r4 上解析器日期只对 78%。它漏掉的是：这周末 / 月底 / 下个月3号 / 下下周一 / the 22nd / the 1st、中文数字钟点（七点半、九点）、相对时间（30分钟后、in 2 hours）。gpt-6-luna 能答对其中 8 条，但这类规则可以直接写进解析器（确定性、离线、免费）。把这些补上，A2 的上限从约 63% 升到约 90%（估算，未实测）。
+2. **类型判断（task / event / alarm）：** Apple FM（93–96%）≈ Qwen3.5-4B（90–97%）≈ gpt-6-luna（95–97%）。端侧、不用下载的 Apple FM 已经够用。Qwen3.5 ≤ 2B 和 Qwen3 系列不够（≤ 86%）。
+3. **「模型直接抽取全部字段」只有 gpt-6-luna 接近可用（r4 80%）。** 端侧模型都不行（Apple FM 20%，Qwen3.5-4B 41%）。
+4. **调整类请求：Apple FM 现在的 schema 不够。** 操作判断 79%、目标 85%，但新时间只对 26%（算术：推迟半小时、同一时间改到明天），并且 15 条「该先问清楚」的请求一条都没问（0/15）。Qwen3.5-4B 在同一 prompt 上 95 / 95 / 100，gpt-6-luna 90 / 90 / 90。时间算术应该交给代码（模型只输出 op、目标 id 和「推迟多少分钟 / 改到几点」这类小数字），歧义判断也应该由代码做（用户说的词命中多个候选 → 直接问）。这个重设计**还没测**。
+5. **开源模型的接入成本高于看上去的：**
+   - iOS 27 的 Core AI 可以把开源模型放进同一个 `LanguageModelSession`（`CoreAILanguageModel`，`@Generable` 和工具调用沿用同一套 API），但注册表里是 Qwen3（0.6B / 1.7B / 4B / 8B）、Gemma 3 / 3n、Gemma 4（需 iOS 27.2+）、Phi、SmolLM2，**没有 Qwen3.5**。实测 Qwen3 在我们的任务上明显差（kind 59–65%）。
+   - 好用的 Qwen3.5-4B Q4 约 2.7 GB 文件，运行时内存估计 3 GB 以上（未在手机实测），要么增大安装包要么首次下载；只能走 llama.cpp 或 MLX Swift（Qwen3.5 支持情况未核实），要自己维护推理引擎。
+   - 对比 Apple FM：零安装包体积、零下载、系统管理内存。
+
+### 7.4 选型
+
+| 层 | 选择 | 连接方式 | 尺寸 / 成本 |
+|---|---|---|---|
+| 捕获（加任务 / 事件 / 闹钟） | **`CaptureParser`（补齐日期规则）+ Apple FM 做 task/event/alarm 三选一（A2）** | `FoundationModels`，`@Generable` 枚举，不需要 entitlement；仅 iOS 27 | 0 额外体积；p50 约 0.35 s（Mac） |
+| 调整已有条目（改期 / 取消 / 问清楚） | **v1：Apple FM，输出 op + 目标 id + 小数字，时间算术和歧义判断由代码做；先做出来再测** | 同上 | 约 1 s |
+| 设备不支持 Apple Intelligence | 仅 `CaptureParser`（调整类请求提示「需要 Apple Intelligence」或让用户手动改） | - | - |
+| 复杂请求的上限（可选，不在 v1） | gpt-6-luna 或同类云端小模型，用户明确开启，经自己的服务端转发 | HTTPS + 服务端代理（密钥不进 App） | p50 1.2–2.2 s；任务标题会离开设备；价格我没有核实 |
+| **不采用** | 打包 Qwen / Gemma 进 App（v1）；Core AI 的 Qwen3 小模型；PCC | - | - |
+
+理由：Apple FM 在最关键的「类型判断」上与更大的开源模型和云端模型持平，却不增加包体积、不需下载、不增加推理引擎维护；真正拖累准确率的是解析器的日期覆盖，补规则比换模型便宜得多；调整类请求的短板是 schema 设计（让模型做算术）而不是模型太小。Qwen3.5-4B 是端侧开源里唯一在调整类请求上有明显优势的，保留为后备：如果重设计后 Apple FM 的调整类请求仍低于 90%，再评估把它打包或首次下载，并确认 iPhone 内存。
+
+### 7.5 没有验证的风险
+
+- Apple FM 的数字来自 macOS 26.6 的端侧模型。官方文档说 iOS 27.0 是单独的一代模型，可能更好也可能不同，**必须在 iOS 27 真机上重跑**（`ios/Eval/Understanding/run.sh`、`score_open.py` 都可复用）。
+- 所有延迟是 Mac 上的数字，不代表 iPhone。手机上的 p50 需要真机实测。
+- 评测集是我和 spike 写的，句子少（41 / 20），r4 的标题评分对改写偏严格（例如「和王总吃午餐」被判错），数字有几个点的噪声。解析器补规则之后需要一套**没见过**的新句子做最终验证。
+- 开源模型是温度 0、固定 seed；Apple FM 默认采样，对 Apple FM 略不利。
+- Qwen3.5-9B、Gemma 4 E4B、Gemma 3 / 3n 没有完成测试（前两个因占用资源过高被我停止，后者因被 Gemma 4 取代跳过）。
+- 云端只测了 gpt-6-luna（按你的要求，因为最便宜），没有比较其他尺寸。
+- 密钥管理、云端隐私条款、费用都没有评估。
+
+### 7.6 下一步（按顺序）
+
+1. 给 `CaptureParser` 补日期规则（周末 / 月底 / 下个月N号 / N号 / 下下周 / 中文数字钟点 / 相对时间），用 r4 做开发集，另写一套新句子做最终验证。
+2. 调整类请求：重设计 Apple FM 的 schema（op + 目标 id + 推迟分钟 / 目标时刻），代码做算术和歧义判断，在 `edit-cases-r4.json` 上重测；再写一批新的调整类句子验证。
+3. 在 iOS 27 真机上重跑所有 Apple FM 评测，测手机延迟。
+4. 如果第 2 步仍 < 90%，评估 Qwen3.5-4B 的包体积 / 内存方案。
