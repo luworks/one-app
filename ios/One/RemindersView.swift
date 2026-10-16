@@ -101,6 +101,8 @@ struct RemindersView: View {
 
     @AppStorage(SmartListLayout.orderKey) private var smartOrder = ""
     @AppStorage(SmartListLayout.hiddenKey) private var smartHidden = ""
+    /// False until the user first drags My Lists; until then numbered lists ("01 工作") sort by their number.
+    @AppStorage("reminders.listsReordered") private var listsReordered = false
 
     @State private var path: [ReminderTarget] = []
     @State private var addingList = false
@@ -111,6 +113,20 @@ struct RemindersView: View {
     private let sync = RemindersSync.shared
 
     private var isEditing: Bool { editMode.isEditing }
+
+    /// My Lists in display order: the user's own order once they have dragged, else numbered lists first by number.
+    private var sortedLists: [OneList] {
+        guard !listsReordered else { return lists }
+        return lists.enumerated().sorted { a, b in
+            let na = ListName.number(a.element.name), nb = ListName.number(b.element.name)
+            switch (na, nb) {
+            case let (x?, y?) where x != y: return x < y
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return a.offset < b.offset
+            }
+        }.map(\.element)
+    }
     private var layout: SmartListLayout { SmartListLayout(order: smartOrder, hidden: smartHidden) }
 
     var body: some View {
@@ -140,8 +156,9 @@ struct RemindersView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
-            // Room to scroll the last row clear of the app's floating bottom bar (search, Ask AI, +).
-            .contentMargins(.bottom, 24, for: .scrollContent)
+            // Room to scroll the last row clear of the app's floating bottom bar (search, Ask AI, +): the bar's
+            // safe-area inset doesn't reach this list through the NavigationStack, so the rows ran under it.
+            .contentMargins(.bottom, 96, for: .scrollContent)
             .environment(\.editMode, $editMode)
             // The app's own top bar is above; this is the title the pushed screen's back button shows.
             .navigationTitle("Lists")
@@ -180,7 +197,7 @@ struct RemindersView: View {
 
     /// The pinned cards: the smart lists that are shown, then pinned lists.
     private func pinnedCards(_ stats: Stats) -> some View {
-        let pinned = lists.filter(\.pinned)
+        let pinned = sortedLists.filter(\.pinned)
         return Section {
             editButton
                 .listRowInsets(EdgeInsets())
@@ -270,16 +287,20 @@ struct RemindersView: View {
                 .deleteDisabled(true)
                 .accessibilityIdentifier("list.default")
             }
-            ForEach(lists) { list in
+            // .onMove also lets a row be long-pressed and dragged outside Edit mode (iOS 16+), like Apple Reminders:
+            // a long press opens the context menu, and moving the finger without lifting picks the row up.
+            let ordered = sortedLists
+            ForEach(ordered) { list in
                 listRow(list, stats: stats)
             }
             .onMove { from, to in
-                var reordered = lists
+                var reordered = ordered
                 reordered.move(fromOffsets: from, toOffset: to)
                 ListActions.reorder(reordered, in: context)
+                listsReordered = true
             }
             .onDelete { offsets in
-                if let i = offsets.first, lists.indices.contains(i) { askDelete(lists[i]) }
+                if let i = offsets.first, ordered.indices.contains(i) { askDelete(ordered[i]) }
             }
 
             // An inline row at the end of the list, not a floating button: the app's own bottom bar owns
