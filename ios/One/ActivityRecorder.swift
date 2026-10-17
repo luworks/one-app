@@ -80,6 +80,13 @@ final class ActivityRecorder {
         }
     }
 
+    /// Forgets what is waiting to be written (Clear must not let a buffered event come back after it).
+    func discardBuffered() {
+        lock.lock()
+        buffer = []
+        lock.unlock()
+    }
+
     var bufferedCount: Int {
         lock.lock(); defer { lock.unlock() }
         return buffer.count

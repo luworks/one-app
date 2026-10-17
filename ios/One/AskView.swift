@@ -838,7 +838,7 @@ struct AskView: View {
 
     private func applyTidy() {
         let changes = tidy.filter { $0.choice != .keep }
-        var entries: [LedgerEntry] = []
+        var entries: [LedgerItem] = []
         withAnimation {
             for r in changes {
                 let new = OverdueTidy.newDue(r.oldDue, r.choice)

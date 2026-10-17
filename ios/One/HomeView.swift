@@ -178,6 +178,7 @@ struct HomeView: View {
         }
         let shared = ShareInbox.drain()
         guard !shared.isEmpty else { return }
+        ActivityCenter.record(ActivityEvents.shareImport(count: shared.count))
         let added = shared.map { s in
             let t = OneTask(title: s.title, note: s.note, due: s.due)
             context.insert(t)
@@ -275,6 +276,9 @@ struct HomeView: View {
             #endif
             Self.seedUITestReminder(context)
             importShared()
+            // The old SwiftData ledger is copied into the Activity store once; then expired activity is dropped.
+            LedgerMigration.run(context: context)
+            ActivityCenter.importOutbox()
             Ledger.prune(context)
             #if DEBUG
             // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
@@ -312,18 +316,23 @@ struct HomeView: View {
             default: break
             }
         }
-        .onChange(of: tab) { _, t in UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey) }
+        .onChange(of: tab) { _, t in
+            UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey)
+            ActivityCenter.record(ActivityEvents.screenOpen(t.rawValue))
+        }
         .onChange(of: calendarMode) { _, m in UserDefaults.standard.set(m.rawValue, forKey: Self.calendarModeKey) }
         .onChange(of: clockSection) { _, s in UserDefaults.standard.set(s.rawValue, forKey: Self.clockSectionKey) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 dropDeletedMirrors()
                 importShared()
+                ActivityCenter.importOutbox()
                 autoPlan()
                 Task { await Reminders.shared.resync() }
             }
             if phase == .background {
                 Ledger.flush(context)
+                ActivityCenter.flushInBackground()
                 updateWidgets()
                 WidgetFeed.scheduleBackgroundRefresh()
             }
