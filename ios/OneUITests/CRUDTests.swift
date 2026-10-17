@@ -499,9 +499,9 @@ final class CRUDTests: XCTestCase {
         // Switch off and on.
         let toggle = alarmSwitch("Piano lesson")
         XCTAssertEqual(toggle.value as? String, "1", "a saved alarm is on")
-        toggle.tap()
+        toggle.toggleSwitch()
         XCTAssertTrue(wait(toggle, "value == '0'"), "switched off")
-        toggle.tap()
+        toggle.toggleSwitch()
         XCTAssertTrue(wait(toggle, "value == '1'"), "and on again")
 
         // Delete with a swipe; Undo.
