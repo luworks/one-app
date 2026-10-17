@@ -125,6 +125,8 @@ struct Sidebar: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // Swipe right to left anywhere on the list goes back to Today; vertical scrolling is left alone.
+        .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
         // `presenting:` hands the thread to the buttons: the alert clears `renaming` as it closes, which can happen
         // before Save's action runs.
         .alert("Rename Conversation", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
@@ -148,17 +150,16 @@ struct Sidebar: View {
             .textCase(nil)
     }
 
-    /// Swipe right to left archives (a full swipe archives at once), swipe left to right shows Delete,
+    /// Swipe left to right shows Archive and Delete (right to left closes the sidebar and returns to Today),
     /// press and hold for Rename / Archive / Delete. Archive and Delete both have Undo.
     private func row(_ thread: ChatThread) -> some View {
         ConversationRow(thread: thread, now: now) { onOpen(thread) }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                archiveButton(thread)
-            }
+            // Only the leading edge has row actions: a right-to-left swipe is free to close the sidebar.
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                archiveButton(thread).tint(.orange)
                 Button(role: .destructive) { delete(thread) } label: {
                     Label("Delete", systemImage: "trash")
                 }
