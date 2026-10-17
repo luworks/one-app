@@ -11,9 +11,15 @@ let package = Package(
             path: "One",
             sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift"]
         ),
+        // Code shared by the app and the TodayWidgets extension (the widget snapshot and "next items" logic).
+        .target(
+            name: "OneShared",
+            path: "Shared",
+            sources: ["WidgetSnapshot.swift"]
+        ),
         .testTarget(
             name: "OneLogicTests",
-            dependencies: ["OneLogic"],
+            dependencies: ["OneLogic", "OneShared"],
             path: "Eval/Tests/OneLogicTests",
             resources: [.copy("capture-cases.json")]
         ),

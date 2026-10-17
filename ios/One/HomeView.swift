@@ -232,6 +232,7 @@ struct HomeView: View {
             allAlarms.forEach { $0.retireIfRung() }
             await Reminders.shared.resync()
             await Ringer.sync(context)
+            updateWidgets()
         }
         .onChange(of: QuickAction.shared.pending, initial: true) { _, type in
             guard let type else { return }
@@ -250,9 +251,27 @@ struct HomeView: View {
                 dropDeletedMirrors()
                 Task { await Reminders.shared.resync() }
             }
+            if phase == .background { updateWidgets() }
         }
         // An event deleted in Apple Calendar must not linger here: when the system calendar changes, drop the copies it lost.
-        .onChange(of: CalendarSync.shared.version) { dropDeletedMirrors() }
+        .onChange(of: CalendarSync.shared.version) {
+            dropDeletedMirrors()
+            updateWidgets()
+        }
+        // Widget rows link here (today://today?day=…): open Today on that day.
+        .onOpenURL { url in
+            guard let day = WidgetLink.day(from: url) else { return }
+            ask = nil
+            showsSearch = false
+            drawer.set(open: false, animated: false)
+            tab = .today
+            todayDay = day
+        }
+    }
+
+    /// Rewrites the Lock Screen / Home Screen widget snapshot (skipped when nothing changed).
+    private func updateWidgets() {
+        WidgetFeed.update(tasks: allTasks, events: allEvents, alarms: allAlarms)
     }
 
     private func dropDeletedMirrors() {

@@ -63,6 +63,21 @@ Four tabs: **Today · Calendar · Reminders · Alarms**, plus a left sidebar, se
 - `Reminders.swift` — local notifications (Done / Snooze / Tomorrow actions, overdue badge). Despite the name this is not Apple Reminders. `Ringer.swift` — AlarmKit scheduling for alarms and "Ring as alarm" items.
 - `Sidebar.swift` (full-screen conversation history: New chat, past chats grouped by day with swipe Archive / Delete, long-press Rename, an Archived section, Settings), `ChatThread.swift` (saved AI conversations, text only), `ConversationHistory.swift` (pure grouping/title logic), `QuickActions.swift` (Home Screen quick actions), `LaunchTimer.swift`, `SampleData.swift` (first-launch items; sidebar → Delete all data removes them), `DevImport.swift` (debug-only import of a private export).
 
+## Widgets (`ios/TodayWidgets/`, `ios/Shared/`)
+
+One widget, **Next Up**: the next three things today (events, reminders with a time, alarms), merged and sorted by time,
+all-day first. Lock Screen: rectangular (three lines "15:00 Dentist", or "Nothing else today" plus tomorrow's first item),
+circular (next time in a ring of how much of today is done) and inline (above the clock). Home Screen: small (next item,
+"in 2 hr") and medium (next three, each row opens Today on its day via `today://today?day=YYYY-MM-DD`).
+
+- The app writes `widget-snapshot.json` (today + tomorrow) into the App Group `group.com.luworks.one` (`WidgetFeed.swift`,
+  called after data changes, when Apple Calendar changes and when the app goes to the background), then reloads timelines.
+  The extension reads only that file; it never opens SwiftData or EventKit.
+- `Shared/WidgetSnapshot.swift` is compiled into both targets (and into `swift test` as `OneShared`): the snapshot model,
+  `NextItems` (selection, order, tomorrow fallback, timeline dates) and `WidgetLink`.
+- Add it: long-press the Lock Screen → Customize → Lock Screen → tap the widget area under the clock (or the date line
+  above it) → pick **Today** → Next Up. Home Screen: long-press → Edit → Add Widget → Today.
+
 Tests: `ios/Eval/` (logic unit tests, NL-capture eval, `run-eval.sh`, `cold-start.sh`) and `ios/OneUITests/` (XCUITest journeys). Run `ios/Eval/run-eval.sh` or `ios/Eval/run-eval.sh --ui`.
 
 ## Next
