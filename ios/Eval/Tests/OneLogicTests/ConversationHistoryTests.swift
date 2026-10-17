@@ -47,3 +47,23 @@ final class ConversationHistoryTests: XCTestCase {
         XCTAssertLessThanOrEqual(t.count, 21)
     }
 }
+
+/// Chats settle by themselves: a week idle, or an hour after everything they added is done.
+final class AutoArchiveTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testAWeekWithoutMessagesArchives() {
+        XCTAssertTrue(ConversationHistory.shouldAutoArchive(updatedAt: now.addingTimeInterval(-7 * 86_400), settled: [], now: now))
+        XCTAssertFalse(ConversationHistory.shouldAutoArchive(updatedAt: now.addingTimeInterval(-6 * 86_400), settled: [], now: now))
+    }
+
+    func testEverythingDoneArchivesAfterAnHour() {
+        XCTAssertTrue(ConversationHistory.shouldAutoArchive(updatedAt: now.addingTimeInterval(-3_600), settled: [true, true], now: now))
+        XCTAssertFalse(ConversationHistory.shouldAutoArchive(updatedAt: now.addingTimeInterval(-600), settled: [true], now: now),
+                       "not while you are still in it")
+        XCTAssertFalse(ConversationHistory.shouldAutoArchive(updatedAt: now.addingTimeInterval(-3_600), settled: [true, false], now: now),
+                       "one open item keeps it")
+        XCTAssertFalse(ConversationHistory.shouldAutoArchive(updatedAt: now.addingTimeInterval(-3_600), settled: [], now: now),
+                       "a chat that added nothing waits for the week")
+    }
+}

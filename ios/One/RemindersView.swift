@@ -104,7 +104,8 @@ struct RemindersView: View {
     /// False until the user first drags My Lists; until then numbered lists ("01 工作") sort by their number.
     @AppStorage("reminders.listsReordered") private var listsReordered = false
 
-    @State private var path: [ReminderTarget] = []
+    /// Which list is open. Kept by `HomeView`, so switching tabs and back returns to the same list.
+    @Binding var path: [ReminderTarget]
     @State private var addingList = false
     @State private var editing: OneList?
     @State private var pendingDelete: PendingListDeletion?
@@ -352,17 +353,10 @@ struct RemindersView: View {
         } else {
             NavigationLink(value: ReminderTarget.list(list.persistentModelID)) { row }
                 .accessibilityIdentifier("list.\(list.name)")
-                .swipeActions(edge: .leading) {
-                    Button { ListActions.togglePinned(list, in: context) } label: {
-                        Label(list.pinned ? "Unpin" : "Pin", systemImage: list.pinned ? "pin.slash.fill" : "pin.fill")
-                    }
-                    .tint(.orange)
-                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) { askDelete(list) } label: { Label("Delete", systemImage: "trash") }
-                        .tint(.red)
-                    Button { editing = list } label: { Label("Info", systemImage: "info.circle") }
-                        .tint(Color(.systemGray))
+                    RowAction.delete { askDelete(list) }
+                    RowAction.info { editing = list }
+                    RowAction.pin(list.pinned) { ListActions.togglePinned(list, in: context) }
                 }
                 // No context menu on these rows: a long press has to pick the row up for reordering, and a menu
                 // would take that touch (sliding the finger would pick a menu item instead). Pin, Info and Delete

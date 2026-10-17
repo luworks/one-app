@@ -10,11 +10,11 @@ struct OneApp: App {
         LaunchTimer.mark("app init")
         do {
             // UI tests launch with -uiTesting: a fresh in-memory store with the sample data.
-            // -devData is the same, plus the full dev dataset (chats, alarms, more events and reminders) for trying the app in a
-            // simulator. -uiTestingStore <name> keeps the test store in a file, so a second launch can see what the first one saved.
+            // -dataset <path> (with -uiTesting) loads tests/fixtures/today-dataset.json instead of the sample data.
+            // -uiTestingStore <name> keeps the test store in a file, so a second launch can see what the first one saved.
             let args = ProcessInfo.processInfo.arguments
             let testing = args.contains("-uiTesting")
-            let inMemory = testing || SampleData.isDevData
+            let inMemory = testing
             if inMemory { SampleData.resetFlags() }
             let configuration: ModelConfiguration
             if testing, let i = args.firstIndex(of: "-uiTestingStore"), i + 1 < args.count {

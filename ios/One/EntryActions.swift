@@ -101,6 +101,7 @@ enum EntryDeletion {
             toast?.show("Deleted “\(backup.title)”") {
                 backup.externalID = CalendarSync.shared.save(backup)
                 withAnimation(.snappy) { context.insert(backup) }
+                try? context.save()
             }
         case .task(let task):
             TaskActions.delete(task, context: context, toast: toast)
@@ -150,13 +151,8 @@ private struct SwipeIfRows: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content.swipeActions(edge: .trailing, allowsFullSwipe: !isRepeating) {
-                Button(role: .destructive, action: delete) { Label("Delete", systemImage: "trash") }
-                if case .task(let task) = entry.source {
-                    Button(action: flag) {
-                        Label(task.flagged ? "Unflag" : "Flag", systemImage: task.flagged ? "flag.slash.fill" : "flag.fill")
-                    }
-                    .tint(.orange)
-                }
+                RowAction.delete(delete)
+                if case .task(let task) = entry.source { RowAction.flag(task.flagged, flag) }
             }
         } else {
             content

@@ -50,14 +50,14 @@ final class SidebarTests: XCTestCase {
         XCTAssertFalse(reply.exists)
     }
 
-    func testSwipeRightDeletesAConversationAndUndoBringsItBack() {
+    func testSwipeLeftDeletesAConversationAndUndoBringsItBack() {
         haveAConversation()
         app.openSidebar()
         let row = app.buttons["Anything left today?"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.swipeRight()
+        row.swipeLeft()
         let delete = app.buttons["Delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 3), "swiping left to right reveals Delete")
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "swiping right to left reveals Delete, as on every list")
         delete.tap()
         XCTAssertTrue(row.waitForNonExistence(timeout: 5), "the conversation is gone")
         XCTAssertTrue(app.staticTexts["Your conversations with AI will appear here."].waitForExistence(timeout: 3))
@@ -86,12 +86,12 @@ final class SidebarTests: XCTestCase {
         XCTAssertFalse(reply.exists)
     }
 
-    func testSwipeRightArchivesAConversationIntoTheArchivedSection() {
+    func testSwipeLeftArchivesAConversationIntoTheArchivedSection() {
         haveAConversation()
         app.openSidebar()
         let row = app.buttons["Anything left today?"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.swipeRight()
+        row.swipeLeft()
         let archive = app.buttons["Archive"]
         XCTAssertTrue(archive.waitForExistence(timeout: 2))
         archive.tap()
@@ -102,7 +102,9 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(app.buttons["Anything left today?"].waitForExistence(timeout: 5), "it is still reachable under Archived")
     }
 
-    func testSwipeLeftOnTheChatsListReturnsToToday() {
+    /// The page stays visible on the right of the open sidebar; swiping it back to the left closes the sidebar.
+    /// (A swipe on a chat row shows that row's actions instead, like every other list.)
+    func testSwipeLeftOnThePageReturnsToToday() {
         haveAConversation()
         app.openSidebar()
         let row = app.buttons["Anything left today?"]

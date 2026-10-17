@@ -39,7 +39,9 @@ struct Sidebar: View {
         // On the container itself: a hide applied from outside does not reach an explicit accessibility container.
         .accessibilityHidden(!drawer.isOpen)
         .onChange(of: drawer.isOpen) { _, open in
-            if open { now = .now }
+            guard open else { return }
+            now = .now
+            ChatAutoArchive.run(context)
         }
     }
 
@@ -126,8 +128,8 @@ struct Sidebar: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        // Swipe right to left anywhere on the list goes back to Today; vertical scrolling is left alone.
-        .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
+        // No close-drag on the list itself: a right-to-left swipe on a row shows its actions, like every other list.
+        // The sidebar closes from the page strip on the right, the header, the footer or the empty state.
         // `presenting:` hands the thread to the buttons: the alert clears `renaming` as it closes, which can happen
         // before Save's action runs.
         .alert("Rename Conversation", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
@@ -151,19 +153,16 @@ struct Sidebar: View {
             .textCase(nil)
     }
 
-    /// Swipe left to right shows Archive and Delete (right to left closes the sidebar and returns to Today),
-    /// press and hold for Rename / Archive / Delete. Archive and Delete both have Undo.
+    /// Swipe right to left shows Delete and Archive (as on every list), press and hold for Rename / Archive / Delete. Archive and Delete both have Undo.
     private func row(_ thread: ChatThread) -> some View {
         ConversationRow(thread: thread, now: now) { onOpen(thread) }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-            // Only the leading edge has row actions: a right-to-left swipe is free to close the sidebar.
-            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                archiveButton(thread).tint(.orange)
-                Button(role: .destructive) { delete(thread) } label: {
-                    Label("Delete", systemImage: "trash")
-                }
+            // The same swipe actions as every other list (see `RowAction`): Delete, then Archive, from the trailing edge.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                RowAction.delete { delete(thread) }
+                RowAction.archive(thread.archived) { setArchived(thread, !thread.archived) }
             }
             .contextMenu {
                 Button {
@@ -194,7 +193,7 @@ struct Sidebar: View {
     private func setArchived(_ thread: ChatThread, _ archived: Bool) {
         withAnimation { thread.archived = archived }
         try? context.save()
-        toast?.show(archived ? "Conversation archived" : "Conversation unarchived") {
+        toast?.show(archived ? "Archived “\(thread.title)”" : "Unarchived “\(thread.title)”") {
             withAnimation { thread.archived = !archived }
             try? context.save()
         }
@@ -205,7 +204,7 @@ struct Sidebar: View {
         let backup = thread.copy()
         withAnimation { context.delete(thread) }
         try? context.save()
-        toast?.show("Conversation deleted") {
+        toast?.show("Deleted “\(backup.title)”") {
             withAnimation { context.insert(backup) }
             try? context.save()
         }

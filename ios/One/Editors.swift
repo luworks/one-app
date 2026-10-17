@@ -61,6 +61,7 @@ struct TaskEditor: View {
                     TextField("Title", text: $title)
                         .font(.headline)
                         .focused($titleFocused)
+                        .accessibilityIdentifier("task.title")
                     TextField("Notes", text: $note, axis: .vertical)
                         .lineLimit(2...6)
                 }
@@ -194,6 +195,7 @@ struct TaskEditor: View {
         t.checklist = checklist.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
         t.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if task == nil { context.insert(t) }
+        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
         dismiss()
     }
 }
@@ -253,10 +255,11 @@ struct EventEditor: View {
                     TextField("Title", text: $title)
                         .font(.headline)
                         .focused($titleFocused)
+                        .accessibilityIdentifier("event.title")
                 }
                 Section {
                     Toggle("All-day", isOn: $isAllDay.animation())
-                    DatePicker("Starts", selection: $start, displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
+                    DatePicker("Starts", selection: startKeepingLength, displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
                     DatePicker("Ends", selection: $end, in: start..., displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
                     Picker(selection: $repeatRule) {
                         Text("Never").tag(RepeatRule?.none)
@@ -264,10 +267,6 @@ struct EventEditor: View {
                     } label: {
                         Text("Repeat")
                     }
-                }
-                .onChange(of: start) { old, new in
-                    // Keep the length when the start moves, like Apple Calendar.
-                    end = new.addingTimeInterval(end.timeIntervalSince(old))
                 }
                 Section {
                     Picker(selection: $reminder) {
@@ -292,6 +291,7 @@ struct EventEditor: View {
                             toast?.show("Deleted “\(backup.title)”") {
                                 backup.externalID = CalendarSync.shared.save(backup)
                                 withAnimation(.snappy) { context.insert(backup) }
+                                try? context.save()
                             }
                             dismiss()
                         }
@@ -309,6 +309,15 @@ struct EventEditor: View {
                 }
             }
         }
+    }
+
+    /// Moving the start moves the end with it, so the event keeps its length, like Apple Calendar. Done in the setter, from the
+    /// current values: an `onChange(of: start)` adjustment lost minutes when the wheel sent several changes in a row.
+    private var startKeepingLength: Binding<Date> {
+        Binding(get: { start }, set: { new in
+            end = new.addingTimeInterval(end.timeIntervalSince(start))
+            start = new
+        })
     }
 
     private func save() {
@@ -330,6 +339,7 @@ struct EventEditor: View {
         e.reminderOffsetMinutes = reminder
         e.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if event == nil { context.insert(e) }
+        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
         if CalendarSync.shared.isOn { e.externalID = CalendarSync.shared.save(e) ?? e.externalID }
         dismiss()
     }

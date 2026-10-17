@@ -108,6 +108,7 @@ struct AlarmsView: View {
         Task { await Ringer.sync(context) }
         toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
             withAnimation(.snappy) { context.insert(backup) }
+            try? context.save()
             Task { await Ringer.sync(context) }
         }
     }

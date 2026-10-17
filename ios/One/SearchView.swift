@@ -110,6 +110,7 @@ struct SearchView: View {
                                     ResultRow(symbol: task.isDone ? "checkmark.circle.fill" : "circle", tint: task.isDone ? .green : .blue,
                                               title: task.title, detail: detail(task), dimmed: task.isDone)
                                 }
+                                .accessibilityIdentifier("search.result")
                             }
                         }
                     }
@@ -121,6 +122,7 @@ struct SearchView: View {
                                 } label: {
                                     ResultRow(symbol: "calendar", tint: hit.color, title: hit.title, detail: hit.detail, dimmed: hit.start < .now)
                                 }
+                                .accessibilityIdentifier("search.result")
                             }
                         }
                     }
@@ -128,6 +130,7 @@ struct SearchView: View {
                         Section(header: header("Alarms", r.alarms.count)) {
                             ForEach(r.alarms) { alarm in
                                 Button { opened = .alarm(alarm) } label: { alarmRow(alarm) }
+                                    .accessibilityIdentifier("search.result")
                             }
                         }
                     }

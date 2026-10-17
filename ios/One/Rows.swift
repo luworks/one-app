@@ -165,13 +165,8 @@ struct TaskRow: View {
         // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
         // long-press for the menu. (Delete has an Undo toast.)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) { TaskActions.delete(task, context: context, toast: toast) } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            Button { withAnimation { task.flagged.toggle() } } label: {
-                Label(task.flagged ? "Unflag" : "Flag", systemImage: task.flagged ? "flag.slash.fill" : "flag.fill")
-            }
-            .tint(.orange)
+            RowAction.delete { TaskActions.delete(task, context: context, toast: toast) }
+            RowAction.flag(task.flagged) { withAnimation { task.flagged.toggle() } }
         }
         .contextMenu {
             Button { editing = true } label: { Label("Show Details", systemImage: "info.circle") }

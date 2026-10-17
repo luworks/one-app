@@ -7,6 +7,7 @@ enum SettingsKey {
     static let showOverdue = "today.setting.showOverdue"
     static let showAlarms = "today.setting.showAlarmsInToday"
     static let jumpToNow = "today.setting.jumpToNow"
+    static let autoArchiveChats = "today.setting.autoArchiveChats"
 }
 
 /// Settings is its own screen (opened from the sidebar). Each screen's options live here, not in the sidebar;
@@ -19,6 +20,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.showOverdue) private var showOverdue = true
     @AppStorage(SettingsKey.showAlarms) private var showAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpToNow = true
+    @AppStorage(SettingsKey.autoArchiveChats) private var autoArchiveChats = true
 
     @State private var calendarOn = CalendarSync.shared.isOn
     @State private var remindersOn = RemindersSync.shared.isConnected
@@ -68,6 +70,14 @@ struct SettingsView: View {
                     Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
                 } header: {
                     Text("Today")
+                }
+
+                Section {
+                    Toggle("Archive finished chats", isOn: $autoArchiveChats)
+                } header: {
+                    Text("Chats")
+                } footer: {
+                    Text("A chat moves to Archived a week after its last message, or an hour after everything it added is done. Archived chats stay in the sidebar under Archived.")
                 }
 
                 Section {

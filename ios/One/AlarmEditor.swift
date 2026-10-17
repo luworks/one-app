@@ -240,6 +240,7 @@ struct AlarmEditor: View {
             Task { await Ringer.sync(context) }
             toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
                 withAnimation(.snappy) { context.insert(backup) }
+                try? context.save()
                 Task { await Ringer.sync(context) }
             }
             dismiss()
@@ -266,6 +267,9 @@ struct AlarmEditor: View {
         target.createdAt = .now   // a one-time alarm counts from the last save
         target.alarmKitSignature = nil   // forces a reschedule of exactly this alarm
         if alarm == nil { context.insert(target) }
+        // Saved now so the new alarm's id is final: the list opens its editor by that id, and an autosave that
+        // changed it while the editor was open would close the editor and drop the edits.
+        try? context.save()
         Task { await Ringer.sync(context) }
         dismiss()
     }

@@ -6,6 +6,21 @@ Requires Xcode 27 and iOS 27.
 
 The display name is **Today**. The bundle id (`com.luworks.one`), the Xcode project and the target names (`One`, `OneUITests`) are unchanged.
 
+## Test environment
+
+One simulator for everything: **Today-Dogfood** (`341B8786-E55B-4ECE-8720-BF1F2DF73899`). Sessions share it, so run one
+`xcodebuild test` at a time.
+
+The test dataset lives in `tests/fixtures/today-dataset.json`: lists, reminders (flagged, overdue, completed, repeating,
+one that rings), events (repeating, all-day, across the week), alarms (on, off, repeating, once) and chats (one archived).
+Dates are relative to the day it loads. Load it into a fresh in-memory store (Apple Calendar / Reminders sync stays off):
+
+```bash
+xcrun simctl launch 341B8786-E55B-4ECE-8720-BF1F2DF73899 com.luworks.one -uiTesting -dataset "$PWD/tests/fixtures/today-dataset.json"
+```
+
+UI tests use it with `app.launchArguments = TestData.launchArguments`.
+
 ## Run it on your iPhone (free Apple ID, no paid account)
 
 1. Open `ios/One.xcodeproj` in Xcode.

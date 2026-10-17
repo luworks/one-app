@@ -691,7 +691,7 @@ struct AskView: View {
 
     /// A task goes to the list it clearly belongs to, else the Inbox. Never silently to whatever list is the default.
     private func filed(_ capture: Capture) -> Capture {
-        guard capture.kind == .task, capture.listName == nil else { return capture }
+        guard capture.kind == .task, !capture.ringsAsAlarm, capture.listName == nil else { return capture }
         var c = capture
         let names = lists.map(\.name)
         let candidates = lists.map { list in
@@ -717,7 +717,8 @@ struct AskView: View {
     private func commit(_ id: UUID) -> Capture? {
         guard let i = proposals.firstIndex(where: { $0.id == id && $0.state == .open }) else { return nil }
         let capture = proposals[i].capture
-        capture.insert(into: context)
+        let item = capture.insert(into: context)
+        thread?.items.append(item)
         lastTouched = capture.title
         onAdded(capture)
         withAnimation(.snappy) { proposals[i].state = .added }
@@ -733,7 +734,7 @@ struct AskView: View {
     }
 
     private func addedDetail(_ c: Capture) -> String {
-        guard c.kind == .task, let list = c.listName else { return c.summary }
+        guard c.kind == .task, !c.ringsAsAlarm, let list = c.listName else { return c.summary }
         return c.summary + " · " + list
     }
 

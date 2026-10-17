@@ -37,6 +37,10 @@ struct HomeView: View {
 
     @State private var tab: HomeTab = .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
+    // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
+    // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
+    @State private var calendarMode: CalendarView.Mode = .week
+    @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
     @State private var todayDay = Calendar.current.startOfDay(for: .now)
     /// The AI screen: a new chat, or a saved conversation to continue. nil = closed.
@@ -158,11 +162,11 @@ struct HomeView: View {
                 switch tab {
                 case .today: DayAgenda(day: $todayDay, showsWeekStrip: false)
                 case .calendar:
-                    CalendarView(day: $calendarDay) { picked in
+                    CalendarView(day: $calendarDay, mode: $calendarMode) { picked in
                         todayDay = picked
                         withAnimation(.snappy) { tab = .today }
                     }
-                case .tasks: RemindersView(isPushed: $remindersPushed)
+                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath)
                 case .alarms: AlarmsView()
                 }
             }
@@ -173,7 +177,7 @@ struct HomeView: View {
         .sheet(isPresented: $showsSearch) { SearchView() }
         .sheet(item: $newItem) { item in
             switch item {
-            case .task: TaskEditor()
+            case .task: QuickReminderSheet()   // Due-style quick add; editing a reminder opens TaskEditor
             case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
             case .alarm: AlarmEditor()
             }
@@ -191,8 +195,15 @@ struct HomeView: View {
                 return
             }
             #endif
+            #if DEBUG
+            if let path = TestDataset.requestedPath {
+                do { try TestDataset.load(path: path, into: context) } catch { print("DATASET failed: \(error)") }
+            } else {
+                SampleData.insertIfNeeded(context)
+            }
+            #else
             SampleData.insertIfNeeded(context)
-            if SampleData.isDevData { SampleData.insertDevExtras(context) }
+            #endif
             ListActions.ensureLists(in: context)
             #if DEBUG
             if let i = ProcessInfo.processInfo.arguments.firstIndex(of: "-debugDeleteSystemEvent"),

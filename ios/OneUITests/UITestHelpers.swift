@@ -14,3 +14,13 @@ extension XCUIApplication {
         if close.waitForExistence(timeout: 3) { close.tap() }
     }
 }
+
+/// The test dataset in the repo: tests/fixtures/today-dataset.json (chats, reminders, events, alarms around today).
+enum TestData {
+    static let path = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "tests/fixtures/today-dataset.json").path
+
+    /// Launch arguments for a fresh in-memory store filled from the dataset.
+    static var launchArguments: [String] { ["-uiTesting", "-dataset", path] }
+}

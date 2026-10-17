@@ -86,6 +86,7 @@ enum TaskActions {
             task.toggleDone()
             if let next { context.insert(next) }
         }
+        if next != nil { try? context.save() }
         let suffix = next.map { n in " · next " + DayLabel.withTime(n.plannedStart ?? n.due ?? .now) } ?? ""
         toast?.show("Completed “\(task.title)”" + suffix) {
             withAnimation {
@@ -102,6 +103,7 @@ enum TaskActions {
         withAnimation { context.delete(task) }
         toast?.show("Deleted “\(backup.title)”") {
             withAnimation { context.insert(backup) }
+            try? context.save()
         }
     }
 }

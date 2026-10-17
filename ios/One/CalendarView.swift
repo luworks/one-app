@@ -12,9 +12,10 @@ struct CalendarView: View {
     }
 
     @Binding var day: Date
+    /// Week / Month / Year. Kept by `HomeView`, so switching tabs and back keeps the view.
+    @Binding var mode: Mode
     var onOpenDay: (Date) -> Void
 
-    @State private var mode: Mode = .week
     @State private var opened: OpenedEntry?
     private let cal = Calendar.current
 

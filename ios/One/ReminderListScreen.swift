@@ -246,6 +246,8 @@ struct ReminderListScreen: View {
         case .smart: break
         }
         withAnimation { context.insert(t) }
+        // Saved now so its id is final: an autosave later would change the id under an open editor and close it.
+        try? context.save()
     }
 }
 
