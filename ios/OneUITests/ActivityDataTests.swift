@@ -40,19 +40,18 @@ final class ActivityDataTests: XCTestCase {
     func testPageExplainsPausesAndClears() {
         launch(["-uiTestingActivityRows", "5"])
         openActivityData()
-        XCTAssertEqual(app.switches["activity.pause"].value as? String, "0")
+        let pause = app.switches["activity.pause"]
+        XCTAssertEqual(pause.value as? String, "0")
         XCTAssertTrue(app.switches["activity.tier.1"].exists, "one switch per category")
+        // Pause shows on the Activity screen, with the one-line note about where the data lives.
+        pause.toggleSwitch()
         let keep = app.switches["activity.keepChatText"]
         scrollTo(keep, swipes: 6)
         XCTAssertEqual(keep.value as? String, "0", "chat text is not kept unless asked")
         XCTAssertTrue(app.switches["activity.tier.4"].exists)
-        let where_ = app.staticTexts["On this iPhone"]
+        let where_ = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'On this iPhone'")).firstMatch
         scrollTo(where_, swipes: 6)
         XCTAssertTrue(where_.exists, "says where it lives")
-        for _ in 0..<6 { app.swipeDown(velocity: .fast) }
-
-        // Pause shows on the Activity screen, with the one-line note about where the data lives.
-        app.switches["activity.pause"].toggleSwitch()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.buttons["Done"].tap()
         openActivityFromSidebar()
@@ -80,7 +79,7 @@ final class ActivityDataTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["No activity yet"].waitForExistence(timeout: 3))
     }
 
-    /// 400 changes: 150 per page, "Show more" until the end; nothing loads all at once.
+    /// 400 changes: pages of 150 (150, 300, then the last 100) with "Show more" between; nothing loads all at once.
     func testActivityPagesWithShowMore() {
         launch(["-uiTestingActivityRows", "400"])
         app.openSidebar()
@@ -88,12 +87,12 @@ final class ActivityDataTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Completed “Synthetic 0”"].waitForExistence(timeout: 5), "newest first")
         XCTAssertFalse(app.staticTexts["Completed “Synthetic 399”"].exists, "the oldest is not loaded yet")
         let more = app.buttons["Show more"]
-        for page in 1...3 {
+        for page in 1...2 {
             scrollTo(more)
             XCTAssertTrue(more.exists, "page \(page) ends with Show more")
             more.tap()
         }
-        XCTAssertTrue(more.waitForNonExistence(timeout: 3), "400 rows = 150 + 150 + 100: no more after the third tap")
+        XCTAssertTrue(more.waitForNonExistence(timeout: 3), "400 rows = 150 + 150 + 100: no more after the second tap")
         for _ in 0..<12 { app.swipeUp() }
         XCTAssertTrue(app.staticTexts["Completed “Synthetic 399”"].waitForExistence(timeout: 3), "the oldest row is there")
     }
