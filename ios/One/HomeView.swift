@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 enum HomeTab: String, CaseIterable, Identifiable {
-    case today, calendar, tasks, alarms
+    case today, calendar, tasks, alarms, health
 
     var id: Self { self }
 
@@ -12,6 +12,7 @@ enum HomeTab: String, CaseIterable, Identifiable {
         case .calendar: "Calendar"
         case .tasks: "Reminders"
         case .alarms: "Alarms"
+        case .health: "Health"
         }
     }
 
@@ -21,6 +22,7 @@ enum HomeTab: String, CaseIterable, Identifiable {
         case .calendar: "calendar"
         case .tasks: "checklist"
         case .alarms: "alarm"
+        case .health: "heart"
         }
     }
 }
@@ -35,12 +37,18 @@ struct HomeView: View {
     @Query private var allEvents: [OneEvent]
     @Query private var allAlarms: [OneAlarm]
 
-    @State private var tab: HomeTab = Self.restored(HomeTab.self, key: Self.tabKey) ?? .today
+    @State private var tab: HomeTab = Self.uiTestingTab ?? Self.restored(HomeTab.self, key: Self.tabKey) ?? .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
     // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
     @State private var calendarMode: CalendarView.Mode = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey) ?? .week
     // The tab and the Calendar view also survive a restart (not in UI tests, which always start the same way).
+    /// UI tests and screenshots only (`-uiTesting -uiTestingTab health`): opens on that tab.
+    private static var uiTestingTab: HomeTab? {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingTab"), i + 1 < args.count else { return nil }
+        return HomeTab(rawValue: args[i + 1])
+    }
     private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode"
     private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
         guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
@@ -174,6 +182,7 @@ struct HomeView: View {
                     }
                 case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath)
                 case .alarms: AlarmsView()
+                case .health: HealthView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -356,7 +365,8 @@ struct HomeView: View {
         switch tab {
         case .calendar: .event
         case .alarms: .alarm
-        case .today, .tasks: .task
+        // Health is read-only (Today never writes to Apple Health), so + keeps adding a reminder there.
+        case .today, .tasks, .health: .task
         }
     }
 
