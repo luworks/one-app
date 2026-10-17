@@ -88,6 +88,108 @@ final class WorldClockTests: XCTestCase {
     }
 }
 
+final class OverlapTests: XCTestCase {
+    private func tz(_ id: String) -> TimeZone { TimeZone(identifier: id)! }
+    private let noonUTC = Date(timeIntervalSince1970: 1_792_238_400)   // 2026-10-17 12:00 UTC
+
+    func testScrubSnapsToQuarterHoursAndClamps() {
+        typealias S = WorldClock.Scrub
+        XCTAssertEqual(S.offset(start: 0, dragWidth: 0), 0)
+        XCTAssertEqual(S.offset(start: 0, dragWidth: -9), 0, "less than a step does nothing")
+        XCTAssertEqual(S.offset(start: 0, dragWidth: -10), 15, "drag left = later")
+        XCTAssertEqual(S.offset(start: 0, dragWidth: -125), 180)
+        XCTAssertEqual(S.offset(start: 60, dragWidth: 20), 30, "drag right = earlier, from where the drag began")
+        XCTAssertEqual(S.offset(start: 0, dragWidth: -100_000), 24 * 60, "a day at most")
+        XCTAssertEqual(S.offset(start: 0, dragWidth: 100_000), -24 * 60)
+        XCTAssertEqual(S.snap(7), 0)
+        XCTAssertEqual(S.snap(8), 15)
+        XCTAssertEqual(S.snap(-23), -30)
+    }
+
+    func testScrubbedDateLandsOnQuarterHours() {
+        let now = Date(timeIntervalSince1970: 1_792_238_400 + 7 * 60 + 13)   // 12:07:13 UTC
+        XCTAssertEqual(WorldClock.Scrub.date(now: now, offset: 0), now, "not scrubbed: the real time")
+        XCTAssertEqual(WorldClock.Scrub.date(now: now, offset: 15), Date(timeIntervalSince1970: 1_792_238_400 + 15 * 60), "12:15")
+        XCTAssertEqual(WorldClock.Scrub.date(now: now, offset: -60), Date(timeIntervalSince1970: 1_792_238_400 - 3600), "11:00")
+    }
+
+    func testScrubLabel() {
+        typealias S = WorldClock.Scrub
+        XCTAssertEqual(S.label(0), "Now")
+        XCTAssertEqual(S.label(180), "3 hours from now")
+        XCTAssertEqual(S.label(60), "1 hour from now")
+        XCTAssertEqual(S.label(45), "45 minutes from now")
+        XCTAssertEqual(S.label(75), "1 hour 15 minutes from now")
+        XCTAssertEqual(S.label(-120), "2 hours ago")
+    }
+
+    func testDayBands() {
+        typealias B = WorldClock.DayBand
+        XCTAssertEqual(B(hour: 0), .night)
+        XCTAssertEqual(B(hour: 5), .night)
+        XCTAssertEqual(B(hour: 6), .morning)
+        XCTAssertEqual(B(hour: 8), .morning)
+        XCTAssertEqual(B(hour: 9), .work)
+        XCTAssertEqual(B(hour: 17), .work)
+        XCTAssertEqual(B(hour: 18), .evening)
+        XCTAssertEqual(B(hour: 21), .evening)
+        XCTAssertEqual(B(hour: 22), .night)
+        XCTAssertEqual(B(zone: tz("Asia/Kolkata"), at: noonUTC), .work, "17:30 in Kolkata")
+        XCTAssertEqual(B(zone: tz("America/Los_Angeles"), at: noonUTC), .night, "05:00 in Los Angeles")
+    }
+
+    func testOverlapSameDay() {
+        // Home Los Angeles (PDT): 9–18 = 16:00–01:00 UTC; New York 13:00–22:00 UTC; London (BST) 08:00–17:00 UTC.
+        let laNoon = Date(timeIntervalSince1970: 1_792_263_600)   // Oct 17 12:00 in LA
+        let window = WorldClock.overlap([tz("America/New_York"), tz("Europe/London")], home: tz("America/Los_Angeles"), on: laNoon)
+        XCTAssertEqual(window.count, 1)
+        XCTAssertEqual(window.first?.start, Date(timeIntervalSince1970: 1_792_252_800), "16:00 UTC = 09:00 in LA")
+        XCTAssertEqual(window.first?.duration, 3600)
+        let sentence = WorldClock.overlapSentence(cities: ["New York", "London"], home: "Los Angeles", homeZone: tz("America/Los_Angeles"),
+                                                  overlap: window, locale: Locale(identifier: "en_GB"))
+        XCTAssertEqual(sentence, "Overlap for New York and London when it's 09:00 in Los Angeles")
+    }
+
+    func testOverlapAcrossTheDateLine() {
+        // Home Tokyo, Oct 18: Los Angeles works Oct 17 16:00 – Oct 18 01:00 UTC; Tokyo Oct 18 00:00–09:00 UTC.
+        let tokyoNoon = Date(timeIntervalSince1970: 1_792_292_400)
+        let window = WorldClock.overlap([tz("America/Los_Angeles")], home: tz("Asia/Tokyo"), on: tokyoNoon)
+        XCTAssertEqual(window.count, 1)
+        XCTAssertEqual(window.first?.start, Date(timeIntervalSince1970: 1_792_281_600), "09:00 in Tokyo, still Oct 17 in LA")
+        XCTAssertEqual(window.first?.duration, 3600)
+    }
+
+    func testNoOverlap() {
+        // London 08–17 UTC; Sydney (AEDT) 22:00–07:00 UTC.
+        let window = WorldClock.overlap([tz("Australia/Sydney")], home: tz("Europe/London"), on: noonUTC)
+        XCTAssertTrue(window.isEmpty)
+        XCTAssertEqual(WorldClock.overlapSentence(cities: ["Sydney"], home: "London", homeZone: tz("Europe/London"), overlap: window),
+                       "No working hours overlap for Sydney today")
+    }
+
+    func testOverlapWithHomeOnlyIsTheWorkday() {
+        let window = WorldClock.overlap([], home: tz("Europe/London"), on: noonUTC)
+        XCTAssertEqual(window.first?.duration, 9 * 3600)
+    }
+
+    func testWorkCurve() {
+        let curve = WorldClock.workCurve([tz("America/New_York"), tz("Europe/London")], home: tz("America/Los_Angeles"),
+                                         on: Date(timeIntervalSince1970: 1_792_263_600), stepMinutes: 60)
+        XCTAssertEqual(curve.count, 25, "every hour of the home day, both ends included")
+        XCTAssertEqual(curve.map(\.count).max(), 3)
+        XCTAssertEqual(curve.first(where: { $0.count == 3 })?.date, Date(timeIntervalSince1970: 1_792_252_800))
+    }
+
+    func testNamesDatesAndHome() {
+        XCTAssertEqual(WorldClock.nameList(["Dallas"]), "Dallas")
+        XCTAssertEqual(WorldClock.nameList(["Dallas", "Boston"]), "Dallas and Boston")
+        XCTAssertEqual(WorldClock.nameList(["Dallas", "Boston", "Austin"]), "Dallas, Boston and 1 more")
+        XCTAssertEqual(WorldClock.dateText(zone: tz("Asia/Tokyo"), at: Date(timeIntervalSince1970: 1_792_292_400), locale: Locale(identifier: "en_US")),
+                       "Sun, Oct 18")
+        XCTAssertEqual(WorldClock.others(["Europe/London", "America/Los_Angeles"], home: "America/Los_Angeles"), ["Europe/London"])
+    }
+}
+
 final class StopwatchTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_000_000)
 

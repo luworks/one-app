@@ -214,3 +214,159 @@ struct StopwatchState: Codable, Equatable {
         if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: key) }
     }
 }
+
+// MARK: - World Clock: scrubbing, time of day, overlap (modeled on the app "Overlap")
+
+extension WorldClock {
+    /// Scrubbing moves every city's clock together, in 15-minute steps, up to a day either way.
+    enum Scrub {
+        static let stepMinutes = 15
+        static let limitMinutes = 24 * 60
+        /// Points of horizontal drag per 15-minute step.
+        static let pointsPerStep: Double = 10
+
+        /// The offset (in minutes) for a drag: dragging left moves time forward, like sliding a timeline under the finger.
+        /// `start` is the offset when the drag began.
+        static func offset(start: Int, dragWidth: Double) -> Int {
+            let steps = Int((-dragWidth / pointsPerStep).rounded(.towardZero))
+            return clamp(snap(start) + steps * stepMinutes)
+        }
+
+        /// Rounds to the nearest 15 minutes.
+        static func snap(_ minutes: Int) -> Int {
+            Int((Double(minutes) / Double(stepMinutes)).rounded()) * stepMinutes
+        }
+
+        static func clamp(_ minutes: Int) -> Int { min(limitMinutes, max(-limitMinutes, minutes)) }
+
+        /// The moment the cards show: now, or, while scrubbed, the quarter hour now falls in plus the offset,
+        /// so scrubbed clocks read 10:15, 10:30… rather than 10:22.
+        static func date(now: Date, offset minutes: Int) -> Date {
+            guard minutes != 0 else { return now }
+            let step = Double(stepMinutes * 60)
+            let quarter = (now.timeIntervalSinceReferenceDate / step).rounded(.down) * step
+            return Date(timeIntervalSinceReferenceDate: quarter + Double(minutes * 60))
+        }
+
+        /// The capsule under the cities: "Now", "3 hours from now", "1 hour 15 minutes ago", "45 minutes from now".
+        static func label(_ minutes: Int) -> String {
+            guard minutes != 0 else { return "Now" }
+            let m = abs(minutes)
+            let h = m / 60, rest = m % 60
+            var parts: [String] = []
+            if h > 0 { parts.append("\(h) " + (h == 1 ? "hour" : "hours")) }
+            if rest > 0 { parts.append("\(rest) " + (rest == 1 ? "minute" : "minutes")) }
+            return parts.joined(separator: " ") + (minutes > 0 ? " from now" : " ago")
+        }
+    }
+
+    /// Time of day on a city's clock, which tints its card: who is asleep, up, or at work.
+    enum DayBand: String, CaseIterable {
+        case night, morning, work, evening
+
+        /// Working hours are 9:00–18:00; morning 6–9, evening 18–22, night otherwise.
+        init(hour: Int) {
+            switch hour {
+            case 9..<18: self = .work
+            case 6..<9: self = .morning
+            case 18..<22: self = .evening
+            default: self = .night
+            }
+        }
+
+        init(zone: TimeZone, at date: Date) {
+            self.init(hour: WorldClock.hourMinute(zone: zone, at: date).hour)
+        }
+    }
+
+    static let workStartHour = 9, workEndHour = 18
+
+    /// Whether `date` falls within working hours (9:00–18:00) on the city's clock.
+    static func isWorking(_ zone: TimeZone, at date: Date) -> Bool {
+        DayBand(zone: zone, at: date) == .work
+    }
+
+    /// The home city's calendar day around `date`: local midnight to the next midnight (23 or 25 hours on DST days).
+    static func day(containing date: Date, in home: TimeZone) -> DateInterval {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = home
+        let start = cal.startOfDay(for: date)
+        let end = cal.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        return DateInterval(start: start, end: end)
+    }
+
+    /// One city's working hours (9–18 on its own clock) that fall inside `window`, across its date changes.
+    static func workIntervals(_ zone: TimeZone, within window: DateInterval) -> [DateInterval] {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = zone
+        let first = cal.startOfDay(for: window.start)
+        var out: [DateInterval] = []
+        for d in -1...2 {
+            guard let day = cal.date(byAdding: .day, value: d, to: first),
+                  let s = cal.date(bySettingHour: workStartHour, minute: 0, second: 0, of: day),
+                  let e = cal.date(bySettingHour: workEndHour, minute: 0, second: 0, of: day),
+                  let hit = DateInterval(start: s, end: e).intersection(with: window), hit.duration > 0 else { continue }
+            out.append(hit)
+        }
+        return out
+    }
+
+    /// The hours of the home city's day when every city (home included) is within working hours. Usually one stretch,
+    /// empty when they never line up. Times are absolute; show them on any clock.
+    static func overlap(_ zones: [TimeZone], home: TimeZone, on date: Date) -> [DateInterval] {
+        let window = day(containing: date, in: home)
+        var common = [window]
+        for zone in [home] + zones {
+            let work = workIntervals(zone, within: window)
+            common = common.flatMap { c in
+                work.compactMap { w in c.intersection(with: w).flatMap { $0.duration > 0 ? $0 : nil } }
+            }
+            if common.isEmpty { break }
+        }
+        return common.sorted { $0.start < $1.start }
+    }
+
+    /// How many of the cities (home included) are working at each step of the home day: the wave behind the overlap chart.
+    static func workCurve(_ zones: [TimeZone], home: TimeZone, on date: Date, stepMinutes: Int = 30) -> [(date: Date, count: Int)] {
+        let window = day(containing: date, in: home)
+        let all = [home] + zones
+        return stride(from: window.start.timeIntervalSince1970, through: window.end.timeIntervalSince1970, by: Double(stepMinutes * 60)).map {
+            let t = Date(timeIntervalSince1970: $0)
+            return (t, all.filter { isWorking($0, at: t) }.count)
+        }
+    }
+
+    /// "Dallas", "Dallas and Boston", "Dallas, Boston and 1 more".
+    static func nameList(_ names: [String]) -> String {
+        switch names.count {
+        case 0: ""
+        case 1: names[0]
+        case 2: names[0] + " and " + names[1]
+        default: names[0] + ", " + names[1] + " and \(names.count - 2) more"
+        }
+    }
+
+    /// "Overlap for Dallas, Boston and 1 more when it's 08:00 in San Jose", or that there is none that day.
+    static func overlapSentence(cities: [String], home: String, homeZone: TimeZone, overlap: [DateInterval], locale: Locale = .current) -> String {
+        let who = nameList(cities)
+        guard let first = overlap.first else { return "No working hours overlap for \(who) today" }
+        let hm = hourMinute(zone: homeZone, at: first.start)
+        let parts = AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute, locale: locale)
+        let time = parts.time + (parts.suffix.map { " " + $0 } ?? "")
+        return "Overlap for \(who) when it's \(time) in \(home)"
+    }
+
+    /// "Sat, Oct 18" on the city's calendar.
+    static func dateText(zone: TimeZone, at date: Date, locale: Locale = .current) -> String {
+        let f = DateFormatter()
+        f.locale = locale
+        f.timeZone = zone
+        f.setLocalizedDateFormatFromTemplate("EEEMMMd")
+        return f.string(from: date)
+    }
+
+    /// The saved cities without the home zone: home is always shown first, on its own.
+    static func others(_ list: [String], home: String) -> [String] {
+        list.filter { $0 != home }
+    }
+}
