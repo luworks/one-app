@@ -64,6 +64,8 @@ enum OverdueTidy {
     /// "tidy overdue", "clean up overdue", "整理过期" … A question ("what's overdue?") is not a request.
     static func isRequest(_ text: String) -> Bool {
         let t = text.lowercased()
+        // "Tidy 3 overdue", "tidy my 3 overdue reminders", "整理3条过期提醒".
+        if t.range(of: #"\btidy\s+(?:up\s+)?(?:my\s+)?\d+\s+overdue|整理\s*\d+\s*条\s*过期"#, options: .regularExpression) != nil { return true }
         return ["tidy overdue", "tidy up overdue", "clean up overdue", "clear overdue", "reschedule overdue", "sort out overdue",
                 "整理过期", "处理过期", "清理过期"].contains { t.contains($0) }
     }

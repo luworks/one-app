@@ -64,14 +64,6 @@ struct AskView: View {
         _messages = State(initialValue: thread?.messages ?? [])
     }
 
-    private let suggestions = [
-        "Plan my day",
-        "Tidy overdue",
-        "Call Alex tomorrow at 3pm",
-        "Send the Q3 report by Friday",
-        "What's left today?",
-    ]
-
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
@@ -207,20 +199,7 @@ struct AskView: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("What do you want to plan?")
                 .font(.title2.bold())
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(suggestions, id: \.self) { s in
-                    Button { send(s) } label: {
-                        Text(s)
-                            .font(.subheadline)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(Color(.secondarySystemFill), in: Capsule())
-                    }
-                    .buttonStyle(PressScale())
-                    .tint(.primary)
-                    .accessibilityIdentifier("ask-suggestion")
-                }
-            }
+            AskSuggestionList(onSend: send)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -339,6 +318,8 @@ struct AskView: View {
         } else if isPlanRequest(text) {
             clearPreviews()
             proposePlan()
+        } else if SentenceRoute.isReviewRequest(text) {
+            messages.append(ChatMessage(role: .ai, text: reviewSummary))
         } else if isQuestion(text) {
             // A question does not throw away the card the user is looking at.
             messages.append(ChatMessage(role: .ai, text: todaySummary))
@@ -486,30 +467,7 @@ struct AskView: View {
 
     /// Open tasks and the next week's events, with short ids the model can point at.
     private func editCandidates() -> (items: [EditItem], tasks: [String: OneTask], events: [String: OneEvent]) {
-        let cal = Calendar.current
-        let window = DateInterval(start: cal.startOfDay(for: .now), end: cal.date(byAdding: .day, value: 8, to: cal.startOfDay(for: .now)) ?? .now)
-        var items: [EditItem] = []
-        var taskByID: [String: OneTask] = [:]
-        var eventByID: [String: OneEvent] = [:]
-        let eventPairs = events.compactMap { e in e.occurrences(in: window).first.map { (e, $0) } }
-            .sorted { $0.1 < $1.1 }.prefix(8)
-        for (i, pair) in eventPairs.enumerated() {
-            let id = "e\(i + 1)"
-            eventByID[id] = pair.0
-            let n = CalendarSync.shared.audience(externalID: pair.0.externalID)?.attendees ?? 0
-            items.append(EditItem(id: id, type: "event", title: pair.0.title, start: pair.1, minutes: pair.0.durationMinutes, attendees: n))
-        }
-        let openTasks = tasks.filter { t in
-            guard !t.isDone else { return false }
-            guard let s = t.plannedStart else { return true }
-            return window.contains(s)
-        }.sorted { ($0.plannedStart ?? .distantFuture) < ($1.plannedStart ?? .distantFuture) }.prefix(12)
-        for (i, t) in openTasks.enumerated() {
-            let id = "t\(i + 1)"
-            taskByID[id] = t
-            items.append(EditItem(id: id, type: "task", title: t.title, start: t.plannedStart, minutes: t.durationMinutes, attendees: 0))
-        }
-        return (items, taskByID, eventByID)
+        EditCandidates.build(events: events, tasks: tasks)
     }
 
     /// Edit sentence → a ChangeCard, a question in the chat, or (not an edit after all) a capture. Nothing is written here.
@@ -768,10 +726,7 @@ struct AskView: View {
         return c.summary + " · " + c.listLabel
     }
 
-    private func isPlanRequest(_ text: String) -> Bool {
-        let t = text.lowercased()
-        return ["plan my day", "plan today", "schedule my day", "安排今天", "规划今天", "帮我安排"].contains { t.contains($0) }
-    }
+    private func isPlanRequest(_ text: String) -> Bool { SentenceRoute.isPlanRequest(text) }
 
     /// Proposes start times for today's flexible tasks around fixed events. Nothing moves until Apply.
     private func proposePlan() {
@@ -907,6 +862,26 @@ struct AskView: View {
     private func isQuestion(_ text: String) -> Bool {
         text.hasSuffix("?") || text.hasSuffix("？") || ["什么", "怎么", "吗", "多少", "几"].contains { text.contains($0) }
             || ["what", "how", "when", "which", "do ", "is ", "am ", "any"].contains { text.lowercased().hasPrefix($0) }
+    }
+
+    /// "Review today": what got done against what the day held, and what is left. Read only; moving or dropping what is
+    /// left happens in the Review today sheet on the Today tab, where each choice is a preview.
+    private var reviewSummary: String {
+        let now = TodayClock.now
+        let items = tasks.enumerated().map {
+            EveningReview.Item(id: $0.offset, isDone: $0.element.isDone, doneAt: $0.element.doneAt,
+                               plannedStart: $0.element.plannedStart, due: $0.element.due, repeats: $0.element.repeats != nil)
+        }
+        let summary = EveningReview.summary(items, now: now)
+        var lines = [EveningReview.headline(summary) + "."]
+        let left = summary.left.map { tasks[$0].title }
+        if !left.isEmpty {
+            lines.append("Left today:")
+            lines += left.prefix(5).map { "· " + $0 }
+            if left.count > 5 { lines.append("· and \(left.count - 5) more") }
+        }
+        if EveningReview.shows(now: now), !left.isEmpty { lines.append("Open Review today on the Today tab to move or drop what's left.") }
+        return lines.joined(separator: "\n")
     }
 
     private var todaySummary: String {
