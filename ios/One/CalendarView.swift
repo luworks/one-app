@@ -109,12 +109,12 @@ private struct ModePill: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.footnote.weight(.semibold))
-                .padding(.horizontal, 14)
-                .frame(minHeight: 34)
-                .background(isSelected ? Color(.label) : Color(.secondarySystemFill), in: Capsule())
-                .foregroundStyle(isSelected ? Color(.systemBackground) : Color.primary)
-                .frame(minHeight: 44)
+                .font(PillStyle.Control.font)
+                .padding(.horizontal, PillStyle.Control.padding)
+                .frame(minHeight: PillStyle.Control.height)
+                .background(PillStyle.fill(selected: isSelected), in: Capsule())
+                .foregroundStyle(PillStyle.text(selected: isSelected))
+                .frame(minHeight: PillStyle.tapHeight)
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressScale())

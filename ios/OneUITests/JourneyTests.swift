@@ -128,8 +128,8 @@ final class JourneyTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText("priya")
         XCTAssertTrue(app.staticTexts["Lunch with Priya"].waitForExistence(timeout: 5), "an event is found")
-        XCTAssertTrue(app.segmentedControls.buttons["Alarms"].exists && app.segmentedControls.buttons["Reminders"].exists,
-                      "scopes: All / Reminders / Events / Alarms")
+        XCTAssertTrue(app.buttons["search.scope.alarms"].exists && app.buttons["search.scope.reminders"].exists,
+                      "scopes (pills): All / Reminders / Events / Alarms")
     }
 
     /// Search opens straight onto suggestions (no empty pop-up), a suggestion lists things, and Cancel closes Search.

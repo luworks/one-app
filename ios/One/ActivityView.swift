@@ -24,24 +24,10 @@ struct ActivityView: View {
     }
 
     private var chips: some View {
-        HStack(spacing: 8) {
-            ForEach(ActivityFilter.allCases) { f in
-                Button { withAnimation(.snappy) { filter = f } } label: {
-                    Text(f.rawValue)
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 34)
-                        .background(filter == f ? Color(.label) : Color(.secondarySystemFill), in: Capsule())
-                        .foregroundStyle(filter == f ? Color(.systemBackground) : Color.primary)
-                }
-                .buttonStyle(PressScale())
-                .accessibilityAddTraits(filter == f ? .isSelected : [])
-                .accessibilityIdentifier("activity.filter.\(f.rawValue)")
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+        PillSwitcher(items: ActivityFilter.allCases, selection: $filter,
+                     title: { $0.rawValue }, identifier: { "activity.filter.\($0.rawValue)" })
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
     }
 }
 
