@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Approval Inbox</title>
+<!-- Design prototype for the Today app. Fictional data from tests/fixtures/today-dataset.json, fixed clock, no network. Generated; edit the sources in docs/research/prototypes/src/. -->
+<style>:root{color-scheme:light;
+--bg:#F6F6F2;--surface:#FFFFFF;--fill:#EDEEE8;--fill2:#E4E6DF;--ink:#1A201E;--ink2:#424B47;--ink3:#5C6560;--line:#E0E2DA;
+--event:#2A64A6;--event-soft:#E6EEF8;--task:#257050;--task-soft:#E2F0E8;--alarm:#9E540B;--alarm-soft:#FAEDDD;--ai:#5F44AA;--ai-soft:#EDE8F8;--danger:#B93525;--danger-soft:#FAE7E3;
+--blur:rgba(246,246,242,.86);--shadow:0 12px 40px rgba(20,30,25,.14);--scrim:rgba(15,20,18,.32);--page:#E7E8E2}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#101312;--surface:#1A1E1C;--fill:#222725;--fill2:#2B312E;--ink:#EEF1EE;--ink2:#C4CAC6;--ink3:#A0A8A3;--line:#2B312E;--event:#8FB9EC;--event-soft:#1C2A3A;--task:#80CCA5;--task-soft:#1A2C23;--alarm:#F1B376;--alarm-soft:#352618;--ai:#BCA8F3;--ai-soft:#28223E;--danger:#FF8C7E;--danger-soft:#3A1E1B;--blur:rgba(16,19,18,.86);--shadow:0 12px 40px rgba(0,0,0,.5);--scrim:rgba(0,0,0,.5);--page:#0A0C0B}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#101312;--surface:#1A1E1C;--fill:#222725;--fill2:#2B312E;--ink:#EEF1EE;--ink2:#C4CAC6;--ink3:#A0A8A3;--line:#2B312E;--event:#8FB9EC;--event-soft:#1C2A3A;--task:#80CCA5;--task-soft:#1A2C23;--alarm:#F1B376;--alarm-soft:#352618;--ai:#BCA8F3;--ai-soft:#28223E;--danger:#FF8C7E;--danger-soft:#3A1E1B;--blur:rgba(16,19,18,.86);--shadow:0 12px 40px rgba(0,0,0,.5);--scrim:rgba(0,0,0,.5);--page:#0A0C0B}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--page);color:var(--ink);font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+h1,h2,h3,p{margin:0}
+.wrap{display:flex;gap:40px;justify-content:center;align-items:flex-start;padding:28px 16px 40px}
+.phone{width:390px;height:844px;flex:none;border-radius:46px;background:var(--bg);box-shadow:var(--shadow),0 0 0 10px #151a18;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.notes{width:340px;font-size:14px;line-height:1.65;color:var(--ink2);position:sticky;top:28px}
+.notes h1{font-size:22px;color:var(--ink);letter-spacing:-.02em;margin-bottom:8px}
+.notes h2{font-size:14px;color:var(--ink);margin:16px 0 4px}
+.notes ul{margin:4px 0;padding-left:18px}
+.notes a{color:var(--event)}
+.notes .back{display:inline-block;margin-bottom:12px;font-size:13px}
+.notes .sim{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.notes .sim button{text-align:left;padding:8px 12px;border-radius:10px;background:var(--surface);border:.5px solid var(--line);font-size:13px}
+.notes .sim button:active{background:var(--fill)}
+@media (max-width:820px){.wrap{flex-direction:column;align-items:stretch;padding:0;gap:0}.phone{width:100%;height:100dvh;border-radius:0;box-shadow:none}.notes{width:auto;position:static;padding:20px 16px 40px}}
+/* phone chrome */
+.status{height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 30px;font-weight:600;font-size:15px}
+.top{flex:none;display:flex;align-items:center;gap:2px;padding:0 8px 6px}
+.ibtn{width:40px;height:40px;border-radius:20px;display:grid;place-items:center;color:var(--ink2)}
+.ibtn:active{background:var(--fill)}
+.pills{flex:1;min-width:0;display:flex;gap:2px;justify-content:flex-start;overflow:hidden}
+.pill-t{padding:6px 8px;border-radius:16px;font-size:12.5px;white-space:nowrap;font-weight:600;color:var(--ink3)}
+.pill-t.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0 110px}
+.dock{position:absolute;left:0;right:0;bottom:0;padding:22px 14px 26px;display:flex;gap:10px;align-items:center;background:linear-gradient(to bottom,transparent,var(--bg) 40%);z-index:5}
+.ask{flex:1;height:50px;border-radius:25px;background:var(--surface);border:.5px solid var(--line);box-shadow:0 6px 24px rgba(20,30,25,.1);display:flex;align-items:center;gap:8px;padding:0 16px;color:var(--ink3);white-space:nowrap;overflow:hidden}
+.plus{width:50px;height:50px;border-radius:25px;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:26px;font-weight:300}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.s{width:15px;height:15px}
+.h1{font-size:30px;font-weight:700;letter-spacing:-.03em;padding:4px 20px 2px}
+.sub{font-size:13px;color:var(--ink3);padding:0 20px 10px}
+.sect{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink3);padding:16px 20px 6px;display:flex;justify-content:space-between;align-items:center}
+.card{margin:0 14px 10px;background:var(--surface);border-radius:16px;border:.5px solid var(--line);overflow:hidden}
+.row{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-top:.5px solid var(--line)}
+.row:first-child{border-top:0}
+.row .rm{flex:1;min-width:0}
+.row b{font-weight:600;display:block}
+.row small{display:block;color:var(--ink3);font-size:12.5px;margin-top:1px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--fill);color:var(--ink2);white-space:nowrap}
+.chip.ai{background:var(--ai-soft);color:var(--ai)}.chip.ev{background:var(--event-soft);color:var(--event)}.chip.tk{background:var(--task-soft);color:var(--task)}.chip.al{background:var(--alarm-soft);color:var(--alarm)}.chip.dg{background:var(--danger-soft);color:var(--danger)}
+.btn{white-space:nowrap;height:36px;padding:0 14px;border-radius:18px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:6px;justify-content:center}
+.btn.pri{background:var(--ink);color:var(--bg)}.btn.sec{background:var(--fill);color:var(--ink)}.btn.ai{background:var(--ai);color:#fff}.btn.ghost{color:var(--ink2)}
+.btn:active{opacity:.75}
+.toast{position:absolute;left:14px;right:14px;bottom:92px;background:var(--ink);color:var(--bg);border-radius:14px;padding:11px 14px;display:flex;align-items:center;gap:10px;font-size:14px;z-index:20;transform:translateY(20px);opacity:0;pointer-events:none;transition:.2s}
+.toast.on{transform:none;opacity:1;pointer-events:auto}
+.toast span{flex:1}.toast button{font-weight:700;color:var(--bg)}
+.seg{display:flex;background:var(--fill);border-radius:10px;padding:2px;margin:6px 14px 8px}
+.seg button{flex:1;height:30px;border-radius:8px;font-size:13px;font-weight:600;color:var(--ink2)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.av{width:28px;height:28px;border-radius:14px;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;color:#fff}
+.sheet-scrim{position:absolute;inset:0;background:var(--scrim);z-index:30;opacity:0;pointer-events:none;transition:.2s}
+.sheet-scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:86%;background:var(--bg);border-radius:22px 22px 0 0;z-index:31;transform:translateY(100%);transition:transform .25s;display:flex;flex-direction:column}
+.sheet.on{transform:none}
+.sheet .sh-h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;font-weight:700;font-size:16px}
+.sheet .sh-b{overflow-y:auto;padding-bottom:30px}
+pre.rec{margin:0 14px;padding:12px;border-radius:12px;background:var(--fill);font:11.5px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word;color:var(--ink2)}
+</style>
+<script>const DATA={"version":1,"about":"Test dataset for the Today iOS app. Dates are relative: day 0 = the day it is loaded, -1 = yesterday, times are 24-hour HH:mm. Load it in the simulator with: xcrun simctl launch <udid> com.luworks.one -uiTesting -dataset <absolute path to this file>. Everything is made up.","lists":[{"name":"Reminders","color":0},{"name":"Home","color":1},{"name":"Work","color":2}],"reminders":[{"title":"Pay studio invoice","list":"Reminders","due":{"day":-1,"time":"17:00"}},{"title":"Buy milk","list":"Home","due":{"day":0},"tags":["errands"]},{"title":"Water the plants","list":"Home","due":{"day":0},"repeat":"weekly"},{"title":"Prepare the demo","list":"Work","planned":{"day":0,"time":"13:30"},"minutes":45,"due":{"day":1,"time":"17:00"},"flagged":true,"checklist":[{"title":"Outline","done":true},{"title":"Slides"},{"title":"Rehearse"}]},{"title":"Write up design review notes","list":"Work","planned":{"day":0,"time":"16:00"}},{"title":"Reply to Sam","list":"Work","planned":{"day":0,"time":"17:00"}},{"title":"Take out the trash","list":"Home","planned":{"day":0,"time":"21:00"},"ringsAsAlarm":true},{"title":"Book flights to Tokyo","list":"Work","due":{"day":3,"time":"17:00"},"flagged":true},{"title":"Order birthday gift","list":"Home","due":{"day":3,"time":"12:00"},"flagged":true},{"title":"Renew passport","list":"Reminders","due":{"day":14,"time":"09:00"},"note":"Photos are in the Documents folder."},{"title":"Read that design article","list":"Reminders"},{"title":"Backup photos","list":"Home"},{"title":"Send invoice","list":"Work","done":true},{"title":"Call plumber","list":"Home","done":true},{"title":"Pick up parcel","list":"Reminders","done":true}],"events":[{"title":"Product sync","start":{"day":0,"time":"09:00"},"minutes":25},{"title":"Standup","start":{"day":0,"time":"09:45"},"minutes":15,"repeat":"weekdays"},{"title":"Lunch with Priya","start":{"day":0,"time":"12:15"},"minutes":45},{"title":"Dentist","start":{"day":0,"time":"15:00"},"minutes":30},{"title":"Gym","start":{"day":0,"time":"18:30"},"minutes":60},{"title":"Weekly review","start":{"day":1,"time":"10:00"},"minutes":30},{"title":"Weekly sync","start":{"day":1,"time":"11:00"},"minutes":45,"repeat":"weekly"},{"title":"Design review","start":{"day":1,"time":"14:00"},"minutes":60},{"title":"1:1 with Sam","start":{"day":2,"time":"11:00"},"minutes":30},{"title":"Team offsite","start":{"day":2},"minutes":2880,"allDay":true},{"title":"Dinner with Mia","start":{"day":3,"time":"19:00"},"minutes":120},{"title":"Mia's birthday","start":{"day":4},"minutes":1440,"allDay":true},{"title":"Flight to Tokyo","start":{"day":5,"time":"08:15"},"minutes":180}],"alarms":[{"time":"06:30","label":"Wake up","weekdays":[2,3,4,5,6]},{"time":"08:30","label":"Weekend run","weekdays":[7,1],"on":false},{"time":"13:00","label":"Take medicine"},{"time":"22:30","label":"Wind down","weekdays":[1,2,3,4,5],"snooze":false}],"chats":[{"title":"Plan my day","hoursAgo":2,"messages":[["user","Plan my day"],["ai","Here's a plan around your meetings. Meetings stay fixed; only tasks move. Nothing changes until you apply it."],["ai","Planned 3 tasks for today."]]},{"title":"Call Alex tomorrow at 3pm","hoursAgo":5,"messages":[["user","Call Alex tomorrow at 3pm"],["ai","Here's what I understood. Nothing is added until you confirm."],["user","make it 4pm"],["ai","Updated. Nothing is added until you confirm."],["ai","Added “Call Alex” · Planned Tomorrow 16:00."]]},{"title":"Move the dentist to tomorrow","hoursAgo":27,"messages":[["user","Move the dentist to tomorrow"],["ai","Here's the change. Nothing changes until you apply it."],["ai","Moved “Dentist” to Tomorrow 15:00."]]},{"title":"What's left today?","hoursAgo":72,"messages":[["user","What's left today?"],["ai","Today: 3 open tasks and 2 upcoming events.\n· Buy milk\n· Water the plants"]]},{"title":"明早7点叫我起床","hoursAgo":216,"messages":[["user","明早7点叫我起床"],["ai","Here's what I understood. Nothing is added until you confirm."],["ai","Added “起床” · Planned Tomorrow 07:00 · Rings as alarm."]]},{"title":"Send the Q3 report by Friday","hoursAgo":960,"messages":[["user","Send the Q3 report by Friday"],["ai","Added “Send the Q3 report” · Due Friday."]]},{"title":"Book a hotel in Rome for March","hoursAgo":1440,"archived":true,"messages":[["user","Book a hotel in Rome for March"],["ai","Added “Book a hotel in Rome” · No date, goes to your Inbox."]]}]};
+// Shared by every prototype. Fictional demo: fixed clock, no network, nothing persisted.
+const D0 = new Date(2026, 9, 15); // Thursday 15 Oct 2026 = day 0 of tests/fixtures/today-dataset.json
+const NOW = 9 * 60 + 41;          // 09:41
+const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const mins = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const hm = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+const dayDate = d => { const x = new Date(D0); x.setDate(x.getDate() + d); return x; };
+const dayLabel = d => d === 0 ? 'Today' : d === -1 ? 'Yesterday' : d === 1 ? 'Tomorrow' : `${WD[dayDate(d).getDay()]} ${dayDate(d).getDate()} Oct`;
+const when = w => w ? `${dayLabel(w.day)}${w.time ? ' ' + w.time : ''}` : '';
+
+// Fictional agents. Names are examples of what could connect; none of this exists yet.
+const ACTORS = {
+  you:      { name: 'You',         short: 'Y',  color: 'var(--ink)',  via: 'Today app' },
+  today:    { name: 'Today AI',    short: 'AI', color: 'var(--ai)',   via: 'On-device model' },
+  trip:     { name: 'Trip agent',  short: 'Tr', color: '#0E7C86',     via: 'Mac · MCP' },
+  inbox:    { name: 'Inbox agent', short: 'In', color: '#B4572E',     via: 'Mac · MCP' },
+  code:     { name: 'Coding agent',short: '</>',color: '#4A5BD0',     via: 'Mac · MCP' },
+  shortcut: { name: 'Shortcuts',   short: 'Sc', color: '#6B7280',     via: 'App Intent' },
+};
+const INTENTS = {
+  demo:  { title: 'Demo ready', detail: 'Prepare the demo · due Tomorrow 17:00' },
+  tokyo: { title: 'Tokyo trip', detail: 'Flight Tue 08:15 · flights, passport' },
+  mia:   { title: "Mia's birthday", detail: 'Dinner Sun 19:00 · gift due Sun 12:00' },
+  pr:    { title: 'Ship PR #25', detail: 'Fix ListEditor Bool literals' },
+  day:   { title: 'A good Thursday', detail: 'Today’s plan and what actually happened' },
+};
+// Autonomy tiers (see docs/research/ai-native-vision.md §4.3)
+const TIERS = {
+  0: { name: 'Observe', desc: 'Reads or notices. Logged, never asks.' },
+  1: { name: 'Local', desc: 'Changes only Today’s own copy (planned time, links, notes in the ledger). Can be allowed per agent. One-tap undo.' },
+  2: { name: 'Apple apps', desc: 'Writes to Apple Calendar, Reminders or alarms. Asks unless you granted this agent this kind of change, for a while.' },
+  3: { name: 'Other people', desc: 'Notifies someone, deletes, sends or spends. Always asks. Cannot be pre-approved.' },
+};
+// The shared ledger: append-only records of intentions → actions → outcomes.
+const LEDGER = [
+  { id:'L01', at:{day:-1,time:'16:40'}, actor:'you', via:'Ask AI', intent:'tokyo', verb:'created', object:{type:'reminder',title:'Book flights to Tokyo'}, after:'Due Sun 17:00 · flagged', tier:2, state:'approved', writes:['Apple Reminders'] },
+  { id:'L02', at:{day:-1,time:'17:00'}, actor:'today', via:'On-device', intent:'day', verb:'noticed', object:{type:'reminder',title:'Pay studio invoice'}, after:'Overdue. Stays visible; not moved.', tier:0, state:'auto' },
+  { id:'L03', at:{day:-1,time:'18:02'}, actor:'you', via:'Today app', intent:'day', verb:'completed', object:{type:'reminder',title:'Call plumber'}, tier:2, state:'approved', writes:['Apple Reminders'] },
+  { id:'L04', at:{day:-1,time:'19:10'}, actor:'trip', via:'MCP', intent:'tokyo', verb:'proposed', object:{type:'reminder',title:'Renew passport'}, before:'Due 29 Oct', after:'Delete (looks like a duplicate)', tier:3, state:'declined', by:'you · 19:12', writes:['Apple Reminders'], why:'Found “passport” in two places.' },
+  { id:'L05', at:{day:-1,time:'21:30'}, actor:'today', via:'On-device', intent:'demo', verb:'moved', object:{type:'reminder',title:'Prepare the demo'}, before:'Unplanned', after:'Today 13:30 · 45 min', tier:1, state:'approved', by:'you · 21:31', writes:['Today only'], why:'Evening plan for tomorrow. Deadline unchanged.' },
+  { id:'L06', at:{day:-1,time:'22:05'}, actor:'code', via:'MCP', intent:'pr', verb:'opened', object:{type:'outcome',title:'PR #25 · Fix ListEditor Bool literals'}, after:'Waiting for review', tier:0, state:'auto' },
+  { id:'L07', at:{day:0,time:'06:30'}, actor:'you', via:'Alarm', intent:'day', verb:'stopped', object:{type:'alarm',title:'Wake up'}, after:'Stopped 06:34. Stopping an alarm is not finishing a task.', tier:0, state:'auto' },
+  { id:'L08', at:{day:0,time:'07:00'}, actor:'today', via:'On-device', intent:'day', verb:'prepared', object:{type:'chat',title:'Morning brief'}, after:'5 events, 6 reminders, 1 overdue', tier:1, state:'auto', writes:['Today only'] },
+  { id:'L09', at:{day:0,time:'07:58'}, actor:'inbox', via:'MCP', intent:'day', verb:'linked', object:{type:'reminder',title:'Reply to Sam'}, after:'Linked email “Notes by 5?”', tier:1, state:'auto', grant:'Inbox agent may link emails to reminders · until 14 Nov', writes:['Today only'] },
+  { id:'L10', at:{day:0,time:'08:05'}, actor:'shortcut', via:'App Intent', intent:'day', verb:'reported', object:{type:'signal',title:'Left home'}, after:'Commute started', tier:0, state:'auto' },
+  { id:'L11', at:{day:0,time:'08:30'}, actor:'trip', via:'MCP', intent:'tokyo', verb:'proposed', object:{type:'reminder',title:'Book flights to Tokyo'}, before:'No notes', after:'Add 2 fares to notes · cheapest JL 704, book by Sat', tier:2, state:'pending', writes:['Apple Reminders'], why:'Fare went up twice this week. Booking itself stays with you.' },
+  { id:'L12', at:{day:0,time:'08:31'}, actor:'trip', via:'MCP', intent:'tokyo', verb:'proposed', object:{type:'event',title:'Leave for airport'}, before:'—', after:'New event Tue 06:15–06:55', tier:2, state:'pending', writes:['Apple Calendar'], why:'Flight 08:15; 40 min to the airport at that hour.' },
+  { id:'L13', at:{day:0,time:'08:45'}, actor:'trip', via:'MCP', intent:'tokyo', verb:'failed', object:{type:'reminder',title:'Online check-in'}, after:'List “Travel” does not exist. Nothing written.', tier:2, state:'failed', writes:['Apple Reminders'] },
+  { id:'L14', at:{day:0,time:'09:02'}, actor:'inbox', via:'MCP', intent:'day', verb:'proposed', object:{type:'event',title:'Weekly sync'}, before:'Tomorrow 11:00', after:'Tomorrow 11:30 (this occurrence)', tier:3, state:'pending', notifies:4, writes:['Apple Calendar'], why:'Priya asked by email to start 30 min later.' },
+  { id:'L15', at:{day:0,time:'09:25'}, actor:'today', via:'Calendar', intent:'day', verb:'noticed', object:{type:'signal',title:'Product sync ended'}, after:'Ended 9:25, on time', tier:0, state:'auto' },
+  { id:'L16', at:{day:0,time:'09:30'}, actor:'code', via:'MCP', intent:'pr', verb:'proposed', object:{type:'reminder',title:'Review PR #25'}, before:'—', after:'New reminder · Today 11:00 · 20 min', tier:2, state:'pending', writes:['Apple Reminders'], why:'CI is green and you are the requested reviewer.' },
+  { id:'L17', at:{day:0,time:'09:35'}, actor:'inbox', via:'MCP', intent:'mia', verb:'proposed', object:{type:'reminder',title:'Order birthday gift'}, before:'No notes', after:'Add note: Mia’s wishlist link (from her email)', tier:2, state:'pending', writes:['Apple Reminders'], why:'Due Sun 12:00; delivery takes 2 days.' },
+  { id:'L18', at:{day:0,time:'09:41'}, actor:'today', via:'On-device', intent:'demo', verb:'proposed', object:{type:'plan',title:'Re-plan today'}, before:'Demo 13:30', after:'4 changes · demo 10:00, leave 14:30, milk 15:45', tier:1, state:'pending', writes:['Today only','Alarm (1)'], why:'Morning is free after standup; rain from 17:30.' },
+];
+const pendingCount = () => LEDGER.filter(r => r.state === 'pending').length;
+const ICONS = {
+  menu:'<path d="M4 7h16M4 12h16M4 17h16"/>', spark:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>', x:'<path d="M6 6l12 12M18 6L6 18"/>', undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-2"/>',
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', car:'<path d="M5 16V11l2-5h10l2 5v5M5 16h14M7.5 16v2M16.5 16v2"/><circle cx="8" cy="13" r=".8"/><circle cx="16" cy="13" r=".8"/>',
+  rain:'<path d="M7 15a4 4 0 01.5-8 5 5 0 019.5 1.5A3.5 3.5 0 0117 15z"/><path d="M9 18l-1 2M13 18l-1 2M17 18l-1 2"/>',
+  bed:'<path d="M3 18V8M3 14h18v4M21 14v-2a3 3 0 00-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/>', bolt:'<path d="M13 3L5 13h6l-1 8 8-10h-6z"/>',
+  lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>', shield:'<path d="M12 3l7 3v6c0 4-3 7.5-7 9-4-1.5-7-5-7-9V6z"/>',
+  people:'<circle cx="9" cy="9" r="3"/><circle cx="17" cy="10" r="2.4"/><path d="M3.5 19a5.5 5.5 0 0111 0M15 19a4 4 0 016 0"/>',
+  chev:'<path d="M9 6l6 6-6 6"/>', mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/>',
+  graph:'<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.3 11l7.4-3.8M8.3 13l7.4 3.8"/>',
+  inbox:'<path d="M4 13l2.5-7h11L20 13v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/>',
+};
+const ic = (n, c = '') => `<svg class="ic ${c}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const av = a => `<span class="av" style="background:${ACTORS[a].color};${a === 'you' ? 'color:var(--bg)' : ''}">${esc(ACTORS[a].short)}</span>`;
+function chrome(active) {
+  const tabs = ['Today','Calendar','Reminders','Alarms'];
+  return `<div class="status"><span>9:41</span><span style="font-size:12px">●●● ▮</span></div>
+  <div class="top"><button class="ibtn" aria-label="Menu" onclick="location.href='agent-board.html'">${ic('menu')}</button>
+  <div class="pills">${tabs.map(t => `<span class="pill-t ${t === active ? 'on' : ''}">${t}</span>`).join('')}</div>
+  <a class="ibtn" aria-label="Approvals" href="approval-inbox.html" style="position:relative;color:var(--ai)">${ic('inbox')}<span id="badge" style="position:absolute;top:4px;right:3px;min-width:16px;height:16px;border-radius:8px;background:var(--ai);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 3px">${pendingCount()}</span></a></div>`;
+}
+const dock = () => `<div class="dock"><div class="ask">${ic('spark')}<span style="flex:1">Ask AI or add anything</span>${ic('mic')}</div><div class="plus">+</div></div>`;
+let toastTimer;
+function toast(msg, undo) {
+  const t = document.getElementById('toast');
+  t.innerHTML = `<span>${esc(msg)}</span>${undo ? '<button id="t-undo">Undo</button>' : ''}`;
+  t.classList.add('on');
+  if (undo) document.getElementById('t-undo').onclick = () => { t.classList.remove('on'); undo(); };
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000);
+}
+function openSheet(title, html) {
+  document.getElementById('sh-title').textContent = title;
+  document.getElementById('sh-body').innerHTML = html;
+  document.getElementById('scrim').classList.add('on'); document.getElementById('sheet').classList.add('on');
+}
+function closeSheet() { document.getElementById('scrim').classList.remove('on'); document.getElementById('sheet').classList.remove('on'); }
+const sheetHTML = () => `<div class="toast" id="toast"></div><div class="sheet-scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet" role="dialog" aria-labelledby="sh-title"><div class="sh-h"><span id="sh-title"></span><button class="btn sec" onclick="closeSheet()">Done</button></div><div class="sh-b" id="sh-body"></div></div>`;
+function recordJSON(r) {
+  const o = { id: r.id, at: `${dayDate(r.at.day).toISOString().slice(0,10)}T${r.at.time}`, actor: r.actor, via: r.via, intent: r.intent, verb: r.verb, object: r.object };
+  if (r.before) o.before = r.before; if (r.after) o.after = r.after;
+  o.tier = r.tier; o.approval = { state: r.state, ...(r.by ? { by: r.by } : {}), ...(r.grant ? { grant: r.grant } : {}) };
+  o.effects = { writes: r.writes || [], notifies: r.notifies || 0, undo: r.tier < 3 ? 'one tap' : (r.notifies ? 'sends a second update' : 'restore from ledger') };
+  if (r.why) o.why = r.why;
+  return JSON.stringify(o, null, 2);
+}
+</script></head>
+<body>
+<style>
+.ap{margin:0 14px 12px;background:var(--surface);border-radius:16px;border:.5px solid var(--line);overflow:hidden}
+.ap-h{display:flex;gap:10px;align-items:center;padding:12px 14px 6px}
+.ap-h .rm{flex:1;min-width:0}
+.ap-h b{display:block;font-size:14px}
+.ap-h small{color:var(--ink3);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-h b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-t{display:flex;gap:8px;align-items:center}.ap-t span:first-child{flex:1}
+.ap-t{padding:2px 14px 0;font-weight:600;font-size:15.5px}
+.ap-d{margin:8px 14px 0;border-radius:10px;background:var(--fill);padding:8px 10px;font-size:13px;display:grid;grid-template-columns:auto 1fr;gap:3px 10px}
+.ap-d span:nth-child(odd){color:var(--ink3)}
+.ap-why{padding:8px 14px 0;font-size:13px;color:var(--ink2)}
+.fx{display:flex;gap:5px;flex-wrap:wrap;padding:8px 14px 0}
+.grant{margin:10px 14px 0;display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink2)}
+.grant input{margin-top:2px;accent-color:var(--ai)}
+.grant.locked{color:var(--ink3)}
+.ap-a{display:flex;gap:6px;padding:12px 14px 14px}.ap-a .btn{padding:0 12px}
+.tier{font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px}
+.t1{background:var(--task-soft);color:var(--task)}.t2{background:var(--alarm-soft);color:var(--alarm)}.t3{background:var(--danger-soft);color:var(--danger)}
+.done-row{opacity:.6}
+.perm{width:100%;border-collapse:collapse;font-size:12.5px}
+.perm td:first-child{width:34%;font-size:12px}.perm td:not(:first-child){text-align:center}.perm .lvl{padding:2px 5px;font-size:10.5px}
+.perm th,.perm td{padding:7px 3px;border-top:.5px solid var(--line);text-align:left}
+.perm th{color:var(--ink3);font-weight:600}
+.lvl{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:9px;background:var(--fill);color:var(--ink2);white-space:nowrap}
+.lvl.ok{background:var(--task-soft);color:var(--task)}.lvl.no{color:var(--ink3)}.lvl.q{background:var(--alarm-soft);color:var(--alarm)}
+</style>
+<div class="wrap">
+<div class="phone" id="phone">
+  <div id="chrome"></div>
+  <div class="scroll" id="main"></div>
+  <script>document.write(dock())</script>
+</div>
+<aside class="notes">
+  <a class="back" href="index.html">← 全部原型</a>
+  <h1>审批收件箱</h1>
+  <p>所有 agent（Today AI、Mac 上的 Trip / Inbox / Coding agent、快捷指令）提出的改动都进这里。每张卡说清楚：<b>谁</b>、<b>改什么（改前 → 改后）</b>、<b>为什么</b>、<b>影响范围</b>（写到哪个 Apple App、会不会通知别人、能不能撤销）。</p>
+  <h2>四级自主权</h2>
+  <ul>
+    <li><b>0 观察</b>：只读、只记录，从不打扰。</li>
+    <li><b>1 本地</b>：只改 Today 自己的副本（计划时间、链接、账本里的备注），可以给某个 agent 长期放行，一键撤销。</li>
+    <li><b>2 Apple App</b>：写 Apple 日历 / 提醒事项 / 闹钟。默认要问；可以“对这个 agent、这类改动、这个列表，放行 30 天”。</li>
+    <li><b>3 他人 / 不可逆</b>：通知别人、删除、发送、花钱。永远要问，不能预先授权。</li>
+  </ul>
+  <h2>试一试</h2>
+  <ul><li>批准一张卡，再点 Undo。</li><li>勾选“Always allow…”再批准，看看 Allowed 区和右上角权限表。</li><li>Weekly sync 那张卡没有放行选项（第 3 级）。</li></ul>
+</aside>
+</div>
+<script>document.getElementById("phone").insertAdjacentHTML("beforeend", sheetHTML())</script>
+<script>
+const grants = [{ actor: 'inbox', what: 'Link emails to reminders', row: 'Link / annotate (Local)', tier: 1, until: '14 Nov' }];
+const decided = {};
+function card(r) {
+  const A = ACTORS[r.actor];
+  const fx = [...(r.writes || []).map(w => `<span class="chip ${w.startsWith('Apple') ? 'ev' : w.startsWith('Alarm') ? 'al' : 'tk'}">Writes: ${esc(w)}</span>`),
+    r.notifies ? `<span class="chip dg">${ic('people','s')} Notifies ${r.notifies} people</span>` : '',
+    `<span class="chip">${r.tier >= 3 ? (r.notifies ? 'Undo sends a 2nd update' : 'Hard to undo') : 'One-tap undo'}</span>`].join('');
+  const grantLabel = { 2: `Always allow ${A.name} to ${r.object.type === 'event' ? 'add events to Apple Calendar' : 'add or edit reminders'} · 30 days`, 1: `Always allow ${A.name} to re-plan flexible reminders · 30 days` }[r.tier];
+  return `<div class="ap" id="c-${r.id}"><div class="ap-h">${av(r.actor)}<div class="rm"><b>${esc(A.name)} <span style="font-weight:400;color:var(--ink3)">${esc(r.verb)}</span></b><small>${esc(A.via)} · ${when(r.at)} · ${esc(INTENTS[r.intent].title)}</small></div></div>
+  <div class="ap-t"><span>${esc(r.object.title)}</span><span class="tier t${r.tier}">${r.tier} · ${TIERS[r.tier].name}</span></div>
+  <div class="ap-d"><span>Before</span><span>${esc(r.before || '—')}</span><span>After</span><span><b style="color:var(--ai)">${esc(r.after)}</b></span></div>
+  ${r.why ? `<div class="ap-why">${esc(r.why)}</div>` : ''}<div class="fx">${fx}</div>
+  ${r.tier === 3 ? `<div class="grant locked">${ic('lock','s')}<span>Changes that notify other people always ask. Only this occurrence moves.</span></div>` : `<label class="grant"><input type="checkbox" id="g-${r.id}"><span>${esc(grantLabel)}</span></label>`}
+  <div class="ap-a"><button class="btn ai" onclick="decide('${r.id}','approved')">${r.tier === 3 ? 'Approve & notify' : 'Approve'}</button><button class="btn sec" onclick="edit('${r.id}')">Edit</button><button class="btn ghost" onclick="decide('${r.id}','declined')">Decline</button></div></div>`;
+}
+function render() {
+  document.getElementById('chrome').innerHTML = chrome('Today');
+  const pend = LEDGER.filter(r => r.state === 'pending').sort((a, b) => b.tier - a.tier || (a.at.time < b.at.time ? 1 : -1));
+  const auto = LEDGER.filter(r => r.at.day === 0 && (r.state === 'auto' && r.tier >= 1));
+  const done = LEDGER.filter(r => decided[r.id]);
+  let h = `<div style="display:flex;align-items:center;padding-right:14px"><div class="h1" style="flex:1">Approvals</div><button class="ibtn" aria-label="Agent permissions" style="background:var(--fill)" onclick="perms()">${ic('shield')}</button></div>
+  <div class="sub">${pend.length ? `${pend.length} waiting. Nothing changes until you approve.` : 'All clear. Agents will ask here.'}</div>`;
+  if (pend.length > 1) h += `<div style="padding:0 14px 10px;display:flex;gap:8px"><button class="btn sec" onclick="approveLow()">Approve all Local + Apple (${pend.filter(r => r.tier < 3).length})</button></div>`;
+  h += pend.map(card).join('');
+  if (done.length) h += `<div class="sect">Decided just now</div><div class="card">${done.map(r => `<div class="row done-row">${av(r.actor)}<div class="rm"><b>${esc(r.object.title)}</b><small>${r.state === 'approved' ? 'Approved' : 'Declined'} · ${esc(r.after)}</small></div><button class="btn sec" onclick="undo('${r.id}')">Undo</button></div>`).join('')}</div>`;
+  h += `<div class="sect">Allowed automatically today · ${auto.length}</div><div class="card">${auto.map(r => `<div class="row">${av(r.actor)}<div class="rm"><b>${esc(r.object.title)}</b><small>${esc(r.verb)} · ${esc(r.after)}${r.grant ? '<br>' + esc(r.grant) : ''}</small></div><span class="tier t${r.tier}">${r.tier}</span></div>`).join('')}</div>
+  <div style="padding:6px 20px;font-size:12.5px;color:var(--ink3)">Full history: <a href="agent-board.html" style="color:var(--event)">Activity</a></div>`;
+  document.getElementById('main').innerHTML = h;
+}
+function decide(id, state) {
+  const r = LEDGER.find(x => x.id === id), g = document.getElementById('g-' + id);
+  if (g && g.checked && state === 'approved') grants.push({ actor: r.actor, what: r.tier === 1 ? 'Re-plan flexible reminders' : r.object.type === 'event' ? 'Add events to Apple Calendar' : 'Add or edit reminders', row: r.tier === 1 ? 'Re-plan flexible reminders (Local)' : r.object.type === 'event' ? 'Add events (Apple)' : 'Add or edit reminders (Apple)', tier: r.tier, until: '14 Nov' });
+  r.state = state; r.by = 'you · 9:41'; decided[id] = true;
+  render(); toast(`${state === 'approved' ? 'Approved' : 'Declined'}: ${r.object.title}${state === 'approved' && r.writes ? ' → ' + r.writes.join(', ') : ''}`, () => undo(id));
+}
+function approveLow() { LEDGER.filter(r => r.state === 'pending' && r.tier < 3).forEach(r => { r.state = 'approved'; r.by = 'you · 9:41'; decided[r.id] = true; }); render(); toast('Approved. Weekly sync still needs you.'); }
+function undo(id) { const r = LEDGER.find(x => x.id === id); r.state = 'pending'; delete r.by; delete decided[id]; render(); }
+function edit(id) {
+  const r = LEDGER.find(x => x.id === id);
+  openSheet('Edit before approving', `<div class="card"><div class="row"><div class="rm"><b>${esc(r.object.title)}</b><small>${esc(r.after)}</small></div></div>
+  <div class="row"><div class="rm"><small style="font-size:14px;color:var(--ink2)">In the app this opens the normal editor (reminder, event or alarm) prefilled with the agent’s change. Saving counts as your approval and is logged as “edited by you”.</small></div></div></div>
+  <div class="sect">Ledger record</div><pre class="rec">${esc(recordJSON(r))}</pre>`);
+}
+function perms() {
+  const rows = [['Read calendar & reminders', 'ok', 'ok', 'ok', 'ok'], ['Propose changes', 'ok', 'ok', 'ok', 'ok'], ['Re-plan flexible reminders (Local)', 'ok', 'ask', 'ask', 'no'], ['Link / annotate (Local)', 'ok', 'ok', 'ask', 'ask'],
+    ['Add or edit reminders (Apple)', 'ask', 'ask', 'ask', 'ask'], ['Add events (Apple)', 'ask', 'ask', 'ask', 'no'], ['Alarms (AlarmKit)', 'ask', 'no', 'no', 'no'], ['Move a meeting · notify others', 'lock', 'lock', 'lock', 'no'], ['Delete', 'lock', 'lock', 'lock', 'no']];
+  grants.forEach(g => { const i = ['today', 'trip', 'inbox', 'code'].indexOf(g.actor) + 1; const r = rows.find(x => x[0] === g.row); if (r && i > 0 && r[i] === 'ask') r[i] = 'ok'; });
+  const L = { ok: '<span class="lvl ok">Allowed</span>', ask: '<span class="lvl q">Ask</span>', no: '<span class="lvl no">Never</span>', lock: `<span class="lvl">${ic('lock','s')} Ask</span>` };
+  openSheet('Agent permissions', `<div style="padding:0 20px 8px;font-size:12.5px;color:var(--ink3)">${['today','trip','inbox','code'].map(a=>`${esc(ACTORS[a].short)} = ${esc(ACTORS[a].name)}`).join(' · ')}</div><div class="card" style="padding:4px 8px"><table class="perm"><tr><th></th>${['today', 'trip', 'inbox', 'code'].map(a => `<th style="text-align:center">${av(a)}</th>`).join('')}</tr>
+  ${rows.map(r => `<tr><td>${esc(r[0])}</td>${r.slice(1).map(v => `<td>${L[v]}</td>`).join('')}</tr>`).join('')}</table></div>
+  <div class="sect">Standing grants</div><div class="card">${grants.map(g => `<div class="row">${av(g.actor)}<div class="rm"><b>${esc(g.what)}</b><small>Tier ${g.tier} · until ${g.until} · every use is logged</small></div><button class="btn sec" onclick="this.closest('.row').style.opacity=.4;this.textContent='Revoked'">Revoke</button></div>`).join('')}</div>
+  <div style="padding:4px 20px;font-size:12.5px;color:var(--ink3)">A lock means it always asks. Grants expire, are per agent and per kind of change, and pause when the agent is disconnected.</div>`);
+}
+render();
+</script>
+
+</body></html>
