@@ -8,6 +8,8 @@ struct CalEntry: Identifiable {
         case system(String)       // EKEvent identifier
         case local(OneEvent)
         case task(OneTask)
+        /// One ring of an alarm: a moment, not a span (start == end).
+        case alarm(OneAlarm)
     }
 
     let id: String
@@ -23,6 +25,7 @@ struct CalEntry: Identifiable {
     var repeats = false
 
     var isTask: Bool { if case .task = source { true } else { false } }
+    var isAlarm: Bool { if case .alarm = source { true } else { false } }
 
     func overlaps(_ day: Date, calendar: Calendar = .current) -> Bool {
         guard let interval = calendar.dateInterval(of: .day, for: day) else { return false }
@@ -39,6 +42,9 @@ struct CalEntry: Identifiable {
     }
 
     var speech: String {
+        if isAlarm {
+            return "Alarm \(title) at \(start.formatted(date: .omitted, time: .shortened))"
+        }
         if isTask {
             return "\(title), planned \(start.formatted(date: .omitted, time: .shortened))"
         }
@@ -49,8 +55,10 @@ struct CalEntry: Identifiable {
 @MainActor
 enum CalendarEntries {
     /// Everything overlapping `interval`, merged from the system calendar, Today's own events and planned tasks.
-    /// Events hidden in the Calendars list are left out.
-    static func make(in interval: DateInterval, events: [OneEvent], tasks: [OneTask], calendar: Calendar = .current) -> [CalEntry] {
+    /// Events hidden in the Calendars list are left out. Pass `alarms` (already empty when "Show alarms in the day" is off)
+    /// to add their rings by the same rule as the Today timeline (see `CalendarAlarms`); reminders that ring as alarms stay reminders.
+    static func make(in interval: DateInterval, events: [OneEvent], tasks: [OneTask], alarms: [OneAlarm] = [],
+                     now: Date = TodayClock.now, calendar: Calendar = .current) -> [CalEntry] {
         let sync = CalendarSync.shared
         var result: [CalEntry] = []
 
@@ -85,6 +93,13 @@ enum CalendarEntries {
                                    end: s.addingTimeInterval(TimeInterval(t.durationMinutes * 60)), isAllDay: false,
                                    color: .accentColor, calendarTitle: "Reminders"))
         }
+
+        for ring in CalendarAlarms.occurrences(of: alarms.map(\.spec), in: interval, now: now, calendar: calendar) {
+            let a = alarms[ring.index]
+            result.append(CalEntry(id: "a\(a.persistentModelID.hashValue)@\(ring.date.timeIntervalSince1970)", source: .alarm(a),
+                                   title: CalendarAlarms.title(a.label), start: ring.date, end: ring.date,
+                                   isAllDay: false, color: .accentColor, calendarTitle: "Alarms", repeats: !a.weekdays.isEmpty))
+        }
         return result
     }
 
@@ -108,6 +123,8 @@ enum OpenedEntry: Identifiable {
     case editSystem(String)
     case local(OneEvent)
     case task(OneTask)
+    /// An alarm opens in the Alarms tab's editor.
+    case alarm(OneAlarm)
     /// A new event at a slot picked on the Week grid (long-press), when our editor is used.
     case new(start: Date, end: Date)
 
@@ -118,6 +135,7 @@ enum OpenedEntry: Identifiable {
         case .editSystem(let id): "e" + id
         case .local(let e): "l\(e.persistentModelID.hashValue)"
         case .task(let t): "t\(t.persistentModelID.hashValue)"
+        case .alarm(let a): "a\(a.persistentModelID.hashValue)"
         }
     }
 
@@ -126,6 +144,7 @@ enum OpenedEntry: Identifiable {
         case .system(let id): self = .system(id)
         case .local(let e): self = .local(e)
         case .task(let t): self = .task(t)
+        case .alarm(let a): self = .alarm(a)
         }
     }
 }

@@ -75,7 +75,7 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Show overdue reminders", isOn: $showOverdue)
-                    Toggle("Show alarms in the day", isOn: $showAlarms)
+                    Toggle("Show alarms in Today and Calendar", isOn: $showAlarms)
                     Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
                     explainedToggle("Travel time", isOn: $travelTime,
                                     caption: "Shows the drive time and when to leave for events with a location today and tomorrow. Your location and the event's address go to Apple Maps only; nothing else leaves your iPhone.")

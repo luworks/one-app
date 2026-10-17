@@ -62,6 +62,8 @@ enum WidgetFeed {
                                                 isAllDay: entry.isAllDay, externalID: e.externalID, days: days, calendar: calendar)
                 result += withTravel(rows, externalID: e.externalID, start: entry.start, isAllDay: entry.isAllDay,
                                      fallbackAddress: "", now: now)
+            case .alarm:
+                break   // alarms are added below from `alarms`; `make` is not given any here
             }
         }
 

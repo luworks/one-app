@@ -82,6 +82,9 @@ final class OneAlarm {
         return AlarmPlan.nextRing(hour: hour, minute: minute, weekdays: weekdays, switchedOn: createdAt, now: now)
     }
 
+    /// The plain values the Calendar and Today rules work on (see `CalendarAlarms`).
+    var spec: AlarmSpec { AlarmSpec(hour: hour, minute: minute, label: label, weekdays: weekdays, isOn: isOn) }
+
     /// When this alarm rings on `day`, if it does. A one-time alarm rings on the day of its next occurrence.
     func fires(on day: Date, now: Date = .now, calendar: Calendar = .current) -> Date? {
         guard isOn else { return nil }
