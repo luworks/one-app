@@ -226,6 +226,9 @@ struct HomeView: View {
             if ProcessInfo.processInfo.arguments.contains("-uiTesting"), let ms = LaunchTimer.milliseconds {
                 Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier("coldStartMs").accessibilityLabel(String(ms))
             }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uiTestingSyncDump") { SyncDumpProbe() }
+            #endif
         }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))

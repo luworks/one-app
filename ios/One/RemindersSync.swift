@@ -45,6 +45,12 @@ final class RemindersSync {
     /// Bumped after each finished pass so views that care can refresh.
     private(set) var version = 0
     private(set) var lastError: String?
+    #if DEBUG
+    /// UI tests only (`-uiTestingSyncDump <prefix>`): what Apple Reminders and the app hold after the last pass.
+    private(set) var debugAppleDump = ""
+    private(set) var debugAppDump = ""
+    @ObservationIgnored private var debugOpsDone = false
+    #endif
     /// UI tests start with Apple Reminders off (a saved "on" from an earlier run would upload and pull test data);
     /// the test that needs it passes `-uiTestingRemindersSync`.
     private(set) var enabled = UserDefaults.standard.bool(forKey: RemindersSync.enabledKey)
@@ -256,7 +262,15 @@ final class RemindersSync {
             if again { again = false; scheduleReconcile() }
         }
         do {
+            #if DEBUG
+            let firstPass = !debugOpsDone
+            if firstPass { await debugRunAppleOps() }
+            #endif
             try await pass(container.mainContext)
+            #if DEBUG
+            if firstPass { debugOpsDone = true; debugRunAppOps(container.mainContext) }
+            await debugRefreshDump(container.mainContext)
+            #endif
             lastError = nil
         } catch {
             lastError = error.localizedDescription
@@ -544,3 +558,116 @@ final class RemindersSync {
         try store.save(ek, commit: true)
     }
 }
+
+#if DEBUG
+// MARK: UI test hooks
+
+/// Lets a UI test change Apple Reminders and the app's own data without typing, then read back both sides.
+/// Debug builds with `-uiTesting` only. Each op is three arguments: `<op> <title> <value>` ("_" for no value).
+/// - `-uiTestingAppleOp add|complete|rename|delete` runs on Apple Reminders directly, before the first pass
+///   (`add` puts it in the default list, due tomorrow 9:00; the value is a `RepeatRule` raw value or "_").
+/// - `-uiTestingAppOp complete|rename|delete|repeat` runs on the app's reminder after the first pass, through the
+///   same `TaskActions` the screens use.
+/// - `-uiTestingSyncDump <prefix>` shows both sides as hidden labels (`SyncDumpProbe`).
+extension RemindersSync {
+    private static func debugOps(_ flag: String) -> [(op: String, title: String, value: String)] {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-uiTesting") else { return [] }
+        return args.indices.filter { args[$0] == flag && $0 + 3 < args.count }
+            .map { (args[$0 + 1], args[$0 + 2], args[$0 + 3]) }
+    }
+
+    private static var debugPrefix: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingSyncDump"), i + 1 < args.count else { return nil }
+        return args[i + 1]
+    }
+
+    private func debugAllReminders() async -> [Unchecked<EKReminder>] {
+        let store = self.store
+        let predicate = Unchecked(store.predicateForReminders(in: nil))
+        return await withCheckedContinuation { c in
+            store.fetchReminders(matching: predicate.value) { c.resume(returning: ($0 ?? []).map(Unchecked.init)) }
+        }
+    }
+
+    fileprivate func debugRunAppleOps() async {
+        let ops = Self.debugOps("-uiTestingAppleOp")
+        guard !ops.isEmpty else { return }
+        for op in ops {
+            let all = await debugAllReminders().map(\.value)
+            let match = all.first { $0.title == op.title && !$0.isCompleted } ?? all.first { $0.title == op.title }
+            debugApply(op, to: match)
+        }
+    }
+
+    private func debugApply(_ op: (op: String, title: String, value: String), to found: EKReminder?) {
+        debugLog("apple op \(op.op) \(op.title)")
+        if op.op == "add" {
+            guard let cal = store.defaultCalendarForNewReminders() else { return }
+            let ek = EKReminder(eventStore: store)
+            ek.calendar = cal
+            ek.title = op.title
+            let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now
+            let due = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+            ek.dueDateComponents = Self.components(for: due)
+            if let rule = RepeatRule(rawValue: op.value) { ek.addRecurrenceRule(Self.recurrence(for: rule)) }
+            try? store.save(ek, commit: true)
+            return
+        }
+        guard let ek = found else { return }
+        switch op.op {
+        case "complete": ek.isCompleted = true; try? store.save(ek, commit: true)
+        case "rename": ek.title = op.value; try? store.save(ek, commit: true)
+        case "delete": try? store.remove(ek, commit: true)
+        default: break
+        }
+    }
+
+    fileprivate func debugRunAppOps(_ context: ModelContext) {
+        let ops = Self.debugOps("-uiTestingAppOp")
+        guard !ops.isEmpty else { return }
+        let tasks = (try? context.fetch(FetchDescriptor<OneTask>())) ?? []
+        for op in ops {
+            guard let t = tasks.first(where: { $0.title == op.title && !$0.isDone }) else { continue }
+            switch op.op {
+            case "complete": TaskActions.toggleDone(t, context: context, toast: nil)
+            case "rename": t.title = op.value
+            case "delete": TaskActions.delete(t, context: context, toast: nil)
+            case "repeat": t.repeatRule = RepeatRule(rawValue: op.value)?.rawValue
+            default: break
+            }
+        }
+        try? context.save()
+    }
+
+    fileprivate func debugRefreshDump(_ context: ModelContext) async {
+        guard let prefix = Self.debugPrefix else { return }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        func line(_ title: String, _ done: Bool, _ due: Date?, _ rule: String?) -> String {
+            "\(title)|\(done ? "done" : "open")|\(due.map(f.string(from:)) ?? "-")|\(rule ?? "-")"
+        }
+        let apple = await debugAllReminders().map { Remote($0.value) }.filter { $0.title.hasPrefix(prefix) }
+        debugAppleDump = apple.map { line($0.title, $0.isDone, $0.due, $0.repeatRule) }.sorted().joined(separator: ";")
+        let tasks = ((try? context.fetch(FetchDescriptor<OneTask>())) ?? []).filter { $0.title.hasPrefix(prefix) }
+        debugAppDump = tasks.map { line($0.title, $0.isDone, $0.due, $0.repeatRule) }.sorted().joined(separator: ";")
+    }
+}
+
+/// Hidden labels a UI test reads: `syncDump.apple` and `syncDump.app`.
+struct SyncDumpProbe: View {
+    private let sync = RemindersSync.shared
+
+    var body: some View {
+        VStack {
+            Text(sync.debugAppleDump).accessibilityIdentifier("syncDump.apple").accessibilityLabel(sync.debugAppleDump)
+            Text(sync.debugAppDump).accessibilityIdentifier("syncDump.app").accessibilityLabel(sync.debugAppDump)
+        }
+        .font(.system(size: 1))
+        .opacity(0.01)
+        .allowsHitTesting(false)
+    }
+}
+#endif
