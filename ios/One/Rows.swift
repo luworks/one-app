@@ -334,9 +334,13 @@ struct CaptureCard: View {
     @Binding var capture: Capture
     /// The user's Reminders lists; when given, a task shows which one it goes to, changeable with one tap.
     var lists: [String] = []
+    /// Open until the user decides. The card stays in the conversation afterwards (see `CardFooter`).
+    var status: CardStatus = .open
     var onAdd: () -> Void
     var onCancel: () -> Void
     var cancelTitle = "Cancel"
+    var onUndo: () -> Void = {}
+    var onOpen: () -> Void = {}
 
     enum Mode: Hashable, CaseIterable { case task, event, alarm }
 
@@ -376,30 +380,59 @@ struct CaptureCard: View {
                         .lineLimit(1)
                 }
             }
-            PillSwitcher(items: Mode.allCases, selection: mode,
-                         title: { kind in
-                             switch kind {
-                             case .task: "Reminder"
-                             case .event: "Event"
-                             case .alarm: "Alarm"
-                             }
-                         },
-                         identifier: { "capture.kind." + String(describing: $0) })
+            if status == .open {
+                PillSwitcher(items: Mode.allCases, selection: mode,
+                             title: { kind in
+                                 switch kind {
+                                 case .task: "Reminder"
+                                 case .event: "Event"
+                                 case .alarm: "Alarm"
+                                 }
+                             },
+                             identifier: { "capture.kind." + String(describing: $0) })
+            }
             Text(capture.title).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
-            if capture.kind == .task, !capture.ringsAsAlarm, !lists.isEmpty {
-                ListMenu(capture: $capture, lists: lists).font(.subheadline)
+            if capture.kind == .task, !capture.ringsAsAlarm {
+                if status == .open {
+                    if !lists.isEmpty { ListMenu(capture: $capture, lists: lists).font(.subheadline) }
+                } else {
+                    Label(capture.listLabel, systemImage: "list.bullet").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
-            HStack {
-                Button(cancelTitle, action: onCancel).buttonStyle(.bordered)
-                Spacer()
-                Button("Add", action: onAdd).buttonStyle(.borderedProminent)
+            if status == .open {
+                HStack {
+                    Button(cancelTitle, action: onCancel).buttonStyle(.bordered)
+                    Spacer()
+                    Button("Add", action: onAdd).buttonStyle(.borderedProminent)
+                }
+                .padding(.top, 4)
+            } else {
+                CardFooter(status: status, onAdd: onAdd, onUndo: onUndo, onOpen: onOpen)
+                    .padding(.top, 4)
             }
-            .padding(.top, 4)
         }
         .padding(14)
         .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.secondary.opacity(0.25)))
+        .opacity(status == .dropped ? 0.55 : 1)
+        .modifier(DecidedCardLabel(status: status, capture: capture))
+    }
+}
+
+/// A decided card reads as one thing to VoiceOver ("Added: Call Alex, Tomorrow 15:00 · alerts you") with its buttons inside.
+private struct DecidedCardLabel: ViewModifier {
+    let status: CardStatus
+    let capture: Capture
+
+    func body(content: Content) -> some View {
+        if status == .open {
+            content
+        } else {
+            content
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(status.accessibilityLabel(for: capture))
+        }
     }
 }
 

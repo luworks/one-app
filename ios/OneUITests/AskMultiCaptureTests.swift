@@ -42,7 +42,11 @@ final class AskMultiCaptureTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["capture-added"].firstMatch.waitForExistence(timeout: 5), "added items turn into a check")
         let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: addAll)
         XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 5), .completed)
-        XCTAssertTrue(app.descendants(matching: .any)["capture-stack"].waitForNonExistence(timeout: 8), "the card leaves once everything is added")
+        // The card stays in the chat: every row says Added, each with its own Undo.
+        XCTAssertTrue(app.descendants(matching: .any)["capture-stack"].exists, "the card stays once everything is added")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "capture-added").count, 3)
+        XCTAssertEqual(app.buttons.matching(identifier: "capture-undo").count, 3)
+        XCTAssertTrue(text("Buy milk").exists && text("Call Alex").exists, "the rows keep their text")
     }
 
     func testAddOneAndSkipAnother() {
@@ -52,5 +56,20 @@ final class AskMultiCaptureTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["capture-added"].firstMatch.waitForExistence(timeout: 5), "the added row shows a check")
         app.buttons["Skip"].firstMatch.tap()
         XCTAssertEqual(app.buttons.matching(identifier: "capture-row-add").count, 1, "one item is left to add")
+        XCTAssertTrue(app.descendants(matching: .any)["capture-dropped"].waitForExistence(timeout: 5), "the skipped row stays, Dropped")
+    }
+
+    /// Undo on one row takes back only that item; the row offers Add again.
+    func testUndoOneRowAndAddItAgain() {
+        send("Buy milk; Call Alex tomorrow at 3pm")
+        XCTAssertTrue(app.buttons["capture-add-all"].waitForExistence(timeout: 15))
+        app.buttons["capture-add-all"].tap()
+        XCTAssertTrue(app.buttons["capture-undo"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["capture-undo"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture-undone"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "capture-added").count, 1, "the other row is still Added")
+        app.buttons["capture-add-again"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture-undone"].waitForNonExistence(timeout: 5))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "capture-added").count, 2)
     }
 }

@@ -2,8 +2,8 @@ import Foundation
 
 /// What the composer understood from a line of text. Shown as a preview card;
 /// nothing is created until the user taps 添加.
-struct Capture: Equatable {
-    enum Kind: String, CaseIterable { case task, event }
+struct Capture: Equatable, Codable {
+    enum Kind: String, CaseIterable, Codable { case task, event }
 
     var title: String
     var day: Date
@@ -410,10 +410,17 @@ enum CaptureParser {
         t = t.replacingOccurrences(of: #"\s(?:左右|大概|ish)(?=\s|$)|^(?:左右|大概)\s"#, with: " ", options: [.regularExpression, .caseInsensitive])
         let deadlineWord = raw.range(of: #"[周号日天点底末礼拜\d](?:之?前|以前)|\bby\b|\bbefore\b|之前"#, options: [.regularExpression, .caseInsensitive]) != nil
         var changed = true
+        // "帮我增加一个 reminder 吧：我需要…": the lead-in goes, and what the user wrote after it is kept as it is.
+        var hadLeadIn = false
         while changed {
             changed = false
             t = t.trimmingCharacters(in: CharacterSet(charactersIn: " ,，。.、!！?？~"))
-            for pattern in leadingFillers {
+            if !hadLeadIn, let rest = CaptureLeadIn.strip(t) {
+                t = rest
+                hadLeadIn = true
+                changed = true
+            }
+            for pattern in leadingFillers where !hadLeadIn {
                 if let r = t.range(of: pattern, options: [.regularExpression, .caseInsensitive]), !r.isEmpty, r.lowerBound == t.startIndex {
                     t.removeSubrange(r)
                     changed = true
@@ -728,7 +735,8 @@ enum CaptureDraftMapper {
     /// (empty title), so the caller can fall back to the rule parser. Never trusts the model: bad dates, times,
     /// durations and repeat names are dropped instead of guessed.
     static func capture(from draft: CaptureDraft, now: Date = .now, calendar: Calendar = .current) -> Capture? {
-        let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The model sometimes keeps the instruction ("增加一个 reminder 吧：…"); the title is what comes after it.
+        let title = CaptureLeadIn.stripped(draft.title.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !title.isEmpty else { return nil }
 
         let today = calendar.startOfDay(for: now)

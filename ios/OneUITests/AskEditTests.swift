@@ -36,6 +36,13 @@ final class AskEditTests: XCTestCase {
         app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
     }
 
+    /// Text on the newest preview card (earlier cards stay in the chat as Added / Dropped).
+    private func cardText(containing s: String) -> XCUIElement {
+        let stacks = app.descendants(matching: .any).matching(identifier: "capture-stack")
+        return stacks.element(boundBy: max(stacks.count - 1, 0)).staticTexts
+            .containing(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
+    }
+
     // MARK: Capture
 
     func testCapture_fiveSentences() {
@@ -49,10 +56,10 @@ final class AskEditTests: XCTestCase {
         for (i, c) in cases.enumerated() {
             send(c.input)
             XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90), "card for \(c.input)")
-            for e in c.expect { XCTAssertTrue(label(containing: e).exists, "'\(e)' on the card for \(c.input)") }
-            for n in c.notExpect { XCTAssertFalse(label(containing: n).exists, "no '\(n)' for \(c.input)") }
+            for e in c.expect { XCTAssertTrue(cardText(containing: e).exists, "'\(e)' on the card for \(c.input)") }
+            for n in c.notExpect { XCTAssertFalse(cardText(containing: n).exists, "no '\(n)' for \(c.input)") }
             shot("capture-\(i + 1)")
-            if i == 0 { app.buttons["Add"].tap(); XCTAssertTrue(label(containing: "Added").waitForExistence(timeout: 5)) }
+            if i == 0 { app.buttons["Add"].tap(); XCTAssertTrue(app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5)) }
             else { app.buttons["Cancel"].tap() }
         }
     }

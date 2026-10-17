@@ -127,6 +127,12 @@ struct HomeView: View {
                 if route.fromSidebar { drawer.set(open: show, animated: false) }
             }, onAdded: { capture in
                 if capture.hasDay { calendarDay = capture.day }
+            }, onOpenDay: { day in
+                // "Open" on an added event: leave the AI screen and show that day in Today.
+                ask = nil
+                drawer.set(open: false, animated: false)
+                tab = .today
+                todayDay = Calendar.current.startOfDay(for: day)
             })
         }
         .environment(toast)

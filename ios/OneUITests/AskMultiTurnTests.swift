@@ -36,7 +36,8 @@ final class AskMultiTurnTests: XCTestCase {
         XCTAssertTrue(label(containing: "Call Alex").exists, "same item, not a new one called “make it 4pm”")
         XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1, "still one card")
         app.buttons["Add"].tap()
-        XCTAssertTrue(label(containing: "Added “Call Alex”").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5), "the card stays, now Added")
+        XCTAssertTrue(label(containing: "Call Alex").exists && label(containing: "16:00").exists, "with the edited time")
     }
 
     func testFollowUpMakesItAnAlarm() {
@@ -92,7 +93,7 @@ final class AskMultiTurnTests: XCTestCase {
         send("Call Alex tomorrow at 3pm")
         XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
         app.buttons["Add"].tap()
-        XCTAssertTrue(label(containing: "Added “Call Alex”").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5))
         send("move it to 5pm")
         XCTAssertTrue(app.otherElements["change-card"].waitForExistence(timeout: 90), "“it” is Call Alex")
         XCTAssertTrue(label(containing: "Call Alex").exists)

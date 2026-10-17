@@ -238,6 +238,13 @@ extension Capture {
     @MainActor @discardableResult
     func insert(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
                 approval: LedgerApproval = .userMade) -> PersistentIdentifier {
+        insertRecorded(into: context, actor: actor, channel: channel, approval: approval).id
+    }
+
+    /// `insert`, and the Activity entry that recorded it (so Undo can be recorded against it).
+    @MainActor
+    func insertRecorded(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
+                        approval: LedgerApproval = .userMade) -> (id: PersistentIdentifier, entry: LedgerEntry) {
         let model: any PersistentModel
         switch kind {
         case .task:
@@ -247,8 +254,8 @@ extension Capture {
         context.insert(model)
         try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
         let kind = model is OneAlarm ? "alarm" : (model is OneEvent ? "event" : "task")
-        Ledger.record(.created, task: model as? OneTask, kind: kind, title: title, after: summary,
-                      actor: actor, channel: channel, approval: approval, context: context)
-        return model.persistentModelID
+        let entry = Ledger.record(.created, task: model as? OneTask, kind: kind, title: title, after: summary,
+                                  actor: actor, channel: channel, approval: approval, context: context)
+        return (model.persistentModelID, entry)
     }
 }
