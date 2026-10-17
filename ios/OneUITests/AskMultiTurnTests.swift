@@ -73,6 +73,21 @@ final class AskMultiTurnTests: XCTestCase {
         XCTAssertTrue(label(containing: "→ Today 17:00").exists)
     }
 
+    /// The sample data has "Dentist" at 15:00 today. A new request that merely mentions 3pm must not be read as an edit of it,
+    /// and a clarification that describes a new thing must not become a ChangeCard either.
+    func testNewRequestMentioningAnItemsTimeIsACaptureNotAnEdit() {
+        send("请把我可以卖的东西都放到车库去，然后今天下午 3 点的时候提醒我移动一下")
+        XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90), "a preview card for a new reminder")
+        XCTAssertFalse(app.otherElements["change-card"].exists)
+        XCTAssertFalse(label(containing: "Which one").exists, "no question about existing items")
+        send("哦，我想卖家里的一些东西，然后去 Marketplace。今天下午 3 点提醒我吧")
+        XCTAssertTrue(label(containing: "Marketplace").waitForExistence(timeout: 90), "the card is the new reminder")
+        XCTAssertTrue(label(containing: "15:00").exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1)
+        XCTAssertFalse(app.otherElements["change-card"].exists, "never a change to an existing item")
+        XCTAssertFalse(label(containing: "Here's the change").exists)
+    }
+
     func testItMeansWhatWeTalkedAboutLast() {
         send("Call Alex tomorrow at 3pm")
         XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
