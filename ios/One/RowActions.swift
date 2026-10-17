@@ -6,9 +6,17 @@ import SwiftUI
 /// Icon only, like iOS 26 Mail and Reminders: with text, two actions are wide enough that the row's title slides off screen.
 /// The title stays the accessibility label, so VoiceOver and the UI tests still find "Delete", "Flag", ….
 enum RowAction {
-    static func delete(_ action: @escaping () -> Void) -> some View {
-        Button(role: .destructive, action: action) { Label("Delete", systemImage: "trash.fill").labelStyle(.iconOnly) }
-            .tint(.red)
+    /// `asksFirst`: Delete only opens a question (a repeating event, a list). Then the button has no destructive role:
+    /// with one, SwiftUI removes the row at once, the data still has it, and the list crashes on its next update
+    /// ("Invalid update: invalid number of items").
+    @ViewBuilder
+    static func delete(asksFirst: Bool = false, _ action: @escaping () -> Void) -> some View {
+        let label = Label("Delete", systemImage: "trash.fill").labelStyle(.iconOnly)
+        if asksFirst {
+            Button(action: action) { label }.tint(.red)
+        } else {
+            Button(role: .destructive, action: action) { label }.tint(.red)
+        }
     }
 
     static func flag(_ flagged: Bool, _ action: @escaping () -> Void) -> some View {
