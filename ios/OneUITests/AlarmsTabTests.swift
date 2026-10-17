@@ -70,12 +70,12 @@ final class AlarmsTabTests: XCTestCase {
 
     func testRepeatDaysShowClockWording() {
         let row = addAlarm(days: ["Monday", "Wednesday"])
-        XCTAssertTrue(row.label.hasSuffix(", Alarm, Every Mon, Wed"), row.label)
+        XCTAssertTrue(row.label.hasSuffix(", Alarm, Mon, Wed"), row.label)
         // The editor shows the same value, and the check marks stick.
         row.tap()
         XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
         let repeatRow = app.descendants(matching: .any)["alarm.repeat"]
-        XCTAssertEqual(repeatRow.label, "Repeat, Every Mon, Wed")
+        XCTAssertEqual(repeatRow.label, "Repeat, Mon, Wed")
         shot("4-edit")
         XCTAssertTrue(app.buttons["Every Monday"].isSelected, "Monday is on")
         XCTAssertFalse(app.buttons["Every Tuesday"].isSelected)
@@ -83,7 +83,7 @@ final class AlarmsTabTests: XCTestCase {
         app.buttons["Every Wednesday"].tap()
         XCTAssertEqual(repeatRow.label, "Repeat, Never", "no days means Never")
         app.buttons["Cancel"].tap()
-        XCTAssertTrue(rows.firstMatch.label.hasSuffix(", Alarm, Every Mon, Wed"), "Cancel keeps the alarm as it was")
+        XCTAssertTrue(rows.firstMatch.label.hasSuffix(", Alarm, Mon, Wed"), "Cancel keeps the alarm as it was")
     }
 
     func testEditTimeAndLabel() {
@@ -154,11 +154,42 @@ final class AlarmsTabTests: XCTestCase {
                       "it is still chosen when the alarm is opened again")
     }
 
+    /// Missing permissions are one slim row above the list, not two big cards. (The simulator denies AlarmKit.)
+    func testPermissionIsOneSlimRow() throws {
+        let row = app.descendants(matching: .any)["alarms.permissionRow"]
+        try XCTSkipUnless(row.waitForExistence(timeout: 3), "alarms and notifications are both allowed here")
+        XCTAssertLessThanOrEqual(row.frame.height, 60, "a slim row, not a card")
+        XCTAssertTrue(row.label.contains("off") || app.staticTexts.matching(NSPredicate(format: "label CONTAINS ' off'")).count > 0)
+        XCTAssertFalse(app.staticTexts["Alarms Are Off"].exists)
+        XCTAssertFalse(app.staticTexts["Notifications Are Off"].exists)
+        XCTAssertLessThan(row.frame.maxY, app.frame.height / 3, "above the list")
+        shot("10-permission")
+    }
+
     func testSnoozeOffHidesDuration() {
         app.buttons["New"].tap()
         XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
         app.switches["alarm.snooze"].toggleSwitch()
         XCTAssertTrue(app.buttons["alarm.snoozeDuration"].waitForNonExistence(timeout: 3))
+    }
+}
+
+/// Add Alarm opens on the next quarter hour of Today's clock (pinned to 10:56, so 11:00), not on a whole hour.
+final class AlarmDefaultTimeTests: XCTestCase {
+    func testAddAlarmOpensOnTheNextQuarterHour() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting", "-uiTestingNow", "10:56"]
+        app.launch()
+        app.buttons["Alarms"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+        app.buttons["New"].tap()
+        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+        let wheels = app.pickerWheels
+        XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
+        // 12- or 24-hour clock: the hour reads "11 o’clock" or "11", the minutes "00" on both.
+        XCTAssertTrue((wheels.element(boundBy: 0).value as? String ?? "").hasPrefix("11"), "hour: \(wheels.element(boundBy: 0).value ?? "")")
+        XCTAssertTrue((wheels.element(boundBy: 1).value as? String ?? "").hasPrefix("00"), "minutes: \(wheels.element(boundBy: 1).value ?? "")")   // "00 minutes"
     }
 }

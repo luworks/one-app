@@ -60,7 +60,7 @@ struct AlarmsView: View {
     private var alarmsList: some View {
         List {
             nextAlarmRow
-            authorizationBanner
+            permissionRow
             Section {
                 if alarms.isEmpty { emptyState }
                 ForEach(alarms) { alarm in
@@ -79,9 +79,6 @@ struct AlarmsView: View {
                         ItemAlarmRow(item: item)
                     }
                 } header: { SectionTitle("From reminders and events") }
-            }
-            if notificationStatus != .authorized && notificationStatus != .provisional {
-                notificationsRow
             }
         }
         .listStyle(.plain)
@@ -157,69 +154,66 @@ struct AlarmsView: View {
 
     // MARK: Permission
 
-    /// Apple-style wording for AlarmKit's three states. Notifications for reminders are a separate card at the bottom.
-    @ViewBuilder private var authorizationBanner: some View {
-        switch center.authorization {
-        case .authorized:
-            EmptyView()
-        case .notDetermined:
-            banner(symbol: "alarm", title: "Allow Alarms",
-                   text: "Allow Today to schedule alarms that ring even on Silent or in a Focus.",
-                   button: "Allow Alarms") { Task { await center.requestAuthorization() } }
-        case .denied:
-            banner(symbol: "alarm.slash", title: "Alarms Are Off",
-                   text: "Allow alarms for Today in Settings so they can ring.",
-                   button: "Open Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-            }
-        case .unavailable:
-            banner(symbol: "alarm.slash", title: "Update iOS to Ring Alarms",
-                   text: "Ringing alarms need iOS 26 or later.", button: nil) {}
+    /// What is missing, in the words of one slim row: "Alarms and notifications are off". AlarmKit can be undecided,
+    /// denied or unavailable (older iOS); notifications can be undecided or denied. Nothing shows when both are allowed.
+    private var permissionNotice: (text: String, button: String?)? {
+        let alarmsUndecided = center.authorization == .notDetermined
+        let alarmsOff = center.authorization == .denied || alarmsUndecided
+        let notificationsUndecided = notificationStatus == .notDetermined
+        let notificationsOff = notificationStatus == .denied || notificationsUndecided
+        if center.authorization == .unavailable && !notificationsOff { return ("Update iOS to ring alarms", nil) }
+        let text: String
+        switch (alarmsOff, notificationsOff) {
+        case (true, true): text = "Alarms and notifications are off"
+        case (true, false): text = "Alarms are off"
+        case (false, true): text = "Notifications are off"
+        case (false, false): return nil
         }
+        // Undecided: the button asks. Denied: only Settings can change it.
+        return (text, alarmsUndecided || notificationsUndecided ? "Allow" : "Open")
     }
 
-    private func banner(symbol: String, title: String, text: String, button: String?, action: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: symbol).font(.headline)
-            Text(text).font(.subheadline).foregroundStyle(.secondary)
-            if let button {
-                Button(button, action: action)
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    .accessibilityIdentifier("alarms.permission")
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .plainRow(top: 4, bottom: 8)
-    }
-
-    private var notificationsRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Notifications Are Off", systemImage: "bell.slash").font(.headline)
-            Text(notificationStatus == .denied
-                 ? "Notifications are turned off for Today. Turn them on in Settings to get reminded when a reminder or event starts."
-                 : "Allow notifications so Today can remind you when a reminder or event starts.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Button(notificationStatus == .denied ? "Open Settings" : "Turn On Notifications") {
-                if notificationStatus == .denied {
-                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
-                } else {
-                    Task {
-                        await Reminders.shared.requestPermission()
-                        notificationStatus = await Reminders.shared.authorizationStatus()
-                    }
+    @ViewBuilder private var permissionRow: some View {
+        if let notice = permissionNotice {
+            HStack(spacing: 10) {
+                Image(systemName: "bell.slash").foregroundStyle(.secondary)
+                Text(notice.text)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let button = notice.button {
+                    Button(button) { resolvePermission() }
+                        .font(.subheadline.weight(.semibold))
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("alarms.permission")
                 }
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("alarms.permissionRow")
+            .plainRow(top: 0, bottom: 8)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .plainRow(top: 16, bottom: 8)
+    }
+
+    /// Asks for what is still undecided; when everything is decided (denied), opens Settings.
+    private func resolvePermission() {
+        let alarmsUndecided = center.authorization == .notDetermined
+        let notificationsUndecided = notificationStatus == .notDetermined
+        guard alarmsUndecided || notificationsUndecided else {
+            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            return
+        }
+        Task {
+            if alarmsUndecided { await center.requestAuthorization() }
+            if notificationsUndecided {
+                await Reminders.shared.requestPermission()
+                notificationStatus = await Reminders.shared.authorizationStatus()
+            }
+        }
     }
 }
 

@@ -77,12 +77,12 @@ struct SettingsView: View {
                     Toggle("Show overdue reminders", isOn: $showOverdue)
                     Toggle("Show alarms in the day", isOn: $showAlarms)
                     Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
-                    Toggle("Travel time", isOn: $travelTime)
-                    Toggle("Health summary", isOn: $healthSummary)
+                    explainedToggle("Travel time", isOn: $travelTime,
+                                    caption: "Shows the drive time and when to leave for events with a location today and tomorrow. Your location and the event's address go to Apple Maps only; nothing else leaves your iPhone.")
+                    explainedToggle("Health summary", isOn: $healthSummary,
+                                    caption: "Shows today's steps and last night's sleep from Apple Health in one line. Today only reads them.")
                 } header: {
                     Text("Today")
-                } footer: {
-                    Text("Travel time shows how long the drive takes to upcoming events with a location today and tomorrow, and when to leave. To work it out, your current location and the event's address go to Apple Maps (MapKit) only; nothing else leaves your iPhone. Health summary shows today's steps and last night's sleep from Apple Health in one line; Today only reads them.")
                 }
 
                 smartListsSection
@@ -220,6 +220,18 @@ struct SettingsView: View {
         } footer: {
             Text("Shown at the top of Reminders. Press and hold one, then drag, to change the order.")
         }
+    }
+
+    /// A switch with its own short explanation right under it (a Section footer can only describe the whole group).
+    private func explainedToggle(_ title: String, isOn: Binding<Bool>, caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(title, isOn: isOn)
+            Text(caption)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 2)
     }
 
     private var activeGrants: Int { grants.filter { $0.info?.isActive(at: .now) ?? false }.count }
