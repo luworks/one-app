@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-enum HomeTab: CaseIterable, Identifiable {
+enum HomeTab: String, CaseIterable, Identifiable {
     case today, calendar, tasks, alarms
 
     var id: Self { self }
@@ -35,11 +35,17 @@ struct HomeView: View {
     @Query private var allEvents: [OneEvent]
     @Query private var allAlarms: [OneAlarm]
 
-    @State private var tab: HomeTab = .today
+    @State private var tab: HomeTab = Self.restored(HomeTab.self, key: Self.tabKey) ?? .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
     // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
-    @State private var calendarMode: CalendarView.Mode = .week
+    @State private var calendarMode: CalendarView.Mode = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey) ?? .week
+    // The tab and the Calendar view also survive a restart (not in UI tests, which always start the same way).
+    private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode"
+    private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
+        guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
+        return UserDefaults.standard.string(forKey: key).flatMap(T.init(rawValue:))
+    }
     @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
     @State private var todayDay = Calendar.current.startOfDay(for: .now)
@@ -237,6 +243,8 @@ struct HomeView: View {
             default: break
             }
         }
+        .onChange(of: tab) { _, t in UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey) }
+        .onChange(of: calendarMode) { _, m in UserDefaults.standard.set(m.rawValue, forKey: Self.calendarModeKey) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 dropDeletedMirrors()
