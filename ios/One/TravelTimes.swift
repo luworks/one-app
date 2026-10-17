@@ -1,6 +1,7 @@
 import CoreLocation
 import MapKit
 import Observation
+import UIKit
 import os
 
 /// Travel time to upcoming events with a location ("Drive 18 min · Leave by 14:20"), like Apple Calendar's Time to Leave.
@@ -23,6 +24,7 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
     @ObservationIgnored private var inFlight: Set<String> = []
     /// Address → resolved place for this launch (several events at the same address need one search).
     @ObservationIgnored private var askedThisLaunch = false
+    @ObservationIgnored private var requestedFix = false
     @ObservationIgnored private var resolved: [String: MKMapItem] = [:]
     @ObservationIgnored private lazy var manager: CLLocationManager = {
         let m = CLLocationManager()
@@ -59,9 +61,11 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
         _ = version
         guard !isUITesting, Self.isEnabled, let place, !eventID.isEmpty,
               TravelTime.isEligible(start: start, isAllDay: isAllDay, location: place.address, now: now) else { return nil }
+        // Location refused: no estimate can be made, so don't queue anything.
+        guard status != .denied, status != .restricted else { return nil }
         let key = TravelTime.cacheKey(eventID: eventID, start: start, address: place.address)
         let cached = cache[key]
-        if TravelTime.needsRefresh(cached, now: now), queued[key] == nil, !inFlight.contains(key) {
+        if TravelTime.needsRefresh(cached, now: now), !inFlight.contains(key) {
             // Deferred: rows call this while drawing, and starting work (or a prompt) must wait until that's done.
             let job = Job(key: key, place: place, start: start)
             Task { @MainActor in self.enqueue(job, askPermission: askPermission) }
@@ -84,13 +88,21 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
             }
             return   // the answer bumps `version`, rows redraw and ask again
         }
-        guard isAuthorized, queued[job.key] == nil, !inFlight.contains(job.key) else { return }
-        queued[job.key] = job
+        guard isAuthorized, !inFlight.contains(job.key) else { return }
+        if !requestedFix {
+            // One location fix per launch, so address searches look near you (not in another city with the same street).
+            requestedFix = true
+            manager.requestLocation()
+        }
+        if queued[job.key] == nil { queued[job.key] = job }
         pump()
     }
 
-    /// Starts the soonest queued lookups, a few at a time (MapKit throttles bursts).
+    /// Starts the soonest queued lookups, a few at a time (MapKit throttles bursts). Only while the app is open:
+    /// with "when in use" permission a background refresh has no current location, and a failed lookup would be
+    /// cached for 15 minutes. Queued jobs start the next time a row asks in the foreground.
     private func pump() {
+        guard UIApplication.shared.applicationState == .active else { return }
         let next = TravelTime.nextRequests(queued.values.map { (id: $0.key, start: $0.start) }, inFlight: inFlight.count)
         for key in next {
             guard let job = queued.removeValue(forKey: key) else { continue }
@@ -156,6 +168,12 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in self.version += 1 }
     }
+
+    /// The fix lands in `manager.location`, which address searches read; nothing else to do.
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {}
+
+    /// Required with `requestLocation()`. Without a fix, searches just aren't biased toward you.
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
 
 extension TravelTimes {
