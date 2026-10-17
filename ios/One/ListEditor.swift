@@ -76,14 +76,14 @@ private struct DeleteListAlert: ViewModifier {
         ) { item in
             if item.count == 0 {
                 Button("Delete", role: .destructive) {
-                    run(item, keepingTasks: False)
+                    run(item, keepingTasks: false)
                 }
             } else {
                 Button("Delete List, Keep Reminders") {
-                    run(item, keepingTasks: True)
+                    run(item, keepingTasks: true)
                 }
                 Button("Delete List and Reminders", role: .destructive) {
-                    run(item, keepingTasks: False)
+                    run(item, keepingTasks: false)
                 }
             }
             Button("Cancel", role: .cancel) {}
