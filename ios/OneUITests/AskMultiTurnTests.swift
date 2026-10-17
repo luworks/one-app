@@ -43,7 +43,7 @@ final class AskMultiTurnTests: XCTestCase {
         send("Call Alex tomorrow at 3pm")
         XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
         send("make it an alarm")
-        XCTAssertTrue(label(containing: "Rings as alarm").waitForExistence(timeout: 10))
+        XCTAssertTrue(label(containing: "Alarm ").waitForExistence(timeout: 10))
         XCTAssertTrue(label(containing: "New alarm").exists, "the card is an alarm now")
     }
 

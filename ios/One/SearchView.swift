@@ -110,15 +110,19 @@ struct SearchView: View {
                                     ResultRow(symbol: task.isDone ? "checkmark.circle.fill" : "circle", tint: task.isDone ? .green : .blue,
                                               title: task.title, detail: detail(task), dimmed: task.isDone)
                                 }
+                                .accessibilityIdentifier("search.result")
                             }
                         }
                     }
                     if !r.events.isEmpty {
                         Section(header: header("Events", r.events.count)) {
                             ForEach(r.events.prefix(limit)) { hit in
-                                Button { opened = hit.opened } label: {
+                                Button {
+                                    if case .system(let id) = hit.opened { NativeEvents.edit(identifier: id, start: hit.start) } else { opened = hit.opened }
+                                } label: {
                                     ResultRow(symbol: "calendar", tint: hit.color, title: hit.title, detail: hit.detail, dimmed: hit.start < .now)
                                 }
+                                .accessibilityIdentifier("search.result")
                             }
                         }
                     }
@@ -126,6 +130,7 @@ struct SearchView: View {
                         Section(header: header("Alarms", r.alarms.count)) {
                             ForEach(r.alarms) { alarm in
                                 Button { opened = .alarm(alarm) } label: { alarmRow(alarm) }
+                                    .accessibilityIdentifier("search.result")
                             }
                         }
                     }

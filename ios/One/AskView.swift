@@ -33,6 +33,10 @@ struct AskView: View {
     @State private var thinking = false
     @State private var captureTask: Task<Void, Never>?
     @State private var plan: [(task: OneTask, start: Date)] = []
+    /// The "Plan reminders into free time" grant, while one is active (the plan card then says so instead of offering it).
+    @State private var planGrant: AIGrant?
+    /// "Tidy overdue": a new date per overdue reminder, waiting for Apply.
+    @State private var tidy: [TidyRow] = []
     @State private var voice = VoiceInput()
     @State private var change: PendingChange?
     @State private var undoRow: UndoRow?
@@ -59,6 +63,7 @@ struct AskView: View {
 
     private let suggestions = [
         "Plan my day",
+        "Tidy overdue",
         "Call Alex tomorrow at 3pm",
         "Send the Q3 report by Friday",
         "What's left today?",
@@ -210,6 +215,7 @@ struct AskView: View {
                     }
                     .buttonStyle(PressScale())
                     .tint(.primary)
+                    .accessibilityIdentifier("ask-suggestion")
                 }
             }
         }
@@ -221,7 +227,12 @@ struct AskView: View {
     private var inputArea: some View {
         VStack(spacing: 8) {
             if !plan.isEmpty {
-                PlanCard(plan: plan, onApply: applyPlan, onCancel: { plan = [] })
+                PlanCard(plan: plan, grantUntil: planGrant?.expires, onApply: { applyPlan() }, onAlways: applyPlanAlways,
+                         onCancel: { plan = [] })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if !tidy.isEmpty {
+                TidyCard(rows: $tidy, onApply: applyTidy, onCancel: { tidy = [] })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let undo = undoRow {
@@ -314,11 +325,15 @@ struct AskView: View {
         let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
         messages.append(ChatMessage(role: .user, text: text))
         plan = []
+        tidy = []
         undoRow = nil
         // The message may answer what the last turn left open, or edit the preview that is showing.
         if answerOpenTurn(text, history: history) { return }
         followup = nil
-        if isPlanRequest(text) {
+        if OverdueTidy.isRequest(text) {
+            clearPreviews()
+            proposeTidy()
+        } else if isPlanRequest(text) {
             clearPreviews()
             proposePlan()
         } else if isQuestion(text) {
@@ -604,18 +619,31 @@ struct AskView: View {
         case .task(let task):
             if c.delete {
                 let backup = task.copy()
+                let entry = Ledger.record(.deleted, title: backup.title, actor: .todayAI, channel: .ask, approval: .asked,
+                                          snapshot: Ledger.snapshot(of: task), context: context)
                 withAnimation { context.delete(task) }
-                offerUndo("Deleted “\(backup.title)”.") { context.insert(backup) }
+                offerUndo("Deleted “\(backup.title)”.") {
+                    context.insert(backup)
+                    Ledger.recordUndo(of: entry, channel: .ask, context: context)
+                }
             } else if let new = c.newStart {
                 let old = task.plannedStart // `due` is never touched
-                withAnimation { task.plannedStart = new }
+                let entry = TaskActions.setPlanned(task, to: new, context: context, actor: .todayAI, channel: .ask, approval: .asked)
                 messages.append(ChatMessage(role: .ai, text: "Moved “\(task.title)” to \(DayLabel.withTime(new))."))
-                offerUndo("Moved “\(task.title)”.") { task.plannedStart = old }
+                offerUndo("Moved “\(task.title)”.") {
+                    task.plannedStart = old
+                    if let entry { Ledger.recordUndo(of: entry, channel: .ask, context: context) }
+                }
             }
         case .event(let event):
             if c.delete {
                 let backup = event.copy()
-                CalendarSync.shared.delete(externalID: event.externalID, span: .thisEvent)
+                guard CalendarSync.shared.delete(event, span: .thisEvent) else {
+                    messages.append(ChatMessage(role: .ai, text: "Couldn't delete the calendar event, so nothing changed."))
+                    return
+                }
+                Ledger.record(.deleted, kind: "event", title: backup.title, before: c.oldText, actor: .todayAI, channel: .ask,
+                              approval: .asked, context: context)
                 withAnimation { context.delete(event) }
                 messages.append(ChatMessage(role: .ai, text: "Deleted “\(backup.title)”."))
                 offerUndo("Deleted “\(backup.title)”." + recallNote(c)) {
@@ -630,6 +658,8 @@ struct AskView: View {
                     messages.append(ChatMessage(role: .ai, text: "Couldn't update the calendar event, so nothing changed."))
                     return
                 }
+                Ledger.record(.moved, kind: "event", title: event.title, before: DayLabel.withTime(old), after: DayLabel.withTime(new),
+                              actor: .todayAI, channel: .ask, approval: .asked, context: context)
                 messages.append(ChatMessage(role: .ai, text: "Moved “\(event.title)” to \(DayLabel.withTime(new))."))
                 offerUndo("Moved “\(event.title)”." + recallNote(c)) {
                     event.start = old
@@ -688,7 +718,7 @@ struct AskView: View {
 
     /// A task goes to the list it clearly belongs to, else the Inbox. Never silently to whatever list is the default.
     private func filed(_ capture: Capture) -> Capture {
-        guard capture.kind == .task, capture.listName == nil else { return capture }
+        guard capture.kind == .task, !capture.ringsAsAlarm, capture.listName == nil else { return capture }
         var c = capture
         let names = lists.map(\.name)
         let candidates = lists.map { list in
@@ -714,7 +744,8 @@ struct AskView: View {
     private func commit(_ id: UUID) -> Capture? {
         guard let i = proposals.firstIndex(where: { $0.id == id && $0.state == .open }) else { return nil }
         let capture = proposals[i].capture
-        capture.insert(into: context)
+        let item = capture.insert(into: context, actor: .todayAI, channel: .ask, approval: .asked)
+        thread?.items.append(item)
         lastTouched = capture.title
         onAdded(capture)
         withAnimation(.snappy) { proposals[i].state = .added }
@@ -730,7 +761,7 @@ struct AskView: View {
     }
 
     private func addedDetail(_ c: Capture) -> String {
-        guard c.kind == .task, let list = c.listName else { return c.summary }
+        guard c.kind == .task, !c.ringsAsAlarm, let list = c.listName else { return c.summary }
         return c.summary + " · " + list
     }
 
@@ -742,7 +773,7 @@ struct AskView: View {
     /// Proposes start times for today's flexible tasks around fixed events. Nothing moves until Apply.
     private func proposePlan() {
         let cal = Calendar.current
-        let now = Date.now
+        let now = TodayClock.now
         guard let endOfDay = cal.date(bySettingHour: 21, minute: 0, second: 0, of: now), endOfDay > now else {
             messages.append(ChatMessage(role: .ai, text: "It's late. Ask me to plan tomorrow instead."))
             return
@@ -768,6 +799,26 @@ struct AskView: View {
         let items = candidates.enumerated().map { DayPlanner.Item(id: $0.offset, minutes: $0.element.durationMinutes) }
         let result = DayPlanner.plan(items, busy: busy, window: window)
         plan = result.map { (candidates[$0.id], $0.start) }
+        planGrant = GrantStore.active(.planFreeTime, context: context, now: .now)
+        if planGrant != nil, !plan.isEmpty {
+            // Under the grant, what the policy allows applies by itself; the rest (overdue, …) stays on the card.
+            let grants = GrantStore.infos(context)
+            let protected = Ledger.protectedRefs(context, now: .now)
+            let auto = plan.filter { p in
+                let ref = Ledger.ref(p.task.persistentModelID)
+                let change = ProposedChange(target: .reminder, operation: .setPlannedTime, isOverdue: p.task.isOverdue,
+                                            isDone: p.task.isDone, ringsAsAlarm: p.task.ringsAsAlarm,
+                                            aiChangedRecently: ref.map(protected.aiRecent.contains) ?? false,
+                                            userChoseTime: ref.map(protected.userChose.contains) ?? false)
+                return AutonomyPolicy.decide(change, grants: grants, now: .now) == .auto
+            }
+            if !auto.isEmpty {
+                let autoIDs = Set(auto.map { ObjectIdentifier($0.task) })
+                plan.removeAll { autoIDs.contains(ObjectIdentifier($0.task)) }
+                applyPlan(auto, approval: .autoUnderGrant)
+                return
+            }
+        }
         if plan.isEmpty {
             messages.append(ChatMessage(role: .ai, text: candidates.isEmpty
                 ? "Nothing urgent to place: no overdue, due-today or flagged tasks without a time."
@@ -779,15 +830,74 @@ struct AskView: View {
         }
     }
 
-    private func applyPlan() {
-        let applied = plan
-        withAnimation {
-            for p in applied { p.task.plannedStart = p.start }
+    /// Writes the plan's planned times (never deadlines) and records each in Activity. `rows` defaults to the card's.
+    private func applyPlan(_ rows: [(task: OneTask, start: Date)]? = nil, approval: LedgerApproval = .asked) {
+        let applied = rows ?? plan
+        let auto = approval == .autoUnderGrant
+        let entries = applied.compactMap { p in
+            TaskActions.setPlanned(p.task, to: p.start, context: context, actor: .todayAI,
+                                   channel: auto ? .automatic : .ask, approval: approval)
         }
-        plan = []
-        messages.append(ChatMessage(role: .ai, text: "Planned \(applied.count) task\(applied.count == 1 ? "" : "s") for today."))
-        offerUndo("Planned \(applied.count) task\(applied.count == 1 ? "" : "s").") {
-            for p in applied { p.task.plannedStart = nil }
+        if rows == nil { plan = [] }
+        let n = applied.count
+        let label = auto ? LedgerFormat.autoPlanned(n) + "." : "Planned \(n) task\(n == 1 ? "" : "s")."
+        var text = auto ? label + " Automatic until \(DayLabel.text(for: planGrant?.expires ?? .now))."
+                        : "Planned \(n) task\(n == 1 ? "" : "s") for today."
+        if auto, !plan.isEmpty { text += " \(plan.count) more need\(plan.count == 1 ? "s" : "") your OK." }
+        messages.append(ChatMessage(role: .ai, text: text))
+        offerUndo(label) {
+            for p in applied where p.task.plannedStart == p.start { p.task.plannedStart = nil }
+            for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
+        }
+    }
+
+    /// "Always for 7 days": applies this card now (the user's tap) and lets the same kind of change apply by itself for
+    /// 7 days, under `AutonomyPolicy`. Revoke in Settings → AI → Automatic changes.
+    private func applyPlanAlways() {
+        planGrant = GrantStore.grant(.planFreeTime, context: context)
+        applyPlan()
+        messages.append(ChatMessage(role: .ai, text: "For the next 7 days I'll plan reminders due today into free time by myself "
+            + "and tell you each time. Only Today's planned times change. Revoke it in Settings."))
+    }
+
+    /// Suggests a new date for every overdue reminder (see `OverdueTidy`). Nothing changes until Apply.
+    private func proposeTidy() {
+        let overdue = tasks.filter(\.isOverdue)
+        guard !overdue.isEmpty else {
+            messages.append(ChatMessage(role: .ai, text: "Nothing is overdue."))
+            return
+        }
+        let items = overdue.enumerated().compactMap { i, t in
+            t.due.map { OverdueTidy.Item(id: i, due: $0, flagged: t.flagged, repeats: t.repeats != nil) }
+        }
+        tidy = OverdueTidy.suggest(items).compactMap { s in
+            overdue[s.id].due.map { TidyRow(task: overdue[s.id], oldDue: $0, choice: s.choice) }
+        }
+        let n = tidy.count
+        messages.append(ChatMessage(role: .ai, text: "\(n) overdue reminder\(n == 1 ? "" : "s"). Flagged and recent ones first, three a day; "
+            + "ones older than a month lose their date but stay in their list. Change any row, then Apply. Nothing changes until you do."))
+    }
+
+    private func applyTidy() {
+        let changes = tidy.filter { $0.choice != .keep }
+        var entries: [LedgerEntry] = []
+        withAnimation {
+            for r in changes {
+                let new = OverdueTidy.newDue(r.oldDue, r.choice)
+                r.task.due = new
+                entries.append(Ledger.record(.redated, task: r.task, title: r.task.title, before: LedgerFormat.time(r.oldDue, none: "No date"),
+                                             after: LedgerFormat.time(new, none: "No date"), beforeDate: r.oldDue, afterDate: new,
+                                             actor: .todayAI, channel: .ask, approval: .asked, context: context))
+            }
+        }
+        try? context.save()
+        tidy = []
+        let label = "Moved \(changes.count) reminder\(changes.count == 1 ? "" : "s")."
+        messages.append(ChatMessage(role: .ai, text: label))
+        offerUndo(label) {
+            for r in changes { r.task.due = r.oldDue }
+            for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
+            try? context.save()
         }
     }
 
@@ -813,23 +923,122 @@ struct AskView: View {
     }
 }
 
-/// User messages are bubbles on the right; AI replies are plain text, no bubble.
+/// User messages are bubbles on the right; AI replies are plain text, no bubble. Text can be selected
+/// (long-press), and a small copy button sits under each message, as in ChatGPT.
 struct MessageView: View {
     let message: ChatMessage
+    @State private var copied = false
 
     var body: some View {
         switch message.role {
         case .user:
-            HStack {
-                Spacer(minLength: 48)
-                Text(message.text)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 20))
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack {
+                    Spacer(minLength: 48)
+                    Text(message.text)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 20))
+                }
+                copyButton
             }
         case .ai:
-            Text(message.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message.text)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                copyButton
+            }
+        }
+    }
+
+    private var copyButton: some View {
+        Button {
+            UIPasteboard.general.string = message.text
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(width: 44, height: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.success, trigger: copied) { _, new in new }
+        .accessibilityLabel(copied ? "Copied" : "Copy message")
+        .accessibilityIdentifier("message.copy")
+    }
+}
+
+/// One overdue reminder on the tidy card, with the date the user picked for it.
+struct TidyRow: Identifiable {
+    let id = UUID()
+    let task: OneTask
+    let oldDue: Date
+    var choice: OverdueTidy.Choice
+}
+
+/// "Tidy overdue" preview: a suggested date per reminder, each changeable from its menu; Apply writes them all.
+struct TidyCard: View {
+    @Binding var rows: [TidyRow]
+    var onApply: () -> Void
+    var onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("New dates for overdue", systemImage: "sparkles")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ViewThatFits(in: .vertical) {
+                list
+                ScrollView { list }
+            }
+            .frame(maxHeight: 240)
+            HStack {
+                Button("Cancel", action: onCancel).buttonStyle(.bordered)
+                Spacer()
+                Button("Apply", action: onApply)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(rows.allSatisfy { $0.choice == .keep })
+                    .accessibilityIdentifier("tidy.apply")
+            }
+            .padding(.top, 4)
+        }
+        .padding(14)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.secondary.opacity(0.25)))
+    }
+
+    private var list: some View {
+        VStack(spacing: 6) {
+            ForEach($rows) { $row in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(row.task.title).font(.subheadline).lineLimit(1)
+                        Text("was " + DayLabel.withTime(row.oldDue)).font(.caption).foregroundStyle(.red)
+                    }
+                    Spacer(minLength: 8)
+                    Menu {
+                        Picker("New date", selection: $row.choice) {
+                            ForEach(OverdueTidy.choices(repeats: row.task.repeats != nil)) { Text($0.rawValue).tag($0) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(row.choice.rawValue)
+                            Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(row.choice == .keep ? Color.secondary : Color.accentColor)
+                    }
+                    .accessibilityIdentifier("tidy.choice.\(row.task.title)")
+                    .accessibilityValue(row.choice.rawValue)
+                }
+            }
         }
     }
 }
@@ -837,7 +1046,11 @@ struct MessageView: View {
 /// AI plan preview: proposed start times, applied only on tap.
 struct PlanCard: View {
     let plan: [(task: OneTask, start: Date)]
+    /// Set while a "Plan reminders into free time" grant is active: the card then only offers Apply.
+    var grantUntil: Date? = nil
     var onApply: () -> Void
+    /// "Always for 7 days": apply now and allow this kind of change by itself (only Today's own planned times).
+    var onAlways: () -> Void = {}
     var onCancel: () -> Void
 
     var body: some View {
@@ -858,11 +1071,23 @@ struct PlanCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            HStack {
+            Text(grantUntil.map { "Only Today's planned times change; deadlines stay. Automatic until \(DayLabel.text(for: $0))." }
+                 ?? "Only Today's planned times change; deadlines stay.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
                 Button("Cancel", action: onCancel).buttonStyle(.bordered)
-                Spacer()
-                Button("Apply", action: onApply).buttonStyle(.borderedProminent)
+                Spacer(minLength: 0)
+                if grantUntil == nil {
+                    Button("Always for 7 days", action: onAlways)
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("plan.always")
+                }
+                Button("Apply", action: onApply)
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("plan.apply")
             }
+            .lineLimit(1)
             .padding(.top, 4)
         }
         .padding(14)

@@ -6,11 +6,11 @@
 
 A minimal, AI-native planner for iPhone that puts calendar, reminders and alarms in one app, so people need fewer apps.
 
-- **Data:** local. Apple Calendar and Apple Reminders are the source of truth, read and written live through EventKit. Alarms use AlarmKit. (Today the app reads and writes Apple Calendar events through EventKit, but reminders are still stored in the app's own SwiftData store; moving them to EventKit is the next big step.)
+- **Data:** local. Apple Calendar and Apple Reminders are the source of truth, read and written live through EventKit. Alarms use AlarmKit. (Status, October 2026: Apple Calendar events are read and written through EventKit, and reminders and lists sync both ways with Apple Reminders through EventKit (`RemindersSync`; Apple wins on conflict). The app keeps a local SwiftData copy, and planned time stays local.)
 - **Roadmap (Yuan's words):** first **aggregate** (calendar + reminders + alarms in one place, with a very good Today tab that keeps people focused on now), then **optimize**, then **surpass**. Gestures and screens match Apple Calendar / Reminders as closely as possible before we improve on them.
-- **Information architecture (4 tabs):** Today · Calendar · Reminders · Alarms. No habits. Calendar is Week and Month only (the day view is Today; tapping a day in Calendar opens it in Today). Alarms lists real alarms (AlarmKit) plus items marked "Ring as alarm". The bottom-right button is a **+**: tap adds what fits the page (alarm on Alarms, event on Calendar, otherwise a reminder); press and hold for the menu.
-- **Gestures follow Apple:** tap the circle to complete; swipe left for Delete (with Undo) and Flag; long-press menu (Show Details / Flag / Today / Tomorrow / Delete); system events open in Apple's own event viewer. Events are never moved by drag; only flexible tasks move.
-- **Next phase after aggregation:** Apple Intelligence (on-device Foundation Models) turns what the user types into reminders and events and helps tidy overdue items, always as a preview the user confirms.
+- **Information architecture (4 tabs):** Today · Calendar · Reminders · Alarms. No habits. Calendar is Week (default), Month and Year (the day view is Today; tapping a day in Calendar opens it in Today). Alarms lists real alarms (AlarmKit) plus items marked "Ring as alarm", with a kitchen timer on top. The bottom-right button is a **+**: tap adds what fits the page (alarm on Alarms, event on Calendar, otherwise a reminder); press and hold for the menu (built). Top left is a menu button that opens the sidebar: Search, AI chat history, New chat, Settings.
+- **Gestures follow Apple:** tap the circle to complete; swipe left for Delete (with Undo) and Flag, with one shared look for swipe actions in every list; long-press menu (Show Details / Flag / Today / Tomorrow / Delete); system events open in Apple's own event viewer. Events are never moved by drag; only flexible tasks move.
+- **Next phase after aggregation:** Apple Intelligence (on-device Foundation Models) turns what the user types into reminders and events and helps tidy overdue items, always as a preview the user confirms. (Capture and edit are built; tidy overdue is not.)
 - **Style:** Notion / Linear / ChatGPT mobile. Calm, dense, monochrome with one accent, system semantic colors, Dynamic Type.
 - **Coverage:** what people use Apple Calendar, Apple Reminders and Clock for, without their complexity.
 - **AI-native:** one typed or spoken line is the fastest way to do anything. AI prepares, the user decides: every AI change is a preview the user confirms (product principles in `CLAUDE.md`).
@@ -34,7 +34,7 @@ Method adapted from Anthropic's posts on [eval design and hill-climbing](https:/
    - J2 See what's left today
    - J3 Complete a reminder
    - J4 Add an event
-   - J5 Add a reminder to a list (tap budget set when first measured; needs the Reminders tab)
+   - J5 Add a reminder to a list: 3 taps (Reminders tab → list → New Reminder row) plus typing; measured in round 21, budget 3
    - J6 Get reminded at the right time and act from the notification (or add an alarm)
    - J7 Find something
    Each journey records taps from the home screen; the budget can only go down.
@@ -95,20 +95,21 @@ Re-scoped in round 19: the Alarms page lists real alarms only; reminders live on
 ### 4. Reminders parity (benchmark: Apple Reminders)
 Replaces "Habits (benchmark: Streaks)", retired in round 19: habits were removed from the product (no tab, chips or streaks; the `Habit` SwiftData model stays in the schema, unused, so existing installs migrate without data loss).
 
-Status after round 20 (checked in the iOS simulator, see the log). "Demonstrated" = seen working on screen or covered by a UI test. "Built" = in the code, not yet demonstrated, so it does not count in a score yet.
+Status after round 21 (full UI suite run in the iOS simulator, see the log). "Demonstrated" = seen working on screen or covered by a UI test. "Built" = in the code, not yet demonstrated, so it does not count in a score yet.
 
 1. Smart lists Today, Scheduled, All, Flagged and Completed, each with a live count. **Demonstrated** (screenshot: 16 / 71 / 78 / 0 / 201 on real imported data)
 2. My Lists, each with a color and an icon. **Demonstrated** (screenshot; lists from Apple get the nearest palette color; the icon is Today-only because EventKit has no list icon)
-3. Create, rename and delete a list. **Built** (Add List sheet verified on screen; rename and delete have a confirm alert, not yet exercised)
-4. New reminder with date and time, notes, flag and repeat. **Built** (reminder editor; J1 covers the one-line path; J5 adds a reminder inline to a list)
-5. Swipe left on a row shows Delete (full swipe, with Undo toast) and Flag. **Built** (`Rows.swift`)
-6. Long-press menu: Show Details, Flag, Today, Tomorrow, Delete. **Built** (`Rows.swift`; it also has Unschedule)
+3. Create, rename and delete a list. **Demonstrated** (`CRUDTests.testListCreateRenameDelete`, `RemindersListsTests.testAddListIsVisibleAndCreatesAList` and `testLongPressDragReordersLists` pass; lists can also be pinned)
+4. New reminder with date and time, notes, flag and repeat. **Partly demonstrated** (`CRUDTests.testReminderCreateEditFlagCompleteDeleteUndo`, `testReminderQuickAddWithPlus`, J1 and J5 pass; `InlineNewReminderTests` fails reaching the inline row's date menu, which may sit behind the keyboard; not yet diagnosed)
+5. Swipe left on a row shows Delete (full swipe, with Undo toast) and Flag. **Demonstrated** (`RowActions.swift`, one look in every list; `CRUDTests.testReminderSwipeFlagShowsInFlagged` and `testReminderCreateEditFlagCompleteDeleteUndo` pass)
+6. Long-press menu: Show Details, Flag, Today, Tomorrow, Delete. **Built** (`Rows.swift`; it also has Unschedule; events get the same menu, `EntryActionsTests`)
 7. Completed section, collapsed by default, with a count. **Built** (list screen: "N Completed · Show")
 8. Search reminders by title. **Demonstrated** (`SearchView`, UI test J7)
-9. Reads and writes real Apple Reminders (EventKit, live, two-way). **Demonstrated** (a reminder added in Today appeared in the system Reminders app and one added there appeared in Today; `RemindersSyncTests` repeats the round trip). Not covered yet: completing, editing and deleting in both directions, repeating reminders, and many lists
+9. Reads and writes real Apple Reminders (EventKit, live, two-way). **Demonstrated** (`RemindersSyncTests` round trip; `RemindersSyncBothWaysTests`: complete, rename, delete and repeat from the app reach Apple, complete, rename and delete in Apple reach the app, and completing a repeating reminder on either side rolls the same Apple reminder forward with one open copy left; a refused Apple delete is retried, not dropped). Not covered: many lists at scale
 10. List order and colors match Apple Reminders. **Built** (colors map to the nearest of 12 palette colors; Apple's own order is not exposed by EventKit, so lists are ordered by creation)
 
-Round 20 count: 4 demonstrated (1, 2, 8, 9), 6 built (3, 4, 5, 6, 7, 10). No score is given until the "built" claims have tests or screenshots.
+Round 20 count: 4 demonstrated (1, 2, 8, 9), 6 built (3, 4, 5, 6, 7, 10).
+Round 21 count: 6 demonstrated (1, 2, 3, 5, 8, 9), 1 partly (4), 3 built (6, 7, 10). Reminders parity scores 6/10.
 
 ### 5. AI (benchmark: ChatGPT, Todoist natural language)
 1. Understands day words (today, tomorrow, 明天…)
@@ -122,7 +123,7 @@ Round 20 count: 4 demonstrated (1, 2, 8, 9), 6 built (3, 4, 5, 6, 7, 10). No sco
 9. Suggests a plan for the day (preview, user applies)
 10. Voice input
 
-NL-capture eval accuracy (train / test) is tracked separately in the log.
+NL-capture eval accuracy (train / test) is tracked separately in the log. Since round 20 the AI page uses the on-device Apple Intelligence model when available (the rule parser decides day, time and title; the model decides task / event / alarm), proposes several items from one line, keeps multi-turn context, and edits existing items through a change card (`AskEditTests`, `AskMultiCaptureTests`, `AskMultiTurnTests`). Held-out results: `ios/Eval/Understanding/RESULTS.md`; design: `docs/apple-intelligence.md`.
 
 ### 6. Visual design (benchmark: Notion, Linear) — judged on screenshots
 1. One accent color; everything else semantic system colors
@@ -143,7 +144,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 4. Haptics on key actions
 5. Undo after complete / delete
 6. Add a timed task in ≤ 3 taps plus typing (J1)
-7. Sidebar like ChatGPT/Claude: swipe right from the left edge (or tap the avatar) slides the page over to a drawer
+7. Sidebar like ChatGPT/Claude: swipe right from the left edge (or tap the menu button) slides the page over to a drawer
 8. Drag to reschedule on the timeline
 9. Home Screen quick actions or widget
 10. No dead ends: every sheet closes, every tab can return to today
@@ -187,6 +188,7 @@ NL-capture eval accuracy (train / test) is tracked separately in the log.
 | 18 | 10 | 10 | 8 | 10 | 9 | 10 | 10 | 10 | 9.6 | Real data (debug-only `-importData`, Yuan's Calendar + Reminders export, never committed): 458 events, 277 reminders, mostly Chinese titles. Fixed what it exposed: noisy task details (deadline first, repeat as ↻, no duplicate "Overdue"), numbered list names shown without the number, Overdue collapsed to 3 + "Show N more" and sorted oldest first, redundant "All day" labels, empty built-in Inbox chip hidden, Unscheduled sorted by deadline. CalendarSyncTests made robust to leftover simulator events |
 | 19 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | Re-scope, no new measurement. (1) App renamed **Today** (bundle id and targets unchanged). (2) Direction: AI-native, local data, Apple Calendar/Reminders as the source of truth via EventKit, AlarmKit alarms; roadmap aggregate, then optimize, then surpass; Apple Intelligence (on-device) later, always as a preview. (3) 4 tabs Today / Calendar / Reminders / Alarms; Habits removed (model kept in schema); Calendar is Week/Month; Alarms lists real alarms only; the nag-until-done reminder is dropped; the bottom-right button becomes a + (tap adds what fits, hold for the menu). (4) Gestures follow Apple (tap the circle, swipe left Delete + Flag, long-press menu, system events in Apple's viewer). (5) HTML prototype simplified the same way (the iOS app is now ahead of it). Dimensions were re-scoped (Habits retired for Reminders parity; Alarms, AI, Interaction and Reliability claims reworded), so scores restart at the next full eval and round 18 numbers are not comparable. Reminders parity by code read: 1 demonstrated, 4 built, 5 not met |
 | 20 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | Aggregation step. (1) Reminders tab modeled on Apple Reminders: smart-list cards with counts, My Lists with color and symbol, Add List sheet, list screens with an inline New Reminder row. (2) Two-way sync with Apple Reminders through EventKit (`RemindersSync`): lists and reminders, Apple wins on conflict, nothing written before the user connects, only items created after connecting are uploaded, a pass never deletes more than 10 Apple items, "Delete all data" forgets the link first, planned time stays local. Verified in the simulator both ways; a same-value write looped the sync and was fixed. (3) Alarms page lists real alarms (AlarmKit, new `OneAlarm`), alarms also appear in Today's schedule; + button adds what fits the page. (4) Apple Intelligence (on-device) capture with the rule parser as fallback, compile-checked only. Known: the simulator's Apple Calendar accumulates the test events UI tests create |
+| 21 | n/a | n/a | n/a | 6 | n/a | n/a | n/a | n/a | n/a | First full UI run since the re-scope, on the merged branch, simulator Today-Docs (machine heavily loaded by parallel builds). 112 tests: 89 passed, 2 skipped, 21 failed; re-running the 21 alone: 18 pass (launch-time flakes under load: "Failed to get launch progress"), 3 fail for real: `InlineNewReminderTests` (inline date menu not reached), `RemindersListsTests.testSwipePinsAListToTheTop` (stale: Pin moved to the trailing swipe; test fixed), `SidebarTests.testSidebarHasNoTabRowsAndShowsTheEmptyState` (a Today button is on screen with the sidebar open; not diagnosed). J1–J7 all pass; J5 measured at 3 taps. New this round: Reminders sync both ways (`RemindersSyncBothWaysTests`), Tidy overdue (`OverdueTidyTests`, `TidyOverdueTests`), Share extension (`ShareInboxTests`, `ShareImportTests`, `ShareSheetTests` end to end through Safari). Logic tests and NL-capture eval pass (train 44/44, test 22/22). Only Reminders parity is scored; the other dimensions need the screenshot checklist |
 
 Round 1 failing claims, weakest first: Alarms (2–10), Reliability (3–5, 8–10), Calendar (3, 4, 8–10), Tasks (3 undo, 6–10).
 
@@ -217,7 +219,8 @@ The NL-capture cases live in `ios/Eval/Tests/OneLogicTests/capture-cases.json` (
 - ~~Round 14 — Plan my day~~ done.
 - **Remaining (device-only):** dictation (AI 10), AlarmKit ringing (Alarms 7), notification Done/Snooze actions (Alarms 3). All built; they need the iPhone run.
 - **Round 19 — re-scope** (docs only): rename to Today, 4-tab IA, Habits retired, Alarms and gesture claims rewritten.
-- **Next — Aggregate:** build the Reminders tab like Apple Reminders (smart lists with counts, My Lists with color/icon, create/rename/delete a list), then move reminders to live EventKit read/write so Apple Reminders is the source of truth. Add the + button behavior (tap adds what fits the page, hold for the menu). Add UI tests for swipe and long-press so the "built" Reminders claims count. Write and measure J5.
-- **Then — Optimize:** Apple Intelligence (Foundation Models, on-device) behind the one-line capture and a "tidy overdue" preview; the user always confirms.
+- ~~**Aggregate**~~ mostly done (rounds 20+): Reminders tab like Apple Reminders (smart lists with counts, pinned cards, My Lists with color/symbol, create/rename/delete/reorder/pin, Edit, inline New Reminder row), two-way EventKit sync with Apple Reminders, the + button (tap adds what fits, hold for the menu), Due-style quick add with local suggestions, sidebar with Search and chat history (auto-archive), shared swipe actions, tabs that keep their place, AlarmKit alarms and a kitchen timer, a shared test dataset (`tests/fixtures/today-dataset.json`) on one simulator (Today-Dogfood).
+- ~~**Still open in Aggregate**~~ done in round 21: Reminders sync tested both ways (complete / rename / delete / repeat), full UI suite run, J5 measured (3 taps). Left: Reminders claims 4 (inline date menu test), 6, 7 and 10.
+- **Optimize (in progress):** done: Apple Intelligence (Foundation Models, on-device) behind the one-line capture, multi-item capture, follow-ups and edits of existing items; "Tidy overdue" preview (new reminder date per row, Apply, Undo); Next Up widgets with background refresh; Live Activities for the timer and snoozing alarms; Siri / Shortcuts (App Intents); Share extension. Next: fill the full claim checklist (screenshots for design) and score every dimension.
 - **Then — Surpass:** improve on Apple's screens only after parity is demonstrated.
 - Then run a full eval, restart the score log from the new dimensions, and keep climbing whatever is weakest.

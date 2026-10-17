@@ -69,7 +69,8 @@ enum Ringer {
     /// - an alarm on the Alarms tab has its own id; it is scheduled, rescheduled (only if edited) or cancelled by that id,
     /// - a one-time alarm that AlarmKit no longer has (it rang and was stopped) is switched off in the list,
     /// - items marked "Ring as alarm" get an id derived from their title and time,
-    /// - anything else this app scheduled earlier is cancelled, except an alarm that is ringing right now.
+    /// - anything else this app scheduled earlier is cancelled, except an alarm that is ringing right now
+    ///   and the countdown timer (`RunningTimer`, see TimerCard.swift).
     static func sync(_ context: ModelContext) async {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
@@ -96,7 +97,7 @@ enum Ringer {
 @available(iOS 26, *)
 @MainActor
 enum AlarmScheduler {
-    struct Meta: AlarmMetadata {}
+    typealias Meta = AlarmMeta
 
     static let log = Logger(subsystem: "com.luworks.one", category: "alarms")
 
@@ -131,6 +132,8 @@ enum AlarmScheduler {
         var existing: [UUID: Alarm] = [:]
         for alarm in (try? manager.alarms) ?? [] { existing[alarm.id] = alarm }
         var keep = Set<UUID>()
+        // The countdown timer on the Alarms tab is not in the data; never cancel it as a leftover.
+        if let timer = RunningTimer.load() { keep.insert(timer.id) }
 
         for alarm in alarms {
             guard let id = alarm.alarmKitID else { continue }
@@ -207,9 +210,9 @@ enum AlarmScheduler {
         // While snoozing, the countdown shows the alarm's title (what Clock shows under the snooze timer).
         let presentation = AlarmPresentation(alert: alert,
                                              countdown: snooze ? AlarmPresentation.Countdown(title: resource) : nil)
-        let attributes = AlarmAttributes<Meta>(presentation: presentation, tintColor: .orange)
+        let attributes = AlarmAttributes<Meta>(presentation: presentation, metadata: AlarmMeta(kind: .alarm), tintColor: .orange)
         let configuration = AlarmManager.AlarmConfiguration<Meta>(
-            countdownDuration: snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(snoozeMinutes * 60)) : nil,
+            countdownDuration: snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(AlarmPlan.snoozeMinutes(nearest: snoozeMinutes) * 60)) : nil,
             schedule: schedule,
             attributes: attributes,
             sound: AlarmSound.named(sound)?.alertSound ?? .default)

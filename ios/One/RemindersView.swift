@@ -54,7 +54,7 @@ enum SmartList: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// Where a row or card in Reminders leads. Lists are referenced by id so a rename or delete can't leave a stale model behind.
+/// Where a row or pill in Reminders leads. Lists are referenced by id so a rename or delete can't leave a stale model behind.
 enum ReminderTarget: Hashable {
     case smart(SmartList)
     case list(PersistentIdentifier)
@@ -62,7 +62,8 @@ enum ReminderTarget: Hashable {
     case defaultList
 }
 
-/// Which smart lists show at the top of Reminders, and in what order (Edit on the Reminders tab).
+/// Which smart lists show at the top of Reminders, and in what order. Changed in Settings (a switch per list;
+/// press, hold and drag to reorder) or with Hide in a smart list's long-press menu.
 /// Stored as comma-separated raw values so it fits in `@AppStorage`.
 struct SmartListLayout {
     static let orderKey = "reminders.smartOrder"
@@ -87,15 +88,16 @@ struct SmartListLayout {
     var hiddenString: String { hidden.map(\.rawValue).sorted().joined(separator: ",") }
 }
 
-/// The Reminders tab: pinned cards (smart lists and pinned lists), My Lists, Add List. Everything else is
-/// pushed inside this stack, below the app's own top bar. Edit (top right) chooses which smart lists are
-/// pinned and in what order, reorders My Lists and pins or deletes them, like Apple Reminders.
+/// The Reminders tab: small pills above the List (smart lists, then pinned lists), My Lists, Add List. Everything
+/// else is pushed inside this stack, below the app's own top bar.
+/// No Edit button and no edit mode: editing works as everywhere else in the app. Press and hold a list for Rename,
+/// Color & Icon, Pin and Delete; press, hold and drag a row to reorder; swipe a row from the right for Delete, Info
+/// and Pin (`RowAction`). Which smart lists show, and in what order, is in Settings (or Hide in a pill's menu).
 struct RemindersView: View {
     /// True while a list screen is pushed, so the shell can leave the left-edge swipe to "back".
     @Binding var isPushed: Bool
 
     @Environment(\.modelContext) private var context
-    @Environment(\.dynamicTypeSize) private var typeSize
     @Query(sort: \OneList.order) private var lists: [OneList]
     @Query private var tasks: [OneTask]
 
@@ -104,15 +106,15 @@ struct RemindersView: View {
     /// False until the user first drags My Lists; until then numbered lists ("01 工作") sort by their number.
     @AppStorage("reminders.listsReordered") private var listsReordered = false
 
-    @State private var path: [ReminderTarget] = []
+    /// Which list is open. Kept by `HomeView`, so switching tabs and back returns to the same list.
+    @Binding var path: [ReminderTarget]
     @State private var addingList = false
     @State private var editing: OneList?
     @State private var pendingDelete: PendingListDeletion?
-    @State private var editMode: EditMode = .inactive
+    @State private var renaming: OneList?
+    @State private var renameText = ""
 
     private let sync = RemindersSync.shared
-
-    private var isEditing: Bool { editMode.isEditing }
 
     /// My Lists in display order: the user's own order once they have dragged, else numbered lists first by number.
     private var sortedLists: [OneList] {
@@ -133,34 +135,39 @@ struct RemindersView: View {
     var body: some View {
         let stats = Stats(tasks: tasks.filter { !$0.isDeleted })
         NavigationStack(path: $path) {
-            List {
-                if isEditing {
-                    smartListEditor
-                } else {
-                    pinnedCards(stats)
-                }
-                myLists(stats)
-                if showsAccessOff {
-                    Section {
-                        Button {
-                            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                        } label: {
-                            Label("Apple Reminders is off for Today. Open Settings", systemImage: "exclamationmark.circle")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                pills(stats)
+                List {
+                    myLists(stats)
+                    if showsAccessOff {
+                        Section {
+                            Button {
+                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                            } label: {
+                                Label("Apple Reminders is off for Today. Open Settings", systemImage: "exclamationmark.circle")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .listRowBackground(Color.clear)
                         }
-                        .listRowBackground(Color.clear)
+                        .listSectionSeparator(.hidden)
                     }
-                    .listSectionSeparator(.hidden)
                 }
+                .listStyle(.insetGrouped)
+                .listSectionSpacing(.compact)
+                .scrollContentBackground(.hidden)
+                .background(Color(.systemGroupedBackground))
+                // No empty band: My Lists sits right under the pills.
+                .contentMargins(.top, 4, for: .scrollContent)
+                // Room to scroll the last row clear of the app's floating bottom bar (search, Ask AI, +): the bar's
+                // safe-area inset doesn't reach this list through the NavigationStack, so the rows ran under it.
+                .contentMargins(.bottom, 96, for: .scrollContent)
+                // Never in edit mode, and saying so explicitly matters: without a pinned-inactive edit mode, deleting a
+                // list while the default "Reminders" row appears in the same update crashed UICollectionView (invalid
+                // number of items in section), seen when a swipe deleted a list and kept its reminders.
+                .environment(\.editMode, .constant(.inactive))
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
             .background(Color(.systemGroupedBackground))
-            // Room to scroll the last row clear of the app's floating bottom bar (search, Ask AI, +): the bar's
-            // safe-area inset doesn't reach this list through the NavigationStack, so the rows ran under it.
-            .contentMargins(.bottom, 96, for: .scrollContent)
-            .environment(\.editMode, $editMode)
             // The app's own top bar is above; this is the title the pushed screen's back button shows.
             .navigationTitle("Lists")
             .toolbar(.hidden, for: .navigationBar)
@@ -171,103 +178,72 @@ struct RemindersView: View {
         .sheet(isPresented: $addingList) { ListEditor() }
         .sheet(item: $editing) { ListEditor(list: $0) }
         .deleteListAlert($pendingDelete)
+        // The same Rename as a conversation's in the sidebar. `presenting:` hands the list to the buttons: the alert
+        // clears `renaming` as it closes, which can happen before Save's action runs.
+        .alert("Rename List", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
+               presenting: renaming) { list in
+            TextField("List Name", text: $renameText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                guard !list.isDeleted else { return }
+                withAnimation(.snappy) { _ = ListActions.rename(list, to: renameText, in: context) }
+            }
+        }
         .task { await FirstRun.reminders() }
         .onChange(of: path.count) { _, n in isPushed = n > 0 }
         .onAppear { isPushed = !path.isEmpty }
-        .onDisappear {
-            isPushed = false
-            editMode = .inactive
-        }
+        .onDisappear { isPushed = false }
     }
 
-    // MARK: Top
+    // MARK: Pills
 
-    /// Edit / Done, top right like Apple's (the app's own top bar replaces the navigation bar here).
-    private var editButton: some View {
-        HStack {
-            Spacer()
-            Button(isEditing ? "Done" : "Edit") {
-                withAnimation(.snappy) { editMode = isEditing ? .inactive : .active }
-            }
-            .fontWeight(isEditing ? .semibold : .regular)
-            .buttonStyle(.borderless)
-            .frame(minHeight: 44)
-            .accessibilityIdentifier("reminders.edit")
-        }
-    }
-
-    /// The pinned cards: the smart lists that are shown, then pinned lists.
-    private func pinnedCards(_ stats: Stats) -> some View {
+    /// The smart lists that are shown, then pinned lists, as small pills that wrap onto a second line when needed
+    /// (all of them visible, nothing to scroll sideways). They sit above the List, not in it: inside a List (a row or a
+    /// section header) a pill's own long-press menu never opens.
+    @ViewBuilder
+    private func pills(_ stats: Stats) -> some View {
         let pinned = sortedLists.filter(\.pinned)
-        return Section {
-            editButton
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            if !layout.visible.isEmpty || !pinned.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: typeSize.isAccessibilitySize ? 1 : 2),
-                          spacing: 12) {
-                    ForEach(layout.visible) { smart in
-                        ListCard(title: smart.title, color: smart.color, symbol: smart.symbol, showsDay: smart == .today,
-                                 count: stats.smart[smart] ?? 0) { path.append(.smart(smart)) }
-                            .accessibilityIdentifier("smart.\(smart.rawValue)")
-                    }
-                    ForEach(pinned) { list in
-                        ListCard(title: ListName.display(list.name), color: list.color, symbol: list.symbol,
-                                 count: stats.open[list.name] ?? 0) { path.append(.list(list.persistentModelID)) }
-                            .accessibilityIdentifier("pinned.\(list.name)")
-                            .contextMenu {
-                                Button { ListActions.togglePinned(list, in: context) } label: { Label("Unpin", systemImage: "pin.slash") }
-                                Button { editing = list } label: { Label("Show List Info", systemImage: "info.circle") }
-                            }
-                    }
+        if !layout.visible.isEmpty || !pinned.isEmpty {
+            PillFlow(spacing: 8) {
+                ForEach(layout.visible) { smart in
+                    ListPill(title: smart.title, color: smart.color, symbol: smart.symbol, showsDay: smart == .today,
+                             count: stats.smart[smart] ?? 0) { path.append(.smart(smart)) }
+                        .accessibilityIdentifier("smart.\(smart.rawValue)")
+                        .contextMenu {
+                            Button { hide(smart) } label: { Label("Hide “\(smart.title)”", systemImage: "eye.slash") }
+                        }
                 }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+                ForEach(pinned) { list in
+                    ListPill(title: ListName.display(list.name), color: list.color, symbol: list.symbol,
+                             count: stats.open[list.name] ?? 0) { path.append(.list(list.persistentModelID)) }
+                        .accessibilityIdentifier("pinned.\(list.name)")
+                        .contextMenu { listMenu(list) }
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
         }
     }
 
-    /// Edit mode: tap the circle to pin or unpin a smart list, drag to reorder (Apple Reminders' Edit Lists).
-    private var smartListEditor: some View {
-        Section {
-            editButton
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .moveDisabled(true)
-            ForEach(layout.order) { smart in
-                let shown = !layout.hidden.contains(smart)
-                HStack(spacing: 12) {
-                    Button { toggle(smart) } label: {
-                        Image(systemName: shown ? "checkmark.circle.fill" : "circle")
-                            .font(.title2)
-                            .foregroundStyle(shown ? Color(.systemBlue) : Color(.tertiaryLabel))
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(smart.title)
-                    .accessibilityValue(shown ? "Pinned" : "Not pinned")
-                    .accessibilityIdentifier("smartToggle.\(smart.rawValue)")
-                    ListGlyph(color: smart.color, symbol: smart.symbol, size: 30)
-                    Text(smart.title)
-                }
-                .frame(minHeight: 36)
-            }
-            .onMove { from, to in
-                var l = layout
-                l.order.move(fromOffsets: from, toOffset: to)
-                smartOrder = l.orderString
-            }
-        } footer: {
-            Text("Checked lists are pinned to the top. Pin your own lists with the pin button below.")
-        }
-    }
-
-    private func toggle(_ smart: SmartList) {
+    private func hide(_ smart: SmartList) {
         var l = layout
-        if l.hidden.contains(smart) { l.hidden.remove(smart) } else { l.hidden.insert(smart) }
+        l.hidden.insert(smart)
         withAnimation(.snappy) { smartHidden = l.hiddenString }
+    }
+
+    /// A list's long-press menu, the same on its row and on its pill.
+    @ViewBuilder
+    private func listMenu(_ list: OneList) -> some View {
+        Button {
+            renameText = list.name
+            renaming = list
+        } label: { Label("Rename", systemImage: "pencil") }
+        Button { editing = list } label: { Label("Color & Icon", systemImage: "paintpalette") }
+        Button { withAnimation(.snappy) { ListActions.togglePinned(list, in: context) } } label: {
+            if list.pinned { Label("Unpin", systemImage: "pin.slash") } else { Label("Pin", systemImage: "pin") }
+        }
+        Divider()
+        Button(role: .destructive) { askDelete(list) } label: { Label("Delete", systemImage: "trash") }
     }
 
     // MARK: My Lists
@@ -275,21 +251,15 @@ struct RemindersView: View {
     private func myLists(_ stats: Stats) -> some View {
         Section {
             if showsDefaultList(stats) {
-                Group {
-                    if isEditing {
-                        ListRow(name: "Reminders", color: ReminderPalette.color(6), symbol: "list.bullet", count: stats.open[""] ?? 0)
-                    } else {
-                        NavigationLink(value: ReminderTarget.defaultList) {
-                            ListRow(name: "Reminders", color: ReminderPalette.color(6), symbol: "list.bullet", count: stats.open[""] ?? 0)
-                        }
-                    }
+                NavigationLink(value: ReminderTarget.defaultList) {
+                    ListRow(name: "Reminders", color: ReminderPalette.color(6), symbol: "list.bullet", count: stats.open[""] ?? 0)
                 }
                 .moveDisabled(true)
                 .deleteDisabled(true)
                 .accessibilityIdentifier("list.default")
             }
-            // .onMove also lets a row be long-pressed and dragged outside Edit mode (iOS 16+), like Apple Reminders:
-            // a long press opens the context menu, and moving the finger without lifting picks the row up.
+            // .onMove lets a row be pressed, held and dragged with no edit mode (iOS 16+), like Apple Reminders:
+            // a long press opens the row's menu, and moving the finger without lifting picks the row up instead.
             let ordered = sortedLists
             ForEach(ordered) { list in
                 listRow(list, stats: stats)
@@ -300,6 +270,7 @@ struct RemindersView: View {
                 ListActions.reorder(reordered, in: context)
                 listsReordered = true
             }
+            // The system Delete swipe is replaced by the row's own swipe actions; this stays as the List's delete hook.
             .onDelete { offsets in
                 if let i = offsets.first, ordered.indices.contains(i) { askDelete(ordered[i]) }
             }
@@ -327,65 +298,33 @@ struct RemindersView: View {
         }
     }
 
-    @ViewBuilder
     private func listRow(_ list: OneList, stats: Stats) -> some View {
-        let row = ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol,
-                          count: stats.open[list.name] ?? 0, pinned: list.pinned)
-        if isEditing {
-            HStack(spacing: 8) {
-                row
-                Button { ListActions.togglePinned(list, in: context) } label: {
-                    Image(systemName: list.pinned ? "pin.fill" : "pin")
-                        .foregroundStyle(list.pinned ? Color(.systemOrange) : Color(.tertiaryLabel))
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(list.pinned ? "Unpin \(ListName.display(list.name))" : "Pin \(ListName.display(list.name))")
-                .accessibilityIdentifier("pin.\(list.name)")
-                Button { editing = list } label: {
-                    Image(systemName: "info.circle").frame(width: 32, height: 32)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Show List Info")
-            }
-            .accessibilityIdentifier("list.\(list.name)")
-        } else {
-            NavigationLink(value: ReminderTarget.list(list.persistentModelID)) { row }
-                .accessibilityIdentifier("list.\(list.name)")
-                .swipeActions(edge: .leading) {
-                    Button { ListActions.togglePinned(list, in: context) } label: {
-                        Label(list.pinned ? "Unpin" : "Pin", systemImage: list.pinned ? "pin.slash.fill" : "pin.fill")
-                    }
-                    .tint(.orange)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) { askDelete(list) } label: { Label("Delete", systemImage: "trash") }
-                        .tint(.red)
-                    Button { editing = list } label: { Label("Info", systemImage: "info.circle") }
-                        .tint(Color(.systemGray))
-                }
-                // No context menu on these rows: a long press has to pick the row up for reordering, and a menu
-                // would take that touch (sliding the finger would pick a menu item instead). Pin, Info and Delete
-                // are on the row's swipe actions and in Edit.
-                // Long press lifts the row (system drag); dropping it on another row puts it just before that row.
-                .draggable(list.name) { row.padding(.horizontal, 16).background(.background, in: RoundedRectangle(cornerRadius: 12)) }
-                .dropDestination(for: String.self) { names, _ in
-                    guard let name = names.first else { return false }
-                    moveList(named: name, before: list)
-                    return true
-                }
+        NavigationLink(value: ReminderTarget.list(list.persistentModelID)) {
+            ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol,
+                    count: stats.open[list.name] ?? 0, pinned: list.pinned)
+        }
+        .accessibilityIdentifier("list.\(list.name)")
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            RowAction.delete(asksFirst: true) { askDelete(list) }
+            RowAction.info { editing = list }
+            RowAction.pin(list.pinned) { ListActions.togglePinned(list, in: context) }
+        }
+        .contextMenu { listMenu(list) }
+        // Press, hold and drag: the menu gives way to the system drag (as in Files or Apple Reminders); dropping the
+        // row on another row puts it just before that row.
+        .draggable(list.name) {
+            ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol, count: stats.open[list.name] ?? 0)
+                .padding(.horizontal, 16)
+                .background(.background, in: RoundedRectangle(cornerRadius: 12))
+        }
+        .dropDestination(for: String.self) { names, _ in
+            guard let name = names.first else { return false }
+            moveList(named: name, before: list)
+            return true
         }
     }
 
-    /// Only when the user said "Don't Allow": the first request is iOS's own prompt, shown when this tab first opens.
-    private var showsAccessOff: Bool { sync.isDenied }
-
-    /// The default list hides when it has nothing and other lists exist.
-    private func showsDefaultList(_ stats: Stats) -> Bool {
-        (stats.total[""] ?? 0) > 0 || lists.isEmpty
-    }
-
-    /// Moves the list called `name` to sit just before `target` (a long-press drag and drop in My Lists).
+    /// Moves the list called `name` to sit just before `target` (a press-hold-drag and drop in My Lists).
     private func moveList(named name: String, before target: OneList) {
         var ordered = sortedLists
         guard let from = ordered.firstIndex(where: { $0.name == name }), ordered[from] !== target else { return }
@@ -398,11 +337,19 @@ struct RemindersView: View {
         }
     }
 
+    /// Only when the user said "Don't Allow": the first request is iOS's own prompt, shown when this tab first opens.
+    private var showsAccessOff: Bool { sync.isDenied }
+
+    /// The default list hides when it has nothing and other lists exist.
+    private func showsDefaultList(_ stats: Stats) -> Bool {
+        (stats.total[""] ?? 0) > 0 || lists.isEmpty
+    }
+
     private func askDelete(_ list: OneList) {
         pendingDelete = .make(list, context: context)
     }
 
-    /// Counts for the cards and rows, computed in one pass per body.
+    /// Counts for the pills and rows, computed in one pass per body.
     private struct Stats {
         var smart: [SmartList: Int] = [:]
         var open: [String: Int] = [:]
@@ -419,8 +366,8 @@ struct RemindersView: View {
     }
 }
 
-/// A pinned card: colored circle top-left, big count top-right, title below. Today's circle shows the date.
-private struct ListCard: View {
+/// A compact pill at the top of Reminders: colored circle, title, open count. Today's circle shows the date.
+private struct ListPill: View {
     let title: String
     let color: Color
     let symbol: String
@@ -428,55 +375,83 @@ private struct ListCard: View {
     let count: Int
     var action: () -> Void
 
-    @ScaledMetric private var glyph = 34
+    @ScaledMetric private var glyph = 24
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top) {
-                    if showsDay {
-                        Circle().fill(color).frame(width: glyph, height: glyph)
-                            .overlay {
-                                Text("\(Calendar.current.component(.day, from: .now))")
-                                    .font(.system(size: glyph * 0.5, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.white)
-                            }
-                    } else {
-                        ListGlyph(color: color, symbol: symbol, size: glyph)
+        HStack(spacing: 7) {
+            if showsDay {
+                Circle().fill(color).frame(width: glyph, height: glyph)
+                    .overlay {
+                        Text("\(Calendar.current.component(.day, from: .now))")
+                            .font(.system(size: glyph * 0.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
                     }
-                    Spacer(minLength: 4)
-                    Text("\(count)")
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(.primary)
-                        .contentTransition(.numericText())
-                        .minimumScaleFactor(0.6)
-                        .lineLimit(1)
-                }
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            } else {
+                ListGlyph(color: color, symbol: symbol, size: glyph)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(title), \(reminderCountText(count))")
+            // Explicit colors: a section header would otherwise dim them to secondary.
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color(.label))
+                .lineLimit(1)
+            Text("\(count)")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(Color(.secondaryLabel))
+                .contentTransition(.numericText())
         }
-        .buttonStyle(CardPress())
+        .padding(.leading, 6)
+        .padding(.trailing, 14)
+        .padding(.vertical, 6)
+        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+        .contentShape(Capsule())
+        .onTapGesture(perform: action)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(reminderCountText(count))")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action() }
+        // The long-press menu lifts just the pill, not a rectangle around it.
+        .contentShape(.contextMenuPreview, Capsule())
     }
 }
 
-/// Dims a card while pressed, like Apple's.
-private struct CardPress: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.primary.opacity(configuration.isPressed ? 0.1 : 0))
+/// Lays pills out left to right and wraps to a new line when the next one doesn't fit.
+private struct PillFlow: Layout {
+    var spacing: CGFloat = 8
+
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [[(Int, CGSize)]] {
+        var rows: [[(Int, CGSize)]] = [[]]
+        var x: CGFloat = 0
+        for (i, view) in subviews.enumerated() {
+            let size = view.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            if x > 0, x + size.width > width {
+                rows.append([])
+                x = 0
             }
-            .animation(.snappy(duration: 0.12), value: configuration.isPressed)
+            rows[rows.count - 1].append((i, size))
+            x += size.width + spacing
+        }
+        return rows
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        let rows = rows(subviews, width: width)
+        let height = rows.map { $0.map(\.1.height).max() ?? 0 }.reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
+        let used = rows.map { r in r.map(\.1.width).reduce(0, +) + spacing * CGFloat(max(r.count - 1, 0)) }.max() ?? 0
+        return CGSize(width: proposal.width ?? used, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            var x = bounds.minX
+            let h = row.map(\.1.height).max() ?? 0
+            for (i, size) in row {
+                subviews[i].place(at: CGPoint(x: x, y: y + (h - size.height) / 2), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += h + spacing
+        }
     }
 }
 

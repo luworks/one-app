@@ -61,6 +61,7 @@ struct TaskEditor: View {
                     TextField("Title", text: $title)
                         .font(.headline)
                         .focused($titleFocused)
+                        .accessibilityIdentifier("task.title")
                     TextField("Notes", text: $note, axis: .vertical)
                         .lineLimit(2...6)
                 }
@@ -121,7 +122,7 @@ struct TaskEditor: View {
                         Text(ringsAsAlarm
                              ? (Ringer.isDenied ? "Alarms are turned off for Today in Settings, so this will only notify."
                                                 : "Rings like an alarm, even on Silent. Stopping it doesn't complete the task.")
-                             : "Keeps nudging every few minutes until you mark it done.")
+                             : "One notification at the reminder time.")
                     }
                 }
                 Section {
@@ -194,6 +195,8 @@ struct TaskEditor: View {
         t.checklist = checklist.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
         t.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if task == nil { context.insert(t) }
+        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
+        if task == nil { Ledger.record(.created, task: t, title: t.title, after: LedgerFormat.time(t.plannedStart ?? t.due, none: ""), context: context) }
         dismiss()
     }
 }
@@ -216,17 +219,24 @@ struct EventEditor: View {
     /// Where a new event starts: the next full hour today, or 9:00 on the chosen day.
     private let defaultStart: Date
 
-    init(event: OneEvent? = nil, day: Date = .now) {
-        self.event = event
+    /// The next full hour today, or 9:00 on another day.
+    static func defaultStart(for day: Date) -> Date {
         let cal = Calendar.current
         let base = cal.isDateInToday(day) ? Date.now : (cal.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
-        let rounded = cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
+        return cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
+    }
+
+    /// `start` / `end`: a new event at a slot picked on the Week grid (instead of the default time on `day`).
+    init(event: OneEvent? = nil, day: Date = .now, start slotStart: Date? = nil, end slotEnd: Date? = nil) {
+        self.event = event
+        let rounded = slotStart ?? Self.defaultStart(for: day)
         defaultStart = rounded
         let start = event?.start ?? rounded
         _title = State(initialValue: event?.title ?? "")
         _isAllDay = State(initialValue: event?.isAllDay ?? false)
         _start = State(initialValue: start)
-        _end = State(initialValue: start.addingTimeInterval(TimeInterval((event?.durationMinutes ?? 60) * 60)))
+        _end = State(initialValue: event == nil ? slotEnd ?? start.addingTimeInterval(3600)
+                                                : start.addingTimeInterval(TimeInterval((event?.durationMinutes ?? 60) * 60)))
         _repeatRule = State(initialValue: event?.repeats)
         _reminder = State(initialValue: event == nil ? 10 : event?.reminderOffsetMinutes)
         _ringsAsAlarm = State(initialValue: event?.ringsAsAlarm ?? false)
@@ -248,10 +258,11 @@ struct EventEditor: View {
                     TextField("Title", text: $title)
                         .font(.headline)
                         .focused($titleFocused)
+                        .accessibilityIdentifier("event.title")
                 }
                 Section {
                     Toggle("All-day", isOn: $isAllDay.animation())
-                    DatePicker("Starts", selection: $start, displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
+                    DatePicker("Starts", selection: startKeepingLength, displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
                     DatePicker("Ends", selection: $end, in: start..., displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
                     Picker(selection: $repeatRule) {
                         Text("Never").tag(RepeatRule?.none)
@@ -259,10 +270,6 @@ struct EventEditor: View {
                     } label: {
                         Text("Repeat")
                     }
-                }
-                .onChange(of: start) { old, new in
-                    // Keep the length when the start moves, like Apple Calendar.
-                    end = new.addingTimeInterval(end.timeIntervalSince(old))
                 }
                 Section {
                     Picker(selection: $reminder) {
@@ -278,11 +285,17 @@ struct EventEditor: View {
                     Section {
                         Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
                             let backup = event.copy()
-                            CalendarSync.shared.delete(externalID: event.externalID)
+                            guard CalendarSync.shared.delete(event) else {
+                                toast?.showNotice("Couldn't delete “\(event.title)” from Calendar, so it was kept.")
+                                dismiss()
+                                return
+                            }
+                            Ledger.record(.deleted, kind: "event", title: backup.title, before: DayLabel.withTime(backup.start), context: context)
                             context.delete(event)
                             toast?.show("Deleted “\(backup.title)”") {
                                 backup.externalID = CalendarSync.shared.save(backup)
                                 withAnimation(.snappy) { context.insert(backup) }
+                                try? context.save()
                             }
                             dismiss()
                         }
@@ -300,6 +313,15 @@ struct EventEditor: View {
                 }
             }
         }
+    }
+
+    /// Moving the start moves the end with it, so the event keeps its length, like Apple Calendar. Done in the setter, from the
+    /// current values: an `onChange(of: start)` adjustment lost minutes when the wheel sent several changes in a row.
+    private var startKeepingLength: Binding<Date> {
+        Binding(get: { start }, set: { new in
+            end = new.addingTimeInterval(end.timeIntervalSince(start))
+            start = new
+        })
     }
 
     private func save() {
@@ -321,7 +343,9 @@ struct EventEditor: View {
         e.reminderOffsetMinutes = reminder
         e.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if event == nil { context.insert(e) }
+        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
         if CalendarSync.shared.isOn { e.externalID = CalendarSync.shared.save(e) ?? e.externalID }
+        if event == nil { Ledger.record(.created, kind: "event", title: e.title, after: DayLabel.withTime(e.start), context: context) }
         dismiss()
     }
 }

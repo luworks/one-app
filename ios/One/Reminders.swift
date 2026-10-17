@@ -2,9 +2,9 @@ import Foundation
 import SwiftData
 import UserNotifications
 
-/// Local notifications for timed tasks and events, Due-style:
-/// a task keeps nagging every few minutes until it's done, and every notification
-/// has Done / Snooze / Tomorrow actions. Snoozing only moves the reminder, never the task;
+/// Local notifications for timed tasks and events: one per item, with Done / Snooze / Tomorrow actions.
+/// One alert per item: an item that Apple already alerts for (a synced reminder's due time) or that rings as an alarm
+/// (AlarmKit) gets no notification from us. Snoozing only moves the reminder, never the task;
 /// stopping a reminder never completes the task (only Done does).
 @MainActor
 final class Reminders: NSObject, UNUserNotificationCenterDelegate {
@@ -60,20 +60,21 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         let tasks = (try? context.fetch(FetchDescriptor<OneTask>(predicate: #Predicate { !$0.isDone }))) ?? []
         let events = (try? context.fetch(FetchDescriptor<OneEvent>())) ?? []
 
+        // "Ring as alarm" replaces the notification when AlarmKit can ring it; otherwise the notification is the fallback.
+        let rings = Ringer.authorization == .authorized
         var requests: [(Date, UNNotificationRequest)] = []
         for task in tasks {
-            guard let fire = task.reminderDate, fire < horizon else { continue }
+            guard let fire = task.reminderDate, fire > now, fire < horizon else { continue }
+            if rings, task.ringsAsAlarm { continue }
             // A synced reminder with only a due time is alerted by Apple Reminders itself; ours would be a duplicate.
             if task.externalID != nil, task.plannedStart == nil { continue }
             let id = Self.key(task.persistentModelID)
             let when = task.plannedStart.map { DayLabel.withTime($0) } ?? task.due.map { "Due " + DayLabel.withTime($0) } ?? ""
-            for (n, f) in ReminderPlan.taskFires(reminder: fire, now: now).enumerated() {
-                requests.append((f.date, request(id: "\(id)#\(n)", title: task.title, body: f.isNag ? "Still open · " + when : when,
-                                                 category: Self.taskCategory, key: id, at: f.date)))
-            }
+            requests.append((fire, request(id: "\(id)#0", title: task.title, body: when, category: Self.taskCategory, key: id, at: fire)))
         }
         for event in events {
             guard let fire = event.reminderDate, fire > now, fire < horizon else { continue }
+            if rings, event.ringsAsAlarm { continue }
             let id = Self.key(event.persistentModelID)
             let body = event.start.formatted(date: .omitted, time: .shortened) + " · \(event.durationMinutes) min"
             requests.append((fire, request(id: "\(id)#0", title: event.title, body: body, category: Self.eventCategory, key: id, at: fire)))
@@ -140,9 +141,13 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         guard let task = context.model(for: id) as? OneTask else { return }
         switch Action(rawValue: action) {
         case .done:
-            if !task.isDone { TaskActions.toggleDone(task, context: context, toast: nil) }
+            if !task.isDone { TaskActions.toggleDone(task, context: context, toast: nil, channel: .notification) }
         case .tomorrow:
+            let old = task.plannedStart
             task.moveToTomorrow()
+            let new = task.plannedStart
+            task.plannedStart = old
+            TaskActions.setPlanned(task, to: new, context: context, channel: .notification)
         default:
             return
         }

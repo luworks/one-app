@@ -44,13 +44,19 @@ final class OneTask {
         return due < Calendar.current.startOfDay(for: .now)
     }
 
+    /// A deadline at a time of day (a date-only deadline is stored at midnight).
+    var dueHasTime: Bool {
+        guard let due else { return false }
+        return Calendar.current.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0)
+    }
+
     /// When the reminder fires: planned time, else a deadline that has a time of day.
     var reminderDate: Date? {
         guard let offset = reminderOffsetMinutes else { return nil }
         let base: Date?
         if let plannedStart {
             base = plannedStart
-        } else if let due, Calendar.current.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0) {
+        } else if let due, dueHasTime {
             base = due
         } else {
             base = nil
@@ -198,6 +204,25 @@ extension Capture {
         return t
     }
 
+    /// An alarm request becomes a real alarm (Alarms tab) when it can be one: it rings within the next day, or repeats
+    /// daily / on weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
+    func makeAlarm(now: Date = .now) -> OneAlarm? {
+        guard kind == .task, ringsAsAlarm, let start = plannedStart else { return nil }
+        let cal = Calendar.current
+        let weekdays: [Int]
+        switch repeatRule.flatMap(RepeatRule.init(rawValue:)) {
+        case nil:
+            guard start > now, start.timeIntervalSince(now) <= 86_400 else { return nil }
+            weekdays = []
+        case .daily: weekdays = Array(1...7)
+        case .weekdays: weekdays = [2, 3, 4, 5, 6]
+        case .weekly: weekdays = [cal.component(.weekday, from: start)]
+        default: return nil
+        }
+        let c = cal.dateComponents([.hour, .minute], from: start)
+        return OneAlarm(hour: c.hour ?? 0, minute: c.minute ?? 0, label: title, weekdays: weekdays)
+    }
+
     func makeEvent() -> OneEvent {
         let start = plannedStart ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
         let e = OneEvent(title: title, start: isAllDay ? day : start, durationMinutes: isAllDay ? 1440 : durationMinutes ?? 60)
@@ -207,10 +232,22 @@ extension Capture {
     }
 
     /// Creates the right model for `kind` in `context`. Only called after the user taps Add.
-    func insert(into context: ModelContext) {
+    /// Inserts what this capture becomes and returns its id (final, after the save).
+    /// Recorded in Activity as made by `actor` through `channel`.
+    @MainActor @discardableResult
+    func insert(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
+                approval: LedgerApproval = .userMade) -> PersistentIdentifier {
+        let model: any PersistentModel
         switch kind {
-        case .task: context.insert(makeTask())
-        case .event: context.insert(makeEvent())
+        case .task:
+            if let alarm = makeAlarm() { model = alarm } else { model = makeTask() }
+        case .event: model = makeEvent()
         }
+        context.insert(model)
+        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
+        let kind = model is OneAlarm ? "alarm" : (model is OneEvent ? "event" : "task")
+        Ledger.record(.created, task: model as? OneTask, kind: kind, title: title, after: summary,
+                      actor: actor, channel: channel, approval: approval, context: context)
+        return model.persistentModelID
     }
 }

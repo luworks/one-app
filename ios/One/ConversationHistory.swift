@@ -57,6 +57,17 @@ enum ConversationHistory {
         }
     }
 
+    /// Conversations are about getting things done, so they settle by themselves: a chat archives itself after a week
+    /// without a new message, or an hour after everything it added is done (reminders completed or deleted, events over,
+    /// alarms rung or off). `settled` has one entry per item the chat added. Archived chats stay under "Archived".
+    static let autoArchiveIdleDays = 7
+
+    static func shouldAutoArchive(updatedAt: Date, settled: [Bool], now: Date = .now) -> Bool {
+        let idle = now.timeIntervalSince(updatedAt)
+        if idle >= Double(autoArchiveIdleDays) * 86_400 { return true }
+        return !settled.isEmpty && settled.allSatisfy { $0 } && idle >= 3600
+    }
+
     /// A conversation is titled by its first user message: whitespace collapsed, capped so one long paste stays a title.
     static func title(from text: String, limit: Int = 80) -> String {
         let flat = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")

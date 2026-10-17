@@ -42,8 +42,8 @@ final class AskEditTests: XCTestCase {
         let cases: [(input: String, expect: [String], notExpect: [String])] = [
             ("Call Alex tomorrow at 3pm", ["Call Alex", "Planned Tomorrow"], []),
             ("周五晚上7点和朋友聚餐", ["和朋友聚餐", "19:00"], []),
-            ("明早7点叫我起床", ["Rings as alarm"], []),
-            ("提醒我下周一交报销单", ["交报销单"], ["Rings as alarm"]),
+            ("明早7点叫我起床", ["Alarm Tomorrow 07:00"], []),
+            ("提醒我下周一交报销单", ["交报销单"], ["Alarm "]),
             ("30分钟后关烤箱", ["关烤箱", "Planned"], []),
         ]
         for (i, c) in cases.enumerated() {

@@ -33,7 +33,7 @@ final class SystemEventEditorTests: XCTestCase {
         app.buttons["Done"].tap()
 
         let title = "Editor check \(Int(Date.now.timeIntervalSince1970) % 10000)"
-        app.buttons["Today"].firstMatch.tap()
+        app.closeSidebar()
         sleep(1)
         app.buttons["Calendar"].firstMatch.tap()
         sleep(1)

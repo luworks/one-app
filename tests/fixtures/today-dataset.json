@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "about": "Test dataset for the Today iOS app. Dates are relative: day 0 = the day it is loaded, -1 = yesterday, times are 24-hour HH:mm. Load it in the simulator with: xcrun simctl launch <udid> com.luworks.one -uiTesting -dataset <absolute path to this file>. Everything is made up.",
+  "lists": [
+    { "name": "Reminders", "color": 0 },
+    { "name": "Home", "color": 1 },
+    { "name": "Work", "color": 2 }
+  ],
+  "reminders": [
+    { "title": "Pay studio invoice", "list": "Reminders", "due": { "day": -1, "time": "17:00" } },
+    { "title": "Buy milk", "list": "Home", "due": { "day": 0 }, "tags": ["errands"] },
+    { "title": "Call the bank", "list": "Reminders", "due": { "day": 0, "time": "11:30" } },
+    { "title": "Renew parking permit", "list": "Home", "due": { "day": -3 }, "planned": { "day": 0, "time": "11:00" } },
+    { "title": "Water the plants", "list": "Home", "due": { "day": 0 }, "repeat": "weekly" },
+    { "title": "Prepare the demo", "list": "Work", "planned": { "day": 0, "time": "13:30" }, "minutes": 45,
+      "due": { "day": 1, "time": "17:00" }, "flagged": true,
+      "checklist": [ { "title": "Outline", "done": true }, { "title": "Slides" }, { "title": "Rehearse" } ] },
+    { "title": "Write up design review notes", "list": "Work", "planned": { "day": 0, "time": "16:00" } },
+    { "title": "Reply to Sam", "list": "Work", "planned": { "day": 0, "time": "17:00" } },
+    { "title": "Take out the trash", "list": "Home", "planned": { "day": 0, "time": "21:00" }, "ringsAsAlarm": true },
+    { "title": "Book flights to Tokyo", "list": "Work", "due": { "day": 3, "time": "17:00" }, "flagged": true },
+    { "title": "Order birthday gift", "list": "Home", "due": { "day": 3, "time": "12:00" }, "flagged": true },
+    { "title": "Renew passport", "list": "Reminders", "due": { "day": 14, "time": "09:00" }, "note": "Photos are in the Documents folder." },
+    { "title": "Read that design article", "list": "Reminders" },
+    { "title": "Backup photos", "list": "Home" },
+    { "title": "Send invoice", "list": "Work", "done": true },
+    { "title": "Call plumber", "list": "Home", "done": true },
+    { "title": "Pick up parcel", "list": "Reminders", "done": true }
+  ],
+  "events": [
+    { "title": "Product sync", "start": { "day": 0, "time": "09:00" }, "minutes": 25 },
+    { "title": "Standup", "start": { "day": 0, "time": "09:45" }, "minutes": 15, "repeat": "weekdays" },
+    { "title": "Lunch with Priya", "start": { "day": 0, "time": "12:15" }, "minutes": 45 },
+    { "title": "Dentist", "start": { "day": 0, "time": "15:00" }, "minutes": 30 },
+    { "title": "Gym", "start": { "day": 0, "time": "18:30" }, "minutes": 60 },
+    { "title": "Weekly review", "start": { "day": 1, "time": "10:00" }, "minutes": 30 },
+    { "title": "Weekly sync", "start": { "day": 1, "time": "11:00" }, "minutes": 45, "repeat": "weekly" },
+    { "title": "Design review", "start": { "day": 1, "time": "14:00" }, "minutes": 60 },
+    { "title": "1:1 with Sam", "start": { "day": 2, "time": "11:00" }, "minutes": 30 },
+    { "title": "Team offsite", "start": { "day": 2 }, "minutes": 2880, "allDay": true },
+    { "title": "Dinner with Mia", "start": { "day": 3, "time": "19:00" }, "minutes": 120 },
+    { "title": "Mia's birthday", "start": { "day": 4 }, "minutes": 1440, "allDay": true },
+    { "title": "Flight to Tokyo", "start": { "day": 5, "time": "08:15" }, "minutes": 180 }
+  ],
+  "alarms": [
+    { "time": "06:30", "label": "Wake up", "weekdays": [2, 3, 4, 5, 6] },
+    { "time": "08:30", "label": "Weekend run", "weekdays": [7, 1], "on": false },
+    { "time": "13:00", "label": "Take medicine" },
+    { "time": "22:30", "label": "Wind down", "weekdays": [1, 2, 3, 4, 5], "snooze": false }
+  ],
+  "chats": [
+    { "title": "Plan my day", "hoursAgo": 2, "messages": [
+      ["user", "Plan my day"],
+      ["ai", "Here's a plan around your meetings. Meetings stay fixed; only tasks move. Nothing changes until you apply it."],
+      ["ai", "Planned 3 tasks for today."] ] },
+    { "title": "Call Alex tomorrow at 3pm", "hoursAgo": 5, "messages": [
+      ["user", "Call Alex tomorrow at 3pm"],
+      ["ai", "Here's what I understood. Nothing is added until you confirm."],
+      ["user", "make it 4pm"],
+      ["ai", "Updated. Nothing is added until you confirm."],
+      ["ai", "Added “Call Alex” · Planned Tomorrow 16:00."] ] },
+    { "title": "Move the dentist to tomorrow", "hoursAgo": 27, "messages": [
+      ["user", "Move the dentist to tomorrow"],
+      ["ai", "Here's the change. Nothing changes until you apply it."],
+      ["ai", "Moved “Dentist” to Tomorrow 15:00."] ] },
+    { "title": "What's left today?", "hoursAgo": 72, "messages": [
+      ["user", "What's left today?"],
+      ["ai", "Today: 3 open tasks and 2 upcoming events.\n· Buy milk\n· Water the plants"] ] },
+    { "title": "明早7点叫我起床", "hoursAgo": 216, "messages": [
+      ["user", "明早7点叫我起床"],
+      ["ai", "Here's what I understood. Nothing is added until you confirm."],
+      ["ai", "Added “起床” · Planned Tomorrow 07:00 · Rings as alarm."] ] },
+    { "title": "Send the Q3 report by Friday", "hoursAgo": 960, "messages": [
+      ["user", "Send the Q3 report by Friday"],
+      ["ai", "Added “Send the Q3 report” · Due Friday."] ] },
+    { "title": "Book a hotel in Rome for March", "hoursAgo": 1440, "archived": true, "messages": [
+      ["user", "Book a hotel in Rome for March"],
+      ["ai", "Added “Book a hotel in Rome” · No date, goes to your Inbox."] ] }
+  ]
+}

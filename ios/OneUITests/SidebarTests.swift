@@ -50,14 +50,14 @@ final class SidebarTests: XCTestCase {
         XCTAssertFalse(reply.exists)
     }
 
-    func testSwipeRightDeletesAConversationAndUndoBringsItBack() {
+    func testSwipeLeftDeletesAConversationAndUndoBringsItBack() {
         haveAConversation()
         app.openSidebar()
         let row = app.buttons["Anything left today?"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.swipeRight()
+        row.swipeLeft()
         let delete = app.buttons["Delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 3), "swiping left to right reveals Delete")
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "swiping right to left reveals Delete, as on every list")
         delete.tap()
         XCTAssertTrue(row.waitForNonExistence(timeout: 5), "the conversation is gone")
         XCTAssertTrue(app.staticTexts["Your conversations with AI will appear here."].waitForExistence(timeout: 3))
@@ -86,12 +86,12 @@ final class SidebarTests: XCTestCase {
         XCTAssertFalse(reply.exists)
     }
 
-    func testSwipeRightArchivesAConversationIntoTheArchivedSection() {
+    func testSwipeLeftArchivesAConversationIntoTheArchivedSection() {
         haveAConversation()
         app.openSidebar()
         let row = app.buttons["Anything left today?"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.swipeRight()
+        row.swipeLeft()
         let archive = app.buttons["Archive"]
         XCTAssertTrue(archive.waitForExistence(timeout: 2))
         archive.tap()
@@ -102,14 +102,19 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(app.buttons["Anything left today?"].waitForExistence(timeout: 5), "it is still reachable under Archived")
     }
 
-    func testSwipeLeftOnTheChatsListReturnsToToday() {
+    /// The page stays visible on the right of the open sidebar; swiping it back to the left closes the sidebar.
+    /// (A swipe on a chat row shows that row's actions instead, like every other list.)
+    func testSwipeLeftOnThePageReturnsToToday() {
         haveAConversation()
         app.openSidebar()
         let row = app.buttons["Anything left today?"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)))
-        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "a left swipe closes the sidebar")
+        // The closed sidebar stays built behind the page, so check that the page is back and reachable instead.
+        let calendar = app.buttons["Calendar"].firstMatch
+        let back = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: calendar)
+        XCTAssertEqual(XCTWaiter().wait(for: [back], timeout: 8), .completed, "a left swipe closes the sidebar")
     }
 
     func testLongPressOffersRenameArchiveAndDelete() {
@@ -137,12 +142,13 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(app.buttons["Settings"].exists)
         XCTAssertTrue(app.staticTexts["Your conversations with AI will appear here."].exists)
         // The pill bar on the page behind owns these; the sidebar must not repeat them.
+        // The page stays visible beside the sidebar (its pills included), so look inside the sidebar itself.
+        let sidebar = app.otherElements["sidebar"]
+        XCTAssertTrue(sidebar.exists)
         for name in ["Today", "Calendar", "Reminders", "Alarms"] {
-            // The page behind has slid fully off screen; what matters is that no such row is visible in the sidebar.
-            let onScreen = app.buttons.matching(identifier: name).allElementsBoundByIndex.contains { $0.exists && $0.frame.intersects(app.frame) }
-            let labelled = app.buttons.matching(NSPredicate(format: "label == %@", name)).allElementsBoundByIndex
-                .contains { $0.exists && $0.frame.intersects(app.frame) }
-            XCTAssertFalse(onScreen || labelled, "no \(name) row in the sidebar")
+            let byId = sidebar.buttons.matching(identifier: name).count
+            let byLabel = sidebar.buttons.matching(NSPredicate(format: "label == %@", name)).count
+            XCTAssertEqual(byId + byLabel, 0, "no \(name) row in the sidebar")
         }
     }
 

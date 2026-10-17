@@ -7,7 +7,10 @@ struct TimeColumn: View {
         Text(date.formatted(date: .omitted, time: .shortened))
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
-            .frame(width: 58, alignment: .leading)
+            // Never wraps: at large text sizes the column widens instead of breaking "09:00" over three lines.
+            .lineLimit(1)
+            .fixedSize()
+            .frame(minWidth: 58, alignment: .leading)
     }
 }
 
@@ -32,6 +35,20 @@ struct TitleDetail<Detail: View>: View {
     }
 }
 
+/// The travel-time line under an event with a location: "Drive 18 min · Leave by 14:20".
+struct TravelLine: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let text: String
+    var body: some View {
+        Label(text, systemImage: "car.fill")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .labelStyle(.titleAndIcon)
+            // One line normally; at accessibility sizes "Drive 18 min · Leave by 14:20" wraps instead of losing the time.
+            .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+    }
+}
+
 /// The calendar color bar beside an event; it stretches to the height of the row's text.
 struct CalendarBar: View {
     let color: Color
@@ -52,6 +69,7 @@ struct EventRow: View {
     /// The list that holds this row asks "this event or the series?" for a repeating one (see `entryDeleteDialog`).
     @Binding var pendingDelete: CalEntry?
     @State private var editing = false
+    @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
     init(event: OneEvent, start: Date? = nil, pendingDelete: Binding<CalEntry?> = .constant(nil)) {
         self.event = event
@@ -77,12 +95,15 @@ struct EventRow: View {
                 TimeColumn(date: start ?? event.start)
             }
             CalendarBar(color: CalendarSync.shared.color(forExternalID: event.externalID) ?? Color.blue)
-            TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
-                Label(detail, systemImage: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(.titleAndIcon)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
+                    Label(detail, systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                }
+                if let travel { TravelLine(text: travel) }
             }
             Spacer(minLength: 0)
         }
@@ -96,9 +117,17 @@ struct EventRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(EventSpeech.label(title: event.title, start: start ?? event.start,
                                               end: (start ?? event.start).addingTimeInterval(event.duration), isAllDay: event.isAllDay,
-                                              calendar: CalendarSync.shared.calendar(forExternalID: event.externalID)?.title ?? event.calendarName))
+                                              calendar: CalendarSync.shared.calendar(forExternalID: event.externalID)?.title ?? event.calendarName)
+                            + (travel.map { ". " + $0 } ?? ""))
         .accessibilityAddTraits(.isButton)
         .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in editing = true }, edit: { _ in editing = true })
+    }
+
+    /// "Drive 18 min · Leave by 14:20" when the event's Apple Calendar copy has a location (Today's own events keep none).
+    private var travel: String? {
+        guard travelOn, let id = event.externalID else { return nil }
+        return TravelTimes.shared.label(eventID: id, start: start ?? event.start, isAllDay: event.isAllDay,
+                                        place: CalendarSync.shared.place(forExternalID: id))
     }
 
     /// The same swipe and long-press actions as in the Calendar tab.
@@ -118,15 +147,21 @@ struct TaskRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let task: OneTask
     var showsTime = false
+    /// The time in the time column; nil = the planned time.
+    var time: Date? = nil
     /// Add the list name to the detail line. Off inside a list, where it is the title.
     var showsList = true
     /// Day view: detail on the title's line when it fits, titles capped at two lines, tighter insets.
     var compact = false
+    /// A suggested time for a reminder due today with no time: shown faint with a Plan button. Nothing is saved until Plan.
+    var suggested: Date? = nil
     @State private var editing = false
 
     var body: some View {
         HStack(spacing: 10) {
-            if showsTime, let start = task.plannedStart {
+            if let suggested {
+                TimeColumn(date: suggested).opacity(0.6)
+            } else if showsTime, let start = time ?? task.plannedStart {
                 TimeColumn(date: start)
             }
             Button {
@@ -155,6 +190,7 @@ struct TaskRow: View {
                     .foregroundStyle(Color.accentColor)
                     .accessibilityLabel("Flagged")
             }
+            if let suggested { planButton(suggested) }
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
@@ -165,23 +201,18 @@ struct TaskRow: View {
         // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
         // long-press for the menu. (Delete has an Undo toast.)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) { TaskActions.delete(task, context: context, toast: toast) } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            Button { withAnimation { task.flagged.toggle() } } label: {
-                Label(task.flagged ? "Unflag" : "Flag", systemImage: task.flagged ? "flag.slash.fill" : "flag.fill")
-            }
-            .tint(.orange)
+            RowAction.delete { TaskActions.delete(task, context: context, toast: toast) }
+            RowAction.flag(task.flagged) { withAnimation { task.flagged.toggle() } }
         }
         .contextMenu {
             Button { editing = true } label: { Label("Show Details", systemImage: "info.circle") }
             Button { task.flagged.toggle() } label: {
                 Label(task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }
-            Button { withAnimation { task.moveToToday() } } label: { Label("Today", systemImage: "calendar") }
-            Button { withAnimation { task.moveToTomorrow() } } label: { Label("Tomorrow", systemImage: "sunrise") }
+            Button { plan { $0.moveToToday() } } label: { Label("Today", systemImage: "calendar") }
+            Button { plan { $0.moveToTomorrow() } } label: { Label("Tomorrow", systemImage: "sunrise") }
             if task.plannedStart != nil {
-                Button { withAnimation { task.plannedStart = nil } } label: {
+                Button { TaskActions.setPlanned(task, to: nil, context: context) } label: {
                     Label("Unschedule", systemImage: "calendar.badge.minus")
                 }
             }
@@ -191,10 +222,36 @@ struct TaskRow: View {
         }
     }
 
+    /// Today / Tomorrow from the menu: works out the new planned time on the task, then records it like any other move.
+    private func plan(_ move: (OneTask) -> Void) {
+        let old = task.plannedStart
+        move(task)
+        let new = task.plannedStart
+        task.plannedStart = old
+        TaskActions.setPlanned(task, to: new, context: context)
+    }
+
     private var title: Text {
         Text(task.title)
             .strikethrough(task.isDone)
-            .foregroundStyle(task.isDone ? .secondary : .primary)
+            .foregroundStyle(task.isDone || suggested != nil ? .secondary : .primary)
+    }
+
+    /// Sets the planned time only; the deadline stays where it is. Undo clears it again.
+    private func planButton(_ start: Date) -> some View {
+        let time = start.formatted(date: .omitted, time: .shortened)
+        return Button("Plan") {
+            let entry = TaskActions.setPlanned(task, to: start, context: context)
+            toast?.show("Planned “\(task.title)” at \(time)") {
+                withAnimation { task.plannedStart = nil }
+                if let entry { Ledger.recordUndo(of: entry, context: context) }
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .accessibilityLabel("Plan \(task.title) at \(time)")
     }
 
     @ViewBuilder private var detailText: some View {
@@ -209,6 +266,7 @@ struct TaskRow: View {
     /// Most important first, so truncation drops the least useful bits: deadline, plan, repeat, list, tags.
     private var detail: String? {
         var parts: [String] = []
+        if suggested != nil { parts.append("Suggested") }
         if let due = task.due { parts.append("Due " + DayLabel.withTime(due)) }
         if !showsTime, let start = task.plannedStart, start != task.due {
             parts.append("Planned " + DayLabel.withTime(start))

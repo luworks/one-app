@@ -2,8 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.luworks.one.widgetRefresh</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Today rings alarms you set on tasks and events, even on Silent.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Today shows how long it takes to get to your upcoming events and when to leave. Your location goes only to Apple Maps to work out the route.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.luworks.one</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>today</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>

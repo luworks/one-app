@@ -1,15 +1,18 @@
 import SwiftUI
 import SwiftData
 
-/// Left drawer, like the ChatGPT / Claude iOS apps: a full screen with the list of past conversations with the AI
-/// (newest first, grouped by day), and New chat and Settings pinned at the bottom.
+/// Left drawer, like the ChatGPT / Claude iOS apps: most of the screen, with the page peeking out on the right, the list of
+/// past conversations with the AI (newest first, grouped by day), Search at the top, and New chat and Settings at the bottom.
 /// The four tabs are not repeated here; they are in the pill bar.
 struct Sidebar: View {
     let drawer: DrawerModel
     let width: CGFloat
     var onNewChat: () -> Void
     var onOpen: (ChatThread) -> Void
+    var onSearch: () -> Void
     var onSettings: () -> Void
+    /// Opens Activity (the ledger of changes) over the sidebar, like Settings.
+    var onActivity: () -> Void = {}
     var close: () -> Void
 
     @Environment(\.modelContext) private var context
@@ -24,6 +27,9 @@ struct Sidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            SidebarRow(icon: "clock.arrow.circlepath", title: "Activity", action: onActivity)
+                .accessibilityIdentifier("sidebar.activity")
+                .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
             if threads.isEmpty {
                 emptyState
             } else {
@@ -38,31 +44,36 @@ struct Sidebar: View {
         // On the container itself: a hide applied from outside does not reach an explicit accessibility container.
         .accessibilityHidden(!drawer.isOpen)
         .onChange(of: drawer.isOpen) { _, open in
-            if open { now = .now }
+            guard open else { return }
+            now = .now
+            ChatAutoArchive.run(context)
         }
     }
 
-    // MARK: Top: title and close
+    // MARK: Top: title and search
 
     private var header: some View {
         HStack(spacing: 10) {
             Text("Chats")
                 .font(.title2.weight(.bold))
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
 
-            Button(action: close) {
-                Image(systemName: "xmark")
+            Button(action: onSearch) {
+                Image(systemName: "magnifyingglass")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.primary)
                     .modifier(SidebarCircle())
             }
             .buttonStyle(PressScale())
-            .accessibilityLabel("Close sidebar")
+            .accessibilityLabel("Search")
         }
         .padding(.leading, 20)
         .padding(.trailing, 16)
         .padding(.top, 12)
         .padding(.bottom, 8)
+        // Fixed-size round buttons, capped like the page's top and bottom bars so they never clip.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
     }
 
@@ -125,8 +136,8 @@ struct Sidebar: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        // Swipe right to left anywhere on the list goes back to Today; vertical scrolling is left alone.
-        .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
+        // No close-drag on the list itself: a right-to-left swipe on a row shows its actions, like every other list.
+        // The sidebar closes from the page strip on the right, the header, the footer or the empty state.
         // `presenting:` hands the thread to the buttons: the alert clears `renaming` as it closes, which can happen
         // before Save's action runs.
         .alert("Rename Conversation", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
@@ -146,23 +157,21 @@ struct Sidebar: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.footnote.weight(.semibold))
-            .foregroundStyle(.secondary)
+            // secondaryLabel, not .secondary: a list header is already dimmed, and .secondary on top read too faint.
+            .foregroundStyle(Color(.secondaryLabel))
             .textCase(nil)
     }
 
-    /// Swipe left to right shows Archive and Delete (right to left closes the sidebar and returns to Today),
-    /// press and hold for Rename / Archive / Delete. Archive and Delete both have Undo.
+    /// Swipe right to left shows Delete and Archive (as on every list), press and hold for Rename / Archive / Delete. Archive and Delete both have Undo.
     private func row(_ thread: ChatThread) -> some View {
         ConversationRow(thread: thread, now: now) { onOpen(thread) }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-            // Only the leading edge has row actions: a right-to-left swipe is free to close the sidebar.
-            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                archiveButton(thread).tint(.orange)
-                Button(role: .destructive) { delete(thread) } label: {
-                    Label("Delete", systemImage: "trash")
-                }
+            // The same swipe actions as every other list (see `RowAction`): Delete, then Archive, from the trailing edge.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                RowAction.delete { delete(thread) }
+                RowAction.archive(thread.archived) { setArchived(thread, !thread.archived) }
             }
             .contextMenu {
                 Button {
@@ -193,7 +202,7 @@ struct Sidebar: View {
     private func setArchived(_ thread: ChatThread, _ archived: Bool) {
         withAnimation { thread.archived = archived }
         try? context.save()
-        toast?.show(archived ? "Conversation archived" : "Conversation unarchived") {
+        toast?.show(archived ? "Archived “\(thread.title)”" : "Unarchived “\(thread.title)”") {
             withAnimation { thread.archived = !archived }
             try? context.save()
         }
@@ -204,7 +213,7 @@ struct Sidebar: View {
         let backup = thread.copy()
         withAnimation { context.delete(thread) }
         try? context.save()
-        toast?.show("Conversation deleted") {
+        toast?.show("Deleted “\(backup.title)”") {
             withAnimation { context.insert(backup) }
             try? context.save()
         }
@@ -234,7 +243,7 @@ struct Sidebar: View {
                     }
                     .foregroundStyle(Color(.systemBackground))
                     .padding(.horizontal, 20)
-                    .frame(height: 52)
+                    .frame(minHeight: 52)
                     .background(Color.primary, in: Capsule())
                     .contentShape(Capsule())
                 }
@@ -258,6 +267,7 @@ struct Sidebar: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 12)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .background(Color(.systemBackground))
         .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
@@ -279,16 +289,21 @@ private struct SidebarCircle: ViewModifier {
 }
 
 private struct ConversationRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let thread: ChatThread
     let now: Date
     var action: () -> Void
 
     var body: some View {
+        // At accessibility sizes the time goes under the title, so the title is not squeezed to a few letters.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
         Button(action: action) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            layout {
                 Text(thread.title)
                     .font(.body)
-                    .lineLimit(2)
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(ConversationHistory.timeText(thread.updatedAt, now: now))

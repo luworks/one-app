@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import SwiftData
 import EventKit
@@ -66,10 +67,20 @@ struct EntryActions: ViewModifier {
 @MainActor
 enum EntryDeletion {
     static func perform(_ entry: CalEntry, span: EKSpan, context: ModelContext, toast: UndoToast?) {
+        Logger(subsystem: "com.luworks.one", category: "calendar").info("delete requested: \(entry.title, privacy: .public) kind=\(String(describing: entry.source).prefix(6), privacy: .public)")
         switch entry.source {
         case .system(let id):
-            CalendarSync.shared.delete(externalID: id, span: span)
+            guard CalendarSync.shared.canDelete(externalID: id) else {
+                toast?.showNotice("“\(entry.title)” is in a read-only calendar, so it can't be deleted here.")
+                return
+            }
+            guard CalendarSync.shared.delete(externalID: id, occurrence: entry.start, span: span) else {
+                CalendarSync.shared.refresh()
+                toast?.showNotice("Couldn't delete “\(entry.title)”. Try again, or delete it in Calendar.")
+                return
+            }
             CalendarSync.shared.refresh()
+            Ledger.record(.deleted, kind: "event", title: entry.title, before: DayLabel.withTime(entry.start), context: context)
             // Undo puts back a plain copy (title, time, place) in the default calendar, for a one-off event only:
             // a series has its own rules and attendees that a plain copy would not carry, and it was asked about first.
             guard !entry.repeats else { return }
@@ -82,11 +93,17 @@ enum EntryDeletion {
             }
         case .local(let event):
             let backup = event.copy()
-            CalendarSync.shared.delete(externalID: event.externalID, span: span)
+            // The copy in Apple Calendar goes first; if it refuses, nothing is deleted anywhere.
+            guard CalendarSync.shared.delete(event, span: span) else {
+                toast?.showNotice("Couldn't delete “\(event.title)” from Calendar, so it was kept.")
+                return
+            }
+            Ledger.record(.deleted, kind: "event", title: backup.title, before: DayLabel.withTime(entry.start), context: context)
             withAnimation(.snappy) { context.delete(event) }
             toast?.show("Deleted “\(backup.title)”") {
                 backup.externalID = CalendarSync.shared.save(backup)
                 withAnimation(.snappy) { context.insert(backup) }
+                try? context.save()
             }
         case .task(let task):
             TaskActions.delete(task, context: context, toast: toast)
@@ -136,13 +153,8 @@ private struct SwipeIfRows: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content.swipeActions(edge: .trailing, allowsFullSwipe: !isRepeating) {
-                Button(role: .destructive, action: delete) { Label("Delete", systemImage: "trash") }
-                if case .task(let task) = entry.source {
-                    Button(action: flag) {
-                        Label(task.flagged ? "Unflag" : "Flag", systemImage: task.flagged ? "flag.slash.fill" : "flag.fill")
-                    }
-                    .tint(.orange)
-                }
+                RowAction.delete(asksFirst: isRepeating, delete)
+                if case .task(let task) = entry.source { RowAction.flag(task.flagged, flag) }
             }
         } else {
             content

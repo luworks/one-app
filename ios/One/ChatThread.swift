@@ -15,6 +15,14 @@ final class ChatThread {
     var messagesData: Data = Data()
     /// Archived conversations leave the main list and wait under "Archived" in the sidebar.
     var archived: Bool = false
+    /// The reminders, events and alarms this conversation added (JSON of their ids), so it can archive itself once they
+    /// are all done (see `ChatAutoArchive`). Additive field: older stores get none.
+    var itemsData: Data = Data()
+
+    var items: [PersistentIdentifier] {
+        get { (try? JSONDecoder().decode([PersistentIdentifier].self, from: itemsData)) ?? [] }
+        set { itemsData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
 
     init(title: String, messages: [ChatMessage], createdAt: Date = .now, updatedAt: Date = .now, id: UUID = UUID()) {
         self.id = id
@@ -38,6 +46,7 @@ final class ChatThread {
         let c = ChatThread(title: title, messages: [], createdAt: createdAt, updatedAt: updatedAt, id: id)
         c.messagesData = messagesData
         c.archived = archived
+        c.itemsData = itemsData
         return c
     }
 }

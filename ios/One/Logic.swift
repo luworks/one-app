@@ -88,22 +88,9 @@ enum DurationLabel {
     }
 }
 
-/// When reminders fire (Due-style): at the reminder time, then nags until the task is done.
+/// Notification snoozes. A task's reminder fires once, at the reminder time: there are no follow-up nags (they put three
+/// more alerts on the lock screen for the same task).
 enum ReminderPlan {
-    /// Follow-up nags after the first reminder, in minutes.
-    static let nagMinutes = [5, 10, 20]
-
-    /// Fire dates still in the future: (date, isNag).
-    static func taskFires(reminder: Date, now: Date) -> [(date: Date, isNag: Bool)] {
-        var result: [(Date, Bool)] = []
-        if reminder > now { result.append((reminder, false)) }
-        for m in nagMinutes {
-            let nag = reminder.addingTimeInterval(TimeInterval(m * 60))
-            if nag > now { result.append((nag, true)) }
-        }
-        return result
-    }
-
     /// Snooze presets offered on the notification.
     static let snoozeMinutes = ["SNOOZE_10": 10, "SNOOZE_60": 60]
 
@@ -153,6 +140,76 @@ enum DayPlanner {
         if extra == 0 && s == 0 { return date }
         let base = calendar.date(bySetting: .second, value: 0, of: date) ?? date
         return base.addingTimeInterval(TimeInterval((extra == 0 ? 5 : extra) * 60))
+    }
+}
+
+/// The day view's single timeline: where reminders due that day without a time are suggested.
+/// Suggestions only show; nothing is written until the user taps Plan (planned time, never the deadline).
+enum DaySchedule {
+    /// Suggestions fill free time from 08:00 (or now, on today) until 21:00, like "Plan my day".
+    static let openHour = 8, closeHour = 21
+
+    /// A suggested start for each item (nil = no gap left: it goes under "Anytime"), in `minutes` order.
+    /// Past days get no suggestions.
+    static func suggestedStarts(minutes: [Int], busy: [DateInterval], day: Date, now: Date,
+                                calendar: Calendar = .current) -> [Date?] {
+        let none = [Date?](repeating: nil, count: minutes.count)
+        let dayStart = calendar.startOfDay(for: day)
+        guard dayStart >= calendar.startOfDay(for: now),
+              let open = calendar.date(bySettingHour: openHour, minute: 0, second: 0, of: dayStart),
+              let close = calendar.date(bySettingHour: closeHour, minute: 0, second: 0, of: dayStart) else { return none }
+        let start = calendar.isDate(day, inSameDayAs: now) ? max(now, open) : open
+        guard start < close else { return none }
+        let items = minutes.enumerated().map { DayPlanner.Item(id: $0.offset, minutes: $0.element) }
+        var result = none
+        for placed in DayPlanner.plan(items, busy: busy, window: DateInterval(start: start, end: close), calendar: calendar) {
+            result[placed.id] = placed.start
+        }
+        return result
+    }
+}
+
+extension DaySchedule {
+    /// Free time between items in waking hours (08:00, or now on today, until 21:00), at least `minimum` minutes.
+    /// `busy` should already include the suggested slots, so a suggestion uses up its part of a gap.
+    static func freeGaps(busy: [DateInterval], day: Date, now: Date, minimum: Int = 30,
+                         calendar: Calendar = .current) -> [DateInterval] {
+        let dayStart = calendar.startOfDay(for: day)
+        guard dayStart >= calendar.startOfDay(for: now),
+              let open = calendar.date(bySettingHour: openHour, minute: 0, second: 0, of: dayStart),
+              let close = calendar.date(bySettingHour: closeHour, minute: 0, second: 0, of: dayStart) else { return [] }
+        var cursor = calendar.isDate(day, inSameDayAs: now) ? max(now, open) : open
+        var gaps: [DateInterval] = []
+        for block in busy.sorted(by: { $0.start < $1.start }) where block.end > cursor {
+            if block.start >= close { break }
+            if block.start > cursor { gaps.append(DateInterval(start: cursor, end: block.start)) }
+            cursor = max(cursor, block.end)
+        }
+        if cursor < close { gaps.append(DateInterval(start: cursor, end: close)) }
+        return gaps.filter { $0.duration >= TimeInterval(minimum * 60) }
+    }
+
+    /// "1 h 30 min", "45 min", "2 h".
+    static func freeLabel(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds / 60)
+        let h = minutes / 60, m = minutes % 60
+        switch (h, m) {
+        case (0, _): return "Free \(m) min"
+        case (_, 0): return "Free \(h) h"
+        default: return "Free \(h) h \(m) min"
+        }
+    }
+}
+
+/// When Today shows all of tomorrow instead of its first few items.
+enum TomorrowPreview {
+    static let limit = 3
+    /// Apple Reminders starts "Tonight" at 18:00; from then on tomorrow matters more than what's left of today.
+    static let eveningHour = 18
+
+    /// Open in the evening, or once nothing timed is left today.
+    static func opensByItself(now: Date, todayStarts: [Date], calendar: Calendar = .current) -> Bool {
+        calendar.component(.hour, from: now) >= eveningHour || !todayStarts.contains { $0 > now }
     }
 }
 
@@ -252,6 +309,33 @@ enum CalendarLayout {
         }
         close()
         return result
+    }
+
+    /// The slot under a point on the Week grid, for a long-press that makes a new event: the day column and the start
+    /// minute, snapped down to 15 minutes like Apple Calendar. `x` and `y` are in the grid's space (hour 0 at y = 0,
+    /// the hour labels in the first `gutter` points). Clamped to the visible days and to a start no later than 23:45.
+    static func slot(x: Double, y: Double, gutter: Double, columnWidth: Double, hourHeight: Double, dayCount: Int) -> (day: Int, minute: Int) {
+        let day = min(max(Int(((x - gutter) / columnWidth).rounded(.down)), 0), dayCount - 1)
+        let minute = Int((y / hourHeight * 60 / 15).rounded(.down)) * 15
+        return (day, min(max(minute, 0), 24 * 60 - 15))
+    }
+
+    /// How busy a day looks in the Year view's heatmap: 0 (nothing), 1 (one or two items), 2 (three or four), 3 (five or more).
+    static func busyLevel(count: Int) -> Int {
+        switch count {
+        case ..<1: 0
+        case 1...2: 1
+        case 3...4: 2
+        default: 3
+        }
+    }
+
+    /// Hour heights the Week grid can be pinched to, in points: compact enough for a whole day, roomy enough to read short events.
+    static let hourHeights: ClosedRange<Double> = 28...120
+
+    /// The hour height after a pinch of `scale` that started at `start`, kept inside `hourHeights`.
+    static func zoomedHourHeight(_ start: Double, scale: Double) -> Double {
+        min(max(start * scale, hourHeights.lowerBound), hourHeights.upperBound)
     }
 }
 
@@ -375,6 +459,20 @@ enum AlarmPlan {
 
     /// What Clock calls "Snooze": nine minutes.
     static let snoozeSeconds: TimeInterval = 9 * 60
+
+    /// Snooze Duration choices in the alarm editor, in minutes.
+    static let snoozeChoices = [5, 9, 10, 15, 30]
+    /// Default Snooze Duration (Clock's nine minutes).
+    static let defaultSnoozeMinutes = 9
+
+    /// The allowed Snooze Duration nearest to `minutes` (ties go to the shorter one), so alarms saved with a
+    /// value no longer offered (1, 3, 7, 20…) keep working: 1/3/7 → 5, 20 → 15, 45 → 30.
+    static func snoozeMinutes(nearest minutes: Int) -> Int {
+        snoozeChoices.min { a, b in
+            let da = abs(a - minutes), db = abs(b - minutes)
+            return da != db ? da < db : a < b
+        } ?? defaultSnoozeMinutes
+    }
 }
 
 /// Search matching: every word of the query must appear in one of the fields; case, accents and width are ignored.

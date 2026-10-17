@@ -16,8 +16,11 @@ struct Capture: Equatable {
     var durationMinutes: Int? = nil
     /// What the line most likely is. The user can switch it on the preview card.
     var kind: Kind = .task
-    /// Ring like an alarm (AlarmKit). Only set by the on-device model for "wake me at 7"; needs a time.
-    var ringsAsAlarm: Bool = false
+    /// An alarm ("wake me at 7", "alarm in 30 minutes"); needs a time. Becomes a real alarm on the Alarms tab when it rings
+    /// within a day (see `Capture.insert`). The title loses the instruction words ("set an alarm", "remind me to").
+    var ringsAsAlarm: Bool = false {
+        didSet { if ringsAsAlarm, !oldValue { title = CaptureParser.alarmLabel(title) } }
+    }
     /// A whole-day event (no start time). Only the Apple Intelligence path sets it today.
     var isAllDay: Bool = false
     /// True when the on-device model (Apple Intelligence) produced this proposal; shown as a small label on the card.
@@ -40,12 +43,14 @@ struct Capture: Equatable {
             let start = plannedStart ?? day
             parts.append(DayLabel.withTime(start))
             if let d = durationMinutes { parts.append(DurationLabel.text(minutes: d)) }
+        case .task where ringsAsAlarm:
+            parts.append("Alarm " + (plannedStart.map { DayLabel.withTime($0) } ?? ""))
+            if let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)) { parts.append(rule.label) }
         case .task:
             if let start = plannedStart { parts.append("Planned " + DayLabel.withTime(start)) }
             else if hasDay { parts.append("Due " + DayLabel.text(for: day)) }
             else { parts.append("No date, goes to your Inbox") }
             if let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)) { parts.append(rule.label) }
-            if ringsAsAlarm { parts.append("Rings as alarm") }
         }
         return parts.joined(separator: " · ")
     }
@@ -524,11 +529,29 @@ enum CaptureParser {
         }
         let words = "a|an|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty|forty|forty-five"
         if take(#"\bin\s+half\s+an?\s+hour\b"#, from: &text) != nil { return 30 }
-        if let m = take(#"\bin\s+(\d+|"# + words + #")\s*(hours?|hrs?|minutes?|mins?)\b"#, from: &text) {
+        if let m = take(#"\b(?:in|after)\s+(\d+|"# + words + #")\s*(hours?|hrs?|minutes?|mins?)\b"#, from: &text)
+            ?? take(#"\b(\d+|"# + words + #")\s*(hours?|hrs?|minutes?|mins?)\s+(?:later|from\s+now)\b"#, from: &text) {
             let unit = (m[1] ?? "").hasPrefix("h") ? 60 : 1
             return amount(m[0]).map { $0 * unit }
         }
         return nil
+    }
+
+    /// The name of an alarm made from a sentence: the sentence without the instruction words.
+    /// "Adding alarm after remind me to walking" → "Walking"; "叫我起床" → "起床". Empty → "Alarm".
+    static func alarmLabel(_ title: String) -> String {
+        var t = " " + title + " "
+        let patterns = [
+            #"\b(?:please\s+)?(?:add(?:ing)?|set(?:ting)?|create|make|start)\s+(?:an?\s+|the\s+)?(?:alarm|timer)\b(?:\s+(?:for|to|at|that))?"#,
+            #"\b(?:alarm|timer)\s+(?:for|to|at)\b"#, #"\bremind\s+me\s+(?:to|about|of)?\b"#, #"\bwake\s+me(?:\s+up)?\b"#,
+            #"\b(?:alarm|timer|after|later|from\s+now)\b"#,
+            #"(?:帮我)?(?:设(?:置)?|定|订|加)(?:一?个)?闹钟"#, "闹钟", "提醒我", "叫醒我", "叫我(?=起床)",
+        ]
+        for p in patterns { t = t.replacingOccurrences(of: p, with: " ", options: [.regularExpression, .caseInsensitive]) }
+        t = t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " ,，.。:：-"))
+        guard let first = t.first else { return "Alarm" }
+        return first.uppercased() + t.dropFirst()
     }
 
     /// "两个小时", "半小时", "一个半小时", "90分钟", "for 2 hours", "2-hour", "half an hour" → minutes. Not "...后" (that is a relative time).

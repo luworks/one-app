@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-enum HomeTab: CaseIterable, Identifiable {
+enum HomeTab: String, CaseIterable, Identifiable {
     case today, calendar, tasks, alarms
 
     var id: Self { self }
@@ -35,8 +35,21 @@ struct HomeView: View {
     @Query private var allEvents: [OneEvent]
     @Query private var allAlarms: [OneAlarm]
 
-    @State private var tab: HomeTab = .today
+    @State private var tab: HomeTab = Self.restored(HomeTab.self, key: Self.tabKey) ?? .today
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
+    // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
+    // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
+    @State private var calendarMode: CalendarView.Mode = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey) ?? .week
+    /// Alarms · World Clock · Stopwatch · Timer inside the Alarms tab.
+    @State private var clockSection: ClockSection = Self.restored(ClockSection.self, key: Self.clockSectionKey) ?? .alarms
+    @State private var addingCity = false
+    // The tab and the Calendar view also survive a restart (not in UI tests, which always start the same way).
+    private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode", clockSectionKey = "today.last.clockSection"
+    private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
+        guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
+        return UserDefaults.standard.string(forKey: key).flatMap(T.init(rawValue:))
+    }
+    @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
     @State private var todayDay = Calendar.current.startOfDay(for: .now)
     /// The AI screen: a new chat, or a saved conversation to continue. nil = closed.
@@ -44,6 +57,7 @@ struct HomeView: View {
     @State private var showsSearch = false
     @State private var newItem: NewItem?
     @State private var showsSettings = false
+    @State private var showsActivity = false
     /// The left drawer (conversation history). See `Drawer.swift` for how the drag works.
     @State private var drawer = DrawerModel()
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
@@ -52,17 +66,23 @@ struct HomeView: View {
     @Environment(\.undoManager) private var undoManager
     /// Counts tab switches made by swiping; drives their haptic (pill taps already have one).
     @State private var tabSwipes = 0
+    /// The keyboard is up (typing a new reminder inline, a list name, …): the floating bar steps aside instead of
+    /// riding on top of the keyboard, where it would cover the row being edited and a tap would open Ask.
+    @State private var keyboardUp = false
 
     var body: some View {
         GeometryReader { geo in
-            // The sidebar is a full screen: as wide as the page, which slides all the way off to the right.
-            let width = geo.size.width
+            // The sidebar takes most of the width; the page slides aside and stays visible beside it.
+            let full = geo.size.width
+            let width = full * DrawerLayout.widthFraction
             ZStack(alignment: .leading) {
                 if drawer.isBuilt {
                     Sidebar(drawer: drawer, width: width,
                             onNewChat: { openAsk(nil, fromSidebar: true) },
                             onOpen: { openAsk($0, fromSidebar: true) },
+                            onSearch: { showsSearch = true },
                             onSettings: { showsSettings = true },
+                            onActivity: { showsActivity = true },
                             close: { drawer.set(open: false) })
                         .frame(width: width)
                         .modifier(DrawerSidebarSlide(model: drawer, width: width))
@@ -81,7 +101,22 @@ struct HomeView: View {
                         }
                     }
                     .modifier(DrawerDrag(model: drawer, width: width, kind: .edgeOnly, enabled: edgeSwipeEnabled))
-                    .modifier(DrawerMainSlide(model: drawer, width: width))
+                    .modifier(DrawerMainSlide(model: drawer, width: width, size: geo.size, insets: geo.safeAreaInsets))
+
+                // The visible strip of the page: a tap or a drag to the left closes the sidebar.
+                if drawer.isOpen {
+                    Button { drawer.set(open: false) } label: {
+                        Color.clear
+                            .frame(width: full - width)
+                            .frame(maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close sidebar")
+                    .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .ignoresSafeArea()
+                }
             }
         }
         // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
@@ -98,6 +133,7 @@ struct HomeView: View {
         .onAppear { toast.undoManager = undoManager }
         .onChange(of: undoManager) { _, new in toast.undoManager = new }
         .sheet(isPresented: $showsSettings) { SettingsView() }
+        .sheet(isPresented: $showsActivity) { ActivityView() }
         .task {
             // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.
             try? await Task.sleep(for: .seconds(1.5))
@@ -126,6 +162,39 @@ struct HomeView: View {
         ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
     }
 
+    /// Reminders added from the Share sheet wait in the App Group (`ShareInbox`) until the app is active; they come in
+    /// here as new reminders, with an Undo toast. UI tests leave the inbox alone unless they pass `-uiTestingShare <title>`,
+    /// which puts one there first, or `-uiTestingShareInbox`, which reads what the real Share sheet left.
+    private static var sharedTestItemQueued = false
+
+    private func importShared() {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-uiTesting"), !args.contains("-uiTestingShareInbox") {
+            guard let i = args.firstIndex(of: "-uiTestingShare"), i + 1 < args.count else { return }
+            if !Self.sharedTestItemQueued {
+                Self.sharedTestItemQueued = true
+                ShareInbox.append(SharedReminder(title: args[i + 1], note: "https://example.com", due: ShareInbox.due(for: .tomorrow)))
+            }
+        }
+        let shared = ShareInbox.drain()
+        guard !shared.isEmpty else { return }
+        let added = shared.map { s in
+            let t = OneTask(title: s.title, note: s.note, due: s.due)
+            context.insert(t)
+            return t
+        }
+        try? context.save()
+        let entries = added.map {
+            Ledger.record(.created, task: $0, title: $0.title, after: LedgerFormat.time($0.due, none: ""), actor: .share,
+                          channel: .share, context: context)
+        }
+        toast.show(shared.count == 1 ? "Added “\(shared[0].title)” from Share" : "Added \(shared.count) reminders from Share") {
+            added.forEach { context.delete($0) }
+            try? context.save()
+            entries.forEach { Ledger.recordUndo(of: $0, context: context) }
+        }
+    }
+
     /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
     private static func seedUITestReminder(_ context: ModelContext) {
         let args = ProcessInfo.processInfo.arguments
@@ -141,22 +210,29 @@ struct HomeView: View {
                 switch tab {
                 case .today: DayAgenda(day: $todayDay, showsWeekStrip: false)
                 case .calendar:
-                    CalendarView(day: $calendarDay) { picked in
+                    CalendarView(day: $calendarDay, mode: $calendarMode) { picked in
                         todayDay = picked
                         withAnimation(.snappy) { tab = .today }
                     }
-                case .tasks: RemindersView(isPushed: $remindersPushed)
-                case .alarms: AlarmsView()
+                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath)
+                case .alarms: AlarmsView(section: $clockSection)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .safeAreaInset(edge: .bottom) { bottomBar }
+        .safeAreaInset(edge: .bottom) { if !keyboardUp { bottomBar } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardUp = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardUp = false
+        }
         .sensoryFeedback(.selection, trigger: tabSwipes)
         .sheet(isPresented: $showsSearch) { SearchView() }
+        .sheet(isPresented: $addingCity) { CityPicker() }
         .sheet(item: $newItem) { item in
             switch item {
-            case .task: TaskEditor()
+            case .task: QuickReminderSheet()   // Due-style quick add; editing a reminder opens TaskEditor
             case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
             case .alarm: AlarmEditor()
             }
@@ -174,9 +250,39 @@ struct HomeView: View {
                 return
             }
             #endif
+            #if DEBUG
+            if let path = TestDataset.requestedPath {
+                do { try TestDataset.load(path: path, into: context) } catch { print("DATASET failed: \(error)") }
+            } else {
+                SampleData.insertIfNeeded(context)
+            }
+            #else
             SampleData.insertIfNeeded(context)
+            #endif
             ListActions.ensureLists(in: context)
+            #if DEBUG
+            // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-debugDeleteSystemEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugDeleteSystemEvents(titled: args[i + 1])
+            }
+            if let i = args.firstIndex(of: "-debugCreateSystemEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: false)
+            }
+            if let i = args.firstIndex(of: "-debugCreateRepeatingEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: true)
+            }
+            #endif
             Self.seedUITestReminder(context)
+            importShared()
+            Ledger.prune(context)
+            #if DEBUG
+            // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
+            if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"), GrantStore.active(.planFreeTime, context: context) == nil {
+                GrantStore.grant(.planFreeTime, context: context)
+            }
+            #endif
+            autoPlan()
             await FirstRun.calendar()
         }
         .onAppear { LaunchTimer.markFirstFrame() }
@@ -185,12 +291,16 @@ struct HomeView: View {
             if ProcessInfo.processInfo.arguments.contains("-uiTesting"), let ms = LaunchTimer.milliseconds {
                 Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier("coldStartMs").accessibilityLabel(String(ms))
             }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uiTestingSyncDump") { SyncDumpProbe() }
+            #endif
         }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
             allAlarms.forEach { $0.retireIfRung() }
             await Reminders.shared.resync()
             await Ringer.sync(context)
+            updateWidgets()
         }
         .onChange(of: QuickAction.shared.pending, initial: true) { _, type in
             guard let type else { return }
@@ -198,13 +308,62 @@ struct HomeView: View {
             switch type {
             case "com.luworks.one.ask": openAsk(nil)
             case "com.luworks.one.newTask": newItem = .task
-            case "com.luworks.one.newEvent": newItem = .event
+            case "com.luworks.one.newEvent": newEvent()
             default: break
             }
         }
+        .onChange(of: tab) { _, t in UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey) }
+        .onChange(of: calendarMode) { _, m in UserDefaults.standard.set(m.rawValue, forKey: Self.calendarModeKey) }
+        .onChange(of: clockSection) { _, s in UserDefaults.standard.set(s.rawValue, forKey: Self.clockSectionKey) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await Reminders.shared.resync() } }
+            if phase == .active {
+                dropDeletedMirrors()
+                importShared()
+                autoPlan()
+                Task { await Reminders.shared.resync() }
+            }
+            if phase == .background {
+                Ledger.flush(context)
+                updateWidgets()
+                WidgetFeed.scheduleBackgroundRefresh()
+            }
         }
+        // An event deleted in Apple Calendar must not linger here: when the system calendar changes, drop the copies it lost.
+        .onChange(of: CalendarSync.shared.version) {
+            dropDeletedMirrors()
+            updateWidgets()
+        }
+        // Widget rows link here (today://today?day=…): open Today on that day.
+        .onOpenURL { url in
+            guard let day = WidgetLink.day(from: url) else { return }
+            ask = nil
+            showsSearch = false
+            drawer.set(open: false, animated: false)
+            tab = .today
+            todayDay = day
+        }
+    }
+
+    /// Rewrites the Lock Screen / Home Screen widget snapshot (skipped when nothing changed).
+    private func updateWidgets() {
+        WidgetFeed.update(tasks: allTasks, events: allEvents, alarms: allAlarms)
+    }
+
+    /// Under a "Plan reminders into free time" grant, today's untimed reminders take their suggested free time by
+    /// themselves, with a toast and Undo (see `AutoPlan`). Without a grant this does nothing.
+    private func autoPlan() {
+        AutoPlan.run(context: context, toast: toast)
+    }
+
+    private func dropDeletedMirrors() {
+        let gone = CalendarSync.shared.removedMirrors(allEvents)
+        guard !gone.isEmpty else { return }
+        for event in gone {
+            Ledger.record(.deleted, kind: "event", title: event.title, before: DayLabel.withTime(event.start),
+                          actor: .agent("Apple Calendar"), channel: .sync, approval: .observed, context: context)
+            context.delete(event)
+        }
+        try? context.save()
     }
 
     /// Changes whenever anything that affects reminders changes.
@@ -223,7 +382,8 @@ struct HomeView: View {
 
     private var topBar: some View {
         HStack(spacing: 8) {
-            // No avatar button: the sidebar opens with a swipe from the left edge (VoiceOver: the "Open menu" action).
+            // The three lines open the sidebar (chat history and Search), like ChatGPT and Claude; a swipe from the left edge does too.
+            CircleButton(systemImage: "line.3.horizontal", label: "Open menu", size: 44) { drawer.set(open: true) }
             // Only scrolls when the pills don't fit (very large text). Otherwise there is no scroll view
             // to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
             ViewThatFits(in: .horizontal) {
@@ -235,7 +395,6 @@ struct HomeView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
         .contentShape(Rectangle())
-        .accessibilityAction(named: "Open menu") { drawer.set(open: true) }
         // Chrome stays usable at the largest text sizes; content below still scales fully.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
@@ -271,6 +430,12 @@ struct HomeView: View {
         }
     }
 
+    /// A new event: Apple's own editor when Calendar access is on (presented by UIKit, see `NativeEvents`), else ours.
+    private func newEvent() {
+        guard CalendarSync.shared.usesNativeEditor else { newItem = .event; return }
+        NativeEvents.edit(start: EventEditor.defaultStart(for: tab == .calendar ? calendarDay : .now))
+    }
+
     /// What + adds right now: the thing this page is about.
     private var smartNewItem: NewItem {
         switch tab {
@@ -280,9 +445,15 @@ struct HomeView: View {
         }
     }
 
+    /// On World Clock, + adds a city.
+    private var plusAddsCity: Bool { tab == .alarms && clockSection == .worldClock }
+
+    /// Stopwatch and Timer have nothing to add: no + there, like Clock.
+    private var showsPlus: Bool { !(tab == .alarms && (clockSection == .stopwatch || clockSection == .timer)) }
+
     private var bottomButtons: some View {
         HStack(spacing: 10) {
-            CircleButton(systemImage: "magnifyingglass", label: "Search") { showsSearch = true }
+            // Search lives in the sidebar (top right), like ChatGPT and Claude; the bar keeps only Ask AI and +.
             Button { openAsk(nil) } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
@@ -295,28 +466,36 @@ struct HomeView: View {
                 .glassCapsule()
             }
             .buttonStyle(PressScale())
-            // +: tap adds what fits the page you are on (alarm on Alarms, event on Calendar, otherwise a
-            // reminder); press and hold to pick.
-            Menu {
-                Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
-                Button { newItem = .event } label: { Label("New event", systemImage: "calendar") }
-                Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 50, height: 50)
-                    .glassCircle()
-            } primaryAction: {
-                newItem = smartNewItem
-            }
-            .tint(.primary)
-            .accessibilityLabel("New")
-            .accessibilityHint("Adds \(smartNewItem.noun). Press and hold for more.")
+            // +: tap adds what fits the page you are on (alarm on Alarms, a city on World Clock, event on Calendar,
+            // otherwise a reminder); press and hold to pick.
+            if showsPlus { plusButton }
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
         .padding(.bottom, 4)
+    }
+
+    private var plusButton: some View {
+        Menu {
+            if plusAddsCity {
+                Button { addingCity = true } label: { Label("Add city", systemImage: "globe") }
+            }
+            Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
+            Button { newEvent() } label: { Label("New event", systemImage: "calendar") }
+            Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
+        } label: {
+            Image(systemName: "plus")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 50, height: 50)
+                .glassCircle()
+        } primaryAction: {
+            if plusAddsCity { addingCity = true }
+            else if smartNewItem == .event { newEvent() } else { newItem = smartNewItem }
+        }
+        .tint(.primary)
+        .accessibilityLabel("New")
+        .accessibilityHint("Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
     }
 }
 
@@ -397,6 +576,7 @@ struct TabPill: View {
 struct CircleButton: View {
     let systemImage: String
     let label: String
+    var size: CGFloat = 50
     var action: () -> Void
 
     var body: some View {
@@ -404,7 +584,7 @@ struct CircleButton: View {
             Image(systemName: systemImage)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.primary)
-                .frame(width: 50, height: 50)
+                .frame(width: size, height: size)
                 .glassCircle()
         }
         .buttonStyle(PressScale())
@@ -445,5 +625,5 @@ extension View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self], inMemory: true)
+        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self, LedgerEntry.self, AIGrant.self], inMemory: true)
 }

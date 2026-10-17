@@ -7,6 +7,9 @@ enum SettingsKey {
     static let showOverdue = "today.setting.showOverdue"
     static let showAlarms = "today.setting.showAlarmsInToday"
     static let jumpToNow = "today.setting.jumpToNow"
+    static let autoArchiveChats = "today.setting.autoArchiveChats"
+    static let travelTime = "today.setting.travelTime"
+    static let healthSummary = "today.setting.healthSummary"
 }
 
 /// Settings is its own screen (opened from the sidebar). Each screen's options live here, not in the sidebar;
@@ -19,6 +22,11 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.showOverdue) private var showOverdue = true
     @AppStorage(SettingsKey.showAlarms) private var showAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpToNow = true
+    @AppStorage(SettingsKey.autoArchiveChats) private var autoArchiveChats = true
+    @AppStorage(SmartListLayout.orderKey) private var smartOrder = ""
+    @AppStorage(SmartListLayout.hiddenKey) private var smartHidden = ""
+    @AppStorage(SettingsKey.travelTime) private var travelTime = true
+    @AppStorage(SettingsKey.healthSummary) private var healthSummary = true
 
     @State private var calendarOn = CalendarSync.shared.isOn
     @State private var remindersOn = RemindersSync.shared.isConnected
@@ -26,6 +34,9 @@ struct SettingsView: View {
     @State private var showsCalendars = false
     @State private var askingFirst = false
     @State private var askingSecond = false
+    @State private var activityCount = 0
+    @State private var askingClearActivity = false
+    @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
 
     var body: some View {
         NavigationStack {
@@ -66,8 +77,50 @@ struct SettingsView: View {
                     Toggle("Show overdue reminders", isOn: $showOverdue)
                     Toggle("Show alarms in the day", isOn: $showAlarms)
                     Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
+                    Toggle("Travel time", isOn: $travelTime)
+                    Toggle("Health summary", isOn: $healthSummary)
                 } header: {
                     Text("Today")
+                } footer: {
+                    Text("Travel time shows how long the drive takes to upcoming events with a location today and tomorrow, and when to leave. To work it out, your current location and the event's address go to Apple Maps (MapKit) only; nothing else leaves your iPhone. Health summary shows today's steps and last night's sleep from Apple Health in one line; Today only reads them.")
+                }
+
+                smartListsSection
+
+                Section {
+                    NavigationLink {
+                        AutomaticChangesView()
+                    } label: {
+                        HStack {
+                            Label("Automatic changes", systemImage: "sparkles")
+                            Spacer()
+                            Text(activeGrants == 0 ? "Off" : "\(activeGrants) on").foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("settings.automaticChanges")
+                } header: {
+                    Text("AI")
+                } footer: {
+                    Text("AI changes wait for your tap. On a card that only changes Today's own planned times, “Always for 7 days” lets that kind of change happen by itself for a week; each one shows a toast with Undo and an entry in Activity.")
+                }
+
+                Section {
+                    LabeledContent("Entries", value: "\(activityCount)")
+                        .accessibilityIdentifier("settings.activityCount")
+                    Button(role: .destructive) { askingClearActivity = true } label: { Text("Clear Activity…") }
+                        .disabled(activityCount == 0)
+                } header: {
+                    Text("Activity")
+                } footer: {
+                    Text("Activity keeps 90 days of changes on this device. Clearing it does not change any reminder, event or alarm.")
+                }
+
+                Section {
+                    Toggle("Archive finished chats", isOn: $autoArchiveChats)
+                } header: {
+                    Text("Chats")
+                } footer: {
+                    Text("A chat moves to Archived a week after its last message, or an hour after everything it added is done. Archived chats stay in the sidebar under Archived.")
                 }
 
                 Section {
@@ -91,7 +144,18 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task {
+                Ledger.flush(context)
+                activityCount = Ledger.count(context)
                 notificationStatus = await Reminders.shared.authorizationStatus()
+            }
+            .confirmationDialog("Clear Activity?", isPresented: $askingClearActivity, titleVisibility: .visible) {
+                Button("Clear \(activityCount) Entries", role: .destructive) {
+                    Ledger.clear(context)
+                    activityCount = 0
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The record of past changes is deleted from this device. Your reminders, events and alarms stay as they are.")
             }
             .onChange(of: calendarOn) { _, on in
                 guard on != CalendarSync.shared.isOn else { return }
@@ -99,6 +163,9 @@ struct SettingsView: View {
                     await CalendarSync.shared.setEnabled(on)
                     calendarOn = CalendarSync.shared.isOn   // stays off if access was refused
                 }
+            }
+            .onChange(of: travelTime) { _, _ in
+                WidgetFeed.rewriteFromStore()   // add or drop "Leave by" on the widget
             }
             .onChange(of: remindersOn) { _, on in
                 guard on != RemindersSync.shared.isConnected else { return }
@@ -111,7 +178,7 @@ struct SettingsView: View {
                 Button("Continue…", role: .destructive) { askingSecond = true }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This deletes the reminders, events, alarms and lists Today keeps on this device. It can't be undone.")
+                Text("This deletes the reminders, events, alarms, lists and Activity Today keeps on this device. It can't be undone.")
             }
             .sheet(isPresented: $showsCalendars) { CalendarsSheet() }
             .sheet(isPresented: $askingSecond) {
@@ -122,6 +189,40 @@ struct SettingsView: View {
             }
         }
     }
+
+    /// Which smart lists show at the top of Reminders: a switch per list, press, hold and drag to reorder (no Edit mode).
+    private var smartListsSection: some View {
+        let layout = SmartListLayout(order: smartOrder, hidden: smartHidden)
+        return Section {
+            ForEach(layout.order) { smart in
+                Toggle(isOn: Binding(
+                    get: { !layout.hidden.contains(smart) },
+                    set: { shown in
+                        var l = SmartListLayout(order: smartOrder, hidden: smartHidden)
+                        if shown { l.hidden.remove(smart) } else { l.hidden.insert(smart) }
+                        smartHidden = l.hiddenString
+                    }
+                )) {
+                    HStack(spacing: 12) {
+                        ListGlyph(color: smart.color, symbol: smart.symbol, size: 28)
+                        Text(smart.title)
+                    }
+                }
+                .accessibilityIdentifier("smartToggle.\(smart.rawValue)")
+            }
+            .onMove { from, to in
+                var l = SmartListLayout(order: smartOrder, hidden: smartHidden)
+                l.order.move(fromOffsets: from, toOffset: to)
+                smartOrder = l.orderString
+            }
+        } header: {
+            Text("Reminders Smart Lists")
+        } footer: {
+            Text("Shown at the top of Reminders. Press and hold one, then drag, to change the order.")
+        }
+    }
+
+    private var activeGrants: Int { grants.filter { $0.info?.isActive(at: .now) ?? false }.count }
 
     private func statusRow(title: String, icon: String, value: String, showsSettings: Bool, turnOn: (() -> Void)? = nil) -> some View {
         HStack {
@@ -193,6 +294,67 @@ enum DataReset {
         try? context.delete(model: OneList.self)
         try? context.delete(model: Habit.self)
         try? context.delete(model: ChatThread.self)
+        try? context.delete(model: AIGrant.self)
+        Ledger.clear(context)
         try? context.save()
     }
+}
+
+/// Settings → AI → Automatic changes: the grants given with "Always for 7 days", each with its end date and Revoke.
+/// What no grant can ever cover is listed too (see `AutonomyPolicy`).
+struct AutomaticChangesView: View {
+    @Environment(\.modelContext) private var context
+    @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
+
+    private var active: [AIGrant] { grants.filter { $0.info?.isActive(at: .now) ?? false } }
+
+    var body: some View {
+        Form {
+            Section {
+                if active.isEmpty {
+                    Text("None. AI changes wait for your tap.").foregroundStyle(.secondary)
+                }
+                ForEach(active) { g in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(GrantScope(rawValue: g.scope)?.title ?? g.scope)
+                            Text("Until " + g.expires.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Revoke", role: .destructive) {
+                            withAnimation { GrantStore.revoke(g, context: context) }
+                            try? context.save()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("grant.revoke")
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("grant.row")
+                }
+            } header: {
+                Text("Allowed")
+            } footer: {
+                Text(GrantScope.planFreeTime.detail + " Overdue reminders, ones that ring as alarms, and ones you placed yourself still ask.")
+            }
+            Section {
+                ForEach(Self.never, id: \.self) { Label($0, systemImage: "lock").font(.subheadline) }
+            } header: {
+                Text("Always asks")
+            } footer: {
+                Text("No grant covers these. Each one is a card you apply with a tap.")
+            }
+        }
+        .navigationTitle("Automatic changes")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    static let never = [
+        "Writing Apple Calendar or Apple Reminders",
+        "Moving or changing events",
+        "Changing deadlines",
+        "Deleting anything",
+        "Anything that notifies other people",
+    ]
 }
