@@ -142,12 +142,13 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(app.buttons["Settings"].exists)
         XCTAssertTrue(app.staticTexts["Your conversations with AI will appear here."].exists)
         // The pill bar on the page behind owns these; the sidebar must not repeat them.
+        // The page stays visible beside the sidebar (its pills included), so look inside the sidebar itself.
+        let sidebar = app.otherElements["sidebar"]
+        XCTAssertTrue(sidebar.exists)
         for name in ["Today", "Calendar", "Reminders", "Alarms"] {
-            // The page behind has slid fully off screen; what matters is that no such row is visible in the sidebar.
-            let onScreen = app.buttons.matching(identifier: name).allElementsBoundByIndex.contains { $0.exists && $0.frame.intersects(app.frame) }
-            let labelled = app.buttons.matching(NSPredicate(format: "label == %@", name)).allElementsBoundByIndex
-                .contains { $0.exists && $0.frame.intersects(app.frame) }
-            XCTAssertFalse(onScreen || labelled, "no \(name) row in the sidebar")
+            let byId = sidebar.buttons.matching(identifier: name).count
+            let byLabel = sidebar.buttons.matching(NSPredicate(format: "label == %@", name)).count
+            XCTAssertEqual(byId + byLabel, 0, "no \(name) row in the sidebar")
         }
     }
 
