@@ -3,23 +3,36 @@ import SwiftData
 
 /// Activity, from the sidebar: what changed, newest first, grouped by day. Each row: time · who · what, before → after,
 /// and Undo where Today can put it back. Filter chips: All / AI / You / Agents. Read-only apart from Undo.
+///
+/// The rows come from the Activity data store (`ActivityStore`), one page of 150 at a time: "Show more" asks for the next page
+/// from where the last one ended, so a long history never loads at once.
 struct ActivityView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @State private var filter: ActivityFilter = .all
-    /// Rows fetched: one page, grown by "Show more" (the ledger keeps 90 days and can be long).
-    @State private var limit = 150
+    @State private var items: [LedgerItem] = []
+    @State private var undone: Set<UUID> = []
+    @State private var moreAfter: ActivityCursor?
+    @State private var canLoadMore = false
+    @State private var loaded = false
+    @State private var recording = true
+    @State private var now = Date.now
+
+    private let pageSize = 150
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 chips
-                ActivityList(filter: filter, limit: limit) { limit += 150 }
+                content
             }
             .navigationTitle("Activity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .onAppear { Ledger.flush(context) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { note }
+            .task { reload() }
+            .onChange(of: filter) { reload(keepCount: false) }
+            .onReceive(NotificationCenter.default.publisher(for: ActivityCenter.didChange)) { _ in reload() }
         }
     }
 
@@ -29,51 +42,28 @@ struct ActivityView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
     }
-}
 
-/// One page of entries for a filter. The filter and the 90-day window are in the fetch itself.
-private struct ActivityList: View {
-    @Environment(\.modelContext) private var context
-    @Query private var entries: [LedgerEntry]
-    let limit: Int
-    var showMore: () -> Void
-    @State private var now = Date.now
-
-    init(filter: ActivityFilter, limit: Int, showMore: @escaping () -> Void) {
-        self.limit = limit
-        self.showMore = showMore
-        let cutoff = LedgerFormat.retentionCutoff(now: .now)
-        let you = LedgerActor.you.raw, ai = LedgerActor.todayAI.raw
-        let predicate: Predicate<LedgerEntry>
-        switch filter {
-        case .all: predicate = #Predicate<LedgerEntry> { $0.date >= cutoff }
-        case .ai: predicate = #Predicate<LedgerEntry> { $0.date >= cutoff && $0.actor == ai }
-        case .you: predicate = #Predicate<LedgerEntry> { $0.date >= cutoff && $0.actor == you }
-        case .agents: predicate = #Predicate<LedgerEntry> { $0.date >= cutoff && $0.actor != you && $0.actor != ai }
-        }
-        var d = FetchDescriptor<LedgerEntry>(predicate: predicate, sortBy: [SortDescriptor(\.date, order: .reverse)])
-        d.fetchLimit = limit
-        _entries = Query(d)
-    }
-
-    var body: some View {
-        if entries.isEmpty {
+    @ViewBuilder private var content: some View {
+        if items.isEmpty {
             ContentUnavailableView("No activity yet", systemImage: "clock.arrow.circlepath",
                                    description: Text("Changes made by you, Today AI, Siri, Share and other apps show here, with Undo where possible."))
         } else {
-            let undone = Set(entries.compactMap(\.undoOf))
             List {
-                ForEach(LedgerFormat.groupByDay(entries, date: \.date, now: now), id: \.day) { group in
+                ForEach(LedgerFormat.groupByDay(items, date: \.date, now: now), id: \.day) { group in
                     Section {
-                        ForEach(group.items) { entry in
-                            ActivityRow(entry: entry, undone: undone.contains(entry.id))
+                        ForEach(group.items) { item in
+                            ActivityRow(item: item, undone: undone.contains(item.id)) {
+                                let ok = Ledger.undo(item, context: context)
+                                reload()
+                                return ok
+                            }
                         }
                     } header: {
                         Text(group.title).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).textCase(nil)
                     }
                 }
-                if entries.count >= limit {
-                    Button("Show more", action: showMore)
+                if canLoadMore {
+                    Button("Show more", action: loadMore)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .listRowSeparator(.hidden)
                 }
@@ -81,20 +71,74 @@ private struct ActivityList: View {
             .listStyle(.plain)
         }
     }
+
+    /// One quiet line: where this lives, and that Settings has pause, clear and export.
+    private var note: some View {
+        Text(recording ? ActivityNote.screenLine : "Recording is paused, so new changes are not listed. " + ActivityNote.screenLine)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+            .accessibilityIdentifier("activity.note")
+    }
+
+    // MARK: Paging
+
+    private var query: ActivityQuery {
+        let actors: ActivityQuery.Actors = switch filter {
+        case .all: .all
+        case .ai: .ai
+        case .you: .you
+        case .agents: .others
+        }
+        let since = ActivityCenter.shared.settings.retention.cutoff(now: .now).map(ActivityClock.ms)
+        return ActivityQuery(tiers: [.changes], actors: actors, sinceMs: since)
+    }
+
+    /// Reads the newest rows again (keeping as many as are shown), after Undo, a new change or another filter.
+    private func reload(keepCount: Bool = true) {
+        Ledger.flush(context)
+        recording = ActivityCenter.recordsChanges
+        guard let store = ActivityCenter.shared.store else { loaded = true; return }
+        let want = keepCount ? max(pageSize, items.count) : pageSize
+        let page = (try? store.page(query, limit: want + 1)) ?? []
+        show(Array(page.prefix(want)), more: page.count > want, store: store, replacing: true)
+    }
+
+    private func loadMore() {
+        guard let store = ActivityCenter.shared.store, let after = moreAfter else { return }
+        let page = (try? store.page(query, after: after, limit: pageSize + 1)) ?? []
+        show(Array(page.prefix(pageSize)), more: page.count > pageSize, store: store, replacing: false)
+    }
+
+    private func show(_ events: [ActivityEvent], more: Bool, store: ActivityStore, replacing: Bool) {
+        now = .now
+        let fresh = events.map { LedgerItem(event: $0) }
+        let all = replacing ? fresh : items + fresh
+        undone = Set(((try? store.undone(among: all.map { $0.id.uuidString })) ?? []).compactMap(UUID.init(uuidString:)))
+        moreAfter = ActivityCursor(after: events.last) ?? (replacing ? nil : moreAfter)
+        canLoadMore = more
+        loaded = true
+        withAnimation(.snappy) { items = all }
+    }
 }
 
 private struct ActivityRow: View {
-    @Environment(\.modelContext) private var context
-    let entry: LedgerEntry
+    let item: LedgerItem
     let undone: Bool
+    /// Runs Undo; false when it could not (the reminder is gone or changed again).
+    let onUndo: () -> Bool
     @State private var failed = false
 
-    private var actor: LedgerActor { entry.actorValue }
+    private var actor: LedgerActor { item.actorValue }
 
     var body: some View {
-        let change = LedgerFormat.change(before: entry.before, after: entry.after)
-        let canUndo = LedgerFormat.canUndo(action: entry.actionValue, itemKind: entry.itemKind, approval: entry.approvalValue,
-                                           hasItem: entry.itemRef != nil, hasSnapshot: entry.snapshot != nil, alreadyUndone: undone)
+        let change = LedgerFormat.change(before: item.before, after: item.after)
+        let canUndo = LedgerFormat.canUndo(action: item.actionValue, itemKind: item.itemKind, approval: item.approvalValue,
+                                           hasItem: item.itemRef != nil, hasSnapshot: item.hasSnapshot, alreadyUndone: undone)
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: actor.symbol)
                 .font(.footnote.weight(.semibold))
@@ -103,7 +147,7 @@ private struct ActivityRow: View {
                 .background(actor == .todayAI ? Color.purple.opacity(0.14) : Color(.secondarySystemFill), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(LedgerFormat.headline(entry.actionValue, title: entry.title))
+                Text(LedgerFormat.headline(item.actionValue, title: item.title))
                     .font(.subheadline)
                     .lineLimit(2)
                 if !change.isEmpty {
@@ -114,13 +158,13 @@ private struct ActivityRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             if canUndo && !failed {
                 Button("Undo") {
-                    withAnimation(.snappy) { failed = !Ledger.undo(entry, context: context) }
+                    withAnimation(.snappy) { failed = !onUndo() }
                 }
                 .font(.subheadline.weight(.semibold))
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
-                .accessibilityLabel("Undo \(LedgerFormat.headline(entry.actionValue, title: entry.title))")
+                .accessibilityLabel("Undo \(LedgerFormat.headline(item.actionValue, title: item.title))")
                 .accessibilityIdentifier("activity.undo")
             } else if undone {
                 Text("Undone").font(.caption).foregroundStyle(.secondary)
@@ -135,8 +179,8 @@ private struct ActivityRow: View {
 
     /// "09:41 · Today AI · Automatic".
     private var meta: String {
-        var parts = [entry.date.formatted(date: .omitted, time: .shortened), actor.name]
-        if let label = entry.approvalValue.label { parts.append(label) }
+        var parts = [item.date.formatted(date: .omitted, time: .shortened), actor.name]
+        if let label = item.approvalValue.label { parts.append(label) }
         return parts.joined(separator: " · ")
     }
 }

@@ -1,0 +1,184 @@
+import SwiftUI
+import SwiftData
+
+/// Settings → Activity → Activity data: what Today records about your use, where it lives, and the basics: pause, switch a
+/// category off, how long changes are kept, export (JSON Lines or CSV) and clear. Everything stays on this iPhone.
+struct ActivityDataView: View {
+    @Environment(\.modelContext) private var context
+    @AppStorage(ActivitySettings.pausedKey) private var paused = false
+    @AppStorage(ActivitySettings.retentionKey) private var retentionRaw = ActivityRetention.default.rawValue
+    @AppStorage(ActivitySettings.keepChatTextKey) private var keepChatText = false
+    @AppStorage(ActivitySettings.tierKey(.changes)) private var keepChanges = true
+    @AppStorage(ActivitySettings.tierKey(.ai)) private var keepAI = true
+    @AppStorage(ActivitySettings.tierKey(.usage)) private var keepUsage = true
+    @AppStorage(ActivitySettings.tierKey(.system)) private var keepSystem = true
+
+    @State private var summary = ActivityCenter.Summary()
+    @State private var askingClear = false
+    @State private var exporting = false
+    @State private var exported: ExportedFile?
+    @State private var exportFailed = false
+    @State private var benchmark: String?
+    @State private var benchmarking = false
+    @State private var legacyRows = 0
+
+    private struct ExportedFile: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
+    private var retention: Binding<ActivityRetention> {
+        Binding(get: { ActivityRetention(rawValue: retentionRaw) ?? .default }, set: { retentionRaw = $0.rawValue })
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Pause recording", isOn: $paused)
+                    .accessibilityIdentifier("activity.pause")
+            } footer: {
+                Text("While paused nothing new is recorded, in any category. What is already recorded stays until you clear it.")
+            }
+
+            Section {
+                tierToggle(.changes, $keepChanges)
+                tierToggle(.ai, $keepAI)
+                tierToggle(.usage, $keepUsage)
+                tierToggle(.system, $keepSystem)
+                Toggle(isOn: $keepChatText) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Keep the text of my messages")
+                        Text("Off: only the length and language of what you ask the AI are recorded. On: the message text is stored too, apart from the other fields.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityIdentifier("activity.keepChatText")
+            } header: {
+                Text("What is recorded")
+            } footer: {
+                Text(ActivityNote.neverRecorded + " While Changes is off (or recording is paused), “Always for 7 days” does not apply anything by itself, because there would be no Activity entry or Undo for it.")
+            }
+
+            Section {
+                LabeledContent("Stored") { Text("On this iPhone").foregroundStyle(.secondary) }
+                ForEach(ActivityTier.allCases) { tier in
+                    LabeledContent(tier.title) { Text("\(summary.perTier[tier] ?? 0)").foregroundStyle(.secondary).monospacedDigit() }
+                }
+                LabeledContent("Size") {
+                    Text(ByteCountFormatter.string(fromByteCount: summary.fileBytes, countStyle: .file)).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Where it lives")
+            } footer: {
+                Text(ActivityNote.whereStored + " Export it below if you want a copy; deleting the app deletes it.")
+            }
+            .accessibilityIdentifier("activity.where")
+
+            Section {
+                Picker("Keep changes for", selection: retention) {
+                    ForEach(ActivityRetention.allCases) { Text($0.title).tag($0) }
+                }
+                .accessibilityIdentifier("activity.retention")
+            } footer: {
+                Text("Older changes are removed when Today opens. Other records are kept shorter: AI decisions 180 days, usage 30 days, system events 90 days. Undo for a deleted reminder works for 30 days.")
+            }
+
+            Section {
+                ForEach(ActivityExportFormat.allCases) { format in
+                    Button { export(format) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Export \(format.rawValue)…")
+                            Text(format.summary).font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(exporting || summary.total == 0)
+                    .accessibilityIdentifier("activity.export.\(format.fileExtension)")
+                }
+            } header: {
+                Text("Export")
+            } footer: {
+                Text(exportFailed ? "The export did not work. Try again." : "Opens the share sheet, so you can save the file to Files, send it by AirDrop or mail it.")
+            }
+
+            Section {
+                Button(role: .destructive) { askingClear = true } label: { Text("Clear activity history…") }
+                    .disabled(summary.total == 0)
+                    .accessibilityIdentifier("activity.clear")
+            } footer: {
+                Text("Deletes everything recorded here. Your reminders, events and alarms stay as they are, and so do Apple Calendar and Apple Reminders.")
+            }
+
+            #if DEBUG
+            Section {
+                Button(benchmarking ? "Running…" : "Run speed test (100,000 rows)") { runBenchmark() }
+                    .disabled(benchmarking)
+                    .accessibilityIdentifier("activity.benchmark")
+                LabeledContent("Old ledger rows (SwiftData)") {
+                    Text("\(legacyRows)").monospacedDigit().accessibilityIdentifier("activity.legacyCount")
+                }
+                if let benchmark { Text(benchmark).font(.caption.monospaced()).textSelection(.enabled) }
+            } header: {
+                Text("Debug")
+            } footer: {
+                Text("Inserts rows into a throwaway database file, times the queries, and deletes it. Your data is not touched.")
+            }
+            #endif
+        }
+        .navigationTitle("Activity data")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: ActivityCenter.didChange)) { _ in refresh() }
+        .confirmationDialog("Clear activity history?", isPresented: $askingClear, titleVisibility: .visible) {
+            Button("Clear \(summary.total) Events", role: .destructive) {
+                ActivityCenter.clear(context: context)
+                refresh()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The record of past changes, AI decisions, usage and system events is deleted from this iPhone. Undo from Activity stops working for what is cleared.")
+        }
+        .sheet(item: $exported) { file in
+            ActivityFileSheet(url: file.url).presentationDetents([.medium, .large])
+        }
+    }
+
+    private func tierToggle(_ tier: ActivityTier, _ isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tier.title)
+                Text(tier.detail).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityIdentifier("activity.tier.\(tier.rawValue)")
+    }
+
+    private func refresh() {
+        summary = ActivityCenter.summary()
+        #if DEBUG
+        legacyRows = (try? context.fetchCount(FetchDescriptor<LedgerEntry>())) ?? 0
+        #endif
+    }
+
+    private func export(_ format: ActivityExportFormat) {
+        exporting = true
+        exportFailed = false
+        Task {
+            do { exported = ExportedFile(url: try await ActivityCenter.export(format)) } catch { exportFailed = true }
+            exporting = false
+        }
+    }
+
+    #if DEBUG
+    private func runBenchmark() {
+        benchmarking = true
+        benchmark = nil
+        Task.detached(priority: .utility) {
+            let text = (try? ActivityBenchmark.run(rows: 100_000).summary) ?? "The speed test failed."
+            await MainActor.run {
+                benchmark = text
+                benchmarking = false
+            }
+        }
+    }
+    #endif
+}

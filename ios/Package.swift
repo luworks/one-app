@@ -9,13 +9,13 @@ let package = Package(
         .target(
             name: "OneLogic",
             path: "One",
-            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift", "TimerDial.swift", "Pomodoro.swift", "IntentLogic.swift", "EventMatch.swift", "ClockLogic.swift", "OverdueTidy.swift", "LedgerLogic.swift", "AutonomyPolicy.swift", "HealthLogic.swift", "EveningReview.swift", "EditingLogic.swift", "RowSubtitle.swift", "MessageCopy.swift", "AskSuggestions.swift", "AppearanceLogic.swift"]
+            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift", "TimerDial.swift", "Pomodoro.swift", "IntentLogic.swift", "EventMatch.swift", "ClockLogic.swift", "OverdueTidy.swift", "LedgerLogic.swift", "AutonomyPolicy.swift", "HealthLogic.swift", "EveningReview.swift", "EditingLogic.swift", "RowSubtitle.swift", "MessageCopy.swift", "AskSuggestions.swift", "AppearanceLogic.swift", "ActivityEvent.swift", "ActivityStore.swift", "ActivityRecorder.swift", "ActivityLedger.swift", "ActivityEvents.swift", "ActivityExport.swift"]
         ),
         // Code shared by the app and the TodayWidgets extension (the widget snapshot and "next items" logic).
         .target(
             name: "OneShared",
             path: "Shared",
-            sources: ["WidgetSnapshot.swift", "NextUpSpeech.swift", "TravelTime.swift", "ShareInbox.swift", "LockScreenNext.swift"]
+            sources: ["WidgetSnapshot.swift", "NextUpSpeech.swift", "TravelTime.swift", "ShareInbox.swift", "LockScreenNext.swift", "ActivityOutbox.swift"]
         ),
         .testTarget(
             name: "OneLogicTests",

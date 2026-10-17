@@ -55,6 +55,8 @@ struct NextUpProvider: TimelineProvider {
         // One entry at each start and end, so the list advances by itself, through tomorrow in case iOS delays the reload.
         // Reload hourly (and at midnight) to re-read Apple Calendar.
         let entries = NextItems.timelineDates(for: items, now: now, days: 2, countdownLead: LockScreenNext.countdownWindow).map { NextUpEntry(date: $0, items: items) }
+        // The widget never opens the Activity database: it leaves one small file in the App Group outbox for the app to import.
+        ActivityOutbox.append(kind: "sys.widget.refresh", actor: "system", channel: "widget", props: ["count": items.count], at: now)
         completion(Timeline(entries: entries, policy: .after(NextItems.reloadDate(now: now))))
     }
 

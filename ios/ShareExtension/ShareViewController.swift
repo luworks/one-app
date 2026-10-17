@@ -16,6 +16,9 @@ final class ShareViewController: UIViewController {
                                    onCancel: { [weak self] in self?.finish(added: false) },
                                    onAdd: { [weak self] reminder in
                                        ShareInbox.append(reminder)
+                                       // Never the SQLite file: a small JSONL file in the App Group outbox (imported by the app).
+                                       ActivityOutbox.append(kind: "sys.share.add", actor: "share", channel: "share",
+                                                             props: ["has_note": !reminder.note.isEmpty, "has_due": reminder.due != nil])
                                        self?.finish(added: true)
                                    })
             let host = UIHostingController(rootView: sheet)

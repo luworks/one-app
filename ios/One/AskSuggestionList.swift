@@ -34,6 +34,11 @@ struct AskSuggestionList: View {
 
     private var key: String { SuggestionCache.key(for: held.rules, language: held.ctx?.language ?? .en) }
 
+    /// "model" once the on-device model's wording is on screen, else "rules" (for Activity data).
+    private var source: String {
+        held.upgradedKey == key && held.upgraded.count == held.rules.count ? "model" : "rules"
+    }
+
     /// Rules at first; the model's version once it is ready for exactly these rules.
     private func shown() -> [AskSuggestion] {
         if held.ctx == nil { rebuild() }
@@ -52,8 +57,11 @@ struct AskSuggestionList: View {
         let _ = revision // a finished background step (model answer, refresh) redraws
         let chips = shown()
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(chips.enumerated()), id: \.offset) { _, s in
-                Button { onSend(s.text) } label: {
+            ForEach(Array(chips.enumerated()), id: \.offset) { rank, s in
+                Button {
+                    ActivityCenter.record(ActivityEvents.chipTapped(id: s.id, rank: rank, source: source))
+                    onSend(s.text)
+                } label: {
                     Text(verbatim: s.text)
                         .font(.subheadline)
                         .multilineTextAlignment(.leading)
@@ -68,6 +76,11 @@ struct AskSuggestionList: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: chips)
+        // Which chips were on screen, in rank order (a changed set counts again): the base for tap rates.
+        .task(id: chips.map(\.id).joined(separator: "|")) {
+            ActivityCenter.record(ActivityEvents.chipsShown(ids: chips.map(\.id), source: source,
+                                                            hour: Calendar.current.component(.hour, from: .now)))
+        }
         .task { await keepFresh() }
         .onChange(of: tasks.count) { refresh() }
         .onChange(of: events.count) { refresh() }

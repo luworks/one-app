@@ -120,7 +120,7 @@ enum TaskActions {
     /// Sets or clears the planned time (never the deadline) and records it: Plan, Today, Tomorrow, Unschedule, drag.
     @discardableResult
     static func setPlanned(_ task: OneTask, to start: Date?, context: ModelContext,
-                           actor: LedgerActor = .you, channel: LedgerChannel = .app, approval: LedgerApproval = .userMade) -> LedgerEntry? {
+                           actor: LedgerActor = .you, channel: LedgerChannel = .app, approval: LedgerApproval = .userMade) -> LedgerItem? {
         let old = task.plannedStart
         guard old != start else { return nil }
         withAnimation { task.plannedStart = start }

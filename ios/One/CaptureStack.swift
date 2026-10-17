@@ -5,9 +5,17 @@ struct CaptureProposal: Identifiable, Equatable {
     enum State: Equatable { case open, added }
     let id = UUID()
     var capture: Capture
+    /// The proposal as the AI first made it, to tell what the user changed before Add (Activity data, edited-card diffs).
+    let original: Capture
     var state: State = .open
     /// How many items the line produced; a line with several keeps the list layout as rows leave.
     var batchSize = 1
+
+    init(capture: Capture, batchSize: Int = 1) {
+        self.capture = capture
+        self.original = capture
+        self.batchSize = batchSize
+    }
 }
 
 /// Every item from one line at once: a single item is the full preview card; several are compact rows with their own
