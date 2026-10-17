@@ -59,12 +59,12 @@ final class AlarmsTabTests: XCTestCase {
         addAlarm()
         let toggle = toggles.firstMatch
         XCTAssertEqual(toggle.value as? String, "1", "a new alarm is on")
-        toggle.tap()
+        toggle.toggleSwitch()
         XCTAssertEqual(toggle.value as? String, "0")
-        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Next alarm in'")).firstMatch.exists,
-                       "no hint when every alarm is off")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Next alarm in'")).firstMatch.waitForNonExistence(timeout: 3),
+                      "no hint when every alarm is off")
         shot("3-off")
-        toggle.tap()
+        toggle.toggleSwitch()
         XCTAssertEqual(toggle.value as? String, "1")
     }
 
@@ -157,7 +157,8 @@ final class AlarmsTabTests: XCTestCase {
     func testSnoozeOffHidesDuration() {
         app.buttons["New"].tap()
         XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
-        app.switches["alarm.snooze"].tap()
+        XCTAssertTrue(app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
+        app.switches["alarm.snooze"].toggleSwitch()
         XCTAssertTrue(app.buttons["alarm.snoozeDuration"].waitForNonExistence(timeout: 3))
     }
 }

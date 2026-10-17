@@ -51,6 +51,20 @@ final class CalendarRecurringDeleteTests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
     }
 
+    /// Whether today's occurrence is gone from Today. Today ends with a short look at tomorrow, where the next
+    /// occurrence of a repeating event is listed too: only a row above the Tomorrow header is today's.
+    private func isTodaysRowGone(_ app: XCUIApplication, timeout: TimeInterval = 5) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let header = app.buttons["tomorrowHeader"]
+            let limit = header.exists ? header.frame.minY : .greatestFiniteMagnitude
+            let rows = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", title))
+            if !rows.allElementsBoundByIndex.contains(where: { $0.exists && $0.frame.minY < limit }) { return true }
+            usleep(250_000)
+        } while Date() < deadline
+        return false
+    }
+
     /// The Today list is lazy and opens on the now line, and other tests leave events at the same hour: look further
     /// down, then further up, for the row.
     private func isListedToday(_ app: XCUIApplication) -> Bool {
@@ -126,7 +140,7 @@ final class CalendarRecurringDeleteTests: XCTestCase {
         let app = start(repeating: true)
         deleteFromRow(app)
         confirm("Delete This Event Only", app)
-        XCTAssertTrue(row(app).waitForNonExistence(timeout: 5), "today's occurrence is gone")
+        XCTAssertTrue(isTodaysRowGone(app), "today's occurrence is gone")
         // A series offers no Undo: a plain copy put back would not repeat.
         XCTAssertFalse(app.buttons["Undo"].waitForExistence(timeout: 2), "no Undo for one occurrence of a series")
         XCTAssertTrue(isListed(on: tomorrow, app), "tomorrow's occurrence is still there")
@@ -148,7 +162,7 @@ final class CalendarRecurringDeleteTests: XCTestCase {
         let editor = deleteInAppleEditor(app)
         confirm("Delete This Event Only", app)
         XCTAssertTrue(editor.waitForNonExistence(timeout: 8), "the editor closes after Delete Event")
-        XCTAssertTrue(row(app).waitForNonExistence(timeout: 5), "today's occurrence is gone")
+        XCTAssertTrue(isTodaysRowGone(app), "today's occurrence is gone")
         XCTAssertTrue(isListed(on: tomorrow, app), "tomorrow's occurrence is still there")
     }
 

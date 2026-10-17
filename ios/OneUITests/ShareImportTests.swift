@@ -10,7 +10,9 @@ final class ShareImportTests: XCTestCase {
         app.launchArguments = TestData.launchArguments + ["-uiTestingShare", title]
         app.launch()
 
-        app.buttons["Reminders"].firstMatch.tap()
+        let reminders = app.buttons["Reminders"].firstMatch
+        XCTAssertTrue(reminders.waitForExistence(timeout: 10), "the app is up")
+        reminders.tap()
         let scheduled = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Scheduled'")).firstMatch
         XCTAssertTrue(scheduled.waitForExistence(timeout: 5))
         scheduled.tap()

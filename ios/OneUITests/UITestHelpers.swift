@@ -11,7 +11,27 @@ extension XCUIApplication {
     /// The sidebar is a full screen with no Today row, and Settings opens over it, so after Settings the sidebar is still open.
     func closeSidebar() {
         let close = buttons["Close sidebar"]
-        if close.waitForExistence(timeout: 3) { close.tap() }
+        // A tap while the sidebar is still sliding open can be lost: tap again if it is still open.
+        for _ in 0..<2 where close.waitForExistence(timeout: 3) {
+            close.tap()
+            if close.waitForNonExistence(timeout: 2) { break }
+        }
+        // The page slides back for a moment after the tap; a tap on it meanwhile is lost. Wait until it is back in place
+        // (its menu button at the left edge again).
+        let menu = buttons["Open menu"]
+        let deadline = Date().addingTimeInterval(3)
+        while menu.exists, menu.frame.minX > 30, Date() < deadline { usleep(100_000) }
+    }
+}
+
+extension XCUIElement {
+    /// Flips a switch by tapping its knob (a tap on the middle of a labeled switch can land on the label and do nothing)
+    /// and waits for the new value, so the next line sees it.
+    func toggleSwitch(file: StaticString = #filePath, line: UInt = #line) {
+        let before = value as? String
+        coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value != %@", before ?? ""), object: self)
+        XCTAssertEqual(XCTWaiter().wait(for: [changed], timeout: 3), .completed, "the switch flipped", file: file, line: line)
     }
 }
 

@@ -100,7 +100,7 @@ final class SinglePresentationTests: XCTestCase {
 
     // MARK: Long-press to make an event
 
-    /// Where 11:10 and 12:10 are in today's column: measured from the 09:00 "Product sync" block (48pt per hour).
+    /// Where a time is in today's column: measured from the 09:00 "Product sync" block (48pt per hour).
     private func todaySlot(minutesAfterNine: Double) -> XCUICoordinate {
         let block = labeled("Product sync")
         XCTAssertTrue(block.waitForExistence(timeout: 5))
@@ -117,32 +117,33 @@ final class SinglePresentationTests: XCTestCase {
         sleep(2)   // the grid scrolls to 7:00 when it appears; measure after that
     }
 
-    /// Press and hold an empty slot (11:00, between Standup and lunch): the new-event editor opens at 11:00-12:00.
+    /// Press and hold an empty slot (10:40, between Standup, whose short block reaches past 10:00, and the 11:00
+    /// "Renew parking permit"): the new-event editor opens at 10:30-11:30.
     func testLongPressOnAnEmptySlotMakesAnEventThere() {
         showWeek()
-        let slot = todaySlot(minutesAfterNine: 130)   // 11:10 snaps down to 11:00
+        let slot = todaySlot(minutesAfterNine: 100)   // 10:40 snaps down to 10:30
         slot.press(forDuration: 0.8)
         let editor = app.navigationBars["New event"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5), "releasing opens the new-event editor")
         shot("longpress-editor")
         XCTAssertEqual(app.navigationBars.count, 1)
-        XCTAssertTrue(app.buttons["11:00"].exists || labeled("11:00").exists, "starts at the pressed slot")
-        XCTAssertTrue(app.buttons["12:00"].exists || labeled("12:00").exists, "and lasts an hour")
+        XCTAssertTrue(app.buttons["10:30"].exists || labeled("10:30").exists, "starts at the pressed slot")
+        XCTAssertTrue(app.buttons["11:30"].exists || labeled("11:30").exists, "and lasts an hour")
         app.buttons["Cancel"].tap()
         XCTAssertFalse(app.descendants(matching: .any)["calendar.newEventDraft"].waitForExistence(timeout: 1), "the placeholder is gone")
     }
 
-    /// Hold, then drag down an hour before letting go: the event starts where the finger ends (12:00).
+    /// Hold an empty slot (10:40), then drag down an hour before letting go: the event starts where the finger ends (11:30).
     func testLongPressThenDragMovesTheNewEvent() {
         showWeek()
-        let from = todaySlot(minutesAfterNine: 130)
+        let from = todaySlot(minutesAfterNine: 100)
         let to = from.withOffset(CGVector(dx: 0, dy: 48))
         from.press(forDuration: 0.8, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.3)
         shot("longpress-drag-after")
         XCTAssertTrue(app.navigationBars["New event"].waitForExistence(timeout: 5))
         shot("longpress-drag-editor")
-        XCTAssertTrue(app.buttons["12:00"].exists || labeled("12:00").exists, "starts where the finger was let go")
-        XCTAssertTrue(app.buttons["13:00"].exists || labeled("13:00").exists)
+        XCTAssertTrue(app.buttons["11:30"].exists || labeled("11:30").exists, "starts where the finger was let go")
+        XCTAssertTrue(app.buttons["12:30"].exists || labeled("12:30").exists)
         app.buttons["Cancel"].tap()
     }
 
@@ -175,7 +176,7 @@ final class SinglePresentationTests: XCTestCase {
     /// A quick tap on an empty slot does nothing, and a swipe still scrolls the grid (no editor, no placeholder).
     func testTapAndSwipeOnTheGridDoNotMakeAnEvent() {
         showWeek()
-        todaySlot(minutesAfterNine: 130).tap()
+        todaySlot(minutesAfterNine: 100).tap()   // 10:40, empty (11:00 has "Renew parking permit")
         let block = labeled("Product sync")
         let y = block.frame.minY
         shot("swipe-before")
