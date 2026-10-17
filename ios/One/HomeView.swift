@@ -40,8 +40,11 @@ struct HomeView: View {
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
     // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
     @State private var calendarMode: CalendarView.Mode = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey) ?? .week
+    /// Alarms · World Clock · Stopwatch · Timer inside the Alarms tab.
+    @State private var clockSection: ClockSection = Self.restored(ClockSection.self, key: Self.clockSectionKey) ?? .alarms
+    @State private var addingCity = false
     // The tab and the Calendar view also survive a restart (not in UI tests, which always start the same way).
-    private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode"
+    private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode", clockSectionKey = "today.last.clockSection"
     private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
         guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
         return UserDefaults.standard.string(forKey: key).flatMap(T.init(rawValue:))
@@ -173,7 +176,7 @@ struct HomeView: View {
                         withAnimation(.snappy) { tab = .today }
                     }
                 case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath)
-                case .alarms: AlarmsView()
+                case .alarms: AlarmsView(section: $clockSection)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -181,6 +184,7 @@ struct HomeView: View {
         .safeAreaInset(edge: .bottom) { bottomBar }
         .sensoryFeedback(.selection, trigger: tabSwipes)
         .sheet(isPresented: $showsSearch) { SearchView() }
+        .sheet(isPresented: $addingCity) { CityPicker() }
         .sheet(item: $newItem) { item in
             switch item {
             case .task: QuickReminderSheet()   // Due-style quick add; editing a reminder opens TaskEditor
@@ -212,9 +216,16 @@ struct HomeView: View {
             #endif
             ListActions.ensureLists(in: context)
             #if DEBUG
-            if let i = ProcessInfo.processInfo.arguments.firstIndex(of: "-debugDeleteSystemEvent"),
-               i + 1 < ProcessInfo.processInfo.arguments.count {
-                CalendarSync.shared.debugDeleteSystemEvents(titled: ProcessInfo.processInfo.arguments[i + 1])
+            // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-debugDeleteSystemEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugDeleteSystemEvents(titled: args[i + 1])
+            }
+            if let i = args.firstIndex(of: "-debugCreateSystemEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: false)
+            }
+            if let i = args.firstIndex(of: "-debugCreateRepeatingEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: true)
             }
             #endif
             Self.seedUITestReminder(context)
@@ -246,12 +257,16 @@ struct HomeView: View {
         }
         .onChange(of: tab) { _, t in UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey) }
         .onChange(of: calendarMode) { _, m in UserDefaults.standard.set(m.rawValue, forKey: Self.calendarModeKey) }
+        .onChange(of: clockSection) { _, s in UserDefaults.standard.set(s.rawValue, forKey: Self.clockSectionKey) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 dropDeletedMirrors()
                 Task { await Reminders.shared.resync() }
             }
-            if phase == .background { updateWidgets() }
+            if phase == .background {
+                updateWidgets()
+                WidgetFeed.scheduleBackgroundRefresh()
+            }
         }
         // An event deleted in Apple Calendar must not linger here: when the system calendar changes, drop the copies it lost.
         .onChange(of: CalendarSync.shared.version) {
@@ -360,6 +375,12 @@ struct HomeView: View {
         }
     }
 
+    /// On World Clock, + adds a city.
+    private var plusAddsCity: Bool { tab == .alarms && clockSection == .worldClock }
+
+    /// Stopwatch and Timer have nothing to add: no + there, like Clock.
+    private var showsPlus: Bool { !(tab == .alarms && (clockSection == .stopwatch || clockSection == .timer)) }
+
     private var bottomButtons: some View {
         HStack(spacing: 10) {
             // Search lives in the sidebar (top right), like ChatGPT and Claude; the bar keeps only Ask AI and +.
@@ -375,28 +396,36 @@ struct HomeView: View {
                 .glassCapsule()
             }
             .buttonStyle(PressScale())
-            // +: tap adds what fits the page you are on (alarm on Alarms, event on Calendar, otherwise a
-            // reminder); press and hold to pick.
-            Menu {
-                Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
-                Button { newEvent() } label: { Label("New event", systemImage: "calendar") }
-                Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 50, height: 50)
-                    .glassCircle()
-            } primaryAction: {
-                if smartNewItem == .event { newEvent() } else { newItem = smartNewItem }
-            }
-            .tint(.primary)
-            .accessibilityLabel("New")
-            .accessibilityHint("Adds \(smartNewItem.noun). Press and hold for more.")
+            // +: tap adds what fits the page you are on (alarm on Alarms, a city on World Clock, event on Calendar,
+            // otherwise a reminder); press and hold to pick.
+            if showsPlus { plusButton }
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
         .padding(.bottom, 4)
+    }
+
+    private var plusButton: some View {
+        Menu {
+            if plusAddsCity {
+                Button { addingCity = true } label: { Label("Add city", systemImage: "globe") }
+            }
+            Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
+            Button { newEvent() } label: { Label("New event", systemImage: "calendar") }
+            Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
+        } label: {
+            Image(systemName: "plus")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 50, height: 50)
+                .glassCircle()
+        } primaryAction: {
+            if plusAddsCity { addingCity = true }
+            else if smartNewItem == .event { newEvent() } else { newItem = smartNewItem }
+        }
+        .tint(.primary)
+        .accessibilityLabel("New")
+        .accessibilityHint("Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
     }
 }
 

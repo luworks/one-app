@@ -32,6 +32,18 @@ struct TitleDetail<Detail: View>: View {
     }
 }
 
+/// The travel-time line under an event with a location: "Drive 18 min · Leave by 14:20".
+struct TravelLine: View {
+    let text: String
+    var body: some View {
+        Label(text, systemImage: "car.fill")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .labelStyle(.titleAndIcon)
+            .lineLimit(1)
+    }
+}
+
 /// The calendar color bar beside an event; it stretches to the height of the row's text.
 struct CalendarBar: View {
     let color: Color
@@ -52,6 +64,7 @@ struct EventRow: View {
     /// The list that holds this row asks "this event or the series?" for a repeating one (see `entryDeleteDialog`).
     @Binding var pendingDelete: CalEntry?
     @State private var editing = false
+    @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
     init(event: OneEvent, start: Date? = nil, pendingDelete: Binding<CalEntry?> = .constant(nil)) {
         self.event = event
@@ -77,12 +90,15 @@ struct EventRow: View {
                 TimeColumn(date: start ?? event.start)
             }
             CalendarBar(color: CalendarSync.shared.color(forExternalID: event.externalID) ?? Color.blue)
-            TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
-                Label(detail, systemImage: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(.titleAndIcon)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
+                    Label(detail, systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                }
+                if let travel { TravelLine(text: travel) }
             }
             Spacer(minLength: 0)
         }
@@ -96,9 +112,17 @@ struct EventRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(EventSpeech.label(title: event.title, start: start ?? event.start,
                                               end: (start ?? event.start).addingTimeInterval(event.duration), isAllDay: event.isAllDay,
-                                              calendar: CalendarSync.shared.calendar(forExternalID: event.externalID)?.title ?? event.calendarName))
+                                              calendar: CalendarSync.shared.calendar(forExternalID: event.externalID)?.title ?? event.calendarName)
+                            + (travel.map { ". " + $0 } ?? ""))
         .accessibilityAddTraits(.isButton)
         .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in editing = true }, edit: { _ in editing = true })
+    }
+
+    /// "Drive 18 min · Leave by 14:20" when the event's Apple Calendar copy has a location (Today's own events keep none).
+    private var travel: String? {
+        guard travelOn, let id = event.externalID else { return nil }
+        return TravelTimes.shared.label(eventID: id, start: start ?? event.start, isAllDay: event.isAllDay,
+                                        place: CalendarSync.shared.place(forExternalID: id))
     }
 
     /// The same swipe and long-press actions as in the Calendar tab.
