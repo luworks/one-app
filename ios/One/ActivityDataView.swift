@@ -20,6 +20,7 @@ struct ActivityDataView: View {
     @State private var exportFailed = false
     @State private var benchmark: String?
     @State private var benchmarking = false
+    @State private var legacyRows = 0
 
     private struct ExportedFile: Identifiable {
         let id = UUID()
@@ -112,6 +113,9 @@ struct ActivityDataView: View {
                 Button(benchmarking ? "Running…" : "Run speed test (100,000 rows)") { runBenchmark() }
                     .disabled(benchmarking)
                     .accessibilityIdentifier("activity.benchmark")
+                LabeledContent("Old ledger rows (SwiftData)") {
+                    Text("\(legacyRows)").monospacedDigit().accessibilityIdentifier("activity.legacyCount")
+                }
                 if let benchmark { Text(benchmark).font(.caption.monospaced()).textSelection(.enabled) }
             } header: {
                 Text("Debug")
@@ -148,7 +152,12 @@ struct ActivityDataView: View {
         .accessibilityIdentifier("activity.tier.\(tier.rawValue)")
     }
 
-    private func refresh() { summary = ActivityCenter.summary() }
+    private func refresh() {
+        summary = ActivityCenter.summary()
+        #if DEBUG
+        legacyRows = (try? context.fetchCount(FetchDescriptor<LedgerEntry>())) ?? 0
+        #endif
+    }
 
     private func export(_ format: ActivityExportFormat) {
         exporting = true

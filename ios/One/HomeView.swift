@@ -277,6 +277,9 @@ struct HomeView: View {
             Self.seedUITestReminder(context)
             importShared()
             // The old SwiftData ledger is copied into the Activity store once; then expired activity is dropped.
+            #if DEBUG
+            LedgerMigration.seedLegacyForTests(context: context)
+            #endif
             LedgerMigration.run(context: context)
             ActivityCenter.importOutbox()
             Ledger.prune(context)
