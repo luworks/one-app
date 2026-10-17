@@ -25,6 +25,8 @@ struct AskView: View {
     /// Asks the presenter to show what this screen goes back to (`true`), underneath it, or to undo that
     /// when a back swipe is cancelled (`false`). Called before the screen closes, by the close button or a swipe.
     var onBack: (Bool) -> Void = { _ in }
+    /// "Open" on an added event: closes this screen and shows that day in Today.
+    var onOpenDay: (Date) -> Void = { _ in }
 
     /// The saved conversation this screen continues. nil = a new chat; the thread is created on the first user message.
     @State private var thread: ChatThread?
@@ -35,8 +37,25 @@ struct AskView: View {
     @State private var cardShownAt: Date?
     @State private var messages: [ChatMessage]
     @State private var draft = ""
-    /// Every item proposed from the last line, shown together. Added ones stay a moment as a check, then leave.
+    /// The preview cards of this conversation, each under the AI message that proposed it. They stay after Add / Cancel
+    /// (Added, Dropped, Undone) and are saved with the conversation.
     @State private var proposals: [CaptureProposal] = []
+    /// The item "Open" on an added card shows, in a sheet.
+    @State private var openedItem: OpenedItem?
+
+    enum OpenedItem: Identifiable {
+        case task(OneTask)
+        case alarm(OneAlarm)
+
+        var id: ObjectIdentifier {
+            switch self {
+            case .task(let t): ObjectIdentifier(t)
+            case .alarm(let a): ObjectIdentifier(a)
+            }
+        }
+    }
+
+    private static let endID = "chat-end"
     @Query(sort: \OneList.order) private var lists: [OneList]
     @State private var thinking = false
     @State private var captureTask: Task<Void, Never>?
@@ -62,12 +81,15 @@ struct AskView: View {
     /// Drags that start on the "which one?" chips scroll them instead of going back.
     @State private var choiceFrame: CGRect = .zero
 
-    init(thread: ChatThread? = nil, onBack: @escaping (Bool) -> Void = { _ in }, onAdded: @escaping (Capture) -> Void = { _ in }) {
+    init(thread: ChatThread? = nil, onBack: @escaping (Bool) -> Void = { _ in }, onAdded: @escaping (Capture) -> Void = { _ in },
+         onOpenDay: @escaping (Date) -> Void = { _ in }) {
         self.onAdded = onAdded
         self.onBack = onBack
+        self.onOpenDay = onOpenDay
         _thread = State(initialValue: thread)
         _threadID = State(initialValue: thread?.id ?? UUID())
         _messages = State(initialValue: thread?.messages ?? [])
+        _proposals = State(initialValue: (thread?.cards ?? []).map(CaptureProposal.init))
     }
 
     var body: some View {
@@ -78,22 +100,37 @@ struct AskView: View {
                         emptyState
                     } else {
                         LazyVStack(alignment: .leading, spacing: 16) {
-                            ForEach(messages) { MessageView(message: $0).id($0.id) }
+                            ForEach(messages) { message in
+                                MessageView(message: message).id(message.id)
+                                cards(under: message.id)
+                            }
                             if thinking {
                                 HStack(spacing: 8) {
                                     ProgressView()
                                     Text("Thinking…").foregroundStyle(.secondary)
                                 }
                             }
+                            Color.clear.frame(height: 1).id(Self.endID)
                         }
                         .padding(20)
+                        .animation(.snappy, value: proposals.map(\.status))
                     }
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(messages.isEmpty ? .top : .bottom)
                 .onChange(of: messages) {
                     persist()
-                    if let last = messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                    withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }
+                }
+                .onChange(of: proposals.count) {
+                    withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }
+                }
+                .onChange(of: proposals) { persistCards() }
+                .sheet(item: $openedItem) { item in
+                    switch item {
+                    case .task(let task): TaskEditor(task: task)
+                    case .alarm(let alarm): AlarmEditor(alarm: alarm)
+                    }
                 }
             }
             .safeAreaInset(edge: .bottom) { inputArea }
@@ -247,11 +284,6 @@ struct AskView: View {
                 ChangeCard(change: change, onApply: { apply(change) }, onCancel: { recordCard(resolved: "change", "cancelled"); self.change = nil })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            if !proposals.isEmpty {
-                CaptureStack(proposals: $proposals, lists: lists.map(\.name),
-                             onAdd: add, onSkip: skip, onAddAll: addAll)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
             HStack(alignment: .bottom, spacing: 8) {
                 TextField("Ask AI or add anything", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
@@ -284,7 +316,6 @@ struct AskView: View {
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
-        .animation(.snappy, value: proposals)
         .animation(.snappy, value: plan.count)
         .animation(.snappy, value: change)
         .animation(.snappy, value: followup)
@@ -350,9 +381,10 @@ struct AskView: View {
         }
     }
 
+    /// A new line moves on: cards still waiting for Add stay in the chat as Dropped, and a pending change goes.
     private func clearPreviews() {
         closeOpenCards("ignored", plansOnly: false)
-        proposals = []
+        dropOpenCards()
         change = nil
     }
 
@@ -382,17 +414,23 @@ struct AskView: View {
         if !plan.isEmpty { recordCard(resolved: "plan", outcome, items: plan.count) }
         if !tidy.isEmpty { recordCard(resolved: "tidy", outcome, items: tidy.count) }
         guard !plansOnly else { return }
-        let open = proposals.filter { $0.state == .open }.count
+        let open = proposals.filter { $0.status == .open }.count
         if open > 0 { recordCard(resolved: "capture", outcome, items: open) }
         if change != nil { recordCard(resolved: "change", outcome) }
     }
 
+    private func dropOpenCards() {
+        for i in proposals.indices {
+            if let next = proposals[i].status.after(.drop) { proposals[i].status = next }
+        }
+    }
+
     /// The first item still waiting for Add: what a follow-up like "make it 5pm" edits. Setting nil drops them all.
     private var pending: Capture? {
-        get { proposals.first { $0.state == .open }?.capture }
+        get { proposals.first { $0.status == .open }?.capture }
         nonmutating set {
-            guard let newValue else { proposals = []; return }
-            if let i = proposals.firstIndex(where: { $0.state == .open }) { proposals[i].capture = newValue }
+            guard let newValue else { dropOpenCards(); return }
+            if let i = proposals.firstIndex(where: { $0.status == .open }) { proposals[i].capture = newValue }
         }
     }
 
@@ -726,11 +764,15 @@ struct AskView: View {
     }
 
     private func show(_ captures: [Capture]) {
-        proposals = captures.map { CaptureProposal(capture: filed($0), batchSize: captures.count) }
-        recordCard(shown: "capture", items: captures.count)
-        messages.append(ChatMessage(role: .ai, text: captures.count == 1
+        let message = ChatMessage(role: .ai, text: captures.count == 1
             ? "Here's what I understood. Nothing is added until you confirm."
-            : "I found \(captures.count) items. Add them one by one or all at once; nothing is added until you confirm."))
+            : "I found \(captures.count) items. Add them one by one or all at once; nothing is added until you confirm.")
+        let batch = UUID()
+        // Earlier cards stay where they are; the new ones sit under the message that proposes them.
+        dropOpenCards()
+        proposals += captures.map { CaptureProposal(capture: filed($0), batchSize: captures.count, batch: batch, anchor: message.id) }
+        recordCard(shown: "capture", items: captures.count)
+        messages.append(message)
     }
 
     /// A task goes to the list it clearly belongs to, else the Inbox. Never silently to whatever list is the default.
@@ -745,44 +787,93 @@ struct AskView: View {
         return c
     }
 
+    // MARK: Cards: Add, Cancel, Undo, Open
+
+    /// The cards under one AI message, grouped by line (a line's items are one card or one list).
+    @ViewBuilder
+    private func cards(under anchor: UUID) -> some View {
+        let batches = proposals.filter { $0.anchor == anchor }.map(\.batch).reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
+        ForEach(batches, id: \.self) { batch in
+            CaptureStack(proposals: batchBinding(batch), lists: lists.map(\.name),
+                         onAdd: add, onSkip: skip, onAddAll: addAll, onUndo: undo, onOpen: open)
+                .id(batch)
+        }
+    }
+
+    private func batchBinding(_ batch: UUID) -> Binding<[CaptureProposal]> {
+        Binding(
+            get: { proposals.filter { $0.batch == batch } },
+            set: { new in
+                for p in new { if let i = proposals.firstIndex(where: { $0.id == p.id }) { proposals[i] = p } }
+            })
+    }
+
+    /// Saves the decided cards with the conversation (the open ones are not kept).
+    private func persistCards() {
+        guard let thread else { return }
+        let decided = proposals.compactMap(\.stored).filter { $0.status != .open }
+        guard thread.cards != decided else { return }
+        thread.cards = decided
+        thread.updatedAt = .now
+        try? context.save()
+    }
+
     private func add(_ id: UUID) {
-        guard let capture = commit(id) else { return }
-        messages.append(ChatMessage(role: .ai, text: "Added “\(capture.title)” · \(addedDetail(capture))."))
+        commit(id)
     }
 
     private func addAll() {
-        let added = proposals.filter { $0.state == .open }.compactMap { commit($0.id) }
-        guard !added.isEmpty else { return }
-        messages.append(ChatMessage(role: .ai, text: "Added \(added.count) items:\n"
-            + added.map { "· “\($0.title)” · \(addedDetail($0))" }.joined(separator: "\n")))
+        for p in proposals where p.status == .open { commit(p.id) }
     }
 
-    /// Writes one proposal, marks it added (the card turns into a check), and lets it leave a moment later.
+    /// Writes one proposal (a card that was undone can be added again) and marks it Added. The card stays; it remembers
+    /// what was written so Undo and Open reach exactly that.
+    @discardableResult
     private func commit(_ id: UUID) -> Capture? {
-        guard let i = proposals.firstIndex(where: { $0.id == id && $0.state == .open }) else { return nil }
+        guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.add) else { return nil }
         let capture = proposals[i].capture
         let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
         recordCard(resolved: "capture", edits.isEmpty ? "applied" : "edited", edits: edits)
-        let item = capture.insert(into: context, actor: .todayAI, channel: .ask, approval: .asked)
-        thread?.items.append(item)
+        let written = capture.insertRecorded(into: context, actor: .todayAI, channel: .ask, approval: .asked)
+        thread?.items.append(written.id)
         lastTouched = capture.title
         onAdded(capture)
-        withAnimation(.snappy) { proposals[i].state = .added }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.4))
-            withAnimation(.snappy) { proposals.removeAll { $0.id == id } }
-        }
+        proposals[i].itemRef = Ledger.ref(written.id)
+        proposals[i].entryID = written.entry.id
+        proposals[i].status = next
         return capture
     }
 
+    /// Cancel / Skip: the card stays in the chat, dimmed, as Dropped.
     private func skip(_ id: UUID) {
-        if proposals.contains(where: { $0.id == id && $0.state == .open }) { recordCard(resolved: "capture", "skipped") }
-        withAnimation(.snappy) { proposals.removeAll { $0.id == id } }
+        guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.drop) else { return }
+        if proposals[i].status == .open { recordCard(resolved: "capture", "skipped") }
+        proposals[i].status = next
     }
 
-    private func addedDetail(_ c: Capture) -> String {
-        guard c.kind == .task, !c.ringsAsAlarm else { return c.summary }
-        return c.summary + " · " + c.listLabel
+    /// Takes back exactly what Add wrote (the reminder, alarm or event), recorded in Activity. The card shows Undone.
+    private func undo(_ id: UUID) {
+        guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.undo) else { return }
+        let p = proposals[i]
+        guard CaptureUndo.undo(itemRef: p.itemRef, entryID: p.entryID, title: p.capture.title, context: context) else {
+            messages.append(ChatMessage(role: .ai, text: "Couldn't take “\(p.capture.title)” back from Calendar, so it was kept."))
+            return
+        }
+        if let ref = p.itemRef, let pid = CaptureUndo.decode(ref) { thread?.items.removeAll { $0 == pid } }
+        proposals[i].itemRef = nil
+        proposals[i].entryID = nil
+        proposals[i].status = next
+    }
+
+    /// Opens what Add wrote: the reminder or alarm in its editor, an event as its day in Today.
+    private func open(_ id: UUID) {
+        guard let p = proposals.first(where: { $0.id == id }) else { return }
+        switch CaptureUndo.resolve(p.itemRef, in: context) {
+        case .task(let task): openedItem = .task(task)
+        case .alarm(let alarm): openedItem = .alarm(alarm)
+        case .event(let event): onOpenDay(event.start)
+        case nil: messages.append(ChatMessage(role: .ai, text: "“\(p.capture.title)” isn't there any more."))
+        }
     }
 
     private func isPlanRequest(_ text: String) -> Bool { SentenceRoute.isPlanRequest(text) }

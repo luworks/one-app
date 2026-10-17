@@ -1,8 +1,9 @@
 import Foundation
 import SwiftData
 
-/// A saved conversation with the AI. Only the text is kept: role + text per message. The preview cards for
-/// captures and plans are not restored; reopening a chat shows what was said and lets you continue it.
+/// A saved conversation with the AI: role + text per message, and the preview cards that were decided (added, dropped,
+/// undone; see `StoredCard`) under the message they belong to. A card still waiting for Add is not restored; plan and
+/// change cards are not kept. Reopening a chat shows what was said and lets you continue it.
 @Model
 final class ChatThread {
     var id: UUID = UUID()
@@ -18,6 +19,14 @@ final class ChatThread {
     /// The reminders, events and alarms this conversation added (JSON of their ids), so it can archive itself once they
     /// are all done (see `ChatAutoArchive`). Additive field: older stores get none.
     var itemsData: Data = Data()
+
+    /// JSON of `[StoredCard]`: the decided cards. Additive field: older conversations have none and show none.
+    var cardsData: Data = Data()
+
+    var cards: [StoredCard] {
+        get { StoredCard.restore(cardsData) }
+        set { cardsData = StoredCard.encode(newValue) }
+    }
 
     var items: [PersistentIdentifier] {
         get { (try? JSONDecoder().decode([PersistentIdentifier].self, from: itemsData)) ?? [] }
@@ -47,6 +56,7 @@ final class ChatThread {
         c.messagesData = messagesData
         c.archived = archived
         c.itemsData = itemsData
+        c.cardsData = cardsData
         return c
     }
 }
