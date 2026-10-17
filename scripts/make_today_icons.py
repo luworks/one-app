@@ -29,18 +29,21 @@ def u(v):
 
 
 def dots():
-    """A week-and-a-bit of days; today is the one that lights up."""
+    """5x5 grid converging on one orange dot: dots grow and brighten toward today."""
     im, d = base()
-    cols, rows, step, r = 5, 5, 128, 30
+    cols, rows, step = 5, 5, 150
     x0 = (S - step * (cols - 1)) / 2
     y0 = (S - step * (rows - 1)) / 2
     for i in range(rows):
         for j in range(cols):
             cx, cy = x0 + j * step, y0 + i * step
-            if (i, j) == (2, 2):
-                rr, col = 64, ACCENT
+            ring = max(abs(i - 2), abs(j - 2))      # 0 centre, 1 inner ring, 2 outer ring
+            if ring == 0:
+                rr, col = 88, ACCENT
             else:
-                rr, col = r, DIM
+                rr = {1: 52, 2: 28}[ring]
+                t = {1: 0.8, 2: 0.15}[ring]
+                col = tuple(round(a + (b - a) * t) for a, b in zip(DIM, INK))
             d.ellipse((u(cx - rr), u(cy - rr), u(cx + rr), u(cy + rr)), fill=col)
     return im
 
