@@ -24,3 +24,35 @@ enum TestData {
     /// Launch arguments for a fresh in-memory store filled from the dataset.
     static var launchArguments: [String] { ["-uiTesting", "-dataset", path] }
 }
+
+extension XCTestCase {
+    /// Turns on Apple Calendar in Settings (sidebar > Settings), answering the access prompt the first time. Does nothing
+    /// when it is already on. Leaves the sidebar closed.
+    func enableCalendarSync(_ app: XCUIApplication) {
+        addUIInterruptionMonitor(withDescription: "Calendar access") { alert in
+            for label in ["Allow Full Access", "Allow", "OK"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
+            return false
+        }
+        app.openSidebar()
+        app.buttons["Settings"].firstMatch.tap()
+        let toggle = app.switches["Apple Calendar"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        if (toggle.value as? String) != "1" {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            for label in ["Allow Full Access", "Allow"] {
+                let b = springboard.buttons[label]
+                if b.waitForExistence(timeout: 3) { b.tap(); break }
+            }
+        }
+        sleep(1)
+        app.buttons["Done"].tap()
+        app.closeSidebar()
+    }
+
+    /// The Month grid's identifier for a day cell.
+    func calendarDayID(_ date: Date) -> String {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "day.%04d-%02d-%02d", c.year!, c.month!, c.day!)
+    }
+}

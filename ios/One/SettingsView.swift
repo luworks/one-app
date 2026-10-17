@@ -8,6 +8,7 @@ enum SettingsKey {
     static let showAlarms = "today.setting.showAlarmsInToday"
     static let jumpToNow = "today.setting.jumpToNow"
     static let autoArchiveChats = "today.setting.autoArchiveChats"
+    static let travelTime = "today.setting.travelTime"
 }
 
 /// Settings is its own screen (opened from the sidebar). Each screen's options live here, not in the sidebar;
@@ -23,6 +24,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.autoArchiveChats) private var autoArchiveChats = true
     @AppStorage(SmartListLayout.orderKey) private var smartOrder = ""
     @AppStorage(SmartListLayout.hiddenKey) private var smartHidden = ""
+    @AppStorage(SettingsKey.travelTime) private var travelTime = true
 
     @State private var calendarOn = CalendarSync.shared.isOn
     @State private var remindersOn = RemindersSync.shared.isConnected
@@ -70,8 +72,11 @@ struct SettingsView: View {
                     Toggle("Show overdue reminders", isOn: $showOverdue)
                     Toggle("Show alarms in the day", isOn: $showAlarms)
                     Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
+                    Toggle("Travel time", isOn: $travelTime)
                 } header: {
                     Text("Today")
+                } footer: {
+                    Text("Travel time shows how long the drive takes to upcoming events with a location today and tomorrow, and when to leave. To work it out, your current location and the event's address go to Apple Maps (MapKit) only; nothing else leaves your iPhone.")
                 }
 
                 smartListsSection
@@ -113,6 +118,9 @@ struct SettingsView: View {
                     await CalendarSync.shared.setEnabled(on)
                     calendarOn = CalendarSync.shared.isOn   // stays off if access was refused
                 }
+            }
+            .onChange(of: travelTime) { _, _ in
+                WidgetFeed.rewriteFromStore()   // add or drop "Leave by" on the widget
             }
             .onChange(of: remindersOn) { _, on in
                 guard on != RemindersSync.shared.isConnected else { return }

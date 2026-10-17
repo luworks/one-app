@@ -53,11 +53,15 @@ enum WidgetFeed {
                                              start: span.allDay ? day : span.start, isAllDay: span.allDay, kind: .reminder))
                 }
             case .system(let id):
-                result += WidgetItem.eventRows(id: entry.id, title: entry.title, start: entry.start, end: entry.end,
-                                               isAllDay: entry.isAllDay, externalID: id, days: days, calendar: calendar)
+                let rows = WidgetItem.eventRows(id: entry.id, title: entry.title, start: entry.start, end: entry.end,
+                                                isAllDay: entry.isAllDay, externalID: id, days: days, calendar: calendar)
+                result += withTravel(rows, externalID: id, start: entry.start, isAllDay: entry.isAllDay,
+                                     fallbackAddress: entry.location, now: now)
             case .local(let e):
-                result += WidgetItem.eventRows(id: entry.id, title: entry.title, start: entry.start, end: entry.end,
-                                               isAllDay: entry.isAllDay, externalID: e.externalID, days: days, calendar: calendar)
+                let rows = WidgetItem.eventRows(id: entry.id, title: entry.title, start: entry.start, end: entry.end,
+                                                isAllDay: entry.isAllDay, externalID: e.externalID, days: days, calendar: calendar)
+                result += withTravel(rows, externalID: e.externalID, start: entry.start, isAllDay: entry.isAllDay,
+                                     fallbackAddress: "", now: now)
             }
         }
 
@@ -79,6 +83,24 @@ enum WidgetFeed {
             }
         }
         return result.sorted(by: NextItems.ordered)
+    }
+
+    /// Adds "Drive 18 min · Leave by" data to the row where the event starts, when Travel time has an estimate.
+    /// Reads the cache only (a missing estimate is looked up in the background and rewrites the snapshot when it lands).
+    private static func withTravel(_ rows: [WidgetItem], externalID: String?, start: Date, isAllDay: Bool,
+                                   fallbackAddress: String, now: Date) -> [WidgetItem] {
+        guard let externalID, TravelTimes.isEnabled else { return rows }
+        let place = CalendarSync.shared.place(forExternalID: externalID)
+            ?? (fallbackAddress.isEmpty ? nil : TravelPlace(address: fallbackAddress))
+        guard let travel = TravelTimes.shared.widgetFields(eventID: externalID, start: start, isAllDay: isAllDay, place: place, now: now)
+        else { return rows }
+        return rows.map { row in
+            guard row.start == start, !row.isAllDay else { return row }
+            var r = row
+            r.travelMinutes = travel.minutes
+            r.leaveBy = travel.leaveBy
+            return r
+        }
     }
 
     // MARK: Background refresh

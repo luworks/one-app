@@ -1,0 +1,173 @@
+<!--TITLE:Today Planned-->
+<style>
+.signals{display:flex;gap:6px;overflow-x:auto;padding:2px 20px 10px;scrollbar-width:none}
+.signals::-webkit-scrollbar{display:none}
+.sig{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:14px;background:var(--surface);border:.5px solid var(--line);font-size:12.5px;color:var(--ink2)}
+.sig.new{border-color:var(--ai);color:var(--ai);background:var(--ai-soft)}
+.plan{border-color:color-mix(in srgb,var(--ai) 35%,var(--line))}
+.plan-h{padding:12px 14px 4px;display:flex;gap:8px;align-items:flex-start}
+.plan-h .rm{flex:1}
+.plan-h b{display:block;font-size:15px}
+.plan-h small{color:var(--ink3);font-size:12.5px}
+.ck{width:22px;height:22px;border-radius:11px;border:1.6px solid var(--ink3);display:grid;place-items:center;flex:none;margin-top:1px;color:#fff}
+.ck.on{background:var(--ai);border-color:var(--ai)}
+.diff{font-size:13px;color:var(--ink2);margin-top:2px}
+.diff s{color:var(--ink3)}
+.dest{margin-top:5px;display:flex;gap:4px;flex-wrap:wrap}
+.info{font-size:12.5px;color:var(--ink3);padding:8px 14px 10px;border-top:.5px solid var(--line);display:flex;gap:8px}
+.acts{display:flex;gap:8px;padding:10px 14px 14px}
+.tl{position:relative;margin:12px 14px 0 0;height:calc(var(--span) * 1.1px)}
+.hr{position:absolute;left:0;right:0;border-top:.5px solid var(--line);font-size:11px;color:var(--ink3)}
+.hr span{position:absolute;left:12px;top:-8px;background:var(--bg);padding-right:6px;width:40px}
+.blk{position:absolute;left:62px;right:0;border-radius:9px;padding:4px 9px;font-size:12.5px;overflow:hidden;line-height:1.3;transition:top .35s,height .35s}
+.blk b{font-weight:600}.blk small{display:block;opacity:.8;font-size:11.5px}
+.blk.ev{background:var(--event-soft);color:var(--event);border-left:3px solid var(--event)}
+.blk.tk{background:var(--task-soft);color:var(--task);border-left:3px solid var(--task)}
+.blk.tr{background:repeating-linear-gradient(135deg,var(--fill),var(--fill) 6px,var(--fill2) 6px,var(--fill2) 12px);color:var(--ink2);border-left:3px solid var(--ink3)}
+.blk.ghost{background:transparent;border:1.5px dashed var(--ai);color:var(--ai);left:62px}
+.blk.was{opacity:.35}
+.mark{position:absolute;left:62px;right:0;height:0;border-top:1.5px dotted var(--alarm);font-size:11px;color:var(--alarm)}
+.mark span{position:absolute;right:0;top:-9px;background:var(--bg);padding-left:6px}
+.now{position:absolute;left:52px;right:0;border-top:2px solid var(--danger);z-index:2}
+.now::before{content:'';position:absolute;left:-5px;top:-6px;width:10px;height:10px;border-radius:5px;background:var(--danger)}
+.tray{display:flex;gap:8px;padding:0 14px 6px;flex-wrap:wrap}
+.tray .chip{padding:5px 10px;font-size:12.5px}
+</style>
+<div class="wrap">
+<div class="phone" id="phone">
+  <div id="chrome"></div>
+  <div class="scroll" id="main"></div>
+  <!--DOCK-->
+</div>
+<aside class="notes">
+  <a class="back" href="index.html">← 全部原型</a>
+  <h1>AI 规划的 Today</h1>
+  <p>9:41，Product sync 准点结束。Today AI 读到实时信号（日历、提醒、路程、天气、睡眠、实际完成情况），算出一张<b>计划更新卡</b>：只动灵活的提醒，会议不动，截止时间不动，过期的不偷偷挪。用户逐条勾选，Apply 才写入。</p>
+  <h2>模拟一个新信号（持续规划）</h2>
+  <div class="sim">
+    <button onclick="sim('overrun')">Standup 拖到 10:20 结束</button>
+    <button onclick="sim('cancel')">Dentist 取消了</button>
+    <button onclick="sim('sleep')">只睡了 5 小时 10 分</button>
+    <button onclick="sim('reset')">重置</button>
+  </div>
+  <h2>要看什么</h2>
+  <ul>
+    <li>虚线紫块 = 建议的新位置，淡掉的绿块 = 原位置。</li>
+    <li>每行有“写到哪里”标签：<i>Today only</i>（只改本地计划时间，第 1 级）或 <i>Alarm</i>（写 AlarmKit，第 2 级）。</li>
+    <li>Gym 是事件，下雨也不挪，只给提示（原则 2）。</li>
+    <li>Pay studio invoice 过期了：默认不勾，只问要不要排（原则 6）。</li>
+    <li>点顶部的信号胶囊，看数据来源和权限。</li>
+  </ul>
+  <p style="margin-top:12px">数据：<code>tests/fixtures/today-dataset.json</code>，第 0 天 = 2026-10-15 周四，时钟固定 9:41。天气、路程、睡眠是虚构信号。</p>
+</aside>
+</div>
+<!--SHEET-->
+<script>
+const S0 = { standupEnd: 600, dentist: true, sleep: '6h 05m', short: false, applied: null, dismissed: false, sel: { demo: true, leave: true, milk: true, invoice: false, wind: false, notes: true }, newSig: null };
+let S = JSON.parse(JSON.stringify(S0));
+const ev0 = DATA.events.filter(e => e.start.day === 0 && e.start.time);
+const rem = t => DATA.reminders.find(r => r.title === t);
+// Planned positions (minutes). Planned time is Today's local copy; Apple Reminders keeps the deadline.
+const base = { demo: mins(rem('Prepare the demo').planned.time), notes: mins('16:00'), sam: mins('17:00'), trash: mins('21:00'), milk: null, invoice: null };
+let pos = { ...base };
+function events() { return ev0.filter(e => S.dentist || e.title !== 'Dentist').map(e => ({ t: e.title, s: mins(e.start.time), d: e.minutes, end: e.title === 'Standup' ? S.standupEnd : mins(e.start.time) + e.minutes })); }
+function proposal() {
+  const evs = events(), out = [];
+  const demoStart = Math.max(S.standupEnd, Math.ceil(NOW / 5) * 5);
+  out.push({ k: 'demo', title: 'Prepare the demo', from: hm(pos.demo), to: demoStart, dur: 45, dest: ['Today only'], why: `Free after Standup until lunch. Due Tomorrow 17:00 (unchanged), flagged, 1 of 3 steps done.` });
+  out.push({ k: 'invoice', title: 'Pay studio invoice', from: 'Overdue since yesterday', to: demoStart + 45, dur: 5, dest: ['Today only'], why: 'Overdue stays visible. Want a 5-minute slot for it?', opt: true });
+  if (S.dentist) {
+    out.push({ k: 'leave', title: 'Leave for Dentist', from: 'not planned', to: 14 * 60 + 30, dur: 25, dest: ['Alarm'], why: '22 min by car at 14:30 + parking. Rings as an alarm.', travel: true });
+    out.push({ k: 'milk', title: 'Buy milk', from: 'Due today, no time', to: 15 * 60 + 40, dur: 15, dest: ['Today only'], why: 'Shop is on the way back from the dentist, before rain at 17:30.' });
+  } else {
+    out.push({ k: 'notes', title: 'Write up design review notes', from: hm(pos.notes), to: 15 * 60, dur: 45, dest: ['Today only'], why: 'Dentist was cancelled, 15:00 is free. Reply to Sam stays at 17:00.' });
+    out.push({ k: 'milk', title: 'Buy milk', from: 'Due today, no time', to: 12 * 60 + 0, dur: 10, dest: ['Today only'], why: 'On the way to lunch with Priya.' });
+  }
+  out.push({ k: 'wind', title: 'Wind down', from: '22:30', to: S.short ? 21 * 60 + 45 : 22 * 60, dur: 0, dest: ['Alarm'], why: `You slept ${S.sleep} last night. Tonight only; the repeating alarm stays 22:30.`, opt: !S.short });
+  return out;
+}
+function render() {
+  document.getElementById('chrome').innerHTML = chrome('Today');
+  const P = S.applied ? [] : proposal();
+  const sel = k => S.sel[k] !== undefined ? S.sel[k] : true;
+  const sigs = [
+    ['bed', `Slept ${S.sleep}`, 'Health · sleep only', S.newSig === 'sleep'],
+    ['rain', 'Rain 17:30–19:00', 'Weather (fictional)', false],
+    ['car', S.dentist ? 'Dentist · 22 min by car' : 'Dentist cancelled', 'Maps travel time', S.newSig === 'cancel'],
+    ['clock', S.standupEnd > 600 ? `Standup ran to ${hm(S.standupEnd)}` : 'Product sync ended 9:25', 'Apple Calendar + what actually happened', S.newSig === 'overrun'],
+    ['bolt', 'Focus: Work', 'Focus filter (App Intent)', false],
+  ];
+  let h = `<div class="h1">Thursday</div><div class="sub">15 October · 4 events left · 6 reminders</div>
+  <div class="signals" aria-label="Live signals">${sigs.map((s, i) => `<button class="sig ${s[3] ? 'new' : ''}" onclick="sigInfo(${i})">${ic(s[0], 's')}${esc(s[1])}</button>`).join('')}</div>`;
+  if (P.length && !S.dismissed) {
+    const n = P.filter(p => sel(p.k)).length;
+    h += `<div class="card plan"><div class="plan-h"><span class="chip ai">${ic('spark','s')} Plan update · ${hm(NOW)}</span><span style="flex:1"></span><button class="btn ghost" style="height:24px;padding:0 4px;font-size:13px" onclick="why()">Why?</button></div>
+    <div class="plan-h" style="padding-top:2px"><div class="rm"><b>${S.newSig ? 'Something changed. Here’s a new plan.' : 'You have 2 free hours before lunch.'}</b><small>Meetings stay where they are. Nothing changes until you apply.</small></div></div>`;
+    P.forEach(p => {
+      const on = sel(p.k);
+      h += `<div class="row"><button class="ck ${on ? 'on' : ''}" aria-pressed="${on}" aria-label="Include ${esc(p.title)}" onclick="tog('${p.k}')">${on ? ic('check','s') : ''}</button><div class="rm"><b>${esc(p.title)}</b>
+      <div class="diff">${p.from.includes(':') && p.from.length <= 5 ? `<s>${p.from}</s> → ` : `<span style="color:var(--ink3)">${esc(p.from)}</span> → `}<b style="display:inline;color:var(--ai)">${hm(p.to)}${p.dur ? '–' + hm(p.to + p.dur) : ''}</b></div>
+      <small>${esc(p.why)}</small><div class="dest">${p.dest.map(d => `<span class="chip ${d === 'Alarm' ? 'al' : 'tk'}">${d === 'Alarm' ? 'Writes: Alarm' : 'Today only'}</span>`).join('')}${p.opt ? '<span class="chip">Optional</span>' : ''}</div></div></div>`;
+    });
+    h += `<div class="info">${ic('rain','s')}<span>Gym 18:30 is an event, so it stays. Rain until 19:00: take an umbrella.</span></div>
+    <div class="acts"><button class="btn ai" ${n ? '' : 'disabled style="opacity:.4"'} onclick="apply()">Apply ${n}</button><button class="btn sec" onclick="S.dismissed=true;render();toast('Kept your plan. Ask again anytime.')">Not now</button></div></div>`;
+  } else if (S.applied) {
+    h += `<div class="card"><div class="row"><span class="av" style="background:var(--ai)">${ic('check','s')}</span><div class="rm"><b>Applied ${S.applied.length} change${S.applied.length > 1 ? 's' : ''}</b><small>Logged in Activity · approved by you · ${hm(NOW)}</small></div><button class="btn sec" onclick="undo()">Undo</button></div></div>`;
+  }
+  h += `<div class="sect">Overdue · 1</div><div class="tray"><span class="chip dg">Pay studio invoice · Yesterday 17:00</span></div>
+  <div class="sect">Due today</div><div class="tray"><span class="chip tk" style="${S.applied && S.applied.includes('milk') ? 'opacity:.5' : ''}">Buy milk${pos.milk ? ' · ' + hm(pos.milk) : ''}</span><span class="chip tk">Water the plants · weekly</span></div>
+  <div class="sect">Schedule</div>`;
+  const T0 = 8 * 60, T1 = 22 * 60 + 45, y = m => (m - T0) * 1.1;
+  h += `<div class="tl" style="--span:${T1 - T0}">`;
+  for (let m = T0; m <= T1; m += 60) h += `<div class="hr" style="top:${y(m)}px"><span>${hm(m)}</span></div>`;
+  events().forEach(e => { h += `<div class="blk ev" style="top:${y(e.s)}px;height:${Math.max(20, (e.end - e.s) * 1.1 - 2)}px"><b>${esc(e.t)}</b>${e.end - e.s >= 30 ? `<small>${hm(e.s)}–${hm(e.end)}</small>` : ''}</div>`; });
+  const tasks = [['demo', 'Prepare the demo', 45], ['notes', 'Write up design review notes', 30], ['sam', 'Reply to Sam', 20], ['trash', 'Take out the trash', 15], ['milk', 'Buy milk', 15], ['invoice', 'Pay studio invoice', 10]];
+  const moving = {}; P.forEach(p => { if (sel(p.k)) moving[p.k] = p; });
+  tasks.forEach(([k, t, d]) => { if (pos[k] == null) return; h += `<div class="blk tk ${moving[k] ? 'was' : ''}" style="top:${y(pos[k])}px;height:${d * 1.1 - 2}px;left:${k === 'milk' || k === 'invoice' ? 62 : 62}px"><b>${esc(t)}</b></div>`; });
+  if (S.applied && S.applied.includes('leave')) h += `<div class="blk tr" style="top:${y(870)}px;height:${25 * 1.1 - 2}px"><b>Leave for Dentist</b> · 22 min</div>`;
+  P.filter(p => sel(p.k) && p.dur).forEach(p => { h += `<div class="blk ghost" style="top:${y(p.to)}px;height:${Math.max(18, p.dur * 1.1 - 2)}px"><b>${esc(p.title)}</b> · ${hm(p.to)}</div>`; });
+  const alarms = DATA.alarms.filter(a => a.on !== false && mins(a.time) >= T0);
+  alarms.forEach(a => { let m = mins(a.time); if (a.label === 'Wind down' && S.applied && S.applied.includes('wind')) m = S.short ? 1305 : 1320; h += `<div class="mark" style="top:${y(m)}px"><span>⏰ ${hm(m)} ${esc(a.label)}</span></div>`; });
+  h += `<div class="now" style="top:${y(NOW)}px"></div></div>`;
+  document.getElementById('main').innerHTML = h;
+}
+function tog(k) { S.sel[k] = !(S.sel[k] !== undefined ? S.sel[k] : true); render(); }
+let snapshot = null;
+function apply() {
+  const P = proposal().filter(p => S.sel[p.k] !== undefined ? S.sel[p.k] : true);
+  snapshot = { ...pos };
+  P.forEach(p => { if (p.k in pos) pos[p.k] = p.to; });
+  S.applied = P.map(p => p.k);
+  LEDGER.find(r => r.id === 'L18').state = 'approved';
+  render(); toast(`${P.length} changes applied`, undo);
+}
+function undo() { if (snapshot) pos = snapshot; S.applied = null; S.dismissed = false; LEDGER.find(r => r.id === 'L18').state = 'pending'; render(); }
+function sim(k) {
+  if (k === 'reset') { S = JSON.parse(JSON.stringify(S0)); pos = { ...base }; render(); return; }
+  if (S.applied) { snapshot = null; S.applied = null; }
+  S.dismissed = false; S.newSig = k;
+  if (k === 'overrun') S.standupEnd = 620;
+  if (k === 'cancel') S.dentist = false;
+  if (k === 'sleep') { S.sleep = '5h 10m'; S.short = true; S.sel.wind = true; }
+  render(); document.getElementById('main').scrollTop = 0;
+}
+function sigInfo(i) {
+  const info = [
+    ['Sleep', 'From Apple Health, on this iPhone. You allowed “Sleep” only. Used to suggest an earlier wind-down; never shown to agents.'],
+    ['Weather', 'Hourly forecast for your location. Used to order errands. (Fictional in this prototype; WeatherKit needs a paid developer account.)'],
+    ['Travel time', 'Estimated with Maps for events that have a location. Turns into a “Leave by” suggestion, never a moved event.'],
+    ['What actually happened', 'Event end times, completed reminders, focus sessions and timers. This is what makes the plan continuous.'],
+    ['Focus', 'Your Focus filter tells Today which lists to show and which agents may ask for approval right now.'],
+  ][i];
+  openSheet(info[0], `<div class="card"><div class="row"><div class="rm"><small style="font-size:14px;color:var(--ink2)">${esc(info[1])}</small></div></div></div>`);
+}
+function why() {
+  openSheet('Why this plan', `<div class="card">${[
+    'The planner is deterministic code (DayPlanner). The on-device model only chose which reminders to include and wrote the reasons.',
+    'Events are fixed obstacles. Only flexible reminders move. Deadlines never move with them.',
+    'Overdue items are offered, never moved on their own.',
+    'Input: 5 events, 6 reminders, 3 alarms, 5 signals, your last 14 days of planned vs. actual (morning blocks finish 4 of 5 times).',
+  ].map(t => `<div class="row"><div class="rm"><small style="font-size:14px;color:var(--ink2)">${esc(t)}</small></div></div>`).join('')}</div>`);
+}
+render();
+</script>
