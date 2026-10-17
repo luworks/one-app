@@ -282,7 +282,7 @@ struct EventEditor: View {
                     Section {
                         Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
                             let backup = event.copy()
-                            guard CalendarSync.shared.delete(externalID: event.externalID) else {
+                            guard CalendarSync.shared.delete(event) else {
                                 toast?.showNotice("Couldn't delete “\(event.title)” from Calendar, so it was kept.")
                                 dismiss()
                                 return

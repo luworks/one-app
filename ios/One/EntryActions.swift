@@ -74,7 +74,7 @@ enum EntryDeletion {
                 toast?.showNotice("“\(entry.title)” is in a read-only calendar, so it can't be deleted here.")
                 return
             }
-            guard CalendarSync.shared.delete(externalID: id, span: span) else {
+            guard CalendarSync.shared.delete(externalID: id, occurrence: entry.start, span: span) else {
                 CalendarSync.shared.refresh()
                 toast?.showNotice("Couldn't delete “\(entry.title)”. Try again, or delete it in Calendar.")
                 return
@@ -93,7 +93,7 @@ enum EntryDeletion {
         case .local(let event):
             let backup = event.copy()
             // The copy in Apple Calendar goes first; if it refuses, nothing is deleted anywhere.
-            guard CalendarSync.shared.delete(externalID: event.externalID, span: span) else {
+            guard CalendarSync.shared.delete(event, span: span) else {
                 toast?.showNotice("Couldn't delete “\(event.title)” from Calendar, so it was kept.")
                 return
             }

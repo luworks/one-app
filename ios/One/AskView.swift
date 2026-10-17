@@ -615,7 +615,7 @@ struct AskView: View {
         case .event(let event):
             if c.delete {
                 let backup = event.copy()
-                guard CalendarSync.shared.delete(externalID: event.externalID, span: .thisEvent) else {
+                guard CalendarSync.shared.delete(event, span: .thisEvent) else {
                     messages.append(ChatMessage(role: .ai, text: "Couldn't delete the calendar event, so nothing changed."))
                     return
                 }

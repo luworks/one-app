@@ -51,7 +51,7 @@ struct CalendarView: View {
 
     /// System events open in Apple's editor (presented by UIKit, see `NativeEvents`); the rest in our editors.
     private func open(_ entry: CalEntry) {
-        if case .system(let id) = entry.source { NativeEvents.edit(identifier: id) } else { opened = OpenedEntry(entry) }
+        if case .system(let id) = entry.source { NativeEvents.edit(identifier: id, start: entry.start) } else { opened = OpenedEntry(entry) }
     }
 
     private func edit(_ entry: CalEntry) { open(entry) }

@@ -196,8 +196,9 @@ final class CalendarSync {
     }
 
     /// A system event and the store it belongs to, for Apple's event viewer.
-    func nativeEvent(identifier: String) -> (EKEvent, EKEventStore)? {
-        guard isOn, let e = store.event(withIdentifier: identifier) else { return nil }
+    /// `occurrence`: the start of the occurrence that was tapped, so a repeating event opens on that day, not its first one.
+    func nativeEvent(identifier: String, occurrence: Date? = nil) -> (EKEvent, EKEventStore)? {
+        guard isOn, let e = occurrence.flatMap({ self.occurrence(identifier, at: $0) }) ?? store.event(withIdentifier: identifier) else { return nil }
         return (e, store)
     }
 
@@ -242,25 +243,69 @@ final class CalendarSync {
     /// Removes the system copy of an event. False when the calendar refused (read-only or subscribed calendars such as
     /// Holidays and Birthdays), so callers can say so instead of acting as if it worked. A copy that is already gone,
     /// or no copy at all, counts as removed.
+    /// `occurrence` is the start of the occurrence that was tapped. A repeating event's identifier alone finds its FIRST
+    /// occurrence, so without it "Delete This Event Only" removed another day's occurrence and the tapped one stayed
+    /// (seen on a real iCloud calendar). With it, that occurrence is removed, and "all future events" start there.
     @discardableResult
-    func delete(externalID: String?, span: EKSpan = .futureEvents) -> Bool {
-        guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else {
+    func delete(externalID: String?, occurrence: Date? = nil, span: EKSpan = .futureEvents) -> Bool {
+        guard isOn, let id = externalID, let ek = occurrence.flatMap({ self.occurrence(id, at: $0) }) ?? store.event(withIdentifier: id) else {
             log.info("delete: no system copy (isOn=\(self.isOn), id=\(externalID ?? "nil", privacy: .public))")
             return true
         }
+        return remove(ek, span: span)
+    }
+
+    /// The occurrence of event `id` that starts at `start` (within a minute).
+    func occurrence(_ id: String, at start: Date) -> EKEvent? {
+        let predicate = store.predicateForEvents(withStart: start.addingTimeInterval(-60), end: start.addingTimeInterval(60), calendars: nil)
+        return store.events(matching: predicate).first {
+            $0.eventIdentifier == id && abs($0.startDate.timeIntervalSince(start)) < 60
+        }
+    }
+
+    /// Removes the system copy of an event Today created. Its identifier can change after iCloud / Exchange sync re-keys the
+    /// event; then the id finds nothing, and the copy would survive the delete and come back as a calendar event. So when the
+    /// id misses, the copy is found by title and start time instead.
+    @discardableResult
+    func delete(_ event: OneEvent, span: EKSpan = .futureEvents) -> Bool {
+        guard let ek = systemCopy(of: event) else {
+            log.info("delete: no system copy for \(event.title, privacy: .public) (isOn=\(self.isOn))")
+            return true
+        }
+        return remove(ek, span: span)
+    }
+
+    private func remove(_ ek: EKEvent, span: EKSpan) -> Bool {
         log.info("delete: \(ek.title ?? "", privacy: .public) calendar=\(ek.calendar.title, privacy: .public) source=\(ek.calendar.source?.title ?? "", privacy: .public) modifiable=\(ek.calendar.allowsContentModifications) recurring=\(ek.hasRecurrenceRules) span=\(span == .thisEvent ? "this" : "future", privacy: .public)")
         guard ek.calendar.allowsContentModifications else {
             log.error("delete refused: calendar is read-only")
             return false
         }
+        let id = ek.eventIdentifier
         do {
-            try store.remove(ek, span: span)
-            log.info("delete: removed, still there=\(self.store.event(withIdentifier: id) != nil)")
+            try store.remove(ek, span: span, commit: true)
+            let still = id.flatMap { store.event(withIdentifier: $0) } != nil
+            log.info("delete: removed, still there=\(still)")
+            version += 1
             return true
         } catch {
             log.error("delete failed \(error.localizedDescription, privacy: .public)")
             return false
         }
+    }
+
+    /// The Apple Calendar copy of an event Today created: by its identifier, or, when sync has re-keyed it, by the same title
+    /// starting within a minute of the same time (then the new identifier is saved on the event).
+    func systemCopy(of event: OneEvent) -> EKEvent? {
+        guard isOn, let id = event.externalID else { return nil }
+        if let ek = store.event(withIdentifier: id) { return ek }
+        let predicate = store.predicateForEvents(withStart: event.start.addingTimeInterval(-60),
+                                                 end: event.start.addingTimeInterval(max(120, event.duration)), calendars: nil)
+        guard let match = store.events(matching: predicate)
+            .first(where: { $0.title == event.title && abs($0.startDate.timeIntervalSince(event.start)) < 60 }) else { return nil }
+        log.info("relinked \(event.title, privacy: .public): its identifier changed")
+        event.externalID = match.eventIdentifier
+        return match
     }
 
     /// Whether the system copy of an event can be deleted (its calendar accepts changes). True when there is no system copy.
@@ -273,10 +318,8 @@ final class CalendarSync {
     /// the local copy goes too. Empty unless Calendar sync is on and its store is ready, so a missing permission never counts as a delete.
     func removedMirrors(_ events: [OneEvent]) -> [OneEvent] {
         guard isOn, storeReady else { return [] }
-        return events.filter { e in
-            guard let id = e.externalID else { return false }
-            return store.event(withIdentifier: id) == nil
-        }
+        // A copy found again under a new identifier is relinked, not dropped (see `systemCopy(of:)`).
+        return events.filter { e in e.externalID != nil && systemCopy(of: e) == nil }
     }
 
     #if DEBUG
@@ -335,9 +378,9 @@ struct ExternalEventRow: View {
         .fixedSize(horizontal: false, vertical: true)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture { NativeEvents.edit(identifier: event.eventIdentifier) }
-        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in NativeEvents.edit(identifier: event.eventIdentifier) },
-                      edit: { _ in NativeEvents.edit(identifier: event.eventIdentifier) })
+        .onTapGesture { NativeEvents.edit(identifier: event.eventIdentifier, start: event.start) }
+        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in NativeEvents.edit(identifier: event.eventIdentifier, start: event.start) },
+                      edit: { _ in NativeEvents.edit(identifier: event.eventIdentifier, start: event.start) })
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .combine)
@@ -356,12 +399,13 @@ enum NativeEvents {
     private static let log = Logger(subsystem: "com.luworks.one", category: "calendar")
 
     /// `identifier` nil = a new event starting at `start`.
+    /// `start`: for an existing event, the start of the occurrence that was tapped; for a new event, when it starts.
     static func edit(identifier: String? = nil, start: Date = .now) {
         let sync = CalendarSync.shared
         let vc = EKEventEditViewController()
         vc.eventStore = sync.eventStore
         if let identifier {
-            guard let (existing, _) = sync.nativeEvent(identifier: identifier) else {
+            guard let (existing, _) = sync.nativeEvent(identifier: identifier, occurrence: start) else {
                 log.error("edit: event not found")
                 return
             }
@@ -379,17 +423,19 @@ enum NativeEvents {
         vc.presentationController?.delegate = d
         guard let top = topViewController() else { return }
         top.present(vc, animated: true)
-        if let identifier { watch(vc, identifier: identifier) }
+        if let identifier { watch(vc, identifier: identifier, occurrence: start) }
     }
 
     /// iOS 27's editor deletes the event but may not call its delegate, so it stays on screen and the list keeps the row,
     /// which looks like the delete failed (reproduced in the simulator: the event was gone from the calendar database).
     /// While the editor is up, check whether the event still exists; once it is gone, close the editor and refresh.
-    private static func watch(_ vc: EKEventEditViewController, identifier: String) {
+    private static func watch(_ vc: EKEventEditViewController, identifier: String, occurrence: Date) {
         Task { @MainActor [weak vc] in
             while let vc, vc.presentingViewController != nil {
                 try? await Task.sleep(for: .milliseconds(400))
-                if CalendarSync.shared.eventStore.event(withIdentifier: identifier) == nil {
+                // Gone: the whole event, or (a repeating one) just the occurrence that was open.
+                let sync = CalendarSync.shared
+                if sync.eventStore.event(withIdentifier: identifier) == nil || sync.occurrence(identifier, at: occurrence) == nil {
                     log.info("editor: event is gone, closing")
                     CalendarSync.shared.refresh()
                     vc.dismiss(animated: true)
