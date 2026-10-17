@@ -141,14 +141,10 @@ struct TimerCard: View {
             Text("Timer")
                 .font(.title3.weight(.bold))
                 .accessibilityAddTraits(.isHeader)
-            HStack(alignment: .center, spacing: 20) {
-                if let running = controller.running {
-                    RunningDial(timer: running, isRinging: controller.isRinging)
-                    runningControls(running)
-                } else {
-                    TimerDialView(seconds: $seconds)
-                    setControls
-                }
+            // Dial beside the controls; stacked when that does not fit (a narrow phone or a large text size).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 20) { dialAndControls }
+                VStack(spacing: 16) { dialAndControls }
             }
             if let message = controller.message {
                 HStack(spacing: 8) {
@@ -170,6 +166,16 @@ struct TimerCard: View {
         .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onAppear { controller.refresh() }
         .onChange(of: AlarmCenter.shared.states) { controller.refresh() }
+    }
+
+    @ViewBuilder private var dialAndControls: some View {
+        if let running = controller.running {
+            RunningDial(timer: running, isRinging: controller.isRinging)
+            runningControls(running)
+        } else {
+            TimerDialView(seconds: $seconds)
+            setControls
+        }
     }
 
     private var setControls: some View {
@@ -197,11 +203,12 @@ struct TimerCard: View {
             seconds = minutes * 60
             controller.message = nil
         } label: {
-            Text("\(minutes) min").font(.subheadline.weight(.medium)).frame(maxWidth: .infinity)
+            Text("\(minutes) min").font(.subheadline.weight(.medium)).lineLimit(1).fixedSize().frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
-        .tint(seconds == minutes * 60 ? .orange : .secondary)
+        // Unselected chips use the primary color: a gray tint put gray text on a gray fill.
+        .tint(seconds == minutes * 60 ? .orange : .primary)
         .accessibilityLabel("\(minutes) min")
         .accessibilityIdentifier("timer.chip.\(minutes)")
     }

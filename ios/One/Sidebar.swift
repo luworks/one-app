@@ -52,6 +52,7 @@ struct Sidebar: View {
             Text("Chats")
                 .font(.title2.weight(.bold))
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
 
             Button(action: onSearch) {
                 Image(systemName: "magnifyingglass")
@@ -66,6 +67,8 @@ struct Sidebar: View {
         .padding(.trailing, 16)
         .padding(.top, 12)
         .padding(.bottom, 8)
+        // Fixed-size round buttons, capped like the page's top and bottom bars so they never clip.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
     }
 
@@ -149,7 +152,8 @@ struct Sidebar: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.footnote.weight(.semibold))
-            .foregroundStyle(.secondary)
+            // secondaryLabel, not .secondary: a list header is already dimmed, and .secondary on top read too faint.
+            .foregroundStyle(Color(.secondaryLabel))
             .textCase(nil)
     }
 
@@ -234,7 +238,7 @@ struct Sidebar: View {
                     }
                     .foregroundStyle(Color(.systemBackground))
                     .padding(.horizontal, 20)
-                    .frame(height: 52)
+                    .frame(minHeight: 52)
                     .background(Color.primary, in: Capsule())
                     .contentShape(Capsule())
                 }
@@ -258,6 +262,7 @@ struct Sidebar: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 12)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .background(Color(.systemBackground))
         .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
