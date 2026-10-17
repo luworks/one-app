@@ -80,6 +80,13 @@ final class CalendarSync {
         }
     }
 
+    /// Sets the store up right away. App Intents (Siri, Shortcuts) read events with no UI that would warm it first.
+    func prepare() {
+        guard isOn, !storeReady else { return }
+        _ = store
+        storeReady = true
+    }
+
     /// On the first launch show iOS's own Calendar permission prompt. Does nothing afterwards.
     func connectIfFirstRun() async {
         #if DEBUG
