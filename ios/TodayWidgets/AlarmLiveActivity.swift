@@ -6,7 +6,7 @@ import WidgetKit
 
 // The Lock Screen and Dynamic Island countdown for a running timer or a snoozing alarm.
 // AlarmKit starts and updates the Live Activity itself; this only draws `AlarmAttributes<AlarmMeta>`.
-// Titles and buttons come from the `AlarmPresentation` the app scheduled ("Timer", or the alarm's label).
+// Titles and buttons come from the `AlarmPresentation` the app scheduled ("Focus" or "Break" for the Pomodoro timer, or the alarm's label).
 
 struct AlarmLiveActivity: Widget {
     var body: some WidgetConfiguration {
