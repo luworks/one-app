@@ -1,0 +1,77 @@
+import XCTest
+
+final class AskConversationTests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUp() {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launchArguments = ["-uiTesting", "-uiTestingMultiCapture"]
+        app.launch()
+        app.buttons["Ask AI or add anything"].tap()
+    }
+
+    private func send(_ text: String) {
+        let input = app.textFields["Ask AI or add anything"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText(text + "\n")
+    }
+
+    private func reply(_ text: String) -> XCUIElement {
+        app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
+    func testReportedActivityMessageIsConversation() {
+        send("我进行一个测试，然后看看我的 Activity 中是不是会选择显示")
+        XCTAssertTrue(reply("Activity 记录的是实际发生的变更").waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Add"].exists)
+        XCTAssertFalse(app.buttons["capture-add-all"].exists)
+        XCTAssertFalse(reply("Here's what I understood").exists)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Activity conversation without capture"
+        shot.lifetime = .keepAlways
+        add(shot)
+        app.buttons["Close"].firstMatch.tap()
+        app.openSidebar()
+        app.buttons["Activity"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["No activity yet"].waitForExistence(timeout: 5))
+    }
+
+    func testChatThenExplicitRequestAndChatPreservesPreview() {
+        send("Hello")
+        XCTAssertTrue(reply("What's on your mind?").waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Add"].exists)
+        send("Call Alex tomorrow at 3pm")
+        XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
+        send("Thanks for explaining the alarm")
+        XCTAssertTrue(reply("You're welcome").waitForExistence(timeout: 10))
+        XCTAssertTrue(reply("New task").exists)
+        XCTAssertFalse(reply("New alarm").exists)
+        send("make it 4pm")
+        XCTAssertTrue(reply("16:00").waitForExistence(timeout: 10))
+        app.buttons["Add"].tap()
+        XCTAssertTrue(reply("Added “Call Alex”").waitForExistence(timeout: 5))
+    }
+
+    func testExplicitEventAndAlarmRequestsStillShowPreviews() {
+        send("Set an alarm for 7am")
+        XCTAssertTrue(reply("New alarm").waitForExistence(timeout: 20))
+        app.buttons["Cancel"].firstMatch.tap()
+        send("Dentist tomorrow at 3pm")
+        XCTAssertTrue(reply("New event").waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["Add"].exists)
+    }
+
+    func testQuestionAndUnknownStatementDoNotCreateCards() {
+        send("How are you?")
+        XCTAssertTrue(reply("We can just chat").waitForExistence(timeout: 10))
+        XCTAssertFalse(reply("Today:").exists)
+        XCTAssertFalse(app.buttons["Add"].exists)
+        send("some thoughts; perhaps a new hobby")
+        let replies = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "We can just chat"))
+        let answered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == 2"), object: replies)
+        XCTAssertEqual(XCTWaiter().wait(for: [answered], timeout: 10), .completed)
+        XCTAssertFalse(app.buttons["capture-add-all"].exists)
+    }
+}
