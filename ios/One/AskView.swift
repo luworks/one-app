@@ -33,6 +33,8 @@ struct AskView: View {
     @State private var thinking = false
     @State private var captureTask: Task<Void, Never>?
     @State private var plan: [(task: OneTask, start: Date)] = []
+    /// "Tidy overdue": a new date per overdue reminder, waiting for Apply.
+    @State private var tidy: [TidyRow] = []
     @State private var voice = VoiceInput()
     @State private var change: PendingChange?
     @State private var undoRow: UndoRow?
@@ -59,6 +61,7 @@ struct AskView: View {
 
     private let suggestions = [
         "Plan my day",
+        "Tidy overdue",
         "Call Alex tomorrow at 3pm",
         "Send the Q3 report by Friday",
         "What's left today?",
@@ -210,6 +213,7 @@ struct AskView: View {
                     }
                     .buttonStyle(PressScale())
                     .tint(.primary)
+                    .accessibilityIdentifier("ask-suggestion")
                 }
             }
         }
@@ -222,6 +226,10 @@ struct AskView: View {
         VStack(spacing: 8) {
             if !plan.isEmpty {
                 PlanCard(plan: plan, onApply: applyPlan, onCancel: { plan = [] })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if !tidy.isEmpty {
+                TidyCard(rows: $tidy, onApply: applyTidy, onCancel: { tidy = [] })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let undo = undoRow {
@@ -314,11 +322,15 @@ struct AskView: View {
         let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
         messages.append(ChatMessage(role: .user, text: text))
         plan = []
+        tidy = []
         undoRow = nil
         // The message may answer what the last turn left open, or edit the preview that is showing.
         if answerOpenTurn(text, history: history) { return }
         followup = nil
-        if isPlanRequest(text) {
+        if OverdueTidy.isRequest(text) {
+            clearPreviews()
+            proposeTidy()
+        } else if isPlanRequest(text) {
             clearPreviews()
             proposePlan()
         } else if isQuestion(text) {
@@ -795,6 +807,39 @@ struct AskView: View {
         }
     }
 
+    /// Suggests a new date for every overdue reminder (see `OverdueTidy`). Nothing changes until Apply.
+    private func proposeTidy() {
+        let overdue = tasks.filter(\.isOverdue)
+        guard !overdue.isEmpty else {
+            messages.append(ChatMessage(role: .ai, text: "Nothing is overdue."))
+            return
+        }
+        let items = overdue.enumerated().compactMap { i, t in
+            t.due.map { OverdueTidy.Item(id: i, due: $0, flagged: t.flagged, repeats: t.repeats != nil) }
+        }
+        tidy = OverdueTidy.suggest(items).compactMap { s in
+            overdue[s.id].due.map { TidyRow(task: overdue[s.id], oldDue: $0, choice: s.choice) }
+        }
+        let n = tidy.count
+        messages.append(ChatMessage(role: .ai, text: "\(n) overdue reminder\(n == 1 ? "" : "s"). Flagged and recent ones first, three a day; "
+            + "ones older than a month lose their date but stay in their list. Change any row, then Apply. Nothing changes until you do."))
+    }
+
+    private func applyTidy() {
+        let changes = tidy.filter { $0.choice != .keep }
+        withAnimation {
+            for r in changes { r.task.due = OverdueTidy.newDue(r.oldDue, r.choice) }
+        }
+        try? context.save()
+        tidy = []
+        let label = "Moved \(changes.count) reminder\(changes.count == 1 ? "" : "s")."
+        messages.append(ChatMessage(role: .ai, text: label))
+        offerUndo(label) {
+            for r in changes { r.task.due = r.oldDue }
+            try? context.save()
+        }
+    }
+
     private func isQuestion(_ text: String) -> Bool {
         text.hasSuffix("?") || text.hasSuffix("？") || ["什么", "怎么", "吗", "多少", "几"].contains { text.contains($0) }
             || ["what", "how", "when", "which", "do ", "is ", "am ", "any"].contains { text.lowercased().hasPrefix($0) }
@@ -834,6 +879,74 @@ struct MessageView: View {
         case .ai:
             Text(message.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// One overdue reminder on the tidy card, with the date the user picked for it.
+struct TidyRow: Identifiable {
+    let id = UUID()
+    let task: OneTask
+    let oldDue: Date
+    var choice: OverdueTidy.Choice
+}
+
+/// "Tidy overdue" preview: a suggested date per reminder, each changeable from its menu; Apply writes them all.
+struct TidyCard: View {
+    @Binding var rows: [TidyRow]
+    var onApply: () -> Void
+    var onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("New dates for overdue", systemImage: "sparkles")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ViewThatFits(in: .vertical) {
+                list
+                ScrollView { list }
+            }
+            .frame(maxHeight: 240)
+            HStack {
+                Button("Cancel", action: onCancel).buttonStyle(.bordered)
+                Spacer()
+                Button("Apply", action: onApply)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(rows.allSatisfy { $0.choice == .keep })
+                    .accessibilityIdentifier("tidy.apply")
+            }
+            .padding(.top, 4)
+        }
+        .padding(14)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.secondary.opacity(0.25)))
+    }
+
+    private var list: some View {
+        VStack(spacing: 6) {
+            ForEach($rows) { $row in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(row.task.title).font(.subheadline).lineLimit(1)
+                        Text("was " + DayLabel.withTime(row.oldDue)).font(.caption).foregroundStyle(.red)
+                    }
+                    Spacer(minLength: 8)
+                    Menu {
+                        Picker("New date", selection: $row.choice) {
+                            ForEach(OverdueTidy.choices(repeats: row.task.repeats != nil)) { Text($0.rawValue).tag($0) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(row.choice.rawValue)
+                            Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(row.choice == .keep ? Color.secondary : Color.accentColor)
+                    }
+                    .accessibilityIdentifier("tidy.choice.\(row.task.title)")
+                    .accessibilityValue(row.choice.rawValue)
+                }
+            }
         }
     }
 }

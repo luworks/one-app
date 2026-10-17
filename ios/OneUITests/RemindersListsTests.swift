@@ -40,9 +40,9 @@ final class RemindersListsTests: XCTestCase {
     func testSwipePinsAListToTheTop() {
         let work = element("list.Work")
         reveal(work)
-        work.swipeRight()
+        work.swipeLeft()   // every row action comes from the trailing edge (RowActions)
         let pin = app.buttons["Pin"]
-        XCTAssertTrue(pin.waitForExistence(timeout: 3), "swipe right reveals Pin")
+        XCTAssertTrue(pin.waitForExistence(timeout: 3), "swipe left reveals Pin")
         pin.tap()
         app.swipeDown(velocity: .fast)
         XCTAssertTrue(element("pinned.Work").waitForExistence(timeout: 5), "a pinned list becomes a card at the top")
