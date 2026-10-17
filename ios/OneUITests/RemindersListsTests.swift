@@ -28,7 +28,7 @@ final class RemindersListsTests: XCTestCase {
     private func menu(_ el: XCUIElement, _ item: String) {
         el.press(forDuration: 1.0)
         let button = app.buttons[item].firstMatch
-        XCTAssertTrue(button.waitForExistence(timeout: 3), "the long-press menu has \(item)")
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "the long-press menu has \(item)")
         button.tap()
     }
 
@@ -38,10 +38,13 @@ final class RemindersListsTests: XCTestCase {
         let today = element("smart.today"), scheduled = element("smart.scheduled")
         XCTAssertTrue(today.waitForExistence(timeout: 5))
         XCTAssertTrue(scheduled.exists)
-        // One row of pills: same line, small, and right under the app's top bar.
-        XCTAssertEqual(today.frame.midY, scheduled.frame.midY, accuracy: 2, "smart lists sit on one row")
+        // Small pills side by side, right under the app's top bar (no empty band), My Lists close below.
+        XCTAssertEqual(today.frame.midY, scheduled.frame.midY, accuracy: 2, "smart lists sit side by side")
         XCTAssertLessThan(today.frame.height, 50, "a pill, not a big card")
-        XCTAssertLessThan(element("list.Home").frame.minY - today.frame.maxY, 120, "My Lists follows the pills closely")
+        XCTAssertLessThan(today.frame.minY, 170, "no empty band above the smart lists")
+        let completed = element("smart.completed")
+        XCTAssertTrue(completed.exists)
+        XCTAssertLessThan(element("list.Home").frame.minY - completed.frame.maxY, 160, "My Lists follows the pills closely")
     }
 
     func testAddListIsVisibleAndCreatesAList() {
@@ -66,7 +69,7 @@ final class RemindersListsTests: XCTestCase {
         XCTAssertTrue(pin.waitForExistence(timeout: 3), "swipe from the right reveals Pin")
         pin.tap()
         app.swipeDown(velocity: .fast)
-        XCTAssertTrue(element("pinned.Work").waitForExistence(timeout: 5), "a pinned list becomes a pill at the top")
+        XCTAssertTrue(element("pinned.Work").waitForExistence(timeout: 5), "a pinned list joins the pills at the top")
     }
 
     func testLongPressRenamesAList() {
@@ -97,9 +100,9 @@ final class RemindersListsTests: XCTestCase {
         let work = element("list.Work")
         reveal(work)
         menu(work, "Pin")
-        app.swipeDown(velocity: .fast)
         let pill = element("pinned.Work")
-        XCTAssertTrue(pill.waitForExistence(timeout: 5), "Pin puts the list in the pill strip")
+        XCTAssertTrue(pill.waitForExistence(timeout: 5), "Pin puts the list with the pills at the top")
+        sleep(1)   // let the row's menu finish closing before the next long press
         menu(pill, "Unpin")
         XCTAssertTrue(pill.waitForNonExistence(timeout: 5), "Unpin from the pill's own menu removes it")
     }
@@ -138,8 +141,11 @@ final class RemindersListsTests: XCTestCase {
         reveal(work)
         XCTAssertTrue(home.exists)
         XCTAssertLessThan(home.frame.minY, work.frame.minY, "starts with Home above Work")
-        // Hold, then drag without lifting: the row's menu gives way to the drag, as in Apple Reminders.
-        work.press(forDuration: 0.6, thenDragTo: home, withVelocity: .slow, thenHoldForDuration: 1.0)
+        // Hold until the row's menu is up, then drag without lifting: the menu gives way to the drag, as in Apple
+        // Reminders. Drop on the top part of Home so Work lands above it.
+        let start = work.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+        start.press(forDuration: 1.5, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 1.0)
         let expectation = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in work.frame.minY < home.frame.minY }, object: nil)
         XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 5), .completed, "Work now sits above Home")
