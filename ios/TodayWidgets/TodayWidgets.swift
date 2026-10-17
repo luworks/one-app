@@ -98,7 +98,8 @@ struct NextUpProvider: TimelineProvider {
         return [
             WidgetItem(id: "s1", title: "Team standup", start: base, end: base.addingTimeInterval(900), kind: .event),
             WidgetItem(id: "s2", title: "Call Alex", start: base.addingTimeInterval(5400), kind: .reminder),
-            WidgetItem(id: "s3", title: "Dentist", start: base.addingTimeInterval(10800), end: base.addingTimeInterval(14400), kind: .event),
+            WidgetItem(id: "s3", title: "Dentist", start: base.addingTimeInterval(10800), end: base.addingTimeInterval(14400), kind: .event,
+                       travelMinutes: 18, leaveBy: base.addingTimeInterval(10800 - 18 * 60)),
         ]
     }
 }
@@ -124,6 +125,9 @@ struct NextUpView: View {
         }
     }
 }
+
+/// "14:20" in the user's 12/24-hour setting, for "Leave by 14:20".
+func shortTime(_ date: Date) -> String { date.formatted(date: .omitted, time: .shortened) }
 
 /// "15:00" (in the user's 12/24-hour setting) or "All day".
 struct TimeText: View {
@@ -250,6 +254,12 @@ struct SmallView: View {
                 Text(item.title)
                     .font(.headline)
                     .lineLimit(2)
+                if next.today.first != nil, let travel = item.travelText(now: entry.date, time: shortTime) {
+                    Label(travel, systemImage: "car.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
                 Spacer(minLength: 0)
                 if next.today.first != nil, !item.isAllDay {
                     if item.start > entry.date {
@@ -324,6 +334,13 @@ struct MediumView: View {
                     .font(.subheadline)
                     .lineLimit(1)
                 Spacer(minLength: 0)
+                if let leaveBy = item.leaveBy, item.start > entry.date {
+                    Label(TravelTime.leaveText(leaveBy: leaveBy, now: entry.date, time: shortTime), systemImage: "car.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                }
             }
         }
     }
