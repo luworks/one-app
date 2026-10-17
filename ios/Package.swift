@@ -15,7 +15,7 @@ let package = Package(
         .target(
             name: "OneShared",
             path: "Shared",
-            sources: ["WidgetSnapshot.swift", "NextUpSpeech.swift", "TravelTime.swift", "ShareInbox.swift"]
+            sources: ["WidgetSnapshot.swift", "NextUpSpeech.swift", "TravelTime.swift", "ShareInbox.swift", "LockScreenNext.swift"]
         ),
         .testTarget(
             name: "OneLogicTests",

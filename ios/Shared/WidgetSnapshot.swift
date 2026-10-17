@@ -207,14 +207,17 @@ enum NextItems {
 
     /// When the widget should redraw: now, every start and end still ahead, and each midnight (where tomorrow's items
     /// become today's), for `days` days. Running past tonight's midnight keeps the widget right if iOS delays the reload.
-    static func timelineDates(for items: [WidgetItem], now: Date, days: Int = 1, calendar: Calendar = .current) -> [Date] {
+    /// `countdownLead`: also a date that long before each start, where the Lock Screen widget starts its live countdown.
+    static func timelineDates(for items: [WidgetItem], now: Date, days: Int = 1, countdownLead: TimeInterval? = nil,
+                              calendar: Calendar = .current) -> [Date] {
         let today = calendar.startOfDay(for: now)
         let midnights = (1...max(1, days)).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
         let last = midnights.last ?? now.addingTimeInterval(86_400)
         var dates = Set([now] + midnights)
         for item in items where !item.isAllDay {
             // The leave-by time too, where "Leave by 14:20" turns into "Leave now".
-            for d in [item.start, item.end, item.leaveBy].compactMap({ $0 }) where d > now && d < last {
+            let lead = countdownLead.map { item.start.addingTimeInterval(-$0) }
+            for d in [item.start, item.end, item.leaveBy, lead].compactMap({ $0 }) where d > now && d < last {
                 dates.insert(d)
             }
         }

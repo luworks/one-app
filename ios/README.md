@@ -83,7 +83,9 @@ Four tabs: **Today · Calendar · Reminders · Alarms** as pills on top (swipe s
 ## Widgets (`ios/TodayWidgets/`, `ios/Shared/`)
 
 One widget, **Next Up**: the next three things today (events, reminders with a time, alarms), merged and sorted by time,
-all-day first. Lock Screen: rectangular (three lines "15:00 Dentist", or "Nothing else today" plus tomorrow's first item),
+all-day first. Lock Screen: rectangular (the next item only, readable at half width: a bold "15:00 · in 24:59" line with a live
+timer, "Now · until 16:00", "Leave 14:20" or "All day", and a small "+2" for what else is left, then the title on up to two lines;
+words in `Shared/LockScreenNext.swift`; or "Nothing else today" plus tomorrow's first item),
 circular (next time in a ring of how much of today is done) and inline (above the clock). Home Screen: small (next item,
 "in 2 hr") and medium (next three, each row opens Today on its day via `today://today?day=YYYY-MM-DD`).
 
