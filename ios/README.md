@@ -73,11 +73,21 @@ all-day first. Lock Screen: rectangular (three lines "15:00 Dentist", or "Nothin
 circular (next time in a ring of how much of today is done) and inline (above the clock). Home Screen: small (next item,
 "in 2 hr") and medium (next three, each row opens Today on its day via `today://today?day=YYYY-MM-DD`).
 
-- The app writes `widget-snapshot.json` (today + tomorrow) into the App Group `group.com.luworks.one` (`WidgetFeed.swift`,
-  called after data changes, when Apple Calendar changes and when the app goes to the background), then reloads timelines.
-  The extension reads only that file; it never opens SwiftData or EventKit.
+- The app writes `widget-snapshot.json` (today, tomorrow and the day after, so "Tomorrow" still has data after midnight)
+  into the App Group `group.com.luworks.one` (`WidgetFeed.swift`, called after data changes, when Apple Calendar changes
+  and when the app goes to the background), then reloads timelines. It waits until the EventKit store is warm, so the
+  first write after launch never drops system events. The snapshot also carries the Apple Calendar on/off switch and
+  the hidden calendars.
+- The extension never opens SwiftData. When Today has Apple Calendar on and the extension has full calendar access
+  (inherited from the app), it reads Apple Calendar itself on every timeline and replaces the snapshot's Apple Calendar
+  events (including Today's mirrored ones) with the live ones (`NextItems.merge`); otherwise it shows the snapshot as is.
+  Timelines reload hourly and at midnight.
+- Background refresh (`com.luworks.one.widgetRefresh`, a `BGAppRefreshTask` booked when the app goes to the background and
+  re-booked by each run, about every three hours and never later than just after midnight): pulls Apple Reminders and rewrites the snapshot without the app being opened. iOS decides
+  when it actually runs.
 - `Shared/WidgetSnapshot.swift` is compiled into both targets (and into `swift test` as `OneShared`): the snapshot model,
-  `NextItems` (selection, order, tomorrow fallback, timeline dates) and `WidgetLink`.
+  `NextItems` (selection, order, tomorrow fallback, live merge, timeline and reload dates), `WidgetItem.eventRows` and
+  `WidgetLink`.
 - Add it: long-press the Lock Screen → Customize → Lock Screen → tap the widget area under the clock (or the date line
   above it) → pick **Today** → Next Up. Home Screen: long-press → Edit → Add Widget → Today.
 

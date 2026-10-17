@@ -450,6 +450,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TodayWidgetsInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Today;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Today shows your Apple Calendar events next to your tasks, and can add events you create there.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -475,6 +476,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TodayWidgetsInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Today;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Today shows your Apple Calendar events next to your tasks, and can add events you create there.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

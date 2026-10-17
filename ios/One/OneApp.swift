@@ -33,6 +33,7 @@ enum OneStore {
             started = true
             Reminders.shared.configure(container)
             RemindersSync.shared.configure(container)
+            WidgetFeed.configure(container)
         }
         return container
     }

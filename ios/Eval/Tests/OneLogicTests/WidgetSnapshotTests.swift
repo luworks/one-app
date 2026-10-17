@@ -126,4 +126,90 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertEqual(WidgetSnapshot.decode(try snap.encoded()), snap)
         XCTAssertNil(WidgetSnapshot.decode(Data("nope".utf8)))
     }
+
+    // MARK: Live Apple Calendar merge
+
+    func testMergeReplacesAppleCalendarEventsWithLiveOnes() {
+        let snapshot = [
+            WidgetItem(id: "old", title: "Moved meeting", start: date(16, 10), end: date(16, 11), kind: .event, externalID: "ek1"),
+            WidgetItem(id: "mirror", title: "Lunch (mirrored)", start: date(16, 12), end: date(16, 13), kind: .event, externalID: "ek2"),
+            WidgetItem(id: "local", title: "Today-only event", start: date(16, 14), end: date(16, 15), kind: .event),
+            item("Call Alex", date(16, 11), kind: .reminder),
+            item("Gym", date(16, 18), kind: .alarm),
+        ]
+        let live = [
+            WidgetItem(id: "new1", title: "Moved meeting", start: date(16, 16), end: date(16, 17), kind: .event, externalID: "ek1"),
+            WidgetItem(id: "new2", title: "Lunch (mirrored)", start: date(16, 12), end: date(16, 13), kind: .event, externalID: "ek2"),
+            WidgetItem(id: "new3", title: "Added in Apple Calendar", start: date(16, 15), end: date(16, 16), kind: .event, externalID: "ek3"),
+        ]
+        let merged = NextItems.merge(snapshot: snapshot, live: live)
+        XCTAssertEqual(merged.map(\.title), ["Call Alex", "Lunch (mirrored)", "Today-only event", "Added in Apple Calendar",
+                                             "Moved meeting", "Gym"])
+        XCTAssertEqual(merged.filter { $0.title == "Lunch (mirrored)" }.count, 1, "a mirrored event shows once")
+    }
+
+    func testMergeWithoutLiveKeepsSnapshot() {
+        let snapshot = [WidgetItem(id: "x", title: "Meeting", start: date(16, 10), kind: .event, externalID: "ek1")]
+        XCTAssertEqual(NextItems.merge(snapshot: snapshot, live: nil), snapshot)
+        // Live but empty: the event was deleted in Apple Calendar.
+        XCTAssertTrue(NextItems.merge(snapshot: snapshot, live: []).isEmpty)
+    }
+
+    func testEventRowsClipMultiDayEventsToEachDay() {
+        let days = [date(16), date(17), date(18)]
+        // Fri 22:00 → Sun 02:00: a late part on Friday, all of Saturday, an early part on Sunday.
+        let rows = WidgetItem.eventRows(id: "trip", title: "Trip", start: date(16, 22), end: date(18, 2), isAllDay: false,
+                                        externalID: "ek", days: days, calendar: cal)
+        XCTAssertEqual(rows.map(\.start), [date(16, 22), date(17), date(18)])
+        XCTAssertEqual(rows.map(\.end), [date(17), nil, date(18, 2)])
+        XCTAssertEqual(rows.map(\.isAllDay), [false, true, false])
+        XCTAssertEqual(Set(rows.map(\.id)).count, 3)
+        XCTAssertTrue(rows.allSatisfy { $0.externalID == "ek" && $0.kind == .event })
+    }
+
+    func testEventRowsAllDayAndOutsideTheWindow() {
+        let days = [date(16), date(17), date(18)]
+        let holiday = WidgetItem.eventRows(id: "h", title: "Holiday", start: date(17), end: date(18), isAllDay: true,
+                                           externalID: nil, days: days, calendar: cal)
+        XCTAssertEqual(holiday.map(\.start), [date(17)])
+        XCTAssertEqual(holiday.first?.isAllDay, true)
+        XCTAssertTrue(WidgetItem.eventRows(id: "p", title: "Past", start: date(15, 9), end: date(15, 10), isAllDay: false,
+                                           externalID: nil, days: days, calendar: cal).isEmpty)
+        // An event ending exactly at midnight belongs only to its own day.
+        let late = WidgetItem.eventRows(id: "l", title: "Late", start: date(16, 23), end: date(17), isAllDay: false,
+                                        externalID: nil, days: days, calendar: cal)
+        XCTAssertEqual(late.map(\.start), [date(16, 23)])
+    }
+
+    /// Just after midnight, today's list and the Tomorrow line both come from the snapshot written the day before.
+    func testThreeDaySnapshotCoversTheMidnightRollover() {
+        let written = [item("Sat run", date(17, 8), kind: .alarm), item("Sun brunch", date(18, 11))]
+        let afterMidnight = date(17, 0, 5)
+        XCTAssertEqual(NextItems.select(from: written, now: afterMidnight, calendar: cal).today.map(\.title), ["Sat run"])
+        XCTAssertEqual(NextItems.select(from: written, now: date(17, 9), calendar: cal).tomorrow?.title, "Sun brunch")
+        XCTAssertEqual(WidgetSnapshot.days, 3)
+    }
+
+    func testTimelineRunsThroughTomorrowWhenAsked() {
+        let items = [item("Standup", date(16, 10), end: date(16, 10, 15)), item("Tomorrow", date(17, 9), end: date(17, 10)),
+                     item("Later", date(18, 9))]
+        XCTAssertEqual(NextItems.timelineDates(for: items, now: now, days: 2, calendar: cal),
+                       [now, date(16, 10), date(16, 10, 15), date(17), date(17, 9), date(17, 10), date(18)])
+    }
+
+    func testReloadHourlyButNeverAfterMidnight() {
+        XCTAssertEqual(NextItems.reloadDate(now: now, calendar: cal), now.addingTimeInterval(3600))
+        XCTAssertEqual(NextItems.reloadDate(now: date(16, 23, 30), calendar: cal), date(17))
+    }
+
+    func testSnapshotCarriesCalendarSettingsAndOldSnapshotsStillDecode() throws {
+        let snap = WidgetSnapshot(generatedAt: date(16, 9),
+                                  items: [WidgetItem(id: "m", title: "Meeting", start: date(16, 10), kind: .event, externalID: "ek1")],
+                                  calendar: .init(isOn: true, hiddenCalendarIDs: ["work"]))
+        XCTAssertEqual(WidgetSnapshot.decode(try snap.encoded()), snap)
+        let old = #"{"generatedAt":"2026-10-16T16:00:00Z","items":[{"id":"a","isAllDay":false,"kind":"alarm","start":"2026-10-16T17:00:00Z","title":"Gym"}]}"#
+        let decoded = try XCTUnwrap(WidgetSnapshot.decode(Data(old.utf8)))
+        XCTAssertNil(decoded.calendar)
+        XCTAssertNil(decoded.items.first?.externalID)
+    }
 }

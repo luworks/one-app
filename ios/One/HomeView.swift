@@ -251,7 +251,10 @@ struct HomeView: View {
                 dropDeletedMirrors()
                 Task { await Reminders.shared.resync() }
             }
-            if phase == .background { updateWidgets() }
+            if phase == .background {
+                updateWidgets()
+                WidgetFeed.scheduleBackgroundRefresh()
+            }
         }
         // An event deleted in Apple Calendar must not linger here: when the system calendar changes, drop the copies it lost.
         .onChange(of: CalendarSync.shared.version) {
