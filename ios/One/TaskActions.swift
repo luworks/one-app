@@ -85,6 +85,9 @@ enum TaskActions {
         }
         // Apple Reminders rolls its own repeating reminders forward, so only local-only tasks spawn the next one here.
         let next = task.externalID == nil ? task.nextOccurrence() : nil
+        // What the finished occurrence looked like, for Undo: a synced repeating reminder comes back from Apple with its
+        // due date rolled forward and no plan (`RemindersSync.apply`), so Undo must put both back exactly.
+        let (oldDue, oldPlanned) = (task.due, task.plannedStart)
         withAnimation {
             task.toggleDone()
             if let next { context.insert(next) }
@@ -95,8 +98,11 @@ enum TaskActions {
                                   actor: actor, channel: channel, context: context)
         toast?.show("Completed “\(task.title)”" + suffix) {
             withAnimation {
-                task.toggleDone()
+                // Not toggleDone(): Apple may already have rolled a repeating reminder back to open (next occurrence).
+                if task.isDone { task.toggleDone() }
                 if let next { context.delete(next) }
+                if task.due != oldDue { task.due = oldDue }
+                if task.plannedStart != oldPlanned { task.plannedStart = oldPlanned }
             }
             Ledger.recordUndo(of: entry, context: context)
         }

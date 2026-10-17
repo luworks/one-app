@@ -53,6 +53,34 @@ enum RepeatRule: String, CaseIterable, Codable {
     }
 }
 
+/// What happens to a task's planned time when a repeating reminder rolls forward to its next occurrence.
+///
+/// Apple Reminders rolls a repeating reminder itself (complete it and its due date moves to the next occurrence, still
+/// open). Only the due date comes back through the sync; the planned time is ours. A plan is a plan for ONE occurrence
+/// (planned time is not the deadline), so the next occurrence starts unplanned, otherwise the finished occurrence's plan
+/// keeps the row on the old day ("Due Oct 28" showing at 09:00 today).
+///
+/// The one exception is a plan that clearly targets the new occurrence: it is on a later day than today AND nearer to the
+/// new due date than to the finished one (e.g. a weekly reminder planned for next Monday while this Monday's is completed).
+/// Everything on or before today belongs to the occurrence that was just finished, however close the new due date is.
+enum RepeatAdvance {
+    /// True when `newDue` is later than `oldDue`: the reminder moved on to a later occurrence.
+    static func movedForward(from oldDue: Date?, to newDue: Date?) -> Bool {
+        guard let oldDue, let newDue else { return false }
+        return newDue > oldDue
+    }
+
+    /// The planned time to keep after the due date changed from `oldDue` to `newDue`.
+    /// Only a repeating, still open reminder whose due date moved forward loses its plan; any other change keeps it.
+    static func plannedStart(_ planned: Date?, dueMovedFrom oldDue: Date?, to newDue: Date?, repeats: Bool, isDone: Bool,
+                             now: Date = .now, calendar: Calendar = .current) -> Date? {
+        guard let planned, repeats, !isDone, movedForward(from: oldDue, to: newDue), let oldDue, let newDue else { return planned }
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+        guard planned >= tomorrow else { return nil }
+        return abs(planned.timeIntervalSince(newDue)) < abs(planned.timeIntervalSince(oldDue)) ? planned : nil
+    }
+}
+
 /// A checklist line inside a task.
 struct ChecklistItem: Codable, Hashable, Identifiable {
     var id = UUID()
