@@ -21,6 +21,16 @@ xcrun simctl launch 341B8786-E55B-4ECE-8720-BF1F2DF73899 com.luworks.one -uiTest
 
 UI tests use it with `app.launchArguments = TestData.launchArguments`.
 
+Tests that need Apple Calendar (`CalendarSyncTests`, `CalendarDeleteSyncTests`, `CalendarRecurringDeleteTests`) add
+`-uiTestingCalendarSync` and use the simulator's own calendar, never a real one. Debug-only launch hooks for them
+(handled in `HomeView`'s launch task, implemented in `CalendarSync`):
+
+- `-debugCreateSystemEvent <title>` — a one-off event at the top of the current hour, as if made in the Calendar app.
+- `-debugCreateRepeatingEvent <title>` — a daily event at the top of the current hour, starting yesterday.
+- `-debugDeleteSystemEvent <title>` — deletes every event with that title (a whole series too), as if deleted in the
+  Calendar app. Tests also use it to clean up.
+- `-uiTestingStore <name>` — keeps the test store in a file, so a second launch sees what the first saved.
+
 ## Run it on your iPhone (free Apple ID, no paid account)
 
 1. Open `ios/One.xcodeproj` in Xcode.
@@ -41,7 +51,7 @@ Four tabs: **Today · Calendar · Reminders · Alarms** as pills on top (swipe s
 - **Calendar** — modeled on Apple Calendar: Week (default; time grid), Month (grid with the selected day's events below) and Year; Day opens the Today tab. One control row: the view switcher. Which calendars show is chosen in Settings. With Calendar access on, + opens Apple's own event editor and system events open in Apple's viewer. Events are fixed; flexible tasks can be long-pressed and dragged in Week.
 - **Reminders** — modeled on Apple Reminders: smart-list cards (Today, Scheduled, All, Flagged, Completed) with counts, pinned lists as cards, My Lists with color and symbol, Add List. Edit (top right) picks and orders the smart lists, reorders, pins and deletes lists. A list screen has a big colored title, a collapsed Completed section and an inline **New Reminder** row (note, date, flag and repeat buttons, suggestions). Two-way sync with Apple Reminders through EventKit (`RemindersSync`): Apple wins on conflict, nothing is written before you connect, a pass never deletes more than 10 Apple items, planned time stays local.
 - **Alarms** — modeled on the Alarms tab of Apple Clock: big light times with AM/PM, green switches, "Next alarm in …", Add/Edit Alarm sheet (wheel, Repeat, Label, Sound from bundled tones, Snooze, Snooze Duration). Every alarm is a real AlarmKit alarm that rings through Silent and Focus; items you marked "Ring as alarm" follow in their own section. AlarmKit only shows alarms this app scheduled: Apple's own Clock alarms cannot be read.
-- **Timer** — a kitchen-timer card on top of Alarms: turn the dial right to add time, left to take it away (one turn = 5 min, up to 90 min), or tap a chip (1 / 5 / 10 / 25 min), then Start. One AlarmKit countdown at a time: it rings full-screen even with the app closed, with Pause / Resume and Cancel.
+- **Focus timer** — a restrained Pomodoro card on top of Alarms: turn the dial right to add time, left to take it away (one turn = 5 min, up to 90 min), or tap a chip (Focus 25 / Short break 5 / Long break 15), then Start; a custom dial value counts as Focus. One AlarmKit countdown at a time: it rings full-screen even with the app closed, with Pause / Resume and Cancel; the alert and Live Activity say "Focus" or "Break". A Focus round counts only when its countdown runs out (not when cancelled); today's rounds show as dots (●●●○, groups of 4) and start over at midnight. After a countdown ends the card offers one next step ("Start 5-min break", every 4th round "Start 15-min long break", after a break "Focus again") and a quiet "Done for now". No stats, no task linking. Logic: `Pomodoro.swift` (unit-tested).
 - **+ (bottom right)** — tap adds what fits the page (alarm on Alarms, event on Calendar, otherwise a reminder); press and hold for New reminder / New event / New alarm. A new reminder opens the Due-style quick add: type what, set when with one tap on the grid (times of day, +/− nudges, days), with guesses from your own past reminders (on the device). Editing a reminder opens the full editor.
 - **Sidebar** — like ChatGPT / Claude (menu button or a swipe from the left edge): Search at the top (reminders, events in the whole system calendar, alarms), past AI chats grouped by day (swipe Archive / Delete, long-press Rename, an Archived section), New chat and Settings at the bottom. Finished chats archive themselves (a week without a message, or an hour after everything they added is done); off in Settings → "Archive finished chats".
 - **Gestures** (follow Apple Reminders / Calendar) — tap the circle to complete; swipe right to left for actions, which look the same in every list (Delete red and rightmost, a full swipe deletes with an Undo toast; Flag, Archive, Pin); long-press for Show Details / Flag / Today / Tomorrow / Unschedule / Delete. Deleting a repeating event asks "this event or the series?" first. Shake to undo.

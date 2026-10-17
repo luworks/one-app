@@ -1,0 +1,106 @@
+<!--TITLE:Approval Inbox-->
+<style>
+.ap{margin:0 14px 12px;background:var(--surface);border-radius:16px;border:.5px solid var(--line);overflow:hidden}
+.ap-h{display:flex;gap:10px;align-items:center;padding:12px 14px 6px}
+.ap-h .rm{flex:1;min-width:0}
+.ap-h b{display:block;font-size:14px}
+.ap-h small{color:var(--ink3);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-h b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-t{display:flex;gap:8px;align-items:center}.ap-t span:first-child{flex:1}
+.ap-t{padding:2px 14px 0;font-weight:600;font-size:15.5px}
+.ap-d{margin:8px 14px 0;border-radius:10px;background:var(--fill);padding:8px 10px;font-size:13px;display:grid;grid-template-columns:auto 1fr;gap:3px 10px}
+.ap-d span:nth-child(odd){color:var(--ink3)}
+.ap-why{padding:8px 14px 0;font-size:13px;color:var(--ink2)}
+.fx{display:flex;gap:5px;flex-wrap:wrap;padding:8px 14px 0}
+.grant{margin:10px 14px 0;display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink2)}
+.grant input{margin-top:2px;accent-color:var(--ai)}
+.grant.locked{color:var(--ink3)}
+.ap-a{display:flex;gap:6px;padding:12px 14px 14px}.ap-a .btn{padding:0 12px}
+.tier{font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px}
+.t1{background:var(--task-soft);color:var(--task)}.t2{background:var(--alarm-soft);color:var(--alarm)}.t3{background:var(--danger-soft);color:var(--danger)}
+.done-row{opacity:.6}
+.perm{width:100%;border-collapse:collapse;font-size:12.5px}
+.perm td:first-child{width:34%;font-size:12px}.perm td:not(:first-child){text-align:center}.perm .lvl{padding:2px 5px;font-size:10.5px}
+.perm th,.perm td{padding:7px 3px;border-top:.5px solid var(--line);text-align:left}
+.perm th{color:var(--ink3);font-weight:600}
+.lvl{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:9px;background:var(--fill);color:var(--ink2);white-space:nowrap}
+.lvl.ok{background:var(--task-soft);color:var(--task)}.lvl.no{color:var(--ink3)}.lvl.q{background:var(--alarm-soft);color:var(--alarm)}
+</style>
+<div class="wrap">
+<div class="phone" id="phone">
+  <div id="chrome"></div>
+  <div class="scroll" id="main"></div>
+  <!--DOCK-->
+</div>
+<aside class="notes">
+  <a class="back" href="index.html">← 全部原型</a>
+  <h1>审批收件箱</h1>
+  <p>所有 agent（Today AI、Mac 上的 Trip / Inbox / Coding agent、快捷指令）提出的改动都进这里。每张卡说清楚：<b>谁</b>、<b>改什么（改前 → 改后）</b>、<b>为什么</b>、<b>影响范围</b>（写到哪个 Apple App、会不会通知别人、能不能撤销）。</p>
+  <h2>四级自主权</h2>
+  <ul>
+    <li><b>0 观察</b>：只读、只记录，从不打扰。</li>
+    <li><b>1 本地</b>：只改 Today 自己的副本（计划时间、链接、账本里的备注），可以给某个 agent 长期放行，一键撤销。</li>
+    <li><b>2 Apple App</b>：写 Apple 日历 / 提醒事项 / 闹钟。默认要问；可以“对这个 agent、这类改动、这个列表，放行 30 天”。</li>
+    <li><b>3 他人 / 不可逆</b>：通知别人、删除、发送、花钱。永远要问，不能预先授权。</li>
+  </ul>
+  <h2>试一试</h2>
+  <ul><li>批准一张卡，再点 Undo。</li><li>勾选“Always allow…”再批准，看看 Allowed 区和右上角权限表。</li><li>Weekly sync 那张卡没有放行选项（第 3 级）。</li></ul>
+</aside>
+</div>
+<!--SHEET-->
+<script>
+const grants = [{ actor: 'inbox', what: 'Link emails to reminders', row: 'Link / annotate (Local)', tier: 1, until: '14 Nov' }];
+const decided = {};
+function card(r) {
+  const A = ACTORS[r.actor];
+  const fx = [...(r.writes || []).map(w => `<span class="chip ${w.startsWith('Apple') ? 'ev' : w.startsWith('Alarm') ? 'al' : 'tk'}">Writes: ${esc(w)}</span>`),
+    r.notifies ? `<span class="chip dg">${ic('people','s')} Notifies ${r.notifies} people</span>` : '',
+    `<span class="chip">${r.tier >= 3 ? (r.notifies ? 'Undo sends a 2nd update' : 'Hard to undo') : 'One-tap undo'}</span>`].join('');
+  const grantLabel = { 2: `Always allow ${A.name} to ${r.object.type === 'event' ? 'add events to Apple Calendar' : 'add or edit reminders'} · 30 days`, 1: `Always allow ${A.name} to re-plan flexible reminders · 30 days` }[r.tier];
+  return `<div class="ap" id="c-${r.id}"><div class="ap-h">${av(r.actor)}<div class="rm"><b>${esc(A.name)} <span style="font-weight:400;color:var(--ink3)">${esc(r.verb)}</span></b><small>${esc(A.via)} · ${when(r.at)} · ${esc(INTENTS[r.intent].title)}</small></div></div>
+  <div class="ap-t"><span>${esc(r.object.title)}</span><span class="tier t${r.tier}">${r.tier} · ${TIERS[r.tier].name}</span></div>
+  <div class="ap-d"><span>Before</span><span>${esc(r.before || '—')}</span><span>After</span><span><b style="color:var(--ai)">${esc(r.after)}</b></span></div>
+  ${r.why ? `<div class="ap-why">${esc(r.why)}</div>` : ''}<div class="fx">${fx}</div>
+  ${r.tier === 3 ? `<div class="grant locked">${ic('lock','s')}<span>Changes that notify other people always ask. Only this occurrence moves.</span></div>` : `<label class="grant"><input type="checkbox" id="g-${r.id}"><span>${esc(grantLabel)}</span></label>`}
+  <div class="ap-a"><button class="btn ai" onclick="decide('${r.id}','approved')">${r.tier === 3 ? 'Approve & notify' : 'Approve'}</button><button class="btn sec" onclick="edit('${r.id}')">Edit</button><button class="btn ghost" onclick="decide('${r.id}','declined')">Decline</button></div></div>`;
+}
+function render() {
+  document.getElementById('chrome').innerHTML = chrome('Today');
+  const pend = LEDGER.filter(r => r.state === 'pending').sort((a, b) => b.tier - a.tier || (a.at.time < b.at.time ? 1 : -1));
+  const auto = LEDGER.filter(r => r.at.day === 0 && (r.state === 'auto' && r.tier >= 1));
+  const done = LEDGER.filter(r => decided[r.id]);
+  let h = `<div style="display:flex;align-items:center;padding-right:14px"><div class="h1" style="flex:1">Approvals</div><button class="ibtn" aria-label="Agent permissions" style="background:var(--fill)" onclick="perms()">${ic('shield')}</button></div>
+  <div class="sub">${pend.length ? `${pend.length} waiting. Nothing changes until you approve.` : 'All clear. Agents will ask here.'}</div>`;
+  if (pend.length > 1) h += `<div style="padding:0 14px 10px;display:flex;gap:8px"><button class="btn sec" onclick="approveLow()">Approve all Local + Apple (${pend.filter(r => r.tier < 3).length})</button></div>`;
+  h += pend.map(card).join('');
+  if (done.length) h += `<div class="sect">Decided just now</div><div class="card">${done.map(r => `<div class="row done-row">${av(r.actor)}<div class="rm"><b>${esc(r.object.title)}</b><small>${r.state === 'approved' ? 'Approved' : 'Declined'} · ${esc(r.after)}</small></div><button class="btn sec" onclick="undo('${r.id}')">Undo</button></div>`).join('')}</div>`;
+  h += `<div class="sect">Allowed automatically today · ${auto.length}</div><div class="card">${auto.map(r => `<div class="row">${av(r.actor)}<div class="rm"><b>${esc(r.object.title)}</b><small>${esc(r.verb)} · ${esc(r.after)}${r.grant ? '<br>' + esc(r.grant) : ''}</small></div><span class="tier t${r.tier}">${r.tier}</span></div>`).join('')}</div>
+  <div style="padding:6px 20px;font-size:12.5px;color:var(--ink3)">Full history: <a href="agent-board.html" style="color:var(--event)">Activity</a></div>`;
+  document.getElementById('main').innerHTML = h;
+}
+function decide(id, state) {
+  const r = LEDGER.find(x => x.id === id), g = document.getElementById('g-' + id);
+  if (g && g.checked && state === 'approved') grants.push({ actor: r.actor, what: r.tier === 1 ? 'Re-plan flexible reminders' : r.object.type === 'event' ? 'Add events to Apple Calendar' : 'Add or edit reminders', row: r.tier === 1 ? 'Re-plan flexible reminders (Local)' : r.object.type === 'event' ? 'Add events (Apple)' : 'Add or edit reminders (Apple)', tier: r.tier, until: '14 Nov' });
+  r.state = state; r.by = 'you · 9:41'; decided[id] = true;
+  render(); toast(`${state === 'approved' ? 'Approved' : 'Declined'}: ${r.object.title}${state === 'approved' && r.writes ? ' → ' + r.writes.join(', ') : ''}`, () => undo(id));
+}
+function approveLow() { LEDGER.filter(r => r.state === 'pending' && r.tier < 3).forEach(r => { r.state = 'approved'; r.by = 'you · 9:41'; decided[r.id] = true; }); render(); toast('Approved. Weekly sync still needs you.'); }
+function undo(id) { const r = LEDGER.find(x => x.id === id); r.state = 'pending'; delete r.by; delete decided[id]; render(); }
+function edit(id) {
+  const r = LEDGER.find(x => x.id === id);
+  openSheet('Edit before approving', `<div class="card"><div class="row"><div class="rm"><b>${esc(r.object.title)}</b><small>${esc(r.after)}</small></div></div>
+  <div class="row"><div class="rm"><small style="font-size:14px;color:var(--ink2)">In the app this opens the normal editor (reminder, event or alarm) prefilled with the agent’s change. Saving counts as your approval and is logged as “edited by you”.</small></div></div></div>
+  <div class="sect">Ledger record</div><pre class="rec">${esc(recordJSON(r))}</pre>`);
+}
+function perms() {
+  const rows = [['Read calendar & reminders', 'ok', 'ok', 'ok', 'ok'], ['Propose changes', 'ok', 'ok', 'ok', 'ok'], ['Re-plan flexible reminders (Local)', 'ok', 'ask', 'ask', 'no'], ['Link / annotate (Local)', 'ok', 'ok', 'ask', 'ask'],
+    ['Add or edit reminders (Apple)', 'ask', 'ask', 'ask', 'ask'], ['Add events (Apple)', 'ask', 'ask', 'ask', 'no'], ['Alarms (AlarmKit)', 'ask', 'no', 'no', 'no'], ['Move a meeting · notify others', 'lock', 'lock', 'lock', 'no'], ['Delete', 'lock', 'lock', 'lock', 'no']];
+  grants.forEach(g => { const i = ['today', 'trip', 'inbox', 'code'].indexOf(g.actor) + 1; const r = rows.find(x => x[0] === g.row); if (r && i > 0 && r[i] === 'ask') r[i] = 'ok'; });
+  const L = { ok: '<span class="lvl ok">Allowed</span>', ask: '<span class="lvl q">Ask</span>', no: '<span class="lvl no">Never</span>', lock: `<span class="lvl">${ic('lock','s')} Ask</span>` };
+  openSheet('Agent permissions', `<div style="padding:0 20px 8px;font-size:12.5px;color:var(--ink3)">${['today','trip','inbox','code'].map(a=>`${esc(ACTORS[a].short)} = ${esc(ACTORS[a].name)}`).join(' · ')}</div><div class="card" style="padding:4px 8px"><table class="perm"><tr><th></th>${['today', 'trip', 'inbox', 'code'].map(a => `<th style="text-align:center">${av(a)}</th>`).join('')}</tr>
+  ${rows.map(r => `<tr><td>${esc(r[0])}</td>${r.slice(1).map(v => `<td>${L[v]}</td>`).join('')}</tr>`).join('')}</table></div>
+  <div class="sect">Standing grants</div><div class="card">${grants.map(g => `<div class="row">${av(g.actor)}<div class="rm"><b>${esc(g.what)}</b><small>Tier ${g.tier} · until ${g.until} · every use is logged</small></div><button class="btn sec" onclick="this.closest('.row').style.opacity=.4;this.textContent='Revoked'">Revoke</button></div>`).join('')}</div>
+  <div style="padding:4px 20px;font-size:12.5px;color:var(--ink3)">A lock means it always asks. Grants expire, are per agent and per kind of change, and pause when the agent is disconnected.</div>`);
+}
+render();
+</script>
