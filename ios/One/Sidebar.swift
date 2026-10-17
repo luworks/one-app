@@ -244,7 +244,7 @@ struct Sidebar: View {
                 Spacer()
 
                 Button {
-                    close()
+                    // Settings opens over the sidebar; closing it first would flash the Today page.
                     onSettings()
                 } label: {
                     Image(systemName: "gearshape")
