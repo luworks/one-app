@@ -354,8 +354,9 @@ struct ActivitySettings: Equatable {
     var paused = false
     var tiers: Set<ActivityTier> = Set(ActivityTier.allCases)
     var retention: ActivityRetention = .default
-    /// Keep the text of a chat message next to its `ai.turn` event (in the `content` table). Off by default.
-    var keepChatText = false
+    /// Keep the text of a chat message next to its `ai.turn` event (in the `content` table). On by default: the user's own
+    /// history, on this device only, is what makes the Activity data useful for improving the product later.
+    var keepChatText = true
 
     static let pausedKey = "activity.setting.paused"
     static let retentionKey = "activity.setting.retention"
@@ -368,7 +369,7 @@ struct ActivitySettings: Equatable {
         paused = defaults.bool(forKey: Self.pausedKey)
         tiers = Set(ActivityTier.allCases.filter { defaults.object(forKey: Self.tierKey($0)) as? Bool ?? true })
         retention = defaults.string(forKey: Self.retentionKey).flatMap(ActivityRetention.init(rawValue:)) ?? .default
-        keepChatText = defaults.bool(forKey: Self.keepChatTextKey)
+        keepChatText = defaults.object(forKey: Self.keepChatTextKey) as? Bool ?? true
     }
 
     func save(to defaults: UserDefaults) {

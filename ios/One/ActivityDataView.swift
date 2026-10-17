@@ -7,7 +7,7 @@ struct ActivityDataView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(ActivitySettings.pausedKey) private var paused = false
     @AppStorage(ActivitySettings.retentionKey) private var retentionRaw = ActivityRetention.default.rawValue
-    @AppStorage(ActivitySettings.keepChatTextKey) private var keepChatText = false
+    @AppStorage(ActivitySettings.keepChatTextKey) private var keepChatText = true
     @AppStorage(ActivitySettings.tierKey(.changes)) private var keepChanges = true
     @AppStorage(ActivitySettings.tierKey(.ai)) private var keepAI = true
     @AppStorage(ActivitySettings.tierKey(.usage)) private var keepUsage = true
@@ -48,7 +48,7 @@ struct ActivityDataView: View {
                 Toggle(isOn: $keepChatText) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Keep the text of my messages")
-                        Text("Off: only the length and language of what you ask the AI are recorded. On: the message text is stored too, apart from the other fields.")
+                        Text("On: the text of your messages to the AI is stored on this iPhone with the rest of your activity. Off: only its length and language are recorded.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }

@@ -47,7 +47,7 @@ final class ActivityDataTests: XCTestCase {
         pause.toggleSwitch()
         let keep = app.switches["activity.keepChatText"]
         scrollTo(keep, swipes: 6)
-        XCTAssertEqual(keep.value as? String, "0", "chat text is not kept unless asked")
+        XCTAssertEqual(keep.value as? String, "1", "chat text is kept by default, on this iPhone only")
         XCTAssertTrue(app.switches["activity.tier.4"].exists)
         let where_ = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'On this iPhone'")).firstMatch
         scrollTo(where_, swipes: 6)

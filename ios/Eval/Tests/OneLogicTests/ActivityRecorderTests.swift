@@ -116,9 +116,9 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertFalse(fresh.paused)
         XCTAssertEqual(fresh.tiers, Set(ActivityTier.allCases), "every category is on by default (decision 1: usage too)")
         XCTAssertEqual(fresh.retention, .year, "default retention is a year (decision 2)")
-        XCTAssertFalse(fresh.keepChatText, "chat text is not copied by default (decision 3)")
+        XCTAssertTrue(fresh.keepChatText, "chat text is kept by default, on this device only (the user wants real chats recorded)")
         var s = fresh
-        s.paused = true; s.tiers = [.changes]; s.retention = .forever; s.keepChatText = true
+        s.paused = true; s.tiers = [.changes]; s.retention = .forever; s.keepChatText = false
         s.save(to: d)
         XCTAssertEqual(ActivitySettings(d), s)
         XCTAssertFalse(s.records(.changes), "paused wins")
