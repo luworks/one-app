@@ -151,7 +151,7 @@ struct ReminderListScreen: View {
             }
 
             if allowsNewReminder {
-                NewReminderRow(onCreate: create)
+                NewReminderRow(onCreate: create, suggestions: suggestions)
             }
 
             if isListScreen, showsCompleted, !done.isEmpty {
@@ -234,14 +234,18 @@ struct ReminderListScreen: View {
 
     // MARK: Creating
 
-    /// New reminder in this list. Today and Scheduled get today's date so the reminder stays on the page;
-    /// Flagged is flagged; All and the lists add no date.
-    private func create(_ title: String) {
-        let t = OneTask(title: title)
+    /// New reminder in this list with what was set in the row (date, flag, repeat), saved like `QuickReminderSheet.save()`.
+    /// Without a chosen date, Today and Scheduled get today's date so the reminder stays on the page;
+    /// Flagged is always flagged; All and the lists add no date.
+    private func create(_ draft: NewReminderDraft) {
+        let t = OneTask(title: draft.trimmedTitle, note: draft.note.trimmingCharacters(in: .whitespacesAndNewlines), due: draft.due)
+        t.flagged = draft.flagged
+        t.reminderOffsetMinutes = draft.due == nil ? nil : 0   // remind at the time you picked
+        t.repeatRule = draft.due == nil ? nil : draft.repeatRule?.rawValue
         switch target {
         case .list: t.listName = list?.name ?? ""
         case .defaultList: break
-        case .smart(.today), .smart(.scheduled): t.due = Calendar.current.startOfDay(for: .now)
+        case .smart(.today), .smart(.scheduled): if t.due == nil { t.due = Calendar.current.startOfDay(for: .now) }
         case .smart(.flagged): t.flagged = true
         case .smart: break
         }
@@ -249,46 +253,213 @@ struct ReminderListScreen: View {
         // Saved now so its id is final: an autosave later would change the id under an open editor and close it.
         try? context.save()
     }
+
+    /// Up to three guesses from this list's own past reminders (done ones too; `suggest` skips titles still open).
+    private func suggestions() -> [ReminderSuggest.Suggestion] {
+        ReminderSuggest.suggest(from: scoped.map {
+            .init(title: $0.title, createdAt: $0.createdAt, due: $0.due ?? $0.plannedStart, isOpen: !$0.isDone)
+        }, limit: 3)
+    }
 }
 
 /// "New Reminder" at the end of a list: tap, type, Return adds it and stays ready for the next one.
+/// Like Apple Reminders' inline row: while editing, an "Add Note" line and round buttons for date, flag and repeat;
+/// when empty, up to three guesses from this list's past reminders.
 private struct NewReminderRow: View {
-    var onCreate: (String) -> Void
+    var onCreate: (NewReminderDraft) -> Void
+    var suggestions: () -> [ReminderSuggest.Suggestion]
 
-    @State private var text = ""
-    @FocusState private var focused: Bool
+    private enum Field { case title, note }
+
+    @State private var draft = NewReminderDraft()
+    @State private var guesses: [ReminderSuggest.Suggestion] = []
+    @State private var showsPicker = false
+    @FocusState private var focus: Field?
+
+    private var isEditing: Bool { focus != nil || showsPicker }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: "circle")
                 .font(.title3)
                 .foregroundStyle(.tertiary)
                 .frame(minWidth: 24)
                 .accessibilityHidden(true)
-            TextField("New Reminder", text: $text)
-                .focused($focused)
-                .onSubmit {
-                    if commit() { DispatchQueue.main.async { focused = true } }
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("New Reminder", text: $draft.title)
+                    .focused($focus, equals: .title)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        if commit() { DispatchQueue.main.async { focus = .title } }
+                    }
+                    .accessibilityIdentifier("newReminderField")
+                if isEditing {
+                    TextField("Add Note", text: $draft.note, axis: .vertical)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1...4)
+                        .focused($focus, equals: .note)
+                        .accessibilityIdentifier("newRow.note")
+                    if focus == .title, draft.title.isEmpty, !guesses.isEmpty { suggestionRow }
+                    if let due = draft.due { dateChip(due) }
+                    controls
+                        .padding(.top, 2)
                 }
-                .accessibilityIdentifier("newReminderField")
+            }
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture { focused = true }
-        .onChange(of: focused) { _, isFocused in
-            if !isFocused { commit() }
+        .onTapGesture { if focus == nil { focus = .title } }
+        .onChange(of: focus) { _, now in
+            if now == .title, draft.title.isEmpty { guesses = suggestions() }
+            // Leaving the row saves it, except while the date picker is up (it takes the keyboard away).
+            if now == nil, !showsPicker, !commit() { draft.reset() }
         }
+        .sheet(isPresented: $showsPicker, onDismiss: { focus = .title }) { datePickerSheet }
+        .animation(.snappy, value: isEditing)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
     }
 
-    /// Adds the typed reminder. Returns false when there was nothing to add.
+    // MARK: Pieces
+
+    /// Tap a guess to fill in the title and its usual time; Return then adds it.
+    private var suggestionRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(guesses, id: \.title) { s in
+                    Button {
+                        draft.apply(s)
+                        focus = .title
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles").font(.caption).foregroundStyle(Color.accentColor)
+                            Text(s.title).lineLimit(1)
+                            if let w = s.when {
+                                Text(w.formatted(date: .omitted, time: .shortened)).foregroundStyle(.secondary)
+                            }
+                        }
+                        .font(.subheadline)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Color(.tertiarySystemFill), in: Capsule())
+                    }
+                    .buttonStyle(PressScale())
+                    .tint(.primary)
+                    .accessibilityLabel("Suggestion, \(s.title)")
+                    .accessibilityIdentifier("newRow.suggestion")
+                }
+            }
+        }
+    }
+
+    /// The chosen date (and repeat), as the row will show it once saved.
+    private func dateChip(_ due: Date) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "calendar")
+            Text(DayLabel.withTime(due))
+            if draft.repeatRule != nil { Image(systemName: "repeat") }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(Color.accentColor)
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Color(.tertiarySystemFill), in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(draft.repeatRule.map { "\(DayLabel.withTime(due)), \($0.label)" } ?? DayLabel.withTime(due))
+        .accessibilityIdentifier("newRow.dateChip")
+    }
+
+    private var controls: some View {
+        HStack(spacing: 12) {
+            Menu {
+                ForEach(QuickTime.Day.allCases) { day in
+                    Button(day.rawValue) {
+                        draft.choose(day)
+                        focus = .title
+                    }
+                }
+                Button("Custom…") {
+                    if draft.due == nil { draft.due = QuickTime.start() }
+                    showsPicker = true
+                }
+                if draft.due != nil {
+                    Divider()
+                    Button("No Date", role: .destructive) {
+                        draft.clearDate()
+                        focus = .title
+                    }
+                }
+            } label: {
+                roundIcon("calendar", on: draft.due != nil, tint: .accentColor)
+            }
+            .accessibilityLabel(draft.due.map { "Date, \(DayLabel.withTime($0))" } ?? "Date")
+            .accessibilityIdentifier("newRow.date")
+
+            Button {
+                draft.flagged.toggle()
+            } label: {
+                roundIcon(draft.flagged ? "flag.fill" : "flag", on: draft.flagged, tint: .orange)
+            }
+            .buttonStyle(PressScale())
+            .accessibilityLabel("Flag")
+            .accessibilityValue(draft.flagged ? "On" : "Off")
+            .accessibilityAddTraits(draft.flagged ? .isSelected : [])
+            .accessibilityIdentifier("newRow.flag")
+
+            Menu {
+                Picker("Repeat", selection: $draft.repeatRule) {
+                    Text("Never").tag(RepeatRule?.none)
+                    ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                }
+            } label: {
+                roundIcon("repeat", on: draft.repeatRule != nil, tint: .accentColor)
+            }
+            .disabled(!draft.canRepeat)
+            .opacity(draft.canRepeat ? 1 : 0.4)
+            .accessibilityLabel(draft.repeatRule.map { "Repeat, \($0.label)" } ?? "Repeat")
+            .accessibilityIdentifier("newRow.repeat")
+        }
+    }
+
+    private func roundIcon(_ name: String, on: Bool, tint: Color) -> some View {
+        Image(systemName: name)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(on ? tint : Color.secondary)
+            .frame(width: 36, height: 36)
+            .background(Color(.secondarySystemFill), in: Circle())
+            .contentShape(Circle())
+    }
+
+    private var datePickerSheet: some View {
+        NavigationStack {
+            VStack {
+                DatePicker("Date", selection: Binding(get: { draft.due ?? QuickTime.start() }, set: { draft.due = $0 }),
+                           displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.graphical)
+                    .padding(.horizontal, 12)
+                    .accessibilityIdentifier("newRow.datePicker")
+                Spacer(minLength: 0)
+            }
+            .navigationTitle("Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showsPicker = false }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    // MARK: Saving
+
+    /// Adds the typed reminder with its date, flag and repeat. Returns false when there was nothing to add.
     @discardableResult
     private func commit() -> Bool {
-        let title = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return false }
-        text = ""
-        onCreate(title)
+        guard !draft.isEmpty else { return false }
+        let saved = draft
+        draft.reset()
+        guesses = []
+        onCreate(saved)
         return true
     }
 }
