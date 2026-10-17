@@ -131,37 +131,43 @@ struct ReminderListScreen: View {
     // MARK: Body
 
     var body: some View {
-        List {
-            titleBlock
-                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
-                .listRowSeparator(.hidden)
+        // The reader lets the New Reminder row scroll itself fully into view as it grows (note, date, flag).
+        ScrollViewReader { proxy in
+            List {
+                titleBlock
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
+                    .listRowSeparator(.hidden)
 
-            ForEach(groups) { group in
-                Section {
-                    ForEach(group.tasks) { TaskRow(task: $0, showsList: smart != nil && smart != .all) }
-                } header: {
-                    if let heading = group.title {
-                        Text(heading)
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(group.color)
-                            .textCase(nil)
-                            .accessibilityAddTraits(.isHeader)
+                ForEach(groups) { group in
+                    Section {
+                        ForEach(group.tasks) { TaskRow(task: $0, showsList: smart != nil && smart != .all) }
+                    } header: {
+                        if let heading = group.title {
+                            Text(heading)
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(group.color)
+                                .textCase(nil)
+                                .accessibilityAddTraits(.isHeader)
+                        }
                     }
                 }
-            }
 
-            if allowsNewReminder {
-                NewReminderRow(onCreate: create, suggestions: suggestions)
-            }
+                if allowsNewReminder {
+                    NewReminderRow(onCreate: create, suggestions: suggestions) {
+                        withAnimation(.snappy) { proxy.scrollTo(NewReminderRow.id, anchor: .bottom) }
+                    }
+                    .id(NewReminderRow.id)
+                }
 
-            if isListScreen, showsCompleted, !done.isEmpty {
-                Section {
-                    ForEach(done) { TaskRow(task: $0, showsList: false) }
-                } header: {
-                    Text("Completed")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(nil)
+                if isListScreen, showsCompleted, !done.isEmpty {
+                    Section {
+                        ForEach(done) { TaskRow(task: $0, showsList: false) }
+                    } header: {
+                        Text("Completed")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color(.secondaryLabel))
+                            .textCase(nil)
+                    }
                 }
             }
         }
@@ -198,9 +204,10 @@ struct ReminderListScreen: View {
                 Button {
                     withAnimation(.snappy) { showsCompleted.toggle() }
                 } label: {
-                    Text("\(done.count) Completed · \(showsCompleted ? "Hide" : "Show")")
+                    // Gray count and a full-color Show, as in Apple Reminders (a tinted .secondary was too faint to read).
+                    (Text("\(done.count) Completed · ").foregroundStyle(Color(.secondaryLabel))
+                        + Text(showsCompleted ? "Hide" : "Show").foregroundStyle(color))
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("toggleCompleted")
@@ -270,6 +277,10 @@ struct ReminderListScreen: View {
 private struct NewReminderRow: View {
     var onCreate: (NewReminderDraft) -> Void
     var suggestions: () -> [ReminderSuggest.Suggestion]
+    /// Called once the row has grown for editing, so the list can scroll it clear of the keyboard and the bottom bar.
+    var reveal: () -> Void = {}
+
+    static let id = "newReminderRow"
 
     private enum Field { case title, note }
 
@@ -279,6 +290,8 @@ private struct NewReminderRow: View {
     /// Which chip row is open under the buttons.
     @State private var panel: Panel?
     @FocusState private var focus: Field?
+    /// The round date / flag / repeat buttons grow with the text size so their glyphs never clip.
+    @ScaledMetric(relativeTo: .subheadline) private var iconSize: CGFloat = 36
 
     private enum Panel { case date, repeating }
 
@@ -331,6 +344,10 @@ private struct NewReminderRow: View {
         }
         .sheet(isPresented: $showsPicker, onDismiss: { focus = .title }) { datePickerSheet }
         .animation(.snappy, value: isEditing)
+        .onChange(of: isEditing) { _, editing in
+            // After the keyboard has come up and the row has grown.
+            if editing { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { reveal() } }
+        }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
     }
@@ -494,7 +511,7 @@ private struct NewReminderRow: View {
         Image(systemName: name)
             .font(.subheadline.weight(.medium))
             .foregroundStyle(on ? tint : Color.secondary)
-            .frame(width: 36, height: 36)
+            .frame(width: iconSize, height: iconSize)
             .background(Color(.secondarySystemFill), in: Circle())
             .contentShape(Circle())
     }
