@@ -62,6 +62,9 @@ struct HomeView: View {
     @Environment(\.undoManager) private var undoManager
     /// Counts tab switches made by swiping; drives their haptic (pill taps already have one).
     @State private var tabSwipes = 0
+    /// While typing on the page (the inline New Reminder row) the bar steps aside, as Apple Reminders has nothing above
+    /// the keyboard; otherwise it would cover the row's note and buttons.
+    @State private var keyboardUp = false
 
     var body: some View {
         GeometryReader { geo in
@@ -178,7 +181,9 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .safeAreaInset(edge: .bottom) { bottomBar }
+        .safeAreaInset(edge: .bottom) { if !keyboardUp { bottomBar } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
         .sensoryFeedback(.selection, trigger: tabSwipes)
         .sheet(isPresented: $showsSearch) { SearchView() }
         .sheet(item: $newItem) { item in

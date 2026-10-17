@@ -284,16 +284,21 @@ private struct SidebarCircle: ViewModifier {
 }
 
 private struct ConversationRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let thread: ChatThread
     let now: Date
     var action: () -> Void
 
     var body: some View {
+        // At accessibility sizes the time goes under the title, so the title is not squeezed to a few letters.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
         Button(action: action) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+            layout {
                 Text(thread.title)
                     .font(.body)
-                    .lineLimit(2)
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(ConversationHistory.timeText(thread.updatedAt, now: now))

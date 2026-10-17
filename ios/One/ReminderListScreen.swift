@@ -332,7 +332,7 @@ private struct NewReminderRow: View {
         .animation(.snappy, value: isEditing)
         .onChange(of: isEditing) { _, editing in
             // After the keyboard has come up and the row has grown.
-            if editing { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { reveal() } }
+            if editing { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { reveal() } }
         }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
