@@ -41,6 +41,8 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AppearanceSection()
+
                 Section {
                     Toggle(isOn: $calendarOn) { Label("Apple Calendar", systemImage: "calendar") }
                     Toggle(isOn: $remindersOn) { Label("Apple Reminders", systemImage: "checklist") }
