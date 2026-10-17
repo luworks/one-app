@@ -6,6 +6,9 @@ struct ChatMessage: Identifiable, Equatable, Codable {
     var id = UUID()
     let role: Role
     let text: String
+
+    /// One of the app's own status sentences (see `MessageCopy`): no Copy button under it.
+    var isTemplate: Bool { MessageCopy.isTemplate(isUser: role == .user, text: text) }
 }
 
 /// Full-screen AI page, modeled on ChatGPT / Claude mobile.
@@ -761,8 +764,8 @@ struct AskView: View {
     }
 
     private func addedDetail(_ c: Capture) -> String {
-        guard c.kind == .task, !c.ringsAsAlarm, let list = c.listName else { return c.summary }
-        return c.summary + " · " + list
+        guard c.kind == .task, !c.ringsAsAlarm else { return c.summary }
+        return c.summary + " · " + c.listLabel
     }
 
     private func isPlanRequest(_ text: String) -> Bool {
@@ -948,7 +951,8 @@ struct MessageView: View {
                 Text(message.text)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                copyButton
+                // The app's own status sentences ("Here's what I understood…", "Updated…") have nothing worth copying.
+                if !message.isTemplate { copyButton }
             }
         }
     }

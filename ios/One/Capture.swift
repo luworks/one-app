@@ -28,12 +28,43 @@ struct Capture: Equatable {
     /// The Reminders list a task goes to (`OneTask.listName`). nil = the app's default; the AI screen fills in the Inbox
     /// or a confident `ListGuess`, and the user can change it on the card.
     var listName: String? = nil
+    /// The time is working time ("work on the report for 2 hours"), so the item is written with a planned time.
+    /// Every other clock time on a reminder is when it alerts: it is written as the reminder's due time, alert at 0 min.
+    var isWorkBlock: Bool = false
 
     var plannedStart: Date? {
         guard let hour else { return nil }
         return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: day)
     }
 
+    /// The dates a reminder made from this capture is written with. A reminder that alerts at a time is written like the
+    /// Quick Add sheet writes it: the time is its due time and the alert fires at it (reminderOffsetMinutes 0). Only working
+    /// time (`isWorkBlock`) and alarms keep a planned time, so principle 3 holds: planned time is never the deadline.
+    var taskTiming: (plannedStart: Date?, due: Date?, alertMinutesBefore: Int?) {
+        if alertsAtTime { return (nil, plannedStart, 0) }
+        return (plannedStart, plannedStart == nil && hasDay ? day : nil, nil)
+    }
+
+    /// "New reminder", "New event", "New alarm": the card's first line.
+    var kindLabel: String {
+        switch kind {
+        case .event: "New event"
+        case .task: ringsAsAlarm ? "New alarm" : "New reminder"
+        }
+    }
+
+    /// The list a reminder goes to, in Apple's words: no name = "Reminders".
+    var listLabel: String {
+        guard let listName, !listName.isEmpty else { return "Reminders" }
+        return listName
+    }
+
+    /// A reminder with a clock time that alerts at that time (see `makeTask`): not an event, not an alarm, not working time.
+    var alertsAtTime: Bool {
+        kind == .task && !ringsAsAlarm && !isWorkBlock && plannedStart != nil
+    }
+
+    /// What the card says will be created, in the words of the result: "Tomorrow 9:00 AM · alerts you", "Due Friday".
     var summary: String {
         var parts: [String] = []
         switch kind {
@@ -47,10 +78,11 @@ struct Capture: Equatable {
             parts.append("Alarm " + (plannedStart.map { DayLabel.withTime($0) } ?? ""))
             if let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)) { parts.append(rule.label) }
         case .task:
-            if let start = plannedStart { parts.append("Planned " + DayLabel.withTime(start)) }
+            if let start = plannedStart { parts.append((isWorkBlock ? "Planned " : "") + DayLabel.withTime(start)) }
             else if hasDay { parts.append("Due " + DayLabel.text(for: day)) }
-            else { parts.append("No date, goes to your Inbox") }
+            else { parts.append("No date") }
             if let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)) { parts.append(rule.label) }
+            if alertsAtTime { parts.append("alerts you") }
         }
         return parts.joined(separator: " · ")
     }
@@ -274,9 +306,21 @@ enum CaptureParser {
 
         title = cleanTitle(title, raw: raw)
         let finalTitle = title.isEmpty ? raw : title
-        return Capture(title: finalTitle, day: day, hasDay: hasDay, hour: hour, minute: minute,
-                       repeatRule: repeatRule, durationMinutes: duration,
-                       kind: kind(title: finalTitle, hour: hour, duration: rangeDuration, repeatRule: repeatRule))
+        var capture = Capture(title: finalTitle, day: day, hasDay: hasDay, hour: hour, minute: minute,
+                              repeatRule: repeatRule, durationMinutes: duration,
+                              kind: kind(title: finalTitle, hour: hour, duration: rangeDuration, repeatRule: repeatRule))
+        capture.isWorkBlock = isWorkTime(raw, hasLength: duration != nil)
+        return capture
+    }
+
+    /// True when the sentence is about time to work on something ("work on the report for 2 hours", "专注写方案"), not a
+    /// reminder. Words that ask to be reminded win: "remind me to work on X at 3" is a reminder.
+    static func isWorkTime(_ raw: String, hasLength: Bool) -> Bool {
+        let remind = #"\bremind(?:er)?\b|\balert\s+me\b|\bping\s+me\b|\bnotify\s+me\b|提醒|通知我|叫我"#
+        if raw.range(of: remind, options: [.regularExpression, .caseInsensitive]) != nil { return false }
+        if hasLength { return true }
+        return raw.range(of: #"\bwork(?:ing)?\s+on\b|\bfocus\s+(?:on|time)\b|\btime\s*block\b|\bblock\s+(?:out\s+)?(?:time|my)\b|专注|集中精力|安排时间"#,
+                         options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private static let eventWords = [
@@ -391,8 +435,43 @@ enum CaptureParser {
                 if joined != t { t = joined; changed = true }
             }
             t = t.split(separator: " ").filter { !["那个", "就是", "嗯", "呃", "uh", "um", "like"].contains($0.lowercased()) }.joined(separator: " ")
+            let trimmed = trimConnectors(t)
+            if trimmed != t { t = trimmed; changed = true }
         }
         return t.trimmingCharacters(in: CharacterSet(charactersIn: " ,，。.、!！?？~"))
+    }
+
+    /// Connector words that a removed date or time leaves dangling: "…车库去，然后 的时候提醒我…" (the time sat between them),
+    /// "Call mom and", "then buy milk". Only words at the ends of the title, or at the start of a word that follows the gap
+    /// a removed time left, so "下雨的时候带伞" keeps its own "的时候".
+    private static func trimConnectors(_ title: String) -> String {
+        let alone: Set<String> = ["然后", "的时候", "时候", "then", "and", "and then", "接着"]
+        var tokens = title.split(separator: " ").map(String.init)
+        while let first = tokens.first, tokens.count > 1, alone.contains(first.lowercased()) { tokens.removeFirst() }
+        while let last = tokens.last, tokens.count > 1, alone.contains(last.lowercased()) { tokens.removeLast() }
+        func isCJKEnd(_ s: String) -> Bool {
+            guard let u = s.unicodeScalars.last else { return false }
+            return (0x4E00...0x9FFF).contains(u.value) || "，。、；：！？".unicodeScalars.contains(u)
+        }
+        var out: [String] = []
+        for (i, token) in tokens.enumerated() {
+            var tok = token
+            var glue = false
+            if i > 0, let p = ["的时候", "时候"].first(where: { tok.hasPrefix($0) && tok.count > $0.count }) {
+                tok = String(tok.dropFirst(p.count))
+                glue = true
+            }
+            if glue, let prev = out.last, isCJKEnd(prev), let c = tok.unicodeScalars.first, (0x4E00...0x9FFF).contains(c.value) {
+                out[out.count - 1] = prev + tok
+            } else {
+                out.append(tok)
+            }
+        }
+        var result = out.joined(separator: " ")
+        for p in [#"^(?:然后|接着)[，,]?\s*(?=\S)"#, #"(?<=\S)[，,]?\s*(?:然后|接着)$"#, #"(?i)^(?:and\s+then|then|and)\s+(?=\S)"#, #"(?i)(?<=\S)\s+(?:and\s+then|then|and)$"#] {
+            result = result.replacingOccurrences(of: p, with: "", options: .regularExpression)
+        }
+        return result.trimmingCharacters(in: CharacterSet(charactersIn: " ,，。.、"))
     }
 
     // MARK: Chinese numerals, month days, relative times
@@ -679,9 +758,12 @@ enum CaptureDraftMapper {
         var duration: Int?
         if !allDay, let d = draft.durationMinutes, (1...1440).contains(d) { duration = d }
 
-        return Capture(title: title, day: day, hasDay: hasDay, hour: hour, minute: minute,
-                       repeatRule: repeatRule(draft.repeatRule), durationMinutes: duration, kind: kind,
-                       isAllDay: allDay, fromAppleIntelligence: true)
+        var capture = Capture(title: title, day: day, hasDay: hasDay, hour: hour, minute: minute,
+                              repeatRule: repeatRule(draft.repeatRule), durationMinutes: duration, kind: kind,
+                              isAllDay: allDay, fromAppleIntelligence: true)
+        // The model gives a length only for work time; a plain time on a task is when it alerts.
+        capture.isWorkBlock = kind == .task && duration != nil
+        return capture
     }
 
     /// Keeps the user's own words as the title. The model tends to shorten or translate ("walk" for

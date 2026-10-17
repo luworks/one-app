@@ -358,6 +358,7 @@ enum Understanding {
         let p = CaptureParser.parse(a.when ?? "", now: now, calendar: calendar)
         var c = Capture(title: title, day: p.day, hasDay: p.hasDay, hour: p.hour, minute: p.minute,
                         repeatRule: p.repeatRule, durationMinutes: p.durationMinutes)
+        c.isWorkBlock = p.isWorkBlock
         switch a.kind {
         case .task: c.kind = .task
         case .event: c.kind = .event

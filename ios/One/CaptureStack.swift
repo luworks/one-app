@@ -123,7 +123,7 @@ struct CompactCaptureRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(capture.title).font(.subheadline.weight(.semibold)).lineLimit(2)
                 Text(capture.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                if capture.kind == .task, !lists.isEmpty {
+                if capture.kind == .task, !capture.ringsAsAlarm, !lists.isEmpty {
                     ListMenu(capture: $capture, lists: lists).font(.caption)
                 }
             }
@@ -159,17 +159,18 @@ struct ListMenu: View {
 
     var body: some View {
         Menu {
-            Picker("List", selection: Binding(get: { capture.listName ?? "" },
+            Picker("List", selection: Binding(get: { capture.listName == "Reminders" ? "" : capture.listName ?? "" },
                                               set: { capture.listName = $0.isEmpty ? nil : $0 })) {
-                if capture.listName == nil { Text("Default list").tag("") }
-                ForEach(lists, id: \.self) { Text($0).tag($0) }
+                // The list with no name of its own is Apple's "Reminders" (`listName == ""`).
+                Text("Reminders").tag("")
+                ForEach(lists.filter { !$0.isEmpty && $0 != "Reminders" }, id: \.self) { Text($0).tag($0) }
             }
         } label: {
-            Label(capture.listName ?? "Default list", systemImage: "list.bullet")
+            Label(capture.listLabel, systemImage: "list.bullet")
                 .lineLimit(1)
         }
         .tint(.secondary)
-        .accessibilityLabel("List: \(capture.listName ?? "Default list")")
+        .accessibilityLabel("List: \(capture.listLabel)")
         .accessibilityIdentifier("capture-list")
     }
 }
@@ -197,7 +198,7 @@ struct AddedRow: View {
     }
 
     private var detail: String {
-        guard capture.kind == .task, let list = capture.listName else { return capture.summary }
-        return capture.summary + " · " + list
+        guard capture.kind == .task, !capture.ringsAsAlarm else { return capture.summary }
+        return capture.summary + " · " + capture.listLabel
     }
 }

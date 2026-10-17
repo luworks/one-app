@@ -34,8 +34,8 @@ final class JourneyTests: XCTestCase {
         field.typeText("Call Alex tomorrow at 3pm\n")
         XCTAssertTrue(app.staticTexts["Call Alex"].waitForExistence(timeout: 5), "preview shows the parsed title")
         tap(app.buttons["Add"])
-        XCTAssertTrue(app.staticTexts["Added “Call Alex” · Planned Tomorrow 15:00."].waitForExistence(timeout: 5)
-                      || app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Added'")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Added “Call Alex” · Tomorrow' AND label CONTAINS 'alerts you'"))
+            .firstMatch.waitForExistence(timeout: 5), "the confirmation says what was made: a reminder that alerts")
         XCTAssertLessThanOrEqual(taps, 2, "J1 tap budget")
     }
 
