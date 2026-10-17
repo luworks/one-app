@@ -18,6 +18,8 @@ struct ExternalEvent: Identifiable, Hashable {
     let color: Color
     /// Address plus coordinate (when Apple Calendar has one), for travel time. Nil without a location.
     var place: TravelPlace? = nil
+    /// Part of a repeating series (Delete asks "this event or all future", and offers no Undo).
+    var repeats = false
 
     var durationMinutes: Int { max(1, Int(end.timeIntervalSince(start) / 60)) }
 }
@@ -181,7 +183,7 @@ final class CalendarSync {
                               start: e.startDate, end: e.endDate, isAllDay: e.isAllDay,
                               calendarID: e.calendar.calendarIdentifier,
                               calendarTitle: e.calendar.title, color: Color(cgColor: e.calendar.cgColor),
-                              place: Self.place(e))
+                              place: Self.place(e), repeats: e.hasRecurrenceRules)
             }
     }
 
@@ -297,9 +299,8 @@ final class CalendarSync {
     /// The occurrence of event `id` that starts at `start` (within a minute).
     func occurrence(_ id: String, at start: Date) -> EKEvent? {
         let predicate = store.predicateForEvents(withStart: start.addingTimeInterval(-60), end: start.addingTimeInterval(60), calendars: nil)
-        return store.events(matching: predicate).first {
-            $0.eventIdentifier == id && abs($0.startDate.timeIntervalSince(start)) < 60
-        }
+        let found = store.events(matching: predicate)
+        return EventMatch.occurrence(id, at: start, in: found.map { ($0.eventIdentifier, $0.startDate) }).map { found[$0] }
     }
 
     /// Removes the system copy of an event Today created. Its identifier can change after iCloud / Exchange sync re-keys the
@@ -340,8 +341,9 @@ final class CalendarSync {
         if let ek = store.event(withIdentifier: id) { return ek }
         let predicate = store.predicateForEvents(withStart: event.start.addingTimeInterval(-60),
                                                  end: event.start.addingTimeInterval(max(120, event.duration)), calendars: nil)
-        guard let match = store.events(matching: predicate)
-            .first(where: { $0.title == event.title && abs($0.startDate.timeIntervalSince(event.start)) < 60 }) else { return nil }
+        let found = store.events(matching: predicate)
+        guard let i = EventMatch.copy(titled: event.title, at: event.start, in: found.map { ($0.title, $0.startDate) }) else { return nil }
+        let match = found[i]
         log.info("relinked \(event.title, privacy: .public): its identifier changed")
         event.externalID = match.eventIdentifier
         return match
@@ -362,12 +364,35 @@ final class CalendarSync {
     }
 
     #if DEBUG
-    /// UI-test hook: deletes system events with this title, as if they had been deleted in the Calendar app.
+    /// UI-test hook (`-debugDeleteSystemEvent <title>`): deletes system events with this title, as if they had been deleted
+    /// in the Calendar app. Also the cleanup for the events the create hooks below make: a whole series goes, even one
+    /// that started days ago (its earliest occurrence is removed with all future events).
     func debugDeleteSystemEvents(titled title: String) {
         guard isOn else { return }
         storeReady = true
-        let predicate = store.predicateForEvents(withStart: .now.addingTimeInterval(-86_400), end: .now.addingTimeInterval(14 * 86_400), calendars: nil)
-        for e in store.events(matching: predicate) where e.title == title { try? store.remove(e, span: .futureEvents) }
+        let predicate = store.predicateForEvents(withStart: .now.addingTimeInterval(-30 * 86_400), end: .now.addingTimeInterval(30 * 86_400), calendars: nil)
+        for e in store.events(matching: predicate).filter({ $0.title == title }).sorted(by: { $0.startDate < $1.startDate }) {
+            try? store.remove(e, span: .futureEvents)
+        }
+        version += 1
+    }
+
+    /// UI-test hooks (`-debugCreateSystemEvent <title>`, `-debugCreateRepeatingEvent <title>`): an event made in the Calendar
+    /// app, not by Today, in the default calendar. It starts at the top of the current hour (next to the Today list's now
+    /// line, and still today at 23:59); the repeating one is daily and starts yesterday, so it has a past occurrence,
+    /// today's and tomorrow's.
+    func debugCreateSystemEvent(titled title: String, repeating: Bool) {
+        guard isOn, let calendar = store.defaultCalendarForNewEvents else { return }
+        storeReady = true
+        let cal = Calendar.current
+        let hour = cal.dateInterval(of: .hour, for: .now)?.start ?? .now
+        let e = EKEvent(eventStore: store)
+        e.calendar = calendar
+        e.title = title
+        e.startDate = repeating ? cal.date(byAdding: .day, value: -1, to: hour) ?? hour : hour
+        e.endDate = e.startDate.addingTimeInterval(1800)
+        if repeating { e.recurrenceRules = [EKRecurrenceRule(recurrenceWith: .daily, interval: 1, end: nil)] }
+        do { try store.save(e, span: .futureEvents) } catch { log.error("debug create failed \(error.localizedDescription, privacy: .public)") }
         version += 1
     }
     #endif
@@ -396,7 +421,8 @@ struct ExternalEventRow: View {
     /// The same swipe and long-press actions as in the Calendar tab.
     private var entry: CalEntry {
         CalEntry(id: event.id, source: .system(event.eventIdentifier), title: event.title, location: event.location,
-                 start: event.start, end: event.end, isAllDay: event.isAllDay, color: event.color, calendarTitle: event.calendarTitle)
+                 start: event.start, end: event.end, isAllDay: event.isAllDay, color: event.color, calendarTitle: event.calendarTitle,
+                 repeats: event.repeats)
     }
 
     var body: some View {

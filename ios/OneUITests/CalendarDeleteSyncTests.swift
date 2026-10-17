@@ -13,6 +13,18 @@ final class CalendarDeleteSyncTests: XCTestCase {
         title = "Sync check \(Int(Date.now.timeIntervalSince1970) % 100000)"
     }
 
+    override func tearDown() {
+        // Leave nothing behind in the simulator's calendar.
+        // A slow simulator can fail the relaunch ("Failed to terminate"); that is not the test's result.
+        XCTExpectFailure("cleanup only", options: .nonStrict()) {
+            let app = launch(["-debugDeleteSystemEvent", title])
+            _ = app.staticTexts["Schedule"].waitForExistence(timeout: 10)
+            sleep(2)
+            app.terminate()
+        }
+        super.tearDown()
+    }
+
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-uiTestingCalendarSync", "-uiTestingStore", store] + extra
@@ -34,32 +46,16 @@ final class CalendarDeleteSyncTests: XCTestCase {
         return found
     }
 
-    private func enableCalendarSync(_ app: XCUIApplication) {
-        addUIInterruptionMonitor(withDescription: "Calendar access") { alert in
-            for label in ["Allow Full Access", "Allow", "OK"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
-            return false
-        }
-        app.openSidebar()
-        app.buttons["Settings"].firstMatch.tap()
-        let toggle = app.switches["Apple Calendar"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        if (toggle.value as? String) != "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        for label in ["Allow Full Access", "Allow"] {
-            let b = springboard.buttons[label]
-            if b.waitForExistence(timeout: 3) { b.tap(); break }
-        }
-        sleep(1)
-        app.buttons["Done"].tap()
-        app.closeSidebar()
-    }
-
     private func addEvent(_ app: XCUIApplication) {
+        // On the Calendar tab "New" adds an event (elsewhere a reminder). Right after the sidebar closes the tab tap can be
+        // lost, so check the tab is showing (its Week / Month / Year pills) before tapping New.
+        let pills = app.buttons["calendar.mode.month"]
         app.buttons["Calendar"].firstMatch.tap()
-        sleep(1)
+        if !pills.waitForExistence(timeout: 5) { app.buttons["Calendar"].firstMatch.tap() }
+        XCTAssertTrue(pills.waitForExistence(timeout: 5), "on the Calendar tab")
         app.buttons["New"].tap()
         let field = app.textFields["Title"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.typeText(title)
         app.buttons["Done"].tap()
     }
