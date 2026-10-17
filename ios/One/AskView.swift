@@ -9,7 +9,7 @@ struct ChatMessage: Identifiable, Equatable, Codable {
 }
 
 /// Full-screen AI page, modeled on ChatGPT / Claude mobile.
-/// No live model yet: statements become a capture preview; questions get a local summary.
+/// Conversation stays conversational; only requests to add items become capture previews.
 /// Nothing is created until the user taps Add on the preview card.
 struct AskView: View {
     @Environment(\.dismiss) private var dismiss
@@ -324,33 +324,56 @@ struct AskView: View {
         thinking = false
         let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
         messages.append(ChatMessage(role: .user, text: text))
-        plan = []
-        tidy = []
-        undoRow = nil
+        // Clear conversation must not be mistaken for a follow-up that changes a pending card.
+        let intent = ChatRouting.intent(text)
+        if intent == .conversation {
+            if ChatRouting.isAgendaQuestion(text) {
+                messages.append(ChatMessage(role: .ai, text: todaySummary))
+            } else {
+                respond(text, history: history, intent: intent)
+            }
+            return
+        }
         // The message may answer what the last turn left open, or edit the preview that is showing.
         if answerOpenTurn(text, history: history) { return }
-        followup = nil
         if OverdueTidy.isRequest(text) {
             clearPreviews()
             proposeTidy()
         } else if isPlanRequest(text) {
             clearPreviews()
             proposePlan()
-        } else if isQuestion(text) {
-            // A question does not throw away the card the user is looking at.
-            messages.append(ChatMessage(role: .ai, text: todaySummary))
         } else if Editing.looksLikeEdit(text, items: editCandidates().items) {
             clearPreviews()
             proposeEdit(text, history: history)
         } else {
-            clearPreviews()
-            propose(text)
+            respond(text, history: history, intent: intent)
+        }
+    }
+
+    /// Route before either the single- or multi-item extractor. Conversation leaves pending previews untouched.
+    private func respond(_ text: String, history: String, intent: ChatRouting.Intent) {
+        thinking = true
+        captureTask = Task { @MainActor in
+            let result = await ChatResponse.respond(text, history: history, intent: intent)
+            guard !Task.isCancelled else { return }
+            thinking = false
+            switch result {
+            case .capture:
+                clearPreviews()
+                propose(text)
+            case .reply(let reply):
+                messages.append(ChatMessage(role: .ai, text: reply))
+            }
         }
     }
 
     private func clearPreviews() {
         proposals = []
         change = nil
+        plan = []
+        tidy = []
+        undoRow = nil
+        followup = nil
     }
 
     /// The first item still waiting for Add: what a follow-up like "make it 5pm" edits. Setting nil drops them all.
@@ -899,11 +922,6 @@ struct AskView: View {
             for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
             try? context.save()
         }
-    }
-
-    private func isQuestion(_ text: String) -> Bool {
-        text.hasSuffix("?") || text.hasSuffix("？") || ["什么", "怎么", "吗", "多少", "几"].contains { text.contains($0) }
-            || ["what", "how", "when", "which", "do ", "is ", "am ", "any"].contains { text.lowercased().hasPrefix($0) }
     }
 
     private var todaySummary: String {
