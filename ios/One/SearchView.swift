@@ -63,12 +63,11 @@ struct SearchView: View {
             let r = results
             List {
                 if !query.isEmpty {
-                    Picker("Search in", selection: $scope) {
-                        ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    PillSwitcher(items: Scope.allCases, selection: $scope,
+                                 title: { $0.rawValue }, identifier: { "search.scope." + $0.rawValue.lowercased() })
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                 }
                 if query.isEmpty, quick == nil {
                     Section("Suggestions") {

@@ -176,11 +176,8 @@ private struct WeightCard: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("health.weight")
 
-                Picker("Range", selection: $days) {
-                    Text("30 Days").tag(30)
-                    Text("90 Days").tag(90)
-                }
-                .pickerStyle(.segmented)
+                PillSwitcher(items: [30, 90], selection: $days,
+                             title: { "\($0) Days" }, identifier: { "health.range.\($0)" })
 
                 if window.count >= 2 {
                     let values = window.map { display($0.kilograms) }

@@ -327,7 +327,7 @@ struct CaptureCard: View {
     var onCancel: () -> Void
     var cancelTitle = "Cancel"
 
-    enum Mode: Hashable { case task, event, alarm }
+    enum Mode: Hashable, CaseIterable { case task, event, alarm }
 
     /// An alarm is a task that rings; it needs a time, so switching to Alarm with none picks the next full hour.
     private var mode: Binding<Mode> {
@@ -364,15 +364,16 @@ struct CaptureCard: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
-                Spacer()
-                Picker("Kind", selection: mode) {
-                    Text("Task").tag(Mode.task)
-                    Text("Event").tag(Mode.event)
-                    Text("Alarm").tag(Mode.alarm)
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()
             }
+            PillSwitcher(items: Mode.allCases, selection: mode,
+                         title: { kind in
+                             switch kind {
+                             case .task: "Task"
+                             case .event: "Event"
+                             case .alarm: "Alarm"
+                             }
+                         },
+                         identifier: { "capture.kind." + String(describing: $0) })
             Text(capture.title).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
             if capture.kind == .task, !lists.isEmpty {

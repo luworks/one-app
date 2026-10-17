@@ -232,45 +232,13 @@ private extension View {
     }
 }
 
-/// The section switcher: four words, the chosen one on a soft gray capsule. Lighter than the tab pills above it,
-/// so it reads as part of the page, not a second tab bar.
+/// The section switcher: the same pills as the Calendar tab's Week / Month / Year row (`PillSwitcher`).
 struct ClockSectionBar: View {
     @Binding var selection: ClockSection
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            row
-            ScrollView(.horizontal, showsIndicators: false) { row }
-        }
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .sensoryFeedback(.selection, trigger: selection)
-    }
-
-    private var row: some View {
-        HStack(spacing: 4) {
-            ForEach(ClockSection.allCases) { item in
-                let selected = item == selection
-                Button {
-                    withAnimation(.snappy) { selection = item }
-                } label: {
-                    Text(item.title)
-                        .font(.subheadline.weight(selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? Color.primary : Color.secondary)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 34)
-                        .frame(maxWidth: .infinity)
-                        .background {
-                            if selected { Capsule().fill(Color(.secondarySystemFill)) }
-                        }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selected ? .isSelected : [])
-                .accessibilityIdentifier("clock.section." + item.rawValue)
-            }
-        }
+        PillSwitcher(items: ClockSection.allCases, selection: $selection,
+                     title: { $0.title }, identifier: { "clock.section." + $0.rawValue })
     }
 }
 

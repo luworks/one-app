@@ -23,6 +23,12 @@ final class ClockTests: XCTestCase {
     private var laps: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "stopwatch.lap") }
     private var plus: XCUIElement { app.buttons["New"] }
 
+    /// The Overlap pill sits at the left of a full-width list row (XCUI reports the whole row as the button),
+    /// so tap where the pill is, not at the row's center.
+    private func toggleOverlap() {
+        app.buttons["worldClock.overlap"].coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).tap()
+    }
+
     func testSwitchingSectionsAndPlus() {
         launch()
         XCTAssertTrue(section("alarms").waitForExistence(timeout: 5))
@@ -131,12 +137,12 @@ final class ClockTests: XCTestCase {
     func testOverlapCard() {
         launch(["-uiTestingCities", "Europe/London,America/New_York"])
         section("worldClock").tap()
-        app.buttons["worldClock.overlap"].tap()
+        toggleOverlap()
         let text = app.staticTexts["worldClock.overlapText"]
         XCTAssertTrue(text.waitForExistence(timeout: 3) || app.descendants(matching: .any)["worldClock.overlapCard"].exists)
         let card = app.descendants(matching: .any)["worldClock.overlapCard"]
         XCTAssertTrue(card.label.contains("London and New York"), card.label)
-        app.buttons["worldClock.overlap"].tap()
+        toggleOverlap()
         XCTAssertTrue(card.waitForNonExistence(timeout: 3))
     }
 
@@ -237,7 +243,7 @@ final class ClockTests: XCTestCase {
             // Overlap, with cities that do share working hours; tapping the card scrubs to the start of the overlap.
             launch(["-uiTestingCities", "America/New_York,America/Chicago,Europe/London"])
             section("worldClock").tap()
-            app.buttons["worldClock.overlap"].tap()
+            toggleOverlap()
             let card = app.descendants(matching: .any)["worldClock.overlapCard"]
             XCTAssertTrue(card.waitForExistence(timeout: 3))
             usleep(500_000)

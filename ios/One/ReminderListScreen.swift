@@ -463,34 +463,24 @@ private struct NewReminderRow: View {
     }
 
     private var repeatChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip("Never", selected: draft.repeatRule == nil) {
-                    draft.repeatRule = nil
-                    close()
-                }
-                ForEach(RepeatRule.allCases, id: \.self) { rule in
-                    chip(rule.label, selected: draft.repeatRule == rule) {
-                        draft.repeatRule = rule
-                        close()
-                    }
-                }
-            }
-        }
-        .accessibilityIdentifier("newRow.repeatChips")
+        // A single choice, so it is the shared pill switcher; choosing closes the panel as the day chips do.
+        PillSwitcher(items: [nil] + RepeatRule.allCases.map(Optional.some),
+                     selection: Binding(get: { draft.repeatRule },
+                                        set: { draft.repeatRule = $0; close() }),
+                     title: { $0?.label ?? "Never" },
+                     identifier: { "newRow.repeat." + ($0?.rawValue ?? "never") })
     }
 
-    private func chip(_ title: String, selected: Bool = false, tint: Color = .primary,
+    private func chip(_ title: String, tint: Color = .primary,
                       _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.subheadline)
-                .foregroundStyle(selected ? Color.white : tint)
+                .foregroundStyle(tint)
                 .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(selected ? Color.accentColor : Color(.tertiarySystemFill), in: Capsule())
+                .background(Color(.tertiarySystemFill), in: Capsule())
         }
         .buttonStyle(PressScale())
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func toggle(_ p: Panel) {
