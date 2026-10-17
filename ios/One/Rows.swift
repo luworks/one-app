@@ -155,6 +155,8 @@ struct TaskRow: View {
     var compact = false
     /// A suggested time for a reminder due today with no time: shown faint with a Plan button. Nothing is saved until Plan.
     var suggested: Date? = nil
+    /// Set on the Today tab: the day the row sits on. The detail line then keeps at most two facts (see `RowSubtitle`).
+    var agendaDay: Date? = nil
     @State private var editing = false
 
     var body: some View {
@@ -265,6 +267,15 @@ struct TaskRow: View {
 
     /// Most important first, so truncation drops the least useful bits: deadline, plan, repeat, list, tags.
     private var detail: String? {
+        if let agendaDay {
+            let planned = showsTime ? nil : task.plannedStart.flatMap { $0 != task.due ? $0 : nil }
+            let shown = suggested ?? (showsTime ? (time ?? task.plannedStart) : nil)
+            return RowSubtitle.line(.init(isSuggested: suggested != nil, due: task.due, dueHasTime: task.dueHasTime,
+                                          shownTime: shown, planned: planned, repeats: task.repeats != nil,
+                                          stepsDone: task.checklist.filter(\.done).count, stepsTotal: task.checklist.count,
+                                          listName: showsList ? task.listName : ""),
+                                   day: agendaDay)
+        }
         var parts: [String] = []
         if suggested != nil { parts.append("Suggested") }
         if let due = task.due { parts.append("Due " + DayLabel.withTime(due)) }
@@ -318,7 +329,7 @@ struct NowRow: View {
     }
 }
 
-/// AI preview: what will be created. The user can switch task / event / alarm before tapping Add.
+/// AI preview: what will be created. The user can switch reminder / event / alarm before tapping Add.
 struct CaptureCard: View {
     @Binding var capture: Capture
     /// The user's Reminders lists; when given, a task shows which one it goes to, changeable with one tap.
@@ -327,7 +338,7 @@ struct CaptureCard: View {
     var onCancel: () -> Void
     var cancelTitle = "Cancel"
 
-    enum Mode: Hashable { case task, event, alarm }
+    enum Mode: Hashable, CaseIterable { case task, event, alarm }
 
     /// An alarm is a task that rings; it needs a time, so switching to Alarm with none picks the next full hour.
     private var mode: Binding<Mode> {
@@ -355,7 +366,7 @@ struct CaptureCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("New \(capture.ringsAsAlarm && capture.kind == .task ? "alarm" : capture.kind.rawValue)", systemImage: "sparkles")
+                Label(capture.kindLabel, systemImage: "sparkles")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if capture.fromAppleIntelligence {
@@ -364,18 +375,19 @@ struct CaptureCard: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
-                Spacer()
-                Picker("Kind", selection: mode) {
-                    Text("Task").tag(Mode.task)
-                    Text("Event").tag(Mode.event)
-                    Text("Alarm").tag(Mode.alarm)
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()
             }
+            PillSwitcher(items: Mode.allCases, selection: mode,
+                         title: { kind in
+                             switch kind {
+                             case .task: "Reminder"
+                             case .event: "Event"
+                             case .alarm: "Alarm"
+                             }
+                         },
+                         identifier: { "capture.kind." + String(describing: $0) })
             Text(capture.title).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
-            if capture.kind == .task, !lists.isEmpty {
+            if capture.kind == .task, !capture.ringsAsAlarm, !lists.isEmpty {
                 ListMenu(capture: $capture, lists: lists).font(.subheadline)
             }
             HStack {

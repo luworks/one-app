@@ -64,6 +64,7 @@ struct DayAgenda: View {
     private var list: some View {
         let items = items(on: day, now: now)
         return List {
+            if !showsWeekStrip { DateTitle(day: day) }
             if isTodayTab, showsHealth, let line = health.line {
                 TodayHealthLine(line: line)
             }
@@ -108,21 +109,16 @@ struct DayAgenda: View {
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
                     .accessibilityHint(showsAllOverdue ? "Hides the overdue tasks" : "Shows the overdue tasks")
-                    if showsAllOverdue { ForEach(overdue) { TaskRow(task: $0, compact: true) } }
+                    if showsAllOverdue { ForEach(overdue) { TaskRow(task: $0, compact: true, agendaDay: day) } }
                 }
             }
-            Section {
-                if items.timeline.isEmpty, items.anytime.isEmpty {
-                    Text("Nothing planned").foregroundStyle(.secondary)
-                        .listRowSeparator(.hidden)
+            // The Today tab names its day in the row at the top; the timeline needs no label of its own.
+            if showsWeekStrip {
+                Section { timelineContent(items) } header: {
+                    AgendaHeader(title: day.formatted(.dateTime.month().day().weekday(.wide)))
                 }
-                ForEach(items.timeline) { timelineRow($0) }
-                if !items.anytime.isEmpty {
-                    AnytimeLabel(title: cal.isDateInToday(day) ? "Anytime today" : "Anytime")
-                    ForEach(items.anytime) { TaskRow(task: $0, compact: true) }
-                }
-            } header: {
-                AgendaHeader(title: showsWeekStrip || !cal.isDateInToday(day) ? day.formatted(.dateTime.month().day().weekday(.wide)) : "Schedule")
+            } else {
+                Section { timelineContent(items) }
             }
             if !showsWeekStrip, cal.isDateInToday(day) { tomorrowSection(after: items) }
         }
@@ -136,13 +132,26 @@ struct DayAgenda: View {
     }
 
     @ViewBuilder
-    private func timelineRow(_ item: TimelineItem) -> some View {
+    private func timelineContent(_ items: DayItems) -> some View {
+        if items.timeline.isEmpty, items.anytime.isEmpty {
+            Text("Nothing planned").foregroundStyle(.secondary)
+                .listRowSeparator(.hidden)
+        }
+        ForEach(items.timeline) { timelineRow($0, on: day) }
+        if !items.anytime.isEmpty {
+            AnytimeLabel(title: cal.isDateInToday(day) ? "Anytime today" : "Anytime")
+            ForEach(items.anytime) { TaskRow(task: $0, compact: true, agendaDay: day) }
+        }
+    }
+
+    @ViewBuilder
+    private func timelineRow(_ item: TimelineItem, on rowDay: Date) -> some View {
         switch item {
         case .event(let event, let start): EventRow(event: event, start: start, pendingDelete: $pendingDelete)
         case .external(let e): ExternalEventRow(event: e, pendingDelete: $pendingDelete)
-        case .task(let task): TaskRow(task: task, showsTime: true, compact: true)
-        case .due(let task): TaskRow(task: task, showsTime: true, time: task.due, compact: true)
-        case .suggested(let task, let start): TaskRow(task: task, compact: true, suggested: start)
+        case .task(let task): TaskRow(task: task, showsTime: true, compact: true, agendaDay: rowDay)
+        case .due(let task): TaskRow(task: task, showsTime: true, time: task.due, compact: true, agendaDay: rowDay)
+        case .suggested(let task, let start): TaskRow(task: task, compact: true, suggested: start, agendaDay: rowDay)
         case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
         case .gap(let free): FreeRow(free: free)
         case .nowMarker(let date): NowRow(date: date).id("now-line")
@@ -189,8 +198,8 @@ struct DayAgenda: View {
                 switch entry {
                 case .allDay(let e): EventRow(event: e, pendingDelete: $pendingDelete)
                 case .externalAllDay(let e): ExternalEventRow(event: e, pendingDelete: $pendingDelete)
-                case .anytime(let t): TaskRow(task: t, compact: true)
-                case .timeline(let item): timelineRow(item)
+                case .anytime(let t): TaskRow(task: t, compact: true, agendaDay: tomorrow)
+                case .timeline(let item): timelineRow(item, on: tomorrow)
                 }
             }
             if !expanded, entries.count > shown.count {
@@ -413,6 +422,19 @@ enum TimelineItem: Identifiable {
 }
 
 /// Small section label for the day view, so headers take less space than the default plain-list header.
+/// The day this page shows, in the system's own style ("Saturday, Oct 17"); the first row of the Today tab.
+struct DateTitle: View {
+    let day: Date
+    var body: some View {
+        Text(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+            .font(.subheadline.weight(.bold))
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 0, trailing: 20))
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("todayDate")
+    }
+}
+
 struct AgendaHeader: View {
     let title: String
     var body: some View {

@@ -196,8 +196,9 @@ final class OneEvent {
 
 extension Capture {
     func makeTask() -> OneTask {
-        let t = OneTask(title: title, plannedStart: plannedStart, durationMinutes: durationMinutes ?? 25,
-                        due: plannedStart == nil && hasDay ? day : nil)
+        let timing = taskTiming
+        let t = OneTask(title: title, plannedStart: timing.plannedStart, durationMinutes: durationMinutes ?? 25, due: timing.due)
+        if let minutes = timing.alertMinutesBefore { t.reminderOffsetMinutes = minutes }
         t.repeatRule = repeatRule
         t.ringsAsAlarm = ringsAsAlarm && plannedStart != nil
         if let listName { t.listName = listName }

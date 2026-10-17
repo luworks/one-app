@@ -31,7 +31,7 @@ final class TodayTomorrowTests: XCTestCase {
 
     func testMorningShowsTheStartOfTomorrow() {
         let app = launch(at: "09:41")
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
         _ = scrollToTomorrow(app)
         XCTAssertTrue(text(app, "Weekly review").waitForExistence(timeout: 3), "tomorrow's first event shows")
 
@@ -48,7 +48,7 @@ final class TodayTomorrowTests: XCTestCase {
 
     func testEveningShowsAllOfTomorrow() {
         let app = launch(at: "19:30")
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
         _ = scrollToTomorrow(app)
         XCTAssertTrue(text(app, "Weekly review").waitForExistence(timeout: 3))
         XCTAssertTrue(text(app, "Design review").waitForExistence(timeout: 3), "from 18:00 all of tomorrow shows")
@@ -57,12 +57,15 @@ final class TodayTomorrowTests: XCTestCase {
 
     func testHeaderOpensTomorrowAsItsOwnDay() {
         let app = launch(at: "09:41")
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
         scrollToTomorrow(app).tap()
         XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5), "tomorrow opens as a day of its own")
         XCTAssertFalse(app.buttons["tomorrowHeader"].exists, "only today shows a Tomorrow section")
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
+        XCTAssertEqual(app.staticTexts["todayDate"].label, tomorrow.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()),
+                       "the open day's date shows on top")
         XCTAssertFalse(app.staticTexts["Due today"].exists)
         app.buttons["Back to today"].tap()
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     }
 }

@@ -134,19 +134,10 @@ struct WorldClockView: View {
     /// The Overlap switch. No Edit button: a city's long-press menu reorders and deletes.
     private var controlsRow: some View {
         HStack {
-            Button {
-                withAnimation(.snappy) { store.showsOverlap.toggle() }
-            } label: {
-                Label("Overlap", systemImage: "chart.line.uptrend.xyaxis")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 32)
-                    .background(store.showsOverlap ? Color(.label) : Color(.secondarySystemFill), in: Capsule())
-                    .foregroundStyle(store.showsOverlap ? Color(.systemBackground) : Color.primary)
+            PillButton(title: "Overlap", icon: "chart.line.uptrend.xyaxis", isSelected: store.showsOverlap,
+                       identifier: "worldClock.overlap") {
+                withAnimation(PillStyle.selectionAnimation) { store.showsOverlap.toggle() }
             }
-            .buttonStyle(PressScale())
-            .accessibilityAddTraits(store.showsOverlap ? .isSelected : [])
-            .accessibilityIdentifier("worldClock.overlap")
             Spacer()
         }
         .plainClockRow(top: 2, bottom: 6)

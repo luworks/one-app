@@ -160,12 +160,13 @@ final class AlarmPlanTests: XCTestCase {
         cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: h, minute: m))!
     }
 
-    func testRepeatLabels() {
-        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [], calendar: cal), "Once")
-        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [1, 2, 3, 4, 5, 6, 7], calendar: cal), "Every day")
-        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [2, 3, 4, 5, 6], calendar: cal), "Weekdays")
-        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [7, 1], calendar: cal), "Weekends")
-        XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [4, 2], calendar: cal), "Mon, Wed")
+    func testNextQuarterHour() {
+        XCTAssertEqual(AlarmPlan.nextQuarterHour(after: at(12, 10, 56), calendar: cal), at(12, 11, 0))
+        XCTAssertEqual(AlarmPlan.nextQuarterHour(after: at(12, 10, 45), calendar: cal), at(12, 11, 0), "on a quarter, the next one")
+        XCTAssertEqual(AlarmPlan.nextQuarterHour(after: at(12, 10, 0), calendar: cal), at(12, 10, 15))
+        XCTAssertEqual(AlarmPlan.nextQuarterHour(after: at(12, 10, 14), calendar: cal), at(12, 10, 15))
+        XCTAssertEqual(AlarmPlan.nextQuarterHour(after: at(12, 10, 31), calendar: cal), at(12, 10, 45))
+        XCTAssertEqual(AlarmPlan.nextQuarterHour(after: at(12, 23, 50), calendar: cal), at(13, 0, 0), "rolls over midnight")
     }
 
     func testSnoozeChoicesAreTheShortList() {
@@ -203,14 +204,33 @@ final class AlarmPlanTests: XCTestCase {
         XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 3, 4, 5, 6], calendar: cal), "Weekdays")
         XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [1, 7], calendar: cal), "Weekends")
         XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2], calendar: cal), "Every Monday")
-        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [4, 2], calendar: cal), "Every Mon, Wed")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [4, 2], calendar: cal), "Mon, Wed")
         // Sunday-first calendar (US): Sunday leads, so Sun + Mon reads "Sun, Mon".
-        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 1], calendar: cal), "Every Sun, Mon")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 1], calendar: cal), "Sun, Mon")
         XCTAssertEqual(AlarmPlan.orderedWeekdays(calendar: cal), [1, 2, 3, 4, 5, 6, 7])
         var monday = cal
         monday.firstWeekday = 2
         XCTAssertEqual(AlarmPlan.orderedWeekdays(calendar: monday), [2, 3, 4, 5, 6, 7, 1])
-        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 1], calendar: monday), "Every Mon, Sun")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 1], calendar: monday), "Mon, Sun")
+    }
+
+    func testRepeatValueMakesRangesOfConsecutiveDays() {
+        // Three or more days in a row become a range; "Every" only starts one day, a daily or a weekday alarm.
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [1, 2, 3, 4, 5], calendar: cal), "Sun\u{2013}Thu")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 3, 4], calendar: cal), "Mon\u{2013}Wed")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 4, 6], calendar: cal), "Mon, Wed, Fri")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 3, 4, 6], calendar: cal), "Mon\u{2013}Wed, Fri")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 3, 5, 6, 7], calendar: cal), "Mon, Tue, Thu\u{2013}Sat")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 3, 4, 5, 6, 7], calendar: cal), "Mon\u{2013}Sat")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [1, 2, 3, 4, 5, 6], calendar: cal), "Sun\u{2013}Fri")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 3, 4, 5, 6, 7, 1], calendar: cal), "Every day")
+        // Monday-first calendar: the week reads Mon…Sun, so Fri + Sat + Sun is one run.
+        var monday = cal
+        monday.firstWeekday = 2
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [6, 7, 1], calendar: monday), "Fri\u{2013}Sun")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [2, 3, 4, 5, 6], calendar: monday), "Weekdays")
+        XCTAssertEqual(AlarmPlan.repeatValue(weekdays: [7, 1], calendar: monday), "Weekends")
+        XCTAssertEqual(AlarmPlan.rowSubtitle(label: "Work", weekdays: [1, 2, 3, 4, 5], calendar: cal), "Work, Sun\u{2013}Thu")
     }
 
     func testRowSubtitle() {

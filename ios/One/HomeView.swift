@@ -400,7 +400,7 @@ struct HomeView: View {
     }
 
     private var pills: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: PillStyle.spacing) {
             ForEach(HomeTab.allCases) { item in
                 TabPill(tab: item, isSelected: item == tab) {
                     withAnimation(.snappy) { tab = item }
@@ -557,15 +557,15 @@ struct TabPill: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: PillStyle.Tab.iconLabelSpacing) {
                 Image(systemName: tab.icon)
                 if isSelected { Text(tab.title) }
             }
-            .font(.subheadline.weight(.semibold))
-            .padding(.horizontal, isSelected ? 16 : 0)
-            .frame(minWidth: 54, minHeight: 44)
-            .background(isSelected ? Color(.label) : Color(.secondarySystemFill), in: Capsule())
-            .foregroundStyle(isSelected ? Color(.systemBackground) : Color.primary)
+            .font(PillStyle.Tab.font)
+            .padding(.horizontal, isSelected ? PillStyle.Tab.selectedPadding : 0)
+            .frame(minWidth: PillStyle.Tab.minWidth, minHeight: PillStyle.Tab.height)
+            .background(PillStyle.fill(selected: isSelected), in: Capsule())
+            .foregroundStyle(PillStyle.text(selected: isSelected))
         }
         .buttonStyle(PressScale())
         .accessibilityLabel(tab.title)

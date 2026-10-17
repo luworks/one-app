@@ -482,7 +482,7 @@ final class CRUDTests: XCTestCase {
         let created = alarmRow("Piano practice")
         XCTAssertTrue(created.waitForExistence(timeout: 5), "the new alarm is listed")
         XCTAssertEqual(alarmRows.count, 5)
-        XCTAssertTrue(created.label.contains(":00"), "on the hour: \(created.label)")
+        XCTAssertTrue([":00", ":15", ":30", ":45"].contains { created.label.contains($0) }, "opens on a quarter hour: \(created.label)")
 
         // Update: minutes and label (right away: a just-created alarm must keep its editor open).
         created.tap()

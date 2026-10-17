@@ -34,8 +34,8 @@ final class JourneyTests: XCTestCase {
         field.typeText("Call Alex tomorrow at 3pm\n")
         XCTAssertTrue(app.staticTexts["Call Alex"].waitForExistence(timeout: 5), "preview shows the parsed title")
         tap(app.buttons["Add"])
-        XCTAssertTrue(app.staticTexts["Added “Call Alex” · Planned Tomorrow 15:00."].waitForExistence(timeout: 5)
-                      || app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Added'")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Added “Call Alex” · Tomorrow' AND label CONTAINS 'alerts you'"))
+            .firstMatch.waitForExistence(timeout: 5), "the confirmation says what was made: a reminder that alerts")
         XCTAssertLessThanOrEqual(taps, 2, "J1 tap budget")
     }
 
@@ -43,7 +43,7 @@ final class JourneyTests: XCTestCase {
     func testJ2_todayShowsWhatsLeft() {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label ENDSWITH 'overdue'")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Due today"].exists, "one timeline: no separate Due today section")
-        XCTAssertTrue(app.staticTexts["Schedule"].exists)
+        XCTAssertTrue(app.staticTexts["todayDate"].exists)
         XCTAssertTrue(app.staticTexts["Buy milk"].exists)
         XCTAssertEqual(taps, 0, "J2 needs no taps")
     }
@@ -95,8 +95,9 @@ final class JourneyTests: XCTestCase {
 
     /// J6: add a real alarm, see it on the Alarms page and in Today's schedule.
     func testJ6_addAlarmAndSeeItInToday() throws {
-        // A new alarm starts at the top of the next hour; in the last hour of the day that is tomorrow.
-        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 23, "the default alarm time is tomorrow")
+        // A new alarm starts at the next quarter hour; in the last quarter hour of the day that is tomorrow.
+        let c = Calendar.current.dateComponents([.hour, .minute], from: .now)
+        try XCTSkipIf(c.hour! == 23 && c.minute! >= 45, "the default alarm time is tomorrow")
         tab("Alarms")
         tap(app.buttons["New"])   // + adds an alarm on the Alarms page
         tap(app.buttons["Save"])
@@ -127,8 +128,8 @@ final class JourneyTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.typeText("priya")
         XCTAssertTrue(app.staticTexts["Lunch with Priya"].waitForExistence(timeout: 5), "an event is found")
-        XCTAssertTrue(app.segmentedControls.buttons["Alarms"].exists && app.segmentedControls.buttons["Reminders"].exists,
-                      "scopes: All / Reminders / Events / Alarms")
+        XCTAssertTrue(app.buttons["search.scope.alarms"].exists && app.buttons["search.scope.reminders"].exists,
+                      "scopes (pills): All / Reminders / Events / Alarms")
     }
 
     /// Search opens straight onto suggestions (no empty pop-up), a suggestion lists things, and Cancel closes Search.
@@ -159,7 +160,10 @@ final class JourneyTests: XCTestCase {
         // The planner only fills free time until 9 PM, so late in the evening there is nothing to place.
         try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 18, "needs free time before 9 PM")
         tap(app.buttons["Ask AI or add anything"])
-        tap(app.buttons["Plan my day"])
+        // The suggestion chips change with the data, so the sentence is typed, as a user would.
+        let field = app.textFields["Ask AI or add anything"].firstMatch.exists ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("Plan my day\n")
         XCTAssertTrue(app.staticTexts["Plan for today"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Pay studio invoice"].exists, "overdue task is placed first")
         tap(app.buttons["Apply"])
@@ -182,6 +186,24 @@ final class JourneyTests: XCTestCase {
         let moved = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned' AND label != %@", before)).firstMatch
         XCTAssertTrue(moved.waitForExistence(timeout: 3), "planned time changed after drag (was: \(before))")
+    }
+
+    /// Each Today option explains itself right under its own switch (not in one shared footer).
+    func testSettingsExplainsEachOptionUnderItsRow() {
+        app.openSidebar()
+        tap(app.buttons["Settings"].firstMatch)
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let travel = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Shows the drive time'")).firstMatch
+        let health = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Shows today'")).firstMatch
+        for _ in 0..<4 where !health.isHittable { app.swipeUp() }
+        XCTAssertTrue(travel.exists && health.exists, "a short explanation under Travel time and under Health summary")
+        XCTAssertTrue(travel.label.contains("Apple Maps only"), "the privacy fact stays: location and address go to Apple Maps only")
+        XCTAssertTrue(health.label.contains("only reads"), "the privacy fact stays: Today only reads Health")
+        XCTAssertLessThan(travel.frame.minY, app.switches["Health summary"].frame.minY, "Travel time's text sits above the next switch")
+        if let dir = ProcessInfo.processInfo.environment["ALARM_SHOTS"] {
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir + "/settings-today.png"))
+        }
     }
 
     /// Settings is its own screen; Delete All Data is last and needs two confirmations (the second needs typing DELETE).

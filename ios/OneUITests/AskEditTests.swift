@@ -40,11 +40,11 @@ final class AskEditTests: XCTestCase {
 
     func testCapture_fiveSentences() {
         let cases: [(input: String, expect: [String], notExpect: [String])] = [
-            ("Call Alex tomorrow at 3pm", ["Call Alex", "Planned Tomorrow"], []),
+            ("Call Alex tomorrow at 3pm", ["Call Alex", "New reminder", "alerts you"], []),
             ("周五晚上7点和朋友聚餐", ["和朋友聚餐", "19:00"], []),
             ("明早7点叫我起床", ["Alarm Tomorrow 07:00"], []),
             ("提醒我下周一交报销单", ["交报销单"], ["Alarm "]),
-            ("30分钟后关烤箱", ["关烤箱", "Planned"], []),
+            ("30分钟后关烤箱", ["关烤箱", "New reminder", "alerts you"], []),
         ]
         for (i, c) in cases.enumerated() {
             send(c.input)

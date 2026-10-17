@@ -46,4 +46,13 @@ final class OverdueTidyTests: XCTestCase {
         XCTAssertTrue(OverdueTidy.isRequest("帮我整理过期的提醒"))
         XCTAssertFalse(OverdueTidy.isRequest("What's overdue?"))
     }
+
+    func testCountedAndChineseRequests() {
+        for text in ["Tidy 3 overdue", "tidy my 12 overdue reminders", "Tidy up 2 overdue", "整理3条过期提醒"] {
+            XCTAssertTrue(OverdueTidy.isRequest(text), text)
+        }
+        for text in ["Tidy my desk", "I have 3 overdue things to do", "整理房间"] {
+            XCTAssertFalse(OverdueTidy.isRequest(text), text)
+        }
+    }
 }

@@ -356,16 +356,6 @@ enum ListName {
 
 /// Real alarms (AlarmKit): which day they ring and how to label the repeat.
 enum AlarmPlan {
-    /// "Once", "Every day", "Weekdays", "Weekends", or short day names in Monday-first order.
-    static func repeatLabel(weekdays: [Int], calendar: Calendar = .current) -> String {
-        let set = Set(weekdays)
-        if set.isEmpty { return "Once" }
-        if set.count == 7 { return "Every day" }
-        if set == [2, 3, 4, 5, 6] { return "Weekdays" }
-        if set == [1, 7] { return "Weekends" }
-        return [2, 3, 4, 5, 6, 7, 1].filter(set.contains).map { calendar.shortWeekdaySymbols[$0 - 1] }.joined(separator: ", ")
-    }
-
     /// The next time hour:minute occurs after `date` on an allowed weekday (any day when `weekdays` is empty).
     static func nextFire(hour: Int, minute: Int, weekdays: [Int], after date: Date, calendar: Calendar = .current) -> Date? {
         let start = calendar.startOfDay(for: date)
@@ -399,17 +389,38 @@ enum AlarmPlan {
         (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 }
     }
 
-    /// The repeat value the way Clock words it: "Never", "Every day", "Weekdays", "Weekends",
-    /// "Every Monday", or "Every Mon, Wed" for several days.
+    /// The repeat value the way Clock words it: "Never", "Every day", "Weekdays", "Weekends", "Every Monday" for one day,
+    /// otherwise short day names where three or more days in a row become a range: "Sun–Thu", "Mon, Wed, Fri", "Mon–Wed, Fri".
+    /// "In a row" follows the calendar's own week order (Sunday first in the US, Monday first in most of Europe).
     static func repeatValue(weekdays: [Int], calendar: Calendar = .current) -> String {
         let set = Set(weekdays)
         if set.isEmpty { return "Never" }
         if set.count == 7 { return "Every day" }
         if set == [2, 3, 4, 5, 6] { return "Weekdays" }
         if set == [1, 7] { return "Weekends" }
-        let days = orderedWeekdays(calendar: calendar).filter(set.contains)
+        let order = orderedWeekdays(calendar: calendar)
+        let days = order.filter(set.contains)
         if days.count == 1 { return "Every " + calendar.weekdaySymbols[days[0] - 1] }
-        return "Every " + days.map { calendar.shortWeekdaySymbols[$0 - 1] }.joined(separator: ", ")
+        var runs: [[Int]] = []
+        for day in days {
+            if let last = runs.last?.last, let a = order.firstIndex(of: last), order.firstIndex(of: day) == a + 1 {
+                runs[runs.count - 1].append(day)
+            } else {
+                runs.append([day])
+            }
+        }
+        let name = { (day: Int) in calendar.shortWeekdaySymbols[day - 1] }
+        return runs.flatMap { run in
+            run.count >= 3 ? [name(run[0]) + "\u{2013}" + name(run[run.count - 1])] : run.map(name)
+        }.joined(separator: ", ")
+    }
+
+    /// The next quarter hour after `date` (10:56 → 11:00, 10:45 → 11:00): where Add Alarm opens.
+    static func nextQuarterHour(after date: Date, calendar: Calendar = .current) -> Date {
+        let c = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let next = ((c.minute ?? 0) / 15 + 1) * 15
+        let base = calendar.date(from: DateComponents(year: c.year, month: c.month, day: c.day, hour: c.hour, minute: 0)) ?? date
+        return calendar.date(byAdding: .minute, value: next, to: base) ?? date
     }
 
     /// The line under the time in the list: the label (or "Alarm"), then the repeat when there is one.
