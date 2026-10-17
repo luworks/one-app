@@ -1,14 +1,15 @@
 import SwiftUI
 import SwiftData
 
-/// Left drawer, like the ChatGPT / Claude iOS apps: a full screen with the list of past conversations with the AI
-/// (newest first, grouped by day), and New chat and Settings pinned at the bottom.
+/// Left drawer, like the ChatGPT / Claude iOS apps: most of the screen, with the page peeking out on the right, the list of
+/// past conversations with the AI (newest first, grouped by day), Search at the top, and New chat and Settings at the bottom.
 /// The four tabs are not repeated here; they are in the pill bar.
 struct Sidebar: View {
     let drawer: DrawerModel
     let width: CGFloat
     var onNewChat: () -> Void
     var onOpen: (ChatThread) -> Void
+    var onSearch: () -> Void
     var onSettings: () -> Void
     var close: () -> Void
 
@@ -42,7 +43,7 @@ struct Sidebar: View {
         }
     }
 
-    // MARK: Top: title and close
+    // MARK: Top: title and search
 
     private var header: some View {
         HStack(spacing: 10) {
@@ -50,14 +51,14 @@ struct Sidebar: View {
                 .font(.title2.weight(.bold))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(action: close) {
-                Image(systemName: "xmark")
+            Button(action: onSearch) {
+                Image(systemName: "magnifyingglass")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.primary)
                     .modifier(SidebarCircle())
             }
             .buttonStyle(PressScale())
-            .accessibilityLabel("Close sidebar")
+            .accessibilityLabel("Search")
         }
         .padding(.leading, 20)
         .padding(.trailing, 16)

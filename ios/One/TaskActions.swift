@@ -32,6 +32,22 @@ final class UndoToast {
         }
     }
 
+    /// A message with no Undo, for something that did not happen ("can't delete a read-only calendar's event").
+    func showNotice(_ message: String) {
+        let t = UUID()
+        token = t
+        withAnimation(.snappy) {
+            self.message = message
+            self.undo = nil
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            if token == t { dismiss() }
+        }
+    }
+
+    var canUndo: Bool { undo != nil }
+
     func performUndo() {
         // The toast's button and the shake prompt undo the same change; once it is undone, forget the shake entry.
         undoManager?.removeAllActions(withTarget: self)
@@ -98,11 +114,13 @@ struct UndoToastView: View {
             HStack(spacing: 12) {
                 Text(message)
                     .font(.subheadline)
-                    .lineLimit(1)
+                    .lineLimit(toast.canUndo ? 1 : 2)
                 Spacer(minLength: 8)
-                Button("Undo") { toast.performUndo() }
-                    .font(.subheadline.weight(.semibold))
-                    .tint(Color.accentColor)
+                if toast.canUndo {
+                    Button("Undo") { toast.performUndo() }
+                        .font(.subheadline.weight(.semibold))
+                        .tint(Color.accentColor)
+                }
             }
             .padding(.horizontal, 16)
             .frame(height: 48)

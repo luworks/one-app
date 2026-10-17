@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 import SwiftData
 import EventKit
@@ -66,9 +67,18 @@ struct EntryActions: ViewModifier {
 @MainActor
 enum EntryDeletion {
     static func perform(_ entry: CalEntry, span: EKSpan, context: ModelContext, toast: UndoToast?) {
+        Logger(subsystem: "com.luworks.one", category: "calendar").info("delete requested: \(entry.title, privacy: .public) kind=\(String(describing: entry.source).prefix(6), privacy: .public)")
         switch entry.source {
         case .system(let id):
-            CalendarSync.shared.delete(externalID: id, span: span)
+            guard CalendarSync.shared.canDelete(externalID: id) else {
+                toast?.showNotice("“\(entry.title)” is in a read-only calendar, so it can't be deleted here.")
+                return
+            }
+            guard CalendarSync.shared.delete(externalID: id, span: span) else {
+                CalendarSync.shared.refresh()
+                toast?.showNotice("Couldn't delete “\(entry.title)”. Try again, or delete it in Calendar.")
+                return
+            }
             CalendarSync.shared.refresh()
             // Undo puts back a plain copy (title, time, place) in the default calendar, for a one-off event only:
             // a series has its own rules and attendees that a plain copy would not carry, and it was asked about first.
@@ -82,7 +92,11 @@ enum EntryDeletion {
             }
         case .local(let event):
             let backup = event.copy()
-            CalendarSync.shared.delete(externalID: event.externalID, span: span)
+            // The copy in Apple Calendar goes first; if it refuses, nothing is deleted anywhere.
+            guard CalendarSync.shared.delete(externalID: event.externalID, span: span) else {
+                toast?.showNotice("Couldn't delete “\(event.title)” from Calendar, so it was kept.")
+                return
+            }
             withAnimation(.snappy) { context.delete(event) }
             toast?.show("Deleted “\(backup.title)”") {
                 backup.externalID = CalendarSync.shared.save(backup)

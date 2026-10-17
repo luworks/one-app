@@ -33,7 +33,7 @@ final class CalendarSyncTests: XCTestCase {
 
         // Create an event in one.
         let title = "EK check \(Int(Date.now.timeIntervalSince1970) % 10000)"
-        app.buttons["Today"].firstMatch.tap()      // closes the sidebar
+        app.closeSidebar()
         sleep(1)
         app.buttons["Calendar"].firstMatch.tap()
         sleep(1)

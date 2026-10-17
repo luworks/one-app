@@ -55,13 +55,15 @@ struct HomeView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // The sidebar is a full screen: as wide as the page, which slides all the way off to the right.
-            let width = geo.size.width
+            // The sidebar takes most of the width; the page slides aside and stays visible beside it.
+            let full = geo.size.width
+            let width = full * DrawerLayout.widthFraction
             ZStack(alignment: .leading) {
                 if drawer.isBuilt {
                     Sidebar(drawer: drawer, width: width,
                             onNewChat: { openAsk(nil, fromSidebar: true) },
                             onOpen: { openAsk($0, fromSidebar: true) },
+                            onSearch: { showsSearch = true },
                             onSettings: { showsSettings = true },
                             close: { drawer.set(open: false) })
                         .frame(width: width)
@@ -81,7 +83,22 @@ struct HomeView: View {
                         }
                     }
                     .modifier(DrawerDrag(model: drawer, width: width, kind: .edgeOnly, enabled: edgeSwipeEnabled))
-                    .modifier(DrawerMainSlide(model: drawer, width: width))
+                    .modifier(DrawerMainSlide(model: drawer, width: width, size: geo.size, insets: geo.safeAreaInsets))
+
+                // The visible strip of the page: a tap or a drag to the left closes the sidebar.
+                if drawer.isOpen {
+                    Button { drawer.set(open: false) } label: {
+                        Color.clear
+                            .frame(width: full - width)
+                            .frame(maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close sidebar")
+                    .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .ignoresSafeArea()
+                }
             }
         }
         // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
@@ -175,7 +192,14 @@ struct HomeView: View {
             }
             #endif
             SampleData.insertIfNeeded(context)
+            if SampleData.isDevData { SampleData.insertDevExtras(context) }
             ListActions.ensureLists(in: context)
+            #if DEBUG
+            if let i = ProcessInfo.processInfo.arguments.firstIndex(of: "-debugDeleteSystemEvent"),
+               i + 1 < ProcessInfo.processInfo.arguments.count {
+                CalendarSync.shared.debugDeleteSystemEvents(titled: ProcessInfo.processInfo.arguments[i + 1])
+            }
+            #endif
             Self.seedUITestReminder(context)
             await FirstRun.calendar()
         }
@@ -198,13 +222,25 @@ struct HomeView: View {
             switch type {
             case "com.luworks.one.ask": openAsk(nil)
             case "com.luworks.one.newTask": newItem = .task
-            case "com.luworks.one.newEvent": newItem = .event
+            case "com.luworks.one.newEvent": newEvent()
             default: break
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await Reminders.shared.resync() } }
+            if phase == .active {
+                dropDeletedMirrors()
+                Task { await Reminders.shared.resync() }
+            }
         }
+        // An event deleted in Apple Calendar must not linger here: when the system calendar changes, drop the copies it lost.
+        .onChange(of: CalendarSync.shared.version) { dropDeletedMirrors() }
+    }
+
+    private func dropDeletedMirrors() {
+        let gone = CalendarSync.shared.removedMirrors(allEvents)
+        guard !gone.isEmpty else { return }
+        for event in gone { context.delete(event) }
+        try? context.save()
     }
 
     /// Changes whenever anything that affects reminders changes.
@@ -223,7 +259,8 @@ struct HomeView: View {
 
     private var topBar: some View {
         HStack(spacing: 8) {
-            // No avatar button: the sidebar opens with a swipe from the left edge (VoiceOver: the "Open menu" action).
+            // The three lines open the sidebar (chat history and Search), like ChatGPT and Claude; a swipe from the left edge does too.
+            CircleButton(systemImage: "line.3.horizontal", label: "Open menu", size: 44) { drawer.set(open: true) }
             // Only scrolls when the pills don't fit (very large text). Otherwise there is no scroll view
             // to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
             ViewThatFits(in: .horizontal) {
@@ -235,7 +272,6 @@ struct HomeView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
         .contentShape(Rectangle())
-        .accessibilityAction(named: "Open menu") { drawer.set(open: true) }
         // Chrome stays usable at the largest text sizes; content below still scales fully.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
@@ -271,6 +307,12 @@ struct HomeView: View {
         }
     }
 
+    /// A new event: Apple's own editor when Calendar access is on (presented by UIKit, see `NativeEvents`), else ours.
+    private func newEvent() {
+        guard CalendarSync.shared.usesNativeEditor else { newItem = .event; return }
+        NativeEvents.edit(start: EventEditor.defaultStart(for: tab == .calendar ? calendarDay : .now))
+    }
+
     /// What + adds right now: the thing this page is about.
     private var smartNewItem: NewItem {
         switch tab {
@@ -282,7 +324,7 @@ struct HomeView: View {
 
     private var bottomButtons: some View {
         HStack(spacing: 10) {
-            CircleButton(systemImage: "magnifyingglass", label: "Search") { showsSearch = true }
+            // Search lives in the sidebar (top right), like ChatGPT and Claude; the bar keeps only Ask AI and +.
             Button { openAsk(nil) } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
@@ -299,7 +341,7 @@ struct HomeView: View {
             // reminder); press and hold to pick.
             Menu {
                 Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
-                Button { newItem = .event } label: { Label("New event", systemImage: "calendar") }
+                Button { newEvent() } label: { Label("New event", systemImage: "calendar") }
                 Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
             } label: {
                 Image(systemName: "plus")
@@ -308,7 +350,7 @@ struct HomeView: View {
                     .frame(width: 50, height: 50)
                     .glassCircle()
             } primaryAction: {
-                newItem = smartNewItem
+                if smartNewItem == .event { newEvent() } else { newItem = smartNewItem }
             }
             .tint(.primary)
             .accessibilityLabel("New")
@@ -397,6 +439,7 @@ struct TabPill: View {
 struct CircleButton: View {
     let systemImage: String
     let label: String
+    var size: CGFloat = 50
     var action: () -> Void
 
     var body: some View {
@@ -404,7 +447,7 @@ struct CircleButton: View {
             Image(systemName: systemImage)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.primary)
-                .frame(width: 50, height: 50)
+                .frame(width: size, height: size)
                 .glassCircle()
         }
         .buttonStyle(PressScale())

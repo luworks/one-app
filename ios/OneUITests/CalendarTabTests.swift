@@ -159,6 +159,7 @@ final class CalendarTabTests: XCTestCase {
             sleep(1)
         }
         if app.buttons["Done"].waitForExistence(timeout: 5) { app.buttons["Done"].tap() }
+        app.closeSidebar()
         showMonth()
 
         // An all-day event sorts first in the day's list, so it is on screen without scrolling.
@@ -190,6 +191,7 @@ final class CalendarTabTests: XCTestCase {
             app.navigationBars["Calendars"].buttons.firstMatch.tap()   // Done
             XCTAssertTrue(app.navigationBars["Calendars"].waitForNonExistence(timeout: 5))
             app.buttons["Done"].firstMatch.tap()                        // leave Settings
+            app.closeSidebar()
         }
         toggleCalendar()
         XCTAssertTrue(row.waitForNonExistence(timeout: 5), "hidden calendar: the event is gone from the list")

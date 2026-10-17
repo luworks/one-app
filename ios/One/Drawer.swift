@@ -122,20 +122,33 @@ struct DrawerDrag: ViewModifier {
     }
 }
 
-/// The page: slides right, fully off screen, as the drawer opens.
+/// How much of the screen the sidebar takes. The page slides this far to the right and stays visible beside it (as in ChatGPT
+/// and Claude), rounded and dimmed; tapping it closes the sidebar.
+enum DrawerLayout {
+    static let widthFraction: CGFloat = 0.78
+}
+
+/// The page: slides right by the sidebar's width, with rounded corners and a dim layer that fade in as it moves.
 struct DrawerMainSlide: ViewModifier {
     let model: DrawerModel
     let width: CGFloat
+    /// The screen's size and safe-area insets, so the rounded corners are the screen's own, not the safe area's.
+    var size: CGSize = .zero
+    var insets = EdgeInsets()
 
     func body(content: Content) -> some View {
         let p = model.progress(width: width)
         content
-            // A soft edge on the page's left side while it moves (a gradient is much cheaper than a shadow on the whole page).
-            .background(alignment: .leading) {
-                LinearGradient(colors: [.clear, .black.opacity(0.10)], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 14)
-                    .offset(x: -14)
-                    .opacity(p > 0 ? 1 : 0)
+            .overlay {
+                Color.black.opacity(0.22 * p)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+            // The mask covers the whole screen (also under the safe areas), so the corners are the screen's own.
+            .mask {
+                RoundedRectangle(cornerRadius: 44 * min(1, p * 5), style: .continuous)
+                    .frame(width: size.width, height: size.height + insets.top + insets.bottom)
+                    .offset(y: (insets.bottom - insets.top) / 2)
             }
             .offset(x: p * width)
             .accessibilityHidden(model.isOpen)

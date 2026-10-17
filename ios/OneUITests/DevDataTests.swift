@@ -1,0 +1,28 @@
+import XCTest
+
+/// The dev dataset (`-devData`): the same data every launch, to try every screen in a simulator.
+/// `-uiTesting -devData` also keeps Apple Calendar sync off, so the simulator's own calendar can't change what is on screen.
+final class DevDataTests: XCTestCase {
+    func testDevDataFillsChatsAlarmsAndReminders() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting", "-devData"]
+        app.launch()
+
+        app.openSidebar()
+        XCTAssertTrue(app.buttons["Plan my day"].waitForExistence(timeout: 5), "chats from today")
+        XCTAssertTrue(app.buttons["Move the dentist to tomorrow"].exists, "chats from yesterday")
+        XCTAssertTrue(app.buttons["conversation.archived"].exists, "an archived chat")
+        app.closeSidebar()
+
+        app.buttons["Alarms"].firstMatch.tap()
+        let wake = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Wake up'")).firstMatch
+        XCTAssertTrue(wake.waitForExistence(timeout: 5), "alarms")
+
+        app.buttons["Reminders"].firstMatch.tap()
+        let completed = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Completed, 3'")).firstMatch
+        XCTAssertTrue(completed.waitForExistence(timeout: 5), "completed reminders")
+        let flagged = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Flagged, 3'")).firstMatch
+        XCTAssertTrue(flagged.exists, "flagged reminders")
+    }
+}

@@ -109,7 +109,10 @@ final class SidebarTests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)))
-        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "a left swipe closes the sidebar")
+        // The closed sidebar stays built behind the page, so check that the page is back and reachable instead.
+        let calendar = app.buttons["Calendar"].firstMatch
+        let back = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: calendar)
+        XCTAssertEqual(XCTWaiter().wait(for: [back], timeout: 8), .completed, "a left swipe closes the sidebar")
     }
 
     func testLongPressOffersRenameArchiveAndDelete() {

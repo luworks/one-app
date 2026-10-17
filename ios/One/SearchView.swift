@@ -116,7 +116,9 @@ struct SearchView: View {
                     if !r.events.isEmpty {
                         Section(header: header("Events", r.events.count)) {
                             ForEach(r.events.prefix(limit)) { hit in
-                                Button { opened = hit.opened } label: {
+                                Button {
+                                    if case .system(let id) = hit.opened { NativeEvents.edit(identifier: id) } else { opened = hit.opened }
+                                } label: {
                                     ResultRow(symbol: "calendar", tint: hit.color, title: hit.title, detail: hit.detail, dimmed: hit.start < .now)
                                 }
                             }

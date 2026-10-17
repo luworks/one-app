@@ -7,4 +7,10 @@ extension XCUIApplication {
         let end = coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
         start.press(forDuration: 0.05, thenDragTo: end)
     }
+
+    /// The sidebar is a full screen with no Today row, and Settings opens over it, so after Settings the sidebar is still open.
+    func closeSidebar() {
+        let close = buttons["Close sidebar"]
+        if close.waitForExistence(timeout: 3) { close.tap() }
+    }
 }

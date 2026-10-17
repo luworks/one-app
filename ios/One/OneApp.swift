@@ -10,10 +10,20 @@ struct OneApp: App {
         LaunchTimer.mark("app init")
         do {
             // UI tests launch with -uiTesting: a fresh in-memory store with the sample data.
-            let testing = ProcessInfo.processInfo.arguments.contains("-uiTesting")
-            if testing { SampleData.resetFlags() }
+            // -devData is the same, plus the full dev dataset (chats, alarms, more events and reminders) for trying the app in a
+            // simulator. -uiTestingStore <name> keeps the test store in a file, so a second launch can see what the first one saved.
+            let args = ProcessInfo.processInfo.arguments
+            let testing = args.contains("-uiTesting")
+            let inMemory = testing || SampleData.isDevData
+            if inMemory { SampleData.resetFlags() }
+            let configuration: ModelConfiguration
+            if testing, let i = args.firstIndex(of: "-uiTestingStore"), i + 1 < args.count {
+                configuration = ModelConfiguration(url: FileManager.default.temporaryDirectory.appending(path: "\(args[i + 1]).store"))
+            } else {
+                configuration = ModelConfiguration(isStoredInMemoryOnly: inMemory)
+            }
             container = try ModelContainer(for: OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self,
-                                           configurations: ModelConfiguration(isStoredInMemoryOnly: testing))
+                                           configurations: configuration)
         } catch {
             fatalError("Could not open the data store: \(error)")
         }

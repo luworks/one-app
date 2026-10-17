@@ -216,11 +216,16 @@ struct EventEditor: View {
     /// Where a new event starts: the next full hour today, or 9:00 on the chosen day.
     private let defaultStart: Date
 
-    init(event: OneEvent? = nil, day: Date = .now) {
-        self.event = event
+    /// The next full hour today, or 9:00 on another day.
+    static func defaultStart(for day: Date) -> Date {
         let cal = Calendar.current
         let base = cal.isDateInToday(day) ? Date.now : (cal.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
-        let rounded = cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
+        return cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
+    }
+
+    init(event: OneEvent? = nil, day: Date = .now) {
+        self.event = event
+        let rounded = Self.defaultStart(for: day)
         defaultStart = rounded
         let start = event?.start ?? rounded
         _title = State(initialValue: event?.title ?? "")
@@ -278,7 +283,11 @@ struct EventEditor: View {
                     Section {
                         Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
                             let backup = event.copy()
-                            CalendarSync.shared.delete(externalID: event.externalID)
+                            guard CalendarSync.shared.delete(externalID: event.externalID) else {
+                                toast?.showNotice("Couldn't delete “\(event.title)” from Calendar, so it was kept.")
+                                dismiss()
+                                return
+                            }
                             context.delete(event)
                             toast?.show("Deleted “\(backup.title)”") {
                                 backup.externalID = CalendarSync.shared.save(backup)

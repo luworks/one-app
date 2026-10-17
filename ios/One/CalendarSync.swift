@@ -239,10 +239,56 @@ final class CalendarSync {
         }
     }
 
-    func delete(externalID: String?, span: EKSpan = .futureEvents) {
-        guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else { return }
-        try? store.remove(ek, span: span)
+    /// Removes the system copy of an event. False when the calendar refused (read-only or subscribed calendars such as
+    /// Holidays and Birthdays), so callers can say so instead of acting as if it worked. A copy that is already gone,
+    /// or no copy at all, counts as removed.
+    @discardableResult
+    func delete(externalID: String?, span: EKSpan = .futureEvents) -> Bool {
+        guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else {
+            log.info("delete: no system copy (isOn=\(self.isOn), id=\(externalID ?? "nil", privacy: .public))")
+            return true
+        }
+        log.info("delete: \(ek.title ?? "", privacy: .public) calendar=\(ek.calendar.title, privacy: .public) source=\(ek.calendar.source?.title ?? "", privacy: .public) modifiable=\(ek.calendar.allowsContentModifications) recurring=\(ek.hasRecurrenceRules) span=\(span == .thisEvent ? "this" : "future", privacy: .public)")
+        guard ek.calendar.allowsContentModifications else {
+            log.error("delete refused: calendar is read-only")
+            return false
+        }
+        do {
+            try store.remove(ek, span: span)
+            log.info("delete: removed, still there=\(self.store.event(withIdentifier: id) != nil)")
+            return true
+        } catch {
+            log.error("delete failed \(error.localizedDescription, privacy: .public)")
+            return false
+        }
     }
+
+    /// Whether the system copy of an event can be deleted (its calendar accepts changes). True when there is no system copy.
+    func canDelete(externalID: String?) -> Bool {
+        guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else { return true }
+        return ek.calendar.allowsContentModifications
+    }
+
+    /// Events Today created whose copy in Apple Calendar is gone (deleted there). Apple Calendar is the source of truth, so
+    /// the local copy goes too. Empty unless Calendar sync is on and its store is ready, so a missing permission never counts as a delete.
+    func removedMirrors(_ events: [OneEvent]) -> [OneEvent] {
+        guard isOn, storeReady else { return [] }
+        return events.filter { e in
+            guard let id = e.externalID else { return false }
+            return store.event(withIdentifier: id) == nil
+        }
+    }
+
+    #if DEBUG
+    /// UI-test hook: deletes system events with this title, as if they had been deleted in the Calendar app.
+    func debugDeleteSystemEvents(titled title: String) {
+        guard isOn else { return }
+        storeReady = true
+        let predicate = store.predicateForEvents(withStart: .now.addingTimeInterval(-86_400), end: .now.addingTimeInterval(14 * 86_400), calendars: nil)
+        for e in store.events(matching: predicate) where e.title == title { try? store.remove(e, span: .futureEvents) }
+        version += 1
+    }
+    #endif
 
     /// Whether the system copy of an event repeats (Delete then asks: this event or the series).
     func isRepeating(externalID: String?) -> Bool {
@@ -261,8 +307,6 @@ final class CalendarSync {
 struct ExternalEventRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let event: ExternalEvent
-    @State private var showing = false
-    @State private var showingEditor = false
     /// The list that holds this row asks "this event or the series?" (see `entryDeleteDialog`).
     @Binding var pendingDelete: CalEntry?
 
@@ -291,16 +335,98 @@ struct ExternalEventRow: View {
         .fixedSize(horizontal: false, vertical: true)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture { showing = true }
-        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in showing = true }, edit: { _ in showingEditor = true })
-        .sheet(isPresented: $showing) { NativeEventSheet(identifier: event.eventIdentifier) }
-        .sheet(isPresented: $showingEditor) { NativeEventEditor(identifier: event.eventIdentifier).ignoresSafeArea() }
+        .onTapGesture { NativeEvents.edit(identifier: event.eventIdentifier) }
+        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in NativeEvents.edit(identifier: event.eventIdentifier) },
+                      edit: { _ in NativeEvents.edit(identifier: event.eventIdentifier) })
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(EventSpeech.label(title: event.title, start: event.start, end: event.end, isAllDay: event.isAllDay,
                                               location: event.location, calendar: event.calendarTitle))
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// Shows Apple's event editor the way UIKit expects: presented over the top screen, not embedded in a SwiftUI sheet.
+/// Embedded, its Delete Event confirmation closed without deleting anything (reproduced in the simulator), and a sheet
+/// attached to each row of a long list could open the wrong event. One presenter for every place that opens it.
+@MainActor
+enum NativeEvents {
+    private static var delegate: Delegate?
+    private static let log = Logger(subsystem: "com.luworks.one", category: "calendar")
+
+    /// `identifier` nil = a new event starting at `start`.
+    static func edit(identifier: String? = nil, start: Date = .now) {
+        let sync = CalendarSync.shared
+        let vc = EKEventEditViewController()
+        vc.eventStore = sync.eventStore
+        if let identifier {
+            guard let (existing, _) = sync.nativeEvent(identifier: identifier) else {
+                log.error("edit: event not found")
+                return
+            }
+            vc.event = existing
+        } else {
+            let event = EKEvent(eventStore: sync.eventStore)
+            event.startDate = start
+            event.endDate = start.addingTimeInterval(3600)
+            event.calendar = sync.eventStore.defaultCalendarForNewEvents
+            vc.event = event
+        }
+        let d = Delegate()
+        delegate = d
+        vc.editViewDelegate = d
+        vc.presentationController?.delegate = d
+        guard let top = topViewController() else { return }
+        top.present(vc, animated: true)
+        if let identifier { watch(vc, identifier: identifier) }
+    }
+
+    /// iOS 27's editor deletes the event but may not call its delegate, so it stays on screen and the list keeps the row,
+    /// which looks like the delete failed (reproduced in the simulator: the event was gone from the calendar database).
+    /// While the editor is up, check whether the event still exists; once it is gone, close the editor and refresh.
+    private static func watch(_ vc: EKEventEditViewController, identifier: String) {
+        Task { @MainActor [weak vc] in
+            while let vc, vc.presentingViewController != nil {
+                try? await Task.sleep(for: .milliseconds(400))
+                if CalendarSync.shared.eventStore.event(withIdentifier: identifier) == nil {
+                    log.info("editor: event is gone, closing")
+                    CalendarSync.shared.refresh()
+                    vc.dismiss(animated: true)
+                    delegate = nil
+                    return
+                }
+            }
+            CalendarSync.shared.refresh()
+        }
+    }
+
+    private static func topViewController() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        var top = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController
+        while let next = top?.presentedViewController, !next.isBeingDismissed { top = next }
+        return top
+    }
+
+    private final class Delegate: NSObject, EKEventEditViewDelegate, UIAdaptivePresentationControllerDelegate {
+        /// Swiped down: nothing to save; refetch in case something changed meanwhile.
+        func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+            Task { @MainActor in
+                CalendarSync.shared.refresh()
+                NativeEvents.delegate = nil
+            }
+        }
+
+        func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+            print("NativeEvents: editor completed \(action.rawValue)")
+            NativeEvents.log.info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
+            Task { @MainActor in
+                CalendarSync.shared.refresh()
+                controller.dismiss(animated: true)
+                NativeEvents.delegate = nil
+            }
+        }
     }
 }
 
@@ -349,6 +475,7 @@ struct NativeEventEditor: UIViewControllerRepresentable {
         let dismiss: () -> Void
         init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
         func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+            Logger(subsystem: "com.luworks.one", category: "calendar").info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
             Task { @MainActor in CalendarSync.shared.refresh() }
             dismiss()
         }

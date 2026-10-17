@@ -48,12 +48,12 @@ struct CalendarView: View {
         }
     }
 
-    private func open(_ entry: CalEntry) { opened = OpenedEntry(entry) }
-
-    /// Edit goes straight to Apple's editor for system events.
-    private func edit(_ entry: CalEntry) {
-        if case .system(let id) = entry.source { opened = .editSystem(id) } else { open(entry) }
+    /// System events open in Apple's editor (presented by UIKit, see `NativeEvents`); the rest in our editors.
+    private func open(_ entry: CalEntry) {
+        if case .system(let id) = entry.source { NativeEvents.edit(identifier: id) } else { opened = OpenedEntry(entry) }
     }
+
+    private func edit(_ entry: CalEntry) { open(entry) }
 
     /// Tapping a day that is already selected opens it in Today (the day view).
     private func openDay(_ date: Date) { onOpenDay(cal.startOfDay(for: date)) }

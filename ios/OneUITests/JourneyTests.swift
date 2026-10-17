@@ -110,6 +110,7 @@ final class JourneyTests: XCTestCase {
 
     /// J7: find something.
     func testJ7_search() {
+        app.openSidebar()   // Search is the button at the top right of the sidebar
         tap(app.buttons["Search"])
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -120,6 +121,7 @@ final class JourneyTests: XCTestCase {
 
     /// Search covers reminders and calendar events together, grouped, with scopes.
     func testSearchFindsEventsAndRemindersTogether() {
+        app.openSidebar()   // Search is the button at the top right of the sidebar
         tap(app.buttons["Search"])
         let field = app.textFields["search.field"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -131,6 +133,7 @@ final class JourneyTests: XCTestCase {
 
     /// Search opens straight onto suggestions (no empty pop-up), a suggestion lists things, and Cancel closes Search.
     func testSearchSuggestionsAndCancelClosesIt() {
+        app.openSidebar()   // Search is the button at the top right of the sidebar
         tap(app.buttons["Search"])
         XCTAssertTrue(app.staticTexts["Suggestions"].waitForExistence(timeout: 5), "suggested searches show first")
         tap(app.buttons["Due today"])
@@ -142,6 +145,12 @@ final class JourneyTests: XCTestCase {
     /// The sidebar opens with a swipe from the left edge (there is no avatar button).
     func testSidebarOpensWithEdgeSwipe() {
         app.openSidebar()
+        XCTAssertTrue(app.buttons["New chat"].waitForExistence(timeout: 3))
+    }
+
+    /// The three lines at the top left open the sidebar too, so the sidebar can be found without knowing the swipe.
+    func testMenuButtonOpensTheSidebar() {
+        tap(app.buttons["Open menu"])
         XCTAssertTrue(app.buttons["New chat"].waitForExistence(timeout: 3))
     }
 
