@@ -263,10 +263,12 @@ private struct MonthPage: View {
         let isToday = cal.isDateInToday(d)
         let isSelected = cal.isDate(d, inSameDayAs: selected)
         let weekend = cal.isDateInWeekend(d)
+        let past = d < cal.startOfDay(for: .now)
         // Today is a red circle when selected (red number otherwise); any other selected day is a label-colored circle.
+        // Days that are over are dimmed; weekends get a faint tint behind the cell.
         let fill: Color = isSelected ? (isToday ? .red : Color(.label)) : .clear
         let text: Color = isSelected ? (isToday ? .white : Color(.systemBackground))
-            : (isToday ? .red : (weekend ? Color(.secondaryLabel) : Color(.label)))
+            : (isToday ? .red : (past ? Color(.tertiaryLabel) : (weekend ? Color(.secondaryLabel) : Color(.label))))
         return Button { onTap(d) } label: {
             VStack(spacing: 4) {
                 Text("\(cal.component(.day, from: d))")
@@ -276,9 +278,11 @@ private struct MonthPage: View {
                     .background(fill, in: Circle())
                 DayDots(colors: items.prefix(3).map(\.color))
                     .frame(height: 5)
+                    .opacity(past ? DayTint.past : 1)
             }
             .padding(.top, 4)
             .frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .top)
+            .background(weekend ? DayTint.weekend : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -415,6 +419,9 @@ struct AgendaRow: View {
 private struct YearView: View {
     @Binding var day: Date
     var pickMonth: (Date) -> Void
+    @Query(sort: \OneEvent.start) private var events: [OneEvent]
+    @Query private var tasks: [OneTask]
+    @State private var cache = BusyCache()
     private let cal = Calendar.current
     private let baseYear = Calendar.current.dateInterval(of: .year, for: .now)?.start ?? .now
 
@@ -437,8 +444,49 @@ private struct YearView: View {
         .accessibilityIdentifier("calendar.year.scroll")
     }
 
+    /// Counts per year, kept until the data changes: a year's worth of Apple Calendar events is one EventKit query,
+    /// not one per redraw. (A class, so filling it while drawing doesn't count as a state change.)
+    final class BusyCache {
+        var signature = 0
+        var years: [Date: [Date: Int]] = [:]
+    }
+
+    private var dataSignature: Int {
+        var h = Hasher()
+        h.combine(CalendarSync.shared.version)
+        for e in events { h.combine(e.start); h.combine(e.durationMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay) }
+        for t in tasks { h.combine(t.plannedStart); h.combine(t.isDone) }
+        return h.finalize()
+    }
+
+    /// How many items each day of the year has (start of day → count); a multi-day event counts on each of its days.
+    private func counts(in start: Date) -> [Date: Int] {
+        let signature = dataSignature
+        if cache.signature != signature { cache.signature = signature; cache.years = [:] }
+        if let hit = cache.years[start] { return hit }
+        let result = countDays(in: start)
+        cache.years[start] = result
+        return result
+    }
+
+    private func countDays(in start: Date) -> [Date: Int] {
+        guard let end = cal.date(byAdding: .year, value: 1, to: start) else { return [:] }
+        var result: [Date: Int] = [:]
+        for e in CalendarEntries.make(in: DateInterval(start: start, end: end), events: events, tasks: tasks) {
+            let last = cal.startOfDay(for: max(e.start, e.end.addingTimeInterval(-1)))
+            var d = cal.startOfDay(for: max(e.start, start))
+            while d <= last, d < end {
+                result[d, default: 0] += 1
+                guard let next = cal.date(byAdding: .day, value: 1, to: d) else { break }
+                d = next
+            }
+        }
+        return result
+    }
+
     private func yearSection(_ start: Date) -> some View {
         let isCurrent = cal.isDate(start, equalTo: .now, toGranularity: .year)
+        let busy = counts(in: start)
         return VStack(spacing: 14) {
             Text(start.formatted(.dateTime.year()))
                 .font(.largeTitle.bold())
@@ -448,7 +496,7 @@ private struct YearView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: 3), spacing: 12) {
                 ForEach(0..<12, id: \.self) { m in
                     if let month = cal.date(byAdding: .month, value: m, to: start) {
-                        MiniMonth(month: month) { pickMonth(month) }
+                        MiniMonth(month: month, counts: busy) { pickMonth(month) }
                     }
                 }
             }
@@ -458,11 +506,18 @@ private struct YearView: View {
     }
 }
 
-/// A small month for the Year view: name (red for the current month), then its day numbers.
+/// A small month for the Year view: name (red for the current month), then its day numbers, each shaded by how busy
+/// the day is (a heatmap in the accent color; Month keeps Apple's dots).
 private struct MiniMonth: View {
     let month: Date
+    /// Items per day (start of day → count), for the heatmap.
+    var counts: [Date: Int] = [:]
     var onTap: () -> Void
     private let cal = Calendar.current
+
+    private var busyDays: Int {
+        CalendarMath.monthWeeks(of: month).flatMap { $0 }.compactMap { $0 }.filter { (counts[$0] ?? 0) > 0 }.count
+    }
 
     var body: some View {
         let weeks = CalendarMath.monthWeeks(of: month)
@@ -479,11 +534,18 @@ private struct MiniMonth: View {
                             ForEach(0..<7, id: \.self) { i in
                                 if w < weeks.count, let d = weeks[w][i] {
                                     let today = cal.isDateInToday(d)
+                                    let level = CalendarLayout.busyLevel(count: counts[d] ?? 0)
                                     Text("\(cal.component(.day, from: d))")
                                         .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
                                         .foregroundStyle(today ? Color.white : Color.primary)
                                         .frame(maxWidth: .infinity, minHeight: 16)
-                                        .background { if today { Circle().fill(Color.red).frame(width: 16, height: 16) } }
+                                        .background {
+                                            if today {
+                                                Circle().fill(Color.red).frame(width: 16, height: 16)
+                                            } else if level > 0 {
+                                                RoundedRectangle(cornerRadius: 4).fill(DayTint.busy(level)).frame(width: 18, height: 16)
+                                            }
+                                        }
                                 } else {
                                     Color.clear.frame(maxWidth: .infinity, minHeight: 16)
                                 }
@@ -497,6 +559,7 @@ private struct MiniMonth: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(month.formatted(.dateTime.month(.wide).year()))
+        .accessibilityValue(busyDays == 0 ? "" : "\(busyDays) busy day\(busyDays == 1 ? "" : "s")")
         .accessibilityHint("Shows this month")
         .accessibilityIdentifier(CalendarIDs.month(month))
     }
@@ -519,6 +582,8 @@ private struct WeekView: View {
     @State private var pos: Int? = 0
     /// The hour at the top of the grid, shared by all pages so paging keeps your place.
     @State private var topHour: Int? = 7
+    /// Points per hour; pinch the grid to change it (shared by all pages).
+    @State private var hourHeight: CGFloat = 48
     private let cal = Calendar.current
     private var base: Date { dayCount == 7 ? CalendarMath.weekStart(of: .now) : cal.startOfDay(for: .now) }
     private let range = -800...800
@@ -543,7 +608,7 @@ private struct WeekView: View {
                 LazyHStack(spacing: 0) {
                     ForEach(range, id: \.self) { o in
                         WeekPage(weekStart: weekStart(o), dayCount: dayCount, selected: day, events: events, tasks: tasks,
-                                 topHour: $topHour, open: open, edit: edit, create: create, openDay: openDay)
+                                 topHour: $topHour, hourHeight: $hourHeight, open: open, edit: edit, create: create, openDay: openDay)
                             .containerRelativeFrame([.horizontal, .vertical])
                             .id(o)
                     }
@@ -574,6 +639,7 @@ private struct WeekPage: View {
     let events: [OneEvent]
     let tasks: [OneTask]
     @Binding var topHour: Int?
+    @Binding var hourHeight: CGFloat
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void = { _ in }
     var create: (Date, Date) -> Void = { _, _ in }
@@ -581,8 +647,8 @@ private struct WeekPage: View {
     @State private var pendingDelete: CalEntry?
     /// The new event being placed by a long-press on an empty slot: day column and start minute.
     @State private var draft: Slot?
-
-    private let hourHeight: CGFloat = 48
+    /// The hour height when the current pinch started.
+    @State private var pinchStart: CGFloat?
     private let gutter: CGFloat = 44
     private let cal = Calendar.current
 
@@ -608,6 +674,7 @@ private struct WeekPage: View {
             ForEach(Array(days.enumerated()), id: \.offset) { i, d in
                 let isToday = cal.isDateInToday(d)
                 let isSelected = cal.isDate(d, inSameDayAs: selected)
+                let past = d < cal.startOfDay(for: .now)
                 Button { openDay(d) } label: {
                     VStack(spacing: 2) {
                         Text(dayCount == 7 ? letters[i] : d.formatted(.dateTime.weekday(.abbreviated)))
@@ -616,7 +683,8 @@ private struct WeekPage: View {
                         Text("\(cal.component(.day, from: d))")
                             .font(.system(size: 17, weight: .medium))
                             .foregroundStyle(isToday ? Color.white : (isSelected ? Color(.systemBackground)
-                                                                      : (cal.isDateInWeekend(d) ? Color(.secondaryLabel) : Color(.label))))
+                                                                      : (past ? Color(.tertiaryLabel)
+                                                                         : (cal.isDateInWeekend(d) ? Color(.secondaryLabel) : Color(.label)))))
                             .frame(width: 29, height: 29)
                             .background(isToday ? Color.red : (isSelected ? Color(.label) : Color.clear), in: Circle())
                     }
@@ -710,14 +778,17 @@ private struct WeekPage: View {
 
                 GeometryReader { geo in
                     let colW = (geo.size.width - gutter - 8) / CGFloat(dayCount)
+                    weekendColumns(days, colW: colW)
                     // Bottom layer: long-press an empty slot to make an event there. Blocks above keep their own taps and menus.
-                    pressLayer(days, colW: colW)
+                    pressLayer(days, timed, colW: colW)
                     ForEach(Array(days.enumerated()), id: \.offset) { index, d in
                         let x = gutter + CGFloat(index) * colW
                         let placed = place(timed, on: d)
+                        let past = d < cal.startOfDay(for: .now)
                         ForEach(placed, id: \.entry.id) { p in
                             let w = (colW - 2) / CGFloat(p.count)
                             block(p.entry, colW: colW)
+                                .opacity(past ? DayTint.past : 1)
                                 .frame(width: max(8, w - 1), height: max(18, p.height(hourHeight)))
                                 .offset(x: x + 1 + w * CGFloat(p.column), y: p.y(hourHeight))
                         }
@@ -738,6 +809,17 @@ private struct WeekPage: View {
         }
         .scrollPosition(id: $topHour, anchor: .top)
         .scrollIndicators(.hidden)
+        // Two fingers zoom the hours; one finger still scrolls, pages, taps, long-presses and drags tasks.
+        .simultaneousGesture(
+            MagnifyGesture(minimumScaleDelta: 0.02)
+                .onChanged { value in
+                    let start = pinchStart ?? hourHeight
+                    pinchStart = start
+                    hourHeight = CGFloat(CalendarLayout.zoomedHourHeight(Double(start), scale: Double(value.magnification)))
+                }
+                .onEnded { _ in pinchStart = nil }
+        )
+        .accessibilityIdentifier("calendar.weekGrid")
     }
 
     private func nowLine(_ now: Date, days: [Date], colW: CGFloat) -> some View {
@@ -827,21 +909,51 @@ private struct WeekPage: View {
         let minute: Int
     }
 
+    /// Where the timed blocks are drawn (the same layout as the grid's `ForEach`).
+    private func blockRects(_ days: [Date], _ timed: [CalEntry], colW: CGFloat) -> [CGRect] {
+        days.enumerated().flatMap { index, d in
+            place(timed, on: d).map { p in
+                let w = (colW - 2) / CGFloat(p.count)
+                return CGRect(x: gutter + CGFloat(index) * colW + 1 + w * CGFloat(p.column), y: p.y(hourHeight),
+                              width: max(8, w - 1), height: max(18, p.height(hourHeight)))
+            }
+        }
+    }
+
+    /// A very faint tint behind weekend columns.
+    private func weekendColumns(_ days: [Date], colW: CGFloat) -> some View {
+        ForEach(Array(days.enumerated()), id: \.offset) { index, d in
+            if cal.isDateInWeekend(d) {
+                DayTint.weekend
+                    .frame(width: colW)
+                    .offset(x: gutter + CGFloat(index) * colW)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
     /// Long-press an empty slot: a one-hour placeholder appears there (snapped to 15 minutes) and follows the finger;
-    /// releasing opens the new-event editor for that time. Like Apple Calendar's Week and Day views.
-    private func pressLayer(_ days: [Date], colW: CGFloat) -> some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .gesture(SlotPress { point in
-                let s = CalendarLayout.slot(x: point.x, y: point.y, gutter: gutter, columnWidth: colW,
-                                            hourHeight: hourHeight, dayCount: dayCount)
-                draft = Slot(day: s.day, minute: s.minute)
-            } ended: { released in
-                defer { draft = nil }
-                guard released, let draft, draft.day < days.count,
-                      let start = cal.date(byAdding: .minute, value: draft.minute, to: days[draft.day]) else { return }
-                create(start, start.addingTimeInterval(3600))
-            })
+    /// releasing opens the new-event editor for that time. Like Apple Calendar's Week and Day views. The same gesture shape
+    /// A UIKit long-press (see `SlotPressView`): moving before it is recognized fails it, so scrolling and week paging are
+    /// untouched; once it is recognized, the scroll views don't take the finger.
+    private func pressLayer(_ days: [Date], _ timed: [CalEntry], colW: CGFloat) -> some View {
+        let blocks = blockRects(days, timed, colW: colW)
+        return SlotPressView { point in
+            // A press on an event or task is theirs (menu, or drag the task); only empty space makes an event.
+            !blocks.contains { $0.contains(point) }
+        } changed: { point in
+            let s = CalendarLayout.slot(x: point.x, y: point.y, gutter: gutter, columnWidth: colW,
+                                        hourHeight: hourHeight, dayCount: dayCount)
+            draft = Slot(day: s.day, minute: s.minute)
+        } ended: { point in
+            draft = nil
+            guard let point else { return }
+            let s = CalendarLayout.slot(x: point.x, y: point.y, gutter: gutter, columnWidth: colW,
+                                        hourHeight: hourHeight, dayCount: dayCount)
+            guard s.day < days.count, let start = cal.date(byAdding: .minute, value: s.minute, to: days[s.day]) else { return }
+            create(start, start.addingTimeInterval(3600))
+        }
             .sensoryFeedback(trigger: draft) { (old: Slot?, new: Slot?) -> SensoryFeedback? in
                 // A thump when the placeholder appears, a tick each time it moves to another slot.
                 guard new != nil else { return nil }
@@ -880,25 +992,46 @@ private struct WeekPage: View {
     }
 }
 
-/// Long-press on the Week grid's empty space (UIKit's long-press, which reports where the finger is from the start and as it
-/// moves): `changed` gets the point while the finger is down, `ended` whether it was released (true) or cancelled.
-/// Moving before the press is recognized fails it, so scrolling and paging stay with the scroll views.
-private struct SlotPress: UIGestureRecognizerRepresentable {
+/// The Week grid's empty space, as a UIKit view with a long-press recognizer. SwiftUI gestures that track a drag (a
+/// long-press sequenced with a drag), attached to the grid's content, kept the grid from scrolling at all; a UIKit
+/// long-press on a view inside the scroll view behaves like Apple Calendar's: a swipe scrolls, a still press and drag places.
+/// `changed` gets the point (in this view, which fills the grid) from the moment the press is recognized; `ended` gets
+/// where the finger was lifted, or nil when the press was cancelled.
+private struct SlotPressView: UIViewRepresentable {
+    /// Whether a press here may make an event (false on an event or task block, which has its own long-press).
+    var isFree: (CGPoint) -> Bool
     var changed: (CGPoint) -> Void
-    var ended: (Bool) -> Void
+    var ended: (CGPoint?) -> Void
 
-    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
-        let press = UILongPressGestureRecognizer()
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        let press = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handle(_:)))
         press.minimumPressDuration = 0.5
-        return press
+        press.delegate = context.coordinator
+        view.addGestureRecognizer(press)
+        return view
     }
 
-    func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
-        switch recognizer.state {
-        case .began, .changed: changed(context.converter.localLocation)
-        case .ended: ended(true)
-        case .cancelled, .failed: ended(false)
-        default: break
+    func updateUIView(_ view: UIView, context: Context) { context.coordinator.parent = self }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: SlotPressView
+        init(_ parent: SlotPressView) { self.parent = parent }
+
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            parent.isFree(recognizer.location(in: recognizer.view))
+        }
+
+        @objc func handle(_ press: UILongPressGestureRecognizer) {
+            switch press.state {
+            case .began, .changed: parent.changed(press.location(in: press.view))
+            case .ended: parent.ended(press.location(in: press.view))
+            case .cancelled, .failed: parent.ended(nil)
+            default: break
+            }
         }
     }
 }
@@ -951,6 +1084,17 @@ struct DraggableTaskBlock<Content: View>: View {
     private func snapped(_ t: CGSize) -> CGSize {
         let (days, minutes) = steps(t)
         return CGSize(width: CGFloat(days) * colWidth, height: CGFloat(minutes) / 60 * hourHeight)
+    }
+}
+
+/// Quiet cues on the Week and Month grids: weekends get a very faint tint, days that are over are dimmed.
+enum DayTint {
+    static let weekend = Color.primary.opacity(0.035)
+    /// Opacity of event blocks on days that are over.
+    static let past = 0.55
+    /// Year heatmap: fill behind a day number for busy levels 1...3 (see `CalendarLayout.busyLevel`).
+    static func busy(_ level: Int) -> Color {
+        Color.accentColor.opacity([0, 0.16, 0.34, 0.58][min(max(level, 0), 3)])
     }
 }
 

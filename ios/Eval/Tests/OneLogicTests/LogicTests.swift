@@ -53,19 +53,6 @@ final class RecurrenceTests: XCTestCase {
 final class ReminderPlanTests: XCTestCase {
     let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
-    func testFutureReminderFiresThenNags() {
-        let fires = ReminderPlan.taskFires(reminder: t0.addingTimeInterval(600), now: t0)
-        XCTAssertEqual(fires.map(\.isNag), [false, true, true, true])
-        XCTAssertEqual(fires.last?.date, t0.addingTimeInterval(600 + 20 * 60))
-    }
-
-    func testPastReminderKeepsRemainingNagsOnly() {
-        // Reminder was 7 minutes ago: the 5-minute nag has passed, 10 and 20 remain.
-        let fires = ReminderPlan.taskFires(reminder: t0.addingTimeInterval(-7 * 60), now: t0)
-        XCTAssertEqual(fires.count, 2)
-        XCTAssertTrue(fires.allSatisfy(\.isNag))
-    }
-
     func testSnoozePresets() {
         XCTAssertEqual(ReminderPlan.snoozed("SNOOZE_10", now: t0), t0.addingTimeInterval(600))
         XCTAssertEqual(ReminderPlan.snoozed("SNOOZE_60", now: t0), t0.addingTimeInterval(3600))
@@ -313,6 +300,16 @@ final class CalendarLayoutTests: XCTestCase {
         let late = CalendarLayout.slot(x: 2000, y: 24 * 48 + 30, gutter: 44, columnWidth: 50, hourHeight: 48, dayCount: 7)
         XCTAssertEqual(late.day, 6)
         XCTAssertEqual(late.minute, 23 * 60 + 45, "starts no later than 23:45")
+    }
+
+    func testBusyLevelSteps() {
+        XCTAssertEqual([0, 1, 2, 3, 4, 5, 12].map { CalendarLayout.busyLevel(count: $0) }, [0, 1, 1, 2, 2, 3, 3])
+    }
+
+    func testPinchZoomStaysInRange() {
+        XCTAssertEqual(CalendarLayout.zoomedHourHeight(48, scale: 2), 96)
+        XCTAssertEqual(CalendarLayout.zoomedHourHeight(48, scale: 10), 120, "no taller than 120pt an hour")
+        XCTAssertEqual(CalendarLayout.zoomedHourHeight(48, scale: 0.1), 28, "no shorter than 28pt an hour")
     }
 
     func testBackToBackEventsDoNotOverlap() {

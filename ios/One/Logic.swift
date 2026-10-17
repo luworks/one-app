@@ -88,22 +88,9 @@ enum DurationLabel {
     }
 }
 
-/// When reminders fire (Due-style): at the reminder time, then nags until the task is done.
+/// Notification snoozes. A task's reminder fires once, at the reminder time: there are no follow-up nags (they put three
+/// more alerts on the lock screen for the same task).
 enum ReminderPlan {
-    /// Follow-up nags after the first reminder, in minutes.
-    static let nagMinutes = [5, 10, 20]
-
-    /// Fire dates still in the future: (date, isNag).
-    static func taskFires(reminder: Date, now: Date) -> [(date: Date, isNag: Bool)] {
-        var result: [(Date, Bool)] = []
-        if reminder > now { result.append((reminder, false)) }
-        for m in nagMinutes {
-            let nag = reminder.addingTimeInterval(TimeInterval(m * 60))
-            if nag > now { result.append((nag, true)) }
-        }
-        return result
-    }
-
     /// Snooze presets offered on the notification.
     static let snoozeMinutes = ["SNOOZE_10": 10, "SNOOZE_60": 60]
 
@@ -261,6 +248,24 @@ enum CalendarLayout {
         let day = min(max(Int(((x - gutter) / columnWidth).rounded(.down)), 0), dayCount - 1)
         let minute = Int((y / hourHeight * 60 / 15).rounded(.down)) * 15
         return (day, min(max(minute, 0), 24 * 60 - 15))
+    }
+
+    /// How busy a day looks in the Year view's heatmap: 0 (nothing), 1 (one or two items), 2 (three or four), 3 (five or more).
+    static func busyLevel(count: Int) -> Int {
+        switch count {
+        case ..<1: 0
+        case 1...2: 1
+        case 3...4: 2
+        default: 3
+        }
+    }
+
+    /// Hour heights the Week grid can be pinched to, in points: compact enough for a whole day, roomy enough to read short events.
+    static let hourHeights: ClosedRange<Double> = 28...120
+
+    /// The hour height after a pinch of `scale` that started at `start`, kept inside `hourHeights`.
+    static func zoomedHourHeight(_ start: Double, scale: Double) -> Double {
+        min(max(start * scale, hourHeights.lowerBound), hourHeights.upperBound)
     }
 }
 

@@ -122,7 +122,7 @@ struct TaskEditor: View {
                         Text(ringsAsAlarm
                              ? (Ringer.isDenied ? "Alarms are turned off for Today in Settings, so this will only notify."
                                                 : "Rings like an alarm, even on Silent. Stopping it doesn't complete the task.")
-                             : "Keeps nudging every few minutes until you mark it done.")
+                             : "One notification at the reminder time.")
                     }
                 }
                 Section {
