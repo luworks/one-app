@@ -233,8 +233,10 @@ extension Capture {
 
     /// Creates the right model for `kind` in `context`. Only called after the user taps Add.
     /// Inserts what this capture becomes and returns its id (final, after the save).
-    @discardableResult
-    func insert(into context: ModelContext) -> PersistentIdentifier {
+    /// Recorded in Activity as made by `actor` through `channel`.
+    @MainActor @discardableResult
+    func insert(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
+                approval: LedgerApproval = .userMade) -> PersistentIdentifier {
         let model: any PersistentModel
         switch kind {
         case .task:
@@ -243,6 +245,9 @@ extension Capture {
         }
         context.insert(model)
         try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
+        let kind = model is OneAlarm ? "alarm" : (model is OneEvent ? "event" : "task")
+        Ledger.record(.created, task: model as? OneTask, kind: kind, title: title, after: summary,
+                      actor: actor, channel: channel, approval: approval, context: context)
         return model.persistentModelID
     }
 }

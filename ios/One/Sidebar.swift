@@ -11,6 +11,8 @@ struct Sidebar: View {
     var onOpen: (ChatThread) -> Void
     var onSearch: () -> Void
     var onSettings: () -> Void
+    /// Opens Activity (the ledger of changes) over the sidebar, like Settings.
+    var onActivity: () -> Void = {}
     var close: () -> Void
 
     @Environment(\.modelContext) private var context
@@ -25,6 +27,9 @@ struct Sidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            SidebarRow(icon: "clock.arrow.circlepath", title: "Activity", action: onActivity)
+                .accessibilityIdentifier("sidebar.activity")
+                .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
             if threads.isEmpty {
                 emptyState
             } else {

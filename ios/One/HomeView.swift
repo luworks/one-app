@@ -57,6 +57,7 @@ struct HomeView: View {
     @State private var showsSearch = false
     @State private var newItem: NewItem?
     @State private var showsSettings = false
+    @State private var showsActivity = false
     /// The left drawer (conversation history). See `Drawer.swift` for how the drag works.
     @State private var drawer = DrawerModel()
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
@@ -81,6 +82,7 @@ struct HomeView: View {
                             onOpen: { openAsk($0, fromSidebar: true) },
                             onSearch: { showsSearch = true },
                             onSettings: { showsSettings = true },
+                            onActivity: { showsActivity = true },
                             close: { drawer.set(open: false) })
                         .frame(width: width)
                         .modifier(DrawerSidebarSlide(model: drawer, width: width))
@@ -131,6 +133,7 @@ struct HomeView: View {
         .onAppear { toast.undoManager = undoManager }
         .onChange(of: undoManager) { _, new in toast.undoManager = new }
         .sheet(isPresented: $showsSettings) { SettingsView() }
+        .sheet(isPresented: $showsActivity) { ActivityView() }
         .task {
             // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.
             try? await Task.sleep(for: .seconds(1.5))
@@ -181,9 +184,14 @@ struct HomeView: View {
             return t
         }
         try? context.save()
+        let entries = added.map {
+            Ledger.record(.created, task: $0, title: $0.title, after: LedgerFormat.time($0.due, none: ""), actor: .share,
+                          channel: .share, context: context)
+        }
         toast.show(shared.count == 1 ? "Added “\(shared[0].title)” from Share" : "Added \(shared.count) reminders from Share") {
             added.forEach { context.delete($0) }
             try? context.save()
+            entries.forEach { Ledger.recordUndo(of: $0, context: context) }
         }
     }
 
@@ -267,6 +275,14 @@ struct HomeView: View {
             #endif
             Self.seedUITestReminder(context)
             importShared()
+            Ledger.prune(context)
+            #if DEBUG
+            // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
+            if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"), GrantStore.active(.planFreeTime, context: context) == nil {
+                GrantStore.grant(.planFreeTime, context: context)
+            }
+            #endif
+            autoPlan()
             await FirstRun.calendar()
         }
         .onAppear { LaunchTimer.markFirstFrame() }
@@ -303,9 +319,11 @@ struct HomeView: View {
             if phase == .active {
                 dropDeletedMirrors()
                 importShared()
+                autoPlan()
                 Task { await Reminders.shared.resync() }
             }
             if phase == .background {
+                Ledger.flush(context)
                 updateWidgets()
                 WidgetFeed.scheduleBackgroundRefresh()
             }
@@ -331,10 +349,20 @@ struct HomeView: View {
         WidgetFeed.update(tasks: allTasks, events: allEvents, alarms: allAlarms)
     }
 
+    /// Under a "Plan reminders into free time" grant, today's untimed reminders take their suggested free time by
+    /// themselves, with a toast and Undo (see `AutoPlan`). Without a grant this does nothing.
+    private func autoPlan() {
+        AutoPlan.run(context: context, toast: toast)
+    }
+
     private func dropDeletedMirrors() {
         let gone = CalendarSync.shared.removedMirrors(allEvents)
         guard !gone.isEmpty else { return }
-        for event in gone { context.delete(event) }
+        for event in gone {
+            Ledger.record(.deleted, kind: "event", title: event.title, before: DayLabel.withTime(event.start),
+                          actor: .agent("Apple Calendar"), channel: .sync, approval: .observed, context: context)
+            context.delete(event)
+        }
         try? context.save()
     }
 
@@ -597,5 +625,5 @@ extension View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self], inMemory: true)
+        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self, LedgerEntry.self, AIGrant.self], inMemory: true)
 }
