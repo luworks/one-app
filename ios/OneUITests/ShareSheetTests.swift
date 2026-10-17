@@ -18,10 +18,12 @@ final class ShareSheetTests: XCTestCase {
         }
         guard page.waitForExistence(timeout: 20) else { throw XCTSkip("Safari could not load the page") }
 
-        let share = safari.buttons["Share"].firstMatch
+        // Safari keeps Share in its page menu (the button left of the address).
+        let share = safari.descendants(matching: .any).matching(NSPredicate(format: "label == 'Share' OR identifier == 'ShareButton'")).firstMatch
         if !share.waitForExistence(timeout: 3) {
-            // Compact Safari keeps Share behind the "more" button in the toolbar.
-            safari.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'more' OR label CONTAINS[c] 'Page Menu'")).firstMatch.tap()
+            let menu = safari.buttons["MoreMenuButton"]
+            XCTAssertTrue(menu.waitForExistence(timeout: 5), "Safari's page menu")
+            menu.tap()
         }
         XCTAssertTrue(share.waitForExistence(timeout: 5))
         share.tap()
@@ -45,7 +47,7 @@ final class ShareSheetTests: XCTestCase {
         // A throwaway store that still reads the real inbox (UI tests otherwise leave it alone).
         app.launchArguments = ["-uiTesting", "-uiTestingShareInbox"]
         app.launch()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "from Share")).firstMatch.waitForExistence(timeout: 15),
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "from Share")).firstMatch.waitForExistence(timeout: 15),
                       "the app picks it up with an Undo toast")
     }
 }
