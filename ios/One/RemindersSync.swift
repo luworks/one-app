@@ -307,16 +307,24 @@ final class RemindersSync {
         var listBase = loadSet(Self.listBaseKey)
         var remoteDeletes = 0
         var pendingLists = loadSet(Self.pendingListsKey)
+        // A delete Apple refused (or one over this pass's cap) stays pending and is tried again next time. Forgetting it
+        // would make the next pass see the list in Apple as new and bring it back ("deleted, then it came back").
+        var listsToRetry = Set<String>()
         for id in pendingLists {
             if let cal = calByID[id] {
                 remoteDeletes += 1
-                if remoteDeletes <= Self.maxRemoteDeletes { try? store.removeCalendar(cal, commit: true) }
+                var removed = false
+                if remoteDeletes <= Self.maxRemoteDeletes {
+                    do { try store.removeCalendar(cal, commit: true); removed = true }
+                    catch { log.error("list delete failed: \(error.localizedDescription, privacy: .public)") }
+                }
+                if !removed { listsToRetry.insert(id); continue }
             }
             listBase.remove(id)
             fp["list:" + id] = nil
         }
-        let deletedLists = pendingLists
-        pendingLists = []
+        let deletedLists = pendingLists   // not brought back this pass, even when the delete is retried later
+        pendingLists = listsToRetry
         saveSet(pendingLists, Self.pendingListsKey)
         let calendars = allCalendars.filter { !deletedLists.contains($0.calendarIdentifier) }
 
@@ -383,6 +391,7 @@ final class RemindersSync {
         var tasks = try context.fetch(FetchDescriptor<OneTask>())
         var base = loadSet(Self.baseKey)
         let pending = loadSet(Self.pendingKey)
+        var remindersToRetry = Set<String>()
         let calendarByTitle = Dictionary(calendars.map { ($0.title, $0) }, uniquingKeysWith: { a, _ in a })
         let defaultCal = store.defaultCalendarForNewReminders()
 
@@ -420,10 +429,17 @@ final class RemindersSync {
             } else if pending.contains(r.id) {
                 // The user deleted it in the app.
                 remoteDeletes += 1
-                if remoteDeletes <= Self.maxRemoteDeletes,
-                   let ek = store.calendarItem(withIdentifier: r.id) as? EKReminder { try? store.remove(ek, commit: true) }
-                base.remove(r.id)
-                fp[r.id] = nil
+                var removed = false
+                if remoteDeletes <= Self.maxRemoteDeletes, let ek = store.calendarItem(withIdentifier: r.id) as? EKReminder {
+                    do { try store.remove(ek, commit: true); removed = true }
+                    catch { log.error("reminder delete failed: \(error.localizedDescription, privacy: .public)") }
+                }
+                if removed {
+                    base.remove(r.id)
+                    fp[r.id] = nil
+                } else {
+                    remindersToRetry.insert(r.id)   // tried again next pass; never pulled back in the meantime
+                }
             } else {
                 // New in Apple, or missing locally for any other reason (e.g. a rebuilt local store): bring it in.
                 debugLog("pull \(r.title)")
@@ -474,7 +490,7 @@ final class RemindersSync {
         }
 
         saveSet(base, Self.baseKey)
-        saveSet([], Self.pendingKey)
+        saveSet(remindersToRetry, Self.pendingKey)
         storedFP = fp
         if context.hasChanges { try context.save() }
         log.info("sync ok: \(tasks.count) local, \(remote.count) in Apple Reminders, \(calendars.count) lists, \(remoteDeletes) Apple deletes")
