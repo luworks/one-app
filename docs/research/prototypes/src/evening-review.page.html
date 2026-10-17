@@ -1,0 +1,102 @@
+<!--TITLE:Evening Review-->
+<style>
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 14px 6px}
+.stat{background:var(--surface);border:.5px solid var(--line);border-radius:14px;padding:10px 12px}
+.stat b{display:block;font-size:20px;letter-spacing:-.02em}
+.stat small{color:var(--ink3);font-size:11.5px}
+.pva{position:relative;height:22px;margin-top:6px}
+.pva i{position:absolute;height:6px;border-radius:3px}
+.pva i.p{top:2px;background:var(--fill2)}
+.pva i.a{top:12px;background:var(--task)}
+.pva i.a.late{background:var(--alarm)}
+.opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.opt{height:30px;padding:0 11px;border-radius:15px;background:var(--fill);font-size:12.5px;font-weight:600;color:var(--ink2)}
+.opt.sug{box-shadow:inset 0 0 0 1.5px var(--ai);color:var(--ai);background:transparent}
+.opt.on{background:var(--ink);color:var(--bg);box-shadow:none}
+.opts[hidden]{display:none}
+.learn{display:flex;gap:6px;margin-top:8px}
+.ok{color:var(--task);font-weight:600;font-size:12.5px}
+</style>
+<div class="wrap">
+<div class="phone" id="phone">
+  <div class="status"><span>21:10</span><span style="font-size:12px">●●● ▮</span></div>
+  <div id="top"></div>
+  <div class="scroll" id="main"></div>
+  <!--DOCK-->
+</div>
+<aside class="notes">
+  <a class="back" href="index.html">← 全部原型</a>
+  <h1>晚间复盘</h1>
+  <p>持续规划的另一半：<b>实际发生了什么</b>。灵感来自 Sunsama 的收工仪式和 Akiflow 的每日回顾，但更轻：一屏、三个决定。</p>
+  <h2>三块</h2>
+  <ul>
+    <li><b>计划 vs 实际</b>：灰条 = 计划，绿条 = 实际，橙条 = 超时。数据来自完成时间、计时器、日历结束时间和账本。</li>
+    <li><b>没做完的</b>：AI 给出建议（紫框），但不预选；用户点了才算。过期的不会被偷偷挪（原则 6）；截止时间不变（原则 3）。</li>
+    <li><b>Today 学到了什么</b>：时长校准、缓冲时间。只改本地规划参数（第 1 级）。勾选“加入评测集”，这次纠正会变成端侧 eval 用例，用来检验下一版 prompt。</li>
+  </ul>
+  <p style="margin-top:10px">时间是虚构的：第 0 天 21:10，假设上午已经批准了计划更新。</p>
+</aside>
+</div>
+<!--SHEET-->
+<script>
+const DAY = [
+  { t: 'Prepare the demo', p: [600, 645], a: [605, 675], done: false, note: '2 of 3 steps · 70 min (planned 45)' },
+  { t: 'Pay studio invoice', p: [645, 650], a: [680, 686], done: true, note: 'Was overdue · done 11:20' },
+  { t: 'Review PR #25', p: [660, 680], a: [680, 700], done: true, note: 'Proposed by Coding agent · merged 11:40' },
+  { t: 'Dentist', p: [900, 930], a: [900, 940], done: true, note: 'Event · ran 10 min over', ev: true },
+  { t: 'Buy milk', p: [940, 955], a: [948, 960], done: true, note: 'On the way back' },
+  { t: 'Write up design review notes', p: [960, 990], a: [970, 1015], done: true, note: '45 min (planned 30)' },
+  { t: 'Reply to Sam', p: [1020, 1040], a: null, done: false, note: 'Not started' },
+  { t: 'Water the plants', p: null, a: null, done: false, note: 'Due today · repeats weekly' },
+];
+const carry = [
+  { t: 'Rehearse (Prepare the demo)', why: 'Due tomorrow 17:00. 9:00 is free before Weekly review.', opts: ['Tomorrow 9:00', 'Tomorrow 13:00', 'Pick a time'], sug: 0 },
+  { t: 'Reply to Sam', why: 'Sam emailed at 7:58 (linked). No deadline.', opts: ['Tomorrow 12:00', 'Tonight 21:30', 'Someday'], sug: 0 },
+  { t: 'Water the plants', why: 'Repeats weekly; next one stays next Thursday.', opts: ['Tomorrow', 'Already did it', 'Skip this week'], sug: 1 },
+];
+const pick = {};
+const learned = [
+  { k: 'dur', t: 'Presentation work runs long', d: 'Demo prep took 70 min for 45 planned; last 3 times +40% on average. Plan 60 min next time?', ok: false, ev: true },
+  { k: 'buf', t: 'Appointments run over', d: 'Dentist ran 10 min over. Keep 10 min free after appointments with a location?', ok: false, ev: false },
+];
+function render() {
+  document.getElementById('top').innerHTML = `<div class="top"><button class="ibtn" aria-label="Menu">${ic('menu')}</button><div class="pills"><span class="pill-t on">Today</span><span class="pill-t">Calendar</span><span class="pill-t">Reminders</span><span class="pill-t">Alarms</span></div></div>`;
+  const W = 360 - 28 - 28, T0 = 540, T1 = 1080, x = m => (m - T0) / (T1 - T0) * 100;
+  const done = DAY.filter(d => d.done).length;
+  let h = `<div class="h1">Wrap up Thursday</div><div class="sub">Wind down rings at 22:30. Three quick decisions, then you’re done.</div>
+  <div class="stats"><div class="stat"><b>${done}/${DAY.length}</b><small>done</small></div><div class="stat"><b>2h 05m</b><small>focused</small></div><div class="stat"><b>4 · 1</b><small>agent asks ok · no</small></div></div>
+  <div class="sect">Planned vs. actual</div><div class="card">`;
+  DAY.forEach(d => {
+    const late = d.a && d.p && (d.a[1] - d.a[0]) > (d.p[1] - d.p[0]) * 1.2;
+    const lo = Math.min(...[d.p, d.a].filter(Boolean).map(v => v[0])) - 10, hi = Math.max(...[d.p, d.a].filter(Boolean).map(v => v[1])) + 10;
+    const x = m => (m - lo) / (hi - lo) * 100;
+    h += `<div class="row"><span class="av" style="width:22px;height:22px;margin-top:1px;background:${d.done ? 'var(--task)' : 'transparent'};border:1.6px solid ${d.done ? 'var(--task)' : 'var(--ink3)'}">${d.done ? ic('check', 's') : ''}</span><div class="rm"><b>${esc(d.t)}</b><small>${esc(d.note)}${d.a ? ` · ${hm(d.a[0])}–${hm(d.a[1])}` : ''}</small>
+    ${d.p || d.a ? `<div class="pva">${d.p ? `<i class="p" style="left:${x(d.p[0])}%;width:${Math.max(1.5, x(d.p[1]) - x(d.p[0]))}%"></i>` : ''}${d.a ? `<i class="a ${late ? 'late' : ''}" style="left:${x(d.a[0])}%;width:${Math.max(1.5, x(d.a[1]) - x(d.a[0]))}%;${d.ev ? 'background:var(--event)' : ''}"></i>` : ''}</div>` : ''}</div></div>`;
+  });
+  h += `<div class="info" style="font-size:11.5px;color:var(--ink3);padding:6px 14px 10px">Gray = planned · green = actual · orange = ran long · each row on its own time scale</div></div>
+  <div class="sect">Not done · decide where it goes</div><div class="card">`;
+  carry.forEach((c, i) => {
+    h += `<div class="row"><div class="rm"><b>${esc(c.t)}</b><small>${esc(c.why)}</small>${c.applied ? `<div class="ok" style="margin-top:6px">${ic('check','s')} ${esc(c.applied)}</div>` : ''}<div class="opts" ${c.applied ? 'hidden' : ''}>${c.opts.map((o, j) => `<button class="opt ${pick[i] === j ? 'on' : j === c.sug && pick[i] === undefined ? 'sug' : ''}" onclick="pick[${i}]=${j};render()">${j === c.sug ? '✦ ' : ''}${esc(o)}</button>`).join('')}</div></div></div>`;
+  });
+  const n = Object.keys(pick).length;
+  h += `<div class="row" style="justify-content:space-between;align-items:center"><small>✦ = suggestion. Nothing moves until you pick. Deadlines stay.</small><button class="btn ai" ${n ? '' : 'disabled style="opacity:.4"'} onclick="applyCarry()">Apply ${n || ''}</button></div></div>
+  <div class="sect">What Today learned</div><div class="card">`;
+  learned.forEach((l, i) => {
+    h += `<div class="row"><span class="av" style="background:var(--ai)">${ic('spark', 's')}</span><div class="rm"><b>${esc(l.t)}</b><small>${esc(l.d)}</small>
+    ${l.ok ? `<div class="ok" style="margin-top:6px">${ic('check', 's')} Saved to your planner settings (local)</div>` : `<div class="learn"><button class="btn sec" style="height:30px" onclick="learned[${i}].ok=true;render();toast('Planner updated on this iPhone',()=>{learned[${i}].ok=false;render()})">Use it</button><button class="btn ghost" style="height:30px">Not now</button></div>`}
+    <label style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink3);margin-top:6px"><input type="checkbox" ${l.ev ? 'checked' : ''} onchange="learned[${i}].ev=this.checked" style="accent-color:var(--ai)">Add this day to my on-device eval set</label></div></div>`;
+  });
+  h += `</div><div class="sect">Tomorrow · Friday</div><div class="card">
+  ${[['10:00', 'Weekly review', 'ev'], ['11:00', 'Weekly sync · asked to move to 11:30', 'ev'], ['14:00', 'Design review', 'ev'], ['17:00', 'Prepare the demo · due', 'tk']].map(r => `<div class="row"><span style="width:40px;color:var(--ink3);font-size:12.5px">${r[0]}</span><div class="rm"><span class="chip ${r[2]}">${esc(r[1])}</span></div></div>`).join('')}
+  <div class="row"><button class="btn ai" onclick="toast('Tomorrow’s plan is ready for the morning. Review it at 7:00.')">${ic('spark', 's')} Draft tomorrow’s plan</button></div></div>`;
+  document.getElementById('main').innerHTML = h;
+}
+function applyCarry() {
+  const msg = Object.entries(pick).map(([i, j]) => `${carry[i].t.split(' (')[0]} → ${carry[i].opts[j]}`).join(' · ');
+  const saved = { ...pick };
+  carry.forEach((c, i) => { if (pick[i] !== undefined) c.applied = c.opts[pick[i]]; });
+  Object.keys(pick).forEach(k => delete pick[k]);
+  render(); toast(msg, () => { carry.forEach(c => delete c.applied); Object.assign(pick, saved); render(); });
+}
+render();
+</script>
