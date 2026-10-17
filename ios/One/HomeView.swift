@@ -40,8 +40,11 @@ struct HomeView: View {
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
     // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
     @State private var calendarMode: CalendarView.Mode = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey) ?? .week
+    /// Alarms · World Clock · Stopwatch · Timer inside the Alarms tab.
+    @State private var clockSection: ClockSection = Self.restored(ClockSection.self, key: Self.clockSectionKey) ?? .alarms
+    @State private var addingCity = false
     // The tab and the Calendar view also survive a restart (not in UI tests, which always start the same way).
-    private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode"
+    private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode", clockSectionKey = "today.last.clockSection"
     private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
         guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
         return UserDefaults.standard.string(forKey: key).flatMap(T.init(rawValue:))
@@ -62,6 +65,9 @@ struct HomeView: View {
     @Environment(\.undoManager) private var undoManager
     /// Counts tab switches made by swiping; drives their haptic (pill taps already have one).
     @State private var tabSwipes = 0
+    /// The keyboard is up (typing a new reminder inline, a list name, …): the floating bar steps aside instead of
+    /// riding on top of the keyboard, where it would cover the row being edited and a tap would open Ask.
+    @State private var keyboardUp = false
 
     var body: some View {
         GeometryReader { geo in
@@ -153,6 +159,34 @@ struct HomeView: View {
         ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
     }
 
+    /// Reminders added from the Share sheet wait in the App Group (`ShareInbox`) until the app is active; they come in
+    /// here as new reminders, with an Undo toast. UI tests leave the inbox alone unless they pass `-uiTestingShare <title>`,
+    /// which puts one there first, or `-uiTestingShareInbox`, which reads what the real Share sheet left.
+    private static var sharedTestItemQueued = false
+
+    private func importShared() {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-uiTesting"), !args.contains("-uiTestingShareInbox") {
+            guard let i = args.firstIndex(of: "-uiTestingShare"), i + 1 < args.count else { return }
+            if !Self.sharedTestItemQueued {
+                Self.sharedTestItemQueued = true
+                ShareInbox.append(SharedReminder(title: args[i + 1], note: "https://example.com", due: ShareInbox.due(for: .tomorrow)))
+            }
+        }
+        let shared = ShareInbox.drain()
+        guard !shared.isEmpty else { return }
+        let added = shared.map { s in
+            let t = OneTask(title: s.title, note: s.note, due: s.due)
+            context.insert(t)
+            return t
+        }
+        try? context.save()
+        toast.show(shared.count == 1 ? "Added “\(shared[0].title)” from Share" : "Added \(shared.count) reminders from Share") {
+            added.forEach { context.delete($0) }
+            try? context.save()
+        }
+    }
+
     /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
     private static func seedUITestReminder(_ context: ModelContext) {
         let args = ProcessInfo.processInfo.arguments
@@ -173,14 +207,21 @@ struct HomeView: View {
                         withAnimation(.snappy) { tab = .today }
                     }
                 case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath)
-                case .alarms: AlarmsView()
+                case .alarms: AlarmsView(section: $clockSection)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .safeAreaInset(edge: .bottom) { bottomBar }
+        .safeAreaInset(edge: .bottom) { if !keyboardUp { bottomBar } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardUp = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardUp = false
+        }
         .sensoryFeedback(.selection, trigger: tabSwipes)
         .sheet(isPresented: $showsSearch) { SearchView() }
+        .sheet(isPresented: $addingCity) { CityPicker() }
         .sheet(item: $newItem) { item in
             switch item {
             case .task: QuickReminderSheet()   // Due-style quick add; editing a reminder opens TaskEditor
@@ -225,6 +266,7 @@ struct HomeView: View {
             }
             #endif
             Self.seedUITestReminder(context)
+            importShared()
             await FirstRun.calendar()
         }
         .onAppear { LaunchTimer.markFirstFrame() }
@@ -233,6 +275,9 @@ struct HomeView: View {
             if ProcessInfo.processInfo.arguments.contains("-uiTesting"), let ms = LaunchTimer.milliseconds {
                 Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier("coldStartMs").accessibilityLabel(String(ms))
             }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uiTestingSyncDump") { SyncDumpProbe() }
+            #endif
         }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
@@ -253,9 +298,11 @@ struct HomeView: View {
         }
         .onChange(of: tab) { _, t in UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey) }
         .onChange(of: calendarMode) { _, m in UserDefaults.standard.set(m.rawValue, forKey: Self.calendarModeKey) }
+        .onChange(of: clockSection) { _, s in UserDefaults.standard.set(s.rawValue, forKey: Self.clockSectionKey) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 dropDeletedMirrors()
+                importShared()
                 Task { await Reminders.shared.resync() }
             }
             if phase == .background {
@@ -370,6 +417,12 @@ struct HomeView: View {
         }
     }
 
+    /// On World Clock, + adds a city.
+    private var plusAddsCity: Bool { tab == .alarms && clockSection == .worldClock }
+
+    /// Stopwatch and Timer have nothing to add: no + there, like Clock.
+    private var showsPlus: Bool { !(tab == .alarms && (clockSection == .stopwatch || clockSection == .timer)) }
+
     private var bottomButtons: some View {
         HStack(spacing: 10) {
             // Search lives in the sidebar (top right), like ChatGPT and Claude; the bar keeps only Ask AI and +.
@@ -385,28 +438,36 @@ struct HomeView: View {
                 .glassCapsule()
             }
             .buttonStyle(PressScale())
-            // +: tap adds what fits the page you are on (alarm on Alarms, event on Calendar, otherwise a
-            // reminder); press and hold to pick.
-            Menu {
-                Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
-                Button { newEvent() } label: { Label("New event", systemImage: "calendar") }
-                Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 50, height: 50)
-                    .glassCircle()
-            } primaryAction: {
-                if smartNewItem == .event { newEvent() } else { newItem = smartNewItem }
-            }
-            .tint(.primary)
-            .accessibilityLabel("New")
-            .accessibilityHint("Adds \(smartNewItem.noun). Press and hold for more.")
+            // +: tap adds what fits the page you are on (alarm on Alarms, a city on World Clock, event on Calendar,
+            // otherwise a reminder); press and hold to pick.
+            if showsPlus { plusButton }
         }
         .padding(.horizontal, 20)
         .padding(.top, 6)
         .padding(.bottom, 4)
+    }
+
+    private var plusButton: some View {
+        Menu {
+            if plusAddsCity {
+                Button { addingCity = true } label: { Label("Add city", systemImage: "globe") }
+            }
+            Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
+            Button { newEvent() } label: { Label("New event", systemImage: "calendar") }
+            Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
+        } label: {
+            Image(systemName: "plus")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 50, height: 50)
+                .glassCircle()
+        } primaryAction: {
+            if plusAddsCity { addingCity = true }
+            else if smartNewItem == .event { newEvent() } else { newItem = smartNewItem }
+        }
+        .tint(.primary)
+        .accessibilityLabel("New")
+        .accessibilityHint("Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
     }
 }
 

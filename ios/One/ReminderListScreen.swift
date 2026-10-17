@@ -265,6 +265,8 @@ struct ReminderListScreen: View {
 /// "New Reminder" at the end of a list: tap, type, Return adds it and stays ready for the next one.
 /// Like Apple Reminders' inline row: while editing, an "Add Note" line and round buttons for date, flag and repeat;
 /// when empty, up to three guesses from this list's past reminders.
+/// Date and repeat open a row of chips right under the buttons, not a Menu: a Menu takes the keyboard away, and
+/// losing focus is what saves the row. Only Return, or focus going somewhere outside the row, saves it.
 private struct NewReminderRow: View {
     var onCreate: (NewReminderDraft) -> Void
     var suggestions: () -> [ReminderSuggest.Suggestion]
@@ -274,9 +276,13 @@ private struct NewReminderRow: View {
     @State private var draft = NewReminderDraft()
     @State private var guesses: [ReminderSuggest.Suggestion] = []
     @State private var showsPicker = false
+    /// Which chip row is open under the buttons.
+    @State private var panel: Panel?
     @FocusState private var focus: Field?
 
-    private var isEditing: Bool { focus != nil || showsPicker }
+    private enum Panel { case date, repeating }
+
+    private var isEditing: Bool { focus != nil || showsPicker || panel != nil }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -304,6 +310,8 @@ private struct NewReminderRow: View {
                     if let due = draft.due { dateChip(due) }
                     controls
                         .padding(.top, 2)
+                    if panel == .date { dayChips }
+                    if panel == .repeating { repeatChips }
                 }
             }
         }
@@ -312,8 +320,14 @@ private struct NewReminderRow: View {
         .onTapGesture { if focus == nil { focus = .title } }
         .onChange(of: focus) { _, now in
             if now == .title, draft.title.isEmpty { guesses = suggestions() }
-            // Leaving the row saves it, except while the date picker is up (it takes the keyboard away).
-            if now == nil, !showsPicker, !commit() { draft.reset() }
+            guard now == nil else { return }
+            // Leaving the row saves it. Checked a moment later: a tap on the row's own buttons and chips puts focus
+            // back on the title, and the date picker sheet takes the keyboard away on purpose; neither saves.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                guard focus == nil, !showsPicker else { return }
+                panel = nil
+                if !commit() { draft.reset() }
+            }
         }
         .sheet(isPresented: $showsPicker, onDismiss: { focus = .title }) { datePickerSheet }
         .animation(.snappy, value: isEditing)
@@ -370,32 +384,18 @@ private struct NewReminderRow: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            Menu {
-                ForEach(QuickTime.Day.allCases) { day in
-                    Button(day.rawValue) {
-                        draft.choose(day)
-                        focus = .title
-                    }
-                }
-                Button("Custom…") {
-                    if draft.due == nil { draft.due = QuickTime.start() }
-                    showsPicker = true
-                }
-                if draft.due != nil {
-                    Divider()
-                    Button("No Date", role: .destructive) {
-                        draft.clearDate()
-                        focus = .title
-                    }
-                }
+            Button {
+                toggle(.date)
             } label: {
-                roundIcon("calendar", on: draft.due != nil, tint: .accentColor)
+                roundIcon("calendar", on: draft.due != nil || panel == .date, tint: .accentColor)
             }
+            .buttonStyle(PressScale())
             .accessibilityLabel(draft.due.map { "Date, \(DayLabel.withTime($0))" } ?? "Date")
             .accessibilityIdentifier("newRow.date")
 
             Button {
                 draft.flagged.toggle()
+                keepFocus()
             } label: {
                 roundIcon(draft.flagged ? "flag.fill" : "flag", on: draft.flagged, tint: .orange)
             }
@@ -405,19 +405,89 @@ private struct NewReminderRow: View {
             .accessibilityAddTraits(draft.flagged ? .isSelected : [])
             .accessibilityIdentifier("newRow.flag")
 
-            Menu {
-                Picker("Repeat", selection: $draft.repeatRule) {
-                    Text("Never").tag(RepeatRule?.none)
-                    ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
-                }
+            Button {
+                toggle(.repeating)
             } label: {
-                roundIcon("repeat", on: draft.repeatRule != nil, tint: .accentColor)
+                roundIcon("repeat", on: draft.repeatRule != nil || panel == .repeating, tint: .accentColor)
             }
+            .buttonStyle(PressScale())
             .disabled(!draft.canRepeat)
             .opacity(draft.canRepeat ? 1 : 0.4)
             .accessibilityLabel(draft.repeatRule.map { "Repeat, \($0.label)" } ?? "Repeat")
             .accessibilityIdentifier("newRow.repeat")
         }
+    }
+
+    /// Today, Tomorrow, This Weekend, Next Week, Custom… (the graphical picker) and, with a date, No Date.
+    private var dayChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(QuickTime.Day.allCases) { day in
+                    chip(day.rawValue) {
+                        draft.choose(day)
+                        close()
+                    }
+                }
+                chip("Custom…") {
+                    if draft.due == nil { draft.due = QuickTime.start() }
+                    panel = nil
+                    showsPicker = true
+                }
+                if draft.due != nil {
+                    chip("No Date", tint: .red) {
+                        draft.clearDate()
+                        close()
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier("newRow.dayChips")
+    }
+
+    private var repeatChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("Never", selected: draft.repeatRule == nil) {
+                    draft.repeatRule = nil
+                    close()
+                }
+                ForEach(RepeatRule.allCases, id: \.self) { rule in
+                    chip(rule.label, selected: draft.repeatRule == rule) {
+                        draft.repeatRule = rule
+                        close()
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier("newRow.repeatChips")
+    }
+
+    private func chip(_ title: String, selected: Bool = false, tint: Color = .primary,
+                      _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(selected ? Color.white : tint)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(selected ? Color.accentColor : Color(.tertiarySystemFill), in: Capsule())
+        }
+        .buttonStyle(PressScale())
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func toggle(_ p: Panel) {
+        withAnimation(.snappy) { panel = panel == p ? nil : p }
+        keepFocus()
+    }
+
+    private func close() {
+        withAnimation(.snappy) { panel = nil }
+        keepFocus()
+    }
+
+    /// The row's own controls never end editing: if a tap took the keyboard, it comes back to the title.
+    private func keepFocus() {
+        if focus == nil { focus = .title }
     }
 
     private func roundIcon(_ name: String, on: Bool, tint: Color) -> some View {
@@ -459,6 +529,7 @@ private struct NewReminderRow: View {
         let saved = draft
         draft.reset()
         guesses = []
+        panel = nil
         onCreate(saved)
         return true
     }

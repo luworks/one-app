@@ -7,8 +7,11 @@ import UserNotifications
 /// Adding is the app-wide + at the bottom right.
 /// Alarms are real: each one is an AlarmKit alarm (they ring through Silent and Focus). The tasks and events
 /// you marked "Ring as alarm" follow in their own section. Reminders and event alerts live in Apple Reminders / Calendar.
-/// A Pomodoro focus-timer card (`TimerCard`, a kitchen-timer dial) sits on top: one AlarmKit countdown at a time.
+/// Like Clock, the tab has four sections (Alarms · World Clock · Stopwatch · Timer), picked from a quiet switcher under
+/// the top bar. The section lives in `HomeView`, so leaving the tab and coming back finds the same one.
+/// The Pomodoro focus-timer card (`TimerCard`, a kitchen-timer dial) is the Timer section: one AlarmKit countdown at a time.
 struct AlarmsView: View {
+    @Binding var section: ClockSection
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
@@ -23,35 +26,24 @@ struct AlarmsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            List {
-                TimerCard()
-                    .plainRow(top: 8, bottom: 8)
-                nextAlarmRow
-                authorizationBanner
-                Section {
-                    if alarms.isEmpty { emptyState }
-                    ForEach(alarms) { alarm in
-                        AlarmRow(alarm: alarm, state: center.state(of: alarm)) { editing = alarm }
-                            .contextMenu {
-                                Button { editing = alarm } label: { Label("Edit", systemImage: "pencil") }
-                                Button(role: .destructive) { delete(alarm) } label: { Label("Delete", systemImage: "trash") }
-                            }
+            ClockSectionBar(selection: $section)
+                .padding(.horizontal, 20)
+                .padding(.top, 2)
+                .padding(.bottom, 6)
+            Group {
+                switch section {
+                case .alarms: alarmsList
+                case .worldClock: WorldClockView()
+                case .stopwatch: StopwatchView()
+                case .timer:
+                    ScrollView {
+                        TimerCard()
+                            .padding(.horizontal, 20)
+                            .padding(.top, 8)
                     }
-                    .onDelete { offsets in offsets.map { alarms[$0] }.forEach(delete) }
-                }
-
-                if !ringing.isEmpty {
-                    Section {
-                        ForEach(ringing) { item in
-                            ItemAlarmRow(item: item)
-                        }
-                    } header: { SectionTitle("From reminders and events") }
-                }
-                if notificationStatus != .authorized && notificationStatus != .provisional {
-                    notificationsRow
                 }
             }
-            .listStyle(.plain)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .background(Color(.systemBackground))
         .sheet(item: $editing) { AlarmEditor(alarm: $0) }
@@ -63,6 +55,36 @@ struct AlarmsView: View {
             notificationStatus = await Reminders.shared.authorizationStatus()
             await Ringer.sync(context)
         }
+    }
+
+    private var alarmsList: some View {
+        List {
+            nextAlarmRow
+            authorizationBanner
+            Section {
+                if alarms.isEmpty { emptyState }
+                ForEach(alarms) { alarm in
+                    AlarmRow(alarm: alarm, state: center.state(of: alarm)) { editing = alarm }
+                        .contextMenu {
+                            Button { editing = alarm } label: { Label("Edit", systemImage: "pencil") }
+                            Button(role: .destructive) { delete(alarm) } label: { Label("Delete", systemImage: "trash") }
+                        }
+                }
+                .onDelete { offsets in offsets.map { alarms[$0] }.forEach(delete) }
+            }
+
+            if !ringing.isEmpty {
+                Section {
+                    ForEach(ringing) { item in
+                        ItemAlarmRow(item: item)
+                    }
+                } header: { SectionTitle("From reminders and events") }
+            }
+            if notificationStatus != .authorized && notificationStatus != .provisional {
+                notificationsRow
+            }
+        }
+        .listStyle(.plain)
     }
 
     // MARK: Next alarm
@@ -206,6 +228,48 @@ private extension View {
         listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: top, leading: 20, bottom: bottom, trailing: 20))
+    }
+}
+
+/// The section switcher: four words, the chosen one on a soft gray capsule. Lighter than the tab pills above it,
+/// so it reads as part of the page, not a second tab bar.
+struct ClockSectionBar: View {
+    @Binding var selection: ClockSection
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            row
+            ScrollView(.horizontal, showsIndicators: false) { row }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    private var row: some View {
+        HStack(spacing: 4) {
+            ForEach(ClockSection.allCases) { item in
+                let selected = item == selection
+                Button {
+                    withAnimation(.snappy) { selection = item }
+                } label: {
+                    Text(item.title)
+                        .font(.subheadline.weight(selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? Color.primary : Color.secondary)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 34)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            if selected { Capsule().fill(Color(.secondarySystemFill)) }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("clock.section." + item.rawValue)
+            }
+        }
     }
 }
 

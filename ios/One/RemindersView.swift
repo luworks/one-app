@@ -305,7 +305,7 @@ struct RemindersView: View {
         }
         .accessibilityIdentifier("list.\(list.name)")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            RowAction.delete { askDelete(list) }
+            RowAction.delete(asksFirst: true) { askDelete(list) }
             RowAction.info { editing = list }
             RowAction.pin(list.pinned) { ListActions.togglePinned(list, in: context) }
         }

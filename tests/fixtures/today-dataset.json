@@ -9,6 +9,8 @@
   "reminders": [
     { "title": "Pay studio invoice", "list": "Reminders", "due": { "day": -1, "time": "17:00" } },
     { "title": "Buy milk", "list": "Home", "due": { "day": 0 }, "tags": ["errands"] },
+    { "title": "Call the bank", "list": "Reminders", "due": { "day": 0, "time": "11:30" } },
+    { "title": "Renew parking permit", "list": "Home", "due": { "day": -3 }, "planned": { "day": 0, "time": "11:00" } },
     { "title": "Water the plants", "list": "Home", "due": { "day": 0 }, "repeat": "weekly" },
     { "title": "Prepare the demo", "list": "Work", "planned": { "day": 0, "time": "13:30" }, "minutes": 45,
       "due": { "day": 1, "time": "17:00" }, "flagged": true,

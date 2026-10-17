@@ -151,7 +151,7 @@ private struct SwipeIfRows: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content.swipeActions(edge: .trailing, allowsFullSwipe: !isRepeating) {
-                RowAction.delete(delete)
+                RowAction.delete(asksFirst: isRepeating, delete)
                 if case .task(let task) = entry.source { RowAction.flag(task.flagged, flag) }
             }
         } else {

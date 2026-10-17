@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Pomodoro focus-timer card on top of the Alarms tab: chips set the dial, turning the dial changes the time,
+/// The Pomodoro focus-timer card (the Timer section of the Alarms tab): chips set the dial, turning the dial changes the time,
 /// today's rounds show as dots, and after a round the card offers one next step.
 /// The simulator denies AlarmKit, so Start only shows the "needs alarm access" line here; ringing is checked on a phone.
 final class TimerTests: XCTestCase {
@@ -17,6 +17,10 @@ final class TimerTests: XCTestCase {
         let alarms = app.buttons["Alarms"].firstMatch
         XCTAssertTrue(alarms.waitForExistence(timeout: 5))
         alarms.tap()
+        // The timer is the Timer section of the Alarms tab.
+        let timer = app.buttons["clock.section.timer"].firstMatch
+        XCTAssertTrue(timer.waitForExistence(timeout: 5))
+        timer.tap()
     }
 
     private var dial: XCUIElement { app.descendants(matching: .any)["timer.dial"].firstMatch }

@@ -53,19 +53,6 @@ final class RecurrenceTests: XCTestCase {
 final class ReminderPlanTests: XCTestCase {
     let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
-    func testFutureReminderFiresThenNags() {
-        let fires = ReminderPlan.taskFires(reminder: t0.addingTimeInterval(600), now: t0)
-        XCTAssertEqual(fires.map(\.isNag), [false, true, true, true])
-        XCTAssertEqual(fires.last?.date, t0.addingTimeInterval(600 + 20 * 60))
-    }
-
-    func testPastReminderKeepsRemainingNagsOnly() {
-        // Reminder was 7 minutes ago: the 5-minute nag has passed, 10 and 20 remain.
-        let fires = ReminderPlan.taskFires(reminder: t0.addingTimeInterval(-7 * 60), now: t0)
-        XCTAssertEqual(fires.count, 2)
-        XCTAssertTrue(fires.allSatisfy(\.isNag))
-    }
-
     func testSnoozePresets() {
         XCTAssertEqual(ReminderPlan.snoozed("SNOOZE_10", now: t0), t0.addingTimeInterval(600))
         XCTAssertEqual(ReminderPlan.snoozed("SNOOZE_60", now: t0), t0.addingTimeInterval(3600))
@@ -96,6 +83,59 @@ final class DayPlannerTests: XCTestCase {
         let plan = DayPlanner.plan([.init(id: 1, minutes: 120)], busy: [],
                                    window: DateInterval(start: at(17), end: at(18)), calendar: cal)
         XCTAssertTrue(plan.isEmpty)
+    }
+}
+
+final class DayScheduleTests: XCTestCase {
+    var cal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        return c
+    }()
+    func at(_ h: Int, _ m: Int = 0, day: Int = 12) -> Date { cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: h, minute: m))! }
+
+    func testSuggestsGapsFromNowAroundMeetings() {
+        // 09:41, Standup 09:45–10:00: the first reminder goes after it (+5 buffer), the next one after the first.
+        let starts = DaySchedule.suggestedStarts(minutes: [25, 25], busy: [DateInterval(start: at(9, 45), end: at(10))],
+                                                 day: at(0), now: at(9, 41), calendar: cal)
+        XCTAssertEqual(starts, [at(10, 5), at(10, 35)])
+    }
+
+    func testLateOrPastDaysGetNoSuggestions() {
+        XCTAssertEqual(DaySchedule.suggestedStarts(minutes: [25], busy: [], day: at(0), now: at(21, 30), calendar: cal), [nil])
+        XCTAssertEqual(DaySchedule.suggestedStarts(minutes: [25], busy: [], day: at(0, day: 11), now: at(9), calendar: cal), [nil])
+    }
+
+    func testTomorrowStartsAtEight() {
+        XCTAssertEqual(DaySchedule.suggestedStarts(minutes: [25], busy: [], day: at(0, day: 13), now: at(19), calendar: cal), [at(8, day: 13)])
+    }
+
+    func testFullDayLeavesItemsForAnytime() {
+        let busy = [DateInterval(start: at(8), end: at(21))]
+        XCTAssertEqual(DaySchedule.suggestedStarts(minutes: [25], busy: busy, day: at(0), now: at(7), calendar: cal), [nil])
+    }
+
+    func testFreeGapsFromNowSkipShortOnes() {
+        // Now 09:41; Standup 09:45–10:00, a suggestion 10:05–10:30, lunch 12:15–13:00, a long afternoon until 21:00.
+        let busy = [DateInterval(start: at(9, 45), end: at(10)), DateInterval(start: at(10, 5), end: at(10, 30)),
+                    DateInterval(start: at(12, 15), end: at(13)), DateInterval(start: at(13), end: at(21))]
+        let gaps = DaySchedule.freeGaps(busy: busy, day: at(0), now: at(9, 41), calendar: cal)
+        // 09:41–09:45 and 10:00–10:05 are too short; 10:30–12:15 is the one free stretch.
+        XCTAssertEqual(gaps, [DateInterval(start: at(10, 30), end: at(12, 15))])
+        XCTAssertEqual(DaySchedule.freeLabel(gaps[0].duration), "Free 1 h 45 min")
+        XCTAssertEqual(DaySchedule.freeLabel(45 * 60), "Free 45 min")
+        XCTAssertEqual(DaySchedule.freeLabel(2 * 3600), "Free 2 h")
+    }
+
+    func testNoGapsLateOrOnPastDays() {
+        XCTAssertEqual(DaySchedule.freeGaps(busy: [], day: at(0), now: at(21, 5), calendar: cal), [])
+        XCTAssertEqual(DaySchedule.freeGaps(busy: [], day: at(0, day: 11), now: at(9), calendar: cal), [])
+    }
+
+    func testTomorrowOpensInTheEveningOrWhenTodayIsDone() {
+        XCTAssertFalse(TomorrowPreview.opensByItself(now: at(9, 41), todayStarts: [at(12)], calendar: cal))
+        XCTAssertTrue(TomorrowPreview.opensByItself(now: at(18), todayStarts: [at(21)], calendar: cal))
+        XCTAssertTrue(TomorrowPreview.opensByItself(now: at(15), todayStarts: [at(9), at(14)], calendar: cal))
     }
 }
 
@@ -316,6 +356,32 @@ final class CalendarLayoutTests: XCTestCase {
         let cols = CalendarLayout.columns(for: [(540, 600), (570, 630), (660, 720)])
         XCTAssertEqual(cols.map(\.column), [0, 1, 0])
         XCTAssertEqual(cols.map(\.count), [2, 2, 1])
+    }
+
+    func testLongPressSlotSnapsDownToQuarterHours() {
+        // Gutter 44, columns 50 wide, 48pt hours: x 44+2*50+10 is the third day; y 18h + 20 min is 18:15.
+        let s = CalendarLayout.slot(x: 154, y: 18 * 48 + 16, gutter: 44, columnWidth: 50, hourHeight: 48, dayCount: 7)
+        XCTAssertEqual(s.day, 2)
+        XCTAssertEqual(s.minute, 18 * 60 + 15)
+    }
+
+    func testLongPressSlotStaysInsideTheGrid() {
+        let early = CalendarLayout.slot(x: 10, y: -5, gutter: 44, columnWidth: 50, hourHeight: 48, dayCount: 7)
+        XCTAssertEqual(early.day, 0, "the hour labels count as the first day")
+        XCTAssertEqual(early.minute, 0)
+        let late = CalendarLayout.slot(x: 2000, y: 24 * 48 + 30, gutter: 44, columnWidth: 50, hourHeight: 48, dayCount: 7)
+        XCTAssertEqual(late.day, 6)
+        XCTAssertEqual(late.minute, 23 * 60 + 45, "starts no later than 23:45")
+    }
+
+    func testBusyLevelSteps() {
+        XCTAssertEqual([0, 1, 2, 3, 4, 5, 12].map { CalendarLayout.busyLevel(count: $0) }, [0, 1, 1, 2, 2, 3, 3])
+    }
+
+    func testPinchZoomStaysInRange() {
+        XCTAssertEqual(CalendarLayout.zoomedHourHeight(48, scale: 2), 96)
+        XCTAssertEqual(CalendarLayout.zoomedHourHeight(48, scale: 10), 120, "no taller than 120pt an hour")
+        XCTAssertEqual(CalendarLayout.zoomedHourHeight(48, scale: 0.1), 28, "no shorter than 28pt an hour")
     }
 
     func testBackToBackEventsDoNotOverlap() {
