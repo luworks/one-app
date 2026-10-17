@@ -31,10 +31,16 @@ struct QuickReminderSheet: View {
     var body: some View {
         VStack(spacing: 16) {
             header
-            card
-            Spacer(minLength: 0)
+                .padding(.horizontal, 16)
+            // Scrolls so a short phone (SE, mini) or a large text size still reaches the grid above the keyboard.
+            ScrollView {
+                card
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
         }
-        .padding(.horizontal, 16)
         .padding(.top, 16)
         .background(Color(.systemBackground))
         .onAppear {
@@ -50,7 +56,7 @@ struct QuickReminderSheet: View {
     // MARK: Header: cancel, options, save
 
     private var header: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 6) {
             Button { dismiss() } label: {
                 Image(systemName: "xmark").font(.body.weight(.semibold)).frame(width: 44, height: 44)
                     .background(Color(.secondarySystemFill), in: Circle())
@@ -66,12 +72,12 @@ struct QuickReminderSheet: View {
                     ForEach(lists.filter { !$0.name.isEmpty && $0.name != "Reminders" }) { Text($0.name).tag($0.name) }
                 }
             } label: {
-                Image(systemName: "list.bullet").frame(width: 36, height: 36)
+                Image(systemName: "list.bullet").frame(width: 40, height: 40)
             }
             .accessibilityLabel("List, \(listName.isEmpty ? "Reminders" : listName)")
 
             Button { flagged.toggle() } label: {
-                Image(systemName: flagged ? "flag.fill" : "flag").frame(width: 36, height: 36)
+                Image(systemName: flagged ? "flag.fill" : "flag").frame(width: 40, height: 40)
                     .foregroundStyle(flagged ? Color.orange : Color.primary)
             }
             .accessibilityLabel(flagged ? "Flagged" : "Flag")
@@ -82,7 +88,7 @@ struct QuickReminderSheet: View {
                     ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
                 }
             } label: {
-                Image(systemName: "repeat").frame(width: 36, height: 36)
+                Image(systemName: "repeat").frame(width: 40, height: 40)
                     .foregroundStyle(repeatRule == nil ? Color.primary : Color.accentColor)
             }
             .disabled(when == nil)
@@ -90,7 +96,7 @@ struct QuickReminderSheet: View {
 
             if Ringer.isAvailable {
                 Button { ringsAsAlarm.toggle() } label: {
-                    Image(systemName: ringsAsAlarm ? "alarm.fill" : "bell").frame(width: 36, height: 36)
+                    Image(systemName: ringsAsAlarm ? "alarm.fill" : "bell").frame(width: 40, height: 40)
                         .foregroundStyle(ringsAsAlarm ? Color.orange : Color.primary)
                 }
                 .disabled(when == nil)
@@ -108,6 +114,8 @@ struct QuickReminderSheet: View {
         }
         .tint(.primary)
         .font(.title3)
+        // Fixed-size icon buttons, like the app's top and bottom bars: capped so they never clip.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // MARK: The card: what, when, and the grid
@@ -158,6 +166,7 @@ struct QuickReminderSheet: View {
                     }
                     .buttonStyle(PressScale())
                     .tint(.primary)
+                    .accessibilityLabel("Suggestion, \(s.title)")
                     .accessibilityIdentifier("quick.suggestion")
                 }
             }
@@ -223,7 +232,7 @@ struct QuickReminderSheet: View {
 
     /// Due's grid: four times of day, then +10 min / +1 hr / +3 hr / +1 day, then the same backwards.
     private var grid: some View {
-        Grid(horizontalSpacing: 1, verticalSpacing: 1) {
+        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             GridRow {
                 ForEach(QuickTime.presets, id: \.hour) { p in
                     cell(String(format: "%02d:%02d", p.hour, p.minute)) {
@@ -242,16 +251,20 @@ struct QuickReminderSheet: View {
                 }
             }
         }
-        .background(Color(.separator))
+        .padding([.horizontal, .bottom], 12)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private func cell(_ text: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text)
                 .font(.title3.monospacedDigit())
-                .frame(maxWidth: .infinity, minHeight: 54)
-                .background(Color(.secondarySystemBackground))
-                .contentShape(Rectangle())
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 4)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.selection, trigger: when)

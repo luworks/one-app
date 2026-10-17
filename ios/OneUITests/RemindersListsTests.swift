@@ -28,6 +28,8 @@ final class RemindersListsTests: XCTestCase {
     private func menu(_ el: XCUIElement, _ item: String) {
         el.press(forDuration: 1.0)
         let button = app.buttons[item].firstMatch
+        // A press can pick the row up for reordering instead of opening the menu; a person would press again.
+        if !button.waitForExistence(timeout: 5) { el.press(forDuration: 1.0) }
         XCTAssertTrue(button.waitForExistence(timeout: 5), "the long-press menu has \(item)")
         button.tap()
     }
@@ -83,15 +85,10 @@ final class RemindersListsTests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard is up")
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "Office")
         XCTAssertEqual(field.value as? String, "Office")
-        // The alert slides up when the keyboard shows; a tap on Save while it moves misses. Tap it once it is still.
+        // The alert slides up when the keyboard shows; a tap on Save while it moves misses. A person would tap again.
         let save = alert.buttons["Save"]
-        var y = save.frame.minY
-        for _ in 0..<15 {
-            usleep(200_000)
-            if save.frame.minY == y { break }
-            y = save.frame.minY
-        }
         save.tap()
+        if !alert.waitForNonExistence(timeout: 2), save.exists { save.tap() }
         XCTAssertTrue(alert.waitForNonExistence(timeout: 5), "Save closes the alert")
         let office = element("list.Office")
         reveal(office)

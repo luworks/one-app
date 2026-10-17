@@ -194,17 +194,10 @@ struct TimerCard: View {
                 Spacer(minLength: 8)
                 roundDots
             }
-            HStack(alignment: .center, spacing: 20) {
-                if let running = controller.running {
-                    RunningDial(timer: running, isRinging: controller.isRinging)
-                    runningControls(running)
-                } else if let next = controller.log.nextStep {
-                    TimerDialView(seconds: $seconds)
-                    nextStepControls(next)
-                } else {
-                    TimerDialView(seconds: $seconds)
-                    setControls
-                }
+            // Dial beside the controls; stacked when that does not fit (a narrow phone or a large text size).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 20) { dialAndControls }
+                VStack(spacing: 16) { dialAndControls }
             }
             if let message = controller.message {
                 HStack(spacing: 8) {
@@ -280,6 +273,19 @@ struct TimerCard: View {
         .frame(maxWidth: .infinity)
     }
 
+    @ViewBuilder private var dialAndControls: some View {
+        if let running = controller.running {
+            RunningDial(timer: running, isRinging: controller.isRinging)
+            runningControls(running)
+        } else if let next = controller.log.nextStep {
+            TimerDialView(seconds: $seconds)
+            nextStepControls(next)
+        } else {
+            TimerDialView(seconds: $seconds)
+            setControls
+        }
+    }
+
     private var setControls: some View {
         VStack(spacing: 8) {
             ForEach(Pomodoro.chips, id: \.self) { chip($0) }
@@ -307,12 +313,13 @@ struct TimerCard: View {
             Text(chip.chipLabel)
                 .font(.subheadline.weight(.medium))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .fixedSize()
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
-        .tint(selected ? .orange : .secondary)
+        // Unselected chips use the primary color: a gray tint put gray text on a gray fill.
+        .tint(selected ? .orange : .primary)
         .accessibilityLabel("\(chip.chipLabel) minutes")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("timer.chip.\(chip.minutes)")
