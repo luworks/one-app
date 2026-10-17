@@ -466,7 +466,7 @@ Today 天然适合当这个地方，因为“时间”是所有 agent 动作的�
 
 ### 4.3 账本格式（建议）
 
-只追加。撤销是一条新记录，不是删除旧记录。字段借鉴 W3C [Activity Streams 2.0](https://www.w3.org/TR/activitystreams-core/) 的 actor-verb-object。调试级的追踪另用 [OpenTelemetry GenAI 约定](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/)（不给用户看）。原型里点任意一行可以看到这个 JSON：
+只追加。撤销是一条新记录，不是删除旧记录。字段借鉴 W3C [Activity Streams 2.0](https://www.w3.org/TR/activitystreams-core/) 的 actor-verb-object。调试级的追踪另用 [OpenTelemetry GenAI 约定](https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/)（不给用户看）。原型里点任意一行可以看到类似的 JSON（原型版没有 `expires` / `model` / `prompt` 字段）：
 
 ```jsonc
 {
