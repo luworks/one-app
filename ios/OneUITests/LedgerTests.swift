@@ -38,9 +38,11 @@ final class LedgerTests: XCTestCase {
 
     private func planMyDay() {
         app.buttons["Ask AI or add anything"].tap()
-        let chip = app.buttons.matching(identifier: "ask-suggestion").matching(NSPredicate(format: "label == %@", "Plan my day")).firstMatch
-        XCTAssertTrue(chip.waitForExistence(timeout: 5))
-        chip.tap()
+        // The suggestion chips change with the day's data, so the sentence is typed, as a user would.
+        let field = app.textFields["Ask AI or add anything"].firstMatch.exists ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("Plan my day\n")
     }
 
     /// Activity lists an AI change the user applied and a delete the user made, and Undo there brings the reminder back.

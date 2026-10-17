@@ -159,7 +159,10 @@ final class JourneyTests: XCTestCase {
         // The planner only fills free time until 9 PM, so late in the evening there is nothing to place.
         try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 18, "needs free time before 9 PM")
         tap(app.buttons["Ask AI or add anything"])
-        tap(app.buttons["Plan my day"])
+        // The suggestion chips change with the data, so the sentence is typed, as a user would.
+        let field = app.textFields["Ask AI or add anything"].firstMatch.exists ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("Plan my day\n")
         XCTAssertTrue(app.staticTexts["Plan for today"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Pay studio invoice"].exists, "overdue task is placed first")
         tap(app.buttons["Apply"])
