@@ -299,6 +299,22 @@ final class CalendarLayoutTests: XCTestCase {
         XCTAssertEqual(cols.map(\.count), [2, 2, 1])
     }
 
+    func testLongPressSlotSnapsDownToQuarterHours() {
+        // Gutter 44, columns 50 wide, 48pt hours: x 44+2*50+10 is the third day; y 18h + 20 min is 18:15.
+        let s = CalendarLayout.slot(x: 154, y: 18 * 48 + 16, gutter: 44, columnWidth: 50, hourHeight: 48, dayCount: 7)
+        XCTAssertEqual(s.day, 2)
+        XCTAssertEqual(s.minute, 18 * 60 + 15)
+    }
+
+    func testLongPressSlotStaysInsideTheGrid() {
+        let early = CalendarLayout.slot(x: 10, y: -5, gutter: 44, columnWidth: 50, hourHeight: 48, dayCount: 7)
+        XCTAssertEqual(early.day, 0, "the hour labels count as the first day")
+        XCTAssertEqual(early.minute, 0)
+        let late = CalendarLayout.slot(x: 2000, y: 24 * 48 + 30, gutter: 44, columnWidth: 50, hourHeight: 48, dayCount: 7)
+        XCTAssertEqual(late.day, 6)
+        XCTAssertEqual(late.minute, 23 * 60 + 45, "starts no later than 23:45")
+    }
+
     func testBackToBackEventsDoNotOverlap() {
         let cols = CalendarLayout.columns(for: [(540, 600), (600, 660)])
         XCTAssertEqual(cols.map(\.count), [1, 1])

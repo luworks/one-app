@@ -25,7 +25,7 @@ struct CalendarView: View {
             Group {
                 switch mode {
                 case .week:
-                    WeekView(day: $day, dayCount: 7, open: open, edit: edit, openDay: openDay)
+                    WeekView(day: $day, dayCount: 7, open: open, edit: edit, create: create, openDay: openDay)
                 case .month:
                     MonthView(day: $day, open: open, edit: edit, openDay: openDay)
                 case .year:
@@ -45,6 +45,7 @@ struct CalendarView: View {
             case .editSystem(let id): NativeEventEditor(identifier: id).ignoresSafeArea()
             case .local(let event): EventEditor(event: event)
             case .task(let task): TaskEditor(task: task)
+            case .new(let start, let end): EventEditor(start: start, end: end)
             }
         }
     }
@@ -55,6 +56,11 @@ struct CalendarView: View {
     }
 
     private func edit(_ entry: CalEntry) { open(entry) }
+
+    /// A long-press on an empty slot of the Week grid: Apple's editor when Calendar access is on, else ours, prefilled.
+    private func create(start: Date, end: Date) {
+        if CalendarSync.shared.usesNativeEditor { NativeEvents.edit(start: start, end: end) } else { opened = .new(start: start, end: end) }
+    }
 
     /// Tapping a day that is already selected opens it in Today (the day view).
     private func openDay(_ date: Date) { onOpenDay(cal.startOfDay(for: date)) }
@@ -505,6 +511,7 @@ private struct WeekView: View {
     var dayCount = 7
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void = { _ in }
+    var create: (Date, Date) -> Void = { _, _ in }
     var openDay: (Date) -> Void
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
@@ -536,7 +543,7 @@ private struct WeekView: View {
                 LazyHStack(spacing: 0) {
                     ForEach(range, id: \.self) { o in
                         WeekPage(weekStart: weekStart(o), dayCount: dayCount, selected: day, events: events, tasks: tasks,
-                                 topHour: $topHour, open: open, edit: edit, openDay: openDay)
+                                 topHour: $topHour, open: open, edit: edit, create: create, openDay: openDay)
                             .containerRelativeFrame([.horizontal, .vertical])
                             .id(o)
                     }
@@ -569,8 +576,11 @@ private struct WeekPage: View {
     @Binding var topHour: Int?
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void = { _ in }
+    var create: (Date, Date) -> Void = { _, _ in }
     var openDay: (Date) -> Void
     @State private var pendingDelete: CalEntry?
+    /// The new event being placed by a long-press on an empty slot: day column and start minute.
+    @State private var draft: Slot?
 
     private let hourHeight: CGFloat = 48
     private let gutter: CGFloat = 44
@@ -700,6 +710,8 @@ private struct WeekPage: View {
 
                 GeometryReader { geo in
                     let colW = (geo.size.width - gutter - 8) / CGFloat(dayCount)
+                    // Bottom layer: long-press an empty slot to make an event there. Blocks above keep their own taps and menus.
+                    pressLayer(days, colW: colW)
                     ForEach(Array(days.enumerated()), id: \.offset) { index, d in
                         let x = gutter + CGFloat(index) * colW
                         let placed = place(timed, on: d)
@@ -715,7 +727,11 @@ private struct WeekPage: View {
                             nowLine(context.date, days: days, colW: colW)
                         }
                     }
+                    if let draft, draft.day < days.count {
+                        draftBlock(draft, on: days[draft.day], colW: colW)
+                    }
                 }
+
             }
             .padding(.top, 10)
             .padding(.bottom, 12)
@@ -806,6 +822,53 @@ private struct WeekPage: View {
         }
     }
 
+    struct Slot: Equatable {
+        let day: Int
+        let minute: Int
+    }
+
+    /// Long-press an empty slot: a one-hour placeholder appears there (snapped to 15 minutes) and follows the finger;
+    /// releasing opens the new-event editor for that time. Like Apple Calendar's Week and Day views.
+    private func pressLayer(_ days: [Date], colW: CGFloat) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .gesture(SlotPress { point in
+                let s = CalendarLayout.slot(x: point.x, y: point.y, gutter: gutter, columnWidth: colW,
+                                            hourHeight: hourHeight, dayCount: dayCount)
+                draft = Slot(day: s.day, minute: s.minute)
+            } ended: { released in
+                defer { draft = nil }
+                guard released, let draft, draft.day < days.count,
+                      let start = cal.date(byAdding: .minute, value: draft.minute, to: days[draft.day]) else { return }
+                create(start, start.addingTimeInterval(3600))
+            })
+            .sensoryFeedback(trigger: draft) { (old: Slot?, new: Slot?) -> SensoryFeedback? in
+                // A thump when the placeholder appears, a tick each time it moves to another slot.
+                guard new != nil else { return nil }
+                return old == nil ? .impact(weight: .medium) : .selection
+            }
+    }
+
+    /// The placeholder under the finger while a new event is placed, like Apple's "New Event" block.
+    private func draftBlock(_ slot: Slot, on day: Date, colW: CGFloat) -> some View {
+        let start = cal.date(byAdding: .minute, value: slot.minute, to: day) ?? day
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("New Event").font(.system(size: 10, weight: .semibold))
+            Text(start.formatted(date: .omitted, time: .shortened)).font(.system(size: 10).monospacedDigit())
+        }
+        .foregroundStyle(.white)
+        .padding(3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))
+        .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
+        .frame(width: colW - 2, height: hourHeight - 1)
+        .offset(x: gutter + CGFloat(slot.day) * colW + 1, y: CGFloat(slot.minute) / 60 * hourHeight)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("New Event, \(DayLabel.withTime(start))")
+        .accessibilityIdentifier("calendar.newEventDraft")
+    }
+
     private func minutes(_ date: Date) -> CGFloat {
         let c = cal.dateComponents([.hour, .minute], from: date)
         return CGFloat((c.hour ?? 0) * 60 + (c.minute ?? 0))
@@ -814,6 +877,29 @@ private struct WeekPage: View {
     private func hourLabel(_ h: Int) -> String {
         h == 0 ? "" : (cal.date(bySettingHour: h, minute: 0, second: 0, of: .now) ?? .now)
             .formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+    }
+}
+
+/// Long-press on the Week grid's empty space (UIKit's long-press, which reports where the finger is from the start and as it
+/// moves): `changed` gets the point while the finger is down, `ended` whether it was released (true) or cancelled.
+/// Moving before the press is recognized fails it, so scrolling and paging stay with the scroll views.
+private struct SlotPress: UIGestureRecognizerRepresentable {
+    var changed: (CGPoint) -> Void
+    var ended: (Bool) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let press = UILongPressGestureRecognizer()
+        press.minimumPressDuration = 0.5
+        return press
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed: changed(context.converter.localLocation)
+        case .ended: ended(true)
+        case .cancelled, .failed: ended(false)
+        default: break
+        }
     }
 }
 

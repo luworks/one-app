@@ -253,6 +253,15 @@ enum CalendarLayout {
         close()
         return result
     }
+
+    /// The slot under a point on the Week grid, for a long-press that makes a new event: the day column and the start
+    /// minute, snapped down to 15 minutes like Apple Calendar. `x` and `y` are in the grid's space (hour 0 at y = 0,
+    /// the hour labels in the first `gutter` points). Clamped to the visible days and to a start no later than 23:45.
+    static func slot(x: Double, y: Double, gutter: Double, columnWidth: Double, hourHeight: Double, dayCount: Int) -> (day: Int, minute: Int) {
+        let day = min(max(Int(((x - gutter) / columnWidth).rounded(.down)), 0), dayCount - 1)
+        let minute = Int((y / hourHeight * 60 / 15).rounded(.down)) * 15
+        return (day, min(max(minute, 0), 24 * 60 - 15))
+    }
 }
 
 enum ListName {
