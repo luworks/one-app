@@ -4,7 +4,7 @@ Research date 2026-10-17. Research only: no app code was changed. Scope: the Act
 
 ## 中文摘要
 
-结论：现在不要上 CSV，也不要上 iCloud。先在 App 自己的容器里建一个独立的 SQLite 文件（`activity.sqlite`，只追加的事件表，WAL 模式，带索引，用系统自带的 SQLite，不加第三方依赖），把现有账本、AI 对话与卡片决定、使用行为、系统事件分成四层记进去；Widget、Share 扩展不直接写数据库，只往 App Group 里丢小 JSONL 文件，App 启动时再收进来。CSV 只作为"导出给人看"的格式，JSONL 作为导出和日后同步的格式。数据表一开始就按 CloudKit 的要求设计（UUID、设备 id、不可变行、JSON 属性），等有了付费账号，只同步第 1、2 层，用 `CKSyncEngine`，不用 SwiftData 的 CloudKit 同步。免费 Apple ID 完全不能用 iCloud/CloudKit（Apple 能力表已核实），所以第一阶段纯本地，一个 agent 一天能做完。
+结论：现在不要上 CSV，也不要上 iCloud。先在 App 自己的容器里建一个独立的 SQLite 文件（`activity.sqlite`，只追加的事件表，WAL 模式，带索引，用系统自带的 SQLite，不加第三方依赖），把现有账本、AI 对话与卡片决定、使用行为、系统事件分成四层记进去；Widget、Share 扩展不直接写数据库，只往 App Group 里丢小 JSONL 文件，App 启动时再收进来。CSV 只作为"导出给人看"的格式，JSONL 作为导出和日后同步的格式。数据表一开始就按 CloudKit 的要求设计（UUID、设备 id、不可变行、JSON 属性），等有了付费账号，只同步第 1、2 层，用 `CKSyncEngine`，不用 SwiftData 的 CloudKit 同步。免费 Apple ID 完全不能用 iCloud/CloudKit（Apple 能力表已核实），所以第一阶段纯本地：存储 + 记录器 + AI 卡片/建议的事件 + JSONL 导出，一个 agent 一天能做完；设置页（暂停、清除）、CSV 导出和真机测速放在 1b（再约一天）。
 
 ---
 
@@ -17,7 +17,7 @@ Five-line version:
 2. Extensions (Share, widgets) never open the database: they drop JSONL files in the App Group; the app drains them (the `ShareInbox` pattern the project already uses).
 3. CSV: export only. JSONL: export, outbox and future sync payload. SQLite: the store.
 4. iCloud/CloudKit: impossible on a free Apple ID (verified), planned for the paid account as `CKSyncEngine` over tiers 1+2; the schema is CloudKit-ready from day one.
-5. Phase 1 (one agent, one day, free account): `ActivityStore` + recorder + tier 2 and tier 4 events + Settings basics (pause, clear, export) + tests. The ledger and Activity screen stay untouched until Phase 2.
+5. Phase 1 (one agent, one day, free account): `ActivityStore` + recorder + tier 2 events + JSONL export + `swift test`; Phase 1b adds the Settings page, CSV, tier 4 events and device benchmark. The ledger and Activity screen stay untouched until Phase 2.
 
 ### Decisions already taken by the owner (this document follows them)
 - Local storage only until the paid Apple Developer account exists; no iCloud work now.
@@ -249,7 +249,7 @@ I parsed Apple's "Supported capabilities (iOS)" page (https://developer.apple.co
 | iCloud: iCloud documents | **No** |
 | iCloud: key-value storage | **No** |
 | Push notifications | **No** (CloudKit sync relies on silent pushes) |
-| Siri capability | No |
+| "Siri" capability | No. This row is the SiriKit entitlement; App Intents / App Shortcuts (which the app already ships under free signing) are not affected (general knowledge: they need no entitlement) |
 | WeatherKit, Sign in with Apple, Time Sensitive Notifications | No |
 | App Groups | **Yes** |
 | Background Modes | **Yes** |
@@ -345,7 +345,8 @@ Sizes: S = about 1 to 2 days, M = 3 to 5 days, L = 1 to 2 weeks or more.
 
 | Phase | Content | Size | Account | Done when |
 |---|---|---|---|---|
-| **1. Store and first recordings (one agent, one day)** | `ActivityStore` (system SQLite wrapper behind `ActivityStoring`, WAL, `user_version` migration 1, schema 3.5), `ActivityRecorder` (in-memory buffer, flush every 1 to 2 s and on background, inside a background task), pure `ActivityEvent` kinds/envelope/retention/export in an `OneEval` file, tier 2 events (`ai.turn`, card shown/resolved with edited fields, chips shown/tapped, undo) and a handful of tier 4 events (sync conflict, intent run, share import, error), `-uiTesting` in-memory store, Settings → "Your activity" (pause, per-tier toggle, Clear, Export JSONL and CSV), tests under `swift test`. The ledger and the Activity screen do not change. Also: re-run the insert benchmark on a real iPhone and check `fts5` and `PRAGMA compile_options` on the iOS runtime | S | Free | New `swift test` cases pass; export file opens; row counts per day logged for a week to replace the estimates in 2.3 |
+| **1. Store and first recordings (one agent, one day)** | `ActivityStore` (system SQLite wrapper behind `ActivityStoring`, WAL, `user_version` migration 1, schema 3.5), `ActivityRecorder` (in-memory buffer, flush every 1 to 2 s and on background, inside a background task), pure `ActivityEvent` kinds/envelope/retention/export in an `OneEval` file, tier 2 events (`ai.turn`, card shown/resolved with edited fields, chips shown/tapped, undo), `-uiTesting` in-memory store, JSONL export (a debug/Settings button), tests under `swift test`. The ledger and the Activity screen do not change | S | Free | New `swift test` cases pass; a JSONL export opens and has the expected rows |
+| **1b. Basics and checks** | Settings → "Your activity" page (pause, per-tier toggles, Clear, CSV export), tier 4 events (sync conflict, intent run, share import, error), re-run the insert benchmark on a real iPhone and check `fts5` / `PRAGMA compile_options` on the iOS runtime, log row counts per day for a week to replace the estimates in 2.3 | S | Free | Page works with pause/clear; device numbers recorded in this document |
 | 2. Ledger into the store | Dual write, one-time copy, cut over Activity screen, `Ledger.undo` and `protectedRefs` to SQL (section 3.6); cursor paging; Activity gets tier 2 rows ("Card edited before Add", "Suggestion ignored") and search by `LIKE` | M | Free | `AutonomyPolicy` tests green; Activity identical for tier 1 data |
 | 3. Usage tier, rollups, outbox | Tier 3 events with coalescing, `rollup_daily` + retention job (launch and background refresh), App Group outbox drained on activation (widget refresh results, Share, background intents) | M | Free | Store size stays flat in a two-week soak |
 | 4. Local learning loops | Chip ranking from tap history, "Save as eval case" for edited cards, acceptance-rate and route-comparison views (debug/Settings), capture-case export for `Eval` | M | Free | One measured improvement on the held-out capture set or chip tap rate |
