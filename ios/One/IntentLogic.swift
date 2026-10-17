@@ -40,4 +40,25 @@ enum IntentTimer {
     static func spoken(minutes: Int) -> String {
         "\(minutes) \(minutes == 1 ? "minute" : "minutes")"
     }
+
+    /// Seconds for a timer asked for in `seconds` (a Duration from Siri, or `TimerPhrase`), or nil when it is out of
+    /// range: at least 1 second, at most the dial's 90 minutes.
+    static func seconds(seconds: Int) -> Int? {
+        (1...TimerDial.maxSeconds).contains(seconds) ? seconds : nil
+    }
+
+    /// "10 minutes", "1 hour 30 minutes", "45 seconds" (what Siri says back).
+    static func spoken(seconds: Int) -> String {
+        func part(_ n: Int, _ unit: String) -> String { "\(n) \(unit)\(n == 1 ? "" : "s")" }
+        let s = max(seconds, 0)
+        let h = s / 3600, m = (s % 3600) / 60, r = s % 60
+        let parts = [h > 0 ? part(h, "hour") : nil, m > 0 ? part(m, "minute") : nil, r > 0 ? part(r, "second") : nil]
+        return parts.compactMap { $0 }.joined(separator: " ")
+    }
+
+    /// The label for a timer: trimmed, nil when empty.
+    static func label(_ text: String?) -> String? {
+        let t = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return t.isEmpty ? nil : t
+    }
 }
