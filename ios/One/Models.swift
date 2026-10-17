@@ -44,13 +44,19 @@ final class OneTask {
         return due < Calendar.current.startOfDay(for: .now)
     }
 
+    /// A deadline at a time of day (a date-only deadline is stored at midnight).
+    var dueHasTime: Bool {
+        guard let due else { return false }
+        return Calendar.current.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0)
+    }
+
     /// When the reminder fires: planned time, else a deadline that has a time of day.
     var reminderDate: Date? {
         guard let offset = reminderOffsetMinutes else { return nil }
         let base: Date?
         if let plannedStart {
             base = plannedStart
-        } else if let due, Calendar.current.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0) {
+        } else if let due, dueHasTime {
             base = due
         } else {
             base = nil

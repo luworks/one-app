@@ -156,6 +156,76 @@ enum DayPlanner {
     }
 }
 
+/// The day view's single timeline: where reminders due that day without a time are suggested.
+/// Suggestions only show; nothing is written until the user taps Plan (planned time, never the deadline).
+enum DaySchedule {
+    /// Suggestions fill free time from 08:00 (or now, on today) until 21:00, like "Plan my day".
+    static let openHour = 8, closeHour = 21
+
+    /// A suggested start for each item (nil = no gap left: it goes under "Anytime"), in `minutes` order.
+    /// Past days get no suggestions.
+    static func suggestedStarts(minutes: [Int], busy: [DateInterval], day: Date, now: Date,
+                                calendar: Calendar = .current) -> [Date?] {
+        let none = [Date?](repeating: nil, count: minutes.count)
+        let dayStart = calendar.startOfDay(for: day)
+        guard dayStart >= calendar.startOfDay(for: now),
+              let open = calendar.date(bySettingHour: openHour, minute: 0, second: 0, of: dayStart),
+              let close = calendar.date(bySettingHour: closeHour, minute: 0, second: 0, of: dayStart) else { return none }
+        let start = calendar.isDate(day, inSameDayAs: now) ? max(now, open) : open
+        guard start < close else { return none }
+        let items = minutes.enumerated().map { DayPlanner.Item(id: $0.offset, minutes: $0.element) }
+        var result = none
+        for placed in DayPlanner.plan(items, busy: busy, window: DateInterval(start: start, end: close), calendar: calendar) {
+            result[placed.id] = placed.start
+        }
+        return result
+    }
+}
+
+extension DaySchedule {
+    /// Free time between items in waking hours (08:00, or now on today, until 21:00), at least `minimum` minutes.
+    /// `busy` should already include the suggested slots, so a suggestion uses up its part of a gap.
+    static func freeGaps(busy: [DateInterval], day: Date, now: Date, minimum: Int = 30,
+                         calendar: Calendar = .current) -> [DateInterval] {
+        let dayStart = calendar.startOfDay(for: day)
+        guard dayStart >= calendar.startOfDay(for: now),
+              let open = calendar.date(bySettingHour: openHour, minute: 0, second: 0, of: dayStart),
+              let close = calendar.date(bySettingHour: closeHour, minute: 0, second: 0, of: dayStart) else { return [] }
+        var cursor = calendar.isDate(day, inSameDayAs: now) ? max(now, open) : open
+        var gaps: [DateInterval] = []
+        for block in busy.sorted(by: { $0.start < $1.start }) where block.end > cursor {
+            if block.start >= close { break }
+            if block.start > cursor { gaps.append(DateInterval(start: cursor, end: block.start)) }
+            cursor = max(cursor, block.end)
+        }
+        if cursor < close { gaps.append(DateInterval(start: cursor, end: close)) }
+        return gaps.filter { $0.duration >= TimeInterval(minimum * 60) }
+    }
+
+    /// "1 h 30 min", "45 min", "2 h".
+    static func freeLabel(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds / 60)
+        let h = minutes / 60, m = minutes % 60
+        switch (h, m) {
+        case (0, _): return "Free \(m) min"
+        case (_, 0): return "Free \(h) h"
+        default: return "Free \(h) h \(m) min"
+        }
+    }
+}
+
+/// When Today shows all of tomorrow instead of its first few items.
+enum TomorrowPreview {
+    static let limit = 3
+    /// Apple Reminders starts "Tonight" at 18:00; from then on tomorrow matters more than what's left of today.
+    static let eveningHour = 18
+
+    /// Open in the evening, or once nothing timed is left today.
+    static func opensByItself(now: Date, todayStarts: [Date], calendar: Calendar = .current) -> Bool {
+        calendar.component(.hour, from: now) >= eveningHour || !todayStarts.contains { $0 > now }
+    }
+}
+
 /// Calendar tab: month grids, week starts and weekday letters. Follows the calendar's first weekday (the device setting), like Apple Calendar.
 enum CalendarMath {
     /// The month containing `date` as rows of 7 slots, like Apple's Month: nil before the 1st and after the last day.

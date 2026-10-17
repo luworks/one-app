@@ -118,15 +118,21 @@ struct TaskRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let task: OneTask
     var showsTime = false
+    /// The time in the time column; nil = the planned time.
+    var time: Date? = nil
     /// Add the list name to the detail line. Off inside a list, where it is the title.
     var showsList = true
     /// Day view: detail on the title's line when it fits, titles capped at two lines, tighter insets.
     var compact = false
+    /// A suggested time for a reminder due today with no time: shown faint with a Plan button. Nothing is saved until Plan.
+    var suggested: Date? = nil
     @State private var editing = false
 
     var body: some View {
         HStack(spacing: 10) {
-            if showsTime, let start = task.plannedStart {
+            if let suggested {
+                TimeColumn(date: suggested).opacity(0.6)
+            } else if showsTime, let start = time ?? task.plannedStart {
                 TimeColumn(date: start)
             }
             Button {
@@ -155,6 +161,7 @@ struct TaskRow: View {
                     .foregroundStyle(Color.accentColor)
                     .accessibilityLabel("Flagged")
             }
+            if let suggested { planButton(suggested) }
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
@@ -189,7 +196,23 @@ struct TaskRow: View {
     private var title: Text {
         Text(task.title)
             .strikethrough(task.isDone)
-            .foregroundStyle(task.isDone ? .secondary : .primary)
+            .foregroundStyle(task.isDone || suggested != nil ? .secondary : .primary)
+    }
+
+    /// Sets the planned time only; the deadline stays where it is. Undo clears it again.
+    private func planButton(_ start: Date) -> some View {
+        let time = start.formatted(date: .omitted, time: .shortened)
+        return Button("Plan") {
+            withAnimation { task.plannedStart = start }
+            toast?.show("Planned “\(task.title)” at \(time)") {
+                withAnimation { task.plannedStart = nil }
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .accessibilityLabel("Plan \(task.title) at \(time)")
     }
 
     @ViewBuilder private var detailText: some View {
@@ -204,6 +227,7 @@ struct TaskRow: View {
     /// Most important first, so truncation drops the least useful bits: deadline, plan, repeat, list, tags.
     private var detail: String? {
         var parts: [String] = []
+        if suggested != nil { parts.append("Suggested") }
         if let due = task.due { parts.append("Due " + DayLabel.withTime(due)) }
         if !showsTime, let start = task.plannedStart, start != task.due {
             parts.append("Planned " + DayLabel.withTime(start))
