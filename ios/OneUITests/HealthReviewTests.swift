@@ -62,13 +62,17 @@ final class HealthReviewTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
         func openSetting() -> XCUIElement {
             app.openSidebar()
-            app.buttons["Settings"].firstMatch.tap()
+            let settings = app.buttons["Settings"].firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 5))
+            settings.tap()
             let toggle = app.switches["Health summary"]
-            for _ in 0..<4 where !(toggle.exists && toggle.isHittable) { app.swipeUp() }
             XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+            for _ in 0..<4 where !toggle.isHittable { app.swipeUp() }
+            sleep(1)   // let the sheet and the scroll come to rest, so the knob tap lands
             return toggle
         }
         func closeSettings() {
+            sleep(1)   // the stored setting is written before the sheet goes away
             app.buttons["Done"].tap()
             app.closeSidebar()
             for _ in 0..<3 { app.swipeDown() }
