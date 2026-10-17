@@ -61,11 +61,11 @@ final class WorldClockStore {
 /// morning and evening blue, working hours green), home first with a star. Drag sideways anywhere on the list to move
 /// every clock together in 15-minute steps; the capsule at the bottom says how far ("3 hours from now") and a tap on it
 /// goes back to now. "Overlap" shows the hours today when every city is within working hours.
-/// Edit reorders and deletes (a red minus; the swipe belongs to scrubbing); a long press also offers Delete. + adds a city.
+/// No Edit button (editing works as everywhere in the app): a long press on a city offers Move Up / Move Down and
+/// Delete, and press, hold and drag reorders (the sideways swipe belongs to scrubbing). + adds a city.
 struct WorldClockView: View {
     @Environment(UndoToast.self) private var toast: UndoToast?
     @State private var store = WorldClockStore.shared
-    @State private var editMode: EditMode = .inactive
     /// Minutes away from now; 0 = now.
     @State private var scrub = 0
     @State private var dragStart: Int?
@@ -76,47 +76,30 @@ struct WorldClockView: View {
             List {
                 controlsRow
                 if store.showsOverlap { overlapRow(date: date, now: context.date) }
-                CityCard(identifier: store.home, date: date, isHome: true, isEditing: editMode.isEditing)
+                CityCard(identifier: store.home, date: date, isHome: true)
                     .moveDisabled(true)
                     .deleteDisabled(true)
-                // A sideways drag scrubs time, so there is no swipe-to-delete here: delete from Edit (red minus)
-                // or the long-press menu.
+                // A sideways drag scrubs time, so there is no swipe-to-delete here: Delete and the order are in the
+                // long-press menu, and a press, hold and drag reorders.
                 ForEach(store.others, id: \.self) { id in
-                    HStack(spacing: 10) {
-                        if editMode.isEditing {
-                            Button { remove(id) } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.title2)
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, Color(.systemRed))
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel("Delete \(WorldClock.cityName(fromIdentifier: id) ?? id)")
-                            .accessibilityIdentifier("worldClock.delete")
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-                        }
-                        CityCard(identifier: id, date: date, isHome: false, isEditing: editMode.isEditing)
-                            .contextMenu { RowAction.delete { remove(id) } }
-                    }
-                    .plainClockRow(top: 5, bottom: 5)
-                    .deleteDisabled(true)
+                    CityCard(identifier: id, date: date, isHome: false)
+                        .contextMenu { cityMenu(id) }
+                        .plainClockRow(top: 5, bottom: 5)
+                        .deleteDisabled(true)
                 }
                 .onMove { store.move(from: $0, to: $1) }
                 if store.others.isEmpty { hint }
             }
             .listStyle(.plain)
-            .environment(\.editMode, $editMode)
             .gesture(HorizontalPan(onChange: dragged, onEnd: { dragStart = nil }))
             .safeAreaInset(edge: .bottom, spacing: 0) { scrubCapsule }
         }
         .sensoryFeedback(.impact(weight: .light), trigger: scrub)
-        .onChange(of: store.others.isEmpty) { _, empty in if empty { editMode = .inactive } }
     }
 
     // MARK: Scrubbing
 
     private func dragged(_ width: CGFloat) {
-        guard !editMode.isEditing else { return }
         if dragStart == nil { dragStart = scrub }
         let next = WorldClock.Scrub.offset(start: dragStart ?? 0, dragWidth: Double(width))
         if next != scrub { scrub = next }
@@ -148,7 +131,7 @@ struct WorldClockView: View {
 
     // MARK: Rows
 
-    /// Overlap on the left, Edit on the right: Clock keeps Edit in a navigation bar, which this tab doesn't have.
+    /// The Overlap switch. No Edit button: a city's long-press menu reorders and deletes.
     private var controlsRow: some View {
         HStack {
             Button {
@@ -165,14 +148,6 @@ struct WorldClockView: View {
             .accessibilityAddTraits(store.showsOverlap ? .isSelected : [])
             .accessibilityIdentifier("worldClock.overlap")
             Spacer()
-            if !store.others.isEmpty {
-                Button(editMode.isEditing ? "Done" : "Edit") {
-                    withAnimation(.snappy) { editMode = editMode.isEditing ? .inactive : .active }
-                }
-                .font(.body.weight(editMode.isEditing ? .semibold : .regular))
-                .buttonStyle(.borderless)
-                .accessibilityIdentifier("worldClock.edit")
-            }
         }
         .plainClockRow(top: 2, bottom: 6)
         .moveDisabled(true)
@@ -202,6 +177,22 @@ struct WorldClockView: View {
             .plainClockRow(top: 0, bottom: 0)
             .moveDisabled(true)
             .deleteDisabled(true)
+    }
+
+    /// A city's long-press menu: move it up or down among your cities (home stays first), or delete it.
+    @ViewBuilder
+    private func cityMenu(_ id: String) -> some View {
+        let i = store.others.firstIndex(of: id) ?? 0
+        Button { withAnimation(.snappy) { store.move(from: [i], to: i - 1) } } label: {
+            Label("Move Up", systemImage: "arrow.up")
+        }
+        .disabled(i == 0)
+        Button { withAnimation(.snappy) { store.move(from: [i], to: i + 2) } } label: {
+            Label("Move Down", systemImage: "arrow.down")
+        }
+        .disabled(i >= store.others.count - 1)
+        Divider()
+        RowAction.delete { remove(id) }
     }
 
     private func remove(_ id: String) {
@@ -280,7 +271,6 @@ private struct CityCard: View {
     let identifier: String
     let date: Date
     let isHome: Bool
-    let isEditing: Bool
 
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .largeTitle) private var timeSize = 44
@@ -311,19 +301,16 @@ private struct CityCard: View {
                     .minimumScaleFactor(0.7)
             }
             Spacer(minLength: 8)
-            if !isEditing {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(parts.time)
-                        .font(.system(size: timeSize, weight: .light).monospacedDigit())
-                        .contentTransition(.numericText())
-                    if let suffix = parts.suffix {
-                        Text(suffix).font(.system(size: suffixSize, weight: .regular))
-                    }
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(parts.time)
+                    .font(.system(size: timeSize, weight: .light).monospacedDigit())
+                    .contentTransition(.numericText())
+                if let suffix = parts.suffix {
+                    Text(suffix).font(.system(size: suffixSize, weight: .regular))
                 }
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .transition(.opacity)
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 18)

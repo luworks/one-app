@@ -75,12 +75,12 @@ final class ClockTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["worldClock.home"].exists, "home stays first")
         XCTAssertTrue(label.contains("Today") || label.contains("Tomorrow") || label.contains("Yesterday"), label)
 
-        // A sideways drag scrubs time, so deleting is in Edit (the red minus) and the long-press menu.
-        app.buttons["worldClock.edit"].tap()
-        let minus = app.buttons["worldClock.delete"].firstMatch
-        XCTAssertTrue(minus.waitForExistence(timeout: 3), "Edit shows a red minus on each city")
-        XCTAssertEqual(minus.label, "Delete Tokyo")
-        minus.tap()
+        // A sideways drag scrubs time, so deleting is in the long-press menu; there is no Edit button.
+        XCTAssertFalse(app.buttons["worldClock.edit"].exists, "no Edit button")
+        cityRows.firstMatch.press(forDuration: 1.0)
+        let delete = app.buttons["Delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "the long-press menu has Delete")
+        delete.tap()
         XCTAssertTrue(app.descendants(matching: .any)["worldClock.hint"].waitForExistence(timeout: 3), "the city is gone")
         XCTAssertEqual(cityRows.count, 0)
         let undo = app.buttons["Undo"].firstMatch
@@ -140,18 +140,20 @@ final class ClockTests: XCTestCase {
         XCTAssertTrue(card.waitForNonExistence(timeout: 3))
     }
 
-    func testReorderInEdit() {
+    /// No Edit mode: a city's long-press menu moves it up or down.
+    func testReorderFromLongPressMenu() {
         launch(["-uiTestingCities", "Europe/London,Asia/Tokyo"])
         section("worldClock").tap()
         XCTAssertTrue(cityRows.element(boundBy: 1).waitForExistence(timeout: 3))
         XCTAssertTrue(cityRows.element(boundBy: 0).label.hasPrefix("London"))
-        app.buttons["worldClock.edit"].tap()
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 3))
-        let handle = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reorder'")).element(boundBy: 1)
-        XCTAssertTrue(handle.waitForExistence(timeout: 3), "Edit shows reorder handles")
-        handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.5, thenDragTo: cityRows.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)))
-        app.buttons["Done"].tap()
-        XCTAssertTrue(cityRows.element(boundBy: 0).label.hasPrefix("Tokyo"), "Tokyo moved up: \(cityRows.element(boundBy: 0).label)")
+        XCTAssertFalse(app.buttons["worldClock.edit"].exists, "no Edit button")
+        cityRows.element(boundBy: 1).press(forDuration: 1.0)
+        let up = app.buttons["Move Up"]
+        XCTAssertTrue(up.waitForExistence(timeout: 3), "the long-press menu has Move Up")
+        up.tap()
+        let moved = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in self.cityRows.element(boundBy: 0).label.hasPrefix("Tokyo") }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [moved], timeout: 5), .completed, "Tokyo moved up")
     }
 
     func testStopwatchStartLapStopReset() {
