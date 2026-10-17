@@ -42,6 +42,7 @@ struct AlarmLiveActivity: Widget {
                 AlarmIcon(attributes: attributes)
             } compactTrailing: {
                 AlarmTimeText(state: state)
+                    .minimumScaleFactor(0.7)
                     .frame(maxWidth: 56)
                     .foregroundStyle(attributes.tintColor)
             } minimal: {
