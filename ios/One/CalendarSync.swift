@@ -476,7 +476,8 @@ enum NativeEvents {
 
     /// `identifier` nil = a new event starting at `start`.
     /// `start`: for an existing event, the start of the occurrence that was tapped; for a new event, when it starts.
-    static func edit(identifier: String? = nil, start: Date = .now) {
+    /// `end`: for a new event, when it ends (default one hour after `start`).
+    static func edit(identifier: String? = nil, start: Date = .now, end: Date? = nil) {
         let sync = CalendarSync.shared
         let vc = EKEventEditViewController()
         vc.eventStore = sync.eventStore
@@ -489,7 +490,7 @@ enum NativeEvents {
         } else {
             let event = EKEvent(eventStore: sync.eventStore)
             event.startDate = start
-            event.endDate = start.addingTimeInterval(3600)
+            event.endDate = end ?? start.addingTimeInterval(3600)
             event.calendar = sync.eventStore.defaultCalendarForNewEvents
             vc.event = event
         }

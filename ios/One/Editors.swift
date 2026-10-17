@@ -122,7 +122,7 @@ struct TaskEditor: View {
                         Text(ringsAsAlarm
                              ? (Ringer.isDenied ? "Alarms are turned off for Today in Settings, so this will only notify."
                                                 : "Rings like an alarm, even on Silent. Stopping it doesn't complete the task.")
-                             : "Keeps nudging every few minutes until you mark it done.")
+                             : "One notification at the reminder time.")
                     }
                 }
                 Section {
@@ -225,15 +225,17 @@ struct EventEditor: View {
         return cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
     }
 
-    init(event: OneEvent? = nil, day: Date = .now) {
+    /// `start` / `end`: a new event at a slot picked on the Week grid (instead of the default time on `day`).
+    init(event: OneEvent? = nil, day: Date = .now, start slotStart: Date? = nil, end slotEnd: Date? = nil) {
         self.event = event
-        let rounded = Self.defaultStart(for: day)
+        let rounded = slotStart ?? Self.defaultStart(for: day)
         defaultStart = rounded
         let start = event?.start ?? rounded
         _title = State(initialValue: event?.title ?? "")
         _isAllDay = State(initialValue: event?.isAllDay ?? false)
         _start = State(initialValue: start)
-        _end = State(initialValue: start.addingTimeInterval(TimeInterval((event?.durationMinutes ?? 60) * 60)))
+        _end = State(initialValue: event == nil ? slotEnd ?? start.addingTimeInterval(3600)
+                                                : start.addingTimeInterval(TimeInterval((event?.durationMinutes ?? 60) * 60)))
         _repeatRule = State(initialValue: event?.repeats)
         _reminder = State(initialValue: event == nil ? 10 : event?.reminderOffsetMinutes)
         _ringsAsAlarm = State(initialValue: event?.ringsAsAlarm ?? false)

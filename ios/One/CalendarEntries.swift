@@ -108,9 +108,12 @@ enum OpenedEntry: Identifiable {
     case editSystem(String)
     case local(OneEvent)
     case task(OneTask)
+    /// A new event at a slot picked on the Week grid (long-press), when our editor is used.
+    case new(start: Date, end: Date)
 
     var id: String {
         switch self {
+        case .new(let start, _): "n\(start.timeIntervalSince1970)"
         case .system(let id): "s" + id
         case .editSystem(let id): "e" + id
         case .local(let e): "l\(e.persistentModelID.hashValue)"
