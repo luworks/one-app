@@ -516,6 +516,8 @@ private struct YearView: View {
         guard let end = cal.date(byAdding: .year, value: 1, to: start) else { return [:] }
         var result: [Date: Int] = [:]
         for e in CalendarEntries.make(in: DateInterval(start: start, end: end), events: events, tasks: tasks, alarms: alarms) {
+            // A repeating alarm (a daily "Wake up") would light every day and hide the busy ones: only one-time alarms count.
+            if case .alarm = e.source, e.repeats { continue }
             let last = cal.startOfDay(for: max(e.start, e.end.addingTimeInterval(-1)))
             var d = cal.startOfDay(for: max(e.start, start))
             while d <= last, d < end {
