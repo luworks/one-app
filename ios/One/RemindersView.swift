@@ -116,6 +116,7 @@ struct RemindersView: View {
 
     /// My Lists in display order: the user's own order once they have dragged, else numbered lists first by number.
     private var sortedLists: [OneList] {
+        let lists = self.lists.filter { !$0.isDeleted }
         guard !listsReordered else { return lists }
         return lists.enumerated().sorted { a, b in
             let na = ListName.number(a.element.name), nb = ListName.number(b.element.name)
@@ -130,7 +131,7 @@ struct RemindersView: View {
     private var layout: SmartListLayout { SmartListLayout(order: smartOrder, hidden: smartHidden) }
 
     var body: some View {
-        let stats = Stats(tasks: tasks)
+        let stats = Stats(tasks: tasks.filter { !$0.isDeleted })
         NavigationStack(path: $path) {
             List {
                 if isEditing {

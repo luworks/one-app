@@ -8,8 +8,11 @@ struct ReminderListScreen: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \OneList.order) private var lists: [OneList]
-    @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
+    // `@Query` can hand back a model for one more render after it was deleted; reading it then crashes.
+    @Query(sort: \OneList.order) private var allLists: [OneList]
+    @Query(sort: \OneTask.createdAt) private var allTasks: [OneTask]
+    private var lists: [OneList] { allLists.filter { !$0.isDeleted } }
+    private var tasks: [OneTask] { allTasks.filter { !$0.isDeleted } }
 
     @State private var showsCompleted = false
     @State private var editing: OneList?
@@ -217,7 +220,7 @@ struct ReminderListScreen: View {
                         Label(showsCompleted ? "Hide Completed" : "Show Completed", systemImage: showsCompleted ? "eye.slash" : "eye")
                     }
                     if let list {
-                        Button(role: .destructive) { pendingDelete = .make(list, context: context) } label: {
+                        Button(role: .destructive) { pendingDelete = .make(list, context: context) { dismiss() } } label: {
                             Label("Delete List", systemImage: "trash")
                         }
                     }

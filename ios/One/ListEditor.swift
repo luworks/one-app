@@ -53,6 +53,21 @@ private struct DeleteListAlert: ViewModifier {
     @Environment(\.modelContext) private var context
     @Binding var pending: PendingListDeletion?
 
+    /// Screens showing the list pop first and the delete runs once they are gone, so no visible row
+    /// reads a model that was just deleted.
+    private func run(_ item: PendingListDeletion, keepingTasks: Bool) {
+        guard let after = item.afterDelete else {
+            ListActions.delete(item.list, keepingTasks: keepingTasks, in: context)
+            return
+        }
+        after()
+        let context = context
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            ListActions.delete(item.list, keepingTasks: keepingTasks, in: context)
+        }
+    }
+
     func body(content: Content) -> some View {
         content.alert(
             Text(pending.map { "Delete “\($0.name)”?" } ?? "Delete List?"),
@@ -61,17 +76,14 @@ private struct DeleteListAlert: ViewModifier {
         ) { item in
             if item.count == 0 {
                 Button("Delete", role: .destructive) {
-                    ListActions.delete(item.list, in: context)
-                    item.afterDelete?()
+                    run(item, keepingTasks: False)
                 }
             } else {
                 Button("Delete List, Keep Reminders") {
-                    ListActions.delete(item.list, keepingTasks: true, in: context)
-                    item.afterDelete?()
+                    run(item, keepingTasks: True)
                 }
                 Button("Delete List and Reminders", role: .destructive) {
-                    ListActions.delete(item.list, in: context)
-                    item.afterDelete?()
+                    run(item, keepingTasks: False)
                 }
             }
             Button("Cancel", role: .cancel) {}
