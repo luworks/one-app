@@ -362,7 +362,8 @@ struct AgendaHeader: View {
     var body: some View {
         Text(title)
             .font(.footnote.weight(.semibold))
-            .foregroundStyle(.secondary)
+            // secondaryLabel, not .secondary: a list header is already dimmed, and .secondary on top read too faint.
+            .foregroundStyle(Color(.secondaryLabel))
             .textCase(nil)
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 2, trailing: 20))
     }

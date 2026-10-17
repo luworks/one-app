@@ -7,7 +7,10 @@ struct TimeColumn: View {
         Text(date.formatted(date: .omitted, time: .shortened))
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
-            .frame(width: 58, alignment: .leading)
+            // Never wraps: at large text sizes the column widens instead of breaking "09:00" over three lines.
+            .lineLimit(1)
+            .fixedSize()
+            .frame(minWidth: 58, alignment: .leading)
     }
 }
 
@@ -34,13 +37,15 @@ struct TitleDetail<Detail: View>: View {
 
 /// The travel-time line under an event with a location: "Drive 18 min · Leave by 14:20".
 struct TravelLine: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let text: String
     var body: some View {
         Label(text, systemImage: "car.fill")
             .font(.caption)
             .foregroundStyle(.secondary)
             .labelStyle(.titleAndIcon)
-            .lineLimit(1)
+            // One line normally; at accessibility sizes "Drive 18 min · Leave by 14:20" wraps instead of losing the time.
+            .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
     }
 }
 
