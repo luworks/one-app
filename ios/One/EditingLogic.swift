@@ -131,7 +131,7 @@ enum Editing {
             let others = hits.filter { score($0.matched) > 0 && score($0.matched) < best && !$0.matched.isSubset(of: covered) }
             return (top + others).map(\.item)
         }
-        if has(text, #"meeting|会议|开会|[把将的]会(?=[推改挪提延移取都])"#) {
+        if has(text, #"meeting|会议|[把将的]会(?=[推改挪提延移取都])"#) {
             // With attendee info, meetings are the events other people are on; without it (no calendar access) any event could be it.
             let events = items.filter { $0.type == "event" }
             let withPeople = events.filter { $0.attendees > 0 }

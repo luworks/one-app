@@ -4,7 +4,7 @@ import XCTest
 /// NL-capture eval. Prints accuracy per split; fails if a split drops below its ratchet.
 /// Raise the ratchet after a round that improves it; never lower it.
 final class CaptureEvalTests: XCTestCase {
-    static let ratchet = ["train": 44, "test": 22]
+    static let ratchet = ["train": 46, "test": 22]
 
     struct Case: Decodable {
         let split: String

@@ -108,6 +108,21 @@ final class EditRoutingTests: XCTestCase {
         XCTAssertTrue(isEdit("把牙医改到下午4点，提醒我"))
     }
 
+    /// New items whose wording contains an edit-like verb (change, update, move, 安排在, 开会): the same bug class.
+    func testNewItemsWithEditLikeVerbsAreCaptures() {
+        for s in [
+            "Remind me to change the oil on Saturday",
+            "Don't forget to update the slides",
+            "提醒我周五把合同改一下",
+            "Move the car at 3pm",
+            "把车挪一下，下午3点",
+            "Schedule a meeting with Alex on Friday at 2pm",
+            "安排在周五下午3点开会",
+        ] {
+            XCTAssertFalse(isEdit(s), s)
+        }
+    }
+
     func testQuestionsAreNeverEdits() {
         XCTAssertFalse(isEdit("What's at 3pm?"))
         XCTAssertFalse(isEdit("下午3点有什么？"))
