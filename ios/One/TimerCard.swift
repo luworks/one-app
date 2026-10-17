@@ -123,7 +123,7 @@ final class TimerController {
                                                    pauseButton: AlarmButton(text: "Pause", textColor: .orange, systemImageName: "pause.fill")),
             paused: AlarmPresentation.Paused(title: "Paused",
                                              resumeButton: AlarmButton(text: "Resume", textColor: .orange, systemImageName: "play.fill")))
-        let attributes = AlarmAttributes<AlarmScheduler.Meta>(presentation: presentation, tintColor: .orange)
+        let attributes = AlarmAttributes<AlarmScheduler.Meta>(presentation: presentation, metadata: AlarmMeta(kind: .timer), tintColor: .orange)
         return .timer(duration: TimeInterval(seconds), attributes: attributes)
     }
     #endif
