@@ -98,6 +98,7 @@ struct WorldClockView: View {
                         CityCard(identifier: id, date: date, isHome: false, isEditing: editMode.isEditing)
                             .contextMenu { RowAction.delete { remove(id) } }
                     }
+                    .plainClockRow(top: 5, bottom: 5)
                     .deleteDisabled(true)
                 }
                 .onMove { store.move(from: $0, to: $1) }
@@ -369,7 +370,7 @@ private struct OverlapCard: View {
                 Chart {
                     ForEach(curve, id: \.date) { point in
                         AreaMark(x: .value("Time", point.date), y: .value("Working", point.count))
-                            .interpolationMethod(.catmullRom)
+                            .interpolationMethod(.monotone)
                             .foregroundStyle(LinearGradient(colors: [Color(.systemGreen).opacity(0.55), Color(.systemGreen).opacity(0.08)],
                                                             startPoint: .top, endPoint: .bottom))
                     }

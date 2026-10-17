@@ -197,9 +197,10 @@ final class ClockTests: XCTestCase {
     func testScreenshots() throws {
         guard let dir = ProcessInfo.processInfo.environment["CLOCK_SHOTS"] else { throw XCTSkip("set TEST_RUNNER_CLOCK_SHOTS") }
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        defer { XCUIDevice.shared.appearance = .light }
-        for (appearance, suffix) in [(XCUIDevice.Appearance.light, "light"), (.dark, "dark")] {
-            XCUIDevice.shared.appearance = appearance
+        // Run once with the simulator in light mode and once in dark (`xcrun simctl ui <udid> appearance dark`),
+        // with TEST_RUNNER_CLOCK_SHOTS_SUFFIX=light / dark.
+        let suffix = ProcessInfo.processInfo.environment["CLOCK_SHOTS_SUFFIX"] ?? "light"
+        do {
             launch(["-dataset", TestData.path, "-uiTestingCities", "America/New_York,Europe/London,Asia/Kolkata,Asia/Tokyo"])
             func shot(_ name: String) {
                 _ = app.wait(for: .runningForeground, timeout: 1)
@@ -216,11 +217,6 @@ final class ClockTests: XCTestCase {
                 .press(forDuration: 0.05, thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
             shot("2b-world-clock-scrubbed")
             app.buttons["worldClock.scrub"].tap()
-            app.buttons["worldClock.overlap"].tap()
-            _ = app.descendants(matching: .any)["worldClock.overlapCard"].waitForExistence(timeout: 3)
-            usleep(500_000)
-            shot("2c-world-clock-overlap")
-            app.buttons["worldClock.overlap"].tap()
             plus.tap()
             XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
             shot("3-choose-city")
@@ -234,6 +230,19 @@ final class ClockTests: XCTestCase {
             section("timer").tap()
             XCTAssertTrue(app.buttons["timer.start"].waitForExistence(timeout: 3))
             shot("5-timer")
+            app.terminate()
+
+            // Overlap, with cities that do share working hours; tapping the card scrubs to the start of the overlap.
+            launch(["-uiTestingCities", "America/New_York,America/Chicago,Europe/London"])
+            section("worldClock").tap()
+            app.buttons["worldClock.overlap"].tap()
+            let card = app.descendants(matching: .any)["worldClock.overlapCard"]
+            XCTAssertTrue(card.waitForExistence(timeout: 3))
+            usleep(500_000)
+            shot("2c-world-clock-overlap")
+            card.tap()
+            usleep(800_000)
+            shot("2d-world-clock-overlap-jumped")
             app.terminate()
         }
     }
