@@ -18,8 +18,13 @@ struct WidgetItem: Codable, Hashable, Identifiable {
     /// Set for events that live in Apple Calendar (system events and Today's events mirrored there). When the widget can
     /// read EventKit itself it drops these and shows the live copies instead. Optional so older snapshots still decode.
     var externalID: String?
+    /// Events with a location, when Travel time is on and the app has an estimate: driving minutes and when to leave.
+    /// Optional so older snapshots still decode.
+    var travelMinutes: Int?
+    var leaveBy: Date?
 
-    init(id: String, title: String, start: Date, end: Date? = nil, isAllDay: Bool = false, kind: Kind, externalID: String? = nil) {
+    init(id: String, title: String, start: Date, end: Date? = nil, isAllDay: Bool = false, kind: Kind, externalID: String? = nil,
+         travelMinutes: Int? = nil, leaveBy: Date? = nil) {
         self.id = id
         self.title = title
         self.start = start
@@ -27,6 +32,14 @@ struct WidgetItem: Codable, Hashable, Identifiable {
         self.isAllDay = isAllDay
         self.kind = kind
         self.externalID = externalID
+        self.travelMinutes = travelMinutes
+        self.leaveBy = leaveBy
+    }
+
+    /// "Drive 18 min · Leave by 14:20" for this item at `now`, or nil without an estimate.
+    func travelText(now: Date, time: (Date) -> String) -> String? {
+        guard let travelMinutes, let leaveBy, start > now else { return nil }
+        return "Drive \(TravelTime.durationText(seconds: Double(travelMinutes) * 60)) · \(TravelTime.leaveText(leaveBy: leaveBy, now: now, time: time))"
     }
 
     /// An event's rows on `days`, the way the Calendar tab reads them: clipped to each day it overlaps, and all-day on a day
@@ -147,7 +160,24 @@ enum NextItems {
     /// reminders and alarms always come from the snapshot.
     static func merge(snapshot: [WidgetItem], live: [WidgetItem]?) -> [WidgetItem] {
         guard let live else { return snapshot }
-        return (snapshot.filter { $0.kind != .event || $0.externalID == nil } + live).sorted(by: ordered)
+        // The widget can't compute travel time (no location, no network): keep the app's estimate on the live copy
+        // of the same occurrence (same Apple Calendar event, same start).
+        var travel: [String: WidgetItem] = [:]
+        for item in snapshot where item.kind == .event && item.leaveBy != nil {
+            if let id = item.externalID { travel[travelKey(id, item.start)] = item }
+        }
+        let carried = live.map { item -> WidgetItem in
+            guard let id = item.externalID, let from = travel[travelKey(id, item.start)] else { return item }
+            var copy = item
+            copy.travelMinutes = from.travelMinutes
+            copy.leaveBy = from.leaveBy
+            return copy
+        }
+        return (snapshot.filter { $0.kind != .event || $0.externalID == nil } + carried).sorted(by: ordered)
+    }
+
+    private static func travelKey(_ externalID: String, _ start: Date) -> String {
+        "\(externalID)@\(Int(start.timeIntervalSince1970))"
     }
 
     /// Still worth showing at `now`: all-day items for their whole day, events until they end, the rest until they start.
@@ -183,7 +213,8 @@ enum NextItems {
         let last = midnights.last ?? now.addingTimeInterval(86_400)
         var dates = Set([now] + midnights)
         for item in items where !item.isAllDay {
-            for d in [item.start, item.end].compactMap({ $0 }) where d > now && d < last {
+            // The leave-by time too, where "Leave by 14:20" turns into "Leave now".
+            for d in [item.start, item.end, item.leaveBy].compactMap({ $0 }) where d > now && d < last {
                 dates.insert(d)
             }
         }

@@ -14,6 +14,8 @@
 	</array>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Today rings alarms you set on tasks and events, even on Silent.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Today shows how long it takes to get to your upcoming events and when to leave. Your location goes only to Apple Maps to work out the route.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -16,6 +16,8 @@ struct ExternalEvent: Identifiable, Hashable {
     var calendarID: String = ""
     let calendarTitle: String
     let color: Color
+    /// Address plus coordinate (when Apple Calendar has one), for travel time. Nil without a location.
+    var place: TravelPlace? = nil
 
     var durationMinutes: Int { max(1, Int(end.timeIntervalSince(start) / 60)) }
 }
@@ -178,7 +180,8 @@ final class CalendarSync {
                               title: e.title ?? "Untitled", location: e.location ?? "",
                               start: e.startDate, end: e.endDate, isAllDay: e.isAllDay,
                               calendarID: e.calendar.calendarIdentifier,
-                              calendarTitle: e.calendar.title, color: Color(cgColor: e.calendar.cgColor))
+                              calendarTitle: e.calendar.title, color: Color(cgColor: e.calendar.cgColor),
+                              place: Self.place(e))
             }
     }
 
@@ -189,18 +192,36 @@ final class CalendarSync {
 
     /// The calendar a mirrored event (one Today created) lives in: its color, and whether the Calendars list hides it.
     func calendar(forExternalID id: String?) -> SystemCalendar? {
+        mirror(id)?.calendar
+    }
+
+    /// The location of a mirrored event's system copy (Today's own events keep no location), for travel time.
+    func place(forExternalID id: String?) -> TravelPlace? {
+        mirror(id)?.place
+    }
+
+    private func mirror(_ id: String?) -> MirrorLookup? {
         _ = version
         guard isOn, storeReady, let id else { return nil }
         if mirrorCacheVersion != version {
             mirrorCache = [:]
             mirrorCacheVersion = version
         }
-        if let hit = mirrorCache[id] { return hit.calendar }
-        let found = store.event(withIdentifier: id)?.calendar.map(Self.describe)
-        mirrorCache[id] = MirrorLookup(calendar: found)
+        if let hit = mirrorCache[id] { return hit }
+        let ek = store.event(withIdentifier: id)
+        let found = MirrorLookup(calendar: ek?.calendar.map(Self.describe), place: ek.flatMap(Self.place))
+        mirrorCache[id] = found
         return found
     }
-    private struct MirrorLookup { let calendar: SystemCalendar? }
+
+    /// An event's address, with the coordinate Apple Calendar stored when the location was picked from Maps.
+    static func place(_ e: EKEvent) -> TravelPlace? {
+        let text = (e.location ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        let geo = e.structuredLocation?.geoLocation?.coordinate
+        return TravelPlace(address: text, latitude: geo?.latitude, longitude: geo?.longitude)
+    }
+    private struct MirrorLookup { let calendar: SystemCalendar?; let place: TravelPlace? }
     @ObservationIgnored private var mirrorCache: [String: MirrorLookup] = [:]
     @ObservationIgnored private var mirrorCacheVersion = -1
 
@@ -370,6 +391,7 @@ struct ExternalEventRow: View {
     let event: ExternalEvent
     /// The list that holds this row asks "this event or the series?" (see `entryDeleteDialog`).
     @Binding var pendingDelete: CalEntry?
+    @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
     /// The same swipe and long-press actions as in the Calendar tab.
     private var entry: CalEntry {
@@ -383,13 +405,16 @@ struct ExternalEventRow: View {
                 TimeColumn(date: event.start)
             }
             CalendarBar(color: event.color)
-            TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
-                Label(event.isAllDay ? event.calendarTitle : "\(DurationLabel.text(minutes: event.durationMinutes)) · \(event.calendarTitle)",
-                      systemImage: "calendar")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(.titleAndIcon)
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
+                    Label(event.isAllDay ? event.calendarTitle : "\(DurationLabel.text(minutes: event.durationMinutes)) · \(event.calendarTitle)",
+                          systemImage: "calendar")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                }
+                if let travel { TravelLine(text: travel) }
             }
             Spacer(minLength: 0)
         }
@@ -403,8 +428,15 @@ struct ExternalEventRow: View {
         .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(EventSpeech.label(title: event.title, start: event.start, end: event.end, isAllDay: event.isAllDay,
-                                              location: event.location, calendar: event.calendarTitle))
+                                              location: event.location, calendar: event.calendarTitle)
+                            + (travel.map { ". " + $0 } ?? ""))
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// "Drive 18 min · Leave by 14:20" for an upcoming event with a location (today or tomorrow).
+    private var travel: String? {
+        guard travelOn else { return nil }
+        return TravelTimes.shared.label(eventID: event.eventIdentifier, start: event.start, isAllDay: event.isAllDay, place: event.place)
     }
 }
 
