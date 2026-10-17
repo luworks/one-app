@@ -212,7 +212,7 @@ enum AlarmScheduler {
                                              countdown: snooze ? AlarmPresentation.Countdown(title: resource) : nil)
         let attributes = AlarmAttributes<Meta>(presentation: presentation, metadata: AlarmMeta(kind: .alarm), tintColor: .orange)
         let configuration = AlarmManager.AlarmConfiguration<Meta>(
-            countdownDuration: snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(snoozeMinutes * 60)) : nil,
+            countdownDuration: snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(AlarmPlan.snoozeMinutes(nearest: snoozeMinutes) * 60)) : nil,
             schedule: schedule,
             attributes: attributes,
             sound: AlarmSound.named(sound)?.alertSound ?? .default)

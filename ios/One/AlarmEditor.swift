@@ -85,7 +85,7 @@ struct AlarmEditor: View {
     @State private var sound: String
     @State private var snoozeMinutes: Int
 
-    static let snoozeChoices = [1, 3, 5, 7, 9, 10, 15, 20, 30]
+    static let snoozeChoices = AlarmPlan.snoozeChoices
 
     init(alarm: OneAlarm? = nil) {
         self.alarm = alarm
@@ -97,7 +97,7 @@ struct AlarmEditor: View {
         _weekdays = State(initialValue: Set(alarm?.weekdays ?? []))
         _snooze = State(initialValue: alarm?.snooze ?? true)
         _sound = State(initialValue: alarm?.sound ?? "")
-        _snoozeMinutes = State(initialValue: alarm?.snoozeMinutes ?? 9)
+        _snoozeMinutes = State(initialValue: AlarmPlan.snoozeMinutes(nearest: alarm?.snoozeMinutes ?? AlarmPlan.defaultSnoozeMinutes))
     }
 
     var body: some View {
