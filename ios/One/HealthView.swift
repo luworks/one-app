@@ -12,6 +12,7 @@ struct HealthView: View {
     @AppStorage("health.weightRange") private var weightDays = 30
 
     var body: some View {
+        ScrollViewReader { proxy in
         List {
             if !source.isAvailable {
                 unavailable
@@ -25,7 +26,7 @@ struct HealthView: View {
                 }
                 StepsCard(days: snapshot.steps).plainRow(top: 8, bottom: 8)
                 WeightCard(samples: snapshot.weights, days: $weightDays).plainRow(top: 8, bottom: 8)
-                SleepCard(nights: snapshot.nights).plainRow(top: 8, bottom: 8)
+                SleepCard(nights: snapshot.nights).plainRow(top: 8, bottom: 8).id("sleep")
                 footer
             } else {
                 ProgressView().frame(maxWidth: .infinity).plainRow(top: 40, bottom: 0)
@@ -39,6 +40,15 @@ struct HealthView: View {
             snapshot = (try? await source.snapshot(now: .now)) ?? .empty
         }
         .refreshable { snapshot = (try? await source.snapshot(now: .now)) ?? .empty }
+        .onChange(of: snapshot) {
+            // Screenshots only (`-uiTesting -uiTestingScrollTo sleep`).
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingScrollTo"), i + 1 < args.count {
+                let target = args[i + 1]
+                Task { try? await Task.sleep(for: .milliseconds(400)); proxy.scrollTo(target, anchor: .top) }
+            }
+        }
+        }
     }
 
     /// Health never tells an app that reading was denied, so the hint covers both "no data" and "not allowed".
@@ -106,8 +116,9 @@ private struct StepsCard: View {
                         .foregroundStyle(.secondary)
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 }
+                .chartYScale(domain: 0...max(goal, days.map(\.value).max() ?? 0) * 1.1)
                 .chartXAxis { AxisMarks(values: .stride(by: .day)) { _ in AxisValueLabel(format: .dateTime.weekday(.narrow)) } }
-                .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
+                .chartYAxis { AxisMarks(position: .trailing, values: [0, goal / 2, goal]) }
                 .frame(height: 110)
                 if let avg = HealthMath.average(days.map(\.value)) {
                     Text("7-day average \(avg.formatted(.number.precision(.fractionLength(0))))")
@@ -176,7 +187,8 @@ private struct WeightCard: View {
                     let low = (values.min() ?? 0) - 0.6, high = (values.max() ?? 0) + 0.6
                     Chart(window) { s in
                         LineMark(x: .value("Date", s.date), y: .value("Weight", display(s.kilograms)))
-                            .interpolationMethod(.monotone)
+                            .interpolationMethod(.linear)
+                            .lineStyle(StrokeStyle(lineWidth: 1.5))
                             .foregroundStyle(Color.purple)
                         PointMark(x: .value("Date", s.date), y: .value("Weight", display(s.kilograms)))
                             .symbolSize(14)

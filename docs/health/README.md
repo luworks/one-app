@@ -44,4 +44,11 @@ Health tab 上 + 仍然是"新提醒"（和 Today/Reminders 一样）。Health �
 
 ## 截图
 
-样例数据，Today-Dogfood 模拟器：`health-light.png`、`health-dark.png`（以及往下滚动后的 `health-light-2.png`）。
+样例数据，模拟器 Today-Health（iPhone 18 Pro Max），启动参数 `-uiTesting -dataset tests/fixtures/today-dataset.json -uiTestingTab health`（滚到睡眠卡再加 `-uiTestingScrollTo sleep`）：
+
+- `health-light.png` / `health-dark.png`：步数、体重
+- `health-light-2.png` / `health-dark-2.png`：体重、睡眠、页脚
+
+## 已知问题
+
+- 第 5 个 tab 让顶部 pill 栏放不下了：Pro Max 上 Health pill 右侧就被截断（栏变成可横滑），小屏 iPhone 更明显。要留这个 tab，得把 pill 收窄或改成别的入口。
