@@ -75,7 +75,8 @@ enum CalendarEntries {
                 end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: x.end)) ?? x.end
             }
             result.append(CalEntry(id: x.id, source: .system(x.eventIdentifier), title: x.title, location: x.location,
-                                   start: x.start, end: end, isAllDay: x.isAllDay, color: x.color, calendarTitle: x.calendarTitle))
+                                   start: x.start, end: end, isAllDay: x.isAllDay, color: x.color, calendarTitle: x.calendarTitle,
+                                   repeats: x.repeats))
         }
 
         for t in tasks where !t.isDone {

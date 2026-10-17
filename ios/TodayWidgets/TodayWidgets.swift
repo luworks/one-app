@@ -1,13 +1,16 @@
+import EventKit
 import SwiftUI
 import WidgetKit
 
 // "Next up": the next three things today (events, reminders with a time, alarms), for the Lock Screen and Home Screen.
-// The widget reads only the JSON snapshot the app writes into the App Group (see Shared/WidgetSnapshot.swift).
+// The widget reads the JSON snapshot the app writes into the App Group (see Shared/WidgetSnapshot.swift) and, when it may,
+// Apple Calendar itself, so events added there show up without opening the app.
 
 @main
 struct TodayWidgetsBundle: WidgetBundle {
     var body: some Widget {
         NextUpWidget()
+        AlarmLiveActivity()
     }
 }
 
@@ -41,17 +44,53 @@ struct NextUpProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (NextUpEntry) -> Void) {
-        let items = WidgetSnapshot.load()?.items ?? []
+        let items = Self.currentItems(now: .now)
         // The widget gallery shows sample items when the app hasn't written anything yet.
         completion(NextUpEntry(date: .now, items: context.isPreview && items.isEmpty ? Self.sample(now: .now) : items))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<NextUpEntry>) -> Void) {
         let now = Date.now
-        let items = WidgetSnapshot.load()?.items ?? []
-        // One entry at each start and end, so the list advances by itself; the last one is midnight, then reload.
-        let entries = NextItems.timelineDates(for: items, now: now).map { NextUpEntry(date: $0, items: items) }
-        completion(Timeline(entries: entries, policy: .atEnd))
+        let items = Self.currentItems(now: now)
+        // One entry at each start and end, so the list advances by itself, through tomorrow in case iOS delays the reload.
+        // Reload hourly (and at midnight) to re-read Apple Calendar.
+        let entries = NextItems.timelineDates(for: items, now: now, days: 2).map { NextUpEntry(date: $0, items: items) }
+        completion(Timeline(entries: entries, policy: .after(NextItems.reloadDate(now: now))))
+    }
+
+    /// The app's snapshot, with its Apple Calendar events replaced by the ones in Apple Calendar right now.
+    static func currentItems(now: Date) -> [WidgetItem] {
+        let snapshot = WidgetSnapshot.load()
+        return NextItems.merge(snapshot: snapshot?.items ?? [], live: liveEvents(settings: snapshot?.calendar, now: now))
+    }
+
+    /// One store for the extension's lifetime: creating an EKEventStore is slow.
+    private static let store = EKEventStore()
+
+    /// Apple Calendar events for the snapshot's days, read the way the app reads them (same visible calendars).
+    /// nil when the widget can't or shouldn't read them: an app build that doesn't say how, Apple Calendar off in Today,
+    /// or no full access for the extension. Then the snapshot's copies are used.
+    static func liveEvents(settings: WidgetSnapshot.CalendarSettings?, now: Date, calendar: Calendar = .current) -> [WidgetItem]? {
+        guard let settings, settings.isOn, EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return nil }
+        let today = calendar.startOfDay(for: now)
+        let days = (0..<WidgetSnapshot.days).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        guard let end = calendar.date(byAdding: .day, value: WidgetSnapshot.days, to: today) else { return nil }
+        let hidden = Set(settings.hiddenCalendarIDs)
+        var visible: [EKCalendar]?
+        if !hidden.isEmpty {
+            visible = store.calendars(for: .event).filter { !hidden.contains($0.calendarIdentifier) }
+            if visible?.isEmpty == true { return [] }
+        }
+        let predicate = store.predicateForEvents(withStart: today, end: end, calendars: visible)
+        return store.events(matching: predicate).flatMap { e -> [WidgetItem] in
+            let id = e.eventIdentifier ?? UUID().uuidString
+            var end: Date = e.endDate
+            // EventKit ends an all-day event on its last day; make the end exclusive, as the app does.
+            if e.isAllDay { end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: e.endDate)) ?? e.endDate }
+            return WidgetItem.eventRows(id: "\(id)@\(e.startDate.timeIntervalSince1970)", title: e.title ?? "Untitled",
+                                        start: e.startDate, end: end, isAllDay: e.isAllDay, externalID: id,
+                                        days: days, calendar: calendar)
+        }
     }
 
     static func sample(now: Date) -> [WidgetItem] {
@@ -59,7 +98,8 @@ struct NextUpProvider: TimelineProvider {
         return [
             WidgetItem(id: "s1", title: "Team standup", start: base, end: base.addingTimeInterval(900), kind: .event),
             WidgetItem(id: "s2", title: "Call Alex", start: base.addingTimeInterval(5400), kind: .reminder),
-            WidgetItem(id: "s3", title: "Dentist", start: base.addingTimeInterval(10800), end: base.addingTimeInterval(14400), kind: .event),
+            WidgetItem(id: "s3", title: "Dentist", start: base.addingTimeInterval(10800), end: base.addingTimeInterval(14400), kind: .event,
+                       travelMinutes: 18, leaveBy: base.addingTimeInterval(10800 - 18 * 60)),
         ]
     }
 }
@@ -85,6 +125,9 @@ struct NextUpView: View {
         }
     }
 }
+
+/// "14:20" in the user's 12/24-hour setting, for "Leave by 14:20".
+func shortTime(_ date: Date) -> String { date.formatted(date: .omitted, time: .shortened) }
 
 /// "15:00" (in the user's 12/24-hour setting) or "All day".
 struct TimeText: View {
@@ -211,6 +254,12 @@ struct SmallView: View {
                 Text(item.title)
                     .font(.headline)
                     .lineLimit(2)
+                if next.today.first != nil, let travel = item.travelText(now: entry.date, time: shortTime) {
+                    Label(travel, systemImage: "car.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
                 Spacer(minLength: 0)
                 if next.today.first != nil, !item.isAllDay {
                     if item.start > entry.date {
@@ -285,6 +334,13 @@ struct MediumView: View {
                     .font(.subheadline)
                     .lineLimit(1)
                 Spacer(minLength: 0)
+                if let leaveBy = item.leaveBy, item.start > entry.date {
+                    Label(TravelTime.leaveText(leaveBy: leaveBy, now: entry.date, time: shortTime), systemImage: "car.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                }
             }
         }
     }

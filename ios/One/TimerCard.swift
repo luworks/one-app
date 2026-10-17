@@ -12,14 +12,17 @@ final class TimerController {
     static let shared = TimerController()
 
     private(set) var running: RunningTimer? = RunningTimer.load()
+    /// Today's Pomodoro rounds and the next step the card offers (UserDefaults, starts over at midnight).
+    private(set) var log: PomodoroLog = TimerController.initialLog()
     /// True while AlarmKit is ringing the timer.
     private(set) var isRinging = false
     /// A short line under the controls, e.g. when alarms are not allowed.
     var message: String?
 
-    func start(seconds: Int) async {
+    func start(seconds: Int, phase: PomodoroPhase = .focus) async {
         message = nil
         guard seconds > 0 else { return }
+        setLog { $0.pending = nil }
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { message = "Timers need iOS 26 or later."; return }
         let manager = AlarmManager.shared
@@ -32,10 +35,10 @@ final class TimerController {
         if let old = running { try? manager.cancel(id: old.id) }
         let id = UUID()
         // Saved before scheduling so a sync that runs on the AlarmKit update keeps it.
-        let timer = RunningTimer.start(id: id, seconds: seconds, now: .now)
+        let timer = RunningTimer.start(id: id, seconds: seconds, now: .now, phase: phase)
         set(timer)
         do {
-            _ = try await manager.schedule(id: id, configuration: Self.configuration(seconds: seconds))
+            _ = try await manager.schedule(id: id, configuration: Self.configuration(seconds: seconds, title: phase.title))
             AlarmScheduler.log.info("timer scheduled \(seconds)s")
         } catch {
             AlarmScheduler.log.error("timer failed \(error.localizedDescription, privacy: .public)")
@@ -69,8 +72,10 @@ final class TimerController {
         #endif
     }
 
+    /// Cancel while counting down (no round), or Stop while ringing (the round already counted when it rang).
     func cancel() {
         guard let timer = running else { return }
+        if isRinging { complete(timer) }
         #if canImport(AlarmKit)
         if #available(iOS 26, *) {
             if isRinging { try? AlarmManager.shared.stop(id: timer.id) }
@@ -82,15 +87,20 @@ final class TimerController {
 
     /// Lines the card up with AlarmKit: a timer it no longer has (rang and was stopped, or cancelled from the
     /// Lock Screen) is cleared; pause/resume done outside the app is followed.
+    /// A Focus round counts only when its countdown ran out: seen ringing, or gone at or after its end time
+    /// (stopped from the Lock Screen while the app was closed). Gone early means cancelled: no round.
     func refresh() {
+        setLog { _ in }  // midnight reset
         #if canImport(AlarmKit)
         guard #available(iOS 26, *), let timer = running else { isRinging = false; return }
         guard let live = ((try? AlarmManager.shared.alarms) ?? []).first(where: { $0.id == timer.id }) else {
+            if timer.ranToEnd(now: .now) { complete(timer) }
             isRinging = false
             set(nil)
             return
         }
         isRinging = live.state == .alerting
+        if isRinging { complete(timer) }
         switch live.state {
         case .paused where !timer.isPaused: set(timer.paused(now: .now))
         case .countdown where timer.isPaused: set(timer.resumed(now: .now))
@@ -101,6 +111,37 @@ final class TimerController {
         #endif
     }
 
+    /// "Done for now": drop the offered next step.
+    func dismissNextStep() { setLog { $0.pending = nil } }
+
+    private func complete(_ timer: RunningTimer) {
+        setLog { $0 = $0.completing(timer.pomodoroPhase, id: timer.id, now: .now) }
+    }
+
+    private func setLog(_ change: (inout PomodoroLog) -> Void) {
+        var next = log.current(.now)
+        change(&next)
+        if next != log {
+            log = next
+            PomodoroLog.save(next)
+        }
+    }
+
+    private static func initialLog() -> PomodoroLog {
+        let args = ProcessInfo.processInfo.arguments
+        #if DEBUG
+        // UI tests: `-pomodoroRounds N` starts the day with N finished Focus rounds, the last one just ended.
+        if let i = args.firstIndex(of: "-pomodoroRounds"), i + 1 < args.count, let n = Int(args[i + 1]) {
+            var log = PomodoroLog.empty(.now)
+            log.rounds = n
+            log.pending = n > 0 ? .focus : nil
+            return log
+        }
+        #endif
+        if args.contains("-uiTesting") { return .empty(.now) }
+        return PomodoroLog.load()
+    }
+
     private func set(_ timer: RunningTimer?) {
         running = timer
         RunningTimer.save(timer)
@@ -108,8 +149,9 @@ final class TimerController {
 
     #if canImport(AlarmKit)
     @available(iOS 26, *)
-    private static func configuration(seconds: Int) -> AlarmManager.AlarmConfiguration<AlarmScheduler.Meta> {
-        let title: LocalizedStringResource = "Timer"
+    private static func configuration(seconds: Int, title phaseTitle: String) -> AlarmManager.AlarmConfiguration<AlarmScheduler.Meta> {
+        // "Focus" or "Break": the full-screen alert, the Lock Screen and the Dynamic Island show this.
+        let title = LocalizedStringResource(String.LocalizationValue(phaseTitle))
         let alert: AlarmPresentation.Alert
         if #available(iOS 26.1, *) {
             alert = AlarmPresentation.Alert(title: title)
@@ -123,24 +165,35 @@ final class TimerController {
                                                    pauseButton: AlarmButton(text: "Pause", textColor: .orange, systemImageName: "pause.fill")),
             paused: AlarmPresentation.Paused(title: "Paused",
                                              resumeButton: AlarmButton(text: "Resume", textColor: .orange, systemImageName: "play.fill")))
-        let attributes = AlarmAttributes<AlarmScheduler.Meta>(presentation: presentation, tintColor: .orange)
+        let attributes = AlarmAttributes<AlarmScheduler.Meta>(presentation: presentation, metadata: AlarmMeta(kind: .timer), tintColor: .orange)
         return .timer(duration: TimeInterval(seconds), attributes: attributes)
     }
     #endif
 }
 
-/// "Timer" card at the top of the Alarms tab: a kitchen-timer dial (turn right to add, left to take away),
-/// quick chips and Start; while running, the time left with Pause/Resume and Cancel.
+/// "Focus timer" card at the top of the Alarms tab: a restrained Pomodoro on a kitchen-timer dial (turn right to add,
+/// left to take away), chips Focus 25 / Short break 5 / Long break 15 and Start; while running, the time left with
+/// Pause/Resume and Cancel. Today's finished Focus rounds show as dots; after a countdown ends the card offers one
+/// next step (a break, or Focus again) and a quiet "Done for now". Logic: Pomodoro.swift.
 struct TimerCard: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var controller = TimerController.shared
-    @State private var seconds = 5 * 60
+    @State private var seconds = PomodoroPhase.focus.seconds
+    /// The chip picked last; a custom dial value counts as Focus (`Pomodoro.phase`).
+    @State private var chosen: PomodoroPhase? = .focus
+
+    private var phase: PomodoroPhase { Pomodoro.phase(seconds: seconds, chosen: chosen) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Timer")
-                .font(.title3.weight(.bold))
-                .accessibilityAddTraits(.isHeader)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Focus timer")
+                    .font(.title3.weight(.bold))
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                roundDots
+            }
             // Dial beside the controls; stacked when that does not fit (a narrow phone or a large text size).
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: 20) { dialAndControls }
@@ -164,14 +217,69 @@ struct TimerCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .onAppear { controller.refresh() }
+        .onAppear {
+            controller.refresh()
+            preset(for: controller.log.nextStep)
+        }
         .onChange(of: AlarmCenter.shared.states) { controller.refresh() }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { controller.refresh() } }
+        .onChange(of: controller.log.nextStep) { _, next in preset(for: next) }
+        .onChange(of: seconds) { _, value in
+            // Turning the dial away from the offered step means the user wants something else: show the chips.
+            if let next = controller.log.nextStep, value != next.seconds { controller.dismissNextStep() }
+        }
+    }
+
+    /// Puts the offered next step on the dial, so it shows what the primary button will start. Also while the
+    /// finished countdown is still ringing (the dial is hidden then), so after Stop the dial already matches.
+    private func preset(for next: PomodoroPhase?) {
+        guard let next else { return }
+        chosen = next
+        seconds = next.seconds
+    }
+
+    /// Today's finished Focus rounds, ●●●○ in groups of 4.
+    private var roundDots: some View {
+        let rounds = controller.log.rounds
+        return Text(Pomodoro.dots(rounds).joined(separator: " "))
+            .font(.footnote)
+            .tracking(1.5)
+            .foregroundStyle(rounds > 0 ? Color.orange : Color(.tertiaryLabel))
+            .accessibilityLabel(Pomodoro.spokenRounds(rounds))
+            .accessibilityIdentifier("pomodoro.rounds")
+    }
+
+    private func nextStepControls(_ next: PomodoroPhase) -> some View {
+        VStack(spacing: 10) {
+            Button {
+                Task { await controller.start(seconds: next.seconds, phase: next) }
+            } label: {
+                Text(Pomodoro.nextTitle(next))
+                    .font(.body.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .tint(.orange)
+            .accessibilityIdentifier("pomodoro.next")
+            Button("Done for now") { controller.dismissNextStep() }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+                .padding(.vertical, 6)
+                .accessibilityIdentifier("pomodoro.done")
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder private var dialAndControls: some View {
         if let running = controller.running {
             RunningDial(timer: running, isRinging: controller.isRinging)
             runningControls(running)
+        } else if let next = controller.log.nextStep {
+            TimerDialView(seconds: $seconds)
+            nextStepControls(next)
         } else {
             TimerDialView(seconds: $seconds)
             setControls
@@ -179,13 +287,10 @@ struct TimerCard: View {
     }
 
     private var setControls: some View {
-        VStack(spacing: 10) {
-            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-                GridRow { chip(1); chip(5) }
-                GridRow { chip(10); chip(25) }
-            }
+        VStack(spacing: 8) {
+            ForEach(Pomodoro.chips, id: \.self) { chip($0) }
             Button {
-                Task { await controller.start(seconds: seconds) }
+                Task { await controller.start(seconds: seconds, phase: phase) }
             } label: {
                 Text("Start").font(.body.weight(.semibold)).frame(maxWidth: .infinity)
             }
@@ -198,19 +303,26 @@ struct TimerCard: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func chip(_ minutes: Int) -> some View {
-        Button {
-            seconds = minutes * 60
+    private func chip(_ chip: PomodoroPhase) -> some View {
+        let selected = seconds == chip.seconds && phase == chip
+        return Button {
+            chosen = chip
+            seconds = chip.seconds
             controller.message = nil
         } label: {
-            Text("\(minutes) min").font(.subheadline.weight(.medium)).lineLimit(1).fixedSize().frame(maxWidth: .infinity)
+            Text(chip.chipLabel)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+                .fixedSize()
+                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
         // Unselected chips use the primary color: a gray tint put gray text on a gray fill.
-        .tint(seconds == minutes * 60 ? .orange : .primary)
-        .accessibilityLabel("\(minutes) min")
-        .accessibilityIdentifier("timer.chip.\(minutes)")
+        .tint(selected ? .orange : .primary)
+        .accessibilityLabel("\(chip.chipLabel) minutes")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("timer.chip.\(chip.minutes)")
     }
 
     private func runningControls(_ timer: RunningTimer) -> some View {
@@ -347,6 +459,10 @@ private struct RunningDial: View {
                         .accessibilityIdentifier("timer.remaining")
                     if timer.isPaused || isRinging {
                         Text(isRinging ? "Ringing" : "Paused")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(timer.pomodoroPhase.title)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
