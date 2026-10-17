@@ -8,8 +8,9 @@ The display name is **Today**. The bundle id (`com.luworks.one`), the Xcode proj
 
 ## Test environment
 
-One simulator for everything: **Today-Dogfood** (`341B8786-E55B-4ECE-8720-BF1F2DF73899`). Sessions share it, so run one
-`xcodebuild test` at a time.
+One named simulator per session that runs tests (`Today-<purpose>`, iPhone 18 Pro Max, iOS 27) with its own
+`-derivedDataPath`, so nobody queues; never run tests on another session's simulator. **Today-Dogfood**
+(`341B8786-E55B-4ECE-8720-BF1F2DF73899`) is the main session's; the commands below use it.
 
 The test dataset lives in `tests/fixtures/today-dataset.json`: lists, reminders (flagged, overdue, completed, repeating,
 one that rings), events (repeating, all-day, across the week), alarms (on, off, repeating, once) and chats (one archived).
@@ -55,7 +56,7 @@ Four tabs: **Today · Calendar · Reminders · Alarms** as pills on top (swipe s
 - **+ (bottom right)** — tap adds what fits the page (alarm on Alarms, event on Calendar, otherwise a reminder); press and hold for New reminder / New event / New alarm. A new reminder opens the Due-style quick add: type what, set when with one tap on the grid (times of day, +/− nudges, days), with guesses from your own past reminders (on the device). Editing a reminder opens the full editor.
 - **Sidebar** — like ChatGPT / Claude (menu button or a swipe from the left edge): Search at the top (reminders, events in the whole system calendar, alarms), past AI chats grouped by day (swipe Archive / Delete, long-press Rename, an Archived section), New chat and Settings at the bottom. Finished chats archive themselves (a week without a message, or an hour after everything they added is done); off in Settings → "Archive finished chats".
 - **Gestures** (follow Apple Reminders / Calendar) — tap the circle to complete; swipe right to left for actions, which look the same in every list (Delete red and rightmost, a full swipe deletes with an Undo toast; Flag, Archive, Pin); long-press for Show Details / Flag / Today / Tomorrow / Unschedule / Delete. Deleting a repeating event asks "this event or the series?" first. Shake to undo.
-- **Ask AI** — a typed or dictated line becomes preview cards; one line can hold several items, each with Add / Skip, plus Add all. Uses the on-device Apple Intelligence model where available and the rule parser otherwise; follow-ups edit the preview ("make it 4pm", "the second one"), and "move / delete X" on existing items shows a change card. Questions get a local answer, and "Plan my day" proposes a schedule you apply or undo. Nothing is written until you tap Add / Apply.
+- **Ask AI** — a typed or dictated line becomes preview cards; one line can hold several items, each with Add / Skip, plus Add all. Uses the on-device Apple Intelligence model where available and the rule parser otherwise; follow-ups edit the preview ("make it 4pm", "the second one"), and "move / delete X" on existing items shows a change card. Questions get a local answer, and "Plan my day" proposes a schedule you apply or undo. "Tidy overdue" (a chip, or "整理过期") suggests a new date for each overdue reminder: flagged and recent ones first, three a day, then tomorrow and next week; one-offs older than a month lose their date. Change any row (Today / Tomorrow / Next Week / No Date / Keep), Apply writes the reminder date keeping its time of day, and Undo puts it back. Nothing is written until you tap Add / Apply.
 - **Settings** (from the sidebar) — Apple Calendar and Apple Reminders switches, the calendars list, Today options, chat auto-archive, and Delete All Data (two confirmations; never touches Apple Calendar or Apple Reminders).
 - **Habits are gone.** No tab, chips or streaks. The `Habit` model remains in the SwiftData schema, unused, so existing installs migrate without losing data.
 
@@ -72,7 +73,7 @@ Four tabs: **Today · Calendar · Reminders · Alarms** as pills on top (swipe s
 - `Rows.swift` — event and task rows with the swipe and long-press gestures; `RowActions.swift` — the shared swipe buttons; `EntryActions.swift` — the same gestures on calendar entries; `TaskActions.swift` — complete, delete, Undo toast and shake to undo.
 - `Editors.swift` — task and event editors. `SearchView.swift` — search across reminders, events and alarms. `SettingsView.swift` — Settings. `FirstRun.swift` — first-run access to Calendar, Reminders and alarms.
 - `Capture.swift` (rule parser), `Understanding.swift` and `AICapture.swift` (on-device model), `CaptureStack.swift` (several items from one line), `Editing.swift` (move / delete existing items), `Dialogue.swift` (follow-ups). `AskView.swift` — the AI page; `VoiceInput.swift` — dictation.
-- `CalendarSync.swift` — EventKit bridge for Apple Calendar events, plus wrappers for Apple's own event editor, viewer and calendar chooser. Debug builds accept `-seedCalendarDemo` (`CalendarDemoSeed.swift`). `RemindersSync.swift` — two-way sync with Apple Reminders.
+- `CalendarSync.swift` — EventKit bridge for Apple Calendar events, plus wrappers for Apple's own event editor, viewer and calendar chooser. Debug builds accept `-seedCalendarDemo` (`CalendarDemoSeed.swift`). `RemindersSync.swift` — two-way sync with Apple Reminders; debug-only hooks `-uiTestingAppleOp`, `-uiTestingAppOp` and `-uiTestingSyncDump` let `RemindersSyncBothWaysTests` change either side and read both back. `OverdueTidy.swift` — the tidy-overdue suggestions (unit-tested).
 - `Reminders.swift` — local notifications (Done / Snooze / Tomorrow actions, overdue badge). Despite the name this is not Apple Reminders. `Ringer.swift` — AlarmKit scheduling for alarms and "Ring as alarm" items.
 - `Sidebar.swift` (search, chats, New chat, Settings), `ChatThread.swift` (saved AI conversations, text only), `ChatAutoArchive.swift`, `QuickActions.swift` (Home Screen quick actions), `WidgetFeed.swift` (writes the widget snapshot), `LaunchTimer.swift`, `SampleData.swift` (first-launch items), `DevImport.swift` (debug-only import of a private export).
 
@@ -101,6 +102,15 @@ circular (next time in a ring of how much of today is done) and inline (above th
 - Add it: long-press the Lock Screen → Customize → Lock Screen → tap the widget area under the clock (or the date line
   above it) → pick **Today** → Next Up. Home Screen: long-press → Edit → Add Widget → Today.
 
+## Share extension (`ios/ShareExtension/`)
+
+Share → **Today** from Safari or any app that shares text: the page title (or the text's first line) becomes the title, the
+link and the rest of the text the note; pick No Date / Today / Tomorrow / Next Week; nothing is added until you tap Add.
+The extension never opens SwiftData: it appends to `share-inbox.json` in the App Group (`Shared/ShareInbox.swift`, with a
+file coordinator), and the app takes everything there when it becomes active, adds the reminders (which sync to Apple
+Reminders when that is on) and shows an Undo toast. Tests: `ShareInboxTests` (logic), `ShareImportTests` (the app side,
+via `-uiTestingShare <title>`) and `ShareSheetTests` (end to end through Safari's real Share sheet; skips without network).
+
 ## Siri, Spotlight and Shortcuts (`One/AppIntents.swift`)
 
 Four App Shortcuts, English phrases in code and Simplified Chinese in `One/AppShortcuts.xcstrings`: **Add Reminder**
@@ -113,4 +123,4 @@ Tests: `ios/Eval/` (logic unit tests, NL-capture eval, `run-eval.sh`, `cold-star
 
 ## Next
 
-Wider Apple Reminders sync coverage (edits, deletes and repeats both ways) → tests for the remaining "built" Reminders claims → tidy overdue with Apple Intelligence (preview first) → Live Activities, App Intents / Siri, Share extension.
+A full eval run on the rubric (scores restart from the re-scoped dimensions) → climb the weakest dimension.
