@@ -43,7 +43,7 @@ final class JourneyTests: XCTestCase {
     func testJ2_todayShowsWhatsLeft() {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label ENDSWITH 'overdue'")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Due today"].exists, "one timeline: no separate Due today section")
-        XCTAssertTrue(app.staticTexts["Schedule"].exists)
+        XCTAssertTrue(app.staticTexts["todayDate"].exists)
         XCTAssertTrue(app.staticTexts["Buy milk"].exists)
         XCTAssertEqual(taps, 0, "J2 needs no taps")
     }

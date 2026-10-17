@@ -11,11 +11,26 @@ final class TodayTimelineTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "09:41"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     }
 
     private func element(_ label: String) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", label)).firstMatch
+    }
+
+    func testTodayNamesItsDayAndHasNoScheduleLabel() {
+        let expected = Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+        XCTAssertEqual(app.staticTexts["todayDate"].label, expected)
+        XCTAssertFalse(app.staticTexts["Schedule"].exists, "the timeline needs no label of its own")
+    }
+
+    func testRowSubtitlesKeepTwoFactsAtMost() {
+        // Buy milk: Suggested + Home; "Due Today" is implied by the timeline and the #errands tag stays in the detail sheet.
+        XCTAssertTrue(app.staticTexts["Suggested · Home"].waitForExistence(timeout: 5))
+        // Prepare the demo: Due tomorrow + step count; the Work list is the third fact and is dropped.
+        let demo = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Due Tomorrow ' AND label ENDSWITH ' · 1/3'")).firstMatch
+        XCTAssertTrue(demo.exists, "the deadline that is not today and the step count")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Due Today' OR label CONTAINS '#'")).firstMatch.exists)
     }
 
     func testNoSeparateDueTodaySection() {

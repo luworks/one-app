@@ -17,7 +17,7 @@ final class HealthReviewTests: XCTestCase {
 
     /// Today scrolls to the Now line; the health line sits above everything, so scroll back to the top for it.
     private func healthLine(_ app: XCUIApplication) -> XCUIElement {
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
         let line = app.buttons["health.summary"]
         for _ in 0..<4 where !(line.exists && line.isHittable) { app.swipeDown() }
         return line
@@ -59,7 +59,7 @@ final class HealthReviewTests: XCTestCase {
 
     func testSettingTurnsTheLineOff() {
         let app = launch(at: "09:41", healthOn: false)
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
         func openSetting() -> XCUIElement {
             app.openSidebar()
             let settings = app.buttons["Settings"].firstMatch
@@ -99,13 +99,13 @@ final class HealthReviewTests: XCTestCase {
 
     func testNoReviewBeforeTheEvening() {
         let app = launch(at: "09:41")
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
         XCTAssertFalse(scrollToReview(app).exists, "Review today shows from 18:00")
     }
 
     func testEveningReviewMovesAndDropsWithOneUndo() {
         let app = launch(at: "19:30")
-        XCTAssertTrue(app.staticTexts["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
         let review = scrollToReview(app)
         XCTAssertTrue(review.waitForExistence(timeout: 3), "the Tomorrow section offers Review today in the evening")
         review.tap()

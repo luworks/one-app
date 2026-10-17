@@ -155,6 +155,8 @@ struct TaskRow: View {
     var compact = false
     /// A suggested time for a reminder due today with no time: shown faint with a Plan button. Nothing is saved until Plan.
     var suggested: Date? = nil
+    /// Set on the Today tab: the day the row sits on. The detail line then keeps at most two facts (see `RowSubtitle`).
+    var agendaDay: Date? = nil
     @State private var editing = false
 
     var body: some View {
@@ -265,6 +267,15 @@ struct TaskRow: View {
 
     /// Most important first, so truncation drops the least useful bits: deadline, plan, repeat, list, tags.
     private var detail: String? {
+        if let agendaDay {
+            let planned = showsTime ? nil : task.plannedStart.flatMap { $0 != task.due ? $0 : nil }
+            let shown = suggested ?? (showsTime ? (time ?? task.plannedStart) : nil)
+            return RowSubtitle.line(.init(isSuggested: suggested != nil, due: task.due, dueHasTime: task.dueHasTime,
+                                          shownTime: shown, planned: planned, repeats: task.repeats != nil,
+                                          stepsDone: task.checklist.filter(\.done).count, stepsTotal: task.checklist.count,
+                                          listName: showsList ? task.listName : ""),
+                                   day: agendaDay)
+        }
         var parts: [String] = []
         if suggested != nil { parts.append("Suggested") }
         if let due = task.due { parts.append("Due " + DayLabel.withTime(due)) }
