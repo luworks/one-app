@@ -41,6 +41,7 @@ struct HealthView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
                     .accessibilityIdentifier("health.add")
                 }
                 footer
@@ -81,6 +82,8 @@ struct HealthView: View {
             HealthRow(item: item)
         }
         .buttonStyle(.plain)
+        // About 60 pt: name, value line, and 6 pt above and below (the default cell padding makes rows 90 pt).
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 16))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(item.accessibilityText)
         .accessibilityAddTraits(.isButton)
@@ -179,7 +182,7 @@ private struct HealthRow: View {
                     .frame(width: 68, height: 28)
             }
         }
-        .frame(minHeight: 60)
+        .frame(minHeight: 48)
         .contentShape(Rectangle())
     }
 }

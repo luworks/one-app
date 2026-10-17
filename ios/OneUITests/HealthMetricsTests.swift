@@ -42,8 +42,8 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["health.sample"].exists, "sample data says so")
         // Dense: the three defaults and Add Metric fit one screen, rows about 60 pt.
         let steps = row(app, "steps").frame, weight = row(app, "weight").frame
-        XCTAssertLessThan(steps.height, 76, "a compact row, not a card")
-        XCTAssertLessThan(weight.maxY - steps.minY, 330, "three metrics in about 300 pt")
+        XCTAssertLessThan(steps.height, 72, "a compact row, not a card")
+        XCTAssertLessThan(weight.maxY - steps.minY, 360, "three metrics with their group headers in about 340 pt")
     }
 
     // MARK: Detail
@@ -67,10 +67,10 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertTrue(change.label.hasSuffix("vs previous 7 days"), change.label)
         app.buttons["health.range.90"].tap()
         XCTAssertTrue(app.buttons["health.range.90"].isSelected)
-        XCTAssertTrue(app.staticTexts["health.detail.change"].label.hasSuffix("vs previous 90 days") || !app.staticTexts["health.detail.change"].exists,
-                      "no earlier data: the line is simply left out")
+        // The sample has 90 days only, so there is nothing before the last 90: the change line is left out.
+        XCTAssertFalse(app.staticTexts["health.detail.change"].exists, "no earlier data: no change line")
 
-        app.buttons["Done"].tap()
+        app.buttons["health.detail.done"].tap()
         XCTAssertTrue(app.buttons["health.row.steps"].waitForExistence(timeout: 3), "back on the list")
     }
 
@@ -170,6 +170,24 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertFalse(body.label.hasSuffix("Today") || body.label.hasSuffix("Yesterday"), "measured 12 days ago: \(body.label)")
     }
 
+    // MARK: Settings
+
+    func testSettingsOpensTheSameSheet() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+        app.openSidebar()
+        let settings = app.buttons["Settings"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let link = app.buttons["settings.healthMetrics"]
+        XCTAssertTrue(link.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !link.isHittable { app.swipeUp() }
+        sleep(1)
+        link.tap()
+        XCTAssertTrue(row(app, "steps").waitForExistence(timeout: 5), "Settings → Health metrics shows the same list")
+        XCTAssertTrue(app.buttons["health.add"].exists)
+    }
+
     // MARK: Screenshots, only with TEST_RUNNER_HEALTH_SHOTS=1 (TEST_RUNNER_HEALTH_SHOTS_DIR, TEST_RUNNER_HEALTH_SHOTS_MODE)
 
     func testScreenshots() throws {
@@ -195,16 +213,16 @@ final class HealthMetricsTests: XCTestCase {
         shot(app, "detail-weight-30")
         app.buttons["health.range.7"].tap()
         shot(app, "detail-weight-7")
-        app.buttons["Done"].tap()
+        app.buttons["health.detail.done"].tap()
         row(app, "steps").tap()
         XCTAssertTrue(app.buttons["health.range.90"].waitForExistence(timeout: 5))
         app.buttons["health.range.90"].tap()
         shot(app, "detail-steps-90")
-        app.buttons["Done"].tap()
+        app.buttons["health.detail.done"].tap()
         row(app, "sleep").tap()
         XCTAssertTrue(app.buttons["health.range.90"].waitForExistence(timeout: 5))
         shot(app, "detail-sleep-30")
-        app.buttons["Done"].tap()
+        app.buttons["health.detail.done"].tap()
         app.buttons["health.add"].tap()
         XCTAssertTrue(app.buttons["health.pick.daylight"].waitForExistence(timeout: 5))
         app.buttons["health.pick.daylight"].tap()

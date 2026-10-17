@@ -32,8 +32,9 @@ struct HealthMetricDetail: View {
             }
             .navigationTitle(metric.title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("health.detail.done") } }
         }
+        .presentationDetents([.fraction(0.72), .large])
         .presentationDragIndicator(.visible)
     }
 
@@ -78,6 +79,9 @@ struct HealthMetricDetail: View {
         return (lo - pad)...(hi + pad)
     }
 
+    /// Sleep and daylight are drawn in hours, so their axis says so.
+    private var axisUnit: String { metric == .sleep || metric == .daylight ? " h" : "" }
+
     private var chart: some View {
         let window = HealthWindow(days: days, now: now)
         let dotted = StrokeStyle(lineWidth: 0.5, dash: [1, 3])
@@ -106,7 +110,7 @@ struct HealthMetricDetail: View {
                         }
                     }
                 }
-                .chartXScale(domain: window.start...window.end)
+                .chartXScale(domain: window.start...window.end, range: .plotDimension(startPadding: 4, endPadding: 28))
                 .chartYScale(domain: yDomain)
                 .chartXAxis {
                     AxisMarks(values: HealthStats.axisTicks(days: days, now: now)) { _ in
@@ -115,9 +119,9 @@ struct HealthMetricDetail: View {
                     }
                 }
                 .chartYAxis {
-                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
                         AxisGridLine(stroke: dotted)
-                        AxisValueLabel { if let v = value.as(Double.self) { Text(HealthFormat.axisLabel(v)) } }
+                        AxisValueLabel { if let v = value.as(Double.self) { Text(HealthFormat.axisLabel(v) + axisUnit) } }
                     }
                 }
                 .frame(height: 220)

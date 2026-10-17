@@ -34,7 +34,7 @@ struct HealthSparkline: View {
                     let h = 3 + CGFloat(v) * (size.height - 3)
                     let rect = CGRect(x: center(i) - barWidth / 2, y: size.height - h, width: barWidth, height: h)
                     context.fill(Path(roundedRect: rect, cornerRadius: barWidth / 2),
-                                 with: .color(HealthStyle.accent.opacity(i == last ? 1 : 0.4)))
+                                 with: .color(HealthStyle.accent.opacity(i == last ? 1 : 0.5)))
                 }
             case .dots:
                 func y(_ v: Double) -> CGFloat { 3 + CGFloat(1 - v) * (size.height - 6) }

@@ -48,7 +48,7 @@ Not copied:
 
 ## (c) Our current problems
 
-Read from `HealthView.swift` and the earlier screenshots (`docs/health/health-light.png`):
+Read from `HealthView.swift` and the old tab-version screenshot (`docs/health/health-light.png` at commit c650ffd, since replaced):
 
 - One card per metric, each `secondarySystemFill` with 16pt padding on every side and a 12pt gap between title, value and content. Measured on the old screenshot, the steps card is about 270pt tall for one number and seven bars, weight about 300pt, sleep about 330pt. Three metrics fill two screens.
 - The cards are full width with the value on the left and a lot of empty space on the right; the goal ring is decoration that adds a goal we do not otherwise have.
