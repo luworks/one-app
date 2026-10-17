@@ -445,6 +445,20 @@ enum AlarmPlan {
 
     /// What Clock calls "Snooze": nine minutes.
     static let snoozeSeconds: TimeInterval = 9 * 60
+
+    /// Snooze Duration choices in the alarm editor, in minutes.
+    static let snoozeChoices = [5, 9, 10, 15, 30]
+    /// Default Snooze Duration (Clock's nine minutes).
+    static let defaultSnoozeMinutes = 9
+
+    /// The allowed Snooze Duration nearest to `minutes` (ties go to the shorter one), so alarms saved with a
+    /// value no longer offered (1, 3, 7, 20…) keep working: 1/3/7 → 5, 20 → 15, 45 → 30.
+    static func snoozeMinutes(nearest minutes: Int) -> Int {
+        snoozeChoices.min { a, b in
+            let da = abs(a - minutes), db = abs(b - minutes)
+            return da != db ? da < db : a < b
+        } ?? defaultSnoozeMinutes
+    }
 }
 
 /// Search matching: every word of the query must appear in one of the fields; case, accents and width are ignored.

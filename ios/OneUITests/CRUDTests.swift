@@ -145,7 +145,8 @@ final class CRUDTests: XCTestCase {
 
         // Flag (long-press menu, like Apple Reminders).
         renamed.press(forDuration: 1.0)
-        let flag = app.buttons["Flag"]
+        // The menu's Flag (the inline New Reminder row has a Flag button of its own).
+        let flag = app.buttons.matching(NSPredicate(format: "label == 'Flag' AND identifier != 'newRow.flag'")).firstMatch
         XCTAssertTrue(flag.waitForExistence(timeout: 3), "the long-press menu offers Flag")
         flag.tap()
         let flaggedMark = app.cells.containing(.staticText, identifier: "Buy printer ink and paper").images["Flagged"]
@@ -171,6 +172,34 @@ final class CRUDTests: XCTestCase {
         XCTAssertTrue(done.waitForNonExistence(timeout: 5), "deleted")
         tapUndo()
         XCTAssertTrue(app.staticTexts["Buy printer ink and paper"].waitForExistence(timeout: 5), "Undo brings it back")
+    }
+
+    /// + on Reminders opens the quick-add sheet: a title, a day chip and a time from the grid, Save.
+    func testReminderQuickAddWithPlus() {
+        openTab("Reminders")
+        app.buttons["New"].tap()
+        let title = app.textFields["quick.title"].exists ? app.textFields["quick.title"] : app.textViews["quick.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "+ on Reminders opens the quick-add sheet")
+        title.typeText("Water the garden")
+        app.buttons["Tomorrow"].tap()
+        app.buttons["09:30"].tap()
+        let when = app.buttons["quick.when"]
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: .now))!
+        let at = cal.date(bySettingHour: 9, minute: 30, second: 0, of: tomorrow)!
+        let shown = at.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+        XCTAssertTrue(wait(when, "label CONTAINS %@".replacingOccurrences(of: "%@", with: "'\(shown)'")),
+                      "the when bar shows tomorrow 09:30: \(when.label), expected \(shown)")
+        app.buttons["quick.save"].tap()
+        XCTAssertTrue(app.buttons["quick.save"].waitForNonExistence(timeout: 5), "Save closes the sheet")
+
+        let scheduled = element("smart.scheduled")
+        reveal(scheduled, up: false)
+        scheduled.tap()
+        let row = app.staticTexts["Water the garden"]
+        reveal(row)
+        XCTAssertTrue(row.exists, "the reminder is in Scheduled")
+        let due = "Due Tomorrow " + at.formatted(date: .omitted, time: .shortened)
+        XCTAssertTrue(any("label BEGINSWITH %@", due).waitForExistence(timeout: 3), "with its due time (\(due))")
     }
 
     /// Swipe left on a reminder offers Flag and Delete; Flag flags it, and the Flagged list shows it.
@@ -580,8 +609,8 @@ final class CRUDTests: XCTestCase {
         app.buttons["Archive"].tap()
         XCTAssertTrue(left.waitForNonExistence(timeout: 5), "it leaves the list")
         let archived = app.buttons["conversation.archived"]
-        XCTAssertTrue(wait(archived, "label == 'Archived, 2'"), "Archived counts it: \(archived.label)")
-        archived.tap()
+        XCTAssertTrue(archived.waitForExistence(timeout: 3), "an Archived section")
+        if archived.value as? String != "Expanded" { archived.tap() }
         XCTAssertTrue(chatRow("What's left today?").waitForExistence(timeout: 5), "it is under Archived")
         XCTAssertTrue(chatRow("Book a hotel in Rome for March").exists, "with the one archived before")
 

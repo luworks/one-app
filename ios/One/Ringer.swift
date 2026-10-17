@@ -97,7 +97,7 @@ enum Ringer {
 @available(iOS 26, *)
 @MainActor
 enum AlarmScheduler {
-    struct Meta: AlarmMetadata {}
+    typealias Meta = AlarmMeta
 
     static let log = Logger(subsystem: "com.luworks.one", category: "alarms")
 
@@ -210,9 +210,9 @@ enum AlarmScheduler {
         // While snoozing, the countdown shows the alarm's title (what Clock shows under the snooze timer).
         let presentation = AlarmPresentation(alert: alert,
                                              countdown: snooze ? AlarmPresentation.Countdown(title: resource) : nil)
-        let attributes = AlarmAttributes<Meta>(presentation: presentation, tintColor: .orange)
+        let attributes = AlarmAttributes<Meta>(presentation: presentation, metadata: AlarmMeta(kind: .alarm), tintColor: .orange)
         let configuration = AlarmManager.AlarmConfiguration<Meta>(
-            countdownDuration: snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(snoozeMinutes * 60)) : nil,
+            countdownDuration: snooze ? Alarm.CountdownDuration(preAlert: nil, postAlert: TimeInterval(AlarmPlan.snoozeMinutes(nearest: snoozeMinutes) * 60)) : nil,
             schedule: schedule,
             attributes: attributes,
             sound: AlarmSound.named(sound)?.alertSound ?? .default)
