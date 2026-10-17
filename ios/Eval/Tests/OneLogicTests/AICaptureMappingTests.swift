@@ -74,7 +74,7 @@ final class AICaptureMappingTests: XCTestCase {
         let c = try XCTUnwrap(map(.init(kind: "task", title: "Call mom")))
         XCTAssertFalse(c.hasDay)
         XCTAssertNil(c.hour)
-        XCTAssertEqual(c.summary, "No date, goes to your Inbox")
+        XCTAssertEqual(c.summary, "No date")
     }
 
     func testTimeWithoutDayLaterTodayStaysToday() throws {

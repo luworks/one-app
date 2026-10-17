@@ -318,7 +318,7 @@ struct NowRow: View {
     }
 }
 
-/// AI preview: what will be created. The user can switch task / event / alarm before tapping Add.
+/// AI preview: what will be created. The user can switch reminder / event / alarm before tapping Add.
 struct CaptureCard: View {
     @Binding var capture: Capture
     /// The user's Reminders lists; when given, a task shows which one it goes to, changeable with one tap.
@@ -355,7 +355,7 @@ struct CaptureCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("New \(capture.ringsAsAlarm && capture.kind == .task ? "alarm" : capture.kind.rawValue)", systemImage: "sparkles")
+                Label(capture.kindLabel, systemImage: "sparkles")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if capture.fromAppleIntelligence {
@@ -366,7 +366,7 @@ struct CaptureCard: View {
                 }
                 Spacer()
                 Picker("Kind", selection: mode) {
-                    Text("Task").tag(Mode.task)
+                    Text("Reminder").tag(Mode.task)
                     Text("Event").tag(Mode.event)
                     Text("Alarm").tag(Mode.alarm)
                 }
@@ -375,7 +375,7 @@ struct CaptureCard: View {
             }
             Text(capture.title).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
-            if capture.kind == .task, !lists.isEmpty {
+            if capture.kind == .task, !capture.ringsAsAlarm, !lists.isEmpty {
                 ListMenu(capture: $capture, lists: lists).font(.subheadline)
             }
             HStack {

@@ -9,7 +9,7 @@ let package = Package(
         .target(
             name: "OneLogic",
             path: "One",
-            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift", "TimerDial.swift", "Pomodoro.swift", "IntentLogic.swift", "EventMatch.swift", "ClockLogic.swift", "OverdueTidy.swift", "LedgerLogic.swift", "AutonomyPolicy.swift", "HealthLogic.swift", "EveningReview.swift", "EditingLogic.swift"]
+            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift", "TimerDial.swift", "Pomodoro.swift", "IntentLogic.swift", "EventMatch.swift", "ClockLogic.swift", "OverdueTidy.swift", "LedgerLogic.swift", "AutonomyPolicy.swift", "HealthLogic.swift", "EveningReview.swift", "EditingLogic.swift", "MessageCopy.swift"]
         ),
         // Code shared by the app and the TodayWidgets extension (the widget snapshot and "next items" logic).
         .target(
