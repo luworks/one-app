@@ -29,7 +29,7 @@ struct AddReminderIntent: AppIntent {
         }
         let context = OneStore.start().mainContext
         // A task without an alarm request always becomes a `OneTask`; the save also queues the Apple Reminders sync.
-        capture.insert(into: context)
+        capture.insert(into: context, actor: .siri, channel: .intent)
         await Reminders.shared.resync()
         IntentSupport.refreshWidgets(context)
         return .result(dialog: "Added “\(capture.title)”. \(capture.summary).")

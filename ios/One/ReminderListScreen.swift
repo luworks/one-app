@@ -259,6 +259,7 @@ struct ReminderListScreen: View {
         withAnimation { context.insert(t) }
         // Saved now so its id is final: an autosave later would change the id under an open editor and close it.
         try? context.save()
+        Ledger.record(.created, task: t, title: t.title, after: LedgerFormat.time(t.due, none: ""), context: context)
     }
 
     /// Up to three guesses from this list's own past reminders (done ones too; `suggest` skips titles still open).

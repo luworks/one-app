@@ -285,6 +285,7 @@ struct QuickReminderSheet: View {
         t.ringsAsAlarm = ringsAsAlarm && when != nil
         context.insert(t)
         try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
+        Ledger.record(.created, task: t, title: t.title, after: LedgerFormat.time(t.due, none: ""), context: context)
         dismiss()
     }
 }

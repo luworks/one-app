@@ -191,7 +191,7 @@ final class JourneyTests: XCTestCase {
         tap(app.buttons["Settings"].firstMatch)
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         let delete = app.buttons["Delete All Data…"]
-        for _ in 0..<4 where !delete.isHittable { app.swipeUp() }
+        for _ in 0..<6 where !delete.isHittable { app.swipeUp() }
         tap(delete)
         tap(app.buttons["Continue…"])   // first confirmation
         let final = app.buttons["Delete All Data"]

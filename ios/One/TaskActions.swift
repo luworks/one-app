@@ -75,9 +75,12 @@ final class UndoToast {
 @MainActor
 enum TaskActions {
     /// Complete or reopen. Completing a repeating task creates its next occurrence.
-    static func toggleDone(_ task: OneTask, context: ModelContext, toast: UndoToast?) {
+    /// Every change is also written to the Activity ledger (`Ledger`), as made by `actor` through `channel`.
+    static func toggleDone(_ task: OneTask, context: ModelContext, toast: UndoToast?,
+                           actor: LedgerActor = .you, channel: LedgerChannel = .app) {
         guard !task.isDone else {
             withAnimation { task.toggleDone() }
+            Ledger.record(.reopened, task: task, title: task.title, actor: actor, channel: channel, context: context)
             return
         }
         // Apple Reminders rolls its own repeating reminders forward, so only local-only tasks spawn the next one here.
@@ -88,23 +91,48 @@ enum TaskActions {
         }
         if next != nil { try? context.save() }
         let suffix = next.map { n in " · next " + DayLabel.withTime(n.plannedStart ?? n.due ?? .now) } ?? ""
+        let entry = Ledger.record(.completed, task: task, title: task.title, after: next.map { _ in "Next one added" } ?? "",
+                                  actor: actor, channel: channel, context: context)
         toast?.show("Completed “\(task.title)”" + suffix) {
             withAnimation {
                 task.toggleDone()
                 if let next { context.delete(next) }
             }
+            Ledger.recordUndo(of: entry, context: context)
         }
     }
 
-    static func delete(_ task: OneTask, context: ModelContext, toast: UndoToast?) {
+    static func delete(_ task: OneTask, context: ModelContext, toast: UndoToast?,
+                       actor: LedgerActor = .you, channel: LedgerChannel = .app) {
         RemindersSync.shared.noteDeleted(reminder: task.externalID)
         let backup = task.copy()
         if task.externalID != nil { backup.createdAt = .now }   // Undo creates it again in Apple Reminders too
+        let entry = Ledger.record(.deleted, title: backup.title, before: deletedDetail(task), actor: actor, channel: channel,
+                                  snapshot: Ledger.snapshot(of: task), context: context)
         withAnimation { context.delete(task) }
         toast?.show("Deleted “\(backup.title)”") {
             withAnimation { context.insert(backup) }
             try? context.save()
+            Ledger.recordUndo(of: entry, context: context)
         }
+    }
+
+    /// Sets or clears the planned time (never the deadline) and records it: Plan, Today, Tomorrow, Unschedule, drag.
+    @discardableResult
+    static func setPlanned(_ task: OneTask, to start: Date?, context: ModelContext,
+                           actor: LedgerActor = .you, channel: LedgerChannel = .app, approval: LedgerApproval = .userMade) -> LedgerEntry? {
+        let old = task.plannedStart
+        guard old != start else { return nil }
+        withAnimation { task.plannedStart = start }
+        let action: LedgerAction = start == nil ? .unscheduled : (old == nil ? .planned : .moved)
+        return Ledger.record(action, task: task, title: task.title, before: LedgerFormat.time(old), after: LedgerFormat.time(start),
+                             beforeDate: old, afterDate: start, actor: actor, channel: channel, approval: approval, context: context)
+    }
+
+    private static func deletedDetail(_ t: OneTask) -> String {
+        if let s = t.plannedStart { return "Planned " + DayLabel.withTime(s) }
+        if let d = t.due { return "Due " + DayLabel.withTime(d) }
+        return t.listName
     }
 }
 

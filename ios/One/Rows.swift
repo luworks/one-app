@@ -209,10 +209,10 @@ struct TaskRow: View {
             Button { task.flagged.toggle() } label: {
                 Label(task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }
-            Button { withAnimation { task.moveToToday() } } label: { Label("Today", systemImage: "calendar") }
-            Button { withAnimation { task.moveToTomorrow() } } label: { Label("Tomorrow", systemImage: "sunrise") }
+            Button { plan { $0.moveToToday() } } label: { Label("Today", systemImage: "calendar") }
+            Button { plan { $0.moveToTomorrow() } } label: { Label("Tomorrow", systemImage: "sunrise") }
             if task.plannedStart != nil {
-                Button { withAnimation { task.plannedStart = nil } } label: {
+                Button { TaskActions.setPlanned(task, to: nil, context: context) } label: {
                     Label("Unschedule", systemImage: "calendar.badge.minus")
                 }
             }
@@ -220,6 +220,15 @@ struct TaskRow: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+    }
+
+    /// Today / Tomorrow from the menu: works out the new planned time on the task, then records it like any other move.
+    private func plan(_ move: (OneTask) -> Void) {
+        let old = task.plannedStart
+        move(task)
+        let new = task.plannedStart
+        task.plannedStart = old
+        TaskActions.setPlanned(task, to: new, context: context)
     }
 
     private var title: Text {
@@ -232,9 +241,10 @@ struct TaskRow: View {
     private func planButton(_ start: Date) -> some View {
         let time = start.formatted(date: .omitted, time: .shortened)
         return Button("Plan") {
-            withAnimation { task.plannedStart = start }
+            let entry = TaskActions.setPlanned(task, to: start, context: context)
             toast?.show("Planned “\(task.title)” at \(time)") {
                 withAnimation { task.plannedStart = nil }
+                if let entry { Ledger.recordUndo(of: entry, context: context) }
             }
         }
         .font(.subheadline.weight(.semibold))

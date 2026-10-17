@@ -196,6 +196,7 @@ struct TaskEditor: View {
         t.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if task == nil { context.insert(t) }
         try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
+        if task == nil { Ledger.record(.created, task: t, title: t.title, after: LedgerFormat.time(t.plannedStart ?? t.due, none: ""), context: context) }
         dismiss()
     }
 }
@@ -289,6 +290,7 @@ struct EventEditor: View {
                                 dismiss()
                                 return
                             }
+                            Ledger.record(.deleted, kind: "event", title: backup.title, before: DayLabel.withTime(backup.start), context: context)
                             context.delete(event)
                             toast?.show("Deleted “\(backup.title)”") {
                                 backup.externalID = CalendarSync.shared.save(backup)
@@ -343,6 +345,7 @@ struct EventEditor: View {
         if event == nil { context.insert(e) }
         try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
         if CalendarSync.shared.isOn { e.externalID = CalendarSync.shared.save(e) ?? e.externalID }
+        if event == nil { Ledger.record(.created, kind: "event", title: e.title, after: DayLabel.withTime(e.start), context: context) }
         dismiss()
     }
 }

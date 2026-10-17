@@ -129,6 +129,7 @@ struct AlarmsView: View {
 
     private func delete(_ alarm: OneAlarm) {
         let backup = alarm.copy()
+        Ledger.record(.deleted, kind: "alarm", title: alarmTitle(backup), context: context)
         withAnimation(.snappy) { context.delete(alarm) }
         Task { await Ringer.sync(context) }
         toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {

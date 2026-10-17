@@ -236,6 +236,7 @@ struct AlarmEditor: View {
     private func deleteButton(_ alarm: OneAlarm) -> some View {
         Button(role: .destructive) {
             let backup = alarm.copy()
+            Ledger.record(.deleted, kind: "alarm", title: alarmTitle(backup), context: context)
             context.delete(alarm)
             Task { await Ringer.sync(context) }
             toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
@@ -266,7 +267,10 @@ struct AlarmEditor: View {
         target.isOn = true
         target.createdAt = .now   // a one-time alarm counts from the last save
         target.alarmKitSignature = nil   // forces a reschedule of exactly this alarm
-        if alarm == nil { context.insert(target) }
+        if alarm == nil {
+            context.insert(target)
+            Ledger.record(.created, kind: "alarm", title: alarmTitle(target), context: context)
+        }
         // Saved now so the new alarm's id is final: the list opens its editor by that id, and an autosave that
         // changed it while the editor was open would close the editor and drop the edits.
         try? context.save()
@@ -361,4 +365,11 @@ private struct SoundScreen: View {
         .accessibilityLabel(title)
         .accessibilityAddTraits(sound == value ? .isSelected : [])
     }
+}
+
+/// "Alarm 07:00" or "Alarm 07:00 · Gym", for Activity.
+@MainActor
+func alarmTitle(_ a: OneAlarm) -> String {
+    let time = a.timeToday.formatted(date: .omitted, time: .shortened)
+    return a.label.isEmpty ? "Alarm \(time)" : "Alarm \(time) · \(a.label)"
 }

@@ -33,6 +33,8 @@ struct AskView: View {
     @State private var thinking = false
     @State private var captureTask: Task<Void, Never>?
     @State private var plan: [(task: OneTask, start: Date)] = []
+    /// The "Plan reminders into free time" grant, while one is active (the plan card then says so instead of offering it).
+    @State private var planGrant: AIGrant?
     /// "Tidy overdue": a new date per overdue reminder, waiting for Apply.
     @State private var tidy: [TidyRow] = []
     @State private var voice = VoiceInput()
@@ -225,7 +227,8 @@ struct AskView: View {
     private var inputArea: some View {
         VStack(spacing: 8) {
             if !plan.isEmpty {
-                PlanCard(plan: plan, onApply: applyPlan, onCancel: { plan = [] })
+                PlanCard(plan: plan, grantUntil: planGrant?.expires, onApply: { applyPlan() }, onAlways: applyPlanAlways,
+                         onCancel: { plan = [] })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if !tidy.isEmpty {
@@ -616,13 +619,21 @@ struct AskView: View {
         case .task(let task):
             if c.delete {
                 let backup = task.copy()
+                let entry = Ledger.record(.deleted, title: backup.title, actor: .todayAI, channel: .ask, approval: .asked,
+                                          snapshot: Ledger.snapshot(of: task), context: context)
                 withAnimation { context.delete(task) }
-                offerUndo("Deleted “\(backup.title)”.") { context.insert(backup) }
+                offerUndo("Deleted “\(backup.title)”.") {
+                    context.insert(backup)
+                    Ledger.recordUndo(of: entry, channel: .ask, context: context)
+                }
             } else if let new = c.newStart {
                 let old = task.plannedStart // `due` is never touched
-                withAnimation { task.plannedStart = new }
+                let entry = TaskActions.setPlanned(task, to: new, context: context, actor: .todayAI, channel: .ask, approval: .asked)
                 messages.append(ChatMessage(role: .ai, text: "Moved “\(task.title)” to \(DayLabel.withTime(new))."))
-                offerUndo("Moved “\(task.title)”.") { task.plannedStart = old }
+                offerUndo("Moved “\(task.title)”.") {
+                    task.plannedStart = old
+                    if let entry { Ledger.recordUndo(of: entry, channel: .ask, context: context) }
+                }
             }
         case .event(let event):
             if c.delete {
@@ -631,6 +642,8 @@ struct AskView: View {
                     messages.append(ChatMessage(role: .ai, text: "Couldn't delete the calendar event, so nothing changed."))
                     return
                 }
+                Ledger.record(.deleted, kind: "event", title: backup.title, before: c.oldText, actor: .todayAI, channel: .ask,
+                              approval: .asked, context: context)
                 withAnimation { context.delete(event) }
                 messages.append(ChatMessage(role: .ai, text: "Deleted “\(backup.title)”."))
                 offerUndo("Deleted “\(backup.title)”." + recallNote(c)) {
@@ -645,6 +658,8 @@ struct AskView: View {
                     messages.append(ChatMessage(role: .ai, text: "Couldn't update the calendar event, so nothing changed."))
                     return
                 }
+                Ledger.record(.moved, kind: "event", title: event.title, before: DayLabel.withTime(old), after: DayLabel.withTime(new),
+                              actor: .todayAI, channel: .ask, approval: .asked, context: context)
                 messages.append(ChatMessage(role: .ai, text: "Moved “\(event.title)” to \(DayLabel.withTime(new))."))
                 offerUndo("Moved “\(event.title)”." + recallNote(c)) {
                     event.start = old
@@ -729,7 +744,7 @@ struct AskView: View {
     private func commit(_ id: UUID) -> Capture? {
         guard let i = proposals.firstIndex(where: { $0.id == id && $0.state == .open }) else { return nil }
         let capture = proposals[i].capture
-        let item = capture.insert(into: context)
+        let item = capture.insert(into: context, actor: .todayAI, channel: .ask, approval: .asked)
         thread?.items.append(item)
         lastTouched = capture.title
         onAdded(capture)
@@ -758,7 +773,7 @@ struct AskView: View {
     /// Proposes start times for today's flexible tasks around fixed events. Nothing moves until Apply.
     private func proposePlan() {
         let cal = Calendar.current
-        let now = Date.now
+        let now = TodayClock.now
         guard let endOfDay = cal.date(bySettingHour: 21, minute: 0, second: 0, of: now), endOfDay > now else {
             messages.append(ChatMessage(role: .ai, text: "It's late. Ask me to plan tomorrow instead."))
             return
@@ -784,6 +799,26 @@ struct AskView: View {
         let items = candidates.enumerated().map { DayPlanner.Item(id: $0.offset, minutes: $0.element.durationMinutes) }
         let result = DayPlanner.plan(items, busy: busy, window: window)
         plan = result.map { (candidates[$0.id], $0.start) }
+        planGrant = GrantStore.active(.planFreeTime, context: context, now: .now)
+        if planGrant != nil, !plan.isEmpty {
+            // Under the grant, what the policy allows applies by itself; the rest (overdue, …) stays on the card.
+            let grants = GrantStore.infos(context)
+            let protected = Ledger.protectedRefs(context, now: .now)
+            let auto = plan.filter { p in
+                let ref = Ledger.ref(p.task.persistentModelID)
+                let change = ProposedChange(target: .reminder, operation: .setPlannedTime, isOverdue: p.task.isOverdue,
+                                            isDone: p.task.isDone, ringsAsAlarm: p.task.ringsAsAlarm,
+                                            aiChangedRecently: ref.map(protected.aiRecent.contains) ?? false,
+                                            userChoseTime: ref.map(protected.userChose.contains) ?? false)
+                return AutonomyPolicy.decide(change, grants: grants, now: .now) == .auto
+            }
+            if !auto.isEmpty {
+                let autoIDs = Set(auto.map { ObjectIdentifier($0.task) })
+                plan.removeAll { autoIDs.contains(ObjectIdentifier($0.task)) }
+                applyPlan(auto, approval: .autoUnderGrant)
+                return
+            }
+        }
         if plan.isEmpty {
             messages.append(ChatMessage(role: .ai, text: candidates.isEmpty
                 ? "Nothing urgent to place: no overdue, due-today or flagged tasks without a time."
@@ -795,16 +830,34 @@ struct AskView: View {
         }
     }
 
-    private func applyPlan() {
-        let applied = plan
-        withAnimation {
-            for p in applied { p.task.plannedStart = p.start }
+    /// Writes the plan's planned times (never deadlines) and records each in Activity. `rows` defaults to the card's.
+    private func applyPlan(_ rows: [(task: OneTask, start: Date)]? = nil, approval: LedgerApproval = .asked) {
+        let applied = rows ?? plan
+        let auto = approval == .autoUnderGrant
+        let entries = applied.compactMap { p in
+            TaskActions.setPlanned(p.task, to: p.start, context: context, actor: .todayAI,
+                                   channel: auto ? .automatic : .ask, approval: approval)
         }
-        plan = []
-        messages.append(ChatMessage(role: .ai, text: "Planned \(applied.count) task\(applied.count == 1 ? "" : "s") for today."))
-        offerUndo("Planned \(applied.count) task\(applied.count == 1 ? "" : "s").") {
-            for p in applied { p.task.plannedStart = nil }
+        if rows == nil { plan = [] }
+        let n = applied.count
+        let label = auto ? LedgerFormat.autoPlanned(n) + "." : "Planned \(n) task\(n == 1 ? "" : "s")."
+        var text = auto ? label + " Automatic until \(DayLabel.text(for: planGrant?.expires ?? .now))."
+                        : "Planned \(n) task\(n == 1 ? "" : "s") for today."
+        if auto, !plan.isEmpty { text += " \(plan.count) more need\(plan.count == 1 ? "s" : "") your OK." }
+        messages.append(ChatMessage(role: .ai, text: text))
+        offerUndo(label) {
+            for p in applied where p.task.plannedStart == p.start { p.task.plannedStart = nil }
+            for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
         }
+    }
+
+    /// "Always for 7 days": applies this card now (the user's tap) and lets the same kind of change apply by itself for
+    /// 7 days, under `AutonomyPolicy`. Revoke in Settings → AI → Automatic changes.
+    private func applyPlanAlways() {
+        planGrant = GrantStore.grant(.planFreeTime, context: context)
+        applyPlan()
+        messages.append(ChatMessage(role: .ai, text: "For the next 7 days I'll plan reminders due today into free time by myself "
+            + "and tell you each time. Only Today's planned times change. Revoke it in Settings."))
     }
 
     /// Suggests a new date for every overdue reminder (see `OverdueTidy`). Nothing changes until Apply.
@@ -827,8 +880,15 @@ struct AskView: View {
 
     private func applyTidy() {
         let changes = tidy.filter { $0.choice != .keep }
+        var entries: [LedgerEntry] = []
         withAnimation {
-            for r in changes { r.task.due = OverdueTidy.newDue(r.oldDue, r.choice) }
+            for r in changes {
+                let new = OverdueTidy.newDue(r.oldDue, r.choice)
+                r.task.due = new
+                entries.append(Ledger.record(.redated, task: r.task, title: r.task.title, before: LedgerFormat.time(r.oldDue, none: "No date"),
+                                             after: LedgerFormat.time(new, none: "No date"), beforeDate: r.oldDue, afterDate: new,
+                                             actor: .todayAI, channel: .ask, approval: .asked, context: context))
+            }
         }
         try? context.save()
         tidy = []
@@ -836,6 +896,7 @@ struct AskView: View {
         messages.append(ChatMessage(role: .ai, text: label))
         offerUndo(label) {
             for r in changes { r.task.due = r.oldDue }
+            for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
             try? context.save()
         }
     }
@@ -985,7 +1046,11 @@ struct TidyCard: View {
 /// AI plan preview: proposed start times, applied only on tap.
 struct PlanCard: View {
     let plan: [(task: OneTask, start: Date)]
+    /// Set while a "Plan reminders into free time" grant is active: the card then only offers Apply.
+    var grantUntil: Date? = nil
     var onApply: () -> Void
+    /// "Always for 7 days": apply now and allow this kind of change by itself (only Today's own planned times).
+    var onAlways: () -> Void = {}
     var onCancel: () -> Void
 
     var body: some View {
@@ -1006,11 +1071,23 @@ struct PlanCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            HStack {
+            Text(grantUntil.map { "Only Today's planned times change; deadlines stay. Automatic until \(DayLabel.text(for: $0))." }
+                 ?? "Only Today's planned times change; deadlines stay.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
                 Button("Cancel", action: onCancel).buttonStyle(.bordered)
-                Spacer()
-                Button("Apply", action: onApply).buttonStyle(.borderedProminent)
+                Spacer(minLength: 0)
+                if grantUntil == nil {
+                    Button("Always for 7 days", action: onAlways)
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("plan.always")
+                }
+                Button("Apply", action: onApply)
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("plan.apply")
             }
+            .lineLimit(1)
             .padding(.top, 4)
         }
         .padding(14)

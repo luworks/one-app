@@ -481,6 +481,8 @@ final class RemindersSync {
                     fp[id] = r.fingerprint
                 }
             } else if base.contains(id) {
+                Ledger.record(.deleted, title: t.title, actor: .agent("Apple Reminders"), channel: .sync, approval: .observed,
+                              context: context)
                 context.delete(t)
                 base.remove(id)
                 fp[id] = nil
