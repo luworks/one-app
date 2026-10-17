@@ -51,7 +51,17 @@
         }
       }
     },
-    "What’s next in ${applicationName}": {
+    "Set a ${applicationName} timer": {
+   "localizations": {
+    "zh-Hans": {
+     "stringUnit": {
+      "state": "translated",
+      "value": "在${applicationName}设置计时器"
+     }
+    }
+   }
+  },
+  "What’s next in ${applicationName}": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {

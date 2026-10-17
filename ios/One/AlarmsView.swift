@@ -37,7 +37,7 @@ struct AlarmsView: View {
                 case .stopwatch: StopwatchView()
                 case .timer:
                     ScrollView {
-                        TimerCard()
+                        TimerSection()
                             .padding(.horizontal, 20)
                             .padding(.top, 8)
                     }

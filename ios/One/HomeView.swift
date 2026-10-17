@@ -208,7 +208,11 @@ struct HomeView: View {
                 .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
             Group {
                 switch tab {
-                case .today: DayAgenda(day: $todayDay, showsWeekStrip: false)
+                case .today:
+                    DayAgenda(day: $todayDay, showsWeekStrip: false) {
+                        clockSection = .timer
+                        withAnimation(.snappy) { tab = .alarms }
+                    }
                 case .calendar:
                     CalendarView(day: $calendarDay, mode: $calendarMode) { picked in
                         todayDay = picked
@@ -295,6 +299,8 @@ struct HomeView: View {
             if ProcessInfo.processInfo.arguments.contains("-uiTestingSyncDump") { SyncDumpProbe() }
             #endif
         }
+        // Timers follow AlarmKit on every tab, so the Today row appears the moment one starts (also from Siri).
+        .task { await TimerController.shared.watch() }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
             allAlarms.forEach { $0.retireIfRung() }
@@ -319,6 +325,7 @@ struct HomeView: View {
             if phase == .active {
                 dropDeletedMirrors()
                 importShared()
+                TimerController.shared.refresh()
                 autoPlan()
                 Task { await Reminders.shared.resync() }
             }

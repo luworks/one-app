@@ -8,6 +8,8 @@ import SwiftData
 struct DayAgenda: View {
     @Binding var day: Date
     var showsWeekStrip: Bool
+    /// Opens the Timer tab (a tap on a running timer's row).
+    var openTimer: () -> Void = {}
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
@@ -65,6 +67,8 @@ struct DayAgenda: View {
         let items = items(on: day, now: now)
         return List {
             if !showsWeekStrip { DateTitle(day: day) }
+            // Running timers: a live countdown at the top of today.
+            if isTodayTab { TodayTimerRows(open: openTimer) }
             if isTodayTab, showsHealth, let line = health.line {
                 TodayHealthLine(line: line)
             }
