@@ -433,6 +433,7 @@ final class RemindersSync {
                 let local = Self.fingerprint(of: t)
                 if agreed == nil || r.fingerprint != agreed {
                     // Apple changed (or Apple and the app both did: Apple wins).
+                    if let agreed, local != agreed { ActivityCenter.record(ActivityEvents.syncConflict(source: "reminders")) }
                     apply(r, to: t)
                     fp[r.id] = r.fingerprint
                 } else if local != agreed {

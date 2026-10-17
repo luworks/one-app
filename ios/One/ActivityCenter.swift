@@ -25,6 +25,8 @@ final class ActivityCenter {
             let d = UserDefaults.standard
             for key in [ActivitySettings.pausedKey, ActivitySettings.retentionKey, ActivitySettings.keepChatTextKey]
                 + ActivityTier.allCases.map(ActivitySettings.tierKey) { d.removeObject(forKey: key) }
+            // `-uiTestingActivityPaused`: starts with recording paused.
+            if args.contains("-uiTestingActivityPaused") { d.set(true, forKey: ActivitySettings.pausedKey) }
         }
         let location: ActivityStore.Location
         if testing {
@@ -36,10 +38,26 @@ final class ActivityCenter {
         } else {
             location = .file(ActivityStore.defaultURL())
         }
+        let opened: ActivityStore?
         switch location {
-        case .memory: store = try? ActivityStore(location: .memory)
-        case .file(let url): store = try? ActivityStore.openOrRecover(at: url)
+        case .memory: opened = try? ActivityStore(location: .memory)
+        case .file(let url): opened = try? ActivityStore.openOrRecover(at: url)
         }
+        store = opened
+        #if DEBUG
+        // UI tests only (`-uiTesting -uiTestingActivityRows <n>`): n changes older than anything else, to test paging.
+        if testing, let opened, let i = args.firstIndex(of: "-uiTestingActivityRows"), i + 1 < args.count, let n = Int(args[i + 1]) {
+            let base = Date.now.addingTimeInterval(-3600)
+            let events = (0..<n).map { k -> ActivityEvent in
+                var e = ActivityEvent(kind: "change.completed", tier: .changes, actor: "you", channel: "app", at: base.addingTimeInterval(-Double(k) * 60))
+                e.title = "Synthetic \(k)"
+                e.subjectKind = "task"
+                e.approval = "user"
+                return e
+            }
+            _ = try? opened.insert(events)
+        }
+        #endif
         recorder = ActivityRecorder(store: store, settings: { ActivitySettings(.standard) })
         recorder.didFlush = { n in
             guard n > 0 else { return }
