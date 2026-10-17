@@ -79,8 +79,8 @@ circular (next time in a ring of how much of today is done) and inline (above th
   (inherited from the app), it reads Apple Calendar itself on every timeline and replaces the snapshot's Apple Calendar
   events (including Today's mirrored ones) with the live ones (`NextItems.merge`); otherwise it shows the snapshot as is.
   Timelines reload hourly and at midnight.
-- Background refresh (`com.luworks.one.widgetRefresh`, a `BGAppRefreshTask` booked for just after midnight each time the
-  app goes to the background): pulls Apple Reminders and rewrites the snapshot without the app being opened. iOS decides
+- Background refresh (`com.luworks.one.widgetRefresh`, a `BGAppRefreshTask` booked when the app goes to the background and
+  re-booked by each run, about every three hours and never later than just after midnight): pulls Apple Reminders and rewrites the snapshot without the app being opened. iOS decides
   when it actually runs.
 - `Shared/WidgetSnapshot.swift` is compiled into both targets (and into `swift test` as `OneShared`): the snapshot model,
   `NextItems` (selection, order, tomorrow fallback, live merge, timeline and reload dates), `WidgetItem.eventRows` and

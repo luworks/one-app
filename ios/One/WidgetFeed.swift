@@ -90,17 +90,21 @@ enum WidgetFeed {
         }
     }
 
-    /// Asks iOS to wake the app just after midnight (one pending request; each run books the next one).
-    static func scheduleBackgroundRefresh(now: Date = .now, calendar: Calendar = .current) {
+    /// Asks iOS to wake the app in about three hours, and no later than just after midnight (one pending request;
+    /// each run books the next one, so this repeats while iOS allows).
+    static func scheduleBackgroundRefresh() {
         guard !isUITesting else { return }
+        Task { await submitRefreshRequest() }
+    }
+
+    private static func submitRefreshRequest(now: Date = .now, calendar: Calendar = .current) async {
         let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(86_400)
         let request = BGAppRefreshTaskRequest(identifier: refreshTaskID)
-        request.earliestBeginDate = midnight.addingTimeInterval(60)
-        Task { try? await BGTaskScheduler.shared.submitTaskRequest(request) }
+        request.earliestBeginDate = min(now.addingTimeInterval(3 * 3600), midnight.addingTimeInterval(60))
+        try? await BGTaskScheduler.shared.submitTaskRequest(request)
     }
 
     private static func runBackgroundRefresh(_ task: BGTask) {
-        scheduleBackgroundRefresh()
         var finished = false
         func finish(_ success: Bool) {
             guard !finished else { return }
@@ -108,6 +112,8 @@ enum WidgetFeed {
             task.setTaskCompleted(success: success)
         }
         let work = Task { @MainActor in
+            // Book the next run before this one completes.
+            if !isUITesting { await submitRefreshRequest() }
             // Pull Apple Reminders first (does nothing when Reminders sync is off), so new reminders reach the widget too.
             await RemindersSync.shared.reconcile()
             CalendarSync.shared.prepareStore()
@@ -115,7 +121,7 @@ enum WidgetFeed {
             finish(true)
         }
         task.expirationHandler = {
-            MainActor.assumeIsolated {
+            Task { @MainActor in
                 work.cancel()
                 finish(false)
             }
