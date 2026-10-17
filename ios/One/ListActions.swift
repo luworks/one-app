@@ -64,6 +64,7 @@ enum ListActions {
     /// Deletes the list (the UI asks first, with the count). Its reminders are deleted with it, or, with
     /// `keepingTasks`, moved to the default list.
     static func delete(_ list: OneList, keepingTasks: Bool = false, in context: ModelContext) {
+        guard !list.isDeleted else { return }
         RemindersSync.shared.noteDeleted(list: list.externalID)
         for task in tasks(in: list.name, context: context) {
             if keepingTasks {
