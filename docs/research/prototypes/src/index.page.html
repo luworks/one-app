@@ -1,0 +1,17 @@
+<!--TITLE:Today Prototypes-->
+<style>
+.ix{max-width:720px;margin:0 auto;padding:32px 16px 60px}
+.ix h1{font-size:28px;letter-spacing:-.03em;margin-bottom:6px}
+.ix p{color:var(--ink2);line-height:1.6}
+.ix a.c{display:block;margin-top:12px;padding:16px;border-radius:16px;background:var(--surface);border:.5px solid var(--line);text-decoration:none;color:var(--ink)}
+.ix a.c b{font-size:17px}
+.ix a.c span{display:block;color:var(--ink3);font-size:14px;margin-top:4px;line-height:1.55}
+</style>
+<div class="ix">
+<h1>Today · AI-native 原型</h1>
+<p>配合 <code>docs/research/ai-native-vision.md</code> 阅读。界面文字用英文（与 App 一致），右侧 / 下方是中文设计说明。数据来自 <code>tests/fixtures/today-dataset.json</code>，第 0 天固定为 2026-10-15 周四 9:41；agent、天气、路程、睡眠都是虚构的。无网络请求，不保存任何东西，刷新即重置。</p>
+<a class="c" href="today-planned.html"><b>1 · AI 规划的 Today</b><span>实时信号 → 计划更新卡（逐条勾选、写到哪里、Apply / Undo）；可以模拟“会议拖堂”“牙医取消”“没睡好”，看计划怎么跟着变。</span></a>
+<a class="c" href="approval-inbox.html"><b>2 · 审批收件箱</b><span>所有 agent 的提议集中在一处：谁、改什么、为什么、影响范围；四级自主权；按 agent × 改动类型的限时授权。</span></a>
+<a class="c" href="agent-board.html"><b>3 · Agent 活动板</b><span>控制平面：意图 → 动作（谁、何时、经由什么）→ 结果。Timeline / Board / Graph 三种视图，点开看账本原始记录。</span></a>
+<a class="c" href="evening-review.html"><b>4 · 晚间复盘</b><span>计划 vs 实际、没做完的去哪、Today 学到了什么（时长校准、可加入端侧评测集）。</span></a>
+</div>

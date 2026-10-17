@@ -6,8 +6,7 @@ import Foundation
 enum TimerDial {
     static let maxSeconds = 90 * 60
     static let secondsPerTurn = 5.0 * 60
-    /// Quick chips under the dial, in minutes.
-    static let presets = [1, 5, 10, 25]
+    // The chips under the dial are Pomodoro phases (Focus 25, Short break 5, Long break 15), see Pomodoro.swift.
 
     /// The step size at a value: 15 s under 5 min, 30 s under 15 min, 1 min from 15 min up.
     static func step(at seconds: Int) -> Int {
@@ -85,12 +84,22 @@ struct RunningTimer: Codable, Equatable {
     var endsAt: Date?
     /// What is left, while paused.
     var pausedRemaining: TimeInterval?
+    /// Focus or a break (nil in timers saved before Pomodoro: Focus).
+    var phase: PomodoroPhase?
 
-    static func start(id: UUID, seconds: Int, now: Date) -> RunningTimer {
-        RunningTimer(id: id, total: seconds, endsAt: now.addingTimeInterval(TimeInterval(seconds)), pausedRemaining: nil)
+    static func start(id: UUID, seconds: Int, now: Date, phase: PomodoroPhase = .focus) -> RunningTimer {
+        RunningTimer(id: id, total: seconds, endsAt: now.addingTimeInterval(TimeInterval(seconds)), pausedRemaining: nil, phase: phase)
     }
 
     var isPaused: Bool { pausedRemaining != nil }
+    var pomodoroPhase: PomodoroPhase { phase ?? .focus }
+
+    /// True when the countdown reached its end (so it rang), as opposed to being cancelled early.
+    /// Used when AlarmKit no longer has the timer: gone at or after its end means it ran out; gone early means cancelled.
+    func ranToEnd(now: Date) -> Bool {
+        guard !isPaused, let endsAt else { return false }
+        return now >= endsAt.addingTimeInterval(-1)
+    }
 
     func remaining(now: Date) -> TimeInterval {
         if let pausedRemaining { return max(pausedRemaining, 0) }
@@ -100,12 +109,12 @@ struct RunningTimer: Codable, Equatable {
 
     func paused(now: Date) -> RunningTimer {
         guard !isPaused else { return self }
-        return RunningTimer(id: id, total: total, endsAt: nil, pausedRemaining: remaining(now: now))
+        return RunningTimer(id: id, total: total, endsAt: nil, pausedRemaining: remaining(now: now), phase: phase)
     }
 
     func resumed(now: Date) -> RunningTimer {
         guard let pausedRemaining else { return self }
-        return RunningTimer(id: id, total: total, endsAt: now.addingTimeInterval(pausedRemaining), pausedRemaining: nil)
+        return RunningTimer(id: id, total: total, endsAt: now.addingTimeInterval(pausedRemaining), pausedRemaining: nil, phase: phase)
     }
 
     // MARK: Storage

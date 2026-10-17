@@ -221,9 +221,16 @@ struct HomeView: View {
             #endif
             ListActions.ensureLists(in: context)
             #if DEBUG
-            if let i = ProcessInfo.processInfo.arguments.firstIndex(of: "-debugDeleteSystemEvent"),
-               i + 1 < ProcessInfo.processInfo.arguments.count {
-                CalendarSync.shared.debugDeleteSystemEvents(titled: ProcessInfo.processInfo.arguments[i + 1])
+            // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-debugDeleteSystemEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugDeleteSystemEvents(titled: args[i + 1])
+            }
+            if let i = args.firstIndex(of: "-debugCreateSystemEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: false)
+            }
+            if let i = args.firstIndex(of: "-debugCreateRepeatingEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: true)
             }
             #endif
             Self.seedUITestReminder(context)
@@ -260,7 +267,10 @@ struct HomeView: View {
                 dropDeletedMirrors()
                 Task { await Reminders.shared.resync() }
             }
-            if phase == .background { updateWidgets() }
+            if phase == .background {
+                updateWidgets()
+                WidgetFeed.scheduleBackgroundRefresh()
+            }
         }
         // An event deleted in Apple Calendar must not linger here: when the system calendar changes, drop the copies it lost.
         .onChange(of: CalendarSync.shared.version) {

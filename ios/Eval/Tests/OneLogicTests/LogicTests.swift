@@ -128,6 +128,25 @@ final class AlarmPlanTests: XCTestCase {
         XCTAssertEqual(AlarmPlan.repeatLabel(weekdays: [4, 2], calendar: cal), "Mon, Wed")
     }
 
+    func testSnoozeChoicesAreTheShortList() {
+        XCTAssertEqual(AlarmPlan.snoozeChoices, [5, 9, 10, 15, 30])
+        XCTAssertEqual(AlarmPlan.defaultSnoozeMinutes, 9)
+        XCTAssertTrue(AlarmPlan.snoozeChoices.contains(AlarmPlan.defaultSnoozeMinutes))
+    }
+
+    func testSnoozeMinutesMapToNearestAllowed_tiesGoDown() {
+        for m in AlarmPlan.snoozeChoices { XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: m), m) }
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: 1), 5)
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: 3), 5)
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: 7), 5, "7 is 2 from both 5 and 9; ties go down")
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: 8), 9)
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: 20), 15)
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: 23), 30)
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: 60), 30)
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: 0), 5)
+        XCTAssertEqual(AlarmPlan.snoozeMinutes(nearest: -4), 5)
+    }
+
     func testOneTimeAlarmRingsTodayIfStillAhead_elseTomorrow() {
         XCTAssertEqual(AlarmPlan.nextFire(hour: 18, minute: 0, weekdays: [], after: at(12, 9, 41), calendar: cal), at(12, 18, 0))
         XCTAssertEqual(AlarmPlan.nextFire(hour: 7, minute: 0, weekdays: [], after: at(12, 9, 41), calendar: cal), at(13, 7, 0))

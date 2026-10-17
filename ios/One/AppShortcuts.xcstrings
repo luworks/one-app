@@ -1,0 +1,96 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Add a reminder in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在${applicationName}添加提醒"
+          }
+        }
+      }
+    },
+    "Remind me with ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用${applicationName}提醒我"
+          }
+        }
+      }
+    },
+    "New ${applicationName} reminder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建${applicationName}提醒"
+          }
+        }
+      }
+    },
+    "Start a timer in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在${applicationName}开始计时"
+          }
+        }
+      }
+    },
+    "Start a ${applicationName} timer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用${applicationName}设一个计时器"
+          }
+        }
+      }
+    },
+    "What’s next in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}接下来有什么"
+          }
+        }
+      }
+    },
+    "What’s next today in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "${applicationName}今天还有什么"
+          }
+        }
+      }
+    },
+    "Show my day in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在${applicationName}查看我的一天"
+          }
+        }
+      }
+    },
+    "Show today in ${applicationName}": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开${applicationName}的今天"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
