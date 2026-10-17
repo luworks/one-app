@@ -269,6 +269,7 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = 0E1A00000000000000000004;
 			minimizedProjectReferenceProxies = 1;
@@ -520,6 +521,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TodayWidgetsInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Today;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Today shows your Apple Calendar events next to your tasks, and can add events you create there.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -545,6 +547,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TodayWidgetsInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Today;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Today shows your Apple Calendar events next to your tasks, and can add events you create there.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

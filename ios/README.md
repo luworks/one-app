@@ -21,6 +21,16 @@ xcrun simctl launch 341B8786-E55B-4ECE-8720-BF1F2DF73899 com.luworks.one -uiTest
 
 UI tests use it with `app.launchArguments = TestData.launchArguments`.
 
+Tests that need Apple Calendar (`CalendarSyncTests`, `CalendarDeleteSyncTests`, `CalendarRecurringDeleteTests`) add
+`-uiTestingCalendarSync` and use the simulator's own calendar, never a real one. Debug-only launch hooks for them
+(handled in `HomeView`'s launch task, implemented in `CalendarSync`):
+
+- `-debugCreateSystemEvent <title>` — a one-off event at the top of the current hour, as if made in the Calendar app.
+- `-debugCreateRepeatingEvent <title>` — a daily event at the top of the current hour, starting yesterday.
+- `-debugDeleteSystemEvent <title>` — deletes every event with that title (a whole series too), as if deleted in the
+  Calendar app. Tests also use it to clean up.
+- `-uiTestingStore <name>` — keeps the test store in a file, so a second launch sees what the first saved.
+
 ## Run it on your iPhone (free Apple ID, no paid account)
 
 1. Open `ios/One.xcodeproj` in Xcode.
@@ -40,8 +50,8 @@ Four tabs: **Today · Calendar · Reminders · Alarms** as pills on top (swipe s
 - **Today** — one day: all-day events, overdue (one "N overdue" row that expands), due today, and the timeline with a "now" line. Tapping a day in Calendar opens it here, with a "Back to today" row. Settings can hide overdue or alarms and turn off scrolling to now.
 - **Calendar** — modeled on Apple Calendar: Week (default; time grid), Month (grid with the selected day's events below) and Year; Day opens the Today tab. One control row: the view switcher. Which calendars show is chosen in Settings. With Calendar access on, + opens Apple's own event editor and system events open in Apple's viewer. Events are fixed; flexible tasks can be long-pressed and dragged in Week.
 - **Reminders** — modeled on Apple Reminders: smart-list cards (Today, Scheduled, All, Flagged, Completed) with counts, pinned lists as cards, My Lists with color and symbol, Add List. Edit (top right) picks and orders the smart lists, reorders, pins and deletes lists. A list screen has a big colored title, a collapsed Completed section and an inline **New Reminder** row (note, date, flag and repeat buttons, suggestions). Two-way sync with Apple Reminders through EventKit (`RemindersSync`): Apple wins on conflict, nothing is written before you connect, a pass never deletes more than 10 Apple items, planned time stays local.
-- **Alarms** — modeled on the Alarms tab of Apple Clock: big light times with AM/PM, green switches, "Next alarm in …", Add/Edit Alarm sheet (wheel, Repeat, Label, Sound from bundled tones, Snooze, Snooze Duration). Every alarm is a real AlarmKit alarm that rings through Silent and Focus; items you marked "Ring as alarm" follow in their own section. AlarmKit only shows alarms this app scheduled: Apple's own Clock alarms cannot be read.
-- **Timer** — a kitchen-timer card on top of Alarms: turn the dial right to add time, left to take it away (one turn = 5 min, up to 90 min), or tap a chip (1 / 5 / 10 / 25 min), then Start. One AlarmKit countdown at a time: it rings full-screen even with the app closed, with Pause / Resume and Cancel.
+- **Alarms** — modeled on the Alarms tab of Apple Clock: big light times with AM/PM, green switches, "Next alarm in …", Add/Edit Alarm sheet (wheel, Repeat, Label, Sound from bundled tones, Snooze, Snooze Duration). Every alarm is a real AlarmKit alarm that rings through Silent and Focus; items you marked "Ring as alarm" follow in their own section. AlarmKit only shows alarms this app scheduled: Apple's own Clock alarms cannot be read. A quiet switcher under the top bar splits the tab like Clock: **Alarms · World Clock · Stopwatch · Timer** (the last one is kept across tab switches and restarts). **World Clock** is modeled on the app Overlap: home (the device's time zone, starred) first, then your cities as cards tinted by the time of day there (night indigo, morning/evening blue, working hours 9–18 green) with "+N hrs · weekday, date"; drag sideways to move every clock in 15-minute steps (the capsule at the bottom says "3 hours from now", tap it for Now); Overlap shows a wave of who is working and the hours everyone overlaps; Edit reorders and deletes (red minus), long-press deletes; + adds a city from a searchable list. **Stopwatch** like Clock's (Lap/Reset, Start/Stop, best lap green, worst red) keeps running across tabs and relaunches (it stores its start date). **Timer** is the Pomodoro card. + is hidden on Stopwatch and Timer. Logic: `ClockLogic.swift` (unit-tested).
+- **Focus timer** — a restrained Pomodoro card on top of Alarms: turn the dial right to add time, left to take it away (one turn = 5 min, up to 90 min), or tap a chip (Focus 25 / Short break 5 / Long break 15), then Start; a custom dial value counts as Focus. One AlarmKit countdown at a time: it rings full-screen even with the app closed, with Pause / Resume and Cancel; the alert and Live Activity say "Focus" or "Break". A Focus round counts only when its countdown runs out (not when cancelled); today's rounds show as dots (●●●○, groups of 4) and start over at midnight. After a countdown ends the card offers one next step ("Start 5-min break", every 4th round "Start 15-min long break", after a break "Focus again") and a quiet "Done for now". No stats, no task linking. Logic: `Pomodoro.swift` (unit-tested).
 - **+ (bottom right)** — tap adds what fits the page (alarm on Alarms, event on Calendar, otherwise a reminder); press and hold for New reminder / New event / New alarm. A new reminder opens the Due-style quick add: type what, set when with one tap on the grid (times of day, +/− nudges, days), with guesses from your own past reminders (on the device). Editing a reminder opens the full editor.
 - **Sidebar** — like ChatGPT / Claude (menu button or a swipe from the left edge): Search at the top (reminders, events in the whole system calendar, alarms), past AI chats grouped by day (swipe Archive / Delete, long-press Rename, an Archived section), New chat and Settings at the bottom. Finished chats archive themselves (a week without a message, or an hour after everything they added is done); off in Settings → "Archive finished chats".
 - **Gestures** (follow Apple Reminders / Calendar) — tap the circle to complete; swipe right to left for actions, which look the same in every list (Delete red and rightmost, a full swipe deletes with an Undo toast; Flag, Archive, Pin); long-press for Show Details / Flag / Today / Tomorrow / Unschedule / Delete. Deleting a repeating event asks "this event or the series?" first. Shake to undo.
@@ -73,13 +83,31 @@ all-day first. Lock Screen: rectangular (three lines "15:00 Dentist", or "Nothin
 circular (next time in a ring of how much of today is done) and inline (above the clock). Home Screen: small (next item,
 "in 2 hr") and medium (next three, each row opens Today on its day via `today://today?day=YYYY-MM-DD`).
 
-- The app writes `widget-snapshot.json` (today + tomorrow) into the App Group `group.com.luworks.one` (`WidgetFeed.swift`,
-  called after data changes, when Apple Calendar changes and when the app goes to the background), then reloads timelines.
-  The extension reads only that file; it never opens SwiftData or EventKit.
+- The app writes `widget-snapshot.json` (today, tomorrow and the day after, so "Tomorrow" still has data after midnight)
+  into the App Group `group.com.luworks.one` (`WidgetFeed.swift`, called after data changes, when Apple Calendar changes
+  and when the app goes to the background), then reloads timelines. It waits until the EventKit store is warm, so the
+  first write after launch never drops system events. The snapshot also carries the Apple Calendar on/off switch and
+  the hidden calendars.
+- The extension never opens SwiftData. When Today has Apple Calendar on and the extension has full calendar access
+  (inherited from the app), it reads Apple Calendar itself on every timeline and replaces the snapshot's Apple Calendar
+  events (including Today's mirrored ones) with the live ones (`NextItems.merge`); otherwise it shows the snapshot as is.
+  Timelines reload hourly and at midnight.
+- Background refresh (`com.luworks.one.widgetRefresh`, a `BGAppRefreshTask` booked when the app goes to the background and
+  re-booked by each run, about every three hours and never later than just after midnight): pulls Apple Reminders and rewrites the snapshot without the app being opened. iOS decides
+  when it actually runs.
 - `Shared/WidgetSnapshot.swift` is compiled into both targets (and into `swift test` as `OneShared`): the snapshot model,
-  `NextItems` (selection, order, tomorrow fallback, timeline dates) and `WidgetLink`.
+  `NextItems` (selection, order, tomorrow fallback, live merge, timeline and reload dates), `WidgetItem.eventRows` and
+  `WidgetLink`.
 - Add it: long-press the Lock Screen → Customize → Lock Screen → tap the widget area under the clock (or the date line
   above it) → pick **Today** → Next Up. Home Screen: long-press → Edit → Add Widget → Today.
+
+## Siri, Spotlight and Shortcuts (`One/AppIntents.swift`)
+
+Four App Shortcuts, English phrases in code and Simplified Chinese in `One/AppShortcuts.xcstrings`: **Add Reminder**
+(a title or one sentence, read by `CaptureParser`; always a reminder), **Start Timer** (the Alarms tab's AlarmKit countdown,
+asks before replacing a running one), **What's Next Today** (the Next Up widget's three items, spoken plus a snippet) and
+**Open Today** (the `today://today` link). They run in the app's process on the app's store (`OneStore` in `OneApp.swift`).
+Pure parts: `One/IntentLogic.swift`, `Shared/NextUpSpeech.swift` (tested in `IntentTests`).
 
 Tests: `ios/Eval/` (logic unit tests, NL-capture eval, `run-eval.sh`, `cold-start.sh`) and `ios/OneUITests/` (XCUITest journeys). Run `ios/Eval/run-eval.sh` or `ios/Eval/run-eval.sh --ui`.
 
