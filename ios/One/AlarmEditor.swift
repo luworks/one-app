@@ -1,6 +1,12 @@
 import SwiftUI
 import SwiftData
 
+extension View {
+    /// A switch draws about 2 points wider than its layout box on its trailing side, so in a row with hand-set margins it
+    /// ends past the text and divider edge. This pulls it back so its visible edge sits on the same margin.
+    func switchOnRowMargin() -> some View { offset(x: -2.5) }
+}
+
 /// One alarm in the list, as Clock draws it: a big light time with a small AM/PM, the label and repeat under it,
 /// and a green switch. Disabled alarms are gray.
 struct AlarmRow: View {
@@ -51,6 +57,7 @@ struct AlarmRow: View {
                 Toggle("Alarm on", isOn: Binding(get: { alarm.isOn }, set: { alarm.setOn($0) }))
                     .labelsHidden()
                     .tint(Color(.systemGreen))
+                    .switchOnRowMargin()
                     .accessibilityLabel("\(parts.time) \(parts.suffix ?? "") \(subtitle)")
                     .accessibilityIdentifier("alarm.toggle")
             }
@@ -89,10 +96,8 @@ struct AlarmEditor: View {
 
     init(alarm: OneAlarm? = nil) {
         self.alarm = alarm
-        // A new alarm starts at the top of the next hour, so it still rings today when saved straight away.
-        let cal = Calendar.current
-        let nextHour = cal.date(byAdding: .hour, value: 1, to: .now).flatMap { cal.date(bySetting: .minute, value: 0, of: $0) } ?? .now
-        _time = State(initialValue: alarm?.timeToday ?? nextHour)
+        // A new alarm starts at the next quarter hour (10:56 → 11:00), so it still rings today when saved straight away.
+        _time = State(initialValue: alarm?.timeToday ?? AlarmPlan.nextQuarterHour(after: TodayClock.now))
         _label = State(initialValue: alarm?.label ?? "")
         _weekdays = State(initialValue: Set(alarm?.weekdays ?? []))
         _snooze = State(initialValue: alarm?.snooze ?? true)
@@ -211,8 +216,12 @@ struct AlarmEditor: View {
             .accessibilityIdentifier("alarm.sound")
             Divider().padding(.horizontal, 18)
             Row {
+                Text("Snooze")
+                Spacer()
                 Toggle("Snooze", isOn: $snooze.animation(.snappy))
+                    .labelsHidden()
                     .tint(Color(.systemGreen))
+                    .switchOnRowMargin()
                     .accessibilityIdentifier("alarm.snooze")
             }
             if snooze {

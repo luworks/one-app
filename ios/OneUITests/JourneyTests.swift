@@ -95,8 +95,9 @@ final class JourneyTests: XCTestCase {
 
     /// J6: add a real alarm, see it on the Alarms page and in Today's schedule.
     func testJ6_addAlarmAndSeeItInToday() throws {
-        // A new alarm starts at the top of the next hour; in the last hour of the day that is tomorrow.
-        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 23, "the default alarm time is tomorrow")
+        // A new alarm starts at the next quarter hour; in the last quarter hour of the day that is tomorrow.
+        let c = Calendar.current.dateComponents([.hour, .minute], from: .now)
+        try XCTSkipIf(c.hour! == 23 && c.minute! >= 45, "the default alarm time is tomorrow")
         tab("Alarms")
         tap(app.buttons["New"])   // + adds an alarm on the Alarms page
         tap(app.buttons["Save"])
@@ -182,6 +183,24 @@ final class JourneyTests: XCTestCase {
         let moved = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned' AND label != %@", before)).firstMatch
         XCTAssertTrue(moved.waitForExistence(timeout: 3), "planned time changed after drag (was: \(before))")
+    }
+
+    /// Each Today option explains itself right under its own switch (not in one shared footer).
+    func testSettingsExplainsEachOptionUnderItsRow() {
+        app.openSidebar()
+        tap(app.buttons["Settings"].firstMatch)
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        let travel = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Shows the drive time'")).firstMatch
+        let health = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Shows today'")).firstMatch
+        for _ in 0..<4 where !health.isHittable { app.swipeUp() }
+        XCTAssertTrue(travel.exists && health.exists, "a short explanation under Travel time and under Health summary")
+        XCTAssertTrue(travel.label.contains("Apple Maps only"), "the privacy fact stays: location and address go to Apple Maps only")
+        XCTAssertTrue(health.label.contains("only reads"), "the privacy fact stays: Today only reads Health")
+        XCTAssertLessThan(travel.frame.minY, app.switches["Health summary"].frame.minY, "Travel time's text sits above the next switch")
+        if let dir = ProcessInfo.processInfo.environment["ALARM_SHOTS"] {
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir + "/settings-today.png"))
+        }
     }
 
     /// Settings is its own screen; Delete All Data is last and needs two confirmations (the second needs typing DELETE).
