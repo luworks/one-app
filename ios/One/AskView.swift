@@ -384,7 +384,7 @@ struct AskView: View {
         let cal = Calendar.current
         switch followup {
         case .chooseItem(let original, let options):
-            if let i = Dialogue.pick(text, from: options.map(\.title)) {
+            if let i = Dialogue.answerToWhichOne(text, from: options.map(\.title)) {
                 followup = nil
                 choose(options[i], original: original, history: history)
                 return true
@@ -532,7 +532,7 @@ struct AskView: View {
                 messages.append(ChatMessage(role: .ai, text: "The on-device model didn't answer in time. Try again in a moment, or name the item."))
                 return
             }
-            handle(Editing.decide(text: text, plan: plan, items: items, now: .now, calendar: .current, focus: focusItem(items)),
+            handle(Editing.decide(text: text, plan: plan?.pick, items: items, now: .now, calendar: .current, focus: focusItem(items)),
                    text: text, plan: plan, candidates: candidates, history: history)
         }
     }

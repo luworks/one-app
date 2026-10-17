@@ -36,6 +36,28 @@ enum Dialogue {
         return hits.count == 1 ? hits[0] : nil
     }
 
+    /// A sentence that asks for something NEW ("remind me to ...", "提醒我 ...", "don't forget ..."). It is never the answer to a
+    /// "which one?" question and is not an edit of an existing item, unless the words name one of the user's own items.
+    static func startsNewItem(_ text: String) -> Bool {
+        has(text, #"提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个|\bremind me\b|\bdon'?t forget\b|\bnew (?:reminder|task|event)\b|\badd (?:a |an )?(?:reminder|task|event|to-?do)\b|\bset (?:a |an )?reminder\b"#)
+    }
+
+    /// The answer to a "which one?" question, or nil when the message is something else. Like `pick`, but a message that
+    /// asks for something new is never an answer, even if one of its words happens to appear in an item's title.
+    /// "I want to ..." / "我想 ..." tells a story of its own: it counts as an answer only when it points at an option by number
+    /// ("我想要第二个") or names a whole title, not when a single word of it overlaps one.
+    static func answerToWhichOne(_ answer: String, from titles: [String]) -> Int? {
+        if startsNewItem(answer) { return nil }
+        guard let i = pick(answer, from: titles) else { return nil }
+        let telling = has(answer, #"我想|我要|我打算|我得|\bi (?:want|need|wanna|plan)\b|\bi'?d like\b"#)
+        if telling {
+            let byNumber = has(answer, #"最后|\blast\b|\b(?:first|second|third|fourth|1st|2nd|3rd|4th)\b|第?[一二两三四1-4]个"#)
+            let byTitle = answer.lowercased().contains(titles[i].lowercased())
+            if !byNumber && !byTitle { return nil }
+        }
+        return i
+    }
+
     // MARK: Changing the preview card
 
     enum Refinement: Equatable {

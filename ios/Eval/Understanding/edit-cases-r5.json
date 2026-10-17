@@ -194,6 +194,27 @@
    "op": "move",
    "target": "t4",
    "start": "2026-10-16T12:00"
+  },
+  {
+   "lang": "zh",
+   "input": "请把我可以卖的东西都放到车库去，然后今天下午 3 点的时候提醒我移动一下",
+   "op": "none",
+   "target": null,
+   "start": null
+  },
+  {
+   "lang": "zh",
+   "input": "哦，我想卖家里的一些东西，然后去 Marketplace。今天下午 3 点提醒我吧",
+   "op": "none",
+   "target": null,
+   "start": null
+  },
+  {
+   "lang": "zh",
+   "input": "安排在周五下午3点开会",
+   "op": "none",
+   "target": null,
+   "start": null
   }
  ]
 }

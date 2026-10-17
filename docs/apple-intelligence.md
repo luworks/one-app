@@ -102,6 +102,11 @@ If no time is given, leave hour and minute empty.
 
 这是最难的一类，因为模型要引用**已存在**的东西，而 4096 token 装不下全部数据。
 
+**先判断是不是「调整」（代码规则，`Editing.looksLikeEdit`，有单测）：只有句子能指到一个已存在的条目才算调整，否则一律当新建（capture）。**
+- 「提醒我 / remind me / 别忘了」开头的新建请求，除非原话里的词对上了某个条目的标题，否则不是调整（「提醒我把车挪一下」是新提醒）。
+- 仅仅一个钟点（「下午 3 点」）恰好等于某条目的开始时间，不算指到了它；只有「三点那个会改到四点半」「the 3pm one」「move the 4:30 to 5:30」这种用钟点指代条目的说法才算。
+- 回答「Which one do you mean?」时，如果回答本身是一个新请求（提醒我…、「我想…」且只有个别词和某选项标题重叠），它不是在选条目，按新建处理（`Dialogue.answerToWhichOne`）。
+
 1. 代码先按规则筛候选：未完成任务 + 未来 7 天内的任务，最多 ~20 条。
 2. 给每条一个短 id 并压成一行：`t3|Send Q3 report|due Fri|plan Thu 15:00`。
 3. 模型只输出 `kind=editTask, targetID=t3, edit=postpone / moveToTime(hour,minute)`。
