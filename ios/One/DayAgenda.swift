@@ -312,7 +312,9 @@ struct DayAgenda: View {
         }
         // What is still free after the suggestions, as quiet "Free 1 h 30 min" rows.
         timeline += DaySchedule.freeGaps(busy: busy, day: day, now: now).map(TimelineItem.gap)
-        if showsAlarms { timeline += alarms.compactMap { a in a.fires(on: day).map { TimelineItem.alarm(a, $0) } } }
+        if showsAlarms {
+            timeline += CalendarAlarms.occurrences(of: alarms.map(\.spec), on: day, now: now).map { TimelineItem.alarm(alarms[$0.index], $0.date) }
+        }
         if cal.isDateInToday(day), !timeline.isEmpty {
             timeline.append(.nowMarker(now))
         }
