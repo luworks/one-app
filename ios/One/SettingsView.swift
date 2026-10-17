@@ -80,7 +80,8 @@ struct SettingsView: View {
                     explainedToggle("Travel time", isOn: $travelTime,
                                     caption: "Shows the drive time and when to leave for events with a location today and tomorrow. Your location and the event's address go to Apple Maps only; nothing else leaves your iPhone.")
                     explainedToggle("Health summary", isOn: $healthSummary,
-                                    caption: "Shows today's steps and last night's sleep from Apple Health in one line. Today only reads them.")
+                                    caption: "Shows one line from Apple Health on Today: your steps and last night's sleep, or the first metrics you chose. Today only reads them.")
+                    HealthMetricsLink()
                 } header: {
                     Text("Today")
                 }

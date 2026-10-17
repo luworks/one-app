@@ -66,7 +66,7 @@ struct DayAgenda: View {
         return List {
             if !showsWeekStrip { DateTitle(day: day) }
             if isTodayTab, showsHealth, let line = health.line {
-                TodayHealthLine(line: line)
+                TodayHealthLine(line: line) { Task { await health.load() } }
             }
             if !showsWeekStrip, !cal.isDateInToday(day) {
                 Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
