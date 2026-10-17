@@ -30,6 +30,7 @@ struct OneApp: App {
         LaunchTimer.mark("container ready")
         Reminders.shared.configure(container)
         RemindersSync.shared.configure(container)
+        WidgetFeed.configure(container)
         LaunchTimer.mark("reminders configured")
     }
 

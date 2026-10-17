@@ -69,6 +69,17 @@ final class CalendarSync {
     @ObservationIgnored private var storeReady = false
     @ObservationIgnored private var warming = false
 
+    /// False while Apple Calendar is on but the store is still warming up (events read now would come back empty).
+    var isReady: Bool { !isOn || storeReady }
+
+    /// Creates the store now: a background refresh has no first frame to protect.
+    func prepareStore() {
+        guard isOn, !storeReady else { return }
+        _ = store
+        storeReady = true
+        version += 1
+    }
+
     private func warmUp() {
         guard !warming else { return }
         warming = true

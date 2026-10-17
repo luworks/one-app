@@ -15,21 +15,60 @@ struct WidgetItem: Codable, Hashable, Identifiable {
     var end: Date?
     var isAllDay: Bool
     var kind: Kind
+    /// Set for events that live in Apple Calendar (system events and Today's events mirrored there). When the widget can
+    /// read EventKit itself it drops these and shows the live copies instead. Optional so older snapshots still decode.
+    var externalID: String?
 
-    init(id: String, title: String, start: Date, end: Date? = nil, isAllDay: Bool = false, kind: Kind) {
+    init(id: String, title: String, start: Date, end: Date? = nil, isAllDay: Bool = false, kind: Kind, externalID: String? = nil) {
         self.id = id
         self.title = title
         self.start = start
         self.end = end
         self.isAllDay = isAllDay
         self.kind = kind
+        self.externalID = externalID
+    }
+
+    /// An event's rows on `days`, the way the Calendar tab reads them: clipped to each day it overlaps, and all-day on a day
+    /// it covers completely (the middle of a multi-day event). `end` is exclusive (for all-day events: the midnight after).
+    static func eventRows(id: String, title: String, start: Date, end: Date, isAllDay: Bool, externalID: String?,
+                          days: [Date], calendar: Calendar = .current) -> [WidgetItem] {
+        days.compactMap { day in
+            guard let interval = calendar.dateInterval(of: .day, for: day),
+                  start < interval.end && end > interval.start || (start == end && interval.contains(start)) else { return nil }
+            let allDay = isAllDay || start <= interval.start && end >= interval.end
+            let s = max(start, interval.start), e = min(end, interval.end)
+            return WidgetItem(id: "\(id)#\(Int(interval.start.timeIntervalSince1970))", title: title,
+                              start: allDay ? interval.start : s, end: allDay ? nil : e,
+                              isAllDay: allDay, kind: .event, externalID: externalID)
+        }
     }
 }
 
-/// What the app hands the widget: today's and tomorrow's items, written as JSON into the App Group container.
+/// What the app hands the widget: the items of the next `WidgetSnapshot.days` days (so the "Tomorrow" line still has data
+/// after midnight), written as JSON into the App Group container.
 struct WidgetSnapshot: Codable, Equatable {
     var generatedAt: Date
     var items: [WidgetItem]
+    /// The app's Apple Calendar settings, which the widget needs to read EventKit the way the app does:
+    /// nil in snapshots from older builds (then the widget shows the snapshot as it is).
+    var calendar: CalendarSettings?
+
+    struct CalendarSettings: Codable, Equatable {
+        /// Apple Calendar is on in Today and access is granted.
+        var isOn: Bool
+        /// Calendars turned off in the Calendars list.
+        var hiddenCalendarIDs: [String]
+    }
+
+    init(generatedAt: Date, items: [WidgetItem], calendar: CalendarSettings? = nil) {
+        self.generatedAt = generatedAt
+        self.items = items
+        self.calendar = calendar
+    }
+
+    /// Today, tomorrow and the day after: at 00:05 "today" is the old tomorrow and "Tomorrow" is the old day after.
+    static let days = 3
 
     static let appGroup = "group.com.luworks.one"
     static let fileName = "widget-snapshot.json"
@@ -103,6 +142,14 @@ enum WidgetLink {
 }
 
 enum NextItems {
+    /// What the widget shows: the snapshot, with its Apple Calendar events replaced by `live` ones read from EventKit
+    /// just now. `live == nil` (no access, or Apple Calendar is off) keeps the snapshot as it is. Today's own events,
+    /// reminders and alarms always come from the snapshot.
+    static func merge(snapshot: [WidgetItem], live: [WidgetItem]?) -> [WidgetItem] {
+        guard let live else { return snapshot }
+        return (snapshot.filter { $0.kind != .event || $0.externalID == nil } + live).sorted(by: ordered)
+    }
+
     /// Still worth showing at `now`: all-day items for their whole day, events until they end, the rest until they start.
     static func isLeft(_ item: WidgetItem, now: Date, calendar: Calendar = .current) -> Bool {
         if item.isAllDay { return calendar.isDate(item.start, inSameDayAs: now) }
@@ -128,16 +175,24 @@ enum NextItems {
         return NextUp(today: Array(left.prefix(max(0, limit))), remainingToday: left.count, tomorrow: tomorrow)
     }
 
-    /// When the widget should redraw: now, every start and end still ahead today, and midnight
-    /// (where tomorrow's items become today's). The timeline ends at that midnight.
-    static func timelineDates(for items: [WidgetItem], now: Date, calendar: Calendar = .current) -> [Date] {
-        let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(86_400)
-        var dates: Set<Date> = [now, midnight]
+    /// When the widget should redraw: now, every start and end still ahead, and each midnight (where tomorrow's items
+    /// become today's), for `days` days. Running past tonight's midnight keeps the widget right if iOS delays the reload.
+    static func timelineDates(for items: [WidgetItem], now: Date, days: Int = 1, calendar: Calendar = .current) -> [Date] {
+        let today = calendar.startOfDay(for: now)
+        let midnights = (1...max(1, days)).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+        let last = midnights.last ?? now.addingTimeInterval(86_400)
+        var dates = Set([now] + midnights)
         for item in items where !item.isAllDay {
-            for d in [item.start, item.end].compactMap({ $0 }) where d > now && d < midnight {
+            for d in [item.start, item.end].compactMap({ $0 }) where d > now && d < last {
                 dates.insert(d)
             }
         }
         return dates.sorted()
+    }
+
+    /// When the widget asks for a new timeline: within `interval` (to re-read Apple Calendar), and never after midnight.
+    static func reloadDate(now: Date, interval: TimeInterval = 3600, calendar: Calendar = .current) -> Date {
+        let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(86_400)
+        return min(now.addingTimeInterval(interval), midnight)
     }
 }
