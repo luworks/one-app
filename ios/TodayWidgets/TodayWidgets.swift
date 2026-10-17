@@ -8,6 +8,7 @@ import WidgetKit
 struct TodayWidgetsBundle: WidgetBundle {
     var body: some Widget {
         NextUpWidget()
+        AlarmLiveActivity()
     }
 }
 
