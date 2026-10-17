@@ -86,20 +86,30 @@ final class SidebarTests: XCTestCase {
         XCTAssertFalse(reply.exists)
     }
 
-    func testSwipeLeftArchivesAConversationIntoTheArchivedSection() {
+    func testSwipeRightArchivesAConversationIntoTheArchivedSection() {
         haveAConversation()
         app.openSidebar()
         let row = app.buttons["Anything left today?"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        row.swipeLeft()
+        row.swipeRight()
         let archive = app.buttons["Archive"]
-        // A full swipe archives straight away; a shorter one reveals the Archive button first.
-        if archive.waitForExistence(timeout: 2) { archive.tap() }
+        XCTAssertTrue(archive.waitForExistence(timeout: 2))
+        archive.tap()
         XCTAssertTrue(row.waitForNonExistence(timeout: 5), "the conversation leaves the main list")
         let archived = app.buttons["conversation.archived"]
         XCTAssertTrue(archived.waitForExistence(timeout: 3), "an Archived section appears")
         archived.tap()
         XCTAssertTrue(app.buttons["Anything left today?"].waitForExistence(timeout: 5), "it is still reachable under Archived")
+    }
+
+    func testSwipeLeftOnTheChatsListReturnsToToday() {
+        haveAConversation()
+        app.openSidebar()
+        let row = app.buttons["Anything left today?"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)))
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "a left swipe closes the sidebar")
     }
 
     func testLongPressOffersRenameArchiveAndDelete() {
