@@ -89,7 +89,7 @@ enum ListActions {
         try? context.save()
     }
 
-    /// Saves a new My Lists order (after a drag in Edit mode).
+    /// Saves a new My Lists order (after a row is pressed, held and dragged).
     static func reorder(_ lists: [OneList], in context: ModelContext) {
         for (i, list) in lists.enumerated() where list.order != i { list.order = i }
         try? context.save()

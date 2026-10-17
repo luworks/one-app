@@ -21,6 +21,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.showAlarms) private var showAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpToNow = true
     @AppStorage(SettingsKey.autoArchiveChats) private var autoArchiveChats = true
+    @AppStorage(SmartListLayout.orderKey) private var smartOrder = ""
+    @AppStorage(SmartListLayout.hiddenKey) private var smartHidden = ""
 
     @State private var calendarOn = CalendarSync.shared.isOn
     @State private var remindersOn = RemindersSync.shared.isConnected
@@ -71,6 +73,8 @@ struct SettingsView: View {
                 } header: {
                     Text("Today")
                 }
+
+                smartListsSection
 
                 Section {
                     Toggle("Archive finished chats", isOn: $autoArchiveChats)
@@ -130,6 +134,38 @@ struct SettingsView: View {
                     dismiss()
                 }
             }
+        }
+    }
+
+    /// Which smart lists show at the top of Reminders: a switch per list, press, hold and drag to reorder (no Edit mode).
+    private var smartListsSection: some View {
+        let layout = SmartListLayout(order: smartOrder, hidden: smartHidden)
+        return Section {
+            ForEach(layout.order) { smart in
+                Toggle(isOn: Binding(
+                    get: { !layout.hidden.contains(smart) },
+                    set: { shown in
+                        var l = SmartListLayout(order: smartOrder, hidden: smartHidden)
+                        if shown { l.hidden.remove(smart) } else { l.hidden.insert(smart) }
+                        smartHidden = l.hiddenString
+                    }
+                )) {
+                    HStack(spacing: 12) {
+                        ListGlyph(color: smart.color, symbol: smart.symbol, size: 28)
+                        Text(smart.title)
+                    }
+                }
+                .accessibilityIdentifier("smartToggle.\(smart.rawValue)")
+            }
+            .onMove { from, to in
+                var l = SmartListLayout(order: smartOrder, hidden: smartHidden)
+                l.order.move(fromOffsets: from, toOffset: to)
+                smartOrder = l.orderString
+            }
+        } header: {
+            Text("Reminders Smart Lists")
+        } footer: {
+            Text("Shown at the top of Reminders. Press and hold one, then drag, to change the order.")
         }
     }
 
