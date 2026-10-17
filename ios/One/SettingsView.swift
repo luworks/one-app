@@ -9,6 +9,7 @@ enum SettingsKey {
     static let jumpToNow = "today.setting.jumpToNow"
     static let autoArchiveChats = "today.setting.autoArchiveChats"
     static let travelTime = "today.setting.travelTime"
+    static let healthSummary = "today.setting.healthSummary"
 }
 
 /// Settings is its own screen (opened from the sidebar). Each screen's options live here, not in the sidebar;
@@ -25,6 +26,7 @@ struct SettingsView: View {
     @AppStorage(SmartListLayout.orderKey) private var smartOrder = ""
     @AppStorage(SmartListLayout.hiddenKey) private var smartHidden = ""
     @AppStorage(SettingsKey.travelTime) private var travelTime = true
+    @AppStorage(SettingsKey.healthSummary) private var healthSummary = true
 
     @State private var calendarOn = CalendarSync.shared.isOn
     @State private var remindersOn = RemindersSync.shared.isConnected
@@ -73,10 +75,11 @@ struct SettingsView: View {
                     Toggle("Show alarms in the day", isOn: $showAlarms)
                     Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
                     Toggle("Travel time", isOn: $travelTime)
+                    Toggle("Health summary", isOn: $healthSummary)
                 } header: {
                     Text("Today")
                 } footer: {
-                    Text("Travel time shows how long the drive takes to upcoming events with a location today and tomorrow, and when to leave. To work it out, your current location and the event's address go to Apple Maps (MapKit) only; nothing else leaves your iPhone.")
+                    Text("Travel time shows how long the drive takes to upcoming events with a location today and tomorrow, and when to leave. To work it out, your current location and the event's address go to Apple Maps (MapKit) only; nothing else leaves your iPhone. Health summary shows today's steps and last night's sleep from Apple Health in one line; Today only reads them.")
                 }
 
                 smartListsSection

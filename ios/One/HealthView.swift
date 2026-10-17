@@ -37,9 +37,9 @@ struct HealthView: View {
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await source.requestAccess()
-            snapshot = (try? await source.snapshot(now: .now)) ?? .empty
+            snapshot = (try? await source.snapshot(now: TodayClock.now)) ?? .empty
         }
-        .refreshable { snapshot = (try? await source.snapshot(now: .now)) ?? .empty }
+        .refreshable { snapshot = (try? await source.snapshot(now: TodayClock.now)) ?? .empty }
         .onChange(of: snapshot) {
             // Screenshots only (`-uiTesting -uiTestingScrollTo sleep`).
             let args = ProcessInfo.processInfo.arguments

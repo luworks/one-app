@@ -15,6 +15,11 @@ struct DayAgenda: View {
     @AppStorage(SettingsKey.showOverdue) private var showsOverdue = true
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
+    @AppStorage(SettingsKey.healthSummary) private var showsHealth = true
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var health = HealthLineModel()
+    /// The open "Review today" sheet: tomorrow and its first items, taken when the row is tapped.
+    @State private var review: ReviewRequest?
 
     private let cal = Calendar.current
     @State private var showsAllOverdue = false
@@ -30,6 +35,11 @@ struct DayAgenda: View {
             list
                 .onAppear { scrollToNow(proxy) }
                 .onChange(of: day) { _, _ in scrollToNow(proxy) }
+        }
+        .task(id: [showsHealth, isTodayTab, scenePhase == .active]) {
+            // Asks for Health access only the first time the line would show (Today, setting on).
+            guard showsHealth, isTodayTab, scenePhase == .active else { return }
+            await health.load()
         }
         .task {
             while !Task.isCancelled {
@@ -48,9 +58,15 @@ struct DayAgenda: View {
         }
     }
 
+    /// The Today tab on today (not the Calendar tab, not another day).
+    private var isTodayTab: Bool { !showsWeekStrip && cal.isDateInToday(day) }
+
     private var list: some View {
         let items = items(on: day, now: now)
         return List {
+            if isTodayTab, showsHealth, let line = health.line {
+                TodayHealthLine(line: line)
+            }
             if !showsWeekStrip, !cal.isDateInToday(day) {
                 Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
                     Label("Back to today", systemImage: "arrow.uturn.backward").font(.subheadline)
@@ -116,6 +132,7 @@ struct DayAgenda: View {
         .listSectionSpacing(6)
         .scrollContentBackground(.hidden)
         .entryDeleteDialog($pendingDelete)
+        .sheet(item: $review) { r in EveningReviewSheet(now: now, tomorrow: r.tomorrow, peek: r.peek) }
     }
 
     @ViewBuilder
@@ -149,6 +166,21 @@ struct DayAgenda: View {
         let expanded = expandsTomorrow ?? TomorrowPreview.opensByItself(now: now, todayStarts: todayStarts)
         let shown = expanded ? entries : Array(entries.prefix(TomorrowPreview.limit))
         Section {
+            if EveningReview.shows(now: now) {
+                Button {
+                    review = ReviewRequest(tomorrow: tomorrow, peek: Array(entries.compactMap(Self.peek).prefix(EveningReview.tomorrowLimit)))
+                } label: {
+                    Label("Review today", systemImage: "checklist.checked")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.accentColor)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .listRowSeparator(.hidden)
+                .accessibilityHint("Done and left today, and tomorrow's first items")
+                .accessibilityIdentifier("reviewToday")
+            }
             if entries.isEmpty {
                 Text("Nothing planned").foregroundStyle(.secondary)
                     .listRowSeparator(.hidden)
@@ -187,6 +219,24 @@ struct DayAgenda: View {
             .accessibilityLabel("Tomorrow")
             .accessibilityHint("Opens tomorrow")
             .accessibilityIdentifier("tomorrowHeader")
+        }
+    }
+
+    /// Tomorrow's entry as a plain line for the review; the Now line and free time are left out.
+    private static func peek(_ entry: DayEntry) -> ReviewPeek? {
+        switch entry {
+        case .allDay(let e): return ReviewPeek(id: entry.id, time: nil, title: e.title)
+        case .externalAllDay(let e): return ReviewPeek(id: entry.id, time: nil, title: e.title)
+        case .anytime(let t): return ReviewPeek(id: entry.id, time: nil, title: t.title)
+        case .timeline(let item):
+            switch item {
+            case .event(let e, let d): return ReviewPeek(id: entry.id, time: d, title: e.title)
+            case .external(let e): return ReviewPeek(id: entry.id, time: e.start, title: e.title)
+            case .task(let t), .due(let t): return ReviewPeek(id: entry.id, time: item.start, title: t.title)
+            case .suggested(let t, let d): return ReviewPeek(id: entry.id, time: d, title: t.title)
+            case .alarm(let a, let d): return ReviewPeek(id: entry.id, time: d, title: a.label.isEmpty ? "Alarm" : a.label)
+            case .gap, .nowMarker: return nil
+            }
         }
     }
 
@@ -265,6 +315,12 @@ struct DayAgenda: View {
     private var overdue: [OneTask] {
         tasks.filter(\.isOverdue).sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
     }
+}
+
+struct ReviewRequest: Identifiable {
+    let id = UUID()
+    let tomorrow: Date
+    let peek: [ReviewPeek]
 }
 
 /// What one day holds, in the order the day view shows it.

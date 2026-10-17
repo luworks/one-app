@@ -1,6 +1,6 @@
 # Health 模块（原型）
 
-Today 第 5 个 tab（Alarms 右边，图标 heart），只读 Apple Health。代码：`ios/One/HealthView.swift`、`HealthSource.swift`、`HealthLogic.swift`（纯逻辑 + 样例数据，`swift test` 覆盖）。
+**现状：不做第 5 个 tab。** Today tab 顶部（只在今天）一行安静的摘要「6,240 steps · slept 7 hr 12 min」，点开是 Health sheet（下面这些卡片：步数 7 天、体重趋势、近几晚睡眠）。Settings → Today → "Health summary" 开关（默认开）；第一次要显示这行时才请求 HealthKit 授权。代码：`ios/One/TodayHealthLine.swift`（这一行 + sheet）、`HealthView.swift`、`HealthSource.swift`、`HealthLogic.swift`（纯逻辑 + 样例数据，`swift test` 覆盖）。截图：`docs/qa/health-review/`。下面是原型（tab 版）时的调研与说明。
 
 ## Apple 健康 App 是怎么做的（调研摘要）
 
@@ -44,11 +44,11 @@ Health tab 上 + 仍然是"新提醒"（和 Today/Reminders 一样）。Health �
 
 ## 截图
 
-样例数据，模拟器 Today-Health（iPhone 18 Pro Max），启动参数 `-uiTesting -dataset tests/fixtures/today-dataset.json -uiTestingTab health`（滚到睡眠卡再加 `-uiTestingScrollTo sleep`）：
+样例数据，模拟器 Today-Health（iPhone 18 Pro Max），当时用 `-uiTestingTab health`（已随 tab 一起删掉）：
 
 - `health-light.png` / `health-dark.png`：步数、体重
 - `health-light-2.png` / `health-dark-2.png`：体重、睡眠、页脚
 
-## 已知问题
+## 已知问题（tab 版，已撤掉）
 
 - 第 5 个 tab 让顶部 pill 栏放不下了：Pro Max 上 Health pill 右侧就被截断（栏变成可横滑），小屏 iPhone 更明显。要留这个 tab，得把 pill 收窄或改成别的入口。

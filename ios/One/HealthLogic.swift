@@ -18,6 +18,20 @@ struct HealthSnapshot: Equatable {
 
     var stepsToday: Double { steps.last?.value ?? 0 }
     var lastNight: SleepNight? { nights.last }
+
+    /// The quiet line at the top of Today: "6,240 steps · slept 7 hr 12 min". Steps only when there are some today,
+    /// sleep only when last night (ending today) has any; nil when neither, and the line is not shown at all.
+    func summaryLine(now: Date, calendar: Calendar = .current, locale: Locale = .current) -> String? {
+        var parts: [String] = []
+        if let today = steps.last, calendar.isDate(today.day, inSameDayAs: now), today.value > 0 {
+            let n = today.value.formatted(.number.precision(.fractionLength(0)).locale(locale))
+            parts.append(today.value == 1 ? "1 step" : "\(n) steps")
+        }
+        if let night = lastNight, calendar.isDate(night.day, inSameDayAs: now), night.asleep >= 60 {
+            parts.append("slept " + HealthMath.duration(night.asleep))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 }
 
 struct DayValue: Equatable, Identifiable {
