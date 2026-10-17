@@ -80,8 +80,19 @@ final class RemindersListsTests: XCTestCase {
         XCTAssertTrue(alert.waitForExistence(timeout: 3), "Rename asks for the new name")
         let field = alert.textFields.firstMatch
         field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard is up")
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "Office")
-        alert.buttons["Save"].tap()
+        XCTAssertEqual(field.value as? String, "Office")
+        // The alert slides up when the keyboard shows; a tap on Save while it moves misses. Tap it once it is still.
+        let save = alert.buttons["Save"]
+        var y = save.frame.minY
+        for _ in 0..<15 {
+            usleep(200_000)
+            if save.frame.minY == y { break }
+            y = save.frame.minY
+        }
+        save.tap()
+        XCTAssertTrue(alert.waitForNonExistence(timeout: 5), "Save closes the alert")
         let office = element("list.Office")
         reveal(office)
         XCTAssertTrue(office.exists, "the row shows the new name")
