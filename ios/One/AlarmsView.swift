@@ -7,6 +7,7 @@ import UserNotifications
 /// Adding is the app-wide + at the bottom right.
 /// Alarms are real: each one is an AlarmKit alarm (they ring through Silent and Focus). The tasks and events
 /// you marked "Ring as alarm" follow in their own section. Reminders and event alerts live in Apple Reminders / Calendar.
+/// A kitchen-timer card (`TimerCard`) sits on top: one AlarmKit countdown at a time.
 struct AlarmsView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
@@ -23,6 +24,8 @@ struct AlarmsView: View {
     var body: some View {
         VStack(spacing: 0) {
             List {
+                TimerCard()
+                    .plainRow(top: 8, bottom: 8)
                 nextAlarmRow
                 authorizationBanner
                 Section {
