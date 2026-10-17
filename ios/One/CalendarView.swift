@@ -17,6 +17,8 @@ struct CalendarView: View {
     var onOpenDay: (Date) -> Void
 
     @State private var opened: OpenedEntry?
+    /// The month title of the visible week / month page, published by the page and shown in the control row.
+    @State private var title = ""
     private let cal = Calendar.current
 
     var body: some View {
@@ -25,9 +27,9 @@ struct CalendarView: View {
             Group {
                 switch mode {
                 case .week:
-                    WeekView(day: $day, dayCount: 7, open: open, edit: edit, create: create, openDay: openDay)
+                    WeekView(day: $day, title: $title, dayCount: 7, open: open, edit: edit, create: create, openDay: openDay)
                 case .month:
-                    MonthView(day: $day, open: open, edit: edit, openDay: openDay)
+                    MonthView(day: $day, title: $title, open: open, edit: edit, openDay: openDay)
                 case .year:
                     YearView(day: $day) { month in
                         withAnimation(.snappy) {
@@ -67,20 +69,33 @@ struct CalendarView: View {
 
     // MARK: One control row: the view switcher
 
-    /// Week / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned.
+    /// Week / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned, with the
+    /// month title of the visible page on the same row, right-aligned (Year has no title).
     private var controlRow: some View {
         HStack(spacing: 8) {
-            ForEach(Mode.allCases) { item in
-                ModePill(title: item.rawValue, isSelected: item == mode) {
-                    withAnimation(.snappy) { mode = item }
+            HStack(spacing: 8) {
+                ForEach(Mode.allCases) { item in
+                    ModePill(title: item.rawValue, isSelected: item == mode) {
+                        withAnimation(.snappy) { mode = item }
+                    }
                 }
             }
-            Spacer(minLength: 0)
+            .fixedSize()
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("View")
+            Spacer(minLength: 8)
+            if mode != .year, !title.isEmpty {
+                Text(title)
+                    .font(.title2.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .multilineTextAlignment(.trailing)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier(mode == .week ? "calendar.weekTitle" : "calendar.monthTitle")
+            }
         }
         .padding(.horizontal, 20)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("View")
     }
 }
 
@@ -144,6 +159,7 @@ struct CalendarsSheet: View {
 
 private struct MonthView: View {
     @Binding var day: Date
+    @Binding var title: String
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void
     var openDay: (Date) -> Void
@@ -162,12 +178,6 @@ private struct MonthView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(month(current).formatted(.dateTime.month(.wide)))
-                .font(.largeTitle.bold())
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("calendar.monthTitle")
             weekdayHeader
             Rectangle().fill(Color(.separator)).frame(height: 0.5)
             pager
@@ -181,6 +191,7 @@ private struct MonthView: View {
             guard let new, CalendarMath.monthOffset(of: day, from: base) != new else { return }
             day = CalendarMath.landingDay(inMonthOf: month(new))
         }
+        .onChange(of: current, initial: true) { _, new in title = month(new).formatted(.dateTime.month(.wide)) }
         .onAppear { pos = CalendarMath.monthOffset(of: day, from: base) }
     }
 
@@ -570,6 +581,7 @@ private struct MiniMonth: View {
 /// 7-day time grid. Events are tinted blocks in their calendar's color (fixed); planned tasks are accent outlines (flexible).
 private struct WeekView: View {
     @Binding var day: Date
+    @Binding var title: String
     /// 7 = a calendar week; 3 = the next 3 days starting today.
     var dayCount = 7
     var open: (CalEntry) -> Void
@@ -597,13 +609,6 @@ private struct WeekView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).formatted(.dateTime.month(.wide).year()))
-                .font(.title2.bold())
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 2)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("calendar.weekTitle")
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 0) {
                     ForEach(range, id: \.self) { o in
@@ -628,7 +633,12 @@ private struct WeekView: View {
             let shift = new - offset(of: day)
             day = cal.date(byAdding: .day, value: shift * dayCount, to: day) ?? day
         }
+        .onChange(of: weekTitle, initial: true) { _, new in title = new }
         .onAppear { pos = offset(of: day) }
+    }
+
+    private var weekTitle: String {
+        weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).formatted(.dateTime.month(.wide).year())
     }
 }
 
@@ -787,7 +797,7 @@ private struct WeekPage: View {
                         let past = d < cal.startOfDay(for: .now)
                         ForEach(placed, id: \.entry.id) { p in
                             let w = (colW - 2) / CGFloat(p.count)
-                            block(p.entry, colW: colW)
+                            block(p.entry, colW: colW, lines: p.titleLines)
                                 .opacity(past ? DayTint.past : 1)
                                 .frame(width: max(8, w - 1), height: max(18, p.height(hourHeight)))
                                 .offset(x: x + 1 + w * CGFloat(p.column), y: p.y(hourHeight))
@@ -852,6 +862,8 @@ private struct WeekPage: View {
         let lengthMinutes: CGFloat
         func y(_ hourHeight: CGFloat) -> CGFloat { startMinute / 60 * hourHeight }
         func height(_ hourHeight: CGFloat) -> CGFloat { lengthMinutes / 60 * hourHeight - 1 }
+        /// Blocks of 45 minutes or longer let the title wrap onto up to 3 lines; shorter ones keep one line.
+        var titleLines: Int { lengthMinutes >= 45 ? 3 : 1 }
     }
 
     /// Timed entries on `d`, clipped to the day, side by side where they overlap.
@@ -871,14 +883,18 @@ private struct WeekPage: View {
     }
 
     @ViewBuilder
-    private func block(_ e: CalEntry, colW: CGFloat) -> some View {
+    private func block(_ e: CalEntry, colW: CGFloat, lines: Int) -> some View {
         if case .task(let task) = e.source {
             DraggableTaskBlock(task: task, colWidth: colW, hourHeight: hourHeight) {
                 Text(e.title)
                     .font(.system(size: 10, weight: .semibold))
-                    .lineLimit(3)
-                    .padding(3)
+                    .lineLimit(lines)
+                    .lineSpacing(-1)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 3)
+                    .padding(.top, 2)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .clipped()
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor, lineWidth: 1))
             }
@@ -888,7 +904,9 @@ private struct WeekPage: View {
                 Text(e.title)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(EventTint.text(e.color))
-                    .lineLimit(3)
+                    .lineLimit(lines)
+                    .lineSpacing(-1)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 3)
                     .padding(.top, 2)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
