@@ -1,0 +1,176 @@
+import XCTest
+
+/// Clock's sections inside the Alarms tab: the switcher, World Clock (add / delete a city) and the Stopwatch.
+/// Set TEST_RUNNER_CLOCK_SHOTS=<folder> to save light and dark screenshots of each section (`testScreenshots`).
+final class ClockTests: XCTestCase {
+    var app: XCUIApplication!
+
+    override func setUp() {
+        continueAfterFailure = false
+    }
+
+    private func launch(_ extra: [String] = []) {
+        app = XCUIApplication()
+        app.launchArguments = ["-uiTesting"] + extra
+        app.launch()
+        let alarms = app.buttons["Alarms"].firstMatch
+        XCTAssertTrue(alarms.waitForExistence(timeout: 5))
+        alarms.tap()
+    }
+
+    private func section(_ name: String) -> XCUIElement { app.buttons["clock.section." + name].firstMatch }
+    private var cityRows: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "worldClock.row") }
+    private var laps: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "stopwatch.lap") }
+    private var plus: XCUIElement { app.buttons["New"] }
+
+    func testSwitchingSectionsAndPlus() {
+        launch()
+        XCTAssertTrue(section("alarms").waitForExistence(timeout: 5))
+        XCTAssertTrue(section("alarms").isSelected, "Alarms is the default section")
+        XCTAssertTrue(plus.exists, "+ adds an alarm")
+        XCTAssertFalse(app.buttons["timer.start"].exists, "the timer is no longer on top of the alarm list")
+
+        section("worldClock").tap()
+        XCTAssertTrue(app.descendants(matching: .any)["worldClock.empty"].waitForExistence(timeout: 3))
+        XCTAssertTrue(plus.exists, "+ adds a city on World Clock")
+
+        section("stopwatch").tap()
+        XCTAssertTrue(app.staticTexts["stopwatch.time"].waitForExistence(timeout: 3))
+        XCTAssertFalse(plus.exists, "no + on Stopwatch")
+
+        section("timer").tap()
+        XCTAssertTrue(app.buttons["timer.start"].waitForExistence(timeout: 3), "the timer card is the Timer section")
+        XCTAssertFalse(plus.exists, "no + on Timer")
+
+        // The section is kept when you leave the tab and come back.
+        app.buttons["Today"].firstMatch.tap()
+        XCTAssertTrue(plus.waitForExistence(timeout: 3), "+ is back on other tabs")
+        app.buttons["Alarms"].firstMatch.tap()
+        XCTAssertTrue(section("timer").waitForExistence(timeout: 3))
+        XCTAssertTrue(section("timer").isSelected, "back on Timer")
+        XCTAssertFalse(plus.exists)
+    }
+
+    func testAddAndDeleteCity() {
+        launch()
+        section("worldClock").tap()
+        XCTAssertTrue(app.descendants(matching: .any)["worldClock.empty"].waitForExistence(timeout: 3))
+
+        plus.tap()
+        XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        search.tap()
+        search.typeText("Tokyo")
+        let tokyo = app.buttons["city.Asia/Tokyo"].firstMatch
+        XCTAssertTrue(tokyo.waitForExistence(timeout: 3), "search finds Tokyo")
+        tokyo.tap()
+
+        XCTAssertTrue(cityRows.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(cityRows.count, 1)
+        let label = cityRows.firstMatch.label
+        XCTAssertTrue(label.hasPrefix("Tokyo, "), label)
+        XCTAssertTrue(label.contains("hr"), "shows the offset: \(label)")
+        XCTAssertTrue(label.contains("Today") || label.contains("Tomorrow") || label.contains("Yesterday"), label)
+
+        // Swipe left deletes, with Undo.
+        let row = cityRows.firstMatch
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: -0.3, dy: 0.5)))
+        let delete = app.buttons["Delete"]
+        if delete.waitForExistence(timeout: 1) { delete.tap() }
+        XCTAssertTrue(app.descendants(matching: .any)["worldClock.empty"].waitForExistence(timeout: 3), "the city is gone")
+        let undo = app.buttons["Undo"].firstMatch
+        XCTAssertTrue(undo.waitForExistence(timeout: 3))
+        undo.tap()
+        XCTAssertTrue(cityRows.firstMatch.waitForExistence(timeout: 3), "Undo brings it back")
+    }
+
+    func testReorderInEdit() {
+        launch(["-uiTestingCities", "Europe/London,Asia/Tokyo"])
+        section("worldClock").tap()
+        XCTAssertTrue(cityRows.element(boundBy: 1).waitForExistence(timeout: 3))
+        XCTAssertTrue(cityRows.element(boundBy: 0).label.hasPrefix("London"))
+        app.buttons["worldClock.edit"].tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 3))
+        let handle = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Reorder'")).element(boundBy: 1)
+        XCTAssertTrue(handle.waitForExistence(timeout: 3), "Edit shows reorder handles")
+        handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.5, thenDragTo: cityRows.element(boundBy: 0).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)))
+        app.buttons["Done"].tap()
+        XCTAssertTrue(cityRows.element(boundBy: 0).label.hasPrefix("Tokyo"), "Tokyo moved up: \(cityRows.element(boundBy: 0).label)")
+    }
+
+    func testStopwatchStartLapStopReset() {
+        launch()
+        section("stopwatch").tap()
+        let time = app.staticTexts["stopwatch.time"]
+        let startStop = app.buttons["stopwatch.startStop"]
+        let lapReset = app.buttons["stopwatch.lapReset"]
+        XCTAssertTrue(time.waitForExistence(timeout: 3))
+        XCTAssertEqual(time.label, "00:00.00")
+        XCTAssertEqual(lapReset.label, "Lap")
+        XCTAssertFalse(lapReset.isEnabled, "Lap is off before the first start")
+
+        startStop.tap()
+        XCTAssertEqual(startStop.label, "Stop")
+        sleep(1)
+        lapReset.tap()
+        sleep(1)
+        lapReset.tap()
+        // Lap 3 (running) + two finished laps.
+        XCTAssertEqual(laps.count, 3)
+        XCTAssertNotEqual(time.label, "00:00.00", "it is running")
+
+        // Keeps running on another tab.
+        app.buttons["Today"].firstMatch.tap()
+        app.buttons["Alarms"].firstMatch.tap()
+        XCTAssertTrue(startStop.waitForExistence(timeout: 3))
+        XCTAssertEqual(startStop.label, "Stop", "still running after switching tabs")
+
+        startStop.tap()
+        XCTAssertEqual(startStop.label, "Start")
+        XCTAssertEqual(lapReset.label, "Reset")
+        let stopped = time.label
+        sleep(1)
+        XCTAssertEqual(time.label, stopped, "stopped means stopped")
+        lapReset.tap()
+        XCTAssertEqual(time.label, "00:00.00")
+        XCTAssertEqual(laps.count, 0)
+        XCTAssertEqual(lapReset.label, "Lap")
+    }
+
+    /// Light and dark screenshots of each section, for design review.
+    func testScreenshots() throws {
+        guard let dir = ProcessInfo.processInfo.environment["CLOCK_SHOTS"] else { throw XCTSkip("set TEST_RUNNER_CLOCK_SHOTS") }
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { XCUIDevice.shared.appearance = .light }
+        for (appearance, suffix) in [(XCUIDevice.Appearance.light, "light"), (.dark, "dark")] {
+            XCUIDevice.shared.appearance = appearance
+            launch(["-dataset", TestData.path, "-uiTestingCities", "America/New_York,Europe/London,Asia/Kolkata,Asia/Tokyo,Australia/Sydney"])
+            func shot(_ name: String) {
+                _ = app.wait(for: .runningForeground, timeout: 1)
+                try? XCUIScreen.main.screenshot().pngRepresentation
+                    .write(to: URL(fileURLWithPath: "\(dir)/\(name)-\(suffix).png"))
+            }
+            XCTAssertTrue(section("alarms").waitForExistence(timeout: 5))
+            shot("1-alarms")
+            section("worldClock").tap()
+            XCTAssertTrue(cityRows.firstMatch.waitForExistence(timeout: 3))
+            shot("2-world-clock")
+            plus.tap()
+            XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
+            shot("3-choose-city")
+            app.buttons["Cancel"].tap()
+            section("stopwatch").tap()
+            app.buttons["stopwatch.startStop"].tap()
+            for _ in 0..<3 { usleep(700_000); app.buttons["stopwatch.lapReset"].tap() }
+            usleep(400_000)
+            app.buttons["stopwatch.startStop"].tap()
+            shot("4-stopwatch")
+            section("timer").tap()
+            XCTAssertTrue(app.buttons["timer.start"].waitForExistence(timeout: 3))
+            shot("5-timer")
+            app.terminate()
+        }
+    }
+}

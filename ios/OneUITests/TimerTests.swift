@@ -13,6 +13,10 @@ final class TimerTests: XCTestCase {
         let alarms = app.buttons["Alarms"].firstMatch
         XCTAssertTrue(alarms.waitForExistence(timeout: 5))
         alarms.tap()
+        // The timer is the Timer section of the Alarms tab.
+        let timer = app.buttons["clock.section.timer"].firstMatch
+        XCTAssertTrue(timer.waitForExistence(timeout: 5))
+        timer.tap()
     }
 
     private var dial: XCUIElement { app.descendants(matching: .any)["timer.dial"].firstMatch }
