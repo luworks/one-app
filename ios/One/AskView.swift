@@ -862,24 +862,55 @@ struct AskView: View {
     }
 }
 
-/// User messages are bubbles on the right; AI replies are plain text, no bubble.
+/// User messages are bubbles on the right; AI replies are plain text, no bubble. Text can be selected
+/// (long-press), and a small copy button sits under each message, as in ChatGPT.
 struct MessageView: View {
     let message: ChatMessage
+    @State private var copied = false
 
     var body: some View {
         switch message.role {
         case .user:
-            HStack {
-                Spacer(minLength: 48)
-                Text(message.text)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 20))
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack {
+                    Spacer(minLength: 48)
+                    Text(message.text)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 20))
+                }
+                copyButton
             }
         case .ai:
-            Text(message.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message.text)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                copyButton
+            }
         }
+    }
+
+    private var copyButton: some View {
+        Button {
+            UIPasteboard.general.string = message.text
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(width: 44, height: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.success, trigger: copied) { _, new in new }
+        .accessibilityLabel(copied ? "Copied" : "Copy message")
+        .accessibilityIdentifier("message.copy")
     }
 }
 
