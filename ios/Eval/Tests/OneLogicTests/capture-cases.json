@@ -575,6 +575,26 @@
    "title": "早点睡，晚一点再看手机",
    "day": 0,
    "hasDay": false
+  },
+  {
+   "split": "train",
+   "input": "哦，我想卖家里的一些东西，然后去 Marketplace。今天下午 3 点提醒我吧",
+   "title": "我想卖家里的一些东西，然后去 Marketplace",
+   "day": 0,
+   "hasDay": true,
+   "hour": 15,
+   "minute": 0,
+   "kind": "task"
+  },
+  {
+   "split": "train",
+   "input": "请把我可以卖的东西都放到车库去，然后今天下午 3 点的时候提醒我移动一下",
+   "title": "把我可以卖的东西都放到车库去，然后 的时候提醒我移动一下",
+   "day": 0,
+   "hasDay": true,
+   "hour": 15,
+   "minute": 0,
+   "kind": "task"
   }
  ]
 }
