@@ -9,13 +9,13 @@ let package = Package(
         .target(
             name: "OneLogic",
             path: "One",
-            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift", "TimerDial.swift"]
+            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift", "TimerDial.swift", "OverdueTidy.swift"]
         ),
         // Code shared by the app and the TodayWidgets extension (the widget snapshot and "next items" logic).
         .target(
             name: "OneShared",
             path: "Shared",
-            sources: ["WidgetSnapshot.swift"]
+            sources: ["WidgetSnapshot.swift", "ShareInbox.swift"]
         ),
         .testTarget(
             name: "OneLogicTests",

@@ -153,6 +153,34 @@ struct HomeView: View {
         ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
     }
 
+    /// Reminders added from the Share sheet wait in the App Group (`ShareInbox`) until the app is active; they come in
+    /// here as new reminders, with an Undo toast. UI tests leave the inbox alone unless they pass `-uiTestingShare <title>`,
+    /// which puts one there first, or `-uiTestingShareInbox`, which reads what the real Share sheet left.
+    private static var sharedTestItemQueued = false
+
+    private func importShared() {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-uiTesting"), !args.contains("-uiTestingShareInbox") {
+            guard let i = args.firstIndex(of: "-uiTestingShare"), i + 1 < args.count else { return }
+            if !Self.sharedTestItemQueued {
+                Self.sharedTestItemQueued = true
+                ShareInbox.append(SharedReminder(title: args[i + 1], note: "https://example.com", due: ShareInbox.due(for: .tomorrow)))
+            }
+        }
+        let shared = ShareInbox.drain()
+        guard !shared.isEmpty else { return }
+        let added = shared.map { s in
+            let t = OneTask(title: s.title, note: s.note, due: s.due)
+            context.insert(t)
+            return t
+        }
+        try? context.save()
+        toast.show(shared.count == 1 ? "Added “\(shared[0].title)” from Share" : "Added \(shared.count) reminders from Share") {
+            added.forEach { context.delete($0) }
+            try? context.save()
+        }
+    }
+
     /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
     private static func seedUITestReminder(_ context: ModelContext) {
         let args = ProcessInfo.processInfo.arguments
@@ -218,6 +246,7 @@ struct HomeView: View {
             }
             #endif
             Self.seedUITestReminder(context)
+            importShared()
             await FirstRun.calendar()
         }
         .onAppear { LaunchTimer.markFirstFrame() }
@@ -252,6 +281,7 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 dropDeletedMirrors()
+                importShared()
                 Task { await Reminders.shared.resync() }
             }
             if phase == .background { updateWidgets() }
