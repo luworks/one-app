@@ -13,6 +13,15 @@ final class CalendarDeleteSyncTests: XCTestCase {
         title = "Sync check \(Int(Date.now.timeIntervalSince1970) % 100000)"
     }
 
+    override func tearDown() {
+        // Leave nothing behind in the simulator's calendar.
+        let app = launch(["-debugDeleteSystemEvent", title])
+        _ = app.staticTexts["Schedule"].waitForExistence(timeout: 10)
+        sleep(2)
+        app.terminate()
+        super.tearDown()
+    }
+
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-uiTestingCalendarSync", "-uiTestingStore", store] + extra
@@ -32,26 +41,6 @@ final class CalendarDeleteSyncTests: XCTestCase {
             found = row(app).waitForExistence(timeout: 1)
         }
         return found
-    }
-
-    private func enableCalendarSync(_ app: XCUIApplication) {
-        addUIInterruptionMonitor(withDescription: "Calendar access") { alert in
-            for label in ["Allow Full Access", "Allow", "OK"] where alert.buttons[label].exists { alert.buttons[label].tap(); return true }
-            return false
-        }
-        app.openSidebar()
-        app.buttons["Settings"].firstMatch.tap()
-        let toggle = app.switches["Apple Calendar"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        if (toggle.value as? String) != "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        for label in ["Allow Full Access", "Allow"] {
-            let b = springboard.buttons[label]
-            if b.waitForExistence(timeout: 3) { b.tap(); break }
-        }
-        sleep(1)
-        app.buttons["Done"].tap()
-        app.closeSidebar()
     }
 
     private func addEvent(_ app: XCUIApplication) {

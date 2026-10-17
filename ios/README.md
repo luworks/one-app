@@ -21,6 +21,16 @@ xcrun simctl launch 341B8786-E55B-4ECE-8720-BF1F2DF73899 com.luworks.one -uiTest
 
 UI tests use it with `app.launchArguments = TestData.launchArguments`.
 
+Tests that need Apple Calendar (`CalendarSyncTests`, `CalendarDeleteSyncTests`, `CalendarRecurringDeleteTests`) add
+`-uiTestingCalendarSync` and use the simulator's own calendar, never a real one. Debug-only launch hooks for them
+(handled in `HomeView`'s launch task, implemented in `CalendarSync`):
+
+- `-debugCreateSystemEvent <title>` — a one-off event at the top of the current hour, as if made in the Calendar app.
+- `-debugCreateRepeatingEvent <title>` — a daily event at the top of the current hour, starting yesterday.
+- `-debugDeleteSystemEvent <title>` — deletes every event with that title (a whole series too), as if deleted in the
+  Calendar app. Tests also use it to clean up.
+- `-uiTestingStore <name>` — keeps the test store in a file, so a second launch sees what the first saved.
+
 ## Run it on your iPhone (free Apple ID, no paid account)
 
 1. Open `ios/One.xcodeproj` in Xcode.
