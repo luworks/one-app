@@ -78,6 +78,14 @@ circular (next time in a ring of how much of today is done) and inline (above th
 - Add it: long-press the Lock Screen → Customize → Lock Screen → tap the widget area under the clock (or the date line
   above it) → pick **Today** → Next Up. Home Screen: long-press → Edit → Add Widget → Today.
 
+## Siri, Spotlight and Shortcuts (`One/AppIntents.swift`)
+
+Four App Shortcuts, English phrases in code and Simplified Chinese in `One/AppShortcuts.xcstrings`: **Add Reminder**
+(a title or one sentence, read by `CaptureParser`; always a reminder), **Start Timer** (the Alarms tab's AlarmKit countdown,
+asks before replacing a running one), **What's Next Today** (the Next Up widget's three items, spoken plus a snippet) and
+**Open Today** (the `today://today` link). They run in the app's process on the app's store (`OneStore` in `OneApp.swift`).
+Pure parts: `One/IntentLogic.swift`, `Shared/NextUpSpeech.swift` (tested in `IntentTests`).
+
 Tests: `ios/Eval/` (logic unit tests, NL-capture eval, `run-eval.sh`, `cold-start.sh`) and `ios/OneUITests/` (XCUITest journeys). Run `ios/Eval/run-eval.sh` or `ios/Eval/run-eval.sh --ui`.
 
 ## Next
