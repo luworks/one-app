@@ -1,8 +1,8 @@
 import Foundation
 
 // What the Year view marks, as plain values (no SwiftUI, no SwiftData, no EventKit) so `swift test` covers it.
-// Three signals, each with one meaning: a holiday or festival (red day number), an unusually busy day (quiet gray
-// tint), today (Apple's red circle). See docs/design/year-view.md.
+// Four signals, each with one meaning: a holiday or festival (red day number), an unusually busy day (quiet gray
+// tint), a multi-day event (calendar-color band), today (Apple's red circle). See docs/design/year-view.md.
 
 /// A calendar day as three numbers, with no time zone: a holiday stays on its date wherever the phone is.
 struct DayKey: Hashable, Comparable {
@@ -24,7 +24,7 @@ struct DayKey: Hashable, Comparable {
 
 // MARK: - Holidays
 
-/// A set of fixed festivals and holidays the Year view can mark. Which sets show is a Setting; the default follows the region.
+/// A set of fixed festivals and holidays the Year view can mark. Defaults follow region and Chinese language.
 enum HolidaySet: String, CaseIterable, Identifiable {
     case unitedStates, china, international
     var id: Self { self }
@@ -45,19 +45,22 @@ enum HolidaySet: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Sets that show when the user has not chosen: the region's own holidays plus the common Western ones.
-    static func defaults(region: String?) -> Set<HolidaySet> {
-        switch region {
+    /// Keep the region's defaults; a Chinese preferred language also enables China.
+    static func defaults(region: String?, language: String? = nil) -> Set<HolidaySet> {
+        if language?.lowercased().split(separator: "-").first == "zh" {
+            return region == "US" ? [.unitedStates, .china, .international] : [.china, .international]
+        }
+        return switch region {
         case "US": [.unitedStates, .international]
         case "CN", "HK", "MO", "TW", "SG": [.china, .international]
         default: [.international]
         }
     }
 
-    /// The Settings value: "auto" (follow the region), "none", or the chosen sets, comma separated.
-    static func resolve(_ stored: String, region: String?) -> Set<HolidaySet> {
+    /// The Settings value: "auto" (follow region and language), "none", or the chosen sets, comma separated.
+    static func resolve(_ stored: String, region: String?, language: String? = nil) -> Set<HolidaySet> {
         switch stored {
-        case "auto", "": return defaults(region: region)
+        case "auto", "": return defaults(region: region, language: language)
         case "none": return []
         default: return Set(stored.split(separator: ",").compactMap { HolidaySet(rawValue: String($0)) })
         }
@@ -258,4 +261,46 @@ enum YearBusy {
         }
         return Set(loads.filter { $0.value >= threshold }.keys)
     }
+}
+
+// MARK: - Year-only event marks
+
+enum YearEventMarks {
+    static func isBirthday(title: String, calendarTitle: String, isBirthdayCalendar: Bool = false) -> Bool {
+        isBirthdayCalendar || [title, calendarTitle].contains { text in
+            text.localizedCaseInsensitiveContains("birthday") || text.contains("生日")
+        }
+    }
+
+    /// EventKit has no holiday-calendar type. Subscriptions and holiday-named calendars are candidates.
+    static func isHolidayCalendar(isSubscription: Bool, title: String) -> Bool {
+        isSubscription || ["holiday", "节假日", "节日", "假期"].contains { title.localizedCaseInsensitiveContains($0) }
+    }
+
+    static func isTrip(start: Date, end: Date, isAllDay: Bool, calendar: Calendar = .current) -> Bool {
+        guard isAllDay, let next = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: start)) else { return false }
+        return end > next
+    }
+
+    static func isSingleDayHoliday(start: Date, end: Date, isAllDay: Bool, calendar: Calendar = .current) -> Bool {
+        isAllDay && end > start && !isTrip(start: start, end: end, isAllDay: isAllDay, calendar: calendar)
+    }
+
+    /// Clip an exclusive-end span to each visible week, including partial weeks at month edges.
+    static func segments(start: Date, end: Date, weeks: [[Date?]], calendar: Calendar = .current) -> [YearBandSegment] {
+        weeks.enumerated().compactMap { row, days in
+            let columns = days.indices.filter { index in
+                guard let day = days[index], let next = calendar.date(byAdding: .day, value: 1, to: day) else { return false }
+                return start < next && end > day
+            }
+            guard let first = columns.first, let last = columns.last else { return nil }
+            return YearBandSegment(week: row, firstColumn: first, lastColumn: last)
+        }
+    }
+}
+
+struct YearBandSegment: Equatable {
+    var week: Int
+    var firstColumn: Int
+    var lastColumn: Int
 }

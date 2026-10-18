@@ -22,6 +22,8 @@ struct ExternalEvent: Identifiable, Hashable {
     var repeats = false
     /// From a subscribed, holiday or Birthdays calendar: background, not the user's own load (Year's busy days).
     var isBackground = false
+    var isBirthday = false
+    var isHoliday = false
 
     var durationMinutes: Int { max(1, Int(end.timeIntervalSince(start) / 60)) }
 }
@@ -32,6 +34,8 @@ struct SystemCalendar: Identifiable, Hashable {
     let title: String
     let sourceTitle: String
     let color: Color
+    var isBirthday = false
+    var isHoliday = false
 }
 
 /// EventKit bridge: shows system calendar events in Today / Calendar, and can save new events there.
@@ -160,7 +164,9 @@ final class CalendarSync {
     }
 
     private static func describe(_ c: EKCalendar) -> SystemCalendar {
-        SystemCalendar(id: c.calendarIdentifier, title: c.title, sourceTitle: c.source?.title ?? "", color: Color(cgColor: c.cgColor))
+        SystemCalendar(id: c.calendarIdentifier, title: c.title, sourceTitle: c.source?.title ?? "", color: Color(cgColor: c.cgColor),
+                       isBirthday: c.type == .birthday,
+                       isHoliday: YearEventMarks.isHolidayCalendar(isSubscription: c.type == .subscription, title: c.title))
     }
 
     // MARK: Events
@@ -188,7 +194,9 @@ final class CalendarSync {
                               place: Self.place(e), repeats: e.hasRecurrenceRules,
                               isBackground: YearLoad.isBackgroundCalendar(isSubscription: e.calendar.type == .subscription,
                                                                            isBirthday: e.calendar.type == .birthday,
-                                                                           title: e.calendar.title))
+                                                                           title: e.calendar.title),
+                              isBirthday: e.calendar.type == .birthday,
+                              isHoliday: YearEventMarks.isHolidayCalendar(isSubscription: e.calendar.type == .subscription, title: e.calendar.title))
             }
     }
 

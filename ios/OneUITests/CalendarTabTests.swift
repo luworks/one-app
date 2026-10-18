@@ -126,6 +126,50 @@ final class CalendarTabTests: XCTestCase {
         key.tap()
         XCTAssertTrue(app.staticTexts["Unusually busy"].waitForExistence(timeout: 5), "the key says what the gray tint means")
         XCTAssertTrue(app.staticTexts["Holiday or festival"].exists)
+        XCTAssertTrue(app.staticTexts["Multi-day event"].exists)
+    }
+
+    func testYearDayOpensTheChosenDayInToday() {
+        modeButton("Year").tap()
+        let year = cal.component(.year, from: .now)
+        let chosen = DateComponents(calendar: cal, year: year, month: 1, day: 12).date!
+        let cell = app.buttons["year.\(dayID(chosen))"]
+        XCTAssertTrue(cell.waitForExistence(timeout: 5))
+        cell.tap()
+        let title = element("todayDate")
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.label, chosen.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+        XCTAssertFalse(element("calendar.monthTitle").exists)
+    }
+
+    func testYearReadsTripDaysButLeavesLocalBirthdayInMonth() {
+        app.terminate()
+        app.launchArguments = TestData.launchArguments
+        app.launch()
+        app.buttons["Calendar"].firstMatch.tap()
+        modeButton("Year").tap()
+        let tripStart = cal.date(byAdding: .day, value: 2, to: .now)!
+        let tripLast = cal.date(byAdding: .day, value: 3, to: .now)!
+        let birthday = cal.date(byAdding: .day, value: 4, to: .now)!
+        for date in [tripStart, tripLast] {
+            let cell = app.buttons["year.\(dayID(date))"]
+            XCTAssertTrue(cell.waitForExistence(timeout: 5))
+            XCTAssertTrue((cell.value as? String ?? "").contains("Team offsite"))
+        }
+        let birthdayCell = app.buttons["year.\(dayID(birthday))"]
+        XCTAssertTrue(birthdayCell.waitForExistence(timeout: 5))
+        XCTAssertFalse((birthdayCell.value as? String ?? "").contains("birthday"))
+        birthdayCell.tap()
+        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Mia's birthday")).firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Calendar"].firstMatch.tap()
+        modeButton("Month").tap()
+        let month = element("calendar.monthPager")
+        if !cal.isDate(birthday, equalTo: .now, toGranularity: .month) { month.swipeLeft() }
+        let day = element(dayID(birthday))
+        XCTAssertTrue(day.waitForExistence(timeout: 5))
+        day.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Mia's birthday")).firstMatch.waitForExistence(timeout: 5))
     }
 
     /// Week keeps the time grid with all-day banners on top.

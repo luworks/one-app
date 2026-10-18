@@ -25,6 +25,8 @@ struct CalEntry: Identifiable {
     var repeats = false
     /// From a subscribed, holiday or Birthdays calendar (see `YearLoad`).
     var isBackground = false
+    var isBirthday = false
+    var isHoliday = false
 
     var isTask: Bool { if case .task = source { true } else { false } }
     var isAlarm: Bool { if case .alarm = source { true } else { false } }
@@ -60,7 +62,7 @@ enum CalendarEntries {
     /// Events hidden in the Calendars list are left out. Pass `alarms` (already empty when "Show alarms in the day" is off)
     /// to add their rings by the same rule as the Today timeline (see `CalendarAlarms`); reminders that ring as alarms stay reminders.
     static func make(in interval: DateInterval, events: [OneEvent], tasks: [OneTask], alarms: [OneAlarm] = [],
-                     now: Date = TodayClock.now, calendar: Calendar = .current) -> [CalEntry] {
+                     now: Date = TodayClock.now, calendar: Calendar = .current, forYearMarks: Bool = false) -> [CalEntry] {
         let sync = CalendarSync.shared
         var result: [CalEntry] = []
 
@@ -74,19 +76,22 @@ enum CalendarEntries {
                 result.append(CalEntry(id: "l\(e.persistentModelID.hashValue)@\(start.timeIntervalSince1970)", source: .local(e),
                                        title: e.title, start: start, end: end, isAllDay: e.isAllDay,
                                        color: mirror?.color ?? .blue, calendarTitle: mirror?.title ?? e.calendarName,
-                                       repeats: e.repeats != nil))
+                                       repeats: e.repeats != nil,
+                                       isBackground: mirror.map { $0.isBirthday || $0.isHoliday } ?? false,
+                                       isBirthday: mirror?.isBirthday ?? false, isHoliday: mirror?.isHoliday ?? false))
             }
         }
 
+        // Year uses EventKit's exclusive all-day end directly for span and single-day classification.
         for x in sync.events(in: interval, excluding: mirrors) {
             var end = x.end
-            if x.isAllDay {
-                // EventKit ends an all-day event on its last day; make the end exclusive.
+            if x.isAllDay && !forYearMarks {
+                // Preserve the existing Week/Month normalization; Year reads the raw exclusive end.
                 end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: x.end)) ?? x.end
             }
             result.append(CalEntry(id: x.id, source: .system(x.eventIdentifier), title: x.title, location: x.location,
                                    start: x.start, end: end, isAllDay: x.isAllDay, color: x.color, calendarTitle: x.calendarTitle,
-                                   repeats: x.repeats, isBackground: x.isBackground))
+                                   repeats: x.repeats, isBackground: x.isBackground, isBirthday: x.isBirthday, isHoliday: x.isHoliday))
         }
 
         for t in tasks where !t.isDone {
