@@ -73,3 +73,24 @@ that project and identical optimized Debug flags. The parent still obtains the
 global quiet-window handoff; these local locks do not grant a global slot.
 Capture output with `record_command.py`, and index the closed complete xcresult
 through the QA journal after the producer exits.
+
+`extract_xct_metrics.py <raw-ui-log> --output <new.json> [--include-mib]`
+retains each XCTest metric's ID, printed unit and raw values, with method-attempt
+functional gates, median/range and no percentile estimate. Peak physical,
+physical delta, absolute physical and scroll duration remain separate. Optional
+MiB conversion explicitly assumes decimal kB; original values remain primary.
+
+`profile_startup.py --simulator <owned-ID> --fixture <durable-json> --output <new-dir>`
+requires the explicit global handoff, visible booted Today-Performance and a
+stopped installed target. It never boots/builds/installs. It attempts one bounded
+10s Time Profiler capture plus signposts, retains raw errors, and exports only
+TOC on success. Total script budget is60s including cleanup. Verify installed
+UUID against the intended optimized artifact before calling; inspect actual PID,
+samples/schema/symbols before treating the capture as useful. Profiled durations
+are excluded from the unprofiled before/after comparison. Parent indexes the
+closed trace/export directory via the QA journal; unsupported capture is a
+recorded limitation, not an invitation to change profiling/privacy settings.
+
+Current metric table and gaps: [climb-current-state.md](../../docs/performance/climb-current-state.md).
+The app comparator requires each corresponding functional method to pass;
+failed/incomplete logs retain diagnostic ratios but cannot pass the3x/10x gates.
