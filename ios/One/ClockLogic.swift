@@ -20,13 +20,6 @@ enum ClockSection: String, CaseIterable, Identifiable {
 
 /// Pure logic behind World Clock: readable city names from time zone identifiers, "Today, +3 hrs", and the saved list.
 enum WorldClock {
-    /// One city the user can pick: a time zone identifier and the name it is shown with.
-    struct City: Hashable, Identifiable {
-        let identifier: String
-        let name: String
-        var id: String { identifier }
-    }
-
     /// "America/New_York" → "New York", "America/Argentina/Buenos_Aires" → "Buenos Aires".
     /// nil for zones that are not a place ("UTC", "GMT", "Etc/GMT+5", "US/Pacific", "SystemV/…").
     static func cityName(fromIdentifier identifier: String) -> String? {
@@ -35,26 +28,6 @@ enum WorldClock {
         let regions: Set<Substring> = ["Africa", "America", "Antarctica", "Arctic", "Asia", "Atlantic", "Australia", "Europe", "Indian", "Pacific"]
         guard regions.contains(region), let last = parts.last else { return nil }
         return last.replacingOccurrences(of: "_", with: " ")
-    }
-
-    /// Every pickable city, sorted by name. Pass `TimeZone.knownTimeZoneIdentifiers`.
-    static func cities(from identifiers: [String]) -> [City] {
-        identifiers.compactMap { id in cityName(fromIdentifier: id).map { City(identifier: id, name: $0) } }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
-
-    /// Cities whose name or identifier contains the query (case and accent insensitive). An empty query returns all.
-    static func search(_ query: String, in cities: [City]) -> [City] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return cities }
-        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
-        let hits = cities.filter {
-            $0.name.range(of: q, options: options) != nil
-                || $0.identifier.replacingOccurrences(of: "_", with: " ").range(of: q, options: options) != nil
-        }
-        // Names that start with the query come first ("Par" → Paris before Asunción's "Paraguay").
-        let starts = hits.filter { $0.name.range(of: q, options: options.union(.anchored)) != nil }
-        return starts + hits.filter { !starts.contains($0) }
     }
 
     /// The difference to the local time, as Clock writes it: "+0 hrs", "+1 hr", "-5 hrs", "+5:30 hrs", "-3:30 hrs".
@@ -121,10 +94,6 @@ enum WorldClock {
         return out
     }
 
-    /// The saved list, dropping identifiers this system no longer knows.
-    static func load(_ stored: [String]?, known: Set<String>) -> [String] {
-        (stored ?? []).filter(known.contains)
-    }
 }
 
 // MARK: - Stopwatch
@@ -239,24 +208,42 @@ extension WorldClock {
 
         static func clamp(_ minutes: Int) -> Int { min(limitMinutes, max(-limitMinutes, minutes)) }
 
-        /// The moment the cards show: now, or, while scrubbed, the quarter hour now falls in plus the offset,
-        /// so scrubbed clocks read 10:15, 10:30… rather than 10:22.
+        /// The moment the cards show: now plus the offset. Minutes are kept (18:50 minus 15 hours reads 03:50), as in Overlap.
         static func date(now: Date, offset minutes: Int) -> Date {
-            guard minutes != 0 else { return now }
-            let step = Double(stepMinutes * 60)
-            let quarter = (now.timeIntervalSinceReferenceDate / step).rounded(.down) * step
-            return Date(timeIntervalSinceReferenceDate: quarter + Double(minutes * 60))
+            now.addingTimeInterval(Double(minutes) * 60)
         }
 
-        /// The capsule under the cities: "Now", "3 hours from now", "1 hour 15 minutes ago", "45 minutes from now".
-        static func label(_ minutes: Int) -> String {
-            guard minutes != 0 else { return "Now" }
+        /// The pill under the cities, in two parts so the keyword can be bold: ("", "NOW"), ("15 HOURS BEFORE ", "NOW"),
+        /// ("1 HOUR 15 MIN AFTER ", "NOW"), ("45 MIN BEFORE ", "NOW").
+        static func pillParts(_ minutes: Int) -> (lead: String, keyword: String) {
+            guard minutes != 0 else { return ("", "NOW") }
             let m = abs(minutes)
             let h = m / 60, rest = m % 60
             var parts: [String] = []
-            if h > 0 { parts.append("\(h) " + (h == 1 ? "hour" : "hours")) }
-            if rest > 0 { parts.append("\(rest) " + (rest == 1 ? "minute" : "minutes")) }
-            return parts.joined(separator: " ") + (minutes > 0 ? " from now" : " ago")
+            if h > 0 { parts.append("\(h) " + (h == 1 ? "HOUR" : "HOURS")) }
+            if rest > 0 { parts.append("\(rest) MIN") }
+            return (parts.joined(separator: " ") + (minutes > 0 ? " AFTER " : " BEFORE "), "NOW")
+        }
+
+        /// The pill as one line: "NOW", "15 HOURS BEFORE NOW".
+        static func pillText(_ minutes: Int) -> String {
+            let p = pillParts(minutes)
+            return p.lead + p.keyword
+        }
+
+        /// How far the page follows the finger past the end of the scale: the first points move nearly one to one, then it
+        /// stiffens toward `maximum` points (a rubber band).
+        static func rubberBand(_ excess: Double, maximum: Double = 56) -> Double {
+            guard excess > 0 else { return 0 }
+            return maximum * (1 - exp(-excess / maximum))
+        }
+
+        /// How many points the drag went past the end of the scale (positive both ways), for the rubber band.
+        static func excess(start: Int, dragWidth: Double) -> Double {
+            let raw = Double(snap(start)) + (-dragWidth / pointsPerStep) * Double(stepMinutes)
+            let limit = Double(limitMinutes)
+            let over = abs(raw) > limit ? abs(raw) - limit : 0
+            return over / Double(stepMinutes) * pointsPerStep
         }
     }
 
