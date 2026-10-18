@@ -90,6 +90,7 @@ struct AskView: View {
 
     /// A state mutation alone cannot finish a turn. Its own synchronous/async handler must first emit a result.
     private func finishEmission(_ token: UUID) {
+        if AIResponseTrace.enabled { AIResponseTrace.shared.stage("finish_emission_enter", token: token) }
         guard AIResponseTrace.enabled, token == generationToken, !thinking,
               let signature = responseSignature, let baseline = responseBaseline,
               signature != baseline else { return }
@@ -108,6 +109,7 @@ struct AskView: View {
             responseTarget = .reply(reply.id)
         } else { return }
         emittedTurn = token
+        AIResponseTrace.shared.stage("finish_emission_assigned", token: token)
     }
 
     @ViewBuilder private func responseProbe(_ target: ResponseTarget) -> some View {
@@ -224,6 +226,7 @@ struct AskView: View {
                 Understander.prewarm()
             }
             .onChange(of: emittedTurn) { _, token in
+                if AIResponseTrace.enabled, let token { AIResponseTrace.shared.stage("on_change_enter", token: token) }
                 guard let token, token == generationToken, !thinking, responseSignature != responseBaseline else { return }
                 AIResponseTrace.shared.ready(token)
                 responseTurn = token
@@ -442,6 +445,7 @@ struct AskView: View {
         thinking = false
         let turnContext = ConversationContext(messages.map { ($0.role == .user, $0.text) })
         let history = turnContext.prompt
+        if AIResponseTrace.enabled { AIResponseTrace.shared.stage("context_complete", token: token) }
         messages.append(ChatMessage(role: .user, text: text))
         if AIResponseTrace.enabled {
             sentMessageID = messages.last?.id
@@ -514,6 +518,10 @@ struct AskView: View {
 
     /// Route before either extractor. Conversation leaves pending previews and follow-ups untouched.
     private func respond(_ text: String, history: String, intent: ChatRouting.Intent) {
+        if AIResponseTrace.enabled, intent == .conversation {
+            AIResponseTrace.shared.diagnoseConversation(generationToken)
+            AIResponseTrace.shared.stage("respond_enter", token: generationToken)
+        }
         // Record the sent interaction before cancellation can discard its reply. The model has not resolved unsure input yet.
         let initialIntent: String
         switch intent {
@@ -521,13 +529,18 @@ struct AskView: View {
         case .conversation: initialIntent = "conversation"
         case .unsure: initialIntent = "unsure"
         }
+        if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("record_turn_before", token: generationToken) }
         recordTurn(initialIntent, text)
+        if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("record_turn_after", token: generationToken) }
         thinking = true
         traceBackend(generationToken, modelPath: intent != .capture)
         let token = generationToken
         captureTask = Task { @MainActor in
+            if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("task_enter", token: token) }
             defer { finishEmission(token) }
+            if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("chat_response_await_before", token: token) }
             let result = await ChatResponse.respond(text, history: history, intent: intent)
+            if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("chat_response_await_after", token: token) }
             guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
             switch result {

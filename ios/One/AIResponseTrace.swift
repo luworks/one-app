@@ -19,12 +19,42 @@ final class AIResponseTrace {
     }
     private var turn: Turn?
     private var sequence = 0
+    // Diagnostic bookkeeping must not publish state changes or add accessibility samples.
+    @ObservationIgnored private var stageTimes: [String: UInt64] = [:]
+    @ObservationIgnored private var stageToken: UUID?
+    @ObservationIgnored private var conversationStageToken: UUID?
     private(set) var history: [String] = []
 
     func begin(_ token: UUID, modelAvailable: Bool) {
         guard Self.enabled else { return }
         cancel()
         turn = Turn(token: token, start: DispatchTime.now().uptimeNanoseconds, modelAvailable: modelAvailable)
+        stageToken = token
+        stageTimes = ["send": turn?.start ?? 0]
+    }
+
+    /// Only the conversation wrapper is diagnosed; model internals and save outcomes remain unobserved.
+    func diagnoseConversation(_ token: UUID) {
+        guard Self.enabled, stageToken == token else { return }
+        conversationStageToken = token
+    }
+
+    func stage(_ name: String, token: UUID, at timestamp: UInt64? = nil) {
+        guard Self.enabled, stageToken == token,
+              name == "context_complete" || conversationStageToken == token else { return }
+        let now = timestamp ?? DispatchTime.now().uptimeNanoseconds
+        // Keep the first entry and latest entry when deferred emission is visited before and after await.
+        if stageTimes[name] == nil { stageTimes[name] = now }
+        stageTimes[name + "_last"] = now
+    }
+
+    private func emitConversationStages(_ current: Turn) {
+        guard conversationStageToken == current.token, current.pending.isEmpty else { return }
+        let fields = stageTimes.keys.sorted().map { "\($0)_ns=\(stageTimes[$0]!)" }.joined(separator: ";")
+        print("PERF_STAGE_AI v=1;turn=\(current.token.uuidString);backend=\(current.backend);\(fields)")
+        stageTimes.removeAll(keepingCapacity: true)
+        stageToken = nil
+        conversationStageToken = nil
     }
 
     func backend(_ backend: String, token: UUID) {
@@ -38,6 +68,7 @@ final class AIResponseTrace {
         let now = DispatchTime.now().uptimeNanoseconds
         current.ready = now
         turn = current
+        stage("ready", token: token, at: now)
         // Existing APIs emit one complete result, with no streaming token callback. These share an endpoint.
         emit("ai_send_to_first_response_ready", start: current.start, end: now, turn: current)
         emit("ai_send_to_full_response_ready", start: current.start, end: now, turn: current)
@@ -53,6 +84,7 @@ final class AIResponseTrace {
         let end = DispatchTime.now().uptimeNanoseconds
         current.pending.remove(phase)
         turn = current
+        stage(phase.rawValue + "_layout", token: token, at: end)
         switch phase {
         case .feedback:
             emit("ai_send_to_feedback_layout", start: current.start, end: end, turn: current)
@@ -61,6 +93,7 @@ final class AIResponseTrace {
             emit("ai_ready_to_response_layout", start: ready, end: end, turn: current)
             emit("ai_turn_to_response_layout", start: current.start, end: end, turn: current)
         }
+        emitConversationStages(current)
     }
 
     func cancel(_ token: UUID? = nil) {
@@ -69,6 +102,9 @@ final class AIResponseTrace {
             print("PERF_TRACE v=1 event=ai_cancel turn=\(current.token.uuidString) uptime_ns=\(DispatchTime.now().uptimeNanoseconds)")
         }
         turn = nil
+        stageTimes.removeAll(keepingCapacity: true)
+        stageToken = nil
+        conversationStageToken = nil
     }
 
     private func emit(_ name: String, start: UInt64, end: UInt64, turn: Turn) {
