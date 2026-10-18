@@ -2,7 +2,7 @@ import XCTest
 import UIKit
 
 /// The Settings choices added with `Preferences`: Dim past days, no weekend shading, first day of the week, week numbers,
-/// where Calendar opens, and the Today choices (Tomorrow, evening hour, free time, suggested times).
+/// where Calendar opens, the Today choices (Tomorrow, evening hour, free time, suggested times), and new-item defaults.
 /// `-uiTesting` starts every launch from the defaults; `-uiTestingPrefs key=value,...` sets what a test needs up front,
 /// and the tests that say "in Settings" flip the real switches.
 final class SettingsChoicesTests: XCTestCase {
@@ -344,6 +344,85 @@ final class SettingsChoicesTests: XCTestCase {
         XCTAssertTrue(reveal(element("settings.newAlarmSound")).exists)
         let suggestions = reveal(app.switches["Suggestions on the Ask page"])
         XCTAssertEqual(suggestions.value as? String, "1", "on by default")
+    }
+
+    func testDefaultReminderListChosenInSettingsContainsTheSavedQuickAdd() {
+        launch()
+        openSettings()
+        reveal(element("settings.newReminderList")).tap()
+        let workOption = app.buttons["Work"]
+        XCTAssertTrue(workOption.waitForExistence(timeout: 3))
+        workOption.tap()
+        closeSettings()
+
+        // Add from the Reminders home, without choosing a list in the draft.
+        app.buttons["Reminders"].firstMatch.tap()
+        app.buttons["New"].firstMatch.tap()
+        XCTAssertTrue(element("quick.title").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["List, Work"].waitForExistence(timeout: 3),
+                      "the quick add inherits the list selected through Settings")
+        let title = app.textFields["quick.title"].exists ? app.textFields["quick.title"] : app.textViews["quick.title"]
+        title.typeText("Check the handoff checklist")
+        app.buttons["quick.save"].tap()
+        XCTAssertTrue(app.buttons["quick.save"].waitForNonExistence(timeout: 5))
+
+        reveal(element("list.Work")).tap()
+        let saved = app.staticTexts["Check the handoff checklist"]
+        reveal(saved)
+        XCTAssertTrue(saved.waitForExistence(timeout: 5), "the saved reminder actually belongs to Work")
+        saved.tap()
+        XCTAssertTrue(app.navigationBars["Reminder"].waitForExistence(timeout: 5),
+                      "the saved reminder can be reopened from the selected list")
+        XCTAssertEqual(app.textFields["task.title"].value as? String, "Check the handoff checklist")
+    }
+
+    func testDefaultAlarmSoundChosenInSettingsSurvivesSaveAndReopen() {
+        launch()
+        openSettings()
+        reveal(element("settings.newAlarmSound")).tap()
+        let chimes = app.buttons["Chimes"]
+        XCTAssertTrue(chimes.waitForExistence(timeout: 3))
+        chimes.tap()
+        closeSettings()
+
+        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["New"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+        let sound = element("alarm.sound")
+        reveal(sound)
+        let hasChimes = NSPredicate(format: "label CONTAINS %@", "Chimes")
+        let initialSound = XCTNSPredicateExpectation(predicate: hasChimes, object: sound)
+        XCTAssertEqual(XCTWaiter.wait(for: [initialSound], timeout: 5), .completed,
+                       "the new alarm starts with the sound selected through Settings")
+        let label = app.textFields["alarm.label"]
+        label.tap()
+        label.typeText("Handoff sound check")
+        app.buttons["alarm.save"].tap()
+        XCTAssertTrue(app.buttons["alarm.save"].waitForNonExistence(timeout: 5))
+
+        // Change the default before reopening: the saved alarm must keep its own sound.
+        openSettings()
+        reveal(element("settings.newAlarmSound")).tap()
+        let glass = app.buttons["Glass"]
+        XCTAssertTrue(glass.waitForExistence(timeout: 3))
+        glass.tap()
+        closeSettings()
+
+        let saved = app.buttons.matching(NSPredicate(
+            format: "identifier == 'alarm.row' AND label CONTAINS %@", "Handoff sound check"
+        )).firstMatch
+        reveal(saved)
+        saved.tap()
+        XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
+        reveal(sound)
+        let savedSound = XCTNSPredicateExpectation(predicate: hasChimes, object: sound)
+        XCTAssertEqual(XCTWaiter.wait(for: [savedSound], timeout: 5), .completed,
+                       "save and reopen keeps Chimes even after the default changes to Glass")
+        sound.tap()
+        XCTAssertTrue(app.navigationBars["Sound"].waitForExistence(timeout: 5))
+        XCTAssertTrue(chimes.waitForExistence(timeout: 3))
+        XCTAssertTrue(chimes.isSelected, "the saved tone is selected in the sound picker")
+        XCTAssertFalse(app.buttons["Glass"].isSelected, "the new default does not replace the saved tone")
     }
 
     func testAskPageHidesItsSuggestionsWhenSwitchedOff() {
