@@ -257,9 +257,9 @@ def main(argv=None):
         save()
         if runner.returncode != 0 or profiler.returncode != 0 or not trace.is_dir():
             raise RuntimeError('Both producers must exit zero and leave a trace')
-        if active_end - time.monotonic() > 5.5:
+        if active_end - time.monotonic() > 15.5:
             read('toc-export', ['xcrun', 'xctrace', 'export', '--input', str(trace),
-                               '--toc', '--output', str(out / 'toc.xml')], 5)
+                               '--toc', '--output', str(out / 'toc.xml')], 15)
         else:
             status['toc_skipped'] = 'Insufficient budget after producers closed'
         status['status'] = 'recorded; actual stage coverage remains unverified'
