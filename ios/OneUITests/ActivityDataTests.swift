@@ -31,9 +31,19 @@ final class ActivityDataTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Activity"].waitForExistence(timeout: 5))
     }
 
-    /// Lists build rows lazily: swipe (fast) until the element is on screen.
+    /// A hittable row may still be clipped against the sheet's bottom/home indicator.
     private func scrollTo(_ element: XCUIElement, swipes: Int = 40) {
-        for _ in 0..<swipes where !(element.exists && element.isHittable) { app.swipeUp(velocity: .fast) }
+        for attempt in 0...swipes {
+            if element.exists && element.isHittable {
+                let frame = element.frame
+                let top = app.navigationBars.firstMatch.frame.maxY
+                let viewport = CGRect(x: app.frame.minX, y: top, width: app.frame.width,
+                                      height: max(0, app.frame.maxY - 44 - top))
+                if frame.width > 0, frame.height > 0, viewport.contains(frame) { return }
+            }
+            if attempt < swipes { app.swipeUp(velocity: .fast) }
+        }
+        XCTFail("The complete row must be visible above the sheet bottom: \(element)")
     }
 
     /// The page says where the data lives, pausing shows on the Activity screen, and Clear empties it.
@@ -49,7 +59,7 @@ final class ActivityDataTests: XCTestCase {
         scrollTo(keep, swipes: 6)
         XCTAssertEqual(keep.value as? String, "1", "chat text is kept by default, on this iPhone only")
         XCTAssertTrue(app.switches["activity.tier.4"].exists)
-        let where_ = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'On this iPhone'")).firstMatch
+        let where_ = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'On this iPhone'")).firstMatch
         scrollTo(where_, swipes: 6)
         XCTAssertTrue(where_.exists, "says where it lives")
         app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -69,7 +79,9 @@ final class ActivityDataTests: XCTestCase {
         row.tap()
         let clear = app.buttons["activity.clear"]
         scrollTo(clear)
-        clear.tap()
+        let clearFrame = app.buttons["activity.clear"].frame
+        app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: clearFrame.midX - app.frame.minX, dy: clearFrame.midY - app.frame.minY)).tap()
         let confirm = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Clear ' AND label ENDSWITH ' Events'")).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 3), "the confirmation names how many events go")
         confirm.tap()
