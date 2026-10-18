@@ -385,7 +385,7 @@ final class SettingsChoicesTests: XCTestCase {
         chimes.tap()
         closeSettings()
 
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         app.buttons["New"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
         let sound = element("alarm.sound")
@@ -441,7 +441,7 @@ final class SettingsChoicesTests: XCTestCase {
 
     func testNewAlarmStartsWithTheChosenSnoozeLength() {
         launch(prefs: "newAlarmSnooze=15")
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         app.buttons["New"].firstMatch.tap()
         let duration = element("alarm.snoozeDuration")
         XCTAssertTrue(duration.waitForExistence(timeout: 5))

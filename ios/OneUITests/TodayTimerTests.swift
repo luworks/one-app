@@ -67,7 +67,7 @@ final class TodayTimerTests: XCTestCase {
 
     func testStartingOnTheTimerTabShowsOnToday() {
         launch(timers: "x")  // the fake alarms, with nothing running yet
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         let section = app.buttons["clock.section.timer"].firstMatch
         XCTAssertTrue(section.waitForExistence(timeout: 5))
         section.tap()
@@ -83,7 +83,7 @@ final class TodayTimerTests: XCTestCase {
 
     func testTimerTabNotesWhatSiriCannotShare() {
         launch(timers: nil)
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         app.buttons["clock.section.timer"].firstMatch.tap()
         let note = app.staticTexts["timer.siriNote"]
         XCTAssertTrue(note.waitForExistence(timeout: 5))

@@ -119,7 +119,7 @@ struct TodayTimerRows: View {
     }
 }
 
-/// The Timer section of the Alarms tab: the Pomodoro card, the timers started by voice, and an honest note about Siri.
+/// The Timer section of the Clock tab: the Pomodoro card, the timers started by voice, and an honest note about Siri.
 struct TimerSection: View {
     @State private var controller = TimerController.shared
     @State private var showsTip = true

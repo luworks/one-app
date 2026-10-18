@@ -25,7 +25,7 @@ final class TabMemoryTests: XCTestCase {
         XCTAssertTrue(month.waitForExistence(timeout: 5))
         month.tap()
         XCTAssertTrue(app.descendants(matching: .any)["calendar.monthTitle"].waitForExistence(timeout: 5))
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         app.buttons["Calendar"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["calendar.monthTitle"].waitForExistence(timeout: 5),
                       "Calendar comes back in Month, not reset to Week")

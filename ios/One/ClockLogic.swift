@@ -1,6 +1,6 @@
 import Foundation
 
-/// The four parts of the Alarms tab, like the tabs of Apple's Clock app. Shown as a small switcher under the top bar.
+/// The four parts of the Clock tab, like the tabs of Apple's Clock app. Shown as a small switcher under the top bar.
 enum ClockSection: String, CaseIterable, Identifiable {
     case alarms, worldClock, stopwatch, timer
 
@@ -191,7 +191,7 @@ struct StopwatchState: Codable, Equatable {
 
     /// "00:00.00" (minutes, seconds, hundredths), "1:02:03.45" past an hour. Truncates like Clock: never shows a time not yet reached.
     static func format(_ t: TimeInterval) -> String {
-        let hundredths = Int((max(0, t) * 100).rounded(.down))
+        let hundredths = Int((max(0, t) * 100 + 1e-6).rounded(.down))   // 5.75 - 4.2 - 6.5 must not read 5.74
         let cs = hundredths % 100
         let totalSeconds = hundredths / 100
         let s = totalSeconds % 60, m = (totalSeconds / 60) % 60, h = totalSeconds / 3600

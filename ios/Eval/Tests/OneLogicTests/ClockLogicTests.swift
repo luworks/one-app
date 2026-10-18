@@ -244,6 +244,7 @@ final class StopwatchTests: XCTestCase {
         XCTAssertEqual(StopwatchState.format(3599.999), "59:59.99")
         XCTAssertEqual(StopwatchState.format(3723.45), "1:02:03.45")
         XCTAssertEqual(StopwatchState.format(-3), "00:00.00")
+        XCTAssertEqual(StopwatchState.format(5.75 + 4.2 + 6.5 + 5.1 - (4.2 + 6.5 + 5.1)), "00:05.75", "float noise must not drop a hundredth")
     }
 
     func testPersistenceKeepsRunningAcrossRelaunch() throws {
