@@ -25,7 +25,8 @@ final class TabMemoryTests: XCTestCase {
         app.buttons["Name & Appearance"].tap()
         XCTAssertTrue(app.navigationBars["Name & Appearance"].waitForExistence(timeout: 5))
         app.navigationBars["Name & Appearance"].buttons["Cancel"].tap()
-        app.openSidebar()
+        app.buttons["Open menu"].tap()
+        XCTAssertTrue(app.buttons["Close sidebar"].waitForExistence(timeout: 5), "the menu opens the sidebar while a list is pushed")
         app.closeSidebar()
         let back = app.buttons["reminders.back"]
         XCTAssertTrue(back.waitForExistence(timeout: 5))
