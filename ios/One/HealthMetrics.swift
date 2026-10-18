@@ -141,8 +141,8 @@ struct HealthWindow: Equatable {
 // MARK: - Moving average
 
 enum MovingAverage {
-    /// Enough history for the widest chart and its trailing window, including the first visible day.
-    static let historyDays = 90 + 14 - 1
+    /// Enough history for the widest chart's previous-range comparison as well as its trailing average.
+    static let historyDays = max(90 * 2, 90 + 14 - 1)
 
     static func window(for rangeDays: Int) -> Int { rangeDays == 90 ? 14 : 7 }
 
@@ -403,7 +403,7 @@ enum HealthFormat {
 /// What one row of the list shows.
 struct HealthRowModel: Equatable {
     let metric: HealthMetric
-    /// nil when Health has nothing for it in the last 90 days: the row shows "—".
+    /// nil when Health has nothing in the fetched history: the row shows "—".
     let value: HealthValueText?
     /// "Today", "Yesterday", "Oct 14", or "No data".
     let dateLabel: String

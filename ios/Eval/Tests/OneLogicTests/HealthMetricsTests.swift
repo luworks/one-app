@@ -217,6 +217,20 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertEqual(stats.change!, 2, accuracy: 1e-9)
     }
 
+    func testNinetyDayComparisonLoadsTheWholePreviousRange() throws {
+        // Steps rose during the previous range: comparing only its final days hides that change.
+        // Match the history cutoff used by HealthModel and HealthKitSource.
+        let history = HealthWindow(days: MovingAverage.historyDays, now: nowDate, calendar: cal)
+        let available = (0..<180).map { back in
+            daily(back, back < 103 ? 10_000 : 1_000)
+        }
+        let loaded = HealthSeries(points: available.filter { history.contains($0.date) })
+        let stats = try XCTUnwrap(HealthStats.range(loaded, days: 90, now: nowDate, calendar: cal))
+        let previousAverage = (13.0 * 10_000 + 77.0 * 1_000) / 90
+        XCTAssertEqual(stats.average, 10_000)
+        XCTAssertEqual(try XCTUnwrap(stats.change), 10_000 - previousAverage, accuracy: 0.001)
+    }
+
     func testMissingDaysDoNotCountAsZeroAndChangeNeedsAPreviousWindow() {
         let series = HealthSeries(points: [daily(0, 10), daily(3, 20)])
         let stats = HealthStats.range(series, days: 7, now: nowDate, calendar: cal)!
