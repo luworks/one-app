@@ -7,6 +7,7 @@ struct OneApp: App {
     let container: ModelContainer
 
     init() {
+        if PerformanceTrace.enabled { PerformanceTrace.shared.beginLaunch() }
         #if DEBUG
         if PreviewFixtures.isAxe {
             container = PreviewFixtures.reminders
@@ -16,7 +17,9 @@ struct OneApp: App {
         LaunchTimer.mark("app init")
         Appearance.applyLaunchOverride()
         Preferences.applyLaunchOverride()
+        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("store_start") }
         container = OneStore.start()
+        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("store_ready") }
         LaunchTimer.mark("store ready")
     }
 

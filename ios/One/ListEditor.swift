@@ -227,6 +227,7 @@ struct ListEditor: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Color(.systemGroupedBackground))
+            .performanceDestination("list.editor")
             .navigationTitle(list == nil ? "New List" : "Name & Appearance")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

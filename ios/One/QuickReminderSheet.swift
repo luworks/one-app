@@ -45,6 +45,7 @@ struct QuickReminderSheet: View {
         }
         .padding(.top, 16)
         .background(Color(.systemBackground))
+        .performanceDestination("reminder.quick")
         .onAppear {
             focused = true
             // Settings > Reminders > "New reminders go to" (Auto leaves the list as it was opened).

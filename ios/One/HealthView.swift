@@ -15,6 +15,7 @@ struct HealthView: View {
     @State private var visibleMetrics: Set<HealthMetric> = []
 
     private func manageMetrics() {
+        PerformanceTrace.shared.beginPage("health.picker")
         visibleMetrics = Set(model.selection.shown)
         adding = true
     }
@@ -52,6 +53,7 @@ struct HealthView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .performanceDestination("health")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
@@ -90,7 +92,7 @@ struct HealthView: View {
         var failure: HealthFailure?
         if case .failed(let reason) = state { failure = reason }
         return VStack(alignment: .leading, spacing: 4) {
-            Button { detail = metric } label: {
+            Button { PerformanceTrace.shared.beginPage("health.detail"); detail = metric } label: {
                 HealthRow(item: item, isLoading: state == .loading && item.value == nil)
             }
             .buttonStyle(.plain)

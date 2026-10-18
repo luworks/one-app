@@ -54,7 +54,7 @@ struct TodayHealthLine: View {
     @State private var showsDetail = false
 
     var body: some View {
-        Button { showsDetail = true } label: {
+        Button { PerformanceTrace.shared.beginPage("health"); showsDetail = true } label: {
             HStack(spacing: 6) {
                 Image(systemName: "heart.fill").font(.caption2).foregroundStyle(HealthStyle.accent)
                 Text(line).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
@@ -97,7 +97,7 @@ struct HealthMetricsLink: View {
     @State private var showsSheet = false
 
     var body: some View {
-        Button { showsSheet = true } label: {
+        Button { PerformanceTrace.shared.beginPage("health"); showsSheet = true } label: {
             HStack {
                 Text("Health metrics").foregroundStyle(.primary)
                 Spacer()

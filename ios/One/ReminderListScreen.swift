@@ -178,6 +178,7 @@ struct ReminderListScreen: View {
         .navigationTitle("")
         .toolbar(.visible, for: .navigationBar)
         .toolbar { menu }
+        .performanceDestination("reminders.list")
         .sheet(item: $editing) { ListEditor(list: $0) }
         .deleteListAlert($pendingDelete)
         .onChange(of: isMissing) { _, missing in if missing { dismiss() } }

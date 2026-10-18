@@ -196,7 +196,7 @@ struct TaskRow: View {
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture { editing = true }
+        .onTapGesture { PerformanceTrace.shared.beginPage("reminder.editor"); editing = true }
         .sheet(isPresented: $editing) { TaskEditor(task: task) }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: compact ? 1 : 4, leading: 20, bottom: compact ? 1 : 4, trailing: 20))
@@ -207,7 +207,7 @@ struct TaskRow: View {
             RowAction.flag(task.flagged) { withAnimation { task.flagged.toggle() } }
         }
         .contextMenu {
-            Button { editing = true } label: { Label("Show Details", systemImage: "info.circle") }
+            Button { PerformanceTrace.shared.beginPage("reminder.editor"); editing = true } label: { Label("Show Details", systemImage: "info.circle") }
             Button { task.flagged.toggle() } label: {
                 Label(task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }

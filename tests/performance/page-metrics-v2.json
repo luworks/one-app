@@ -1,0 +1,1256 @@
+{
+  "version": 2,
+  "production_baseline": "b1fc12b62e796ac6c232da5e524235a59edba945",
+  "historical_results_not_current": true,
+  "scope_inventory": "docs/performance/page-coverage-v2.md",
+  "goals": {
+    "latency_required": "baseline/3",
+    "latency_stretch": "baseline/10",
+    "bytes_memory_required": "baseline*0.49",
+    "targets_are_results": false
+  },
+  "context_required": [
+    "source_manifest",
+    "instrumentation_hash",
+    "configuration",
+    "optimization",
+    "simulator_id",
+    "runtime",
+    "fixture_hash",
+    "clock_timezone_locale",
+    "backend",
+    "cache_sequence",
+    "host_load",
+    "method",
+    "n",
+    "functional_outcome"
+  ],
+  "initial_instrumented_metrics": [
+    {
+      "id": "page.health",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          632.202542,
+          134.55,
+          134.697458
+        ],
+        "median_ms": 134.697458,
+        "backend": "not_applicable",
+        "method": "testHealthListDetailAndPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 44.89915266666667,
+      "stretch_ms": 13.469745800000002
+    },
+    {
+      "id": "page.health.detail",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          982.617541,
+          115.994625,
+          115.913209
+        ],
+        "median_ms": 115.994625,
+        "backend": "not_applicable",
+        "method": "testHealthListDetailAndPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 38.664875,
+      "stretch_ms": 11.5994625
+    },
+    {
+      "id": "page.health.picker",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          233.471625,
+          132.978667,
+          149.102916
+        ],
+        "median_ms": 149.102916,
+        "backend": "not_applicable",
+        "method": "testHealthListDetailAndPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 49.700972,
+      "stretch_ms": 14.910291599999999
+    },
+    {
+      "id": "page.settings",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "measurement_failed",
+      "evidence": "settings-repro-6ab29add.log"
+    },
+    {
+      "id": "page.settings.activityData",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "measurement_failed",
+      "evidence": "settings-repro-6ab29add.log"
+    },
+    {
+      "id": "page.activity",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "measurement_failed",
+      "evidence": "settings-repro-6ab29add.log"
+    },
+    {
+      "id": "page.clock.worldClock",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          251.053708,
+          49.386125,
+          49.854125
+        ],
+        "median_ms": 49.854125,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 16.618041666666667,
+      "stretch_ms": 4.985412500000001
+    },
+    {
+      "id": "page.clock.cityPicker",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          449.486041,
+          132.681083,
+          132.887667
+        ],
+        "median_ms": 132.887667,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 44.295888999999995,
+      "stretch_ms": 13.2887667
+    },
+    {
+      "id": "page.clock.stopwatch",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          566.980916,
+          67.004792,
+          50.355375
+        ],
+        "median_ms": 67.004792,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 22.334930666666665,
+      "stretch_ms": 6.700479199999999
+    },
+    {
+      "id": "page.clock.timer",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          250.683875,
+          100.484209,
+          83.245041
+        ],
+        "median_ms": 100.484209,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 33.494736333333336,
+      "stretch_ms": 10.0484209
+    },
+    {
+      "id": "page.clock.alarms",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          99.401834,
+          84.452625,
+          84.225667
+        ],
+        "median_ms": 84.452625,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 28.150875,
+      "stretch_ms": 8.4452625
+    },
+    {
+      "id": "page.search",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          1719.681,
+          366.392708,
+          282.896125
+        ],
+        "median_ms": 366.392708,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 122.13090266666667,
+      "stretch_ms": 36.639270800000006
+    },
+    {
+      "id": "page.search.results",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          179.060708,
+          109.438167,
+          76.373792
+        ],
+        "median_ms": 109.438167,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 36.479389000000005,
+      "stretch_ms": 10.943816700000001
+    },
+    {
+      "id": "page.reminder.quick",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          397.956209,
+          249.227333,
+          232.644417
+        ],
+        "median_ms": 249.227333,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 83.07577766666667,
+      "stretch_ms": 24.922733299999997
+    },
+    {
+      "id": "page.reminders.list",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          315.8705,
+          132.573334,
+          148.902959
+        ],
+        "median_ms": 148.902959,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 49.63431966666667,
+      "stretch_ms": 14.890295900000002
+    },
+    {
+      "id": "page.reminder.editor",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          505.290625,
+          217.885292,
+          251.275542
+        ],
+        "median_ms": 251.275542,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 83.758514,
+      "stretch_ms": 25.1275542
+    },
+    {
+      "id": "ai_send_to_feedback_layout",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          249.067584,
+          354.559875,
+          290.390375
+        ],
+        "median_ms": 290.390375,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ],
+      "required_ms": 96.79679166666666,
+      "stretch_ms": 29.0390375,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            446.84175,
+            448.770916,
+            917.255167
+          ],
+          "median_ms": 448.770916,
+          "required_ms": 149.59030533333333,
+          "stretch_ms": 44.8770916,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            96.2895,
+            78.676833,
+            118.33
+          ],
+          "median_ms": 96.2895,
+          "required_ms": 32.0965,
+          "stretch_ms": 9.62895,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            317.224167,
+            460.42325,
+            548.150292
+          ],
+          "median_ms": 460.42325,
+          "required_ms": 153.47441666666666,
+          "stretch_ms": 46.042325,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
+    },
+    {
+      "id": "ai_send_to_first_response_ready",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "ready_state",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          203.518084,
+          276.445334,
+          214.122792
+        ],
+        "median_ms": 214.122792,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ],
+      "required_ms": 71.374264,
+      "stretch_ms": 21.4122792,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            399.185458,
+            387.209125,
+            842.59175
+          ],
+          "median_ms": 399.185458,
+          "required_ms": 133.06181933333332,
+          "stretch_ms": 39.9185458,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            21.562583,
+            19.073291,
+            26.56975
+          ],
+          "median_ms": 21.562583,
+          "required_ms": 7.187527666666667,
+          "stretch_ms": 2.1562583,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            81.616834,
+            140.910542,
+            133.447959
+          ],
+          "median_ms": 133.447959,
+          "required_ms": 44.482653,
+          "stretch_ms": 13.3447959,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
+    },
+    {
+      "id": "ai_send_to_full_response_ready",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "ready_state",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          203.518084,
+          276.445334,
+          214.122792
+        ],
+        "median_ms": 214.122792,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ],
+      "required_ms": 71.374264,
+      "stretch_ms": 21.4122792,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            399.185458,
+            387.209125,
+            842.59175
+          ],
+          "median_ms": 399.185458,
+          "required_ms": 133.06181933333332,
+          "stretch_ms": 39.9185458,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            21.562583,
+            19.073291,
+            26.56975
+          ],
+          "median_ms": 21.562583,
+          "required_ms": 7.187527666666667,
+          "stretch_ms": 2.1562583,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            81.616834,
+            140.910542,
+            133.447959
+          ],
+          "median_ms": 133.447959,
+          "required_ms": 44.482653,
+          "stretch_ms": 13.3447959,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
+    },
+    {
+      "id": "ai_ready_to_response_layout",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          78.347458,
+          78.173833,
+          107.560958
+        ],
+        "median_ms": 78.347458,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ],
+      "required_ms": 26.115819333333334,
+      "stretch_ms": 7.8347458,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            91.275125,
+            104.180125,
+            108.045834
+          ],
+          "median_ms": 104.180125,
+          "required_ms": 34.726708333333335,
+          "stretch_ms": 10.4180125,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            74.788875,
+            59.664542,
+            91.814834
+          ],
+          "median_ms": 74.788875,
+          "required_ms": 24.929625,
+          "stretch_ms": 7.478887500000001,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            235.69825,
+            319.57275,
+            414.80825
+          ],
+          "median_ms": 319.57275,
+          "required_ms": 106.52425,
+          "stretch_ms": 31.957275,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
+    },
+    {
+      "id": "ai_turn_to_response_layout",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "geometry_two_displaylinks",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          281.865542,
+          354.619167,
+          321.68375
+        ],
+        "median_ms": 321.68375,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ],
+      "required_ms": 107.22791666666666,
+      "stretch_ms": 32.168375,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            490.460583,
+            491.38925,
+            950.637584
+          ],
+          "median_ms": 491.38925,
+          "required_ms": 163.79641666666666,
+          "stretch_ms": 49.138925,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            96.351458,
+            78.737833,
+            118.384584
+          ],
+          "median_ms": 96.351458,
+          "required_ms": 32.11715266666666,
+          "stretch_ms": 9.6351458,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            317.315084,
+            460.483292,
+            548.256209
+          ],
+          "median_ms": 460.483292,
+          "required_ms": 153.49443066666666,
+          "stretch_ms": 46.0483292,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
+    }
+  ],
+  "pending_measurement_classes": [
+    "per-page actual presented/usable endpoint",
+    "per-page steady/peak/retained memory",
+    "hitch/frame budget",
+    "local planner and Activity save success/latency",
+    "internal AI context/rules/kind/title stages",
+    "AI Add/Apply acknowledgement and save/relaunch intervals"
+  ],
+  "unsupported_in_simulator_claims": [
+    "physical Apple Intelligence inference latency",
+    "real HealthKit query latency from sample Health data",
+    "physical AlarmKit delivery and real battery energy",
+    "actual App Store thinned download/install size"
+  ],
+  "coverage_rule": "Initial instrumented metrics are a subset; inventory rows without valid baseline remain pending. Do not mark every page measured from a successful batch.",
+  "root_launch_resume_measured_cohort": {
+    "production_sha": "b1fc12b62e796ac6c232da5e524235a59edba945",
+    "measurement_sha": "83b4fb8af1b72d80fc344ecd78f313e2ccec9149",
+    "configuration": "Debug -O",
+    "simulator": "Today-Performance / iPhone18ProMax / iOS27.0",
+    "context": "three process launches OS-warm, fixture today-dataset, in-memory, 09:41; init excludes pre-init",
+    "method": "testLaunchAndResumeEndpoints",
+    "evidence": "root-navigation-summary.json",
+    "metrics": [
+      {
+        "name": "app_init_to_content_layout",
+        "n": 3,
+        "raw_ms": [
+          2624.285542,
+          1633.695125,
+          1450.896666
+        ],
+        "median_ms": 1633.695125,
+        "min_ms": 1450.896666,
+        "max_ms": 2624.285542,
+        "p95_ms": null,
+        "functional_pass": true,
+        "proposed_required_ms": 544.5650416666666,
+        "proposed_stretch_ms": 163.36951249999998
+      },
+      {
+        "name": "resume_to_content_layout",
+        "n": 3,
+        "raw_ms": [
+          81.8095,
+          49.768375,
+          31.78175
+        ],
+        "median_ms": 49.768375,
+        "min_ms": 31.78175,
+        "max_ms": 81.8095,
+        "p95_ms": null,
+        "functional_pass": true,
+        "proposed_required_ms": 16.589458333333333,
+        "proposed_stretch_ms": 4.9768375
+      }
+    ],
+    "root_navigation_status": "invalid: duplicate identical accessibility mirrors stopped method before kept-state checks; reader repair source-only"
+  },
+  "repaired_page_root_and_ai_open_cohort": {
+    "production_sha": "b1fc12b62e796ac6c232da5e524235a59edba945",
+    "measurement_sha": "fc1355f",
+    "configuration": "Debug -O",
+    "context": "same small fixture/simulator; page first-cycle-plus-two-revisits; AI fresh process, waits modal page.ai before send; distinct from83 AI cohort",
+    "evidence": "round3-summary.json",
+    "metrics": [
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_ready_to_response_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          76.480042,
+          85.888292,
+          96.426917
+        ],
+        "median_ms": 85.888292,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 28.629430666666668,
+        "proposed_stretch_ms": 8.588829200000001
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_send_to_feedback_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          532.187709,
+          631.581375,
+          353.79875
+        ],
+        "median_ms": 532.187709,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 177.395903,
+        "proposed_stretch_ms": 53.2187709
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_send_to_first_response_ready",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          455.786292,
+          545.769916,
+          274.8655
+        ],
+        "median_ms": 455.786292,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 151.928764,
+        "proposed_stretch_ms": 45.5786292
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_send_to_full_response_ready",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          455.786292,
+          545.769916,
+          274.8655
+        ],
+        "median_ms": 455.786292,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 151.928764,
+        "proposed_stretch_ms": 45.5786292
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_turn_to_response_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          532.266334,
+          631.658208,
+          371.292417
+        ],
+        "median_ms": 532.266334,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 177.42211133333333,
+        "proposed_stretch_ms": 53.226633400000004
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "page.ai",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          1515.489667,
+          1455.5765,
+          1389.850166
+        ],
+        "median_ms": 1455.5765,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 485.19216666666665,
+        "proposed_stretch_ms": 145.55765
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "calendar.month_to_calendar.year",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          767.39575,
+          650.138542,
+          734.033084
+        ],
+        "median_ms": 734.033084,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 244.67769466666667,
+        "proposed_stretch_ms": 73.4033084
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "calendar.week_to_calendar.month",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          286.481917,
+          235.769708,
+          235.404166
+        ],
+        "median_ms": 235.769708,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 78.58990266666667,
+        "proposed_stretch_ms": 23.5769708
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "calendar.week_to_tasks",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          568.53725,
+          166.492,
+          168.37525
+        ],
+        "median_ms": 168.37525,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 56.12508333333333,
+        "proposed_stretch_ms": 16.837525
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "calendar.year_to_calendar.week",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          250.017333,
+          266.398917,
+          250.188375
+        ],
+        "median_ms": 250.188375,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 83.396125,
+        "proposed_stretch_ms": 25.0188375
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "clock_to_today",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          116.057458,
+          99.382375,
+          316.299375
+        ],
+        "median_ms": 116.057458,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 38.685819333333335,
+        "proposed_stretch_ms": 11.6057458
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "tasks_to_clock",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          233.461042,
+          115.837625,
+          184.148333
+        ],
+        "median_ms": 184.148333,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 61.38277766666667,
+        "proposed_stretch_ms": 18.4148333
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "today_to_calendar.week",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          334.134,
+          166.574167,
+          199.574416
+        ],
+        "median_ms": 199.574416,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 66.52480533333333,
+        "proposed_stretch_ms": 19.957441600000003
+      },
+      {
+        "method": "testSettingsSubpageAndActivityEndpoints",
+        "name": "page.activity",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          167.815042,
+          116.99675,
+          183.848667
+        ],
+        "median_ms": 167.815042,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 55.93834733333333,
+        "proposed_stretch_ms": 16.7815042
+      },
+      {
+        "method": "testSettingsSubpageAndActivityEndpoints",
+        "name": "page.settings",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          833.049375,
+          167.619542,
+          299.683708
+        ],
+        "median_ms": 299.683708,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 99.89456933333334,
+        "proposed_stretch_ms": 29.968370800000002
+      },
+      {
+        "method": "testSettingsSubpageAndActivityEndpoints",
+        "name": "page.settings.activityData",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          358.128833,
+          164.454792,
+          301.262541
+        ],
+        "median_ms": 301.262541,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 100.420847,
+        "proposed_stretch_ms": 30.1262541
+      }
+    ],
+    "fine_ai_stages": "pending: app stdout unavailable; post-endpoint stage export source-only eee949a"
+  },
+  "secondary_page_and_ai_stage_cohort": {
+    "production_sha": "b1fc12b62e796ac6c232da5e524235a59edba945",
+    "measurement_sha": "eee949a",
+    "context": "Debug-O; same fixture/device; AI fresh process; pages ordered first-cycle/two-revisits; drafts cancel only",
+    "evidence": "round4-summary.json / round4-stages.json",
+    "metrics": [
+      {
+        "name": "ai_ready_to_response_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          70.354041,
+          115.908417,
+          108.751083
+        ],
+        "median_ms": 108.751083,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 36.250361,
+        "proposed_stretch_ms": 10.875108299999999
+      },
+      {
+        "name": "ai_send_to_feedback_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          356.239458,
+          526.244666,
+          444.116125
+        ],
+        "median_ms": 444.116125,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 148.03870833333335,
+        "proposed_stretch_ms": 44.411612500000004
+      },
+      {
+        "name": "ai_send_to_first_response_ready",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          285.991292,
+          438.115416,
+          335.444917
+        ],
+        "median_ms": 335.444917,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 111.81497233333333,
+        "proposed_stretch_ms": 33.544491699999995
+      },
+      {
+        "name": "ai_send_to_full_response_ready",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          285.991292,
+          438.115416,
+          335.444917
+        ],
+        "median_ms": 335.444917,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 111.81497233333333,
+        "proposed_stretch_ms": 33.544491699999995
+      },
+      {
+        "name": "ai_turn_to_response_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          356.345333,
+          554.023833,
+          444.196
+        ],
+        "median_ms": 444.196,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 148.06533333333334,
+        "proposed_stretch_ms": 44.4196
+      },
+      {
+        "name": "page.ai",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          2371.249583,
+          2137.986417,
+          2188.069208
+        ],
+        "median_ms": 2188.069208,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 729.3564026666667,
+        "proposed_stretch_ms": 218.8069208
+      },
+      {
+        "name": "page.alarm.editor",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          398.109917,
+          182.913041,
+          199.302292
+        ],
+        "median_ms": 199.302292,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 66.43409733333333,
+        "proposed_stretch_ms": 19.9302292
+      },
+      {
+        "name": "page.event.editor",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          1540.471667,
+          634.067458,
+          533.707875
+        ],
+        "median_ms": 634.067458,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 211.35581933333333,
+        "proposed_stretch_ms": 63.406745799999996
+      },
+      {
+        "name": "page.settings",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          766.372667,
+          182.901125,
+          250.186417
+        ],
+        "median_ms": 250.186417,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 83.39547233333333,
+        "proposed_stretch_ms": 25.0186417
+      },
+      {
+        "name": "page.settings.automaticChanges",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          193.236458,
+          131.366917,
+          147.670917
+        ],
+        "median_ms": 147.670917,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 49.223639,
+        "proposed_stretch_ms": 14.7670917
+      },
+      {
+        "name": "page.settings.calendars",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          167.510708,
+          132.647083,
+          282.701542
+        ],
+        "median_ms": 167.510708,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 55.83690266666667,
+        "proposed_stretch_ms": 16.7510708
+      },
+      {
+        "name": "page.settings.holidays",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          253.745875,
+          181.432083,
+          173.330292
+        ],
+        "median_ms": 181.432083,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 60.477361,
+        "proposed_stretch_ms": 18.1432083
+      }
+    ],
+    "internal_stage_status": "three complete tokens captured; diagnostic elapsed only"
+  }
+}

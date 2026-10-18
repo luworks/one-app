@@ -124,6 +124,7 @@ struct ActivityDataView: View {
             }
             #endif
         }
+        .performanceDestination("settings.activityData")
         .navigationTitle("Activity data")
         .navigationBarTitleDisplayMode(.inline)
         .task { refresh() }

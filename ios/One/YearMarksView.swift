@@ -63,6 +63,7 @@ struct YearKeySheet: View {
                     .frame(width: 20, height: 20).background(Circle().fill(Color.red))),
                     "Today", "")
             }
+            .performanceDestination("calendar.year.key")
             .navigationTitle("Year")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

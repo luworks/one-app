@@ -497,6 +497,7 @@ struct CityPicker: View {
             .overlay {
                 if results.isEmpty { ContentUnavailableView.search(text: query) }
             }
+            .performanceDestination("clock.cityPicker")
             .navigationTitle("Choose a City")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
