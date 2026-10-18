@@ -69,6 +69,51 @@ final class CalendarAlarmTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5), "tapping the marker opens the alarm editor")
     }
 
+    /// Week: a ring during an event has its own horizontal lane, and remains a working tap target.
+    func testWeekOverlappingEventAndAlarmHaveDisjointFramesAndOpenAlarmEditor() throws {
+        // Use the existing dataset loader with a small fixture: the alarm falls strictly inside the event today.
+        let fixture = """
+        {"version":1,"reminders":[],
+         "events":[{"title":"Lane overlap event","start":{"day":0,"time":"09:00"},"minutes":60}],
+         "alarms":[{"time":"09:30","label":"Lane overlap alarm"}],"chats":[]}
+        """
+        let url = FileManager.default.temporaryDirectory.appending(path: "week-alarm-overlap-\(UUID().uuidString).json")
+        try fixture.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+        app.terminate()
+        app.launchArguments = ["-uiTesting", "-dataset", url.path, "-uiTestingNow", "09:00"] + Self.pinAlarmsOn
+        app.launch()
+        app.buttons["Calendar"].firstMatch.tap()
+        mode("Week").tap()
+
+        let grid = element("calendar.weekGrid").firstMatch
+        XCTAssertTrue(grid.waitForExistence(timeout: 5))
+        let event = grid.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH 'Lane overlap event,'")).firstMatch
+        let marker = grid.descendants(matching: .any).matching(identifier: "calendar.alarmMarker")
+            .matching(NSPredicate(format: "label BEGINSWITH 'Alarm Lane overlap alarm at '")).firstMatch
+        let visible = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            event.exists && marker.exists && event.isHittable && marker.isHittable
+                && grid.frame.contains(event.frame) && grid.frame.contains(marker.frame)
+                && self.app.frame.contains(event.frame) && self.app.frame.contains(marker.frame)
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [visible], timeout: 5), .completed,
+                       "both overlapping items must be fully visible in the Week grid")
+
+        let eventFrame = event.frame
+        let alarmFrame = marker.frame
+        XCTAssertGreaterThan(eventFrame.width, 0)
+        XCTAssertGreaterThan(alarmFrame.width, 0)
+        XCTAssertGreaterThan(alarmFrame.minY, eventFrame.minY, "the ring is inside the event's time span")
+        XCTAssertLessThan(alarmFrame.maxY, eventFrame.maxY, "the fixture exercises vertical overlap")
+        XCTAssertLessThanOrEqual(eventFrame.maxX, alarmFrame.minX,
+                                 "the event must yield horizontally to the trailing alarm: event \(eventFrame), alarm \(alarmFrame)")
+        marker.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["alarm.label"].value as? String, "Lane overlap alarm",
+                       "the tap opens this alarm, even beside an event")
+    }
+
     /// Turning off "Show alarms in Today and Calendar" hides them from Month and Week.
     func testTheSettingHidesAlarmsInTheCalendar() {
         mode("Month").tap()
