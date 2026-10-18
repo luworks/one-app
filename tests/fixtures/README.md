@@ -73,3 +73,18 @@ For a committed-state accessibility probe also pass `-uiTestingShareInbox`,
 `-uiTestingShareID <fresh UUID>` and `-uiTestingShareProbeTitle 'Upgrade baseline 20261018'`;
 expect `acknowledged;tasks=1;receipts=0;pending=0`. Do not reseed the reminder.
 The fixture is intentionally frozen; future schema changes should keep opening it.
+
+## AI context journeys
+
+[`ai-context-ui.json`](ai-context-ui.json) is consumed by the three methods in
+`AIContextJourneyTests`. Its planner starts empty, so Activity must contain no
+change-ledger rows before Add. The text-only `Dinner alarm context` chat uses the
+existing `[role, text]` format and has no stored preview or created item. Its
+assistant aside names watering plants at 09:00; the relevant user request remains
+the dinner alarm at 18:00. The journeys cover the exact Chinese three-turn report,
+English alarm/date/time corrections, and New chat isolation plus stored-thread
+resumption. They use `-uiTesting` and the simulator's production rule fallback;
+they do not inject model output or verify Apple Intelligence. Chinese screenshots
+are retained as XCTest attachments inside the eventual xcresult bundle.
+
+- `ios/Eval/Tests/OneLogicTests/conversation-journeys.json` is a copied Swift package resource: thirteen bilingual multi-turn journeys with expected route, title, time/date, preview action and zero writes before Add/Apply. `ConversationJourneyTests` exercises the production context resolver, routing and parser; UI journeys additionally check the real confirmation gate.

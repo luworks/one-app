@@ -78,6 +78,11 @@ enum Dialogue {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if has(text, #"^(?:no|nope|cancel|never ?mind|forget it|算了|不用了|取消|不要了)[.!。！]?$"#) { return .dismissed }
 
+        if !CaptureConversation.referencesAlarm(text),
+           (startsNewItem(text) || has(text, #"^(?:(?:please|can you|could you)\s+)?(?:set|add|create)\s+(?:an?\s+)?alarm\b"#)) {
+            return .notARefinement
+        }
+
         // Rename: "call it X", "rename it to X", "标题改成X".
         if let range = text.range(of: #"(?:call it|rename (?:it )?(?:to)?|title (?:it|to)|叫做|改名(?:为|成)|标题(?:改成|改为|是))\s*[:：]?\s*"#,
                                   options: [.regularExpression, .caseInsensitive]) {
@@ -119,7 +124,10 @@ enum Dialogue {
                                          with: " ", options: [.regularExpression, .caseInsensitive])
 
         // Day / time / repeat: only the parts the message gives replace the old ones.
-        let parsed = CaptureParser.parse(rest, now: now, calendar: calendar)
+        let absolute = CaptureParser.parse(rest, now: calendar.startOfDay(for: now), calendar: calendar)
+        let fromNow = CaptureParser.parse(rest, now: now, calendar: calendar)
+        // Absolute clock changes preserve the preview's day; relative offsets retain the real clock.
+        let parsed = absolute.hour != fromNow.hour || absolute.minute != fromNow.minute ? fromNow : absolute
         if parsed.hasDay { c.day = parsed.day; c.hasDay = true; changed = true }
         if let h = parsed.hour, !wantsAlarm {
             c.hour = h
@@ -169,5 +177,81 @@ enum Dialogue {
     /// The last few messages, short, for the model's instructions. Only text: the 4096-token window is small, so each line is cut.
     static func recap(_ lines: [(isUser: Bool, text: String)], limit: Int = 4) -> String {
         lines.suffix(limit).map { ($0.isUser ? "User: " : "Assistant: ") + String($0.text.prefix(120)) }.joined(separator: "\n")
+    }
+}
+
+/// Shared by the send path, deterministic fallback and model classifier. Resolves references only;
+/// ordinary conversation never acquires an obligation merely because an older turn had a time.
+enum CaptureConversation {
+    private static func has(_ text: String, _ pattern: String) -> Bool {
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// Complete, subjectless requests to turn the current subject into an alarm. Own action text
+    /// ("set an alarm to take medicine") is deliberately excluded and starts a new capture.
+    static func referencesAlarm(_ raw: String) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return has(text, #"^(?:(?:no[, ]*|actually[, ]*|please\s+|just\s+|can you\s+|could you\s+|i need you to (?:help me )?\s*|i want you to\s+))*(?:(?:set|add|create|make)(?:\s+it)?\s+(?:me\s+)?(?:(?:an?|that)\s+)?alarm(?:\s+(?:for (?:it|that)|instead|please))?|make (?:it|that) an alarm)[.!?]*$|^(?:(?:没有|不是|不|就是|只要|就|请|可以|你|我需要|我想要|来|帮我|，|,|\s))*(?:加|设定|设置|设|定|创建)(?:一?个)?闹钟(?:就可以|就行|即可|吧|哦|啊|呢|了|。|！|!)*$"#)
+    }
+
+    /// The same parser result is used with or without Apple Intelligence. Explicit reminders are
+    /// tasks even when their object contains event words (e.g. "don't eat dinner").
+    static func parse(_ text: String, now: Date, calendar: Calendar) -> Capture {
+        var capture = CaptureParser.parse(text, now: now, calendar: calendar)
+        if ChatRouting.intent(text) == .capture, capture.hour != nil,
+           has(text, #"闹钟|\balarm\b|wake me"#) {
+            capture.kind = .task
+            capture.ringsAsAlarm = true
+        } else if ChatRouting.intent(text) == .capture,
+           has(text, #"提醒我|\bremind me\b"#), !has(text, #"闹钟|\balarm\b|wake me"#) {
+            capture.kind = .task
+            capture.ringsAsAlarm = false
+        }
+        return capture
+    }
+
+    /// nil means the ordinary new-message path should handle this turn. Context is caller-owned,
+    /// bounded, and contains only this thread. Assistant suggestions are never parsed as requests.
+    static func resolve(_ text: String, context: ConversationContext, pending: Capture?,
+                        now: Date = .now, calendar: Calendar = .current) -> Capture? {
+        let alarm = referencesAlarm(text)
+        let time = Dialogue.isOnlyWhen(text, now: now, calendar: calendar)
+        guard alarm || (time && pending == nil) else { return nil }
+        var prior: Capture?
+        var requested = false
+        for user in context.users {
+            if referencesAlarm(user) {
+                if prior == nil { prior = Capture(title: "Alarm", day: calendar.startOfDay(for: now), hasDay: false) }
+                prior?.kind = .task
+                prior?.ringsAsAlarm = true
+                requested = true
+            } else if let current = prior, Dialogue.isOnlyWhen(user, now: now, calendar: calendar),
+                      case .updated(let updated) = Dialogue.refine(current, with: user, now: now, calendar: calendar) {
+                prior = updated
+            } else {
+                let intent = ChatRouting.intent(user)
+                let parsed = parse(user, now: now, calendar: calendar)
+                // A recent timed statement can supply the subject only after an explicit conversion.
+                // Questions, quoted commands and completed reports never supply actionable context.
+                let reported = intent != .capture && has(user, #"[\"“”「」]|\b(?:said|asked|already|yesterday)\b|说过|他说|她说|已经|昨天"#)
+                if !reported && (intent == .capture || (parsed.hour != nil && !ChatRouting.isQuestion(user))) {
+                    prior = parsed
+                    requested = intent == .capture
+                } else {
+                    prior = nil
+                    requested = false
+                }
+            }
+        }
+        if alarm {
+            var result = pending ?? prior ?? Capture(title: "Alarm", day: calendar.startOfDay(for: now), hasDay: false)
+            result.kind = .task
+            result.ringsAsAlarm = true
+            result.isAllDay = false
+            return result
+        }
+        guard requested, let prior,
+              case .updated(let result) = Dialogue.refine(prior, with: text, now: now, calendar: calendar) else { return nil }
+        return result
     }
 }

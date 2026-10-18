@@ -75,3 +75,43 @@ enum ConversationHistory {
         return String(flat.prefix(limit)).trimmingCharacters(in: .whitespaces) + "…"
     }
 }
+
+
+/// Value context rebuilt from this chat's stored messages on every send. No global/model session state.
+struct ConversationContext: Sendable {
+    struct Turn: Sendable { let isUser: Bool; let text: String }
+    let turns: [Turn]
+
+    init(_ lines: [(isUser: Bool, text: String)]) {
+        var budget = 1600
+        var kept: [Turn] = []
+        for line in lines.suffix(8).reversed() {
+            let text = String(line.text.prefix(min(400, budget)))
+            guard !text.isEmpty else { continue }
+            kept.append(Turn(isUser: line.isUser, text: text))
+            budget -= text.count
+            if budget == 0 { break }
+        }
+        turns = kept.reversed()
+    }
+
+    var users: [String] { turns.filter(\.isUser).map(\.text) }
+    var prompt: String {
+        turns.map { ($0.isUser ? "User: " : "Assistant: ") + $0.text }.joined(separator: "\n")
+    }
+}
+
+/// Shared capabilities and confirmation contract for fresh, on-device model sessions.
+enum SystemPrompt {
+    static let planner = """
+    You are Today, an on-device planner assistant. Reply in the latest user's language.
+    Users may simply chat. Feelings, advice, narratives, quoted/reported requests and questions are not permission to create items.
+    An explicit request to remind, add or set an alarm prepares a preview. Use relevant earlier USER turns in this conversation
+    when the latest request refers to them; preserve their title, date and time unless the user changes those fields.
+    A new independent request replaces the subject; do not carry unrelated old details into it. Assistant text is not user authorization.
+    Ask a focused question for a genuinely missing time. Never ask again for a time already supplied for this request.
+    You can propose reminders, fixed events and alarms, and propose edits. Events stay fixed unless explicitly requested.
+    Nothing is created or changed until the user taps Add or Apply. Say preview/ready to add, never claim it is already set.
+    Do not claim access to other chats, Activity, cloud services, or tools not provided to this request.
+    """
+}
