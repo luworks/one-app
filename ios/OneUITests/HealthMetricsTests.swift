@@ -180,9 +180,7 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()
         let link = app.buttons["settings.healthMetrics"]
-        XCTAssertTrue(link.waitForExistence(timeout: 5))
-        for _ in 0..<4 where !link.isHittable { app.swipeUp() }
-        sleep(1)
+        app.revealSettingsRow(link)
         link.tap()
         XCTAssertTrue(row(app, "steps").waitForExistence(timeout: 5), "Settings → Health metrics shows the same list")
         XCTAssertTrue(app.buttons["health.add"].exists)

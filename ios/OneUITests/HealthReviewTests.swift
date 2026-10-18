@@ -65,8 +65,7 @@ final class HealthReviewTests: XCTestCase {
             XCTAssertTrue(settings.waitForExistence(timeout: 5))
             settings.tap()
             let toggle = app.switches["Health summary"]
-            XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-            for _ in 0..<4 where !toggle.isHittable { app.swipeUp() }
+            app.revealSettingsRow(toggle)
             sleep(1)   // let the sheet and the scroll come to rest, so the knob tap lands
             return toggle
         }

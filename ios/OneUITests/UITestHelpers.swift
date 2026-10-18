@@ -8,6 +8,17 @@ extension XCUIApplication {
         start.press(forDuration: 0.05, thenDragTo: end)
     }
 
+    /// SwiftUI Form rows are lazy: scroll before requiring an off-screen control to exist.
+    func revealSettingsRow(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        for _ in 0..<12 {
+            if element.exists && element.isHittable { return }
+            let start = coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+            let end = coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(element.exists && element.isHittable, "Settings row is visible: \(element)", file: file, line: line)
+    }
+
     /// The sidebar is a full screen with no Today row, and Settings opens over it, so after Settings the sidebar is still open.
     func closeSidebar() {
         let close = buttons["Close sidebar"]

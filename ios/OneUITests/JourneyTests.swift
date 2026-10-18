@@ -195,8 +195,8 @@ final class JourneyTests: XCTestCase {
         tap(app.buttons["Settings"].firstMatch)
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         let travel = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Shows the drive time'")).firstMatch
-        let health = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Shows today'")).firstMatch
-        for _ in 0..<4 where !health.isHittable { app.swipeUp() }
+        let health = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Shows one line from Apple Health'")).firstMatch
+        app.revealSettingsRow(health)
         XCTAssertTrue(travel.exists && health.exists, "a short explanation under Travel time and under Health summary")
         XCTAssertTrue(travel.label.contains("Apple Maps only"), "the privacy fact stays: location and address go to Apple Maps only")
         XCTAssertTrue(health.label.contains("only reads"), "the privacy fact stays: Today only reads Health")
