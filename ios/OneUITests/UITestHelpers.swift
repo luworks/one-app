@@ -189,14 +189,22 @@ extension XCUIElement {
     }
 }
 
-/// The test dataset in the repo: tests/fixtures/today-dataset.json (chats, reminders, events, alarms around today).
+/// Versioned UI datasets in tests/fixtures, resolved from this source file's repository root.
 enum TestData {
-    static let path = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appending(path: "tests/fixtures/today-dataset.json").path
+    static func fixturePath(_ name: String) -> String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "tests/fixtures")
+            .appending(path: name).path
+    }
 
-    /// Launch arguments for a fresh in-memory store filled from the dataset.
-    static var launchArguments: [String] { ["-uiTesting", "-dataset", path] }
+    /// Launch arguments for a fresh in-memory store filled from a named fixture.
+    static func fixtureArguments(_ name: String) -> [String] {
+        ["-uiTesting", "-dataset", fixturePath(name)]
+    }
+
+    static let path = fixturePath("today-dataset.json")
+    static var launchArguments: [String] { fixtureArguments("today-dataset.json") }
 }
 
 extension XCTestCase {
