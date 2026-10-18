@@ -23,7 +23,7 @@ separate. No PERFORMANCE flag, signing setting change, phone work or user-data d
 
 Latency required target is baseline/3, stretch baseline/10. Memory/bytes required target is
 49% of baseline. Start with n3 meaningful repetitions (up to5 where useful), median/range/raw;
-no small-n p95. Keep first-use and repeated-use samples distinguishable. A failed functional
+no small-n p95. Keep first-use and repeated-use samples distinguishable. The initial page methods retain one first cycle plus two revisits in order; report this fixed mixed sequence explicitly rather than calling it a homogeneous warm-cache cohort. AI methods use three fresh process launches with fixed per-journey history. A failed functional
 journey cannot provide accepted performance evidence. Do not move endpoints, omit required work,
 change backend or remove features to manufacture gains. Recheck correctness after each candidate.
 
