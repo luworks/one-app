@@ -14,6 +14,7 @@ final class PerformanceTrace {
         let start: UInt64
     }
     private var pending: Pending?
+    private var phaseMarks: [String: UInt64] = [:]
     private var sequence = 0
     private(set) var bootstrapComplete = false
     private(set) var launchComplete = false
@@ -23,6 +24,9 @@ final class PerformanceTrace {
     func mark(_ event: String) {
         guard Self.enabled else { return }
         let now = DispatchTime.now().uptimeNanoseconds
+        if ["store_start", "store_ready", "bootstrap_start", "bootstrap_complete"].contains(event) {
+            phaseMarks[event] = now
+        }
         os_signpost(.event, log: log, name: "PerformanceEndpoint", "%{public}@ uptime_ns=%llu", event as NSString, now)
         print("PERF_TRACE v=1 event=\(event) uptime_ns=\(now)")
     }
@@ -60,6 +64,14 @@ final class PerformanceTrace {
         sequence += 1
         let ms = Double(end - pending.start) / 1_000_000
         report = "v=1;seq=\(sequence);name=\(pending.name);route=\(route);start_ns=\(pending.start);end_ns=\(end);ms=\(ms)"
+        if pending.name == "app_init_to_content_layout",
+           let storeStart = phaseMarks["store_start"], let storeReady = phaseMarks["store_ready"],
+           let bootstrapStart = phaseMarks["bootstrap_start"], let bootstrapEnd = phaseMarks["bootstrap_complete"] {
+            report += ";init_to_store_ms=\(Double(storeStart - pending.start) / 1_000_000)"
+            report += ";store_ms=\(Double(storeReady - storeStart) / 1_000_000)"
+            report += ";bootstrap_ms=\(Double(bootstrapEnd - bootstrapStart) / 1_000_000)"
+            report += ";post_bootstrap_layout_ms=\(Double(end - bootstrapEnd) / 1_000_000)"
+        }
         os_signpost(.event, log: log, name: "PerformanceSample", "%{public}@", report as NSString)
         print("PERF_SAMPLE_APP \(report)")
     }
