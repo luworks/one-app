@@ -19,6 +19,8 @@ class PageSummaryTests(unittest.TestCase):
         rows.append("Test Case '-[OneUITests.AIResponsePerformanceTests testConversation]' passed")
         result = summary.summarize('\n'.join(rows))['metrics']
         self.assertEqual([r['n'] for r in result], [3, 3])
+        self.assertEqual(len(result[0]['sample_metadata']), 3)
+        self.assertIn('backend', result[0]['sample_metadata'][0])
         self.assertTrue(all(r['baseline_usable'] for r in result))
         self.assertTrue(all(r['p95_ms'] is None for r in result))
 

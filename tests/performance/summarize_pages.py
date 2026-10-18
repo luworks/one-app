@@ -10,7 +10,7 @@ import statistics
 
 
 def summarize(text):
-    groups, seen, outcomes = defaultdict(list), {}, defaultdict(list)
+    groups, seen, outcomes, metadata = defaultdict(list), {}, defaultdict(list), defaultdict(list)
     method = 'unknown'
     for line in text.splitlines():
         start = re.search(r"Test Case '-\[\S+ (\w+)\]' started", line)
@@ -35,11 +35,13 @@ def summarize(text):
             continue
         seen[identity] = value
         groups[key].append(value)
+        metadata[key].append({k: v for k, v in fields.items() if k not in ('ms', 'start_ns', 'end_ns')})
     rows = []
     for (method, name, backend), values in sorted(groups.items()):
         passed = outcomes[method] == ['passed']
         median = statistics.median(values)
         rows.append(dict(method=method, name=name, backend=backend, n=len(values), raw_ms=values,
+                         sample_metadata=metadata[(method, name, backend)],
                          median_ms=median, min_ms=min(values), max_ms=max(values), p95_ms=None,
                          functional_pass=passed, baseline_usable=passed and len(values) >= 3,
                          proposed_required_ms=median / 3, proposed_stretch_ms=median / 10))

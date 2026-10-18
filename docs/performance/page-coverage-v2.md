@@ -4,6 +4,8 @@ Source-only inventory, 2026-10-18. **Production reference is exactly `b1fc12b62e
 
 `AGENTS.md`, `CLAUDE.md` and `ios/README.md` remain constraints: local data, fixed events by default, planned time distinct from due date, explicit Add/Apply, bounded grants, Activity and Undo. This document is the only owned Git file. Concurrent measurement edits are outside this audit.
 
+Current executed coverage and numbers are maintained in [results v2](pages-ai-results-v2.md). The U/H labels below preserve the source-audit snapshot; they do not override later valid runtime evidence.
+
 ## Evidence semantics
 
 - **U**: unmeasured for this operation on exact current production. Existing functional methods prove only that a journey is authored; no pass is implied here.
