@@ -41,7 +41,14 @@ enum ChatRouting {
         // A 没有/没 completion check describes this action only immediately after its verb.
         // Later checks can be the reminder's object, such as 确认报告提交了没有.
         if has(remainder, #"^(?:了|过)(?:没有|没)[?？]*$"#) { return true }
-        return has(remainder, #"(?:的是(?:谁|什么|哪(?:个|些|条|一))|(?:了|过)吗)[?？]*$"#)
+        if has(remainder, #"的是(?:谁|什么|哪(?:个|些|条|一))[?？]*$"#) { return true }
+        guard has(remainder, #"(?:了|过)吗[?？]*$"#) else { return false }
+        // A check/inquiry verb starts a subordinate question in the requested object. Leading
+        // completed actions and relative-clause questions above still describe the reminder itself.
+        let object = remainder.replacingOccurrences(
+            of: #"^(?:(?:一个|一条|个|条)?提醒[，,：:]\s*)?"# + chineseTimeToken + "*",
+            with: "", options: .regularExpression)
+        return !has(object, #"^(?:确认|检查|问|询问|核实|查看|查明|看看)"#)
     }
 
     static func intent(_ raw: String) -> Intent {

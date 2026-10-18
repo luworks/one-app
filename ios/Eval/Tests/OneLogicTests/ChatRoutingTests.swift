@@ -188,6 +188,36 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testExplicitReminderWithPolarObjectQuestionStillCaptures() {
+        XCTAssertEqual(ChatRouting.intent("提醒我确认报告提交了吗"), .capture)
+    }
+
+    func testCheckAndInquiryReminderObjectsCanContainPolarQuestions() {
+        for prefix in ["提醒我", "下周一提醒我", "本星期五下午3点提醒我"] {
+            for object in ["确认报告提交了吗", "检查门锁好了吗？", "问他吃饭了吗",
+                           "询问同事收到邮件了吗？", "核实快递送到过吗", "查看备份完成了吗",
+                           "查明款项到账了吗", "看看灯关了吗？"] {
+                XCTAssertEqual(ChatRouting.intent(prefix + object), .capture, prefix + object)
+            }
+        }
+        for text in ["添加一个提醒，确认报告提交了吗", "下周一添加一个提醒，询问同事收到邮件了吗",
+                     "提醒我下周一检查报告提交了吗"] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
+    func testReportedActionsRemainConversationEvenWhenTheyMentionChecks() {
+        for prefix in ["", "本周一", "明天"] {
+            for question in ["提醒我买牛奶了吗？", "提醒我了没有？", "添加了一个提醒吗？",
+                             "添加了一个确认报告的提醒吗？", "提醒过我确认报告了吗？",
+                             "提醒我检查门锁的是谁？", "添加的检查报告提醒是什么？"] {
+                let text = prefix + question
+                XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+                XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+            }
+        }
+    }
+
     func testPoliteEnglishPrefixPreservesChineseReminderRequest() {
         for text in ["Please 提醒我明天买牛奶", "Can you 明天提醒我买牛奶?"] {
             XCTAssertEqual(ChatRouting.intent(text), .capture, text)
