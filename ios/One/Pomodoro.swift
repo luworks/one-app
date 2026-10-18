@@ -1,8 +1,9 @@
 import Foundation
 
-/// A restrained Pomodoro on top of the kitchen-timer dial: Focus 25, Short break 5, Long break 15.
-/// Only a Focus countdown that runs to the end counts as a round (cancelled ones do not). Rounds are per day and
-/// start over at midnight. Foundation only, so it runs under `swift test`.
+/// A restrained Pomodoro on top of the Apple-style Timers screen: three preset rows (25:00 Focus, 5:00 Short break,
+/// 15:00 Long break). A timer whose length and label match a preset is a Pomodoro timer. Only a Focus countdown that
+/// runs to the end counts as a round (cancelled ones do not). Rounds are per day and start over at midnight.
+/// Foundation only, so it runs under `swift test`.
 enum PomodoroPhase: String, Codable, Equatable, Sendable {
     case focus, shortBreak, longBreak
 
@@ -20,27 +21,27 @@ enum PomodoroPhase: String, Codable, Equatable, Sendable {
     /// The Live Activity and alert title: "Focus" or "Break" (never "Timer").
     var title: String { isBreak ? "Break" : "Focus" }
 
-    /// The chip label under the dial.
-    var chipLabel: String {
+    /// The name on the preset row ("Focus", "Short break", "Long break"): the label a timer carries.
+    var presetLabel: String {
         switch self {
-        case .focus: "Focus \(minutes)"
-        case .shortBreak: "Short break \(minutes)"
-        case .longBreak: "Long break \(minutes)"
+        case .focus: "Focus"
+        case .shortBreak: "Short break"
+        case .longBreak: "Long break"
         }
     }
 }
 
 enum Pomodoro {
-    /// The chips under the dial, in order.
+    /// The preset rows, in order.
     static let chips: [PomodoroPhase] = [.focus, .shortBreak, .longBreak]
     /// Every 4th Focus round of the day earns a long break.
     static let roundsPerSet = 4
 
-    /// What a countdown of `seconds` counts as, given the chip the user picked last. A break chip stays a break
-    /// only while the dial still shows its length; any other (custom) duration counts as Focus.
-    static func phase(seconds: Int, chosen: PomodoroPhase?) -> PomodoroPhase {
-        if let chosen, chosen.isBreak, seconds == chosen.seconds { return chosen }
-        return .focus
+    /// The Pomodoro phase a timer of `seconds` called `label` is, or nil for any other timer: only an exact preset
+    /// (25:00 "Focus", 5:00 "Short break", 15:00 "Long break") counts, so a custom 7-minute timer never makes a round.
+    static func preset(seconds: Int, label: String?) -> PomodoroPhase? {
+        guard let name = label?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else { return nil }
+        return chips.first { $0.seconds == seconds && $0.presetLabel.lowercased() == name }
     }
 
     /// The one next step after a countdown ends. After Focus: a short break, or a long break when today's
@@ -56,17 +57,6 @@ enum Pomodoro {
         case .focus: "Focus again"
         case .shortBreak: "Start \(next.minutes)-min break"
         case .longBreak: "Start \(next.minutes)-min long break"
-        }
-    }
-
-    /// Today's rounds as dots in groups of 4, filled first: 3 → ["●●●○"], 4 → ["●●●●"], 5 → ["●●●●", "●○○○"].
-    /// No rounds yet is one empty group.
-    static func dots(_ rounds: Int) -> [String] {
-        let r = max(rounds, 0)
-        let groups = max(1, (r + roundsPerSet - 1) / roundsPerSet)
-        return (0..<groups).map { g in
-            let filled = min(max(r - g * roundsPerSet, 0), roundsPerSet)
-            return String(repeating: "●", count: filled) + String(repeating: "○", count: roundsPerSet - filled)
         }
     }
 

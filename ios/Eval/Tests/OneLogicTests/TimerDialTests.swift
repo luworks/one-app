@@ -1,69 +1,11 @@
 import XCTest
 @testable import OneLogic
 
+/// The length limits and `RunningTimer` (pause, resume, storage). The kitchen-timer dial was replaced by Apple's wheel picker.
 final class TimerDialTests: XCTestCase {
-    func testStepSizes() {
-        XCTAssertEqual(TimerDial.step(at: 0), 15)
-        XCTAssertEqual(TimerDial.step(at: 299), 15)
-        XCTAssertEqual(TimerDial.step(at: 300), 30)
-        XCTAssertEqual(TimerDial.step(at: 899), 30)
-        XCTAssertEqual(TimerDial.step(at: 900), 60)
-        XCTAssertEqual(TimerDial.step(at: 5400), 60)
-    }
-
-    func testSnapAndClamp() {
-        XCTAssertEqual(TimerDial.snap(-50), 0)
-        XCTAssertEqual(TimerDial.snap(7), 0)
-        XCTAssertEqual(TimerDial.snap(8), 15)
-        XCTAssertEqual(TimerDial.snap(310), 300)
-        XCTAssertEqual(TimerDial.snap(320), 330)
-        XCTAssertEqual(TimerDial.snap(925), 900)
-        XCTAssertEqual(TimerDial.snap(935), 960)
-        XCTAssertEqual(TimerDial.snap(99_999), 5400)
-        XCTAssertEqual(TimerDial.clamp(-1), 0)
-        XCTAssertEqual(TimerDial.clamp(6000), 5400)
-    }
-
-    func testOneTurnIsFiveMinutes() {
-        XCTAssertEqual(TimerDial.rotate(0, by: 2 * .pi), 300, accuracy: 0.001)
-        XCTAssertEqual(TimerDial.rotate(300, by: .pi / 2), 375, accuracy: 0.001, "a quarter turn clockwise adds 75 s")
-        XCTAssertEqual(TimerDial.rotate(300, by: -.pi / 2), 225, accuracy: 0.001, "counter-clockwise takes time away")
-        XCTAssertEqual(TimerDial.rotate(10, by: -.pi), 0, "never below zero")
-        XCTAssertEqual(TimerDial.rotate(5390, by: .pi), 5400, "never above 90:00")
-    }
-
-    func testAngleDeltaTakesTheShortWayAcrossTheSeam() {
-        let deg = Double.pi / 180
-        XCTAssertEqual(TimerDial.angleDelta(from: 170 * deg, to: -170 * deg), 20 * deg, accuracy: 1e-9)
-        XCTAssertEqual(TimerDial.angleDelta(from: -170 * deg, to: 170 * deg), -20 * deg, accuracy: 1e-9)
-        XCTAssertEqual(TimerDial.angleDelta(from: 10 * deg, to: 40 * deg), 30 * deg, accuracy: 1e-9)
-    }
-
-    func testIncrementAndDecrementCrossRanges() {
-        XCTAssertEqual(TimerDial.increment(0), 15)
-        XCTAssertEqual(TimerDial.increment(285), 300)
-        XCTAssertEqual(TimerDial.increment(300), 330)
-        XCTAssertEqual(TimerDial.increment(870), 900)
-        XCTAssertEqual(TimerDial.increment(900), 960)
-        XCTAssertEqual(TimerDial.increment(5400), 5400)
-        XCTAssertEqual(TimerDial.decrement(0), 0)
-        XCTAssertEqual(TimerDial.decrement(300), 285)
-        XCTAssertEqual(TimerDial.decrement(900), 870)
-        XCTAssertEqual(TimerDial.decrement(960), 900)
-        XCTAssertEqual(TimerDial.decrement(15), 0)
-    }
-
-    func testKnobPosition() {
-        XCTAssertEqual(TimerDial.knobFraction(0), 0)
-        XCTAssertEqual(TimerDial.knobFraction(75), 0.25, accuracy: 1e-9)
-        XCTAssertEqual(TimerDial.knobFraction(375), 0.25, accuracy: 1e-9)
-    }
-
-    func testFormatting() {
-        XCTAssertEqual(TimerDial.format(0), "00:00")
-        XCTAssertEqual(TimerDial.format(300), "05:00")
-        XCTAssertEqual(TimerDial.format(75), "01:15")
-        XCTAssertEqual(TimerDial.format(5400), "90:00")
+    func testLimitsAndSpokenLength() {
+        XCTAssertEqual(TimerDial.maxSeconds, 23 * 3600 + 59 * 60, "the longest timer is 23 h 59 min, like Clock")
+        XCTAssertEqual(TimerDial.maxSeconds % 60, 0, "whole minutes, so Siri can ask for the maximum")
         XCTAssertEqual(TimerDial.spoken(480), "8 minutes 0 seconds")
         XCTAssertEqual(TimerDial.spoken(61), "1 minute 1 second")
     }

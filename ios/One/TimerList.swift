@@ -72,7 +72,22 @@ enum TimerList {
         return timer.isPaused ? "\(name), paused, \(left) left" : "\(name), \(left) left"
     }
 
-    /// Adds `timer`. A card timer replaces the previous card timer (the card runs one at a time);
+    /// VoiceOver for a running timer's card on the Timer tab: "Timer 7 minutes, 0 seconds remaining",
+    /// "Pasta, paused, 1 minute, 5 seconds remaining", "Pasta, ringing".
+    static func spokenRemaining(_ timer: RunningTimer, ringing: Bool, now: Date) -> String {
+        let name = title(timer)
+        if ringing { return "\(name), ringing" }
+        let s = Int(timer.remaining(now: now).rounded(.up))
+        let h = s / 3600, m = (s % 3600) / 60, r = s % 60
+        func part(_ n: Int, _ unit: String) -> String { "\(n) \(unit)\(n == 1 ? "" : "s")" }
+        var parts: [String] = []
+        if h > 0 { parts.append(part(h, "hour")) }
+        if h > 0 || m > 0 { parts.append(part(m, "minute")) }
+        parts.append(part(r, "second"))
+        return "\(name)\(timer.isPaused ? ", paused," : "") \(parts.joined(separator: ", ")) remaining"
+    }
+
+    /// Adds `timer`. A Pomodoro (card) timer replaces the previous card timer (the card runs one at a time);
     /// timers made by voice are added next to whatever runs.
     static func adding(_ timer: RunningTimer, to timers: [RunningTimer]) -> [RunningTimer] {
         var next = timers

@@ -1,9 +1,8 @@
 import SwiftUI
-import AppIntents
 
 /// One timer as a line: icon, name and length, and the time left counting down on its own
-/// (`Text(timerInterval:)` is drawn by the system, so nothing re-renders every second). Used by the Today tab
-/// and the Timer tab. Logic: TimerList.swift.
+/// (`Text(timerInterval:)` is drawn by the system, so nothing re-renders every second). Used by the Today tab.
+/// The Timer tab has its own screen (TimerSection.swift). Logic: TimerList.swift.
 struct TimerLine: View {
     let timer: RunningTimer
     let isRinging: Bool
@@ -116,72 +115,5 @@ struct TodayTimerRows: View {
             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
             .accessibilityIdentifier("todayTimerMore")
         }
-    }
-}
-
-/// The Timer section of the Alarms tab: the Pomodoro card, the timers started by voice, and an honest note about Siri.
-struct TimerSection: View {
-    @State private var controller = TimerController.shared
-    @State private var showsTip = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            TimerCard()
-            if !controller.voiceTimers.isEmpty { voiceTimers }
-            siriNote
-        }
-    }
-
-    private var voiceTimers: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Timers").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-            ForEach(TimerList.ordered(controller.voiceTimers, ringing: controller.ringing, now: .now)) { timer in
-                let ringing = controller.ringing.contains(timer.id)
-                HStack(spacing: 8) {
-                    TimerLine(timer: timer, isRinging: ringing)
-                    if !ringing {
-                        Button {
-                            if timer.isPaused { controller.resume(timer.id) } else { controller.pause(timer.id) }
-                        } label: {
-                            Image(systemName: timer.isPaused ? "play.fill" : "pause.fill").frame(width: 36, height: 36)
-                        }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.circle)
-                        .tint(.orange)
-                        .accessibilityLabel(timer.isPaused ? "Resume" : "Pause")
-                        .accessibilityIdentifier("voiceTimer.pause")
-                    }
-                    Button { withAnimation(.snappy) { controller.cancel(timer.id) } } label: {
-                        Image(systemName: "stop.fill").frame(width: 36, height: 36)
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.circle)
-                    .tint(.red)
-                    .accessibilityLabel("Stop")
-                    .accessibilityIdentifier("voiceTimer.stop")
-                }
-                .frame(minHeight: 44)
-                .accessibilityIdentifier("voiceTimer")
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    /// What iOS allows: Today can show only the timers it started. A timer made with Siri's default Clock is invisible
-    /// to other apps (AlarmKit lists only the app's own), so the way to see a voice timer here is to ask for it by name.
-    private var siriNote: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Timers set with Siri's default Clock aren't visible to other apps. Say “Start a timer in Today for 10 minutes” and it shows here and on the Today tab.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("timer.siriNote")
-            SiriTipView(intent: StartTimerIntent(), isVisible: $showsTip)
-            ShortcutsLink()
-                .shortcutsLinkStyle(.automaticOutline)
-        }
-        .padding(.horizontal, 4)
     }
 }
