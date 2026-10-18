@@ -320,18 +320,50 @@ enum GrantStore {
         all(context).first { $0.info.map { $0.scope == scope && $0.isActive(at: now) } ?? false }
     }
 
+    /// Settings grants the same scope as a plan card. Turning off revokes every active copy of that scope.
+    static func setEnabled(_ enabled: Bool, scope: GrantScope, context: ModelContext) throws {
+        let now = Date.now
+        let changed: [AIGrant]
+        if enabled {
+            guard active(scope, context: context, now: now) == nil else { return }
+            let g = AIGrant(scope: scope, granted: now)
+            context.insert(g)
+            changed = [g]
+        } else {
+            changed = all(context).filter { $0.info.map { $0.scope == scope && $0.isActive(at: now) } ?? false }
+            for g in changed { g.revoked = now }
+        }
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
+        // Publish successful grant changes only after persistence; rollback must not leave a success in Activity.
+        for g in changed { record(g, granted: enabled, context: context) }
+    }
+
+    private static func record(_ g: AIGrant, granted: Bool, context: ModelContext) {
+        let title = GrantScope(rawValue: g.scope)?.title ?? g.scope
+        if granted {
+            Ledger.record(.granted, kind: "grant", title: title, after: "Until " + DayLabel.text(for: g.expires),
+                          channel: .ask, context: context)
+        } else {
+            Ledger.record(.revoked, kind: "grant", title: title, context: context)
+        }
+    }
+
     @discardableResult
     static func grant(_ scope: GrantScope, context: ModelContext) -> AIGrant {
         let g = AIGrant(scope: scope)
         context.insert(g)
-        Ledger.record(.granted, kind: "grant", title: scope.title, after: "Until " + DayLabel.text(for: g.expires),
-                      channel: .ask, context: context)
+        record(g, granted: true, context: context)
         return g
     }
 
     static func revoke(_ g: AIGrant, context: ModelContext) {
         g.revoked = .now
-        Ledger.record(.revoked, kind: "grant", title: GrantScope(rawValue: g.scope)?.title ?? g.scope, context: context)
+        record(g, granted: false, context: context)
     }
 }
 
