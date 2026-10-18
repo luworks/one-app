@@ -122,7 +122,52 @@ final class LedgerTests: XCTestCase {
         app.openSidebar()
         app.buttons["Settings"].firstMatch.tap()
         let automatic = settingsRow("settings.automaticChanges")
-        XCTAssertTrue(automatic.label.contains("1 on"), "one grant is on: \(automatic.label)")
+        XCTAssertTrue(automatic.exists, "scope details remain a separate navigation row")
+        XCTAssertEqual(app.switches["settings.automaticChanges.toggle"].value as? String, "1", "the card grant turns the Settings toggle on")
+    }
+
+    /// Settings creates the same bounded grant, survives relaunch, and persists revocation.
+    func testSettingsTogglePersistsAndControlsGrant() {
+        let store = "settings-grant-" + UUID().uuidString
+        let arguments = TestData.launchArguments + ["-uiTestingNow", "09:41", "-uiTestingStore", store]
+        func openSettingsToggle() -> XCUIElement {
+            app.openSidebar()
+            app.buttons["Settings"].firstMatch.tap()
+            let toggle = app.switches["settings.automaticChanges.toggle"]
+            XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+            app.revealSettingsRow(toggle)
+            return toggle
+        }
+        app.launchArguments = arguments
+        app.launch()
+        let toggle = openSettingsToggle()
+        XCTAssertEqual(toggle.value as? String, "0", "no implicit grant")
+        toggle.toggleSwitch()
+        XCTAssertTrue(app.staticTexts["grant.expiry"].exists, "the seven-day grant shows its end time")
+        app.terminate()
+
+        app.launch()
+        let toast = text("label BEGINSWITH 'Planned ' AND label ENDSWITH ' into free time'")
+        XCTAssertTrue(toast.waitForExistence(timeout: 10), "the persisted Settings grant uses the existing automatic plan path")
+        XCTAssertTrue(app.buttons["Undo"].exists)
+        openActivity()
+        XCTAssertTrue(text("label == %@", "Planned “Buy milk”").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("label CONTAINS 'Today AI · Automatic'").exists)
+        XCTAssertFalse(text("label == %@", "Planned “Pay studio invoice”").exists, "overdue is excluded")
+        app.buttons["Done"].tap()
+        app.closeSidebar()
+        let persisted = openSettingsToggle()
+        XCTAssertEqual(persisted.value as? String, "1")
+        persisted.toggleSwitch()
+        settingsRow("settings.automaticChanges").tap()
+        XCTAssertTrue(app.staticTexts["None. AI changes wait for your tap."].waitForExistence(timeout: 3), "off revokes the active grant")
+        app.terminate()
+
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Buy milk"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(toast.waitForExistence(timeout: 3), "revocation stops automatic planning on relaunch")
+        XCTAssertEqual(openSettingsToggle().value as? String, "0", "off survives relaunch")
+        XCTAssertFalse(app.staticTexts["grant.expiry"].exists)
     }
 
     /// Light and dark screenshots for design review (run once per appearance).

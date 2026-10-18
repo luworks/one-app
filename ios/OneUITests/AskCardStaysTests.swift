@@ -49,6 +49,73 @@ final class AskCardStaysTests: XCTestCase {
         row.tap()
     }
 
+    private func replaceTitle(with title: String) {
+        let field = app.textFields["capture-title-field"].exists
+            ? app.textFields["capture-title-field"] : app.textViews["capture-title-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        let old = field.value as? String ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + title)
+    }
+
+    func testReportedChineseTitleAndTime() {
+        send("今天晚上11点的时候提醒我，必须要睡觉")
+        XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
+        XCTAssertEqual(app.buttons["capture-title"].label, "必须要睡觉")
+        let time = app.staticTexts.containing(NSPredicate(format: "label CONTAINS '23:00' OR label CONTAINS '11:00'")).firstMatch
+        XCTAssertTrue(time.exists, "11 at night stays 23:00 (localized display)")
+        XCTAssertFalse(any("capture-added").exists, "understanding is only a preview")
+        shot("capture-reported-title-time")
+    }
+
+    func testPendingTitleSaveAndCancelStillRequireAdd() {
+        send("Remind me to review the draft tomorrow at 3pm")
+        XCTAssertTrue(app.buttons["capture-title"].waitForExistence(timeout: 20))
+        let original = app.buttons["capture-title"].label
+        app.buttons["capture-title"].tap()
+        replaceTitle(with: "Cancelled draft")
+        app.buttons["capture-title-cancel"].tap()
+        XCTAssertEqual(app.buttons["capture-title"].label, original)
+        app.buttons["capture-title"].tap()
+        replaceTitle(with: "Review the final draft")
+        app.buttons["capture-title-save"].tap()
+        XCTAssertEqual(app.buttons["capture-title"].label, "Review the final draft")
+        XCTAssertTrue(app.buttons["Add"].exists)
+        XCTAssertFalse(any("capture-added").exists)
+        app.buttons["Add"].tap()
+        app.buttons["capture-open"].tap()
+        XCTAssertEqual(app.textFields["task.title"].value as? String, "Review the final draft")
+    }
+
+    func testAddedAlarmTitleSaveCancelReopenAndUndo() {
+        send("今天晚上11点的时候提醒我，必须要睡觉")
+        XCTAssertTrue(app.buttons["capture.kind.alarm"].waitForExistence(timeout: 20))
+        app.buttons["capture.kind.alarm"].tap()
+        app.buttons["Add"].tap()
+        XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5))
+        let original = app.buttons["capture-title"].label
+        app.buttons["capture-title"].tap()
+        replaceTitle(with: "Cancelled alarm")
+        app.buttons["capture-title-cancel"].tap()
+        XCTAssertEqual(app.buttons["capture-title"].label, original)
+        app.buttons["capture-title"].tap()
+        replaceTitle(with: "该睡觉了")
+        app.buttons["capture-title-save"].tap()
+        XCTAssertEqual(app.buttons["capture-title"].label, "该睡觉了")
+        app.buttons["capture-open"].tap()
+        XCTAssertEqual(app.textFields["alarm.label"].value as? String, "该睡觉了", "the real saved alarm changed")
+        app.buttons["Cancel"].tap()
+        reopenFromSidebar(containing: "睡觉")
+        XCTAssertEqual(app.buttons["capture-title"].label, "该睡觉了", "StoredCard persists the saved title")
+        app.buttons["capture-open"].tap()
+        XCTAssertEqual(app.textFields["alarm.label"].value as? String, "该睡觉了")
+        app.buttons["Cancel"].tap()
+        app.buttons["capture-undo"].tap()
+        XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5), "creation Undo still removes the renamed alarm")
+        XCTAssertFalse(app.buttons["capture-title"].exists, "an undone card cannot rename a deleted alarm")
+        shot("capture-renamed-alarm-undone")
+    }
+
     func testAddedCardStaysThenUndoAndAddAgain() {
         send("Order printer paper tomorrow at 3pm")
         XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))

@@ -119,30 +119,44 @@ final class ClockTests: XCTestCase {
     /// Drag sideways on the cities: every clock moves, the pill says how far ("3 HOURS AFTER NOW"), a tap on it goes back to NOW.
     /// The pill is there from the start (reading NOW); there is no Overlap capsule.
     func testScrubbing() {
-        launch(["-uiTestingCities", "Europe/London,Asia/Tokyo"])
+        launch(["-uiTestingCities", "Europe/London,Asia/Tokyo",
+                "-uiTestingHomeZone", "America/Los_Angeles", "-uiTestingNow", "12:50"])
         section("worldClock").tap()
         let tokyo = cityRows.element(boundBy: 1)
         XCTAssertTrue(tokyo.waitForExistence(timeout: 3))
+        let home = app.descendants(matching: .any)["worldClock.home"].firstMatch
+        let london = cityRows.element(boundBy: 0)
+        let clocks = [home, london, tokyo]
         XCTAssertTrue(pill.exists, "the pill is always there")
         XCTAssertEqual(pill.label, "NOW")
         XCTAssertFalse(app.buttons["worldClock.overlap"].exists, "no Overlap capsule")
-        let before = tokyo.label
+        let before = clocks.map(\.label)
 
-        // Drag left across the Tokyo card: later.
-        tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        // Start inside the card, clear of the sidebar's reserved 44pt edge: every city advances into the future.
+        tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
         XCTAssertTrue(pill.label.hasSuffix("AFTER NOW"), "the pill says how far: \(pill.label)")
-        XCTAssertNotEqual(tokyo.label, before, "the clocks moved")
+        for (clock, original) in zip(clocks, before) {
+            XCTAssertNotEqual(clock.label, original, "every clock moved")
+        }
         XCTAssertEqual(cityRows.count, 2, "a drag scrubs; it never deletes")
 
-        pill.tap()
+        XCTAssertTrue(pill.isFullyVisible(in: app.frame))
+        pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertEqual(pill.label, "NOW", "tapping the pill goes back to NOW")
-        XCTAssertEqual(tokyo.label, before)
+        XCTAssertEqual(clocks.map(\.label), before)
 
-        // Drag right: earlier.
-        tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        // Drag left from Now: every city moves into the past.
+        tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
         XCTAssertTrue(pill.label.hasSuffix("BEFORE NOW"), pill.label)
+        for (clock, original) in zip(clocks, before) {
+            XCTAssertNotEqual(clock.label, original, "every clock moved")
+        }
+        XCTAssertTrue(pill.isFullyVisible(in: app.frame))
+        pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertEqual(pill.label, "NOW")
+        XCTAssertEqual(clocks.map(\.label), before)
     }
 
     /// The graph is one icon next to the pill (no capsule): the cards flatten, the sentence appears, the icon swaps back.
@@ -298,8 +312,8 @@ final class ClockTests: XCTestCase {
             let first = cityRows.element(boundBy: 0)
             // 15 hours back: 60 steps of 15 minutes, 10 pt each = 600 pt: three drags.
             for _ in 0..<3 {
-                first.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
-                    .press(forDuration: 0.05, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0.1)
+                first.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+                    .press(forDuration: 0.05, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0.1)
             }
             usleep(500_000)
             shot("6b-reference-scrubbed")

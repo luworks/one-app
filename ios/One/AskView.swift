@@ -127,7 +127,7 @@ struct AskView: View {
                     withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }
                 }
                 .onChange(of: proposals) { persistCards() }
-                .sheet(item: $openedItem) { item in
+                .sheet(item: $openedItem, onDismiss: refreshCardTitles) { item in
                     switch item {
                     case .task(let task): TaskEditor(task: task)
                     case .alarm(let alarm): AlarmEditor(alarm: alarm)
@@ -146,6 +146,7 @@ struct AskView: View {
             .task {
                 // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
                 if messages.isEmpty { focused = true }
+                refreshCardTitles()
                 Understander.prewarm()
             }
             .onDisappear { closeOpenCards("ignored") }
@@ -343,10 +344,26 @@ struct AskView: View {
         draft = ""
         captureTask?.cancel()
         thinking = false
-        let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
+        let turnContext = ConversationContext(messages.map { ($0.role == .user, $0.text) })
+        let history = turnContext.prompt
         messages.append(ChatMessage(role: .user, text: text))
         turnStart = .now
         let intent = ChatRouting.intent(text)
+        if let resolved = CaptureConversation.resolve(text, context: turnContext, pending: pending) {
+            recordTurn("answer", text)
+            if pending != nil { pending = resolved }
+            else { clearPreviews(); show([resolved]) }
+            if resolved.hour == nil && resolved.ringsAsAlarm {
+                followup = .alarmTime
+                messages.append(ChatMessage(role: .ai, text: text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                    ? "闹钟要设在几点？确认添加后才会生效。" : "What time should the alarm ring? Nothing is added until you confirm."))
+            } else {
+                followup = nil
+                messages.append(ChatMessage(role: .ai, text: text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                    ? "预览已更新，点 Add 后才会添加。" : "The preview is ready. Tap Add to create it."))
+            }
+            return
+        }
         // A question-shaped answer to our time prompt may edit a preview; other conversation cannot.
         let hasTimeContext: Bool
         switch followup {
@@ -413,7 +430,7 @@ struct AskView: View {
             switch result {
             case .capture:
                 clearPreviews()
-                propose(text)
+                propose(text, history: history)
             case .reply(let reply):
                 messages.append(ChatMessage(role: .ai, text: reply))
             }
@@ -585,10 +602,10 @@ struct AskView: View {
     }
 
     /// On-device model when available, scripted parser otherwise. Only produces the preview card.
-    private func understand(_ text: String) {
+    private func understand(_ text: String, history: String = "") {
         thinking = true
         captureTask = Task { @MainActor in
-            let capture = await Understander.parse(text)
+            let capture = await Understander.parse(text, history: history)
             guard !Task.isCancelled else { return }
             thinking = false
             show([capture])
@@ -776,9 +793,9 @@ struct AskView: View {
         })
     }
 
-    /// One item per line: the rule parser reads the day / time / title and the on-device model only says task / event / alarm.
+    /// One item per line: rules own scheduling, followed by kind classification and title-only refinement.
     /// A line that lists several things goes to the multi-item model path when it is available.
-    private func propose(_ text: String) {
+    private func propose(_ text: String, history: String = "") {
         // UI tests only (`-uiTesting -uiTestingMultiCapture`): the simulator has no on-device model, so a line with ";"
         // is split by the rule parser into several proposals, to exercise the multi-item card.
         if ProcessInfo.processInfo.arguments.contains("-uiTestingMultiCapture"), text.contains(";") {
@@ -788,7 +805,7 @@ struct AskView: View {
         if AICapture.isAvailable, text.range(of: #"[；;\n]|然后|另外还|\band then\b"#, options: [.regularExpression, .caseInsensitive]) != nil {
             proposeList(text)
         } else {
-            understand(text)
+            understand(text, history: history)
         }
     }
 
@@ -840,7 +857,7 @@ struct AskView: View {
         let batches = proposals.filter { $0.anchor == anchor }.map(\.batch).reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
         ForEach(batches, id: \.self) { batch in
             CaptureStack(proposals: batchBinding(batch), lists: lists.map(\.name),
-                         onAdd: add, onSkip: skip, onAddAll: addAll, onUndo: undo, onOpen: open)
+                         onAdd: add, onSkip: skip, onAddAll: addAll, onUndo: undo, onOpen: open, onRename: rename)
                 .id(batch)
         }
     }
@@ -877,6 +894,7 @@ struct AskView: View {
     private func commit(_ id: UUID) -> Capture? {
         guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.add) else { return nil }
         let capture = proposals[i].capture
+        guard capture.isReadyToAdd else { return nil }
         let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
         recordCard(resolved: "capture", edits.isEmpty ? "applied" : "edited", edits: edits)
         let written = capture.insertRecorded(into: context, actor: .todayAI, channel: .ask, approval: .asked)
@@ -919,6 +937,40 @@ struct AskView: View {
         case .event(let event): onOpenDay(event.start)
         case nil: messages.append(ChatMessage(role: .ai, text: "“\(p.capture.title)” isn't there any more."))
         }
+    }
+
+    /// Save changes the existing item, then every card in this chat that refers to it.
+    private func rename(_ id: UUID, to title: String) -> Bool {
+        guard let p = proposals.first(where: { $0.id == id }), p.status == .added,
+              let old = CaptureUndo.title(p.itemRef, in: context) else { return false }
+        guard old != title else { refreshCardTitles(); return true }
+        guard CaptureUndo.rename(p.itemRef, to: title, in: context) else { return false }
+        let task: OneTask?
+        let kind: String
+        switch CaptureUndo.resolve(p.itemRef, in: context) {
+        case .task(let t): task = t; kind = "task"
+        case .alarm: task = nil; kind = "alarm"
+        case .event: task = nil; kind = "event"
+        case nil: return false
+        }
+        let entry = Ledger.record(.renamed, task: task, kind: kind, title: title,
+                                  before: old, after: title, channel: .ask, context: context)
+        refreshCardTitles()
+        toast?.show("Changed title") {
+            // Do not replace another edit made since this save, or resurrect an item deleted since.
+            guard CaptureUndo.title(p.itemRef, in: context) == title,
+                  CaptureUndo.rename(p.itemRef, to: old, in: context) else { return }
+            Ledger.recordUndo(of: entry, task: task, channel: .ask, context: context)
+            refreshCardTitles()
+        }
+        return true
+    }
+
+    private func refreshCardTitles() {
+        for i in proposals.indices where proposals[i].status == .added {
+            if let title = CaptureUndo.title(proposals[i].itemRef, in: context) { proposals[i].capture.title = title }
+        }
+        persistCards()
     }
 
     private func isPlanRequest(_ text: String) -> Bool { SentenceRoute.isPlanRequest(text) }

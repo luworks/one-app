@@ -57,6 +57,8 @@ struct CaptureStack: View {
     var onUndo: (UUID) -> Void = { _ in }
     var onOpen: (UUID) -> Void = { _ in }
 
+    var onRename: (UUID, String) -> Bool = { _, _ in false }
+
     @State private var expanded: UUID?
 
     private var openCount: Int { proposals.filter { $0.status == .open }.count }
@@ -67,7 +69,8 @@ struct CaptureStack: View {
             if proposals.count == 1, let only = proposals.first, only.batchSize == 1 {
                 CaptureCard(capture: binding(only.id), lists: lists, status: only.status,
                             onAdd: { onAdd(only.id) }, onCancel: { onSkip(only.id) },
-                            onUndo: { onUndo(only.id) }, onOpen: { onOpen(only.id) })
+                            onUndo: { onUndo(only.id) }, onOpen: { onOpen(only.id) },
+                            onRename: { onRename(only.id, $0) })
             } else {
                 list
             }
@@ -92,6 +95,7 @@ struct CaptureStack: View {
                 Spacer()
                 if openCount > 1 {
                     Button("Add all", action: onAddAll)
+                        .disabled(!proposals.contains { $0.status == .open && $0.capture.isReadyToAdd })
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .accessibilityIdentifier("capture-add-all")
@@ -115,7 +119,8 @@ struct CaptureStack: View {
             CompactCaptureRow(capture: binding(p.id), lists: lists, status: p.status,
                               onOpen: { withAnimation(.snappy) { expanded = p.id } },
                               onAdd: { onAdd(p.id) }, onSkip: { onSkip(p.id) },
-                              onUndo: { onUndo(p.id) }, onShow: { onOpen(p.id) })
+                              onUndo: { onUndo(p.id) }, onShow: { onOpen(p.id) },
+                              onRename: { onRename(p.id, $0) })
         }
     }
 
@@ -139,6 +144,7 @@ struct CompactCaptureRow: View {
     var onSkip: () -> Void
     var onUndo: () -> Void = {}
     var onShow: () -> Void = {}
+    var onRename: (String) -> Bool = { _ in false }
 
     var body: some View {
         if status == .open { openRow } else { decidedRow }
@@ -172,6 +178,7 @@ struct CompactCaptureRow: View {
             .buttonBorderShape(.circle)
             .accessibilityLabel("Add")
             .accessibilityIdentifier("capture-row-add")
+            .disabled(!capture.isReadyToAdd)
         }
         .padding(10)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
@@ -180,7 +187,8 @@ struct CompactCaptureRow: View {
     private var decidedRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(capture.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                CaptureTitleButton(title: capture.title, editable: status == .added, onSave: onRename)
+                    .font(.subheadline.weight(.semibold))
                 Text(capture.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 if capture.kind == .task, !capture.ringsAsAlarm {
                     Label(capture.listLabel, systemImage: "list.bullet").font(.caption).foregroundStyle(.secondary).lineLimit(1)

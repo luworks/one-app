@@ -200,6 +200,10 @@ struct AlarmEditor: View {
                     .submitLabel(.done)
                     .accessibilityIdentifier("alarm.label")
             }
+            if let alarm, !alarm.note.isEmpty {
+                Divider().padding(.horizontal, 18)
+                Row { Text(alarm.note).foregroundStyle(.secondary).accessibilityIdentifier("alarm.notes") }
+            }
             Divider().padding(.horizontal, 18)
             NavigationLink {
                 SoundScreen(sound: $sound)

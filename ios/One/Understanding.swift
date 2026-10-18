@@ -2,19 +2,25 @@ import Foundation
 import FoundationModels
 
 /// Turns a line of text into a `Capture` preview.
-/// `CaptureParser` reads the day, time, length and title. Apple's on-device model (Apple Intelligence) only decides
-/// task / event / alarm, because that is what it is good at (round 2-3 of the spike; it was much worse at dates).
-/// With no model (device without Apple Intelligence, model not ready) or on any model error, the parser result is used as is.
+/// `CaptureParser` owns scheduling fields; the on-device classifier resolves uncertain kinds.
+/// One title-only refinement follows kind resolution, with a bounded contextual prompt and local fallback.
+/// Neither model step may change scheduling fields, and preview follow-ups do not repeat title generation.
 /// The result only feeds the preview card; nothing is written until the user taps Add.
 enum Understander {
-    static func parse(_ text: String, now: Date = .now, calendar: Calendar = .current) async -> Capture {
-        let parsed = CaptureParser.parse(text, now: now, calendar: calendar)
-        // Clear cases are decided by rules (no model call): an explicit alarm request with a time, or a chore / errand verb with no event word.
-        if let kind = Understanding.ruleKind(text, parsed: parsed) { return Understanding.combine(parser: parsed, kind: kind, text: text) }
-        // The first request after launch can take a long time while the model loads: the parser result is used instead.
-        guard let kind = await ModelTimeout.run(seconds: 8, { await Understanding.classify(text) }) else { return parsed }
-        // "Remind me" is not an alarm: the model's alarm answer only counts when the text asks for one.
-        return Understanding.combine(parser: parsed, kind: kind, text: text)
+    static func parse(_ text: String, history: String = "", now: Date = .now, calendar: Calendar = .current) async -> Capture {
+        let parsed = CaptureConversation.parse(text, now: now, calendar: calendar)
+        let result: Capture
+        // Rules settle clear kinds without a classifier call. Only uncertain kinds use the model.
+        if let kind = Understanding.ruleKind(text, parsed: parsed) {
+            result = Understanding.combine(parser: parsed, kind: kind, text: text)
+        } else if AICapture.isAvailable,
+                  let kind = await ModelTimeout.run(seconds: 8, { await Understanding.classify(text, history: history) }) {
+            result = Understanding.combine(parser: parsed, kind: kind, text: text)
+        } else {
+            result = parsed
+        }
+        // One title-only refinement for a NEW parse. Preview follow-ups reuse the prepared title.
+        return await AICapture.refineTitle(result, source: text, history: String(history.suffix(1600)))
     }
 
     /// Loads the model ahead of the first request. No-op where the model isn't available.
@@ -161,7 +167,7 @@ enum Understanding {
 
     /// Model output → preview. Pure and testable. Nil means "didn't understand", so the caller falls back.
     static func capture(from action: ParsedAction, now: Date, calendar: Calendar) -> Capture? {
-        let title = action.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = CaptureParser.cleanRequestTitle(action.title)
         guard action.kind != .other, !title.isEmpty else { return nil }
 
         let today = calendar.startOfDay(for: now)
@@ -307,6 +313,7 @@ enum Understanding {
     /// A kind the words settle without the model, or nil.
     static func ruleKind(_ text: String, parsed: Capture) -> SimpleKind? {
         if asksForAlarmStrict(text), parsed.hour != nil { return .alarm }
+        if matches(text, #"提醒我|\bremind me\b"#) { return .task }
         if matches(text, eventCue) { return nil }
         let title = parsed.title.lowercased().trimmingCharacters(in: .whitespaces)
         if matches(title, taskLead) { return .task }
@@ -353,7 +360,7 @@ enum Understanding {
 
     /// Variant B: the model's kind and title; day / time / duration come from running the parser on the model's date words.
     static func combine(when a: WhenAction, now: Date, calendar: Calendar) -> Capture? {
-        let title = a.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = CaptureParser.cleanRequestTitle(a.title)
         guard !title.isEmpty else { return nil }
         let p = CaptureParser.parse(a.when ?? "", now: now, calendar: calendar)
         var c = Capture(title: title, day: p.day, hasDay: p.hasDay, hour: p.hour, minute: p.minute,
@@ -371,9 +378,10 @@ enum Understanding {
     }
 
     /// task / event / alarm for one message. Nil when the model isn't usable or errors (guardrail, unsupported language, cancelled…).
-    static func classify(_ text: String, localeID: String = Locale.current.identifier) async -> SimpleKind? {
+    static func classify(_ text: String, history: String = "", localeID: String = Locale.current.identifier) async -> SimpleKind? {
         guard unavailableReason(localeID: localeID) == nil else { return nil }
-        return try? await extractKindOnly(text, localeID: localeID).kind
+        return try? await extractKindOnly("Relevant conversation (context only):\n\(history)\nLatest request:\n\(text)", localeID: localeID,
+                                          instructions: SystemPrompt.planner + "\n" + kindOnlyInstructions(localeID: localeID)).kind
     }
 
     static func prewarm(localeID: String = Locale.current.identifier) {

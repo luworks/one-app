@@ -19,7 +19,7 @@ enum ChatResponse {
         // The simulator has no model. A timeout, unavailable model or empty response also stays conversational.
         guard AICapture.isAvailable else { return .reply(fallback) }
         let turn: ChatTurn? = await ModelTimeout.run(seconds: 8) {
-            let session = LanguageModelSession(instructions: """
+            let session = LanguageModelSession(instructions: SystemPrompt.planner + "\n" + """
                 You are Today, a helpful conversational assistant in a planner app. Users can simply chat with you.
                 Decide whether the latest message actually requests a NEW planner item. Never turn a narrative,
                 feeling, test, idea, greeting or question into a task. Merely mentioning a date or Activity is not a request.

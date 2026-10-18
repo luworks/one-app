@@ -3,7 +3,7 @@ import Foundation
 // Pure logic with no SwiftData/SwiftUI, so it can be unit-tested with `swift test` (see ios/Eval).
 //
 // What Today's AI may change on its own. Principle 1 still holds: by default every AI change is a card the user applies.
-// The one exception is a grant the user gives with one tap ("Always for 7 days" on a card): for its scope and its time,
+// The one exception is a grant the user gives with one tap ("Always for 7 days" on a card, or the same bounded toggle in Settings): for its scope and its time,
 // matching changes apply by themselves, each shown as a toast with Undo and an Activity entry.
 // Everything a grant can never cover is decided in ONE place: `AutonomyPolicy.decide`.
 

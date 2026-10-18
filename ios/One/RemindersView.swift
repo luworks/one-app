@@ -170,10 +170,10 @@ struct RemindersView: View {
                         .listSectionSeparator(.hidden)
                     }
                 }
-                .listStyle(.insetGrouped)
-                .listSectionSpacing(.compact)
+                .listStyle(.plain)
+                .environment(\.defaultMinListRowHeight, 0)
                 .scrollContentBackground(.hidden)
-                .background(Color(.systemGroupedBackground))
+                .background(Color(.systemBackground))
                 // No empty band: My Lists sits right under the pills.
                 .contentMargins(.top, 4, for: .scrollContent)
                 // Room to scroll the last row clear of the app's floating bottom bar (search, Ask AI, +): the bar's
@@ -184,7 +184,7 @@ struct RemindersView: View {
                 // number of items in section), seen when a swipe deleted a list and kept its reminders.
                 .environment(\.editMode, .constant(.inactive))
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             // The app's own top bar is above; this is the title the pushed screen's back button shows.
             .navigationTitle("Lists")
             .toolbar(.hidden, for: .navigationBar)
@@ -398,11 +398,13 @@ struct RemindersView: View {
     private func myLists(_ stats: Stats) -> some View {
         Section {
             if showsDefaultList(stats) {
-                NavigationLink(value: ReminderTarget.defaultList) {
+                Button { path.append(.defaultList) } label: {
                     ListRow(name: "Reminders", color: ReminderPalette.color(6), symbol: "list.bullet", count: stats.open[""] ?? 0)
                 }
                 .moveDisabled(true)
                 .deleteDisabled(true)
+                .buttonStyle(.plain)
+                .stackedCardRow()
                 .accessibilityIdentifier("list.default")
             }
             // .onMove lets a row be pressed, held and dragged with no edit mode (iOS 16+), like Apple Reminders:
@@ -431,8 +433,12 @@ struct RemindersView: View {
                         .frame(width: 30)
                     Text("Add List")
                 }
-                .frame(minHeight: 36)
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color(.systemBlue))
+            .stackedCardRow()
             .moveDisabled(true)
             .deleteDisabled(true)
             .accessibilityIdentifier("addList")
@@ -446,10 +452,12 @@ struct RemindersView: View {
     }
 
     private func listRow(_ list: OneList, stats: Stats) -> some View {
-        NavigationLink(value: ReminderTarget.list(list.persistentModelID)) {
+        Button { path.append(.list(list.persistentModelID)) } label: {
             ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol,
                     count: stats.open[list.name] ?? 0, pinned: list.pinned)
         }
+        .buttonStyle(.plain)
+        .stackedCardRow()
         .accessibilityIdentifier("list.\(list.name)")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             RowAction.delete(asksFirst: true) { askDelete(list) }
@@ -460,9 +468,7 @@ struct RemindersView: View {
         // Press, hold and drag: the menu gives way to the system drag (as in Files or Apple Reminders); dropping the
         // row on another row puts it just before that row.
         .draggable(list.name) {
-            ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol, count: stats.open[list.name] ?? 0)
-                .padding(.horizontal, 16)
-                .background(.background, in: RoundedRectangle(cornerRadius: 12))
+            ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol, count: stats.open[list.name] ?? 0, pinned: list.pinned)
         }
         .dropDestination(for: String.self) { names, _ in
             guard let name = names.first else { return false }
@@ -530,7 +536,7 @@ private struct DayMark: View {
     }
 }
 
-/// One row of My Lists: colored circle, name, open count; the chevron comes from the NavigationLink.
+/// A list card uses its own color identity with adaptive text, preserving its name, open count and pinned state.
 private struct ListRow: View {
     let name: String
     let color: Color
@@ -538,23 +544,34 @@ private struct ListRow: View {
     let count: Int
     var pinned = false
 
-    @ScaledMetric private var glyph = 30
+    @Environment(\.colorScheme) private var colorScheme
+    @ScaledMetric private var minimumHeight = 82
 
     var body: some View {
-        HStack(spacing: 12) {
-            ListGlyph(color: color, symbol: symbol, size: glyph)
-            Text(name)
-            if pinned {
-                Image(systemName: "pin.fill")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+        StackedCard(fill: color.opacity(colorScheme == .dark ? 0.30 : 0.18)) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 28)
+                Text(name)
+                    .font(.title3.weight(.bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                if pinned {
+                    Image(systemName: "pin.fill")
+                        .font(.caption)
+                }
+                Spacer(minLength: 8)
+                Text("\(count)")
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold).monospacedDigit())
+                    .fixedSize()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 8)
-            Text("\(count)")
-                .font(.body.monospacedDigit())
-                .foregroundStyle(.secondary)
+            .foregroundStyle(.primary)
+            .padding(.vertical, 12)
+            .frame(minHeight: minimumHeight)
         }
-        .frame(minHeight: 36)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(pinned ? "\(name), pinned, \(reminderCountText(count))" : "\(name), \(reminderCountText(count))")
     }

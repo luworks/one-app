@@ -104,6 +104,8 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         let january1 = DateComponents(calendar: cal, year: year, month: 1, day: 1).date!
         XCTAssertEqual(title.label, monthName(january1), "tapping a mini month opens it")
+        let landing = cal.isDate(january1, equalTo: .now, toGranularity: .month) ? Date.now : january1
+        XCTAssertTrue(element(dayID(landing)).isSelected, "month headers retain their usual landing day")
     }
 
     /// Year marks holidays (a red day number, read out as the month's value) and explains its marks in a key.
@@ -129,17 +131,43 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Multi-day event"].exists)
     }
 
-    func testYearDayOpensTheChosenDayInToday() {
-        modeButton("Year").tap()
-        let year = cal.component(.year, from: .now)
-        let chosen = DateComponents(calendar: cal, year: year, month: 1, day: 12).date!
-        let cell = app.buttons["year.\(dayID(chosen))"]
-        XCTAssertTrue(cell.waitForExistence(timeout: 5))
-        cell.tap()
-        let title = element("todayDate")
-        XCTAssertTrue(title.waitForExistence(timeout: 5))
-        XCTAssertEqual(title.label, chosen.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
-        XCTAssertFalse(element("calendar.monthTitle").exists)
+    func testYearDayOpensMonthWithChosenDateAndItsItems() {
+        app.terminate()
+        app.launchArguments = TestData.fixtureArguments("year-day-month-agenda.json")
+        app.launch()
+        app.buttons["Calendar"].firstMatch.tap()
+        // 400 days always lands outside the current month and year, regardless of the run date.
+        for offset in [0, 400] {
+            let chosen = cal.date(byAdding: .day, value: offset, to: cal.startOfDay(for: .now))!
+            modeButton("Year").tap()
+            let cell = app.buttons["year.\(dayID(chosen))"]
+            let scroll = element("calendar.year.scroll")
+            XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+            for _ in 0..<12 {
+                if cell.exists && cell.isFullyVisible(in: scroll.frame) && cell.frame.maxY < app.frame.maxY - 140 && cell.isHittable { break }
+                let isAbove = cell.exists && cell.frame.minY < scroll.frame.minY
+                let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: isAbove ? 0.4 : 0.7))
+                let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: isAbove ? 0.7 : 0.4))
+                start.press(forDuration: 0.01, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+            }
+            XCTAssertTrue(cell.isFullyVisible(in: scroll.frame) && cell.frame.maxY < app.frame.maxY - 140 && cell.isHittable, "chosen day is visible in Year")
+            cell.tap()
+            let title = element("calendar.monthTitle")
+            XCTAssertTrue(title.waitForExistence(timeout: 5))
+            XCTAssertEqual(title.label, monthName(chosen))
+            XCTAssertTrue(modeButton("Month").isSelected, "Year day taps stay in Calendar's Month view")
+            let selected = app.buttons[dayID(chosen)]
+            XCTAssertTrue(selected.waitForExistence(timeout: 5))
+            let selection = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: selected)
+            XCTAssertEqual(XCTWaiter().wait(for: [selection], timeout: 3), .completed, "the exact day is selected")
+            let agenda = element("calendar.dayList")
+            for name in ["Year event \(offset)", "Year reminder \(offset)"] {
+                let row = agenda.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+                XCTAssertTrue(row.waitForExistence(timeout: 5), "chosen day's item appears below the grid: \(name)")
+            }
+            let other = offset == 0 ? 400 : 0
+            XCTAssertFalse(agenda.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Year event \(other)")).firstMatch.exists)
+        }
     }
 
     func testYearReadsTripDaysButLeavesLocalBirthdayInMonth() {
@@ -160,15 +188,11 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertTrue(birthdayCell.waitForExistence(timeout: 5))
         XCTAssertFalse((birthdayCell.value as? String ?? "").contains("birthday"))
         birthdayCell.tap()
-        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Mia's birthday")).firstMatch.waitForExistence(timeout: 5))
-        app.buttons["Calendar"].firstMatch.tap()
-        modeButton("Month").tap()
-        let month = element("calendar.monthPager")
-        if !cal.isDate(birthday, equalTo: .now, toGranularity: .month) { month.swipeLeft() }
+        XCTAssertTrue(element("calendar.monthTitle").waitForExistence(timeout: 5))
+        XCTAssertTrue(modeButton("Month").isSelected)
         let day = element(dayID(birthday))
         XCTAssertTrue(day.waitForExistence(timeout: 5))
-        day.tap()
+        XCTAssertTrue(day.isSelected)
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Mia's birthday")).firstMatch.waitForExistence(timeout: 5))
     }
 

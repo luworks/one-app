@@ -31,7 +31,7 @@ struct CalendarView: View {
                 case .month:
                     MonthView(day: $day, title: $title, open: open, edit: edit, openDay: openDay)
                 case .year:
-                    YearView(day: $day, openDay: openDay) { month in
+                    YearView(day: $day, openDay: showMonth) { month in
                         withAnimation(.snappy) {
                             day = CalendarMath.landingDay(inMonthOf: month)
                             mode = .month
@@ -67,6 +67,14 @@ struct CalendarView: View {
 
     /// Tapping a day that is already selected opens it in Today (the day view).
     private func openDay(_ date: Date) { onOpenDay(cal.startOfDay(for: date)) }
+
+    /// Year day taps keep the exact date selected in Month and show its agenda below the grid.
+    private func showMonth(_ date: Date) {
+        withAnimation(.snappy) {
+            day = cal.startOfDay(for: date)
+            mode = .month
+        }
+    }
 
     // MARK: One control row: the view switcher
 
@@ -693,7 +701,7 @@ private struct MiniMonth: View {
         }
         .accessibilityLabel(d.formatted(date: .complete, time: .omitted))
         .accessibilityValue(((holidays[d] ?? []) + spans.map(\.title) + (busy.contains(d) && spans.isEmpty ? ["Unusually busy"] : [])).joined(separator: "; "))
-        .accessibilityHint("Opens this day in Today")
+        .accessibilityHint("Shows this day and its events in Month")
         .accessibilityIdentifier("year.\(CalendarIDs.day(d))")
     }
 
