@@ -203,3 +203,42 @@ extension View {
         }
     }
 }
+
+
+/// Opt-in navigation owns its activation binding so beginPage precedes the state write.
+/// Without tracing, the caller's original NavigationLink is returned unchanged.
+private struct PerformanceControlledNavigation<Destination: View, LinkLabel: View>: ViewModifier {
+    let route: String
+    let destination: () -> Destination
+    let label: () -> LinkLabel
+    @State private var isActive = false
+
+    init(route: String, destination: @escaping () -> Destination, label: @escaping () -> LinkLabel) {
+        self.route = route
+        self.destination = destination
+        self.label = label
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if PerformanceTrace.enabled {
+            NavigationLink(isActive: $isActive.performanceAction { $0 ? route : nil }) {
+                destination()
+            } label: {
+                label()
+            }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func performanceControlledNavigation<Destination: View, LinkLabel: View>(
+        _ route: String,
+        @ViewBuilder destination: @escaping () -> Destination,
+        @ViewBuilder label: @escaping () -> LinkLabel
+    ) -> some View {
+        modifier(PerformanceControlledNavigation(route: route, destination: destination, label: label))
+    }
+}

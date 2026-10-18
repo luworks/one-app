@@ -101,8 +101,12 @@ struct SettingsView: View {
                     } label: {
                         Label("Holidays in Year", systemImage: "flag")
                     }
+                    .performanceControlledNavigation("settings.holidays") {
+                        YearHolidaysSettingsView().performanceDestination("settings.holidays")
+                    } label: {
+                        Label("Holidays in Year", systemImage: "flag")
+                    }
                     .accessibilityIdentifier("settings.yearHolidays")
-                    .performanceNavigationAction("settings.holidays")
                 } header: {
                     Text("Calendar")
                 } footer: {
@@ -114,8 +118,12 @@ struct SettingsView: View {
                     NavigationLink("Scope and duration") {
                         AutomaticChangesView().performanceDestination("settings.automaticChanges")
                     }
+                    .performanceControlledNavigation("settings.automaticChanges") {
+                        AutomaticChangesView().performanceDestination("settings.automaticChanges")
+                    } label: {
+                        Text("Scope and duration")
+                    }
                     .accessibilityIdentifier("settings.automaticChanges")
-                    .performanceNavigationAction("settings.automaticChanges")
                     AskSuggestionsSettingRow()
                     explainedToggle("Archive finished chats", isOn: $autoArchiveChats,
                                     caption: "A chat moves to Archived a week after its last message, or an hour after everything it added is done. Archived chats stay in the sidebar under Archived.")
@@ -127,7 +135,16 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        ActivityDataView().performanceDestination("settings.activityData")
+                        ActivityDataView()
+                    } label: {
+                        HStack {
+                            Label("Activity data", systemImage: "clock.arrow.circlepath")
+                            Spacer()
+                            Text(activityPaused ? "Paused" : "On").foregroundStyle(.secondary)
+                        }
+                    }
+                    .performanceControlledNavigation("settings.activityData") {
+                        ActivityDataView()
                     } label: {
                         HStack {
                             Label("Activity data", systemImage: "clock.arrow.circlepath")
@@ -136,7 +153,6 @@ struct SettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("settings.activityData")
-                    .performanceNavigationAction("settings.activityData")
                 } header: {
                     Text("Activity")
                 } footer: {
