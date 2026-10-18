@@ -72,7 +72,10 @@ enum CalendarEntries {
             if sync.isHidden(externalID: e.externalID) { continue }
             let mirror = sync.calendar(forExternalID: e.externalID)
             for start in e.occurrences(in: interval) {
-                let end = start.addingTimeInterval(e.duration)
+                let end = forYearMarks
+                    ? YearEventMarks.localEnd(start: start, durationMinutes: e.durationMinutes,
+                                              isAllDay: e.isAllDay, calendar: calendar)
+                    : start.addingTimeInterval(e.duration)
                 result.append(CalEntry(id: "l\(e.persistentModelID.hashValue)@\(start.timeIntervalSince1970)", source: .local(e),
                                        title: e.title, start: start, end: end, isAllDay: e.isAllDay,
                                        color: mirror?.color ?? .blue, calendarTitle: mirror?.title ?? e.calendarName,

@@ -266,6 +266,15 @@ enum YearBusy {
 // MARK: - Year-only event marks
 
 enum YearEventMarks {
+    /// Local editors persist all-day spans as days * 1440 minutes, not elapsed seconds.
+    /// Other durations can come from EventKit (23/25-hour days); preserve their exclusive end.
+    static func localEnd(start: Date, durationMinutes: Int, isAllDay: Bool, calendar: Calendar = .current) -> Date {
+        let elapsedEnd = start.addingTimeInterval(TimeInterval(durationMinutes) * 60)
+        guard isAllDay, durationMinutes > 0, durationMinutes.isMultiple(of: 1440) else { return elapsedEnd }
+        return calendar.date(byAdding: .day, value: durationMinutes / 1440,
+                             to: calendar.startOfDay(for: start)) ?? elapsedEnd
+    }
+
     static func isBirthday(title: String, calendarTitle: String, isBirthdayCalendar: Bool = false) -> Bool {
         isBirthdayCalendar || [title, calendarTitle].contains { text in
             text.localizedCaseInsensitiveContains("birthday") || text.contains("生日")

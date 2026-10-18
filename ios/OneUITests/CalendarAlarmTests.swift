@@ -71,10 +71,21 @@ final class CalendarAlarmTests: XCTestCase {
 
     /// Week: a ring during an event has its own horizontal lane, and remains a working tap target.
     func testWeekOverlappingEventAndAlarmHaveDisjointFramesAndOpenAlarmEditor() throws {
-        // Use the existing dataset loader with a small fixture: the alarm falls strictly inside the event today.
+        try assertWeekOverlap(eventCount: 1)
+    }
+
+    func testWeekDenseOverlapClusterStaysInsideAssignedFramesAndOpensAlarmEditor() throws {
+        try assertWeekOverlap(eventCount: 8)
+    }
+
+    private func assertWeekOverlap(eventCount: Int) throws {
+        // Keep the one-event regression and also exercise columns narrower than the block's stripe and padding.
+        let events = (0..<eventCount).map { index in
+            "{\"title\":\"Lane overlap event \(index)\",\"start\":{\"day\":0,\"time\":\"09:00\"},\"minutes\":60}"
+        }.joined(separator: ",")
         let fixture = """
         {"version":1,"reminders":[],
-         "events":[{"title":"Lane overlap event","start":{"day":0,"time":"09:00"},"minutes":60}],
+         "events":[\(events)],
          "alarms":[{"time":"09:30","label":"Lane overlap alarm"}],"chats":[]}
         """
         let url = FileManager.default.temporaryDirectory.appending(path: "week-alarm-overlap-\(UUID().uuidString).json")
@@ -89,7 +100,7 @@ final class CalendarAlarmTests: XCTestCase {
         let grid = element("calendar.weekGrid").firstMatch
         XCTAssertTrue(grid.waitForExistence(timeout: 5))
         let event = grid.descendants(matching: .any)
-            .matching(NSPredicate(format: "label BEGINSWITH 'Lane overlap event,'")).firstMatch
+            .matching(NSPredicate(format: "label BEGINSWITH 'Lane overlap event 0,'")).firstMatch
         let marker = grid.descendants(matching: .any).matching(identifier: "calendar.alarmMarker")
             .matching(NSPredicate(format: "label BEGINSWITH 'Alarm Lane overlap alarm at '")).firstMatch
         let visible = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
@@ -108,6 +119,24 @@ final class CalendarAlarmTests: XCTestCase {
         XCTAssertLessThan(alarmFrame.maxY, eventFrame.maxY, "the fixture exercises vertical overlap")
         XCTAssertLessThanOrEqual(eventFrame.maxX, alarmFrame.minX,
                                  "the event must yield horizontally to the trailing alarm: event \(eventFrame), alarm \(alarmFrame)")
+        let eventFrames = (0..<eventCount).map { index in
+            grid.descendants(matching: .any)
+                .matching(NSPredicate(format: "label BEGINSWITH %@", "Lane overlap event \(index),")).firstMatch
+        }
+        for block in eventFrames {
+            XCTAssertTrue(block.exists)
+            XCTAssertTrue(block.isHittable)
+            XCTAssertGreaterThan(block.frame.width, 0)
+            if eventCount == 8 {
+                XCTAssertLessThan(block.frame.width, 9, "the dense fixture exercises the former minimum-content overflow")
+            }
+            XCTAssertLessThanOrEqual(block.frame.maxX, alarmFrame.minX,
+                                     "even a dense block must stay outside the alarm lane: \(block.frame)")
+        }
+        let sortedFrames = eventFrames.map(\.frame).sorted { $0.minX < $1.minX }
+        for (left, right) in zip(sortedFrames, sortedFrames.dropFirst()) {
+            XCTAssertLessThanOrEqual(left.maxX, right.minX + 0.5, "adjacent blocks stay within their assigned columns")
+        }
         marker.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["alarm.label"].value as? String, "Lane overlap alarm",

@@ -243,3 +243,41 @@ extension YearMarksTests {
         }
     }
 }
+
+extension YearMarksTests {
+    func testPersistedLocalAllDayDurationsAcrossDST() {
+        var local = cal
+        local.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        for (month, day) in [(3, 8), (11, 1)] {
+            let start = local.date(from: DateComponents(year: 2026, month: month, day: day))!
+            let next = local.date(byAdding: .day, value: 1, to: start)!
+            let after = local.date(byAdding: .day, value: 2, to: start)!
+            for minutes in [1440, 2880] {
+                let end = YearEventMarks.localEnd(start: start, durationMinutes: minutes, isAllDay: true, calendar: local)
+                XCTAssertEqual(end, minutes == 1440 ? next : after)
+                XCTAssertEqual(YearEventMarks.isTrip(start: start, end: end, isAllDay: true, calendar: local), minutes == 2880)
+                XCTAssertEqual(YearEventMarks.segments(start: start, end: end,
+                    weeks: [[start, next, after, nil, nil, nil, nil]], calendar: local), [
+                        YearBandSegment(week: 0, firstColumn: 0, lastColumn: minutes == 1440 ? 0 : 1)
+                    ])
+                let counts = YearLoad.counts([item(start, end, allDay: true)],
+                                            in: DateInterval(start: start, end: after), calendar: local)
+                XCTAssertEqual(counts, minutes == 1440 ? [start: 1] : [:])
+            }
+        }
+    }
+
+    func testMirroredElapsedAllDayDurationsAndTimedDurationsStayIntact() {
+        var local = cal
+        local.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        for (month, day, minutes) in [(3, 8, 1380), (11, 1, 1500), (3, 8, 2820), (11, 1, 2940)] {
+            let start = local.date(from: DateComponents(year: 2026, month: month, day: day))!
+            let end = YearEventMarks.localEnd(start: start, durationMinutes: minutes, isAllDay: true, calendar: local)
+            XCTAssertEqual(end, start.addingTimeInterval(TimeInterval(minutes * 60)))
+            XCTAssertEqual(local.component(.hour, from: end), 0)
+            XCTAssertEqual(YearEventMarks.isTrip(start: start, end: end, isAllDay: true, calendar: local), minutes > 1500)
+            XCTAssertEqual(YearEventMarks.localEnd(start: start, durationMinutes: 1440, isAllDay: false, calendar: local),
+                           start.addingTimeInterval(86400))
+        }
+    }
+}

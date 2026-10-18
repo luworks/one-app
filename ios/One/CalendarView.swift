@@ -956,9 +956,11 @@ private struct WeekPage: View {
                         let past = dimsPast && d < cal.startOfDay(for: .now)
                         ForEach(placed, id: \.entry.id) { p in
                             let span = lanes.block(column: p.column, count: p.count)
-                            block(p.entry, colW: colW, lines: p.titleLines)
+                            block(p.entry, colW: colW, width: CGFloat(span.width), lines: p.titleLines)
                                 .opacity(past ? DayTint.past : 1)
                                 .frame(width: CGFloat(span.width), height: max(18, p.height(hourHeight)))
+                                .clipped()
+                                .contentShape(Rectangle())
                                 .offset(x: x + CGFloat(span.x), y: p.y(hourHeight))
                         }
                         // Beside the blocks: a thin marker at the alarm's time (no duration).
@@ -1093,7 +1095,7 @@ private struct WeekPage: View {
     }
 
     @ViewBuilder
-    private func block(_ e: CalEntry, colW: CGFloat, lines: Int) -> some View {
+    private func block(_ e: CalEntry, colW: CGFloat, width: CGFloat, lines: Int) -> some View {
         if case .task(let task) = e.source {
             DraggableTaskBlock(task: task, colWidth: colW, hourHeight: hourHeight) {
                 Text(e.title)
@@ -1110,17 +1112,20 @@ private struct WeekPage: View {
             }
         } else {
             HStack(spacing: 0) {
-                Rectangle().fill(e.color).frame(width: 3)
-                Text(e.title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(EventTint.text(e.color))
-                    .lineLimit(lines)
-                    .lineSpacing(-1)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 3)
-                    .padding(.top, 2)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                Rectangle().fill(e.color).frame(width: min(3, width))
+                if width >= 12 {
+                    Text(e.title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(EventTint.text(e.color))
+                        .lineLimit(lines)
+                        .lineSpacing(-1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 3)
+                        .padding(.top, 2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .background(EventTint.fill(e.color))
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .contentShape(Rectangle())
