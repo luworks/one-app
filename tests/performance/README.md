@@ -67,3 +67,16 @@ Focused pure-tool validation:
 ```sh
 python3 -m unittest discover -s tests/performance -p 'test_*.py' -v
 ```
+
+
+## Historical first baseline utilities
+
+The original [protocol](../../docs/performance/protocol.md), [static inventory](../../docs/performance/static-audit.md) and [2026-10-18 report](../../docs/performance/baseline-2026-10-18.md) retain their original source/configuration and automation-inclusive limitations. They are historical evidence, not replacement current-main measurements; use the v2 protocol/results above for page/AI comparisons.
+
+- `inventory.py`: file categories/top contributors and local ZIP estimate for a built app.
+- `launch_probe.py`: simulator process launch probe; do not equate its duration to usable content.
+- `memory_sample.py`: simulator memory sampling proxy.
+- `summarize.py`: original automation log reducer, separate from monotonic app-side reducers.
+- `ios/OneUITests/PerformanceBaselineTests.swift`: original authored baseline journeys. Their historical results do not establish new merged-main runtime acceptance.
+
+Keep all generated outputs under primary `tests/results/` and index closed evidence through the existing QA journal. No new build or repeated passing UI run is required for this documentation merge.
