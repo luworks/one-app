@@ -9,6 +9,7 @@ struct OneApp: App {
     init() {
         LaunchTimer.mark("app init")
         Appearance.applyLaunchOverride()
+        Preferences.applyLaunchOverride()
         container = OneStore.start()
         LaunchTimer.mark("store ready")
     }

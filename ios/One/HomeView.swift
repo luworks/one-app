@@ -39,7 +39,7 @@ struct HomeView: View {
     @State private var calendarDay = Calendar.current.startOfDay(for: .now)
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
     // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
-    @State private var calendarMode: CalendarView.Mode = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey) ?? .week
+    @State private var calendarMode: CalendarView.Mode = Self.startingCalendarMode()
     /// Alarms · World Clock · Stopwatch · Timer inside the Alarms tab.
     @State private var clockSection: ClockSection = Self.restored(ClockSection.self, key: Self.clockSectionKey) ?? .alarms
     @State private var addingCity = false
@@ -48,6 +48,11 @@ struct HomeView: View {
     private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
         guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
         return UserDefaults.standard.string(forKey: key).flatMap(T.init(rawValue:))
+    }
+    /// Settings > Calendar > "Open Calendar on": a chosen view, or the one it was left in (Week the first time).
+    private static func startingCalendarMode() -> CalendarView.Mode {
+        let last = restored(CalendarView.Mode.self, key: calendarModeKey)?.rawValue
+        return CalendarView.Mode(rawValue: Preferences.calendarStartChoice().view(lastUsed: last)) ?? .week
     }
     @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
@@ -185,8 +190,11 @@ struct HomeView: View {
         let shared = ShareInbox.drain()
         guard !shared.isEmpty else { return }
         ActivityCenter.record(ActivityEvents.shareImport(count: shared.count))
+        let listNames = ((try? context.fetch(FetchDescriptor<OneList>())) ?? []).map(\.name)
+        let chosenList = Preferences.newReminderList(existing: listNames)   // Settings > Reminders > "New reminders go to"
         let added = shared.map { s in
             let t = OneTask(title: s.title, note: s.note, due: s.due)
+            if let chosenList { t.listName = chosenList }
             context.insert(t)
             return t
         }

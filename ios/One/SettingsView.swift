@@ -78,6 +78,7 @@ struct SettingsView: View {
                     Toggle("Show overdue reminders", isOn: $showOverdue)
                     Toggle("Show alarms in Today and Calendar", isOn: $showAlarms)
                     Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
+                    TodayTimelineSettings()
                     explainedToggle("Travel time", isOn: $travelTime,
                                     caption: "Shows the drive time and when to leave for events with a location today and tomorrow. Your location and the event's address go to Apple Maps only; nothing else leaves your iPhone.")
                     explainedToggle("Health summary", isOn: $healthSummary,
@@ -87,7 +88,13 @@ struct SettingsView: View {
                     Text("Today")
                 }
 
+                CalendarSettingsSection()
+
+                RemindersSettingsSection()
+
                 smartListsSection
+
+                AlarmsSettingsSection()
 
                 Section {
                     NavigationLink {
@@ -100,6 +107,9 @@ struct SettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("settings.automaticChanges")
+                    AskSuggestionsSettingRow()
+                    explainedToggle("Archive finished chats", isOn: $autoArchiveChats,
+                                    caption: "A chat moves to Archived a week after its last message, or an hour after everything it added is done. Archived chats stay in the sidebar under Archived.")
                 } header: {
                     Text("AI")
                 } footer: {
@@ -121,14 +131,6 @@ struct SettingsView: View {
                     Text("Activity")
                 } footer: {
                     Text("Today keeps a record of changes and AI decisions, only on this iPhone. See what is recorded, pause it, export it or clear it.")
-                }
-
-                Section {
-                    Toggle("Archive finished chats", isOn: $autoArchiveChats)
-                } header: {
-                    Text("Chats")
-                } footer: {
-                    Text("A chat moves to Archived a week after its last message, or an hour after everything it added is done. Archived chats stay in the sidebar under Archived.")
                 }
 
                 Section {

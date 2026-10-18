@@ -236,15 +236,17 @@ enum TomorrowPreview {
     static let eveningHour = 18
 
     /// Open in the evening, or once nothing timed is left today.
-    static func opensByItself(now: Date, todayStarts: [Date], calendar: Calendar = .current) -> Bool {
-        calendar.component(.hour, from: now) >= eveningHour || !todayStarts.contains { $0 > now }
+    /// `eveningHour` is Settings → "Evening starts at"; nil (off) leaves only the "nothing left today" rule.
+    static func opensByItself(now: Date, todayStarts: [Date], eveningHour: Int? = TomorrowPreview.eveningHour,
+                              calendar: Calendar = .current) -> Bool {
+        eveningHour.map { calendar.component(.hour, from: now) >= $0 } ?? false || !todayStarts.contains { $0 > now }
     }
 }
 
-/// Calendar tab: month grids, week starts and weekday letters. Follows the calendar's first weekday (the device setting), like Apple Calendar.
+/// Calendar tab: month grids, week starts and weekday letters. Follows the calendar's first weekday: the device setting, or the one chosen in Settings → Calendar (`Calendar.app`).
 enum CalendarMath {
     /// The month containing `date` as rows of 7 slots, like Apple's Month: nil before the 1st and after the last day.
-    static func monthWeeks(of date: Date, calendar: Calendar = .current) -> [[Date?]] {
+    static func monthWeeks(of date: Date, calendar: Calendar = .app) -> [[Date?]] {
         guard let first = calendar.dateInterval(of: .month, for: date)?.start,
               let count = calendar.range(of: .day, in: .month, for: first)?.count else { return [] }
         let lead = (calendar.component(.weekday, from: first) - calendar.firstWeekday + 7) % 7
@@ -268,14 +270,19 @@ enum CalendarMath {
     }
 
     /// First day of the week containing `date`.
-    static func weekStart(of date: Date, calendar: Calendar = .current) -> Date {
+    static func weekStart(of date: Date, calendar: Calendar = .app) -> Date {
         let day = calendar.startOfDay(for: date)
         let back = (calendar.component(.weekday, from: day) - calendar.firstWeekday + 7) % 7
         return calendar.date(byAdding: .day, value: -back, to: day) ?? day
     }
 
+    /// The week of the year `date` falls in (Settings > Calendar > "Show week numbers"), by the calendar's own rule for week 1.
+    static func weekNumber(of date: Date, calendar: Calendar = .app) -> Int {
+        calendar.component(.weekOfYear, from: date)
+    }
+
     /// One letter per weekday, starting at the calendar's first weekday ("S M T W T F S" on a Sunday-first device).
-    static func weekdayLetters(calendar: Calendar = .current) -> [String] {
+    static func weekdayLetters(calendar: Calendar = .app) -> [String] {
         let symbols = calendar.veryShortStandaloneWeekdaySymbols
         let i = calendar.firstWeekday - 1
         return Array(symbols[i...] + symbols[..<i])

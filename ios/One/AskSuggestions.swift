@@ -339,10 +339,10 @@ enum SuggestionRules {
                              why: "\(n) overdue reminder\(n == 1 ? "" : "s")"))
         }
 
-        // Review today, from 18:00, when the day held anything.
+        // Review today, from the evening hour (18:00 unless changed in Settings), when the day held anything.
         let left = ctx.leftToday(cal)
         let done = ctx.doneToday(cal)
-        let hasReview = h >= Double(EveningReview.eveningHour) && done + left.count > 0
+        let hasReview = (EveningReview.eveningHour.map { h >= Double($0) } ?? false) && done + left.count > 0
         if hasReview {
             out.append(.init(id: "review", kind: .review, text: zh ? "回顾今天" : "Review today", score: 88, expectation: .review,
                              why: "It is evening: \(done) done, \(left.count) left today"))

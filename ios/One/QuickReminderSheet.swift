@@ -47,6 +47,8 @@ struct QuickReminderSheet: View {
         .background(Color(.systemBackground))
         .onAppear {
             focused = true
+            // Settings > Reminders > "New reminders go to" (Auto leaves the list as it was opened).
+            if listName.isEmpty, let chosen = Preferences.newReminderList(existing: lists.map(\.name)) { listName = chosen }
             suggestions = ReminderSuggest.suggest(from: tasks.map {
                 .init(title: $0.title, createdAt: $0.createdAt, due: $0.due ?? $0.plannedStart, isOpen: !$0.isDone)
             })
