@@ -73,18 +73,19 @@ struct SmartListLayout {
     var hidden: Set<SmartList>
 
     init(order raw: String, hidden rawHidden: String) {
-        var seen = Set<SmartList>()
-        var o: [SmartList] = []
-        for s in raw.split(separator: ",").compactMap({ SmartList(rawValue: String($0)) }) where seen.insert(s).inserted {
-            o.append(s)
-        }
         // Smart lists added in a later version show up at the end.
-        order = o + SmartList.allCases.filter { !seen.contains($0) }
+        order = PillOrder.decode(raw, all: SmartList.allCases)
         hidden = Set(rawHidden.split(separator: ",").compactMap { SmartList(rawValue: String($0)) })
     }
 
     var visible: [SmartList] { order.filter { !hidden.contains($0) } }
-    var orderString: String { order.map(\.rawValue).joined(separator: ",") }
+    var orderString: String { PillOrder.encode(order) }
+
+    /// A pill was moved in the row of shown smart lists (a drag, or Move Left / Move Right). Hidden lists keep their
+    /// places, so Settings shows the same order.
+    mutating func reorderVisible(_ newVisible: [SmartList]) {
+        order = PillOrder.merge(visible: newVisible, into: order)
+    }
     var hiddenString: String { hidden.map(\.rawValue).sorted().joined(separator: ",") }
 }
 
@@ -113,6 +114,10 @@ struct RemindersView: View {
     @State private var pendingDelete: PendingListDeletion?
     @State private var renaming: OneList?
     @State private var renameText = ""
+    /// A pill is being dragged (its token), the pill it hovers over, and a counter that fires the drop haptic.
+    @State private var dragging: String?
+    @State private var dropTarget: String?
+    @State private var reorderTick = 0
 
     private let sync = RemindersSync.shared
 
@@ -132,7 +137,19 @@ struct RemindersView: View {
     }
     private var layout: SmartListLayout { SmartListLayout(order: smartOrder, hidden: smartHidden) }
 
+    /// UI tests start from the default pill order and visibility, like their fresh in-memory data store (the stored
+    /// choice survives a launch otherwise). `-uiTestingKeepReminderPills` keeps it, for the relaunch check. Runs once
+    /// per process, the first time the tab's body is built.
+    private static let uiTestReset: Void = {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-uiTesting"), !args.contains("-uiTestingKeepReminderPills") else { return }
+        for key in [SmartListLayout.orderKey, SmartListLayout.hiddenKey, "reminders.listsReordered"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+    }()
+
     var body: some View {
+        let _ = Self.uiTestReset
         let stats = Stats(tasks: tasks.filter { !$0.isDeleted })
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
@@ -197,32 +214,162 @@ struct RemindersView: View {
 
     // MARK: Pills
 
-    /// The smart lists that are shown, then pinned lists, as small pills that wrap onto a second line when needed
-    /// (all of them visible, nothing to scroll sideways). They sit above the List, not in it: inside a List (a row or a
-    /// section header) a pill's own long-press menu never opens.
+    /// The smart lists that are shown, then pinned lists, as the app's shared pills (`PillChip`): one left-aligned row
+    /// that scrolls sideways when it doesn't fit, like the Calendar and Alarms switchers. They sit above the List, not
+    /// in it: inside a List (a row or a section header) a pill's own long-press menu never opens.
+    /// Press, hold and drag a pill to reorder it within its kind (smart lists among themselves, pinned lists among
+    /// themselves), as My Lists rows do; the long-press menu has Move Left / Move Right for the same thing.
     @ViewBuilder
     private func pills(_ stats: Stats) -> some View {
         let pinned = sortedLists.filter(\.pinned)
-        if !layout.visible.isEmpty || !pinned.isEmpty {
-            PillFlow(spacing: 8) {
-                ForEach(layout.visible) { smart in
-                    ListPill(title: smart.title, color: smart.color, symbol: smart.symbol, showsDay: smart == .today,
-                             count: stats.smart[smart] ?? 0) { path.append(.smart(smart)) }
-                        .accessibilityIdentifier("smart.\(smart.rawValue)")
-                        .contextMenu {
-                            Button { hide(smart) } label: { Label("Hide “\(smart.title)”", systemImage: "eye.slash") }
-                        }
+        let smarts = layout.visible
+        if !smarts.isEmpty || !pinned.isEmpty {
+            PillChipRow {
+                ForEach(smarts) { smart in
+                    reorderable(token: "smart:\(smart.rawValue)") {
+                        smartChip(smart, stats, id: "smart.\(smart.rawValue)") { path.append(.smart(smart)) }
+                    } preview: {
+                        smartChip(smart, stats, id: nil) {}
+                    } menu: {
+                        moveButtons(canLeft: smart != smarts.first, canRight: smart != smarts.last) { moveSmart(smart, by: $0) }
+                        Button { hide(smart) } label: { Label("Hide “\(smart.title)”", systemImage: "eye.slash") }
+                    } drop: { dragged in
+                        guard dragged.hasPrefix("smart:"), let from = SmartList(rawValue: String(dragged.dropFirst(6))) else { return false }
+                        reorderSmart(PillOrder.move(smarts, from, onto: smart))
+                        return true
+                    }
                 }
                 ForEach(pinned) { list in
-                    ListPill(title: ListName.display(list.name), color: list.color, symbol: list.symbol,
-                             count: stats.open[list.name] ?? 0) { path.append(.list(list.persistentModelID)) }
-                        .accessibilityIdentifier("pinned.\(list.name)")
-                        .contextMenu { listMenu(list) }
+                    reorderable(token: "list:\(list.name)") {
+                        pinnedChip(list, stats, id: "pinned.\(list.name)") { path.append(.list(list.persistentModelID)) }
+                    } preview: {
+                        pinnedChip(list, stats, id: nil) {}
+                    } menu: {
+                        moveButtons(canLeft: list !== pinned.first, canRight: list !== pinned.last) { movePinned(list, by: $0) }
+                        Divider()
+                        listMenu(list)
+                    } drop: { dragged in
+                        guard dragged.hasPrefix("list:"),
+                              let from = pinned.first(where: { $0.name == String(dragged.dropFirst(5)) }) else { return false }
+                        reorderPinned(PillOrder.move(pinned, from, onto: list))
+                        return true
+                    }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
+            .sensoryFeedback(.impact(weight: .medium), trigger: reorderTick)
+            // The same breathing room as the Alarms and Calendar sub-row under the tab pills.
+            .padding(.top, 2)
+            .padding(.bottom, 6)
         }
+    }
+
+    private func smartChip(_ smart: SmartList, _ stats: Stats, id: String?, action: @escaping () -> Void) -> some View {
+        let n = stats.smart[smart] ?? 0
+        return PillChip(title: smart.title, count: n, accessibilityText: "\(smart.title), \(reminderCountText(n))",
+                        identifier: id, leading: { smartMark(smart) }, action: action)
+    }
+
+    private func pinnedChip(_ list: OneList, _ stats: Stats, id: String?, action: @escaping () -> Void) -> some View {
+        let n = stats.open[list.name] ?? 0
+        let name = ListName.display(list.name)
+        return PillChip(title: name, count: n, accessibilityText: "\(name), \(reminderCountText(n))",
+                        identifier: id, leading: { listMark(list) }, action: action)
+    }
+
+    /// A pill that can be picked up: long-press shows its menu, and moving the finger after the lift drags it (the same
+    /// way My Lists rows do). While a pill of the same kind hovers over another, a bar shows where it will land.
+    private func reorderable<Chip: View, Preview: View, Menu: View>(
+        token: String,
+        @ViewBuilder chip: () -> Chip,
+        @ViewBuilder preview: @escaping () -> Preview,
+        @ViewBuilder menu: () -> Menu,
+        drop: @escaping (String) -> Bool
+    ) -> some View {
+        let kind = token.prefix(while: { $0 != ":" })
+        let sameKind = dragging.map { $0.prefix(while: { $0 != ":" }) == kind } ?? false
+        let after = (dragging.flatMap(pillIndex) ?? 0) < (pillIndex(token) ?? 0)
+        return chip()
+            .overlay(alignment: after ? .trailing : .leading) {
+                if dropTarget == token, sameKind, dragging != token {
+                    Capsule().fill(Color.accentColor)
+                        .frame(width: 3, height: PillStyle.Control.height - 8)
+                        .offset(x: after ? PillStyle.spacing / 2 + 1.5 : -(PillStyle.spacing / 2 + 1.5))
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
+            .contextMenu { menu() }
+            .draggable(token) {
+                preview().onAppear {
+                    dragging = token
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+            }
+            .dropDestination(for: String.self) { items, _ in
+                defer { dragging = nil; dropTarget = nil }
+                guard let dragged = items.first else { return false }
+                return drop(dragged)
+            } isTargeted: { targeted in
+                withAnimation(.snappy(duration: 0.15)) {
+                    if targeted { dropTarget = token } else if dropTarget == token { dropTarget = nil }
+                }
+            }
+    }
+
+    /// Where a token sits in the whole row (smart lists, then pinned lists), to tell which side a drop will land on.
+    private func pillIndex(_ token: String) -> Int? {
+        let all = layout.visible.map { "smart:\($0.rawValue)" } + sortedLists.filter(\.pinned).map { "list:\($0.name)" }
+        return all.firstIndex(of: token)
+    }
+
+    @ViewBuilder
+    private func moveButtons(canLeft: Bool, canRight: Bool, move: @escaping (Int) -> Void) -> some View {
+        if canLeft { Button { move(-1) } label: { Label("Move Left", systemImage: "arrow.left") } }
+        if canRight { Button { move(1) } label: { Label("Move Right", systemImage: "arrow.right") } }
+    }
+
+    private func moveSmart(_ smart: SmartList, by offset: Int) {
+        reorderSmart(PillOrder.move(layout.visible, smart, by: offset))
+    }
+
+    private func reorderSmart(_ newVisible: [SmartList]) {
+        var l = layout
+        l.reorderVisible(newVisible)
+        withAnimation(.snappy) { smartOrder = l.orderString }
+        reorderTick += 1
+    }
+
+    private func movePinned(_ list: OneList, by offset: Int) {
+        reorderPinned(PillOrder.move(sortedLists.filter(\.pinned), list, by: offset))
+    }
+
+    /// Pinned lists have no order of their own: they show in My Lists order, so moving a pill moves the list among the
+    /// pinned ones in My Lists too (unpinned lists keep their places).
+    private func reorderPinned(_ newPinned: [OneList]) {
+        let full = PillOrder.merge(visible: newPinned, into: sortedLists)
+        withAnimation(.snappy) {
+            ListActions.reorder(full, in: context)
+            listsReordered = true
+        }
+        reorderTick += 1
+    }
+
+    /// The small tinted mark of a smart list's pill: its symbol, or for Today the day of the month in a calendar outline.
+    @ViewBuilder
+    private func smartMark(_ smart: SmartList) -> some View {
+        if smart == .today {
+            DayMark(color: smart.color)
+        } else {
+            Image(systemName: smart.symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(smart.color)
+        }
+    }
+
+    private func listMark(_ list: OneList) -> some View {
+        Image(systemName: list.symbol)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(list.color)
     }
 
     private func hide(_ smart: SmartList) {
@@ -366,92 +513,20 @@ struct RemindersView: View {
     }
 }
 
-/// A compact pill at the top of Reminders: colored circle, title, open count. Today's circle shows the date.
-private struct ListPill: View {
-    let title: String
+/// Today's mark in its pill: the day of the month inside a small tinted calendar outline (no filled circle).
+private struct DayMark: View {
     let color: Color
-    let symbol: String
-    var showsDay = false
-    let count: Int
-    var action: () -> Void
-
-    @ScaledMetric private var glyph = 24
 
     var body: some View {
-        HStack(spacing: 7) {
-            if showsDay {
-                Circle().fill(color).frame(width: glyph, height: glyph)
-                    .overlay {
-                        Text("\(Calendar.current.component(.day, from: .now))")
-                            .font(.system(size: glyph * 0.5, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                    }
-            } else {
-                ListGlyph(color: color, symbol: symbol, size: glyph)
+        Text("\(Calendar.current.component(.day, from: .now))")
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(color)
+            .minimumScaleFactor(0.7)
+            .frame(width: PillStyle.Chip.markSize, height: PillStyle.Chip.markSize)
+            .overlay {
+                RoundedRectangle(cornerRadius: 4.5, style: .continuous).strokeBorder(color, lineWidth: 1.6)
             }
-            // Explicit colors: a section header would otherwise dim them to secondary.
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color(.label))
-                .lineLimit(1)
-            Text("\(count)")
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(Color(.secondaryLabel))
-                .contentTransition(.numericText())
-        }
-        .padding(.leading, 6)
-        .padding(.trailing, 14)
-        .padding(.vertical, 6)
-        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-        .contentShape(Capsule())
-        .onTapGesture(perform: action)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title), \(reminderCountText(count))")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { action() }
-        // The long-press menu lifts just the pill, not a rectangle around it.
-        .contentShape(.contextMenuPreview, Capsule())
-    }
-}
-
-/// Lays pills out left to right and wraps to a new line when the next one doesn't fit.
-private struct PillFlow: Layout {
-    var spacing: CGFloat = 8
-
-    private func rows(_ subviews: Subviews, width: CGFloat) -> [[(Int, CGSize)]] {
-        var rows: [[(Int, CGSize)]] = [[]]
-        var x: CGFloat = 0
-        for (i, view) in subviews.enumerated() {
-            let size = view.sizeThatFits(ProposedViewSize(width: width, height: nil))
-            if x > 0, x + size.width > width {
-                rows.append([])
-                x = 0
-            }
-            rows[rows.count - 1].append((i, size))
-            x += size.width + spacing
-        }
-        return rows
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        let rows = rows(subviews, width: width)
-        let height = rows.map { $0.map(\.1.height).max() ?? 0 }.reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
-        let used = rows.map { r in r.map(\.1.width).reduce(0, +) + spacing * CGFloat(max(r.count - 1, 0)) }.max() ?? 0
-        return CGSize(width: proposal.width ?? used, height: height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var y = bounds.minY
-        for row in rows(subviews, width: bounds.width) {
-            var x = bounds.minX
-            let h = row.map(\.1.height).max() ?? 0
-            for (i, size) in row {
-                subviews[i].place(at: CGPoint(x: x, y: y + (h - size.height) / 2), proposal: ProposedViewSize(size))
-                x += size.width + spacing
-            }
-            y += h + spacing
-        }
     }
 }
 
