@@ -1,0 +1,476 @@
+<title>Today Year View</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a control strip on top, the phone-sized year grid in the middle, the explanation of each mark below.
+   Phone surface uses iOS-like tokens; the page around it is a quiet cool grey. */
+:root {
+  --page: #f1f3f6; --card: #ffffff; --ink: #14181f; --muted: #5d6675; --line: #d9dee6;
+  --ph: #ffffff; --ph-ink: #111111; --ph-muted: #8a8a8e;
+  --today: #ff3b30; --holiday: #d92d20;
+  --busy: rgba(60,60,67,0.16);
+  --heat: #e8763c;
+  --band-teal: #1ea39a; --band-blue: #3478f6; --band-purple: #8e5bd9;
+  --band-alpha: 0.24;
+  --dot: #e8763c; --bday: #e0508a;
+  --rec: #1b6ef3; --rec-bg: #e5eefe;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sys: -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0d1015; --card: #171b22; --ink: #e8ecf2; --muted: #9aa3b2; --line: #2a303a;
+    --ph: #000000; --ph-ink: #f5f5f7; --ph-muted: #8e8e93;
+    --today: #ff453a; --holiday: #ff6b61;
+    --busy: rgba(235,235,245,0.22);
+    --heat: #f08a55;
+    --band-teal: #3ccfc4; --band-blue: #6aa0ff; --band-purple: #b394f0;
+    --band-alpha: 0.34;
+    --dot: #f08a55; --bday: #ff7fb0;
+    --rec: #6aa0ff; --rec-bg: #1c2a47;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #0d1015; --card: #171b22; --ink: #e8ecf2; --muted: #9aa3b2; --line: #2a303a;
+  --ph: #000000; --ph-ink: #f5f5f7; --ph-muted: #8e8e93;
+  --today: #ff453a; --holiday: #ff6b61;
+  --busy: rgba(235,235,245,0.22);
+  --heat: #f08a55;
+  --band-teal: #3ccfc4; --band-blue: #6aa0ff; --band-purple: #b394f0;
+  --band-alpha: 0.34;
+  --dot: #f08a55; --bday: #ff7fb0;
+  --rec: #6aa0ff; --rec-bg: #1c2a47;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--page); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 22px; }
+h1 { font-size: 26px; line-height: 1.2; font-weight: 600; margin: 0; text-wrap: balance; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+p { margin: 0; max-width: 68ch; }
+.lead { color: var(--muted); }
+.strip { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.group > .cap { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+button.chip {
+  font: inherit; font-size: 14px; color: var(--ink); background: var(--card); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 13px; cursor: pointer; display: inline-flex; gap: 7px; align-items: center;
+}
+button.chip[aria-pressed="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+button.chip:focus-visible, .sets label:focus-within, .info:focus-visible { outline: 2px solid var(--rec); outline-offset: 2px; }
+.badge { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; background: var(--rec-bg); color: var(--rec); border-radius: 999px; padding: 1px 7px; font-weight: 600; }
+button.chip[aria-pressed="true"] .badge { background: var(--page); color: var(--ink); }
+.sets label { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; cursor: pointer; }
+.stage { display: flex; flex-wrap: wrap; gap: 26px 34px; align-items: flex-start; justify-content: center; }
+.col { display: grid; gap: 12px; width: min(100%, 392px); min-width: 0; }
+.col > .label { font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; min-height: 22px; }
+.col > .label b { color: var(--ink); font-weight: 600; }
+
+/* The phone */
+.phone { background: var(--ph); color: var(--ph-ink); border-radius: 34px; border: 1px solid var(--line); padding: 18px 0 20px; position: relative; overflow: hidden; font-family: var(--sys); }
+.yhead { display: flex; align-items: center; justify-content: space-between; padding: 4px 20px 8px; }
+.yhead h3 { margin: 0; font-size: 31px; font-weight: 700; letter-spacing: -0.01em; color: var(--today); }
+.info { font: inherit; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--ph-muted); color: var(--ph-muted); background: transparent; cursor: pointer; font-weight: 600; font-family: var(--sys); font-size: 15px; font-style: italic; }
+.months { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 14px; padding: 0 20px; }
+.month { min-width: 0; }
+.mname { font-size: 17px; font-weight: 700; margin: 0 0 5px 2px; }
+.mname.cur { color: var(--today); }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 6.5px; }
+.cell { height: 16px; position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 0; background: none; padding: 0; color: inherit; font-family: var(--sys); }
+.cell .n { font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; position: relative; z-index: 2; line-height: 16px; }
+.cell .bg { position: absolute; z-index: 1; height: 16px; }
+.cell.empty { cursor: default; }
+.cell .heat { width: 18px; left: 50%; margin-left: -9px; border-radius: 4px; }
+.cell .busy { width: 18px; left: 50%; margin-left: -9px; border-radius: 4px; background: var(--busy); }
+.cell .band { left: 0; right: 0; }
+.cell .band.l { border-top-left-radius: 8px; border-bottom-left-radius: 8px; left: 1px; }
+.cell .band.r { border-top-right-radius: 8px; border-bottom-right-radius: 8px; right: 1px; }
+.cell .circle { width: 16px; height: 16px; border-radius: 50%; background: var(--today); left: 50%; margin-left: -8px; }
+.cell.today .n { color: #fff; }
+.cell.holiday:not(.today) .n { color: var(--holiday); font-weight: 700; }
+.cell.weekend:not(.today):not(.holiday) .n { color: var(--ph-muted); }
+.cell.sel .ring { position: absolute; z-index: 3; width: 20px; height: 18px; border-radius: 5px; border: 1.5px solid var(--ph-ink); left: 50%; margin-left: -10px; }
+.cell .dot { position: absolute; z-index: 3; width: 4px; height: 4px; border-radius: 50%; background: var(--dot); bottom: -3.5px; left: 50%; margin-left: -2px; }
+.cell .bd { position: absolute; z-index: 3; width: 4px; height: 4px; border-radius: 50%; background: var(--bday); top: -2px; right: 1px; }
+.cell:focus-visible { outline: 2px solid var(--rec); outline-offset: 0; border-radius: 4px; }
+.tc-teal { background: color-mix(in srgb, var(--band-teal) calc(var(--band-alpha) * 100%), transparent); }
+.tc-blue { background: color-mix(in srgb, var(--band-blue) calc(var(--band-alpha) * 100%), transparent); }
+.tc-purple { background: color-mix(in srgb, var(--band-purple) calc(var(--band-alpha) * 100%), transparent); }
+.heatL1 { background: color-mix(in srgb, var(--heat) 16%, transparent); }
+.heatL2 { background: color-mix(in srgb, var(--heat) 34%, transparent); }
+.heatL3 { background: color-mix(in srgb, var(--heat) 58%, transparent); }
+
+/* legend sheet inside the phone */
+.sheet { position: absolute; left: 10px; right: 10px; bottom: 10px; background: color-mix(in srgb, var(--ph) 94%, var(--ph-ink)); border: 1px solid var(--line); border-radius: 22px; padding: 16px 18px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.28); z-index: 10; }
+.sheet[hidden] { display: none !important; }
+.sheet h4 { margin: 0 0 10px; font-size: 15px; }
+.sheet ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.sheet li { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; font-size: 13.5px; line-height: 1.3; }
+.sheet .done { margin-top: 12px; font: inherit; font-size: 14px; font-weight: 600; width: 100%; border: 0; border-radius: 12px; padding: 9px; background: var(--busy); color: var(--ph-ink); cursor: pointer; }
+.sw { display: grid; place-items: center; height: 22px; position: relative; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sw.hol { color: var(--holiday); font-weight: 700; }
+.sw.tod::before { content: ""; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: var(--today); }
+.sw.tod span { position: relative; color: #fff; }
+.sw.bz::before { content: ""; position: absolute; width: 22px; height: 18px; border-radius: 5px; background: var(--busy); }
+.sw.bz span { position: relative; }
+.sw.bnd::before { content: ""; position: absolute; width: 44px; height: 16px; border-radius: 8px; background: color-mix(in srgb, var(--band-teal) calc(var(--band-alpha) * 100%), transparent); }
+.sw.bnd span { position: relative; }
+.sw.dl::after { content: ""; position: absolute; width: 4px; height: 4px; border-radius: 50%; background: var(--dot); bottom: 0; left: 50%; margin-left: -2px; }
+.sw.bd::after { content: ""; position: absolute; width: 4px; height: 4px; border-radius: 50%; background: var(--bday); top: 1px; right: 15px; }
+.sw.h1::before, .sw.h2::before, .sw.h3::before { content: ""; position: absolute; width: 22px; height: 18px; border-radius: 4px; }
+.sw.h1::before { background: color-mix(in srgb, var(--heat) 16%, transparent); }
+.sw.h2::before { background: color-mix(in srgb, var(--heat) 34%, transparent); }
+.sw.h3::before { background: color-mix(in srgb, var(--heat) 58%, transparent); }
+.sw span { position: relative; }
+
+/* detail strip + notes */
+.detail { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-size: 14px; min-height: 92px; }
+.detail .d { font-weight: 600; margin-bottom: 4px; }
+.detail .row { color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
+.detail .row span.k { color: var(--ink); }
+.detail .tag { font-family: var(--mono); font-size: 12.5px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; min-width: 0; }
+.card ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.card li { color: var(--ink); }
+.card .muted, .muted { color: var(--muted); }
+code, .mono { font-family: var(--mono); font-size: 13px; }
+.stats { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .sheet { animation: up .18s ease-out; } @keyframes up { from { transform: translateY(14px); opacity: 0; } } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <h1>Year view: every color needs a reason</h1>
+    <p class="lead">Calendar &rsaquo; Year for 2026, today is Saturday Oct 17. The data is an example of a normal person: a daily standup, a weekly sync, a sports calendar on weekends, the US Holidays calendar, four trips, a few due dates. Tap any day to see why it is marked.</p>
+  </header>
+
+  <div class="strip" role="group" aria-label="Controls">
+    <div class="group" id="variants"><span class="cap">View</span></div>
+    <div class="group" id="themes"><span class="cap">Theme</span></div>
+    <div class="group sets"><span class="cap">Holidays</span>
+      <label><input type="checkbox" id="set-us" checked> United States</label>
+      <label><input type="checkbox" id="set-cn"> China</label>
+      <label><input type="checkbox" id="set-intl" checked> Christmas, Easter and more</label>
+    </div>
+    <div class="group"><label class="sets" style="display:inline-flex;gap:6px;align-items:center;font-size:14px;cursor:pointer"><input type="checkbox" id="compare"> Compare with the current view</label></div>
+  </div>
+
+  <div class="stage" id="stage"></div>
+
+  <div class="cards" id="notes"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var Y = 2026, TODAY = [10, 17], SELECTED = [11, 26];
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var MFULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var DOW = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var k = function (m, d) { return m * 100 + d; };
+
+  // Holiday dates as computed by the app's rules (Foundation's Chinese calendar for the lunar ones).
+  var HOL = {
+    us: {101:"New Year's Day",119:"Martin Luther King Jr. Day",216:"Presidents' Day",525:"Memorial Day",619:"Juneteenth",704:"Independence Day",907:"Labor Day",1012:"Columbus Day",1111:"Veterans Day",1126:"Thanksgiving",1225:"Christmas Day"},
+    cn: {101:"New Year's Day",216:"Chinese New Year's Eve",217:"Spring Festival",303:"Lantern Festival",405:"Qingming",501:"Labour Day",619:"Dragon Boat Festival",925:"Mid-Autumn Festival",1001:"National Day"},
+    intl: {101:"New Year's Day",214:"Valentine's Day",405:"Easter Sunday",510:"Mother's Day",621:"Father's Day",1031:"Halloween",1225:"Christmas Day"}
+  };
+  // The Holidays calendar a US user already has (counts as items in the current view).
+  var APPLE_HOL = Object.assign({}, HOL.us, HOL.intl);
+
+  var TRIPS = [
+    {name:"Tokyo", from:k(3,14), to:k(3,18), cls:"tc-teal", cal:"Travel"},
+    {name:"Sales summit", from:k(6,9), to:k(6,11), cls:"tc-purple", cal:"Work"},
+    {name:"Team offsite", from:k(10,21), to:k(10,22), cls:"tc-blue", cal:"Work"},
+    {name:"Family trip", from:k(12,26), to:k(12,30), cls:"tc-teal", cal:"Travel"}
+  ];
+  var DEADLINES = {930:"Pay parking fine (overdue)",1020:"Submit expense report",1030:"Renew passport",1113:"Tax estimate",1124:"Book flights home",1215:"Gift for Mom",1218:"Send holiday cards"};
+  var BDAYS = {203:"Ana",322:"Leo",530:"Priya",712:"Sam",819:"Mia",1008:"Dad",1025:"Chen",1109:"Noor",1202:"Jules"};
+
+  function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  var rand = rng(2026);
+
+  // Per-day model for the whole year.
+  var days = {}; // key -> {m,d,dow,rec,one,sports}
+  for (var m = 1; m <= 12; m++) {
+    var n = new Date(Y, m, 0).getDate();
+    for (var d = 1; d <= n; d++) {
+      var dow = new Date(Y, m - 1, d).getDay();
+      var weekday = dow >= 1 && dow <= 5;
+      var r = rand(), one;
+      if (weekday) one = r < .50 ? 0 : r < .80 ? 1 : r < .93 ? 2 : r < .98 ? 3 : 4;
+      else one = r < .80 ? 0 : r < .95 ? 1 : 2;
+      var rec = (weekday && (m > 1 || d >= 5) ? 1 : 0) + (dow === 2 && (m > 1 || d >= 6) ? 1 : 0);
+      var sports = (!weekday && (m <= 5 || m >= 8) && rand() < .5) ? 1 : 0;
+      days[k(m, d)] = {m:m, d:d, dow:dow, rec:rec, one:one, sports:sports};
+    }
+  }
+  [[1020,3],[1028,4],[1105,5],[1119,3],[1209,4],[310,4],[604,3],[923,3]].forEach(function (p) { days[p[0]].one = Math.max(days[p[0]].one, p[1]); });
+  function tripOf(key) { for (var i = 0; i < TRIPS.length; i++) if (key >= TRIPS[i].from && key <= TRIPS[i].to) return TRIPS[i]; return null; }
+  TRIPS.forEach(function (t) { for (var key in days) if (+key >= t.from && +key <= t.to) days[key].one = 0; });
+  var todayKey = k(TODAY[0], TODAY[1]);
+
+  // What the app counts today (CalendarView.countDays): everything, recurring and subscribed included.
+  function currentCount(key) {
+    var x = days[key];
+    return x.rec + x.one + x.sports + (APPLE_HOL[key] ? 1 : 0) + (BDAYS[key] ? 1 : 0) + (tripOf(key) ? 1 : 0);
+  }
+  function busyLevel(c) { return c < 1 ? 0 : c <= 2 ? 1 : c <= 4 ? 2 : 3; }
+
+  // What the new rule counts (YearLoad.counts): own, one-off, not a trip; plus dated reminders still ahead.
+  function load(key) { return days[key].one + (DEADLINES[key] && key >= todayKey ? 1 : 0); }
+  // YearBusy.days: top tenth of active days, at least 3, never more than 15% of active days.
+  function busySet() {
+    var loads = {}, active = [];
+    for (var key in days) { var l = load(+key); loads[key] = l; if (l > 0) active.push(l); }
+    active.sort(function (a, b) { return a - b; });
+    var out = {}, info = {active: active.length, threshold: 0, marked: 0};
+    if (!active.length) return {set: out, info: info};
+    var rank = Math.min(active.length - 1, Math.max(0, Math.ceil(0.9 * active.length) - 1));
+    var th = Math.max(3, active[rank]), cap = Math.max(1, Math.floor(0.15 * active.length));
+    while (active.filter(function (v) { return v >= th; }).length > cap) {
+      var next = active.find(function (v) { return v > th; });
+      if (next === undefined) { info.threshold = th; return {set: {}, info: info}; }
+      th = next;
+    }
+    for (var key2 in loads) if (loads[key2] >= th) out[key2] = true;
+    info.threshold = th; info.marked = Object.keys(out).length;
+    return {set: out, info: info};
+  }
+  var BUSY = busySet();
+
+  // State
+  var VARIANTS = [
+    {id:"cur", name:"Current"},
+    {id:"a", name:"A. Quiet"},
+    {id:"b", name:"B. Marks with a reason", rec:true},
+    {id:"c", name:"C. Everything"}
+  ];
+  var state = {variant:"b", theme:"auto", us:true, cn:false, intl:true, compare:false, selected:k(SELECTED[0], SELECTED[1]), legend:{}};
+  try { var saved = JSON.parse(localStorage.getItem("year-view-state") || "{}"); ["variant","theme","us","cn","intl","compare"].forEach(function (f) { if (saved[f] !== undefined) state[f] = saved[f]; }); } catch (e) {}
+  function save() { try { localStorage.setItem("year-view-state", JSON.stringify(state)); } catch (e) {} }
+
+  function holidayNames(key) {
+    var out = [];
+    ["us","cn","intl"].forEach(function (s) { if (state[s] && HOL[s][key] && out.indexOf(HOL[s][key]) < 0) out.push(HOL[s][key]); });
+    return out;
+  }
+
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function buildCell(variantId, key, x, col) {
+    var c = el("button", "cell"); c.type = "button";
+    var isToday = key === todayKey, hol = holidayNames(key).length > 0;
+    var weekend = x.dow === 0 || x.dow === 6;
+    c.setAttribute("aria-label", MFULL[x.m - 1] + " " + x.d);
+    c.dataset.key = key;
+    var isCur = variantId === "cur", isA = variantId === "a", isB = variantId === "b", isC = variantId === "c";
+    var trip = tripOf(key);
+
+    if (isCur) {
+      var lv = busyLevel(currentCount(key));
+      if (!isToday && lv > 0) c.appendChild(el("span", "bg heat heatL" + lv));
+    } else {
+      if (trip) {
+        var band = el("span", "bg band " + trip.cls);
+        var prev = col > 0 && trip.from <= key - 1 && days[key - 1] && days[key - 1].m === x.m;
+        var nextOk = col < 6 && trip.to >= key + 1 && days[key + 1] && days[key + 1].m === x.m;
+        if (!prev) band.classList.add("l");
+        if (!nextOk) band.classList.add("r");
+        c.appendChild(band);
+      } else if ((isB || isC) && BUSY.set[key] && !isToday) {
+        c.appendChild(el("span", "bg busy"));
+      }
+    }
+    if (isToday) c.appendChild(el("span", "bg circle"));
+    var n = el("span", "n", String(x.d));
+    c.appendChild(n);
+    if (isToday) c.classList.add("today");
+    if (!isCur && hol) c.classList.add("holiday");
+    if (isC && weekend) c.classList.add("weekend");
+    if (isC) {
+      if (DEADLINES[key]) c.appendChild(el("span", "dot"));
+      if (BDAYS[key]) c.appendChild(el("span", "bd"));
+    }
+    if ((isC || isB || isA) && state.selected === key && isC) { c.classList.add("sel"); c.insertBefore(el("span", "ring"), c.firstChild); }
+    c.addEventListener("click", function () { state.selected = key; renderAll(); });
+    return c;
+  }
+
+  function buildMonth(variantId, m) {
+    var box = el("div", "month");
+    var cur = m === TODAY[0];
+    box.appendChild(el("div", "mname" + (cur ? " cur" : ""), MONTHS[m - 1]));
+    var g = el("div", "grid");
+    var first = new Date(Y, m - 1, 1).getDay(), count = new Date(Y, m, 0).getDate();
+    for (var i = 0; i < first; i++) g.appendChild(el("div", "cell empty"));
+    for (var d = 1; d <= count; d++) {
+      var key = k(m, d);
+      g.appendChild(buildCell(variantId, key, days[key], (first + d - 1) % 7));
+    }
+    box.appendChild(g);
+    return box;
+  }
+
+  function legendRows(variantId) {
+    var R = function (cls, glyph, text) { return {cls: cls, glyph: glyph, text: text}; };
+    if (variantId === "cur") return [
+      R("h1", "7", "Light orange: 1 or 2 items that day. Counts repeating items, holidays, birthdays and every day of a trip."),
+      R("h2", "14", "Medium: 3 or 4 items."),
+      R("h3", "21", "Dark: 5 or more."),
+      R("tod", "17", "Today.")
+    ];
+    var rows = [R("hol", "26", "Holiday or festival (Settings picks which).")];
+    rows.push(R("bnd", "9", "A trip or event that lasts days, in its calendar's color."));
+    if (variantId !== "a") rows.push(R("bz", "5", "Unusually busy for you: 3 or more of your own one-off items, among your busiest days this year."));
+    if (variantId === "c") {
+      rows.push(R("dl", "20", "A reminder is due."));
+      rows.push(R("bd", "25", "A birthday."));
+      rows.push(R("", "6", "Weekend, dimmed."));
+    }
+    rows.push(R("tod", "17", "Today."));
+    return rows;
+  }
+
+  function buildPhone(variantId) {
+    var ph = el("div", "phone");
+    var head = el("div", "yhead");
+    head.appendChild(el("h3", null, String(Y)));
+    var info = el("button", "info", "i"); info.type = "button";
+    info.setAttribute("aria-label", "What the marks mean");
+    head.appendChild(info);
+    ph.appendChild(head);
+    var months = el("div", "months");
+    for (var m = 1; m <= 12; m++) months.appendChild(buildMonth(variantId, m));
+    ph.appendChild(months);
+    var sheet = el("div", "sheet"); sheet.hidden = !state.legend[variantId];
+    sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-label", "Year view key");
+    sheet.appendChild(el("h4", null, "What the marks mean"));
+    var ul = el("ul");
+    legendRows(variantId).forEach(function (row) {
+      var li = el("li"); var sw = el("div", "sw " + row.cls); sw.appendChild(el("span", null, row.glyph)); li.appendChild(sw); li.appendChild(el("div", null, row.text)); ul.appendChild(li);
+    });
+    sheet.appendChild(ul);
+    var done = el("button", "done", "Done"); done.type = "button"; sheet.appendChild(done);
+    ph.appendChild(sheet);
+    info.addEventListener("click", function () { state.legend[variantId] = !state.legend[variantId]; sheet.hidden = !state.legend[variantId]; });
+    done.addEventListener("click", function () { state.legend[variantId] = false; sheet.hidden = true; });
+    return ph;
+  }
+
+  function detailFor(variantId) {
+    var key = state.selected, x = days[key];
+    var box = el("div", "detail");
+    var date = new Date(Y, x.m - 1, x.d);
+    box.appendChild(el("div", "d", DOW[date.getDay()] + ", " + MFULL[x.m - 1] + " " + x.d));
+    function line(label, text) { var r = el("div", "row"); r.appendChild(el("span", "k", label)); r.appendChild(el("span", null, text)); box.appendChild(r); }
+    if (variantId === "cur") {
+      var c = currentCount(key), lv = busyLevel(c);
+      var parts = [];
+      if (x.rec) parts.push(x.rec + " repeating");
+      if (x.sports) parts.push("1 sports calendar");
+      if (x.one) parts.push(x.one + " one-off");
+      if (APPLE_HOL[key]) parts.push("1 holiday");
+      if (BDAYS[key]) parts.push("1 birthday");
+      if (tripOf(key)) parts.push("1 trip day");
+      line("Counted:", c + " items" + (parts.length ? " (" + parts.join(", ") + ")" : ""));
+      line("Shade:", lv ? "level " + lv + " of 3" : "none");
+      line("Says:", c > 0 && !x.one && !tripOf(key) && !APPLE_HOL[key] ? "nothing about this day, it is only the repeating items" : "a mix of routine and real load that cannot be told apart");
+      return box;
+    }
+    var h = holidayNames(key), trip = tripOf(key);
+    line("Holiday:", h.length ? h.join(" / ") : "none");
+    line("Trip:", trip ? trip.name + " (" + trip.cal + " calendar)" : "none");
+    if (variantId !== "a") {
+      var l = load(key);
+      line("Own load:", l + " one-off" + (l === 1 ? " item" : " items") + ", repeating items (" + (x.rec + x.sports) + ") not counted");
+      line("Busy:", BUSY.set[key] ? "yes, at or above " + BUSY.info.threshold + " items" : (trip ? "not judged during a trip" : "no (the line is " + BUSY.info.threshold + " items for this year)"));
+    }
+    if (variantId === "c") {
+      if (DEADLINES[key]) line("Due:", DEADLINES[key]);
+      if (BDAYS[key]) line("Birthday:", BDAYS[key]);
+    }
+    return box;
+  }
+
+  var NOTES = {
+    cur: ["Why it fills up", ["Every weekday has the daily standup, Tuesdays add the weekly sync, so every weekday is at least level 1.", "Repeating items, subscribed calendars, holidays and birthdays count like real meetings.", "The thresholds (1-2, 3-4, 5+) are fixed numbers, not compared with how busy you normally are.", "A 5-day trip counts as 5 slightly busy days."]],
+    a: ["Quiet: three marks", ["Red number: holiday or festival.", "Colored band: a trip or event that lasts days, in its calendar's color.", "Red circle: today (as in Apple Calendar).", "Nothing about how busy a day is. Safe, but you cannot see a crunch coming."]],
+    b: ["Recommended: four marks, each with a reason", ["Red number: holiday or festival from the sets you choose, plus Apple's Holidays calendar when it is on.", "Colored band: all-day events of two or more days, in the calendar's own color.", "Gray tint: unusually busy for you. Only your own one-off items count (events, planned work, reminders still due), and only the top tenth of your active days, at least 3 items.", "Red circle: today.", "The key opens from the i button. Tap a day to see why it is marked."]],
+    c: ["Everything: why it is not recommended", ["Seven kinds of mark share 15-pt cells. A due-date dot, a birthday dot, a dimmed weekend and a selection ring sit next to a number that is already carrying a holiday color.", "Dots appear on a large share of days for anyone with dated reminders, which is the original problem again.", "Birthdays alone add a mark on roughly one day in forty for a short contact list, and many more for a long one.", "Month and the day list already show all of this with room to read it."]]
+  };
+
+  function renderNotes() {
+    var host = document.getElementById("notes"); host.textContent = "";
+    var v = state.variant, nt = NOTES[v];
+    var c1 = el("div", "card"); c1.appendChild(el("h2", null, nt[0]));
+    var ul = el("ul"); nt[1].forEach(function (t) { ul.appendChild(el("li", null, t)); }); c1.appendChild(ul);
+    host.appendChild(c1);
+    var c2 = el("div", "card"); c2.appendChild(el("h2", null, "Numbers for this example year"));
+    var cc = 0, cnt = {0:0,1:0,2:0,3:0};
+    for (var key in days) { var lv = busyLevel(currentCount(+key)); cnt[lv]++; }
+    var total = Object.keys(days).length;
+    var p = el("p", "stats");
+    p.textContent = "Current view: " + (total - cnt[0]) + " of " + total + " days shaded (" + Math.round((total - cnt[0]) / total * 100) + "%).  New rule: " + BUSY.info.marked + " days marked busy out of " + BUSY.info.active + " days that have anything of your own (threshold " + BUSY.info.threshold + " items).";
+    c2.appendChild(p);
+    var p2 = el("p", "muted"); p2.style.marginTop = "8px";
+    p2.textContent = "Weekends and the free days stay plain, so the few marked days are readable at a glance.";
+    c2.appendChild(p2);
+    host.appendChild(c2);
+    var c3 = el("div", "card"); c3.appendChild(el("h2", null, "Dates to check"));
+    var p3 = el("p", "muted");
+    p3.textContent = "Spring Festival is Feb 17, 2026 and Feb 6, 2027 (computed from the Chinese calendar). Mid-Autumn is Sep 25, 2026. Thanksgiving is Nov 26, 2026. Easter is Apr 5, 2026.";
+    c3.appendChild(p3); host.appendChild(c3);
+  }
+
+  function renderAll() {
+    save();
+    document.documentElement.removeAttribute("data-theme");
+    if (state.theme !== "auto") document.documentElement.setAttribute("data-theme", state.theme);
+    var stage = document.getElementById("stage"); stage.textContent = "";
+    var shown = state.compare && state.variant !== "cur" ? ["cur", state.variant] : [state.variant];
+    shown.forEach(function (id) {
+      var col = el("div", "col");
+      var v = VARIANTS.filter(function (x) { return x.id === id; })[0];
+      var lab = el("div", "label"); var b = el("b", null, v.name); lab.appendChild(b);
+      if (v.rec) lab.appendChild(el("span", "badge", "Recommended"));
+      col.appendChild(lab);
+      col.appendChild(buildPhone(id));
+      col.appendChild(detailFor(id));
+      stage.appendChild(col);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#variants button"), function (b) { b.setAttribute("aria-pressed", String(b.dataset.id === state.variant)); });
+    Array.prototype.forEach.call(document.querySelectorAll("#themes button"), function (b) { b.setAttribute("aria-pressed", String(b.dataset.id === state.theme)); });
+    renderNotes();
+  }
+
+  var vh = document.getElementById("variants");
+  VARIANTS.forEach(function (v) {
+    var b = el("button", "chip"); b.type = "button"; b.dataset.id = v.id; b.appendChild(document.createTextNode(v.name));
+    if (v.rec) b.appendChild(el("span", "badge", "Recommended"));
+    b.addEventListener("click", function () { state.variant = v.id; renderAll(); });
+    vh.appendChild(b);
+  });
+  var th = document.getElementById("themes");
+  [["auto","Auto"],["light","Light"],["dark","Dark"]].forEach(function (t) {
+    var b = el("button", "chip", t[1]); b.type = "button"; b.dataset.id = t[0];
+    b.addEventListener("click", function () { state.theme = t[0]; renderAll(); });
+    th.appendChild(b);
+  });
+  [["set-us","us"],["set-cn","cn"],["set-intl","intl"]].forEach(function (p) {
+    var i = document.getElementById(p[0]); i.checked = !!state[p[1]];
+    i.addEventListener("change", function () { state[p[1]] = i.checked; renderAll(); });
+  });
+  var cmp = document.getElementById("compare"); cmp.checked = !!state.compare;
+  cmp.addEventListener("change", function () { state.compare = cmp.checked; renderAll(); });
+  renderAll();
+})();
+</script>
