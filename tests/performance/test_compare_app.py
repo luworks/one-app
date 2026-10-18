@@ -17,6 +17,23 @@ class CompareTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'optimization'):
             compare(before, after, context, dict(context, optimization='different'))
 
+    def test_three_fast_samples_require_a_passed_functional_method(self):
+        def log(ms, outcome):
+            lines = ["Test Case '-[Suite testNavigation]' started."]
+            lines += [f'PERF_SAMPLE_APP v=1;name=route;start_ns={i};end_ns={i+1};ms={ms}' for i in range(3)]
+            if outcome:
+                lines += [f"Test Case '-[Suite testNavigation]' {outcome} (1 seconds)."]
+            return samples('\n'.join(lines))
+        context = {key: 'same' for key in CONTEXT_KEYS}
+        for outcome in ('failed', None):
+            result = compare(log(100, 'passed'), log(1, outcome), context, context)
+            row = result['metrics']['testNavigation/route']
+            self.assertEqual(row['median_ratio'], 100)
+            self.assertFalse(row['required_3x_met'])
+            self.assertFalse(row['stretch_10x_met'])
+        result = compare(log(100, 'passed'), log(1, 'passed'), context, context)
+        self.assertTrue(result['metrics']['testNavigation/route']['stretch_10x_met'])
+
 
 if __name__ == '__main__':
     unittest.main()

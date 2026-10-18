@@ -14,11 +14,15 @@ CONTEXT_KEYS = ('configuration', 'optimization', 'simulator_id', 'runtime', 'fix
 
 def samples(text):
     groups, seen = defaultdict(list), set()
+    passed, failed = set(), set()
     method = 'unknown'
     for line in text.splitlines():
         case = re.search(r"Test Case '-\[\S+ (\w+)\]' started", line)
         if case:
             method = case[1]
+        outcome = re.search(r"Test Case '-\[\S+ (\w+)\]' (passed|failed)", line)
+        if outcome:
+            (passed if outcome[2] == 'passed' else failed).add(outcome[1])
         match = re.search(r'PERF_SAMPLE_APP (v=1;.+)$', line)
         if not match:
             continue
@@ -35,7 +39,7 @@ def samples(text):
             if key in fields:
                 groups[method + '/' + key].append(float(fields[key]))
     return {key: dict(n=len(values), raw_ms=values, median_ms=statistics.median(values),
-                      min_ms=min(values), max_ms=max(values), p95_ms=None)
+                      min_ms=min(values), max_ms=max(values), p95_ms=None, functional_pass=key.split('/', 1)[0] in passed and key.split('/', 1)[0] not in failed)
             for key, values in sorted(groups.items())}
 
 
@@ -48,9 +52,10 @@ def compare(before, after, before_context, after_context):
         a, b = before[key], after[key]
         ratio = a['median_ms'] / b['median_ms'] if b['median_ms'] > 0 else None
         valid = a['n'] >= 3 and b['n'] >= 3
-        results[key] = dict(before=a, after=b, median_ratio=ratio, sample_count_sufficient=valid,
-                            required_3x_met=bool(valid and ratio is not None and ratio >= 3),
-                            stretch_10x_met=bool(valid and ratio is not None and ratio >= 10))
+        functional_pass = a.get('functional_pass', False) and b.get('functional_pass', False)
+        results[key] = dict(before=a, after=b, median_ratio=ratio, sample_count_sufficient=valid, functional_pass=bool(functional_pass),
+                            required_3x_met=bool(valid and functional_pass and ratio is not None and ratio >= 3),
+                            stretch_10x_met=bool(valid and functional_pass and ratio is not None and ratio >= 10))
     return dict(scope='monotonic app layout/display-link proxies; not presented/realTouch/complete usability',
                 context=before_context, metrics=dict(sorted(results.items())),
                 missing_after=sorted(before.keys() - after.keys()), missing_before=sorted(after.keys() - before.keys()))
