@@ -38,6 +38,13 @@ The original Year merge retains the original branch's incomplete behavior. Separ
 - Logs/results: `/tmp/today-codex-merge-reminders-*`, `/tmp/today-codex-reminders-alone-*`, `/tmp/today-codex-reminders-long-primary-*`, `/tmp/today-codex-reminders-fixed.*`, `/tmp/today-codex-reminders-fixed-alone-{1,2}.*`. An aborted secondary isolation attempt completed no methods and is not counted as a product failure.
 - Sole final runner shut down the primary simulator after the isolated runs. No real-phone verification.
 
+### Clock (fifth branch)
+
+- Original Clock WIP branch compiled before acceptance. Prepared merge `854489b`, navigation-only test repair `5d55898`; adopted after Reminders as `85e849a` with the corrected Reminders helpers preserved exactly.
+- Prepared source: 515 logic tests, 1 skipped, 0 failures; simulator build passed. UI: 29 unique methods, 27 non-optional methods have passing evidence, 2 optional screenshot skips. One initial Stopwatch swipe failure passed alone unchanged; 30 total attempts, 27 passed, 2 skipped, 1 initial failure.
+- Actual integrated main: 515 logic tests, 1 skipped, 0 failures; simulator build passed; Stopwatch Start/Lap/Stop/Reset and TabMemory both passed (2/2). Primary shut down afterwards.
+- Evidence: `/tmp/today-codex-clock-sequential-report.md`, `/tmp/today-codex-clock-sequential-*`, `/tmp/today-codex-main-clock-{swift,build,smoke}.log`, `/tmp/today-codex-main-clock-smoke.xcresult`. No physical ringing or reference pixel comparison claimed.
+
 ## Remaining
 
-Clock, World Clock and Timer sequential gates; branch completion gaps; Health moving averages; Week alarm lane; PR #29; final full UI run; real-device checks listed in issue #32. Reference screenshots requested from the owner; not received yet.
+World Clock and Timer sequential gates; branch completion gaps; Health moving averages; Week alarm lane; PR #29; final full UI run; real-device checks listed in issue #32. Reference screenshots requested from the owner; not received yet.
