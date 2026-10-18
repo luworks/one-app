@@ -35,7 +35,7 @@ exports/imports interval-one weekly day sets; unsupported interval/positional ru
 remain unsupported. Model multi-item draft mapping also carries explicit weekdays,
 validates the full list and preserves an explicit future start-date lower bound.
 
-## Evidence at initial review
+## Verification and evidence
 
 - Owner screenshot retained in primary `tests/results/ai-recurrence-20261018/`,
   indexed with SHA256 by QA journal session `recurring-reminder-20261018`.
@@ -45,9 +45,25 @@ validates the full list and preserves an explicit future start-date lower bound.
   one-off `this/next weekend` must not gain recurrence; model weekday mapping
   must not advance an explicitly later start date.
 - Python TitleQuality scorer: 7 tests passed. `git diff --check` passed.
-- Swift logic, simulator build/UI, actual local save/reopen and EventKit runtime
-  behavior are pending resource release at this revision. No real Foundation
-  Models or physical-device behavior has been measured.
+- Pure Swift at `17bb5cb`: red comparator restored only pre-fix `ChatRouting`
+  and the initial weekday parser block from `3bc6a01`, retaining the new compatible
+  recurrence type and new tests. One exact-owner regression test produced 16
+  expected assertion failures, reproducing chat misrouting, malformed titles,
+  single-day loss and wrong first date. This is not an old-app or FM execution.
+- Restored candidate: 86 focused tests ran; 84 passed, 2 methods failed with 3
+  assertions. The failures identified missing 中 in the Chinese midday route
+  vocabulary and the old `Run every weekday` fixture expecting no first due date.
+  Added the complete token and updated that expectation to the first eligible day;
+  the ratchet was not lowered. At `702c4fc`, the two affected methods plus actual
+  fallback exporter passed (3 tests). Capture baseline is 46/46 train, 22/22 test.
+  Other passing tests were not repeated. There is no claim of a full-suite pass.
+- Swift commands ran from this worktree's `ios/` through the global-lock wrapper
+  with `--jobs 2`, in the explicitly released 11:10–11:12 PDT window. A repair
+  invocation initially used the repository root and exited without finding a
+  Package.swift; it was corrected to `ios/` before the 3-test run.
+- No Xcode build, simulator UI, actual local save/reopen, notification delivery or
+  EventKit runtime execution has been performed for this revision. No real
+  Foundation Models or physical-device behavior has been measured.
 
 ## Focused checks
 
@@ -76,3 +92,33 @@ UI (one shared warm runner, build once, at most these three methods):
 The UI title selector is the existing editable `capture-title` Button, not a
 StaticText. These checks establish simulator fallback only. Apple Intelligence,
 notification delivery and live Apple Reminders sync require separate evidence.
+
+## Actual broader goal evaluation
+
+`702c4fc` exported 11 development turns from 9 cases through the production pure
+routing/context/parser/dialogue seam. Raw per-turn JSON, hashes, source manifest,
+red/green/repair logs and scorer output are retained in primary
+`tests/results/ai-recurrence-20261018/`, indexed by the QA journal. The 7 reserved
+validation cases (8 turns) were not executed; they are reserved, not blind.
+
+Both exact owner requests produced `task`, title `丢垃圾`, 17:00 and normalized
+`weekly:sun` / `weekly:fri,sun`; the shared time-correction/English add-repeat,
+weekday and ordinary conversation tests passed. Structured content evidence is
+separate from app persistence and the confirmation gate.
+
+The benchmark is **not green**. Source-aware, attributed content review of actual
+outputs identifies three remaining goals, retained without changing expectations:
+
+- Colloquial `麻烦帮我加个每逢周五…的提醒` stays conversational.
+- `不是下午五点，改成下午六点，周五和周日都保留。` is not recognized as
+  the requested preview correction.
+- The mixed NAS request retains its explicit firmware-update note inside the
+  title while `notes` is null, failing the separate title/notes goal.
+
+The existing scorer reports 3 failed / 16 unmeasured turns, zero reviewed passes.
+The latter includes unexecuted validation plus development rows whose Add/Apply
+controls and writes were not observed. Raw exports omit unknown gate/write fields
+rather than fabricating passing values. Semantic review is attributed derived
+analysis (`observations-reviewed.json`); raw backend artifacts remain unchanged.
+This wider benchmark exposes gaps beyond the repaired weekday pipeline and is not
+represented as model quality, full app acceptance or successful persistence.
