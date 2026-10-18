@@ -35,3 +35,24 @@ class StageSummaryTests(unittest.TestCase):
         self.assertFalse(any('response_await' in name or 'task_queue' in name for name in result['spans']))
         with self.assertRaisesRegex(ValueError, 'contains async'):
             stages.reduce(line + ';task_enter_ns=5000000')
+
+    def test_layout_attribution_requires_complete_points(self):
+        with self.assertRaisesRegex(ValueError, 'missing diagnostic'):
+            stages.reduce(self.line() + ';layout_attribution=1')
+
+    def test_layout_attribution_retains_real_waits(self):
+        fields = {
+            'persist_before': 4, 'persist_after': 5,
+            'scroll_request_before': 5, 'scroll_request_after': 6,
+            'feedback_probe_arm': 7, 'feedback_probe_callback': 8,
+            'feedback_probe_eligible': 9, 'feedback_layout': 11,
+            'response_probe_arm': 10, 'response_probe_callback': 10,
+            'response_probe_eligible': 10,
+        }
+        line = self.line() + ';layout_attribution=1;' + ';'.join(
+            f'{key}_ns={value * 1000000}' for key, value in fields.items())
+        result = stages.reduce(line)
+        key = 'fallback_model_unavailable/async/'
+        self.assertEqual(result['spans'][key + 'persist_call']['raw_ms'], [1])
+        self.assertEqual(result['spans'][key + 'feedback_callback_to_eligible']['raw_ms'], [1])
+        self.assertEqual(result['spans'][key + 'response_eligible_to_layout']['raw_ms'], [1])

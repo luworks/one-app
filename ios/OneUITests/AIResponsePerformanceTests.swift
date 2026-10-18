@@ -130,6 +130,19 @@ final class AIResponsePerformanceTests: XCTestCase {
                             "send", "ready", "feedback_layout", "response_layout"] {
                     XCTAssertNotNil(UInt64(values[key + "_ns"] ?? ""), "Missing conversation stage: \(key)")
                 }
+                for phase in ["feedback", "response"] {
+                    let keys = ["probe_arm", "probe_callback", "probe_eligible"].map { phase + "_" + $0 + "_ns" }
+                    let timestamps = keys.compactMap { UInt64(values[$0] ?? "") }
+                    XCTAssertEqual(timestamps.count, keys.count, "Complete probe attribution: \(phase)")
+                    XCTAssertEqual(timestamps, timestamps.sorted(), "Arm/callback/eligible order: \(phase)")
+                }
+                for pair in [("persist_before", "persist_after"), ("scroll_request_before", "scroll_request_after")] {
+                    guard let before = UInt64(values[pair.0 + "_ns"] ?? ""),
+                          let after = UInt64(values[pair.1 + "_ns"] ?? "") else {
+                        XCTFail("Missing message observer attribution: \(pair)"); continue
+                    }
+                    XCTAssertGreaterThanOrEqual(after, before)
+                }
                 switch values["dispatch"] ?? "" {
                 case "async":
                     for key in ["task_enter", "chat_response_await_before", "chat_response_await_after"] {
