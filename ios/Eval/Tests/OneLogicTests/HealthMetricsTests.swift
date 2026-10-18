@@ -313,7 +313,7 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertEqual(a, HealthSampleSeries.all(now: nowDate, calendar: cal), "seeded: the same every run")
         XCTAssertEqual(Set(a.keys), Set(HealthMetric.allCases))
         let steps = a[.steps]!
-        XCTAssertEqual(steps.points.count, 90)
+        XCTAssertEqual(steps.points.count, MovingAverage.historyDays)
         XCTAssertEqual(steps.latest?.date, cal.startOfDay(for: nowDate))
         XCTAssertTrue(steps.points.dropLast().allSatisfy { (3_000...13_000).contains($0.value) })
         XCTAssertTrue(a[.sleep]!.points.allSatisfy { (5.5 * 60...8.5 * 60).contains($0.value) })

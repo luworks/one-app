@@ -67,11 +67,34 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertTrue(change.label.hasSuffix("vs previous 7 days"), change.label)
         app.buttons["health.range.90"].tap()
         XCTAssertTrue(app.buttons["health.range.90"].isSelected)
-        // The sample has 90 days only, so there is nothing before the last 90: the change line is left out.
-        XCTAssertFalse(app.staticTexts["health.detail.change"].exists, "no earlier data: no change line")
+        // The history includes the lookback before the visible 90-day range.
+        XCTAssertTrue(app.staticTexts["health.detail.change"].exists, "earlier sample data supports the comparison")
 
         app.buttons["health.detail.done"].tap()
         XCTAssertTrue(app.buttons["health.row.steps"].waitForExistence(timeout: 3), "back on the list")
+    }
+
+    func testMovingAverageAppearsForWeightButNotSteps() {
+        let app = launch()
+        openSheet(app)
+        row(app, "weight").tap()
+        let legend = app.descendants(matching: .any)["health.detail.legend"].firstMatch
+        let trend = app.descendants(matching: .any)["health.fact.trend"].firstMatch
+        XCTAssertTrue(legend.waitForExistence(timeout: 5))
+        XCTAssertTrue(legend.label.contains("7-day average"), legend.label)
+        XCTAssertTrue(trend.exists, "reading metrics show the latest average and range change")
+        XCTAssertTrue(trend.label.contains("over 30 days"), trend.label)
+        for days in [7, 90, 30] {
+            app.buttons["health.range.\(days)"].tap()
+            XCTAssertTrue(legend.label.contains(days == 90 ? "14-day average" : "7-day average"), legend.label)
+            XCTAssertTrue(trend.label.contains("over \(days) days"), trend.label)
+        }
+        app.buttons["health.detail.done"].tap()
+        XCTAssertTrue(row(app, "steps").waitForExistence(timeout: 3))
+        row(app, "steps").tap()
+        XCTAssertTrue(app.navigationBars["Steps"].waitForExistence(timeout: 3))
+        XCTAssertFalse(legend.exists, "daily totals have no moving-average legend")
+        XCTAssertFalse(trend.exists, "daily totals keep their existing range facts")
     }
 
     // MARK: Add Metric, Hide

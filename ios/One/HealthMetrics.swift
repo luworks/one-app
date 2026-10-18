@@ -138,6 +138,45 @@ struct HealthWindow: Equatable {
     func contains(_ date: Date) -> Bool { date >= start && date < end }
 }
 
+// MARK: - Moving average
+
+enum MovingAverage {
+    /// Enough history for the widest chart and its trailing window, including the first visible day.
+    static let historyDays = 90 + 14 - 1
+
+    static func window(for rangeDays: Int) -> Int { rangeDays == 90 ? 14 : 7 }
+
+    /// One sample-weighted average per visible calendar day. The trailing window includes that whole day and
+    /// `window - 1` earlier days. Missing days add no zeros; fewer than two samples produces no point.
+    /// Pass the full history, including samples before `days.start`. Calendar arithmetic preserves local days at DST.
+    static func series(points: [HealthPoint], window: Int, days: HealthWindow,
+                       calendar: Calendar = .current) -> [HealthPoint] {
+        guard window > 0, days.days > 0 else { return [] }
+        return (0..<days.days).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: days.start),
+                  let start = calendar.date(byAdding: .day, value: -(window - 1), to: day),
+                  let end = calendar.date(byAdding: .day, value: 1, to: day) else { return nil }
+            let samples = points.filter { $0.date >= start && $0.date < end && $0.value.isFinite }
+            guard samples.count >= 2 else { return nil }
+            return HealthPoint(date: day, value: samples.reduce(0) { $0 + $1.value } / Double(samples.count))
+        }
+    }
+
+    /// Separate chart lines at missing averages, so a long gap is never drawn as a measured trend.
+    static func segments(_ points: [HealthPoint], calendar: Calendar = .current) -> [[HealthPoint]] {
+        var result: [[HealthPoint]] = []
+        for point in points {
+            if let last = result.last?.last,
+               calendar.date(byAdding: .day, value: 1, to: last.date) == point.date {
+                result[result.count - 1].append(point)
+            } else {
+                result.append([point])
+            }
+        }
+        return result
+    }
+}
+
 // MARK: - Selection
 
 /// Which metrics are shown, in the user's order. Groups are fixed (Activity, Sleep & Recovery, Body); inside a group
