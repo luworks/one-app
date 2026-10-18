@@ -541,11 +541,32 @@ private struct YearView: View {
     }
 
     private func marks(in start: Date) -> YearMarks {
+        #if DEBUG
+        if YearCacheTrace.enabled { YearCacheTrace.request() }
+        #endif
         let signature = dataSignature
-        if cache.signature != signature { cache.signature = signature; cache.years = [:] }
-        if let hit = cache.years[start] { return hit }
+        if cache.signature != signature {
+            cache.signature = signature; cache.years = [:]
+            #if DEBUG
+            if YearCacheTrace.enabled { YearCacheTrace.invalidated(cacheCount: cache.years.count) }
+            #endif
+        }
+        if let hit = cache.years[start] {
+            #if DEBUG
+            if YearCacheTrace.enabled { YearCacheTrace.hit() }
+            #endif
+            return hit
+        }
+        #if DEBUG
+        let missStart = YearCacheTrace.enabled ? DispatchTime.now().uptimeNanoseconds : nil
+        #endif
         let result = computeMarks(in: start)
         cache.years[start] = result
+        #if DEBUG
+        if let missStart {
+            YearCacheTrace.miss(year: cal.component(.year, from: start), start: missStart, cacheCount: cache.years.count)
+        }
+        #endif
         return result
     }
 
@@ -599,6 +620,14 @@ private struct YearView: View {
                     .font(.largeTitle.bold())
                     .foregroundStyle(isCurrent ? Color.red : Color.primary)
                     .accessibilityAddTraits(.isHeader)
+                    #if DEBUG
+                    .onAppear {
+                        if YearCacheTrace.enabled { YearCacheTrace.header(year: cal.component(.year, from: start), appeared: true) }
+                    }
+                    .onDisappear {
+                        if YearCacheTrace.enabled { YearCacheTrace.header(year: cal.component(.year, from: start), appeared: false) }
+                    }
+                    #endif
                 Spacer()
                 Button { PerformanceTrace.shared.beginPage("calendar.year.key"); showsKey = true } label: {
                     Image(systemName: "info.circle").font(.title3).foregroundStyle(.secondary)
