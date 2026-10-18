@@ -192,6 +192,7 @@ struct HomeView: View {
     /// Opens the AI screen on a new chat, or on a saved conversation. Opened from the sidebar, closing it
     /// (close button or swipe right) goes back to the sidebar.
     private func openAsk(_ thread: ChatThread?, fromSidebar: Bool = false) {
+        PerformanceTrace.shared.beginPage("ai")
         // From the sidebar, leave it open underneath: closing it first would flash the page (Calendar or
         // Today) before the AI screen slides over it. Back then lands on the sidebar anyway.
         if !fromSidebar { drawer.set(open: false, animated: false) }

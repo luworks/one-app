@@ -25,7 +25,35 @@ final class AIResponsePerformanceTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Ask AI or add anything"].waitForExistence(timeout: 10))
         app.buttons["Ask AI or add anything"].tap()
-        XCTAssertTrue(app.textFields["Ask AI or add anything"].firstMatch.waitForExistence(timeout: 5))
+        let input = app.textFields["Ask AI or add anything"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        // Ask's destination modifier exposes its own report while the modal hides the presenter.
+        let reports = app.staticTexts.matching(identifier: "performance.trace")
+        let opened = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            reports.allElementsBoundByIndex.contains {
+                $0.label.contains(";name=page.ai;") && $0.label.contains(";route=ai;")
+            }
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [opened], timeout: 10), .completed, "Ask content layout endpoint")
+        guard let report = reports.allElementsBoundByIndex.map(\.label).first(where: {
+            $0.contains(";name=page.ai;") && $0.contains(";route=ai;")
+        }) else { XCTFail("Missing modal page.ai report"); return }
+        let values = fields(report)
+        guard let start = UInt64(values["start_ns"] ?? ""), let end = UInt64(values["end_ns"] ?? ""),
+              let ms = Double(values["ms"] ?? "") else {
+            XCTFail("Malformed page.ai sample: \(report)")
+            return
+        }
+        XCTAssertEqual(values["v"], "1")
+        XCTAssertGreaterThanOrEqual(end, start)
+        XCTAssertTrue(ms.isFinite && ms >= 0)
+        XCTAssertEqual(ms, Double(end - start) / 1_000_000, accuracy: 0.000_001)
+        XCTAssertTrue(input.isHittable, "Ask input is usable before sending")
+        print("PERF_SAMPLE_APP \(report)")
+        let pageSample = XCTAttachment(string: report)
+        pageSample.name = "page.ai - \(journey).fresh.\(repetition)"
+        pageSample.lifetime = .keepAlways
+        add(pageSample)
         XCTAssertTrue(app.staticTexts["performance.ai.history"].firstMatch.waitForExistence(timeout: 5))
         print("PERF_CONTEXT v=1;journey=\(journey);rep=\(repetition);launch=process_cold_os_warm;chat=fresh;store=in_memory;fixture=today-dataset.json;clock=09:41;prewarm=default;backend_track=simulator_fallback;wall_epoch=\(Date.now.timeIntervalSince1970)")
     }

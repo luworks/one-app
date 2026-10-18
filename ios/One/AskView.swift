@@ -191,6 +191,7 @@ struct AskView: View {
                         .animation(.snappy, value: proposals.map(\.status))
                     }
                 }
+                .performanceDestination("ai")
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(messages.isEmpty ? .top : .bottom)
                 .onChange(of: messages) {
