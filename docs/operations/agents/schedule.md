@@ -4,13 +4,13 @@
 
 ## Authorized configuration
 
-The owner's current Today root is the single controller. Desired interval: **20 minutes**, T3 structured schedule `{"type":"interval","everyMs":1200000}`. Bind it to that existing root; do not create another Zhuge thread, timer or optional-role schedule. Only the root configures the live T3 schedule after these documents reach `origin/main`. The docs worker must not schedule anything.
+The owner's current Today root is the single controller. Desired interval: **20 minutes**, T3 structured schedule `{"type":"interval","everyMs":1200000}`. Bind it to that existing root; do not create another Zhuge thread, timer or optional-role schedule. Only the root configures the live T3 schedule after these documents reach `origin/main`. The docs worker must not schedule anything. This is ongoing repository supervision: completing all current work settles the corresponding tasks and leaves patrol quiet. Stop the timer only when the owner explicitly disables/cancels repository supervision or an explicitly bounded supervision period ends. Idle patrols must not invent work or wake paused tasks.
 
 Keep full runtime configuration, root identity, task ID, enabled state, prompt version, actual readback and run evidence privately in the primary checkout's `tests/results/`, indexed through `tests/qa/journal.py` in the root's canonical `steward-setup` session. Do not commit raw T3 configuration or private thread inventory. Back up an existing configuration, reread before changing it, preserve unrelated fields, then read back the result. An ambiguous response requires inspection before retrying.
 
 ## Readback status at documentation delivery
 
-Live Today schedule setup/readback is pending the root's action. No task ID, next-run timestamp, enabled state or successful patrol is asserted here. The owner's supplied pre-edit observation was `tasks: []` for both the one-app and job-finder T3 projects; this worker did not independently query or change their schedules. That snapshot is not a claim about later live state.
+The owner now reports that the root created the same-thread 20-minute T3 task, disabled pending these docs reaching main. This worker has not independently read back that configuration; no task ID, next-run timestamp or successful patrol is asserted here. The owner's supplied pre-edit observation was `tasks: []` for both the one-app and job-finder T3 projects; this worker did not independently query or change their schedules. That snapshot is not a claim about later live state.
 
 The requested source path `doc/operations/agent-governance/zhugeliang-schedule-history.md` is absent from job-finder `origin/main` revision `75ba51af7f6a31a72109a4f1cd9fd3fe4f34d8f7` (`git show` reports it is not in that revision). Its presence in a local checkout is not source authority. The source's current coordination references describe historical Codex heartbeat and retired Ubuntu-specific supervision; the owner identifies the historical cadence as 20 minutes. Neither history nor those files establish an active T3 scheduler. Do not restore old job-finder tasks or copy their historical state, private data or host rules.
 
@@ -33,7 +33,9 @@ Workers retain evidence in their own threads/PRs; preserve platform notification
 Respect existing resource ownership and actual capacity. No heavy patrol tests,
 redundant passing checks, CI loops, unsolicited installs or production actions.
 Keep real permission gaps blocked. On owner pause/cancellation stop the affected work;
-when all current endpoints are met, record completion and disable this supervision.
+settle completed tasks but keep quiet repository patrol running when current work is done.
+Stop this timer only on explicit owner cancellation/disablement of repository supervision
+or the end of an explicitly bounded supervision period.
 Record only useful changes in the private QA journal/state. Quiet check: one local
 line, "Patrol: no change." Notify the user in Chinese only for material changes,
 failures or concrete decisions. No acknowledgments or formal no-decision footer.
