@@ -176,8 +176,8 @@ struct ReminderListScreen: View {
         .tint(color)
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle("")
-        .toolbar(.visible, for: .navigationBar)
-        .toolbar { menu }
+        // Keep the native stack (including edge-swipe back), without a second navigation row.
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $editing) { ListEditor(list: $0) }
         .deleteListAlert($pendingDelete)
         .onChange(of: isMissing) { _, missing in if missing { dismiss() } }
@@ -185,20 +185,35 @@ struct ReminderListScreen: View {
 
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(color)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityLabel("\(title), \(reminderCountText(smart == .completed ? done.count : open.count))")
-                Spacer(minLength: 8)
-                if smart != nil {
-                    Text("\(smart == .completed ? done.count : open.count)")
+            HStack(spacing: 8) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.backward")
+                        .font(.title3.weight(.semibold))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Lists")
+                .accessibilityIdentifier("reminders.back")
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(color)
-                        .contentTransition(.numericText())
-                        .accessibilityHidden(true)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityLabel("\(title), \(reminderCountText(smart == .completed ? done.count : open.count))")
+                    Spacer(minLength: 8)
+                    if smart != nil {
+                        Text("\(smart == .completed ? done.count : open.count)")
+                            .font(.largeTitle.weight(.bold))
+                            .foregroundStyle(color)
+                            .contentTransition(.numericText())
+                            .fixedSize()
+                            .accessibilityHidden(true)
+                    }
                 }
+                if isListScreen { menu }
             }
             if isListScreen, !done.isEmpty {
                 Button {
@@ -211,32 +226,32 @@ struct ReminderListScreen: View {
                 }
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("toggleCompleted")
+                .padding(.leading, 52)
             }
         }
     }
 
-    @ToolbarContentBuilder
-    private var menu: some ToolbarContent {
-        if isListScreen {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    if let list {
-                        Button { editing = list } label: { Label("Name & Appearance", systemImage: "pencil") }
-                    }
-                    Button { withAnimation(.snappy) { showsCompleted.toggle() } } label: {
-                        Label(showsCompleted ? "Hide Completed" : "Show Completed", systemImage: showsCompleted ? "eye.slash" : "eye")
-                    }
-                    if let list {
-                        Button(role: .destructive) { pendingDelete = .make(list, context: context) { dismiss() } } label: {
-                            Label("Delete List", systemImage: "trash")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .accessibilityLabel("More")
+    private var menu: some View {
+        Menu {
+            if let list {
+                Button { editing = list } label: { Label("Name & Appearance", systemImage: "pencil") }
             }
+            Button { withAnimation(.snappy) { showsCompleted.toggle() } } label: {
+                Label(showsCompleted ? "Hide Completed" : "Show Completed", systemImage: showsCompleted ? "eye.slash" : "eye")
+            }
+            if let list {
+                Button(role: .destructive) { pendingDelete = .make(list, context: context) { dismiss() } } label: {
+                    Label("Delete List", systemImage: "trash")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("More")
     }
 
     // MARK: Creating
