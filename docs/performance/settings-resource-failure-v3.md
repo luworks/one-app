@@ -65,3 +65,8 @@ the failure geometry inspectable even if xcresult finalization fails again.
 Obtain an actual failure-time screenshot through the owned runner if available.
 Do not change selectors, add coordinate taps, add blind delays, weaken assertions
 or repeat other passing resource methods before that evidence is examined.
+
+
+## Later diagnostic execution
+
+The prepared probe was executed once on new frozen `affd4e1`/production `aa7c7c8`. Its producer exited65 normally and finalized the xcresult. The failure occurred on the second Settings entry, with a unique but hidden/nonhittable Settings node. Actual hierarchy, screenshot and video now exist; see [secondary resources v4](secondary-resources-v4.md) for exact evidence and the narrow setup synchronization repair. These later observations do not repair the old v3 partial result bundle or make its failed samples usable.
