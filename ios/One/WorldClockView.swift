@@ -351,52 +351,49 @@ private struct CityCard: View {
 
     var body: some View {
         let c = colors
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .font(.system(size: 19, weight: .bold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                if isHome {
-                    Image(systemName: "star.fill").font(.system(size: 12))
-                } else {
-                    Text(offset)
-                        .font(.system(size: 10.5, weight: .medium))
-                        .opacity(0.9)
+        StackedCard(
+            fill: LinearGradient(colors: [Color(c.leading), Color(c.trailing)], startPoint: .leading, endPoint: .trailing),
+            horizontalPadding: flat ? 41 : 16,
+            flat: flat
+        ) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.system(size: 19, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if isHome {
+                        Image(systemName: "star.fill").font(.system(size: 12))
+                    } else {
+                        Text(offset)
+                            .font(.system(size: 10.5, weight: .medium))
+                            .opacity(0.9)
+                    }
                 }
-            }
-            .padding(.top, 21)
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: -1) {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(parts.time)
-                        .font(.system(size: flat ? 33 : 35, weight: .heavy, design: .rounded).monospacedDigit())
-                        .contentTransition(.numericText())
-                    if let suffix = parts.suffix { Text(suffix).font(.system(size: 14, weight: .semibold)) }
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                Text(dateText)
-                    .font(.system(size: 10, weight: .medium))
-                    .tracking(0.5)
+                .padding(.top, 21)
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: -1) {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(parts.time)
+                            .font(.system(size: flat ? 33 : 35, weight: .heavy, design: .rounded).monospacedDigit())
+                            .contentTransition(.numericText())
+                        if let suffix = parts.suffix { Text(suffix).font(.system(size: 14, weight: .semibold)) }
+                    }
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.5)
+                    Text(dateText)
+                        .font(.system(size: 10, weight: .medium))
+                        .tracking(0.5)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
+                .padding(.top, 11)
             }
-            .padding(.top, 11)
+            .foregroundStyle(.white)
+            .frame(height: flat ? 78 : 82, alignment: .top)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, flat ? 41 : 16)
-        .frame(height: flat ? 78 : 82, alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .circular)
-                .fill(LinearGradient(colors: [Color(c.leading), Color(c.trailing)], startPoint: .leading, endPoint: .trailing))
-                .opacity(flat ? 0 : 1)
-        )
         .animation(.easeInOut(duration: 0.25), value: c)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .circular))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 1, leading: 15, bottom: 1, trailing: 15))
+        .stackedCardRow()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(name), \(isHome ? "Home" : offset), \(dateText.capitalized), \(parts.time) \(parts.suffix ?? "")")
         .accessibilityIdentifier(isHome ? "worldClock.home" : "worldClock.row")
