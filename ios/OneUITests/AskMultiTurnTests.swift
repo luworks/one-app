@@ -74,6 +74,27 @@ final class AskMultiTurnTests: XCTestCase {
         XCTAssertTrue(label(containing: "→ Today 17:00").exists)
     }
 
+    func testNewReminderInterruptsAnExistingEventsTimePrompt() {
+        send("Move Dentist")
+        XCTAssertTrue(label(containing: "When should I move “Dentist” to?").waitForExistence(timeout: 20))
+        send("Remind me to call Mom tomorrow at 5pm")
+        let card = app.descendants(matching: .any)["capture-stack"].firstMatch
+        XCTAssertTrue(card.buttons["Add"].waitForExistence(timeout: 20), "the new request gets its own preview")
+        XCTAssertTrue(card.staticTexts["call Mom"].exists)
+        XCTAssertTrue(card.staticTexts.containing(NSPredicate(format: "label CONTAINS '17:00'")).firstMatch.exists)
+        XCTAssertFalse(app.otherElements["change-card"].exists, "no proposed move of Dentist")
+        card.buttons["Add"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5))
+
+        // Adding the unrelated reminder has not moved the existing event.
+        send("Move Dentist")
+        send("5pm")
+        XCTAssertTrue(app.otherElements["change-card"].waitForExistence(timeout: 10))
+        XCTAssertTrue(label(containing: "Today 15:00 → Today 17:00").exists)
+        XCTAssertTrue(app.buttons["Apply"].exists, "the event still needs explicit approval")
+        XCTAssertFalse(label(containing: "Moved “Dentist”").exists)
+    }
+
     func testEnglishQuestionTimeAnswerPreservesConversationAndRequiresApply() {
         assertQuestionTimeAnswer("How about 5pm?", conversation: "Did I set an alarm for 7am?")
     }
