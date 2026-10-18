@@ -97,14 +97,20 @@ final class CalendarAlarmTests: XCTestCase {
         app.buttons["Calendar"].firstMatch.tap()
         mode("Week").tap()
 
-        let grid = element("calendar.weekGrid").firstMatch
-        XCTAssertTrue(grid.waitForExistence(timeout: 5))
+        let grids = element("calendar.weekGrid")
+        XCTAssertTrue(grids.firstMatch.waitForExistence(timeout: 5))
+        guard let grid = grids.allElementsBoundByIndex.first(where: {
+            $0.isFullyVisible(in: app.frame) && $0.isHittable
+        }) else {
+            XCTFail("The current Week page is visible")
+            return
+        }
         let event = grid.descendants(matching: .any)
             .matching(NSPredicate(format: "label BEGINSWITH 'Lane overlap event 0,'")).firstMatch
         let marker = grid.descendants(matching: .any).matching(identifier: "calendar.alarmMarker")
             .matching(NSPredicate(format: "label BEGINSWITH 'Alarm Lane overlap alarm at '")).firstMatch
         let visible = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            event.exists && marker.exists && (eventCount > 1 || event.isHittable) && marker.isHittable
+            event.exists && marker.exists && event.isHittable && marker.isHittable
                 && grid.frame.contains(event.frame) && grid.frame.contains(marker.frame)
                 && self.app.frame.contains(event.frame) && self.app.frame.contains(marker.frame)
         }, object: nil)
@@ -125,7 +131,7 @@ final class CalendarAlarmTests: XCTestCase {
         }
         for block in eventFrames {
             XCTAssertTrue(block.exists)
-            if eventCount == 1 { XCTAssertTrue(block.isHittable) }
+            XCTAssertTrue(block.isHittable)
             XCTAssertGreaterThan(block.frame.width, 0)
             if eventCount == 8 {
                 XCTAssertLessThan(block.frame.width, 9, "the dense fixture exercises the former minimum-content overflow")

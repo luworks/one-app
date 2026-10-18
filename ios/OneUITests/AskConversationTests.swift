@@ -51,7 +51,9 @@ final class AskConversationTests: XCTestCase {
         send("make it 4pm")
         XCTAssertTrue(reply("16:00").waitForExistence(timeout: 10))
         app.buttons["Add"].tap()
-        XCTAssertTrue(reply("Added “Call Alex”").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["capture-added"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["capture-undo"].exists)
+        XCTAssertTrue(app.buttons["capture-open"].exists)
     }
 
     func testExistingAlarmQuestionPreservesPendingReminder() {
@@ -68,7 +70,9 @@ final class AskConversationTests: XCTestCase {
         XCTAssertTrue(reply("New reminder").exists)
         XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1)
         app.buttons["Add"].tap()
-        XCTAssertTrue(reply("Added “Call Alex”").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["capture-added"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["capture-undo"].exists)
+        XCTAssertTrue(app.buttons["capture-open"].exists)
     }
 
     func testExplicitEventAndAlarmRequestsStillShowPreviews() {
