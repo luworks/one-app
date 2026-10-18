@@ -156,14 +156,22 @@ final class RemindersSync {
 
     /// A completion is an explicit user write, not a whole-reminder fingerprint edit. Commit it before
     /// the row or the success toast changes. Only this field is written, preserving concurrent Apple edits.
-    func commitCompletion(_ task: OneTask, done: Bool, restoringDue: Date? = nil, restoresDue: Bool = false) throws {
-        guard let id = task.externalID else { return }
+    @discardableResult
+    func commitCompletion(_ task: OneTask, done: Bool, restoringDue: Date? = nil, restoresDue: Bool = false,
+                          expected: Remote? = nil) throws -> Remote? {
+        guard let id = task.externalID else { return nil }
+        var accepted: Remote?
         guard isConnected else { throw CompletionError.disconnected }
         try completionFence.commit {
             guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else {
                 throw CompletionError.missing
             }
             guard reminder.calendar.allowsContentModifications else { throw CompletionError.readOnly }
+            if let expected {
+                let current = Remote(reminder)
+                guard current.isDone == expected.isDone, current.due == expected.due,
+                      current.doneAt == expected.doneAt else { throw CompletionError.changedOutside }
+            }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-uiTestingFailReminderCompletion") {
                 throw CompletionError.injected
@@ -176,7 +184,9 @@ final class RemindersSync {
                 do { try store.save(reminder, commit: true) }
                 catch { reminder.reset(); throw error }
             }
+            accepted = Remote(reminder)
         }
+        return accepted
     }
 
     /// Keep the agreed completion fingerprint in step with the accepted user write. A repeating reminder
@@ -194,12 +204,13 @@ final class RemindersSync {
     }
 
     private enum CompletionError: LocalizedError {
-        case disconnected, missing, readOnly, injected
+        case disconnected, missing, readOnly, injected, changedOutside
         var errorDescription: String? {
             switch self {
             case .disconnected: return "Connect Apple Reminders in Settings, then tap the circle to retry."
             case .missing: return "This Apple reminder is unavailable. Refresh Reminders, then try again."
             case .readOnly: return "This reminder list is read-only. Choose a writable list in Apple Reminders."
+            case .changedOutside: return "This reminder changed in Apple Reminders. Refresh before trying again."
             case .injected: return "The reminder could not be saved (test failure). Tap the circle to retry."
             }
         }
@@ -574,10 +585,12 @@ final class RemindersSync {
             fp[ek.calendarItemIdentifier] = Self.fingerprint(of: t)
         }
 
+        // Publish an agreed baseline only after its local side is durable. A failed local save
+        // must not make an old disk copy look like a new request to reopen an accepted completion.
+        if context.hasChanges { try context.save() }
         saveSet(base, Self.baseKey)
         saveSet(remindersToRetry, Self.pendingKey)
         storedFP = fp
-        if context.hasChanges { try context.save() }
         log.info("sync ok: \(tasks.count) local, \(remote.count) in Apple Reminders, \(calendars.count) lists, \(remoteDeletes) Apple deletes")
     }
 

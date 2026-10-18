@@ -82,8 +82,9 @@ enum TaskActions {
                            actor: LedgerActor = .you, channel: LedgerChannel = .app) {
         let oldDone = task.isDone
         let oldDoneAt = task.doneAt
+        let accepted: RemindersSync.Remote?
         do {
-            try RemindersSync.shared.commitCompletion(task, done: !oldDone)
+            accepted = try RemindersSync.shared.commitCompletion(task, done: !oldDone)
         } catch {
             toast?.showNotice("Couldn’t update Apple Reminders. " + error.localizedDescription + " Tap the circle to retry.")
             return
@@ -110,7 +111,7 @@ enum TaskActions {
         toast?.show("Completed “\(task.title)”" + suffix) {
             let undoDone = task.isDone
             let undoDoneAt = task.doneAt
-            do { try RemindersSync.shared.commitCompletion(task, done: false, restoringDue: oldDue, restoresDue: true) }
+            do { try RemindersSync.shared.commitCompletion(task, done: false, restoringDue: oldDue, restoresDue: true, expected: accepted) }
             catch {
                 toast?.showNotice("Couldn’t reopen in Apple Reminders. " + error.localizedDescription)
                 return
