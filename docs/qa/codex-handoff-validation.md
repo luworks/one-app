@@ -53,6 +53,42 @@ The original Year merge retains the original branch's incomplete behavior. Separ
 - Evidence: `/tmp/today-codex-main-world-{swift,build,add-alone,remaining}.log`, corresponding two xcresults, progress JSON. Primary shut down. Original interrupted secondary run remains partial evidence only; no fix was made for its non-reproduced keyboard failure.
 - Original owner screenshots still missing; no Apple/Overlap pixel or real-phone comparison claimed.
 
-## Remaining
+### Timer (seventh branch, focused acceptance)
 
-Timer sequential gate; branch completion gaps; Health moving averages; Week alarm lane; PR #29; final full UI run; real-device checks listed in issue #32. Reference screenshots requested from the owner; not received yet.
+- Prepared source `d1e4d5a`; actual original Timer adoption `7e3b714`. Logic: 543 executed, 1 skipped, 0 failures; default-signing simulator build passed.
+- Initial 23 selected UI methods: 12 passed, 11 failed, 743.274 seconds. Owner then narrowed verification scope (below); no claim that all 23 passed.
+- Runtime evidence identified absent Recent Button metadata, a stale visual-versus-spoken caption lookup, first-second countdown expectations, picker component/container comparisons, and the helper selecting a hidden sidebar CollectionView. Focused fixes `09e82ba`, `aca75a0`, `4e2f7ca` preserve Recent count/order/controls and explicit timer actions.
+- Five representative methods: Focus caption and stacked-card geometry passed; after targeting `timer.list`, own Recents and immediate play/reorder/countdown also passed. The remaining footer failure video shows all copy visibly above the composer; static text was incorrectly required to be hittable. The helper now requires full visibility for text and hittability for controls; footer assertion is included in the next integrated batch.
+- Evidence: `/tmp/today-codex-main-timer-{swift,build,ui,core,list-fixed}.log`, matching xcresults; runtime JSONs and `/tmp/today-codex-timer-footer-failure.png`. Primary shut down after each batch. Physical ringing/Live Activity/Siri sharing remain unverified.
+
+## Revised verification scope (owner direction, 2026-10-18)
+
+The owner reported that development was too slow and explicitly requested proportionate checks rather than exhaustive verification. Root `AGENTS.md` records the standing policy (`913033d`). Earlier per-failure-isolation/full-suite plans are narrowed accordingly: reproduce one representative failure per common cause, repair together, run a small set of core journeys, and stop after meaningful checks pass. No additional full UI run is scheduled without a renewed requirement. Unchecked behavior remains explicitly unverified, rather than a delivery gate.
+
+For Timer, the first 23-method selection completed with 12 passed / 11 failed (743.274 seconds). Focus caption failed alone unchanged; the remaining equivalent rerun queue was stopped under the revised scope. Direct runtime inspection found missing `timer.recent` metadata and footer clipping; fixes target those causes and stale timing/container assertions. Five representative checks replace exhaustive repetition.
+
+## Owner phone checkpoint (2026-10-18)
+
+At owner request, built current source `07e800d` with the exact issue #32 phone command, using `ios/.build/xcode-device` and `-allowProvisioningUpdates`. Build succeeded. Installed `com.luworks.one` over Wi-Fi on Yuan Pro Max (`00008140-0014301A363B001C`); devicectl reported `App installed`. Launch result is recorded in `/tmp/today-codex-phone-current-launch.log`. This checkpoint includes seven handoff branches, Timer repairs and Year/Week/Health completion; PR #29 integration follows later. Installation/launch does not establish HealthKit, ringing, widgets or other phone-only functional checks.
+
+Logs: `/tmp/today-codex-phone-current-{build,install,launch}.log`. No signing configuration changes, destructive migrations or test-dataset arguments were used for the phone.
+
+## Final integrated result (2026-10-18)
+
+- All seven specified original branch tips and original PR #29 head `4af2247` are ancestors of main. Reviewed gap integration: `07e800d`; PR integration: `1ea3f5e`; final focused test repairs: `ec849f2`, `72859dc`. Existing Habit and LedgerEntry schemas were retained; no destructive migration or signing configuration changes.
+- Actual integrated logic at `1ea3f5e`: **590 executed, 1 skipped, 0 failures**, capture train 46/46 and test 22/22. `/tmp/today-codex-main-pr29-swift.log`. Later changes are UI-test selectors/assertions only.
+- Default-signing simulator build and UI execution succeeded. **15 unique representative UI methods have passing evidence across batches**, not a full-suite-green claim: Timer 5, Year/Week/Health 5, PR #29 core 5.
+- Year date-to-Today, trip bands/Year-only birthday filtering, Health Weight moving-average versus Steps, and Week task dragging passed in `/tmp/today-codex-main-gaps-core.log` (initial selection 6 executed, 4 passed, 2 failed).
+- Final PR/core selection: 7 executed, 5 passed, 2 failed. Chinese existing-action questions, explicit time follow-up requiring Apply, canonical live agenda, plan preview/questions/Apply, and Timer footer passed (`/tmp/today-codex-main-pr29-core.log`).
+- Remaining failures were stale test contracts: old combined Added text, and selecting the previous offscreen Week page (`x=-440`). Fixed status checks to persistent Added/Undo/Open and selected the visible Week grid. Restored all original dense-block hittability assertions; none of the geometry or editor checks were dropped. Final **2/2 passed**: chat/request/preview/Add 48.079s and eight-event/alarm disjoint frames plus correct editor tap 26.739s (`/tmp/today-codex-main-final-targeted-fixed.log` and xcresult).
+- An intermediate test-only compile attempt failed because an XCUIElement was used as a query; fixed by matching all grid elements. That attempt executed no methods and is not counted as a product failure.
+- Timer final footer frame included its accessible row insets; 64pt scroll-content margin accounts for composer overlap and row padding. Footer passed with full bounds above composer. Interactive controls still require hittability; static copy requires full visibility and its exact text.
+- Primary simulator shut down after final tests; all three named simulators are Shutdown. The pre-existing stash and all branches/worktrees remain preserved.
+
+## Unverified or deferred
+
+- No second full UI suite under the owner's revised proportionate-testing instruction. Unselected UI methods were not revalidated after every common helper repair.
+- Original Apple/Overlap screenshots were requested but not received. Exact World Clock/Stopwatch/Timer reference comparison and comprehensive light/dark visual checks remain deferred; actual Timer light appearance was inspected.
+- Phone checkpoint proved build/install/launch only. Not functionally verified on the phone: first HealthKit authorization and real metric units/data; Lock Screen widget layout/countdown; actual AlarmKit ringing, Live Activities and Siri timer routing; Activity 100k-row performance; system appearance switching; native Apple event editor; recurring Apple Reminders; real system Holiday calendars; Apple Intelligence generation and cancellation behavior.
+- Existing stale plannedStart data still requires the owner's explicit Unschedule action; no automatic event/task migration was introduced. iCloud/CloudKit remains later work under the existing developer-account constraints.
+- The installed phone checkpoint is `07e800d`; later PR routing and final UI-only fixes are on main and were not silently reinstalled while the owner was using the phone.
