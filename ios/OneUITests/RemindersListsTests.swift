@@ -120,7 +120,8 @@ final class RemindersListsTests: XCTestCase {
         let current = field.value as? String ?? ""
         XCTAssertEqual(current, "Work", "Rename starts with the current list name")
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
-        let cleared = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == ''"), object: field)
+        // Native text fields may expose their placeholder as value when empty.
+        let cleared = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND (value == '' OR value == placeholderValue)"), object: field)
         XCTAssertEqual(XCTWaiter().wait(for: [cleared], timeout: 3), .completed, "the old name is cleared before typing")
         field.typeText("Office")
         let replaced = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 'Office'"), object: field)

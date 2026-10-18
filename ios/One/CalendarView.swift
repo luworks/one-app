@@ -1069,22 +1069,24 @@ private struct WeekPage: View {
     /// An alarm on the grid: a thin accent line and bell, with a label when it fits. Tap opens the alarm editor;
     /// it has no duration and no drag (only flexible tasks move).
     private func alarmMarker(_ e: CalEntry) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 2) {
+        Button { open(e) } label: {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 2) {
+                    Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
+                    Text(e.title).font(.system(size: 9, weight: .semibold)).lineLimit(1)
+                }
+                .fixedSize(horizontal: true, vertical: false)
                 Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
-                Text(e.title).font(.system(size: 9, weight: .semibold)).lineLimit(1)
             }
-            .fixedSize(horizontal: true, vertical: false)
-            Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
+            .foregroundStyle(EventTint.text(e.color))
+            .padding(.horizontal, 3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(EventTint.fill(e.color))
+            .overlay(alignment: .top) { Rectangle().fill(e.color).frame(height: 1.5) }
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .contentShape(Rectangle())
         }
-        .foregroundStyle(EventTint.text(e.color))
-        .padding(.horizontal, 3)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(EventTint.fill(e.color))
-        .overlay(alignment: .top) { Rectangle().fill(e.color).frame(height: 1.5) }
-        .clipShape(RoundedRectangle(cornerRadius: 3))
-        .contentShape(Rectangle())
-        .onTapGesture { open(e) }
+        .buttonStyle(.plain)
         .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(e.speech)
