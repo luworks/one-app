@@ -9,6 +9,12 @@ historical projections/copy-only experiments. No App Store size claim is made.
 Frozen references: [baseline](baseline-2026-10-18.md) and
 [acceptance targets](climb-targets-v1.md).
 
+Latest experiment: command-only `-Osize` at `122eb13` produced app 8,656,543 B,
+ZIP 4,349,508 B. It is **not adopted**: incremental compressed benefit is only
+4.554%, below the 5% threshold, and no paired Release runtime evidence exists.
+Round 4 records its independent snapshot and verification. Project optimization
+settings remain unchanged; round 1 remains the `-O` source-built control.
+
 ## Hypothesis and scope
 
 The ordinary generic-device Release build retains large local/debug symbol
@@ -401,9 +407,10 @@ arbitrary code absence. Debug source filenames may remain in DWARF, and the
 intentional onboarding/gallery samples, migration models and Release runtime
 test switches are outside this narrow exclusion claim.
 
-### Optional command-only -Osize experiment for the next host window
+### Command-only -Osize plan prepared before round 2
 
-No compiler or project setting is changed by this handoff. The earlier
+Historical plan: parent subsequently executed the command-only experiment in
+round 4 below. This lane did not run the build or change a project setting. The earlier
 [Swift compiler rationale](https://www.swift.org/blog/osize/) remains applicable:
 smaller code is plausible, compressed savings and runtime impact are unknown.
 The actual ZIP now needs 822,296 B further reduction, so a binary-only size
@@ -455,3 +462,73 @@ Undo, timer behavior, App Intents and extension flows through the parent's
 focused functional checks. Retain `-O` unless a meaningful size improvement and
 acceptable endpoint/functional results justify adoption. Do not modify project
 optimization settings merely because the optional build succeeds.
+
+## Round 4: command-only -Osize result, experimental and not adopted
+
+Parent's generic iphoneos Release command-only experiment succeeded at
+`122eb13156c14eb02c737da72469815f01e238c3`, 2026-10-18 11:37:13–11:38:11 PDT,
+exit 0. The compiled app inputs match the round 1 `44daf47` control. The only
+changed iOS file between those commits is
+`ios/Eval/Tests/OneLogicTests/ActivityStoreTests.swift`, a Swift Package test
+fixture repair outside these compiled app targets. The existing recorded
+`osize-compiled-source-guard-7e226dc4` command exited 0. No broader functional
+or runtime equivalence is inferred from that source comparison.
+
+| Metric | Round 1 `-O` B | Round 2 command-only `-Osize` B | Incremental saving |
+| --- | ---: | ---: | ---: |
+| Complete app | 9,390,496 | 8,656,543 | 733,953 B / 7.816% |
+| Deflate-9 ZIP proxy | 4,557,045 | 4,349,508 | 207,537 B / 4.554% |
+| Main executable | 6,147,480 | 5,433,288 | 714,192 B |
+| Widget executable | 365,592 | 365,816 | **224 B larger** |
+| Share executable | 203,216 | 186,696 | 16,520 B |
+
+The round 2 ZIP is 42.934% smaller than the frozen original 7,621,937 B proxy,
+while raw app size is 62.965% smaller than its 23,374,117 B baseline. ZIP remains
+**614,759 B above the required 3,734,749 B ceiling**, so the >50% compressed
+reduction acceptance target is not met. The widget's small increase also shows
+that `-Osize` does not guarantee a smaller executable in every target.
+
+**Decision: experimental, not adopted.** Incremental compressed benefit is below
+the 5% candidate threshold and there is no paired Release `-O`/`-Osize` runtime
+cohort. Do not change project optimization settings or substitute this device
+build for simulator latency/functional acceptance. Existing `-O` project defaults
+remain intact. No App Store download/install, archive/export or speed gain is
+claimed. The low compressed improvement calls for bottleneck reassessment,
+not another equivalent build or an unmeasured adoption.
+
+### Retained snapshot and read-only verification
+
+All paths below are within the same canonical performance-climb run directory.
+
+- New **`round2-osize-products/`** contains the complete app and three dSYMs,
+  plus `manifest.json`; product files total **39,656,267 logical bytes** before
+  the manifest. Copy/source file maps matched before and after copying, and the
+  copied app's complete file names, sizes and SHA-256 hashes match the existing
+  round 2 inventory. Every copied file and the manifest were indexed through
+  `tests/qa/journal.py`, then file/directory write bits were removed while
+  preserving executable permissions. No mutable DD file was directly indexed.
+- New **`round2-osize-verification/`** retains `verify.py`, command list, UUID,
+  DWARF verification, symbol/source-lookup logs, build-log excerpt and
+  `summary.json`. Closed files are indexed under QA Activity session
+  `performance-packaging-osize-verification-20261018`.
+- Existing `round2-osize-inventory.json`, `round2-osize-release-3ebff312.log/json`
+  and source-guard log/context were read in place, not copied or reindexed here.
+  Round 1's read-only product snapshot was untouched; its manifest hash remained
+  unchanged. Round 2's full snapshot hashes remained unchanged after verification.
+
+| Embedded binary / dSYM | Matching arm64 UUID | DWARF verification | Representative source mapping |
+| --- | --- | --- | --- |
+| One | `A787DB4D-0361-3396-9C80-C1F6416D1593` | Exit 0, no errors; two duplicate-filename warnings | `0x100004064`, ActivityCenter initializer → `ios/One/ActivityCenter.swift:20` |
+| TodayWidgets | `F0FE8EF1-71A2-360E-B8FE-6999A832E09A` | Exit 0, no errors/warnings | `0x100004000`, AlarmLiveActivity.body getter → `ios/TodayWidgets/AlarmLiveActivity.swift:12` |
+| ShareExtension | `4B1DC1F2-4C8F-3E3F-863F-43C51EC63362` | Exit 0, no errors/warnings | `0x100004000`, ActivityOutbox.folderURL getter → `ios/Shared/ActivityOutbox.swift:16` |
+
+Verification read **only the retained snapshot** after copying. Each target's
+actual build-log compiler invocation uses `-Osize` with whole-module compilation,
+without `-D DEBUG`; each target generated its dSYM before `strip -D -x -S`, with
+no `-T`. `dwarfdump --verify` and each representative lookup succeeded. Main's
+two warnings are duplicate file-name entries in line-table prologues, with no
+verification errors. These checks preserve sampled source-level symbolication;
+they do not establish app execution or a runtime regression result.
+
+This lane ran no build, Swift tests, simulator/UI, profiling or export, and made
+no compiler/project edit. Parent's exclusive UI/trace window was left undisturbed.
