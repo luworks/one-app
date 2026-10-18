@@ -183,3 +183,18 @@ Event-save supplemental EventKit metadata is seeded by the versioned DEBUG hooks
   mistaken assistant asides. `AIReminderRecoveryTests` checks actual Add cards,
   exact date/title, no change-ledger writes before Add, persisted editor and Undo.
   Simulator fallback is exercised; no Foundation Models outputs are injected.
+
+## Relative alarm and chat visibility (IMG6815)
+
+- `ai-alarm-context-cases.json`: exact full three-turn Chinese screenshot sequence
+  and English equivalent, including the mistaken assistant outputs and elapsed
+  follow-up times. `AlarmContextTests` evaluates the production routing, parser,
+  original-turn timestamps and truthful question path; no model output is injected.
+- `ai-alarm-context-ui.json`: empty planner plus the entire mistaken screenshot
+  conversation, first request ten minutes before fixture load. Legacy fixture
+  messages have no per-turn timestamp; only the first user uses thread creation.
+  `AIAlarmContextTests` checks initial preview, clarification, context question,
+  Add/Undo, stored reopening and new-thread isolation on production simulator rules.
+- Timestamp round-trip, unknown legacy time, assistant-role rejection, bounded
+  model prompt versus full user reference recovery, midnight and spring DST cases
+  are small inline inputs in `AlarmContextTests`.

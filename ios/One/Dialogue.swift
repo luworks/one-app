@@ -39,7 +39,7 @@ enum Dialogue {
     /// A sentence that asks for something NEW ("remind me to ...", "提醒我 ...", "don't forget ..."). It is never the answer to a
     /// "which one?" question and is not an edit of an existing item, unless the words name one of the user's own items.
     static func startsNewItem(_ text: String) -> Bool {
-        has(text, #"提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个|\bremind me\b|\bdon'?t forget\b|\bnew (?:reminder|task|event)\b|\badd (?:a |an )?(?:reminder|task|event|to-?do)\b|\bset (?:a |an )?reminder\b"#)
+        has(text, #"提醒我|提醒一下|提醒(?=\s+\S)|记得|别忘了|帮我记|新建|添加|加一个|加个|\bremind me\b|\bdon'?t forget\b|\bnew (?:reminder|task|event)\b|\badd (?:a |an )?(?:reminder|task|event|to-?do)\b|\bset (?:a |an )?reminder\b"#)
     }
 
     /// The answer to a "which one?" question, or nil when the message is something else. Like `pick`, but a message that
@@ -253,7 +253,16 @@ enum CaptureConversation {
         guard alarm || reminder || proceed || (time && pending == nil) else { return nil }
         var prior: Capture?
         var requested = false
-        for user in context.users {
+        for turn in context.userTurns {
+            let user = turn.text
+            let anchor = turn.timestamp ?? now
+            // An older timestamp-free turn cannot safely restart a relative countdown.
+            if turn.timestamp == nil && CaptureParser.hasRelativeTime(user) {
+                prior = nil
+                requested = false
+                continue
+            }
+            if ChatRouting.isContextQuestion(user) { continue }
             if referencesAlarm(user) {
                 if prior == nil { prior = Capture(title: "Alarm", day: calendar.startOfDay(for: now), hasDay: false) }
                 prior?.kind = .task
@@ -266,12 +275,12 @@ enum CaptureConversation {
                 // Keep the active user subject through short acknowledgments, without treating
                 // them as creation requests. Unrelated conversation below still clears it.
                 continue
-            } else if let current = prior, Dialogue.isOnlyWhen(user, now: now, calendar: calendar),
-                      case .updated(let updated) = Dialogue.refine(current, with: user, now: now, calendar: calendar) {
+            } else if let current = prior, Dialogue.isOnlyWhen(user, now: anchor, calendar: calendar),
+                      case .updated(let updated) = Dialogue.refine(current, with: user, now: anchor, calendar: calendar) {
                 prior = updated
             } else {
                 let intent = ChatRouting.intent(user)
-                let parsed = parse(user, now: now, calendar: calendar)
+                let parsed = parse(user, now: anchor, calendar: calendar)
                 // A recent timed statement can supply the subject only after an explicit conversion.
                 // Questions, quoted commands and completed reports never supply actionable context.
                 let reported = intent != .capture && has(user, #"[\"“”「」]|\b(?:said|asked|already|yesterday)\b|说过|他说|她说|已经|昨天"#)
@@ -285,7 +294,9 @@ enum CaptureConversation {
             }
         }
         if alarm {
-            var result = pending ?? prior ?? Capture(title: "Alarm", day: calendar.startOfDay(for: now), hasDay: false)
+            let incomplete = pending?.title == "Alarm" && pending?.hour == nil
+            var result = (incomplete ? prior ?? pending : pending ?? prior)
+                ?? Capture(title: "Alarm", day: calendar.startOfDay(for: now), hasDay: false)
             result.kind = .task
             result.ringsAsAlarm = true
             result.isAllDay = false

@@ -1,16 +1,6 @@
 import SwiftUI
 import SwiftData
 
-struct ChatMessage: Identifiable, Equatable, Codable {
-    enum Role: String, Codable { case user, ai }
-    var id = UUID()
-    let role: Role
-    let text: String
-
-    /// One of the app's own status sentences (see `MessageCopy`): no Copy button under it.
-    var isTemplate: Bool { MessageCopy.isTemplate(isUser: role == .user, text: text) }
-}
-
 /// Full-screen AI page, modeled on ChatGPT / Claude mobile.
 /// Conversation stays conversational; only requests to add items become capture previews.
 /// Nothing is created until the user taps Add on the preview card.
@@ -450,15 +440,16 @@ struct AskView: View {
         draft = ""
         captureTask?.cancel()
         thinking = false
-        let turnContext = ConversationContext(messages.map { ($0.role == .user, $0.text) })
+        let turnContext = ConversationContext(turns: messages.map { .init(isUser: $0.role == .user, text: $0.text, timestamp: $0.timestamp) })
         let history = turnContext.prompt
         if AIResponseTrace.enabled { AIResponseTrace.shared.stage("context_complete", token: token) }
-        messages.append(ChatMessage(role: .user, text: text))
+        let sentAt = Date.now
+        messages.append(ChatMessage(role: .user, text: text, timestamp: sentAt))
         if AIResponseTrace.enabled {
             sentMessageID = messages.last?.id
             responseBaseline = responseSignature
         }
-        turnStart = .now
+        turnStart = sentAt
         let intent = ChatRouting.intent(text)
         if let resolved = CaptureConversation.resolve(text, context: turnContext, pending: pending) {
             recordTurn("answer", text)
@@ -493,7 +484,7 @@ struct AskView: View {
                 recordTurn("question", text)
                 messages.append(ChatMessage(role: .ai, text: todaySummary))
             } else {
-                respond(text, history: history, intent: intent)
+                respond(text, context: turnContext, intent: intent)
             }
             return
         }
@@ -519,12 +510,13 @@ struct AskView: View {
             clearPreviews()
             proposeEdit(text, history: history)
         } else {
-            respond(text, history: history, intent: intent)
+            respond(text, context: turnContext, intent: intent)
         }
     }
 
     /// Route before either extractor. Conversation leaves pending previews and follow-ups untouched.
-    private func respond(_ text: String, history: String, intent: ChatRouting.Intent) {
+    private func respond(_ text: String, context: ConversationContext, intent: ChatRouting.Intent) {
+        let history = context.prompt
         if AIResponseTrace.enabled, intent == .conversation {
             AIResponseTrace.shared.diagnoseConversation(generationToken)
             AIResponseTrace.shared.stage("respond_enter", token: generationToken)
@@ -539,6 +531,10 @@ struct AskView: View {
         if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("record_turn_before", token: generationToken) }
         recordTurn(initialIntent, text)
         if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("record_turn_after", token: generationToken) }
+        if let reply = ChatRouting.contextReply(text, context: context) {
+            messages.append(ChatMessage(role: .ai, text: reply))
+            return
+        }
         thinking = true
         traceBackend(generationToken, modelPath: intent != .capture)
         let token = generationToken
@@ -736,9 +732,10 @@ struct AskView: View {
         thinking = true
         traceBackend(generationToken, modelPath: true)
         let token = generationToken
+        let anchor = turnStart
         captureTask = Task { @MainActor in
             defer { finishEmission(token) }
-            let capture = await Understander.parse(text, history: history)
+            let capture = await Understander.parse(text, history: history, now: anchor)
             guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
             show([capture])
