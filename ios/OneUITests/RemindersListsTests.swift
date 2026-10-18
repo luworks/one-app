@@ -263,11 +263,13 @@ final class RemindersListsTests: XCTestCase {
         reveal(work)
         XCTAssertTrue(home.exists)
         XCTAssertLessThan(home.frame.minY, work.frame.minY, "starts with Home above Work")
-        // Hold until the row's menu is up, then drag without lifting: the menu gives way to the drag, as in Apple
-        // Reminders. Drop on the top part of Home so Work lands above it.
+        XCTAssertTrue(work.isFullyVisible(in: app.frame) && home.isFullyVisible(in: app.frame), "both drag cards are on screen")
+        print("Reorder card frames: Home=\(home.frame), Work=\(work.frame), viewport=\(app.frame)")
+        // Start lifting before the context menu has expanded over the destination card.
+        // Keep the same real drag/drop and final order assertion on every screen size.
         let start = work.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let end = home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
-        start.press(forDuration: 1.5, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 1.0)
+        start.press(forDuration: 0.5, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 1.0)
         let expectation = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in work.frame.minY < home.frame.minY }, object: nil)
         XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 5), .completed, "Work now sits above Home")
