@@ -28,6 +28,98 @@ final class ActivityStoreTests: XCTestCase {
 
     // MARK: Schema
 
+    func testNewEventKeepsIdentityStampAndPayloadDefaults() {
+        let e = ActivityEvent(kind: "ai.turn", actor: "you", at: now, calendar: cal)
+        let stamp = ActivityClock.stamp(now, calendar: cal)
+        XCTAssertNotNil(UUID(uuidString: e.uid))
+        XCTAssertNotEqual(e.uid, ActivityEvent(kind: e.kind, actor: e.actor, at: now, calendar: cal).uid)
+        XCTAssertEqual(e.ts, stamp.ts)
+        XCTAssertEqual(e.tz, stamp.tz)
+        XCTAssertEqual(e.day, stamp.day)
+        XCTAssertEqual(e.tier, ActivityTier.ai.rawValue)
+        XCTAssertEqual(ActivityEvent(kind: "ai.turn", tier: .usage, actor: "you", at: now, calendar: cal).tier, 3)
+        XCTAssertEqual(e.device, "")
+        XCTAssertEqual(e.props, "{}")
+        XCTAssertEqual(e.v, 1)
+        XCTAssertEqual(e.sync, 0)
+        XCTAssertNil(e.channel); XCTAssertNil(e.session); XCTAssertNil(e.thread)
+        XCTAssertNil(e.subjectKind); XCTAssertNil(e.subjectRef); XCTAssertNil(e.approval); XCTAssertNil(e.undoOf)
+        XCTAssertNil(e.title); XCTAssertNil(e.beforeText); XCTAssertNil(e.afterText)
+        XCTAssertNil(e.beforeTs); XCTAssertNil(e.afterTs)
+        XCTAssertNil(e.rowID); XCTAssertNil(e.snapshot)
+        XCTAssertFalse(e.hasSnapshot)
+        XCTAssertEqual(e.content, [])
+    }
+
+    func testHydrationPreservesEveryPersistedFieldAndLoadsPayloadOnlyForExport() throws {
+        let s = try memory()
+        var e = change("买牛奶\nSecond line", actor: "agent:Calendar", kind: "future.kind", ref: "ref-1", uid: "persisted-id")
+        e.device = "device-1"
+        e.ts = -123_456_789
+        e.tz = 345
+        e.day = 19990102 // Deliberately independent of the reader's current calendar and timestamp.
+        e.tier = ActivityTier.usage.rawValue
+        e.channel = "sync"; e.session = "session-1"; e.thread = "thread-1"
+        e.approval = "observed"; e.undoOf = "previous-id"
+        e.beforeText = ""; e.afterText = "After 🥛"
+        e.beforeTs = -9; e.afterTs = 0
+        e.props = "{\"ms\":12}"; e.v = 7; e.sync = 2
+        e.snapshot = Data([0, 1, 255])
+        e.content = [ActivityContent(field: "title", before: "before", after: "after")]
+        try s.insert([e])
+
+        var expected = e
+        expected.rowID = 1
+        expected.hasSnapshot = true
+        expected.snapshot = nil
+        expected.content = []
+        XCTAssertEqual(try s.page(ActivityQuery()), [expected])
+        XCTAssertEqual(try s.event(uid: e.uid), expected)
+        XCTAssertEqual(try s.snapshot(uid: e.uid), e.snapshot)
+        XCTAssertEqual(try s.content(uid: e.uid), e.content)
+        var exported: [ActivityEvent] = []
+        try s.export { exported += $0 }
+        expected.snapshot = e.snapshot
+        expected.content = e.content
+        XCTAssertEqual(exported, [expected])
+    }
+
+    func testHydrationKeepsNullAndMalformedRowFallbacks() throws {
+        let url = dir.appendingPathComponent("nullable-fixture.sqlite")
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(url.path, &db), SQLITE_OK)
+        let handle = try XCTUnwrap(db)
+        defer { sqlite3_close(handle) }
+        // A deliberately damaged fixture can contain NULL in otherwise required columns.
+        // Production migrations and constraints remain unchanged.
+        let schema = ActivityStore.migrations.map { migration in
+            ["TEXT", "INTEGER", "BLOB"].reduce(migration) { sql, type in
+                sql.replacingOccurrences(of: "\(type) NOT NULL", with: type)
+            }
+        }.joined(separator: "\n")
+        // Preserve partial-index predicates such as `WHERE subject_ref IS NOT NULL`.
+        let sql = schema + "\n" + """
+        PRAGMA user_version = \(ActivityStore.migrations.count);
+        INSERT INTO event (id, uid, props, v, sync) VALUES (1, NULL, NULL, NULL, NULL);
+        INSERT INTO event (id, uid, ts, tier, kind, actor) VALUES (2, 'invalid-tier', 'bad-number', 999, 'ai.turn', 'you');
+        INSERT INTO event (id, uid, tier, kind, actor) VALUES (3, 'null-tier', NULL, 'ai.turn', 'you');
+        INSERT INTO event (id, uid, tier, kind, actor) VALUES (4, 'unknown-kind', -1, 'future.kind', 'system');
+        """
+        let result = sqlite3_exec(handle, sql, nil, nil, nil)
+        XCTAssertEqual(result, SQLITE_OK, String(cString: sqlite3_errmsg(handle)))
+        let s = try ActivityStore(location: .file(url))
+        let rows = try s.page(ActivityQuery())
+        var expected = ActivityEvent(kind: "", tier: .system, actor: "", at: now, calendar: cal)
+        expected.uid = ""; expected.rowID = 1
+        expected.ts = 0; expected.tz = 0; expected.day = 0
+        XCTAssertEqual(rows.first { $0.rowID == 1 }, expected)
+        let malformed = try XCTUnwrap(s.event(uid: "invalid-tier"))
+        XCTAssertEqual(malformed.tier, ActivityTier.ai.rawValue, "invalid tier still derives from kind")
+        XCTAssertEqual(malformed.ts, 0, "SQLite's integer coercion is unchanged")
+        XCTAssertEqual(try s.event(uid: "null-tier")?.tier, ActivityTier.system.rawValue)
+        XCTAssertEqual(try s.event(uid: "unknown-kind")?.tier, ActivityTier.system.rawValue)
+    }
+
     func testCreatesSchemaAndRemembersDeviceAcrossOpens() throws {
         let url = dir.appendingPathComponent("a.sqlite")
         let first = try ActivityStore(location: .file(url))

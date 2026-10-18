@@ -76,7 +76,7 @@ struct ActivityContent: Equatable {
 struct ActivityEvent: Equatable, Identifiable {
     var id: String { uid }
 
-    var uid: String = UUID().uuidString
+    var uid: String
     /// Random id of this install; filled in by the recorder when empty.
     var device: String = ""
     /// Unix milliseconds, UTC.
@@ -123,6 +123,7 @@ struct ActivityEvent: Equatable, Identifiable {
 
     init(kind: String, tier: ActivityTier? = nil, actor: String, channel: String? = nil, at date: Date = .now,
          calendar: Calendar = .current, props: String = "{}") {
+        self.uid = UUID().uuidString
         let stamp = ActivityClock.stamp(date, calendar: calendar)
         self.ts = stamp.ts
         self.tz = stamp.tz
@@ -132,6 +133,18 @@ struct ActivityEvent: Equatable, Identifiable {
         self.actor = actor
         self.channel = channel
         self.props = props
+    }
+
+    /// Read-side envelope: persisted identity and local time need no new UUID or calendar stamp.
+    /// The store owns SQLite coercion and fallbacks; optional payload fields keep their usual empty defaults.
+    init(persistedUID uid: String, ts: Int64, tz: Int, day: Int, tier: ActivityTier?, kind: String, actor: String) {
+        self.uid = uid
+        self.ts = ts
+        self.tz = tz
+        self.day = day
+        self.tier = (tier ?? ActivityKind.tier(of: kind)).rawValue
+        self.kind = kind
+        self.actor = actor
     }
 
     var date: Date { ActivityClock.date(ms: ts) }

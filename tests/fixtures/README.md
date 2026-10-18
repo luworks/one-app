@@ -51,6 +51,13 @@ values were added to replace these defaults.
 - Small constants and synthetic generators in Swift test files are already
   versioned test inputs. Keep them with their corresponding tests rather than
   duplicating thousands of literals in JSON.
+- Activity hydration inputs stay inline in
+  [`ActivityStoreTests.swift`](../../ios/Eval/Tests/OneLogicTests/ActivityStoreTests.swift):
+  fresh-event defaults, every persisted field with lazy payloads, and a damaged
+  nullable schema derived from all migrations while preserving partial indexes.
+  [`ActivityReadPerformanceTests.swift`](../../ios/Eval/Tests/OneLogicTests/ActivityReadPerformanceTests.swift)
+  owns the deterministic `activity-read-v1` 100000-row generator; opt in with
+  `ACTIVITY_READ_BENCH=1 ACTIVITY_READ_SAMPLES=5`. Generated SQLite files are disposable outputs.
 - Synthetic large-data configurations live in versioned test code. Examples:
   `ActivityDataTests.testActivityPagesWithShowMore` requests 400 Activity rows with
   `-uiTestingActivityRows`; `testOldLedgerRowsAreImportedOnceAndRetiredInALaterLaunch`
