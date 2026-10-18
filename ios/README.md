@@ -170,3 +170,7 @@ Tests: `ios/Eval/` (logic unit tests, NL-capture eval, `run-eval.sh`, `cold-star
 ## Next
 
 A full eval run on the rubric (scores restart from the re-scoped dimensions) → climb the weakest dimension.
+
+## Credits
+
+The World Clock city list (`ios/One/cities.json`, built by `scripts/build_cities.py`) is derived from GeoNames data (https://www.geonames.org), licensed CC BY 4.0. The picker footer says so too.
