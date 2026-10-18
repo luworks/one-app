@@ -39,6 +39,7 @@ final class StopwatchTests: XCTestCase {
         launch()
         XCTAssertTrue(time.waitForExistence(timeout: 5), "the dial's readout")
         XCTAssertEqual(time.label, "Stopwatch, 0 seconds")
+        XCTAssertTrue(time.isHittable, "the dial is really on screen, not scrolled away")
         XCTAssertEqual(dots.value as? String, "Analog")
         XCTAssertFalse(timeLarge.exists, "the digital page is hidden while the dial shows")
 
@@ -56,6 +57,7 @@ final class StopwatchTests: XCTestCase {
         launch(["-uiTestingStopwatch", "5.75"])
         XCTAssertTrue(time.waitForExistence(timeout: 5))
         XCTAssertEqual(time.label, "Stopwatch, 5.75 seconds")
+        XCTAssertTrue(time.isHittable, "the dial is really on screen, not scrolled away")
         XCTAssertEqual(lapReset.label, "Reset")
         XCTAssertTrue(lapReset.isEnabled)
         XCTAssertEqual(startStop.label, "Start")

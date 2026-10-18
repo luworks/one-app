@@ -85,6 +85,7 @@ struct StopwatchView: View {
 
     /// Two pages side by side: digital (left dot) and analog (right dot). Analog is the one you open on.
     private func pager(side: CGFloat) -> some View {
+        ScrollViewReader { proxy in
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 digitalFace(side: side)
@@ -103,6 +104,13 @@ struct StopwatchView: View {
         .scrollPosition(id: $scrolledPage)
         .onChange(of: scrolledPage) { _, new in if let new, new != model.page { model.page = new } }
         .onChange(of: model.page) { _, new in if new != scrolledPage { withAnimation(.snappy) { scrolledPage = new } } }
+        // The initial scroll position is not applied before the pages are laid out: jump there once they are.
+        .task {
+            try? await Task.sleep(for: .milliseconds(50))
+            var t = Transaction(); t.disablesAnimations = true
+            withTransaction(t) { proxy.scrollTo(model.page, anchor: .leading) }
+        }
+        }
         .frame(height: side)
         .accessibilityIdentifier("stopwatch.pager")
     }
