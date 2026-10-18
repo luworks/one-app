@@ -2,9 +2,9 @@ import Foundation
 import FoundationModels
 
 /// Turns a line of text into a `Capture` preview.
-/// `CaptureParser` reads the day, time, length and title. Apple's on-device model (Apple Intelligence) only decides
-/// task / event / alarm, because that is what it is good at (round 2-3 of the spike; it was much worse at dates).
-/// With no model (device without Apple Intelligence, model not ready) or on any model error, the parser result is used as is.
+/// `CaptureParser` owns scheduling fields; the on-device classifier resolves uncertain kinds.
+/// One title-only refinement follows kind resolution, with a bounded contextual prompt and local fallback.
+/// Neither model step may change scheduling fields, and preview follow-ups do not repeat title generation.
 /// The result only feeds the preview card; nothing is written until the user taps Add.
 enum Understander {
     static func parse(_ text: String, history: String = "", now: Date = .now, calendar: Calendar = .current) async -> Capture {

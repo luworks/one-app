@@ -9,7 +9,7 @@ The same pure context/parser seam is used by the app fallback and the package jo
 ## Dependencies
 
 - Title PR #65: base `05ea0d9`, U1 connector/negation cleanup `5b748b2`, missing-time Add gate `6dfada8`.
-- The title-only `AICapture.refineTitle(_:source:history:)` API is supplied by the sibling semantic follow-up. This branch's final hook requires that API in integration. Capture/Rows/editor and title refinement implementation remain owned by that PR.
+- The title-only `AICapture.refineTitle(_:source:history:)` API is supplied by sibling semantic commit `21a09fe`. This branch's final hook requires that API in integration. Capture/Rows/editor and title refinement implementation remain owned by that PR.
 
 ## Verification as of initial draft
 

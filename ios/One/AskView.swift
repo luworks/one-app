@@ -792,7 +792,7 @@ struct AskView: View {
         })
     }
 
-    /// One item per line: the rule parser reads the day / time / title and the on-device model only says task / event / alarm.
+    /// One item per line: rules own scheduling, followed by kind classification and title-only refinement.
     /// A line that lists several things goes to the multi-item model path when it is available.
     private func propose(_ text: String, history: String = "") {
         // UI tests only (`-uiTesting -uiTestingMultiCapture`): the simulator has no on-device model, so a line with ";"
