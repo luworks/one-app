@@ -1,11 +1,12 @@
 # Release packaging candidate: standard symbol postprocessing
 
-Status: implemented candidate, **not source-built or accepted**. Initially prepared
-from `abd7312` on `codex/ios-performance-climb`, 2026-10-18. Round 2 below adds
-copy-only extension measurements and the same policy to both extensions. No build, Swift test,
-simulator, profiling, archive, export or device operation ran in this lane;
-the coordinated host window was not granted. Parent must validate before
-claiming a gain. Frozen inputs: [baseline](baseline-2026-10-18.md) and
+Status: **source-built Release size and dSYM verification recorded**, runtime
+and ZIP acceptance still open. Source revision `44daf47767f5ef6474563fbd76fe322cad40ef20`
+produced app **9,390,496 B**, ZIP proxy **4,557,045 B**. ZIP exceeds the required
+whole-byte ceiling **3,734,749 B** by **822,296 B**. Round 3 below contains actual
+artifact/dSYM evidence and the immutable product snapshot; earlier rounds remain
+historical projections/copy-only experiments. No App Store size claim is made.
+Frozen references: [baseline](baseline-2026-10-18.md) and
 [acceptance targets](climb-targets-v1.md).
 
 ## Hypothesis and scope
@@ -308,3 +309,149 @@ Round 2 static validation: parsed comparison against `f25d4d0` permits exactly
 five new settings in each extension Release configuration, with all other
 project objects/configurations identical; `plutil -lint` and `git diff --check`
 passed. No optimization-level, signing or Debug setting changed.
+
+## Round 3: actual source-built Release and retained dSYMs
+
+Parent completed the unsigned generic iphoneos Release build at source revision
+`44daf47767f5ef6474563fbd76fe322cad40ef20`, 2026-10-18 11:02:49–11:04:25 PDT,
+exit code 0. This lane performed only read-only artifact/log verification and
+snapshot preservation. No additional build, Swift test, UI, simulator, profiling,
+signing, archive or export ran here. Parent's exclusive UI window was respected.
+
+| Metric | Frozen baseline B | Actual round 1 Release B | Reduction | Acceptance |
+| --- | ---: | ---: | ---: | --- |
+| Complete app | 23,374,117 | 9,390,496 | 59.83% | Below required raw ceiling 11,453,317.33 B |
+| Deflate-9 ZIP proxy | 7,621,937 | 4,557,045 | 40.21% | Fails required ceiling 3,734,749 B by 822,296 B |
+| Main executable | 16,731,520 | 6,147,480 | 63.26% | Below component required/stretch ceilings |
+| All Mach-O | 17,861,152 | 6,716,288 | 62.40% | Below component required/stretch ceilings |
+
+Widget and Share executables are 365,592 B and 203,216 B respectively, matching
+the copy experiment's stripped sizes. The actual integrated build has 14,581 B
+more total app bytes and 10,742 B more ZIP bytes than the hybrid model. That
+model mixed old code/current audio and was never equivalent source-built proof;
+the actual inventory now supersedes it for round 1 acceptance. These overall
+savings include the audio/source integration, not stripping alone. Runtime
+latency, physical footprint and App Store download/installation sizes are not
+established by these package measurements.
+
+All paths below are relative to canonical
+`/Users/yuanlu/code/one-app/tests/results/runs/performance-climb-20261018/`:
+
+- Existing indexed source-build evidence remains in place:
+  `round1-release-456fc756.log`, `round1-release-456fc756.json` and
+  `round1-release-inventory.json`. They were read, not copied/reindexed here.
+- **Immutable product snapshot:** `round1-release-products/One.app`,
+  `One.app.dSYM`, `TodayWidgets.appex.dSYM`, `ShareExtension.appex.dSYM` and
+  `manifest.json`. The app plus dSYMs contain 40,871,104 logical bytes, excluding
+  the manifest. Per-file path/size/SHA-256 was identical before/after copying
+  and the source stayed stable during the copy. Every snapshot file is indexed;
+  file/directory write bits were removed, preserving executable permissions.
+  DerivedData is a mutable cache and is not the retained evidence location.
+- **Verification evidence:** `round1-packaging-verification/` contains the exact
+  commands, UUID/verify/nm/lookup logs, build-log excerpt, snapshot string scans,
+  input hashes and final `final-summary.json`. These closed files are indexed
+  under QA Activity session `performance-packaging-release-verification-20261018`.
+  Initial checks read completed DD products; their hashes match the retained
+  snapshot. Subsequent string checks read the snapshot. No live DD file was
+  directly indexed in this lane.
+
+### Strip order, UUIDs and source-level debugging
+
+The existing raw build log shows `GenerateDSYMFile` preceding `Strip` separately
+for Share (lines 532 then 551/553), Widget (616 then 646/648), and main app
+(1011 then 1048/1050). All three actual commands are `strip -D -x -S`, with no
+`-T`. The same log's compiler commands confirm `-O`, whole-module compilation
+and no `-D DEBUG` for all three product modules.
+
+| Binary / paired dSYM | Matching arm64 UUID | `dwarfdump --verify` | Representative source lookup |
+| --- | --- | --- | --- |
+| One | `865C8229-7D7A-3195-9B0A-B72A65A36F4A` | Exit 0, no errors; two warnings | `0x10000406c`, ActivityCenter initializer → `ios/One/ActivityCenter.swift:20` |
+| TodayWidgets | `10CA58C5-9386-3EE0-B8A1-57A63DD861B4` | Exit 0, no errors/warnings | `0x100004020`, AlarmLiveActivity body closure → `ios/TodayWidgets/AlarmLiveActivity.swift:13` |
+| ShareExtension | `AB938621-28CD-3775-80A1-214DF69372D8` | Exit 0, no errors/warnings | `0x100004000`, ActivityOutbox.folderURL getter → `ios/Shared/ActivityOutbox.swift:16` |
+
+UUID pairing uses the **embedded** extension executables, not just their
+standalone build products. Main's warnings identify duplicate file-name entries
+in DWARF line-table prologues, not UUID mismatch or verification errors. The
+representative lookups recover function identity and real source lines. This
+establishes useful retained dSYM symbolication for sampled addresses, not full
+optimized-debugger behavior or complete crash-report symbolication.
+
+An initial local parser incorrectly expected `line = N`; this tool prints
+`line N`. Existing raw lookup logs already contained the successful mappings.
+The supplemental summary corrects that parser result without repeating the
+batch. Some generated optimizer thunks had no source lookup and were not chosen
+as representative app symbols; their raw outputs remain retained. No assertion
+about every machine address having a source line is made.
+
+### Release fixture exclusion checks on actual artifacts
+
+For all three binaries, snapshot `strings -a` found zero matches for
+`TestDataset`, `DevImport`, `HealthDebugSeed`, `seedDemo`, `-seedHealth`,
+`-importData`, `-seedCalendarDemo` or `today-dataset.json`. The paired, unstripped
+dSYM symbol tables also have zero matches for the three named types or
+`seedDemo`. The app file manifest contains no fixture/dataset paths, Swift source
+or test bundles; `NSHealthUpdateUsageDescription` is absent from its actual plist.
+
+The exact source revision independently confirms the four relevant files
+(`TestDataset.swift`, `DevImport.swift`, `HealthDebugSeed.swift`,
+`CalendarDemoSeed.swift`) remain entirely DEBUG-gated; actual compiler commands
+do not define DEBUG. Together these support exclusion of those named debug
+implementations and bundled fixture inputs. A string scan alone cannot prove
+arbitrary code absence. Debug source filenames may remain in DWARF, and the
+intentional onboarding/gallery samples, migration models and Release runtime
+test switches are outside this narrow exclusion claim.
+
+### Optional command-only -Osize experiment for the next host window
+
+No compiler or project setting is changed by this handoff. The earlier
+[Swift compiler rationale](https://www.swift.org/blog/osize/) remains applicable:
+smaller code is plausible, compressed savings and runtime impact are unknown.
+The actual ZIP now needs 822,296 B further reduction, so a binary-only size
+experiment may still be insufficient. Reduced inlining can regress parser,
+Year-render and local-query speed even when code shrinks; lower code pressure
+could help launch, but no endpoint win is predicted.
+
+Only the parent holding the next quiet window should execute this optional
+single build. Reuse the same DD cache; preserve the immutable round 1 products
+above. First establish identical app/project/resource inputs against `44daf47`
+(the guard below intentionally stops on iOS/fixture changes). If inputs changed,
+create a fresh same-source `-O` control rather than mixing cohorts. Documentation
+commits alone do not change that source comparison.
+
+```sh
+# Proposed commands only; not executed by this lane.
+(
+set -e
+git diff --exit-code 44daf47767f5ef6474563fbd76fe322cad40ef20 -- ios tests/fixtures
+OSIZE_RUN=/Users/yuanlu/code/one-app/tests/results/runs/performance-climb-20261018
+# Proceed only if the source guard passed and both output paths are unused.
+test ! -e "$OSIZE_RUN/round2-osize-inventory.json"
+test ! -e "$OSIZE_RUN/round2-osize-products"
+python3 tests/performance/record_command.py --session performance-climb-20261018 \
+  --label round2-osize-release -- xcodebuild -project ios/One.xcodeproj \
+  -scheme One -configuration Release -destination 'generic/platform=iOS' \
+  -jobs 2 -derivedDataPath "$OSIZE_RUN/derived-release" \
+  CODE_SIGNING_ALLOWED=NO SWIFT_OPTIMIZATION_LEVEL=-Osize build
+python3 tests/performance/inventory.py \
+  "$OSIZE_RUN/derived-release/Build/Products/Release-iphoneos/One.app" \
+  --output "$OSIZE_RUN/round2-osize-inventory.json"
+)
+```
+
+Stop on any nonzero status before continuing. The command-line override changes
+only the experiment's Swift optimization mode across the three built product
+modules; keep whole-module mode, strip policy, resources, unsigned build context
+and SDK constant. Confirm actual compiler commands use `-Osize`. After success,
+copy app plus all three dSYMs into the unused `round2-osize-products`, verify a
+stable source/copy manifest, index that snapshot and remove its write bits
+before another cache build. Repeat UUID/DWARF/source-lookup checks there.
+
+Compare exact raw/ZIP deltas first. Source-built generic iphoneos bytes cannot
+establish simulator latency: any later speed acceptance needs paired Release
+simulator `-O`/`-Osize` cohorts with identical app-side instrumentation, host load,
+cache state and fixture inputs, n=3–5 median/range for usable-content launch,
+navigation/Year render, search/preview and commit boundaries. Preserve Add/Apply,
+Undo, timer behavior, App Intents and extension flows through the parent's
+focused functional checks. Retain `-O` unless a meaningful size improvement and
+acceptable endpoint/functional results justify adoption. Do not modify project
+optimization settings merely because the optional build succeeds.
