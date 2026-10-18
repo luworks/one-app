@@ -97,6 +97,44 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testSupportedChineseWeekdayPrefixesStillReachCapture() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 9))!
+        // These are the weekday forms already understood by CaptureParser, including both Sundays.
+        for prefix in ["", "下", "这", "这个", "本", "下下"] {
+            for week in ["周", "星期", "礼拜"] {
+                for (day, weekday) in [("一", 2), ("二", 3), ("三", 4), ("四", 5),
+                                       ("五", 6), ("六", 7), ("日", 1), ("天", 1)] {
+                    for (time, hour) in [("", nil), ("上午9点", 9), ("下午3点半", 15)] as [(String, Int?)] {
+                        let text = prefix + week + day + time + "提醒我买牛奶"
+                        XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+                        let parsed = CaptureParser.parse(text, now: now, calendar: cal)
+                        XCTAssertTrue(parsed.hasDay, text)
+                        XCTAssertEqual(cal.component(.weekday, from: parsed.day), weekday, text)
+                        XCTAssertEqual(parsed.hour, hour, text)
+                    }
+                }
+            }
+        }
+        for text in ["可以下周一上午9点提醒我买牛奶吗？", "请本星期五下午3点提醒我交报告",
+                     "Please 下礼拜天提醒我买牛奶", "下周一 09:30 提醒我买牛奶",
+                     "下午3点下周一提醒我买牛奶", "我想先休息。下周一上午9点提醒我买牛奶",
+                     "请先收拾东西，然后这礼拜日下午3点的时候提醒我出发"] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
+    func testWeekdayWordsDoNotTurnExistingActionQuestionsIntoRequests() {
+        for text in ["有没有人提醒我下周一的会议？", "有人添加了下周五的提醒吗？",
+                     "谁提醒我本星期天买牛奶？", "你提醒我这礼拜日买牛奶了吗？",
+                     "下周一有人提醒我买牛奶吗？", "本星期五是否有人添加了一个提醒？",
+                     "下周八提醒我买牛奶", "星期提醒我买牛奶", "周刊提醒我买牛奶"] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+            XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+        }
+    }
+
     func testPoliteEnglishPrefixPreservesChineseReminderRequest() {
         for text in ["Please 提醒我明天买牛奶", "Can you 明天提醒我买牛奶?"] {
             XCTAssertEqual(ChatRouting.intent(text), .capture, text)

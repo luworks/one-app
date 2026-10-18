@@ -38,7 +38,9 @@ enum ChatRouting {
             // Dialogue's unanchored matcher also protects editing follow-ups. At this NEW-message
             // boundary require the request itself, rather than a report/question quoting its words.
             if has(requestBody(text), #"^[\p{Han}0-9]"#) {
-                let when = #"[明天早上下晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]"#
+                // Match CaptureParser's weekday vocabulary as complete tokens, including Sunday 日/天.
+                let weekday = #"(?:下下|下|这个?|本)?(?:周|星期|礼拜)[一二三四五六日天]"#
+                let when = #"(?:"# + weekday + #"|[明天早上下晚今后午晨点分半零一二三四五六七八九十两0-9:：\s])"#
                 let direct = #"^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?"#
                     + when + #"*(?:的时候)?(?:提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
                 // A narrative can end in an explicit timed reminder clause. Its earlier words
