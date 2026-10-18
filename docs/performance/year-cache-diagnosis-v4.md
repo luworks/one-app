@@ -1,0 +1,27 @@
+# Year cache evaluation diagnosis v4
+
+## Question and fixed source
+
+The [root resource baseline](root-resources-v4.md) observed about250MiB whole-app footprint in Year and a similarly high window immediately after returning to Week, before later states fell near100–122MiB. This does not prove a leak or exclusive Year allocation. Current source `YearView` has a41-year `LazyVStack/ForEach` whose closure synchronously calls `yearSection`→`marks`→`computeMarks` on a cache miss before returning its view value. The framework may evaluate offscreen children for sizing/prefetch/scroll positioning; source inspection proves neither all41 years are evaluated nor only visible years are evaluated.
+
+Production reference `f1c8e19f449335cb273d83afbb1d569fe9a00fe8`; frozen diagnostic source `0adb5c46d026ca67c56144cdf61324b43d399acb`. This includes the newly accepted Activity hydration implementation, so it is a new diagnostic cohort, not a memory/latency comparison against earlier aa7 root data. No production optimization is proposed here.
+
+## Counters and acceptance
+
+`YearCacheTrace` exists only in DEBUG and requires all four flags: `-uiTesting`, `-performanceTrace`, `-performanceResources`, `-performanceYearCacheCounts`. The mutable store/lock/event buffer is allocated only when enabled. Record cumulative requests/hits/misses, cache invalidation sequence, completed miss year/start/end uptime/cache count, and year-header appeared/disappeared lifecycle events. No marks, titles, models or signatures are retained. The event cap256 has an explicit truncated count. Diagnostics live for the process independently of product cache invalidation; clearing a product cache must not erase earlier work evidence.
+
+The serial resource queue attaches an optional immutable snapshot at its layout observation. Original action/layout timestamps, two-display-link endpoint, sampling cadence and functional assertions stay unchanged. `snapshot_ns` can follow `layout_ns`: aggregate counts describe snapshot time only. Endpoint claims must filter event `ns <= layout_ns`; completed miss wall durations also need `start_ns >= operation.start_ns` for operation-local costs. Miss `ns` is completion time. Durations are wall observations around mark computation/cache insertion, not CPU/render cost or allocated bytes. An in-flight request can make cumulative requests exceed completed hits+misses.
+
+Header appeared/disappeared is lifecycle evidence, not viewport visibility. Compare completed missed years with ever-appeared headers by the exact endpoint, preserving invalidation episodes and events before/after the action. A few misses before their headers appear are normal ordering, not evidence of eager work. Many far years completed while only a small header set has appeared would support evaluating unnecessary/remote-year work as a candidate; it still would not explain250MiB or prove safe savings. If only the requested year and nearby prefetch years are computed, reject the41-year eager-computation explanation. Truncated/missing/failed-functional snapshots cannot establish absence or complete n3 diagnostic coverage.
+
+No year range, day buttons, marks, VoiceOver content, state retention, cache policy or production scheduling is changed. Any later optimization must be separate, justified by this evidence, and accepted only by matching the original workload/config/endpoints and kept-state assertions. Existing51% memory and3x latency aspirations are not achieved by adding counters.
+
+## Planned minimal execution and current status
+
+Only static source checks and one focused source review have passed. No build, Swift test, UI method, simulator operation, profiler or runtime counter result has run for this diagnostic. The real resource holder is the Reminder repair v2 writer; do not start until its actual release.
+
+One retained-cache incremental optimized-Debug build and `PerformanceClimbTests/testRootYearCacheDiagnosticWindows`: the wrapper only enables the counter flag and calls the existing root resource wrapper, preserving the same three cycles/seven transitions and complete reminder-list/Calendar-mode assertions. No new scroll/profile/retry or passing Health/Clock/Search method is added. This is not a repeat performance acceptance run; it tests a specific unresolved evaluation-count hypothesis.
+
+Prepared canonical `tests/results/runs/performance-pages-ai-20261018/year-cache-v4-command.json` selects exactly that method, jobs2/parallelNO, Today-Performance3243BEDB-4F6A-4807-AE9E-30115C528377, unchanged project path and derived-optimized cache. `staged-source-year-cache-v4/manifest.json` and materialization log freeze the exact source. Future raw logs/closed xcresult/counter summary must remain canonical and journaled; no required input is temporary. Stop/shutdown after the bounded diagnostic batch and preserve unsupported/failed evidence rather than retrying blindly. No Year profiler retry, physical-device operation or gain claim.
+
+The unrelated [Activity report](activity-hydration-v4.md) also receives a metadata clarification from actual SwiftPM Release PIF: `SWIFT_OPTIMIZATION_LEVEL=-Owholemodule`; earlier generic `-O` wording did not change either executed command or numerical result. New version2 comparison contexts preserve that exact name while retaining originals. This documentation clarification needs no duplicate benchmark.
