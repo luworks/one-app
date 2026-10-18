@@ -1,20 +1,28 @@
 import SwiftUI
 import Charts
 
-/// One metric in detail: the latest value, a 7 / 30 / 90 day switch, one clean chart and three plain facts (average,
-/// low, high) with the change against the days before. Facts only: no generated summary, no goal, no advice.
+/// One metric in detail: the latest value, a 7 / 30 / 90 day switch, a chart and plain range facts.
+/// Reading metrics also show a trailing average and its range change. No generated summary, goal or advice.
 struct HealthMetricDetail: View {
     let metric: HealthMetric
     let series: HealthSeries
     let now: Date
     var units = HealthUnits()
+    var calendar = Calendar.current
 
     @Environment(\.dismiss) private var dismiss
     @State private var days = 30
 
     private var latest: HealthPoint? { series.latest }
-    private var points: [HealthPoint] { HealthStats.points(series, days: days, now: now) }
-    private var stats: HealthRangeStats? { HealthStats.range(series, days: days, now: now) }
+    private var points: [HealthPoint] { HealthStats.points(series, days: days, now: now, calendar: calendar) }
+    private var stats: HealthRangeStats? { HealthStats.range(series, days: days, now: now, calendar: calendar) }
+
+    private var averageDays: Int { MovingAverage.window(for: days) }
+    private var averages: [HealthPoint] {
+        guard !metric.isCumulative else { return [] }
+        return MovingAverage.series(points: series.points, window: averageDays,
+                                    days: HealthWindow(days: days, now: now, calendar: calendar), calendar: calendar)
+    }
 
     var body: some View {
         NavigationStack {
@@ -23,6 +31,7 @@ struct HealthMetricDetail: View {
                     header
                     PillSwitcher(items: [7, 30, 90], selection: $days,
                                  title: { "\($0) Days" }, identifier: { "health.range.\($0)" })
+                    if !metric.isCumulative { legend }
                     chart
                     facts
                 }
@@ -51,7 +60,7 @@ struct HealthMetricDetail: View {
                         .padding(.leading, index > 0 ? 4 : 0)
                     Text(part.unit).font(.title3).foregroundStyle(.secondary)
                 }
-                Text(HealthFormat.dateLabel(latest.date, now: now))
+                Text(HealthFormat.dateLabel(latest.date, now: now, calendar: calendar))
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
                     .padding(.leading, 4)
@@ -63,7 +72,7 @@ struct HealthMetricDetail: View {
         .lineLimit(1)
         .minimumScaleFactor(0.6)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(latest.map { "\(HealthFormat.value(metric, $0.value, units: units).text), \(HealthFormat.dateLabel($0.date, now: now))" } ?? "No data")
+        .accessibilityLabel(latest.map { "\(HealthFormat.value(metric, $0.value, units: units).text), \(HealthFormat.dateLabel($0.date, now: now, calendar: calendar))" } ?? "No data")
         .accessibilityIdentifier("health.detail.value")
     }
 
@@ -72,7 +81,7 @@ struct HealthMetricDetail: View {
     private func shown(_ p: HealthPoint) -> Double { HealthFormat.displayValue(metric, p.value, units: units) }
 
     private var yDomain: ClosedRange<Double> {
-        let values = points.map(shown)
+        let values = (points + averages).map(shown)
         guard let lo = values.min(), let hi = values.max() else { return 0...1 }
         if metric.shape == .bars { return 0...max(hi * 1.1, 0.001) }
         let pad = max((hi - lo) * 0.25, abs(hi) * 0.01, 0.001)
@@ -83,10 +92,10 @@ struct HealthMetricDetail: View {
     private var axisUnit: String { metric == .sleep || metric == .daylight ? " h" : "" }
 
     private var chart: some View {
-        let window = HealthWindow(days: days, now: now)
+        let window = HealthWindow(days: days, now: now, calendar: calendar)
         let dotted = StrokeStyle(lineWidth: 0.5, dash: [1, 3])
         return Group {
-            if points.isEmpty {
+            if points.isEmpty && averages.isEmpty {
                 Text("No data in the last \(days) days.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -100,20 +109,30 @@ struct HealthMetricDetail: View {
                                 .foregroundStyle(HealthStyle.accent)
                                 .clipShape(RoundedRectangle(cornerRadius: 2))
                         } else {
-                            LineMark(x: .value("Date", p.date), y: .value(metric.title, shown(p)))
-                                .interpolationMethod(.linear)
-                                .lineStyle(StrokeStyle(lineWidth: 1.5))
-                                .foregroundStyle(HealthStyle.accent.opacity(0.5))
                             PointMark(x: .value("Date", p.date), y: .value(metric.title, shown(p)))
-                                .symbolSize(days == 7 ? 36 : 18)
+                                .symbolSize(days == 7 ? 18 : 10)
+                                .foregroundStyle(HealthStyle.accent.opacity(0.35))
+                        }
+                    }
+                    ForEach(Array(MovingAverage.segments(averages, calendar: calendar).enumerated()), id: \.offset) { index, segment in
+                        ForEach(segment, id: \.date) { p in
+                            LineMark(x: .value("Date", p.date), y: .value("Average", shown(p)),
+                                     series: .value("Segment", index))
+                                .interpolationMethod(.monotone)
+                                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
                                 .foregroundStyle(HealthStyle.accent)
+                            if segment.count == 1 {
+                                PointMark(x: .value("Date", p.date), y: .value("Average", shown(p)))
+                                    .symbolSize(24)
+                                    .foregroundStyle(HealthStyle.accent)
+                            }
                         }
                     }
                 }
                 .chartXScale(domain: window.start...window.end, range: .plotDimension(startPadding: 4, endPadding: 28))
                 .chartYScale(domain: yDomain)
                 .chartXAxis {
-                    AxisMarks(values: HealthStats.axisTicks(days: days, now: now)) { _ in
+                    AxisMarks(values: HealthStats.axisTicks(days: days, now: now, calendar: calendar)) { _ in
                         AxisGridLine(stroke: dotted)
                         AxisValueLabel(format: .dateTime.month(.abbreviated).day(), anchor: .top)
                     }
@@ -130,6 +149,25 @@ struct HealthMetricDetail: View {
         }
     }
 
+    private var legend: some View {
+        HStack(spacing: 16) {
+            Label {
+                Text("Readings")
+            } icon: {
+                Circle().fill(HealthStyle.accent.opacity(0.35)).frame(width: 5, height: 5)
+            }
+            Label {
+                Text("\(averageDays)-day average")
+            } icon: {
+                Capsule().fill(HealthStyle.accent).frame(width: 18, height: 3)
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("health.detail.legend")
+    }
+
     // MARK: Facts
 
     private var facts: some View {
@@ -139,6 +177,7 @@ struct HealthMetricDetail: View {
                 fact("Low", stats?.low)
                 fact("High", stats?.high)
             }
+            if !metric.isCumulative { trend }
             if let change = stats?.change {
                 Text("Average \(HealthFormat.change(metric, change, units: units)) vs previous \(days) days")
                     .font(.footnote)
@@ -146,6 +185,30 @@ struct HealthMetricDetail: View {
                     .accessibilityIdentifier("health.detail.change")
             }
         }
+    }
+
+    private var trend: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Trend").font(.footnote).foregroundStyle(.secondary)
+            if let latest = averages.last {
+                Text(HealthFormat.value(metric, latest.value, units: units).text)
+                    .font(.headline).monospacedDigit()
+                Text("\(averageDays)-day average · \(HealthFormat.dateLabel(latest.date, now: now, calendar: calendar))")
+                    .font(.footnote).foregroundStyle(.secondary)
+                if let first = averages.first, first.date != latest.date {
+                    Text("\(HealthFormat.change(metric, latest.value - first.value, units: units)) over \(days) days")
+                        .font(.footnote).foregroundStyle(.secondary)
+                } else {
+                    Text("Not enough averages to compare this range.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("At least two readings in a \(averageDays)-day window are needed.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("health.fact.trend")
     }
 
     private func fact(_ title: String, _ value: Double?) -> some View {

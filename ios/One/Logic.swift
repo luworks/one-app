@@ -297,6 +297,27 @@ enum CalendarMath {
 
 /// Layout helpers for the Week grid. Pure, so they can be tested.
 enum CalendarLayout {
+    struct TimedLanes {
+        let eventWidth: Double
+        let alarmX: Double
+        let alarmWidth: Double
+
+        /// Keep even dense overlap clusters inside the event lane, including their minimum visual width.
+        func block(column: Int, count: Int) -> (x: Double, width: Double) {
+            let width = eventWidth / Double(max(1, count))
+            return (1 + width * Double(column), min(width, max(8, width - 1)))
+        }
+    }
+
+    /// A trailing alarm lane only on days with alarms. Insets and the gap belong to this shared drawing/hit-test geometry.
+    static func timedLanes(columnWidth: Double, hasAlarms: Bool) -> TimedLanes {
+        let contentWidth = max(0, columnWidth - 2)
+        let alarmWidth = hasAlarms ? min(28, max(18, contentWidth * 0.24), contentWidth * 0.4) : 0
+        let gap = hasAlarms ? min(2, contentWidth * 0.05) : 0
+        let eventWidth = contentWidth - alarmWidth - gap
+        return TimedLanes(eventWidth: eventWidth, alarmX: 1 + eventWidth + gap, alarmWidth: alarmWidth)
+    }
+
     /// Lane (row) for each banner in the all-day strip. `spans` are inclusive day columns (0...6) of one week.
     /// Banners that overlap in days never share a lane; earlier and longer banners go first.
     static func lanes(for spans: [(start: Int, end: Int)]) -> [Int] {

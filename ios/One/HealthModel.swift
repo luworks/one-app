@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Health sheet's state: which metrics are shown (saved), and their last 90 days from Apple Health (memory only).
+/// The Health sheet's state: which metrics are shown (saved), and their chart history and trailing lookback from Apple Health (memory only).
 /// Today never writes to Apple Health; nothing here goes to SwiftData, the widget snapshot or disk, except the choice
 /// and order of metrics.
 ///
@@ -10,7 +10,7 @@ import SwiftUI
 @MainActor
 @Observable
 final class HealthModel {
-    static let days = 90
+    static let days = MovingAverage.historyDays
     /// One model for every Health sheet (Today line, Settings), so a reopened sheet starts from what was already read.
     static let shared = HealthModel()
 

@@ -31,7 +31,7 @@ struct CalendarView: View {
                 case .month:
                     MonthView(day: $day, title: $title, open: open, edit: edit, openDay: openDay)
                 case .year:
-                    YearView(day: $day) { month in
+                    YearView(day: $day, openDay: openDay) { month in
                         withAnimation(.snappy) {
                             day = CalendarMath.landingDay(inMonthOf: month)
                             mode = .month
@@ -477,6 +477,7 @@ struct AgendaRow: View {
 
 private struct YearView: View {
     @Binding var day: Date
+    var openDay: (Date) -> Void
     var pickMonth: (Date) -> Void
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query private var tasks: [OneTask]
@@ -518,13 +519,14 @@ private struct YearView: View {
     struct YearMarks {
         var holidays: [Date: [String]] = [:]
         var busy: Set<Date> = []
+        var trips: [CalEntry] = []
     }
 
     private var dataSignature: Int {
         var h = Hasher()
         h.combine(CalendarSync.shared.version)
         h.combine(holidaySetting)
-        for e in events { h.combine(e.start); h.combine(e.durationMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay) }
+        for e in events { h.combine(e.start); h.combine(e.durationMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.title); h.combine(e.calendarName); h.combine(e.externalID) }
         for t in tasks { h.combine(t.plannedStart); h.combine(t.due); h.combine(t.repeatRule); h.combine(t.isDone) }
         h.combine(cal.startOfDay(for: TodayClock.now))
         return h.finalize()
@@ -543,8 +545,12 @@ private struct YearView: View {
         guard let end = cal.date(byAdding: .year, value: 1, to: start) else { return YearMarks() }
         let interval = DateInterval(start: start, end: end)
         // Alarms are left out on purpose: a ring is not load. Everything else comes from the same merge as Week and Month.
-        var items = CalendarEntries.make(in: interval, events: events, tasks: tasks).filter { !$0.isAlarm }.map {
-            YearLoadItem(start: $0.start, end: $0.end, isAllDay: $0.isAllDay, repeats: $0.repeats, isBackground: $0.isBackground)
+        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, forYearMarks: true).filter {
+            !$0.isAlarm && ($0.isTask || !YearEventMarks.isBirthday(title: $0.title, calendarTitle: $0.calendarTitle,
+                                                                 isBirthdayCalendar: $0.isBirthday))
+        }
+        var items = entries.map {
+            YearLoadItem(start: $0.start, end: $0.end, isAllDay: $0.isAllDay, repeats: $0.repeats, isBackground: $0.isBackground || YearLoad.isBackgroundCalendar(isSubscription: false, isBirthday: false, title: $0.calendarTitle))
         }
         // A reminder that is still due counts on its due day, unless it is already planned for that day (then it is counted above).
         let today = cal.startOfDay(for: TodayClock.now)
@@ -556,11 +562,22 @@ private struct YearView: View {
             items.append(YearLoadItem(start: dueDay, end: next, isAllDay: true, repeats: false, isBackground: false))
         }
         var result = YearMarks()
+        result.trips = entries.filter {
+            !$0.isTask && !$0.isBackground
+                && !YearLoad.isBackgroundCalendar(isSubscription: false, isBirthday: false, title: $0.calendarTitle)
+                && YearEventMarks.isTrip(start: $0.start, end: $0.end, isAllDay: $0.isAllDay, calendar: cal)
+        }.sorted { $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start }
         result.busy = YearBusy.days(loads: YearLoad.counts(items, in: interval, calendar: cal))
         let sets = YearMarkSettings.sets(holidaySetting)
         let names = Holidays.days(inYear: cal.component(.year, from: start), sets: sets)
         for (key, list) in names {
             if let date = cal.date(from: DateComponents(year: key.year, month: key.month, day: key.day)) { result.holidays[date] = list }
+        }
+        for entry in entries where entry.isHoliday && YearEventMarks.isSingleDayHoliday(start: entry.start, end: entry.end, isAllDay: entry.isAllDay, calendar: cal) {
+            let date = cal.startOfDay(for: entry.start)
+            if interval.contains(date), result.holidays[date]?.contains(entry.title) != true {
+                result.holidays[date, default: []].append(entry.title)
+            }
         }
         return result
     }
@@ -588,7 +605,7 @@ private struct YearView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: 3), spacing: 12) {
                 ForEach(0..<12, id: \.self) { m in
                     if let month = cal.date(byAdding: .month, value: m, to: start) {
-                        MiniMonth(month: month, busy: marked.busy, holidays: marked.holidays) { pickMonth(month) }
+                        MiniMonth(month: month, busy: marked.busy, holidays: marked.holidays, trips: marked.trips, openDay: openDay) { pickMonth(month) }
                     }
                 }
             }
@@ -598,74 +615,106 @@ private struct YearView: View {
     }
 }
 
-/// A small month for the Year view: name (red for the current month), then its day numbers. Three marks, each with one
-/// meaning: a red number is a holiday or festival, a quiet gray tint is a day that is unusually busy for you, the red
-/// circle is today (see `YearMarks.swift` and docs/design/year-view.md). Month keeps Apple's dots.
+/// A small month for the Year view: holidays, calendar-color trip bands, quiet busy tints, and today
+/// as a red circle (see `YearMarks.swift` and docs/design/year-view.md). Month keeps Apple's dots.
 private struct MiniMonth: View {
     let month: Date
     /// Unusually busy days (start of day).
     var busy: Set<Date> = []
     /// Holiday names by day (start of day).
     var holidays: [Date: [String]] = [:]
+    var trips: [CalEntry] = []
+    var openDay: (Date) -> Void
     var onTap: () -> Void
     private let cal = Calendar.current
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
 
     private var days: [Date] { CalendarMath.monthWeeks(of: month).flatMap { $0 }.compactMap { $0 } }
 
-    /// What a screen reader says about the month beyond its name: the holidays and how many busy days.
     private var summary: String {
-        var parts: [String] = []
-        let names = days.compactMap { holidays[$0] }.flatMap { $0 }
-        if !names.isEmpty { parts.append(names.joined(separator: ", ")) }
+        var parts = days.compactMap { holidays[$0] }.flatMap { $0 }
         let busyCount = days.filter { busy.contains($0) }.count
         if busyCount > 0 { parts.append("\(busyCount) busy day\(busyCount == 1 ? "" : "s")") }
+        parts += trips.filter { trip in days.contains { trip.overlaps($0) } }.map(\.title)
         return parts.joined(separator: "; ")
     }
 
     var body: some View {
         let weeks = CalendarMath.monthWeeks(of: month)
         let isCurrent = cal.isDate(month, equalTo: .now, toGranularity: .month)
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
+            Button(action: onTap) {
                 Text(month.formatted(.dateTime.month(.abbreviated)))
                     .font(.title3.bold())
                     .foregroundStyle(isCurrent ? Color.red : Color.primary)
                     .padding(.leading, 2)
-                VStack(spacing: 6.5) {
-                    ForEach(0..<6, id: \.self) { w in
-                        HStack(spacing: 0) {
-                            ForEach(0..<7, id: \.self) { i in
-                                if w < weeks.count, let d = weeks[w][i] {
-                                    let today = cal.isDateInToday(d)
-                                    let holiday = holidays[d] != nil
-                                    Text("\(cal.component(.day, from: d))")
-                                        .font(.system(size: 10.5, weight: holiday ? .bold : .semibold).monospacedDigit())
-                                        .foregroundStyle(today ? Color.white : (holiday ? DayTint.holiday : Color.primary))
-                                        .frame(maxWidth: .infinity, minHeight: 16)
-                                        .background {
-                                            if today {
-                                                Circle().fill(Color.red).frame(width: 16, height: 16)
-                                            } else if busy.contains(d) {
-                                                RoundedRectangle(cornerRadius: 4).fill(DayTint.busyDay).frame(width: 18, height: 16)
-                                            }
-                                        }
-                                } else {
-                                    Color.clear.frame(maxWidth: .infinity, minHeight: 16)
-                                }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel(month.formatted(.dateTime.month(.wide).year()))
+            .accessibilityValue(summary)
+            .accessibilityHint("Shows this month")
+            .accessibilityIdentifier(CalendarIDs.month(month))
+            VStack(spacing: 6.5) {
+                ForEach(0..<6, id: \.self) { w in
+                    HStack(spacing: 0) {
+                        ForEach(0..<7, id: \.self) { i in
+                            if w < weeks.count, let d = weeks[w][i] {
+                                dayButton(d)
+                            } else {
+                                Color.clear.frame(maxWidth: .infinity, minHeight: 16)
                             }
                         }
                     }
+                    .background { bands(week: w, weeks: weeks) }
                 }
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(month.formatted(.dateTime.month(.wide).year()))
-        .accessibilityValue(summary)
-        .accessibilityHint("Shows this month")
-        .accessibilityIdentifier(CalendarIDs.month(month))
+    }
+
+    private func dayButton(_ d: Date) -> some View {
+        let today = cal.isDateInToday(d)
+        let holiday = holidays[d] != nil
+        let spans = trips.filter { $0.overlaps(d) }
+        return Button { openDay(d) } label: {
+            Text("\(cal.component(.day, from: d))")
+                .font(.system(size: 10.5, weight: holiday ? .bold : .semibold).monospacedDigit())
+                .foregroundStyle(today ? Color.white : (holiday ? DayTint.holiday : Color.primary))
+                .frame(maxWidth: .infinity, minHeight: 16)
+                .background {
+                    if today {
+                        Circle().fill(Color.red).frame(width: 16, height: 16)
+                    } else if spans.isEmpty && busy.contains(d) {
+                        RoundedRectangle(cornerRadius: 4).fill(DayTint.busyDay).frame(width: 18, height: 16)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(d.formatted(date: .complete, time: .omitted))
+        .accessibilityValue(((holidays[d] ?? []) + spans.map(\.title) + (busy.contains(d) && spans.isEmpty ? ["Unusually busy"] : [])).joined(separator: "; "))
+        .accessibilityHint("Opens this day in Today")
+        .accessibilityIdentifier("year.\(CalendarIDs.day(d))")
+    }
+
+    private func bands(week: Int, weeks: [[Date?]]) -> some View {
+        GeometryReader { geometry in
+            // The earliest span owns overlapping cells; all event names remain available to VoiceOver.
+            // Draw later spans first so overlapping bands never accumulate a darker tint.
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(trips.reversed())) { trip in
+                    ForEach(YearEventMarks.segments(start: trip.start, end: trip.end, weeks: weeks, calendar: cal).filter { $0.week == week }, id: \.firstColumn) { segment in
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(EventTint.fill(trip.color))
+                            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 3))
+                            .frame(width: geometry.size.width * CGFloat(segment.lastColumn - segment.firstColumn + 1) / 7, height: 16)
+                            .offset(x: geometry.size.width * CGFloat(segment.firstColumn) / 7)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -772,7 +821,7 @@ private struct WeekPage: View {
             header(days)
             allDayStrip(days, entries.filter(\.isAllDay))
             Rectangle().fill(Color(.separator)).frame(height: 0.5)
-            // Alarms are markers on the grid, not blocks: they take no column and never move.
+            // Alarms have no duration and never move; timed blocks yield to their narrow lane.
             grid(days, entries.filter { !$0.isAllDay && !$0.isAlarm }, entries.filter(\.isAlarm))
         }
         .entryDeleteDialog($pendingDelete)
@@ -902,20 +951,22 @@ private struct WeekPage: View {
                     ForEach(Array(days.enumerated()), id: \.offset) { index, d in
                         let x = gutter + CGFloat(index) * colW
                         let placed = place(timed, on: d)
+                        let markers = placeAlarms(alarms, on: d)
+                        let lanes = CalendarLayout.timedLanes(columnWidth: Double(colW), hasAlarms: !markers.isEmpty)
                         let past = dimsPast && d < cal.startOfDay(for: .now)
                         ForEach(placed, id: \.entry.id) { p in
-                            let w = (colW - 2) / CGFloat(p.count)
-                            block(p.entry, colW: colW, lines: p.titleLines)
+                            let span = lanes.block(column: p.column, count: p.count)
+                            block(p.entry, colW: colW, width: CGFloat(span.width),
+                                  height: max(18, p.height(hourHeight)), lines: p.titleLines)
                                 .opacity(past ? DayTint.past : 1)
-                                .frame(width: max(8, w - 1), height: max(18, p.height(hourHeight)))
-                                .offset(x: x + 1 + w * CGFloat(p.column), y: p.y(hourHeight))
+                                .offset(x: x + CGFloat(span.x), y: p.y(hourHeight))
                         }
-                        // Above the blocks: a thin marker at the alarm's time (no duration).
-                        ForEach(placeAlarms(alarms, on: d), id: \.entry.id) { m in
+                        // Beside the blocks: a thin marker at the alarm's time (no duration).
+                        ForEach(markers, id: \.entry.id) { m in
                             alarmMarker(m.entry)
                                 .opacity(past ? DayTint.past : 1)
-                                .frame(width: max(8, colW - 2), height: Self.markerHeight)
-                                .offset(x: x + 1, y: m.y)
+                                .frame(width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
+                                .offset(x: x + CGFloat(lanes.alarmX), y: m.y)
                         }
                     }
                     if days.contains(where: cal.isDateInToday) {
@@ -1015,17 +1066,20 @@ private struct WeekPage: View {
         }
     }
 
-    /// An alarm on the grid: a thin accent line at its time with a small bell and its label. Tap opens the alarm editor;
+    /// An alarm on the grid: a thin accent line and bell, with a label when it fits. Tap opens the alarm editor;
     /// it has no duration and no drag (only flexible tasks move).
     private func alarmMarker(_ e: CalEntry) -> some View {
-        HStack(spacing: 2) {
-            Image(systemName: "alarm").font(.system(size: 8, weight: .bold))
-            Text(e.title).font(.system(size: 9, weight: .semibold)).lineLimit(1)
-            Spacer(minLength: 0)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 2) {
+                Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
+                Text(e.title).font(.system(size: 9, weight: .semibold)).lineLimit(1)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
         }
         .foregroundStyle(EventTint.text(e.color))
         .padding(.horizontal, 3)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(EventTint.fill(e.color))
         .overlay(alignment: .top) { Rectangle().fill(e.color).frame(height: 1.5) }
         .clipShape(RoundedRectangle(cornerRadius: 3))
@@ -1039,7 +1093,7 @@ private struct WeekPage: View {
     }
 
     @ViewBuilder
-    private func block(_ e: CalEntry, colW: CGFloat, lines: Int) -> some View {
+    private func block(_ e: CalEntry, colW: CGFloat, width: CGFloat, height: CGFloat, lines: Int) -> some View {
         if case .task(let task) = e.source {
             DraggableTaskBlock(task: task, colWidth: colW, hourHeight: hourHeight) {
                 Text(e.title)
@@ -1049,24 +1103,30 @@ private struct WeekPage: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 3)
                     .padding(.top, 2)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    // Constrain the static content before DraggableTaskBlock applies its lift and drag offset.
+                    .frame(width: width, height: height, alignment: .topLeading)
                     .clipped()
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor, lineWidth: 1))
+                    .contentShape(Rectangle())
             }
         } else {
             HStack(spacing: 0) {
-                Rectangle().fill(e.color).frame(width: 3)
-                Text(e.title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(EventTint.text(e.color))
-                    .lineLimit(lines)
-                    .lineSpacing(-1)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 3)
-                    .padding(.top, 2)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                Rectangle().fill(e.color).frame(width: min(3, width))
+                if width >= 12 {
+                    Text(e.title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(EventTint.text(e.color))
+                        .lineLimit(lines)
+                        .lineSpacing(-1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 3)
+                        .padding(.top, 2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
             }
+            .frame(width: width, height: height, alignment: .leading)
+            .clipped()
             .background(EventTint.fill(e.color))
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .contentShape(Rectangle())
@@ -1086,12 +1146,15 @@ private struct WeekPage: View {
     /// Where the timed blocks are drawn (the same layout as the grid's `ForEach`).
     private func blockRects(_ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry], colW: CGFloat) -> [CGRect] {
         days.enumerated().flatMap { index, d in
-            place(timed, on: d).map { p in
-                let w = (colW - 2) / CGFloat(p.count)
-                return CGRect(x: gutter + CGFloat(index) * colW + 1 + w * CGFloat(p.column), y: p.y(hourHeight),
-                              width: max(8, w - 1), height: max(18, p.height(hourHeight)))
-            } + placeAlarms(alarms, on: d).map { m in
-                CGRect(x: gutter + CGFloat(index) * colW + 1, y: m.y, width: max(8, colW - 2), height: Self.markerHeight)
+            let markers = placeAlarms(alarms, on: d)
+            let lanes = CalendarLayout.timedLanes(columnWidth: Double(colW), hasAlarms: !markers.isEmpty)
+            return place(timed, on: d).map { p in
+                let span = lanes.block(column: p.column, count: p.count)
+                return CGRect(x: gutter + CGFloat(index) * colW + CGFloat(span.x), y: p.y(hourHeight),
+                              width: CGFloat(span.width), height: max(18, p.height(hourHeight)))
+            } + markers.map { m in
+                CGRect(x: gutter + CGFloat(index) * colW + CGFloat(lanes.alarmX), y: m.y,
+                       width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
             }
         }
     }

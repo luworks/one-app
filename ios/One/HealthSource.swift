@@ -32,7 +32,7 @@ enum HealthSources {
     }
 }
 
-/// Deterministic 90-day series for every metric (`HealthSampleSeries`).
+/// Deterministic chart history with a trailing-average lookback for every metric (`HealthSampleSeries`).
 struct MockHealthSource: HealthSource {
     var isAvailable: Bool { true }
     var isSample: Bool { true }

@@ -177,3 +177,107 @@ final class YearMarksTests: XCTestCase {
         XCTAssertTrue(YearBusy.days(loads: ["a": 1, "b": 2]).isEmpty)
     }
 }
+
+extension YearMarksTests {
+    func testChineseLanguageAddsChinaWithoutDiscardingRegionOrExplicitChoice() {
+        XCTAssertEqual(HolidaySet.resolve("auto", region: "US", language: "zh-Hans-US"), [.unitedStates, .china, .international])
+        XCTAssertEqual(HolidaySet.resolve("auto", region: "GB", language: "zh-Hant"), [.china, .international])
+        XCTAssertEqual(HolidaySet.resolve("auto", region: "US", language: "en-US"), [.unitedStates, .international])
+        XCTAssertEqual(HolidaySet.resolve("none", region: "US", language: "zh-Hans"), [])
+        XCTAssertEqual(HolidaySet.resolve("international", region: "CN", language: "zh-Hans"), [.international])
+    }
+
+    func testBirthdayClassificationForLocalAndSystemEvents() {
+        XCTAssertTrue(YearEventMarks.isBirthday(title: "Mia's birthday", calendarTitle: "Local"))
+        XCTAssertTrue(YearEventMarks.isBirthday(title: "妈妈生日", calendarTitle: "Local"))
+        XCTAssertTrue(YearEventMarks.isBirthday(title: "Mia", calendarTitle: "Contacts", isBirthdayCalendar: true))
+        XCTAssertTrue(YearEventMarks.isBirthday(title: "Mia", calendarTitle: "Birthdays"))
+        XCTAssertFalse(YearEventMarks.isBirthday(title: "Conference", calendarTitle: "Work"))
+    }
+
+    func testSystemHolidayCandidatesAndExclusiveEndClassification() {
+        XCTAssertTrue(YearEventMarks.isHolidayCalendar(isSubscription: true, title: "Regional dates"))
+        XCTAssertTrue(YearEventMarks.isHolidayCalendar(isSubscription: false, title: "US HOLIDAYS"))
+        XCTAssertTrue(YearEventMarks.isHolidayCalendar(isSubscription: false, title: "中国节假日"))
+        XCTAssertFalse(YearEventMarks.isHolidayCalendar(isSubscription: false, title: "Work"))
+        XCTAssertTrue(YearEventMarks.isSingleDayHoliday(start: date(2026, 10, 1), end: date(2026, 10, 2), isAllDay: true, calendar: cal))
+        XCTAssertFalse(YearEventMarks.isSingleDayHoliday(start: date(2026, 10, 1), end: date(2026, 10, 3), isAllDay: true, calendar: cal))
+        XCTAssertFalse(YearEventMarks.isSingleDayHoliday(start: date(2026, 10, 1, 10), end: date(2026, 10, 1, 11), isAllDay: false, calendar: cal))
+        XCTAssertFalse(YearEventMarks.isSingleDayHoliday(start: date(2026, 10, 1), end: date(2026, 10, 1), isAllDay: true, calendar: cal))
+    }
+
+    func testTripBandsSplitAtWeekAndMonthBoundariesWithExclusiveEnds() {
+        let weeks: [[Date?]] = [
+            [nil, nil, nil, nil, date(2026, 10, 1), date(2026, 10, 2), date(2026, 10, 3)],
+            (4...10).map { date(2026, 10, $0) },
+            (11...17).map { date(2026, 10, $0) }
+        ]
+        XCTAssertEqual(YearEventMarks.segments(start: date(2026, 9, 30), end: date(2026, 10, 6), weeks: weeks, calendar: cal), [
+            YearBandSegment(week: 0, firstColumn: 4, lastColumn: 6),
+            YearBandSegment(week: 1, firstColumn: 0, lastColumn: 1)
+        ])
+        XCTAssertTrue(YearEventMarks.segments(start: date(2026, 9, 28), end: date(2026, 10, 1), weeks: weeks, calendar: cal).isEmpty)
+        XCTAssertFalse(YearEventMarks.isTrip(start: date(2026, 10, 1, 22), end: date(2026, 10, 3, 2), isAllDay: false, calendar: cal))
+    }
+
+    func testTripBandAcrossYearBoundaryAndLeapDay() {
+        let week: [[Date?]] = [[nil, nil, nil, nil, date(2027, 1, 1), date(2027, 1, 2), date(2027, 1, 3)]]
+        XCTAssertEqual(YearEventMarks.segments(start: date(2026, 12, 30), end: date(2027, 1, 2), weeks: week, calendar: cal), [
+            YearBandSegment(week: 0, firstColumn: 4, lastColumn: 4)
+        ])
+        XCTAssertTrue(YearEventMarks.isTrip(start: date(2028, 2, 28), end: date(2028, 3, 1), isAllDay: true, calendar: cal))
+    }
+
+    func testSingleAllDayDatesAcrossDSTAreNotTrips() {
+        var local = cal
+        local.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        for components in [(2026, 3, 8), (2026, 11, 1)] {
+            let start = local.date(from: DateComponents(year: components.0, month: components.1, day: components.2))!
+            let next = local.date(byAdding: .day, value: 1, to: start)!
+            let end = local.date(byAdding: .day, value: 2, to: start)!
+            XCTAssertFalse(YearEventMarks.isTrip(start: start, end: next, isAllDay: true, calendar: local))
+            XCTAssertTrue(YearEventMarks.isTrip(start: start, end: end, isAllDay: true, calendar: local))
+            XCTAssertEqual(YearEventMarks.segments(start: start, end: end, weeks: [[start, next, end, nil, nil, nil, nil]], calendar: local), [
+                YearBandSegment(week: 0, firstColumn: 0, lastColumn: 1)
+            ])
+        }
+    }
+}
+
+extension YearMarksTests {
+    func testPersistedLocalAllDayDurationsAcrossDST() {
+        var local = cal
+        local.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        for (month, day) in [(3, 8), (11, 1)] {
+            let start = local.date(from: DateComponents(year: 2026, month: month, day: day))!
+            let next = local.date(byAdding: .day, value: 1, to: start)!
+            let after = local.date(byAdding: .day, value: 2, to: start)!
+            for minutes in [1440, 2880] {
+                let end = YearEventMarks.localEnd(start: start, durationMinutes: minutes, isAllDay: true, calendar: local)
+                XCTAssertEqual(end, minutes == 1440 ? next : after)
+                XCTAssertEqual(YearEventMarks.isTrip(start: start, end: end, isAllDay: true, calendar: local), minutes == 2880)
+                XCTAssertEqual(YearEventMarks.segments(start: start, end: end,
+                    weeks: [[start, next, after, nil, nil, nil, nil]], calendar: local), [
+                        YearBandSegment(week: 0, firstColumn: 0, lastColumn: minutes == 1440 ? 0 : 1)
+                    ])
+                let counts = YearLoad.counts([item(start, end, allDay: true)],
+                                            in: DateInterval(start: start, end: after), calendar: local)
+                XCTAssertEqual(counts, minutes == 1440 ? [start: 1] : [:])
+            }
+        }
+    }
+
+    func testMirroredElapsedAllDayDurationsAndTimedDurationsStayIntact() {
+        var local = cal
+        local.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        for (month, day, minutes) in [(3, 8, 1380), (11, 1, 1500), (3, 8, 2820), (11, 1, 2940)] {
+            let start = local.date(from: DateComponents(year: 2026, month: month, day: day))!
+            let end = YearEventMarks.localEnd(start: start, durationMinutes: minutes, isAllDay: true, calendar: local)
+            XCTAssertEqual(end, start.addingTimeInterval(TimeInterval(minutes * 60)))
+            XCTAssertEqual(local.component(.hour, from: end), 0)
+            XCTAssertEqual(YearEventMarks.isTrip(start: start, end: end, isAllDay: true, calendar: local), minutes > 1500)
+            XCTAssertEqual(YearEventMarks.localEnd(start: start, durationMinutes: 1440, isAllDay: false, calendar: local),
+                           start.addingTimeInterval(86400))
+        }
+    }
+}
