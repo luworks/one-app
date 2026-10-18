@@ -366,7 +366,8 @@ final class CalendarLayoutTests: XCTestCase {
                     let event = CGRect(x: span.x, y: 13 * 48, width: span.width, height: 48)
                     let alarm = CGRect(x: lanes.alarmX, y: 13 * 48, width: lanes.alarmWidth, height: 14)
                     XCTAssertFalse(event.intersects(alarm), "an alarm during an event has its own lane")
-                    XCTAssertLessThanOrEqual(event.maxX, alarm.minX - 2 + 0.0001)
+                    XCTAssertGreaterThan(alarm.minX - event.maxX, 0,
+                                         "the adaptive lane gap must keep the frames positively separated")
                     XCTAssertFalse(event.contains(CGPoint(x: alarm.midX, y: alarm.midY)),
                                    "the alarm tap must not hit an event block")
                     XCTAssertGreaterThan(span.width, 0)

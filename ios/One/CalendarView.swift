@@ -956,11 +956,9 @@ private struct WeekPage: View {
                         let past = dimsPast && d < cal.startOfDay(for: .now)
                         ForEach(placed, id: \.entry.id) { p in
                             let span = lanes.block(column: p.column, count: p.count)
-                            block(p.entry, colW: colW, width: CGFloat(span.width), lines: p.titleLines)
+                            block(p.entry, colW: colW, width: CGFloat(span.width),
+                                  height: max(18, p.height(hourHeight)), lines: p.titleLines)
                                 .opacity(past ? DayTint.past : 1)
-                                .frame(width: CGFloat(span.width), height: max(18, p.height(hourHeight)))
-                                .clipped()
-                                .contentShape(Rectangle())
                                 .offset(x: x + CGFloat(span.x), y: p.y(hourHeight))
                         }
                         // Beside the blocks: a thin marker at the alarm's time (no duration).
@@ -1095,7 +1093,7 @@ private struct WeekPage: View {
     }
 
     @ViewBuilder
-    private func block(_ e: CalEntry, colW: CGFloat, width: CGFloat, lines: Int) -> some View {
+    private func block(_ e: CalEntry, colW: CGFloat, width: CGFloat, height: CGFloat, lines: Int) -> some View {
         if case .task(let task) = e.source {
             DraggableTaskBlock(task: task, colWidth: colW, hourHeight: hourHeight) {
                 Text(e.title)
@@ -1105,10 +1103,12 @@ private struct WeekPage: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 3)
                     .padding(.top, 2)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    // Constrain the static content before DraggableTaskBlock applies its lift and drag offset.
+                    .frame(width: width, height: height, alignment: .topLeading)
                     .clipped()
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor, lineWidth: 1))
+                    .contentShape(Rectangle())
             }
         } else {
             HStack(spacing: 0) {
@@ -1125,7 +1125,8 @@ private struct WeekPage: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .frame(width: width, height: height, alignment: .leading)
+            .clipped()
             .background(EventTint.fill(e.color))
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .contentShape(Rectangle())
