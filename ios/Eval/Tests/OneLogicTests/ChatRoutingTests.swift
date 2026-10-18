@@ -135,6 +135,32 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testReportedWeekdayReminderQuestionStaysConversation() {
+        XCTAssertEqual(ChatRouting.intent("本周一添加的提醒是什么？"), .conversation)
+    }
+
+    func testChineseReportedActionsAndRelativeClauseQuestionsStayConversation() {
+        for prefix in ["", "明天", "本周一", "下星期五下午3点"] {
+            for question in ["添加的提醒是什么？", "创建的提醒是哪一个？", "添加了一个提醒吗？",
+                             "创建过的提醒有哪些？", "提醒我开会的是谁？", "提醒我买牛奶了吗？"] {
+                let text = prefix + question
+                XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+                XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+            }
+        }
+    }
+
+    func testChineseCreationQuestionsKeepTheirActualReminderObjects() {
+        for text in ["帮我添加一个提醒", "添加一个提醒", "下周一提醒我买牛奶",
+                     "可以帮我添加一个下周一的提醒吗？", "本周一添加一个买牛奶的提醒好吗？",
+                     "下周一提醒我检查会议的资料好吗？", "添加一个读完了的书的整理提醒",
+                     "添加了不起的项目复盘提醒好吗？", "提醒我检查是谁添加的文件",
+                     "帮我添加一个名叫添加了什么的提醒好吗？",
+                     "添加一个谁动了我的奶酪的读书提醒", "提醒我把做完了的报告发给同事"] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
     func testPoliteEnglishPrefixPreservesChineseReminderRequest() {
         for text in ["Please 提醒我明天买牛奶", "Can you 明天提醒我买牛奶?"] {
             XCTAssertEqual(ChatRouting.intent(text), .capture, text)

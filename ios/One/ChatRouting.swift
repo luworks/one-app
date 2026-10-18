@@ -24,6 +24,23 @@ enum ChatRouting {
         return has(body, #"^(?:plan my day|plan today|schedule my day|(?:tidy(?: up)?|clean up|clear|reschedule|sort out) (?:my )?(?:\d+ )?overdue(?: reminders)?|(?:review|recap) (?:my )?(?:today|the day|day))\s*[.!?]*$|^(?:安排今天|规划今天|帮我安排今天|(?:整理|处理|清理)(?:\d+条)?过期(?:提醒)?|(?:回顾|复盘|总结)(?:一下)?今天|今天(?:回顾|复盘|总结))(?:好吗|可以吗)?[。！？?]*$"#)
     }
 
+    // Match CaptureParser's weekday vocabulary as complete tokens, including Sunday 日/天.
+    private static let chineseWeekday = #"(?:下下|下|这个?|本)?(?:周|星期|礼拜)[一二三四五六日天]"#
+    private static let chineseTimeToken = #"(?:"# + chineseWeekday + #"|[明天早上下晚今后午晨点分半零一二三四五六七八九十两0-9:：\s])"#
+
+    /// Inspect the leading action, not action words inside the object of an explicit request.
+    private static func isChineseReportedActionQuestion(_ text: String) -> Bool {
+        let body = requestBody(text).replacingOccurrences(of: "^" + chineseTimeToken + #"*(?:的时候)?"#,
+                                                        with: "", options: .regularExpression)
+        guard let verb = body.range(of: #"^(?:创建|添加|新建|提醒(?:我|一下)?)"#,
+                                    options: .regularExpression) else { return false }
+        let remainder = String(body[verb.upperBound...])
+        // Attributive/past action plus an inquiry, or a completed action being confirmed.
+        if has(remainder, #"^(?:的|了|过).*(?:什么|谁|哪(?:个|些|条|一)|多少|是否|是不是)"#) { return true }
+        if has(remainder, #"^(?:了|过).*(?<!好)(?<!行)(?<!可以)吗[?？]*$"#) { return true }
+        return has(remainder, #"(?:的是(?:谁|什么|哪(?:个|些|条|一))|(?:了|过)(?:吗|没有|没))[?？]*$"#)
+    }
+
     static func intent(_ raw: String) -> Intent {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         // Talking ABOUT reminders, or explicitly declining one, is not asking for one.
@@ -31,6 +48,7 @@ enum ChatRouting {
         if has(text, #"^(?:i (?:already|just|have)|i've) (?:set|added|created|finished|completed)|我(?:已经|刚刚|刚才).*(?:了|过)|我记得|^i (?:remember|asked)\b|^(?:what (?:does|is)|can you explain)|是什么意思|怎么用"#) { return .conversation }
         // Embedded command words in an explanation question or a past report are not a new request.
         if has(text, #"^(?:what happens\b|why (?:did|does|do|would)\b|how (?:does|would)\b|(?:can|could) you (?:explain|tell me|show me)\b)|^(?:为什么|怎么(?:才能|会|设置|添加|创建)|如何)|^(?:yesterday|last night|this morning)[, ]+i (?:set|added|created)\b|^我(?:昨天|昨晚|今天早上)(?:设置了|设了|添加了|创建了)"#) { return .conversation }
+        if isChineseReportedActionQuestion(text) { return .conversation }
         // Alarm verbs must be the request itself, not words embedded in a question or report.
         let alarmRequest = has(text, #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#)
         if alarmRequest { return .capture }
@@ -38,9 +56,7 @@ enum ChatRouting {
             // Dialogue's unanchored matcher also protects editing follow-ups. At this NEW-message
             // boundary require the request itself, rather than a report/question quoting its words.
             if has(requestBody(text), #"^[\p{Han}0-9]"#) {
-                // Match CaptureParser's weekday vocabulary as complete tokens, including Sunday 日/天.
-                let weekday = #"(?:下下|下|这个?|本)?(?:周|星期|礼拜)[一二三四五六日天]"#
-                let when = #"(?:"# + weekday + #"|[明天早上下晚今后午晨点分半零一二三四五六七八九十两0-9:：\s])"#
+                let when = chineseTimeToken
                 let direct = #"^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?"#
                     + when + #"*(?:的时候)?(?:提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
                 // A narrative can end in an explicit timed reminder clause. Its earlier words
