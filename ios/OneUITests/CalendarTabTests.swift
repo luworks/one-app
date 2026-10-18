@@ -108,7 +108,7 @@ final class CalendarTabTests: XCTestCase {
 
     /// Year marks holidays (a red day number, read out as the month's value) and explains its marks in a key.
     /// The built-in "Christmas, Easter and more" set is on in every region by default.
-    func testYearMarksHolidaysAndHasAKey() {
+    func testYearMarksHolidaysAndHasAKey() throws {
         modeButton("Year").tap()
         XCTAssertTrue(element("calendar.year.scroll").waitForExistence(timeout: 5))
         let year = cal.component(.year, from: .now)
@@ -118,8 +118,11 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertTrue(value.contains("Christmas Day"), "December's holidays are read out: \(value)")
         let october = element(String(format: "miniMonth.%04d-10", year))
         XCTAssertTrue((october.value as? String ?? "").contains("Halloween"))
-        let key = element("calendar.year.key").firstMatch
-        XCTAssertTrue(key.waitForExistence(timeout: 5), "an (i) opens the key")
+        let keys = app.buttons.matching(identifier: "calendar.year.key")
+        XCTAssertTrue(keys.firstMatch.waitForExistence(timeout: 5), "an (i) opens the key")
+        // Lazy year sections also expose offscreen keys; tap the one the user can reach.
+        let key = try XCTUnwrap(keys.allElementsBoundByIndex.first(where: { $0.isHittable }),
+                               "the visible year has a hittable key button")
         key.tap()
         XCTAssertTrue(app.staticTexts["Unusually busy"].waitForExistence(timeout: 5), "the key says what the gray tint means")
         XCTAssertTrue(app.staticTexts["Holiday or festival"].exists)
