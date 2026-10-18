@@ -12,6 +12,25 @@ and inherited UI candidates are not verified product fixes. Adopt only the focus
 recurrence commits after the verified AI65/69 changes reach main. No force push,
 branch deletion or signing changes are needed.
 
+## Final main-targeted adoption
+
+AI PR65 and PR69 are now merged. Latest fetched `origin/main` is `d4bfe26`,
+which also contains PR67 merged by its compatibility owner. A new isolated branch
+`t3/recurring-reminder-main` starts from that main and cherry-picks only the six
+focused commits from the original recurrence branch. No review-base merge is used.
+The only conflict was the fixture catalog: both main's title/context/evaluation
+entries and recurrence entries are preserved without duplicates.
+
+This main-targeted delivery supersedes review-only PR71 and retains its history.
+All recurrence production files, its three UI methods and focused host tests are
+byte-identical to the previous final branch (executed production `48d2d81`);
+`Understanding`, `AskView` and `ChatResponse` are unchanged from current main.
+Main's Drawer, ReminderListScreen and RemindersView are also unchanged, and
+experimental header commit `9435048` is not an ancestor. Thus previous focused
+host evidence is inherited by unchanged source; no Swift/build/UI ran during the
+performance window. Centralized same-source build and the three UI methods remain
+pending. No main merge is performed by this implementation lane.
+
 ## Production path
 
 `AskView.send` calls `ChatRouting` before `ChatResponse` and `Understander.parse`.
