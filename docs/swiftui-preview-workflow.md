@@ -1,5 +1,21 @@
 # SwiftUI preview workflow (development only)
 
+## Adopted scope
+
+Today adopts axe as a development-only fast visual feedback path for supported
+pages: layout, text and color tweaks, plus agent screenshot inspection. Prefer it
+when suitable; if preview support fails, fall back to the full Simulator. Do not
+restructure production logic solely to accommodate axe.
+
+The static gallery does not replace interactive, data or system-integration
+acceptance. Functional verification still follows AGENTS.md's proportionate
+checks. Coordinate actual shared-resource use directly with the performance owner.
+Ordinary-file and structural edits, World Clock watch and 20-screen concurrency
+remain unverified here; the known Reminders watch failure and all existing
+evidence boundaries below remain in effect. No project-wide speedup is claimed.
+
+## Start the workflow
+
 Run from any directory after obtaining the host's heavy-work window:
 
 ```sh

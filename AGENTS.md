@@ -22,6 +22,8 @@ Read `CLAUDE.md` and `ios/README.md` before changing the app. Their product prin
 - Diagnose selectors, accessibility types, actual frames and elapsed-time assertions before repeatedly scrolling, retrying or changing product behavior.
 - Do not add approval steps for routine reversible work. Ask before force-pushes, branch deletion or signing changes, as required by the owner.
 
+- For supported UI layout, text and color tweaks, prefer the [axe visual feedback workflow](docs/swiftui-preview-workflow.md) when suitable; fall back to the full Simulator if support fails. Do not restructure production logic for axe. Functional acceptance still follows the proportionate testing rules above; coordinate shared resources directly with the performance owner.
+
 ## Durable test data and action history
 
 - Keep reusable UI datasets in corresponding files under `tests/fixtures/`. Package-bound resources and small inline inputs remain versioned with their tests; document their locations in the fixture catalog. Never leave a required test input solely in `/tmp`.
