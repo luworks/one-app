@@ -13,7 +13,11 @@ import uuid
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = Path(__file__).with_name('activity-v1.sql')
 CASE = re.compile(r"Test Case '(.*?)' (started|passed|failed|skipped)")
-UI = re.compile(r'\bt\s*=\s*\d+.*(?:Tap |Swipe |Find |Wait |Launch |Terminate |Click |Type |Scroll )')
+UI = re.compile(r'\bt\s*=\s*\d+.*\b(?:Tap|Swipe|Find|Wait|Launch|Terminate|Click|Type|Scroll|Press|Drag|Pinch|Rotate)\b')
+
+
+def is_ui_operation(line):
+    return UI.search(line) is not None
 STATUSES = ('running', 'passed', 'failed', 'interrupted')
 
 
@@ -114,6 +118,43 @@ class Journal:
                     snapshot={'path': str(path), 'source': str(source or path), 'sha256': sha})
         return sha
 
+    def archive_files(self, source, session, *, files=None):
+        """Retain a coherent file tree without importing any execution events."""
+        source = Path(source).resolve()
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+', session) or session in ('.', '..'):
+            raise ValueError('Archive session must be a safe directory name')
+        destination = (self.path.parent / 'archives' / session).resolve()
+        if destination == source or source in destination.parents:
+            raise ValueError('Archive destination must not be nested inside source')
+        files = files if files is not None else sorted(
+            path for path in source.rglob('*') if path.is_file() and not path.is_symlink())
+        # One manifest identifies the entire immutable tree, keeping bundles openable.
+        manifest = [{'path': path.relative_to(source).as_posix(),
+                     'sha256': digest(path), 'bytes': path.stat().st_size} for path in files]
+        manifest_bytes = json.dumps(manifest, sort_keys=True, separators=(',', ':')).encode()
+        revision = hashlib.sha256(manifest_bytes).hexdigest()
+        retained = destination / revision
+        for path, entry in zip(files, manifest):
+            sha = entry['sha256']
+            target = retained / entry['path']
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists():
+                if digest(target) != sha:
+                    raise ValueError(f'Corrupt retained artifact: {target}')
+            else:
+                temporary = target.with_name(target.name + '.' + uuid.uuid4().hex + '.tmp')
+                try:
+                    shutil.copyfile(path, temporary)
+                    if digest(temporary) != sha:
+                        raise ValueError(f'Source changed during archive: {path}')
+                    temporary.replace(target)
+                finally:
+                    temporary.unlink(missing_ok=True)
+            self.artifact(session, target, path)
+        self.record(session, 'qa.archive', str(retained), uid=f'archive:{session}:{revision}',
+                    props={'manifest_sha256': revision, 'files': len(manifest)}, snapshot=manifest)
+        return retained
+
     def import_run(self, source, session, *, status='running', archive=False):
         if status not in STATUSES or (archive and status == 'running'):
             raise ValueError('Archive requires an explicit completed result status')
@@ -140,6 +181,7 @@ class Journal:
                 # Ignore an incomplete final line; no success inference from markers.
                 with path.open('rb') as stream:
                     offset = 0
+                    current_test = None
                     for raw in stream:
                         start = offset
                         offset += len(raw)
@@ -147,41 +189,29 @@ class Journal:
                             break
                         line = raw.decode('utf-8', errors='replace').rstrip('\r\n')
                         match = CASE.search(line)
-                        if match or UI.search(line):
+                        if match and match[2] == 'started':
+                            current_test = match[1]
+                        if match or is_ui_operation(line):
                             kind = 'qa.test' if match else 'qa.ui.operation'
+                            uid = f'line:{session}:{path}:{start}:{hashlib.sha256(raw).hexdigest()}'
+                            subject = match[1] if match else current_test
+                            old = self.db.execute('SELECT subject_ref FROM event WHERE uid=?', (uid,)).fetchone()
+                            if old and not match and old[0] != (subject or session):
+                                # Keep v1 immutable rows; add context without duplicating the operation.
+                                if subject:
+                                    self.record(session, 'qa.ui.subject', uid, subject=subject,
+                                                uid=f'context:{uid}', props={'event_uid': uid})
+                                subject = old[0]
                             self.record(session, kind, line, status=match[2] if match else None,
-                                        subject=match[1] if match else None,
-                                        uid=f'line:{session}:{path}:{start}:{hashlib.sha256(raw).hexdigest()}')
+                                        subject=subject, uid=uid)
+                        if match and match[2] != 'started':
+                            current_test = None
             if path.name == 'command.json':
                 data = path.read_bytes()
                 self.record(session, 'qa.command.imported', data.decode(), status='running',
                             uid=f'command:{session}:{hashlib.sha256(data).hexdigest()}')
         if archive:
-            # One manifest identifies the entire immutable tree, keeping bundles openable.
-            manifest = [{'path': path.relative_to(source).as_posix(),
-                         'sha256': digest(path), 'bytes': path.stat().st_size} for path in files]
-            manifest_bytes = json.dumps(manifest, sort_keys=True, separators=(',', ':')).encode()
-            revision = hashlib.sha256(manifest_bytes).hexdigest()
-            retained = destination / revision
-            for path, entry in zip(files, manifest):
-                sha = entry['sha256']
-                target = retained / entry['path']
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if target.exists():
-                    if digest(target) != sha:
-                        raise ValueError(f'Corrupt retained artifact: {target}')
-                else:
-                    temporary = target.with_name(target.name + '.' + uuid.uuid4().hex + '.tmp')
-                    try:
-                        shutil.copyfile(path, temporary)
-                        if digest(temporary) != sha:
-                            raise ValueError(f'Source changed during archive: {path}')
-                        temporary.replace(target)
-                    finally:
-                        temporary.unlink(missing_ok=True)
-                self.artifact(session, target, path)
-            self.record(session, 'qa.archive', str(retained), uid=f'archive:{session}:{revision}',
-                        props={'manifest_sha256': revision, 'files': len(manifest)}, snapshot=manifest)
+            self.archive_files(source, session, files=files)
         self.record(session, 'qa.run.checkpoint' if status == 'running' else 'qa.run.result', str(source),
                     status=status, uid=f'result:{session}:{status}')
         return self.query(session)

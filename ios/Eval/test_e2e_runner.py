@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -129,10 +130,38 @@ class RunnerContracts(unittest.TestCase):
             command = [sys.executable, "-c", "from pathlib import Path; print(Path(" + repr(str(fixture)) + ").read_text()); raise SystemExit(7)"]
             self.assertEqual(e2e.run_logged(command, directory / "ui.log", directory / "progress.jsonl", [], journal), 7)
             rows = journal.store.query("host")
-            self.assertEqual([r["kind"] for r in rows].count("qa.ui.operation"), 1)
+            self.assertEqual([r["kind"] for r in rows].count("qa.ui.operation"), 3)
             self.assertEqual([r["kind"] for r in rows].count("qa.test"), 4)
             self.assertEqual(json.loads(rows[-1]["props"])["exit_code"], 7)
+            operations = [r for r in rows if r["kind"] == "qa.ui.operation"]
+            self.assertEqual([r["subject_ref"] for r in operations],
+                             ["-[OneUITests.Sample testFirst]", "-[OneUITests.Sample testSecond]", "-[OneUITests.Sample testSecond]"])
             journal.store.close()
+
+    def test_external_output_is_retained_after_original_is_removed_without_reimport(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "external"
+            bundle = output / "fake.xcresult/Data"
+            bundle.mkdir(parents=True)
+            (output / "ui.log").write_bytes(b"original raw log\r\n")
+            (bundle / "object").write_bytes(b"result object")
+            journal = e2e.RunJournal("external-host", [])
+            db = journal.store.path
+            journal.record("qa.test", "already recorded live", status="passed", subject="testLive")
+            journal.finish(output, {"status": "passed"})
+            shutil.rmtree(output)
+            from journal import Journal, digest
+            reopened = Journal(db)
+            self.addCleanup(reopened.close)
+            rows = reopened.query("external-host")
+            self.assertEqual(len([r for r in rows if r["kind"] == "qa.test"]), 1)
+            retained = Path(next(r["action"] for r in rows if r["kind"] == "qa.archive"))
+            self.assertEqual((retained / "ui.log").read_bytes(), b"original raw log\r\n")
+            self.assertEqual((retained / "fake.xcresult/Data/object").read_bytes(), b"result object")
+            for row in rows:
+                if row["kind"] == "qa.artifact":
+                    self.assertEqual(digest(row["action"]), json.loads(row["props"])["sha256"])
 
     def test_log_preserves_failure_exit_code_and_case_order(self):
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):

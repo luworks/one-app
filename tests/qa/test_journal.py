@@ -103,6 +103,32 @@ class JournalTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'nested inside source'):
                 journal.import_run(results, 'invalid', status='passed', archive=True)
 
+    def test_legacy_checkpoint_reimport_adds_context_without_duplicate_operations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'live'
+            source.mkdir()
+            log = source / 'ui.log'
+            raw = Path(__file__).with_name('fixtures').joinpath('attempts.log').read_bytes()
+            log.write_bytes(raw)
+            journal = j.Journal(root / 'results/activity.sqlite')
+            self.addCleanup(journal.close)
+            offset = 0
+            legacy_uids = []
+            for line in raw.splitlines(keepends=True):
+                text = line.decode().rstrip('\r\n')
+                if j.is_ui_operation(text):
+                    uid = f'line:legacy:{log.resolve()}:{offset}:{j.hashlib.sha256(line).hexdigest()}'
+                    journal.record('legacy', 'qa.ui.operation', text, uid=uid)
+                    legacy_uids.append(uid)
+                offset += len(line)
+            rows = journal.import_run(source, 'legacy')
+            self.assertEqual(len([r for r in rows if r['kind'] == 'qa.ui.operation']), 3)
+            self.assertEqual(len([r for r in rows if r['kind'] == 'qa.ui.subject']), 3)
+            self.assertEqual([r['subject_ref'] for r in rows if r['uid'] in legacy_uids], ['legacy'] * 3)
+            self.assertEqual(len(journal.import_run(source, 'legacy')), len(rows))
+            self.assertEqual(log.read_bytes(), raw)
+
     def test_uid_conflict_and_newer_schema(self):
         with tempfile.TemporaryDirectory() as directory:
             db = Path(directory) / 'activity.sqlite'

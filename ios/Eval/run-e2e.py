@@ -20,7 +20,7 @@ import uuid
 IOS = Path(__file__).resolve().parents[1]
 ROOT = IOS.parent
 sys.path.insert(0, str(ROOT / "tests/qa"))
-from journal import Journal, results_root
+from journal import Journal, results_root, is_ui_operation
 
 CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
 
@@ -97,20 +97,24 @@ def run_logged(command, logfile, progress, attempts, journal=None):
         process = subprocess.Popen(command, cwd=IOS, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, bufsize=1, start_new_session=True)
         try:
+            current_test = None
             for line in process.stdout:
                 log.write(line)
                 log.flush()
-                if journal and re.search(r"\bt\s*=\s*\d+.*(?:Tap |Swipe |Find |Wait |Launch |Terminate |Type |Scroll )", line):
-                    journal.record("qa.ui.operation", line.rstrip())
                 started_case = re.search(r"Test Case '(.*?)' started", line)
-                if journal and started_case:
-                    journal.record("qa.test", line.rstrip(), status="started", subject=started_case[1])
+                if started_case:
+                    current_test = started_case[1]
+                    if journal:
+                        journal.record("qa.test", line.rstrip(), status="started", subject=current_test)
+                if journal and is_ui_operation(line):
+                    journal.record("qa.ui.operation", line.rstrip(), subject=current_test)
                 match = CASE.search(line)
                 if match:
                     entry = {"test": match[1], "status": match[2]}
                     attempts.append(entry)
                     if journal:
                         journal.record("qa.test", line.rstrip(), status=match[2], subject=match[1])
+                    current_test = None
                     with progress.open("a") as stream:
                         stream.write(json.dumps({"time": datetime.now(timezone.utc).isoformat(), **entry}) + "\n")
                     print(f"[{len(attempts)} completed] {line.strip()}", flush=True)
@@ -168,20 +172,20 @@ class RunJournal:
         self.record("qa.run.result", json.dumps(summary), status=summary["status"])
         if self.store:
             try:
-                for path in sorted(output.rglob("*")):
-                    if path.is_file() and not path.is_symlink() and path.name != "summary.json":
-                        self.store.artifact(self.session, path)
+                # Immutable indexed report; summary.json may later include journal errors.
+                retained = output / "summary-retained.json"
+                retained.write_text(json.dumps(summary, indent=2) + "\n")
+                if not output.resolve().is_relative_to(results_root().resolve()):
+                    self.store.archive_files(output, self.session)
+                else:
+                    for path in sorted(output.rglob("*")):
+                        if path.is_file() and not path.is_symlink() and path.name != "summary.json":
+                            self.store.artifact(self.session, path)
             except Exception as error:
                 self.error(error)
             finally:
-                try:
-                    # Keep an immutable indexed report even if later journal errors update summary.json.
-                    retained = output / "summary-retained.json"
-                    retained.write_text(json.dumps(summary, indent=2) + "\n")
-                    self.store.artifact(self.session, retained)
-                except Exception as error:
-                    self.error(error)
                 self.store.close()
+
 
 
 def capture(command):

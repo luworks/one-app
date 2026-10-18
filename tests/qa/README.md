@@ -62,7 +62,14 @@ not execute the command. Only explicitly supplied issue/PR links are recorded.
 The runner writes live command starts/completions, test starts/results and XCTest
 UI-operation lines. Its `finally` records shutdown/result and indexes finished
 files; journal failures print separately and populate `summary.json.journal_errors`
-without replacing a valid test failure exit code. An explicit runner `--output`
+without replacing a valid test failure exit code. Completed external `--output`
+files are automatically copied to a coherent `archives/` revision via
+`Journal.archive_files`, without reimporting live-recorded test events. Outputs
+already inside canonical `tests/results/` are indexed in place without recopying.
+The shared UI classifier includes Press, Drag, Pinch, Rotate and Click, and links
+operations to the current test. Legacy checkpoint operation rows stay immutable;
+additive `qa.ui.subject` rows associate their UID (content/props) with a test
+subject reference without duplicating the original operation. An explicit runner `--output`
 can be elsewhere, but its journal remains canonical. `--help`, `--inventory`, and
 `--dry-run` open no DB, create no evidence and launch no subprocess.
 
