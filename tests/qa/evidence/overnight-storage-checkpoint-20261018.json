@@ -1,0 +1,71 @@
+{
+  "captured_at": "2026-10-18T10:08:14.386039+00:00",
+  "database": "/Users/yuanlu/code/one-app/tests/results/activity.sqlite",
+  "schema_version": 1,
+  "integrity_check": "ok",
+  "total_events": 20776,
+  "event_counts": [
+    [
+      "qa.archive",
+      1
+    ],
+    [
+      "qa.artifact",
+      60
+    ],
+    [
+      "qa.command.completed",
+      2
+    ],
+    [
+      "qa.command.imported",
+      1
+    ],
+    [
+      "qa.development",
+      6
+    ],
+    [
+      "qa.import.provenance",
+      21
+    ],
+    [
+      "qa.link",
+      12
+    ],
+    [
+      "qa.run",
+      21
+    ],
+    [
+      "qa.run.checkpoint",
+      1
+    ],
+    [
+      "qa.run.result",
+      20
+    ],
+    [
+      "qa.test",
+      7339
+    ],
+    [
+      "qa.ui.operation",
+      7072
+    ],
+    [
+      "qa.ui.subject",
+      6220
+    ]
+  ],
+  "fixtures": [
+    "tests/fixtures/repeating-reminder-daily-home.json",
+    "tests/fixtures/today-dataset.json",
+    "tests/fixtures/week-alarm-overlap-1.json",
+    "tests/fixtures/week-alarm-overlap-8.json"
+  ],
+  "full_ui_status": "running",
+  "active_xcresult_archived": false,
+  "historical_timestamps": "import_time; original timing retained in raw logs",
+  "verification_scope": "host journal 7/7 and runner 11/11; actual UI runner lifecycle pending; no claim every historical tool invocation was captured"
+}
