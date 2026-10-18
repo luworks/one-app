@@ -69,6 +69,9 @@ struct HomeView: View {
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
     @State private var remindersPushed = false
     @State private var toast = UndoToast()
+    #if DEBUG
+    @State private var shareImportTestState = ""
+    #endif
     @Environment(\.undoManager) private var undoManager
     /// Counts tab switches made by swiping; drives their haptic (pill taps already have one).
     @State private var tabSwipes = 0
@@ -181,11 +184,20 @@ struct HomeView: View {
 
     private func importShared() {
         let args = ProcessInfo.processInfo.arguments
+        var inboxURL = ShareInbox.fileURL
+        #if DEBUG
+        let test = ShareImportUITesting(arguments: args)
+        if let test { inboxURL = test.inboxURL }
+        #endif
         if args.contains("-uiTesting"), !args.contains("-uiTestingShareInbox") {
             guard let i = args.firstIndex(of: "-uiTestingShare"), i + 1 < args.count else { return }
             if !Self.sharedTestItemQueued {
                 Self.sharedTestItemQueued = true
-                ShareInbox.append(SharedReminder(title: args[i + 1], note: "https://example.com", due: ShareInbox.due(for: .tomorrow)))
+                var item = SharedReminder(title: args[i + 1], note: "https://example.com", due: ShareInbox.due(for: .tomorrow))
+                #if DEBUG
+                if let test { item.id = test.id }
+                #endif
+                ShareInbox.append(item, at: inboxURL)
             }
         }
         // A separate context makes this transaction independent of unrelated, unsaved editor changes.
@@ -195,8 +207,12 @@ struct HomeView: View {
         let listNames = ((try? context.fetch(FetchDescriptor<OneList>())) ?? []).map(\.name)
         let chosenList = Preferences.newReminderList(existing: listNames)
         let added: [OneTask]
+        var acknowledge: ((Set<UUID>) -> Bool)? = nil
+        #if DEBUG
+        if test?.failAcknowledgment == true { acknowledge = { _ in false } }
+        #endif
         do {
-            let result = try ShareImport.run(committedIDs: {
+            let result = try ShareImport.run(at: inboxURL, committedIDs: {
                 Set(try importing.fetch(FetchDescriptor<ShareImportReceipt>()).map(\.sharedID))
             }, persist: { shared in
                 let tasks = shared.map { s in
@@ -206,12 +222,23 @@ struct HomeView: View {
                     importing.insert(ShareImportReceipt(sharedID: s.id))
                     return task
                 }
+                #if DEBUG
+                // Explicit injection before save, not a spontaneous SwiftData failure.
+                if test?.failSave == true { throw ShareImportUITesting.InjectedFailure.save }
+                #endif
                 try importing.save()
                 return tasks.map(\.persistentModelID)
-            })
+            }, acknowledge: acknowledge)
             added = result.added.compactMap { context.model(for: $0) as? OneTask }
+            #if DEBUG
+            shareImportTestState = test?.state(in: context.container, outcome: result.acknowledged ? "acknowledged" : "ack-failed") ?? ""
+            #endif
         } catch {
             // Keep the original drafts for the next activation. Do not roll back the UI's context.
+            #if DEBUG
+            importing.rollback()
+            shareImportTestState = test?.state(in: context.container, outcome: "save-failed") ?? ""
+            #endif
             return
         }
         guard !added.isEmpty else { return }
@@ -225,6 +252,9 @@ struct HomeView: View {
             added.forEach { context.delete($0) }
             try? context.save()
             entries.forEach { Ledger.recordUndo(of: $0, context: context) }
+            #if DEBUG
+            shareImportTestState = test?.state(in: context.container, outcome: "undone") ?? ""
+            #endif
         }
     }
 
@@ -336,6 +366,12 @@ struct HomeView: View {
             }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-uiTestingSyncDump") { SyncDumpProbe() }
+            if !shareImportTestState.isEmpty {
+                Text(shareImportTestState).font(.system(size: 1)).opacity(0.01)
+                    .accessibilityIdentifier("shareImport.testState")
+                    .accessibilityLabel(shareImportTestState)
+                    .allowsHitTesting(false)
+            }
             #endif
         }
         // Timers follow AlarmKit on every tab, so the Today row appears the moment one starts (also from Siri).
@@ -678,3 +714,43 @@ extension View {
     HomeView()
         .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self, LedgerEntry.self, AIGrant.self], inMemory: true)
 }
+
+#if DEBUG
+/// Isolates the inbox beside a named UI-test store. No real App Group data is read or cleared.
+private struct ShareImportUITesting {
+    let id: UUID
+    let title: String
+    let inboxURL: URL
+    let failAcknowledgment: Bool
+    let failSave: Bool
+
+    enum InjectedFailure: Error { case save }
+
+    init?(arguments args: [String]) {
+        func value(_ flag: String) -> String? {
+            guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
+            return args[i + 1]
+        }
+        guard args.contains("-uiTesting"), let store = value("-uiTestingStore"),
+              let rawID = value("-uiTestingShareID"), let id = UUID(uuidString: rawID),
+              let title = value("-uiTestingShareProbeTitle") else { return nil }
+        self.id = id
+        self.title = title
+        inboxURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(store).share-inbox.json")
+        failAcknowledgment = args.contains("-uiTestingShareFailAcknowledgment")
+        failSave = args.contains("-uiTestingShareFailSave")
+    }
+
+    @MainActor
+    func state(in container: ModelContainer, outcome: String) -> String {
+        // Read committed rows through a fresh context, rather than the UI's pending inserts/deletes.
+        let saved = ModelContext(container)
+        do {
+            let tasks = try saved.fetch(FetchDescriptor<OneTask>()).filter { $0.title == title }.count
+            let receipts = try saved.fetch(FetchDescriptor<ShareImportReceipt>()).filter { $0.sharedID == id }.count
+            let pending = try ShareInbox.read(at: inboxURL).filter { $0.id == id }.count
+            return "\(outcome);tasks=\(tasks);receipts=\(receipts);pending=\(pending)"
+        } catch { return "probe-failed" }
+    }
+}
+#endif

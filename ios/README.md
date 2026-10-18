@@ -119,6 +119,14 @@ file coordinator), and the app takes everything there when it becomes active, ad
 Reminders when that is on) and shows an Undo toast. Tests: `ShareInboxTests` (logic), `ShareImportTests` (the app side,
 via `-uiTestingShare <title>`) and `ShareSheetTests` (end to end through Safari's real Share sheet; skips without network).
 
+Debug persistence journeys use `-uiTestingStore <unique-name> -uiTestingShareID <UUID>
+-uiTestingShareProbeTitle <title>` together with `-uiTesting`. This isolates the inbox beside that test store,
+uses a deterministic share ID, and exposes `shareImport.testState` (committed matching task/receipt and pending-inbox counts).
+Only the first launch adds `-uiTestingShare <title>`; later launches use `-uiTestingShareInbox` without reseeding.
+`-uiTestingShareFailAcknowledgment` leaves the inbox pending; `-uiTestingShareFailSave` explicitly throws before
+SwiftData save and rolls back the import context. Both are DEBUG-only injections, not evidence of spontaneous storage failures.
+
+
 ## Activity data (`One/Activity*.swift`, `Shared/ActivityOutbox.swift`)
 
 One app-private SQLite file, `Application Support/Activity/activity.sqlite` (system `SQLite3`, no dependency, WAL, `PRAGMA user_version` migrations), holds everything Today records about its own use. Research, schema reasons and numbers: `docs/research/activity-data-store.md`. It is the home of the Activity ledger (tier 1) and of the AI, usage and system events around it.
