@@ -300,7 +300,54 @@
         "backend"
       ],
       "required_ms": 96.79679166666666,
-      "stretch_ms": 29.0390375
+      "stretch_ms": 29.0390375,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            446.84175,
+            448.770916,
+            917.255167
+          ],
+          "median_ms": 448.770916,
+          "required_ms": 149.59030533333333,
+          "stretch_ms": 44.8770916,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            96.2895,
+            78.676833,
+            118.33
+          ],
+          "median_ms": 96.2895,
+          "required_ms": 32.0965,
+          "stretch_ms": 9.62895,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            317.224167,
+            460.42325,
+            548.150292
+          ],
+          "median_ms": 460.42325,
+          "required_ms": 153.47441666666666,
+          "stretch_ms": 46.042325,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
     },
     {
       "id": "ai_send_to_first_response_ready",
@@ -328,7 +375,54 @@
         "backend"
       ],
       "required_ms": 71.374264,
-      "stretch_ms": 21.4122792
+      "stretch_ms": 21.4122792,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            399.185458,
+            387.209125,
+            842.59175
+          ],
+          "median_ms": 399.185458,
+          "required_ms": 133.06181933333332,
+          "stretch_ms": 39.9185458,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            21.562583,
+            19.073291,
+            26.56975
+          ],
+          "median_ms": 21.562583,
+          "required_ms": 7.187527666666667,
+          "stretch_ms": 2.1562583,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            81.616834,
+            140.910542,
+            133.447959
+          ],
+          "median_ms": 133.447959,
+          "required_ms": 44.482653,
+          "stretch_ms": 13.3447959,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
     },
     {
       "id": "ai_send_to_full_response_ready",
@@ -356,7 +450,54 @@
         "backend"
       ],
       "required_ms": 71.374264,
-      "stretch_ms": 21.4122792
+      "stretch_ms": 21.4122792,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            399.185458,
+            387.209125,
+            842.59175
+          ],
+          "median_ms": 399.185458,
+          "required_ms": 133.06181933333332,
+          "stretch_ms": 39.9185458,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            21.562583,
+            19.073291,
+            26.56975
+          ],
+          "median_ms": 21.562583,
+          "required_ms": 7.187527666666667,
+          "stretch_ms": 2.1562583,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            81.616834,
+            140.910542,
+            133.447959
+          ],
+          "median_ms": 133.447959,
+          "required_ms": 44.482653,
+          "stretch_ms": 13.3447959,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
     },
     {
       "id": "ai_ready_to_response_layout",
@@ -384,7 +525,54 @@
         "backend"
       ],
       "required_ms": 26.115819333333334,
-      "stretch_ms": 7.8347458
+      "stretch_ms": 7.8347458,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            91.275125,
+            104.180125,
+            108.045834
+          ],
+          "median_ms": 104.180125,
+          "required_ms": 34.726708333333335,
+          "stretch_ms": 10.4180125,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            74.788875,
+            59.664542,
+            91.814834
+          ],
+          "median_ms": 74.788875,
+          "required_ms": 24.929625,
+          "stretch_ms": 7.478887500000001,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            235.69825,
+            319.57275,
+            414.80825
+          ],
+          "median_ms": 319.57275,
+          "required_ms": 106.52425,
+          "stretch_ms": 31.957275,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
     },
     {
       "id": "ai_turn_to_response_layout",
@@ -412,7 +600,54 @@
         "backend"
       ],
       "required_ms": 107.22791666666666,
-      "stretch_ms": 32.168375
+      "stretch_ms": 32.168375,
+      "additional_measured_cohorts": [
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "fallback_model_unavailable",
+          "n": 3,
+          "raw_ms": [
+            490.460583,
+            491.38925,
+            950.637584
+          ],
+          "median_ms": 491.38925,
+          "required_ms": 163.79641666666666,
+          "stretch_ms": 49.138925,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testCaptureFollowupConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            96.351458,
+            78.737833,
+            118.384584
+          ],
+          "median_ms": 96.351458,
+          "required_ms": 32.11715266666666,
+          "stretch_ms": 9.6351458,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        },
+        {
+          "method": "testPlanConfirmationFreshLaunchN3",
+          "backend": "rules",
+          "n": 3,
+          "raw_ms": [
+            317.315084,
+            460.483292,
+            548.256209
+          ],
+          "median_ms": 460.483292,
+          "required_ms": 153.49443066666666,
+          "stretch_ms": 46.0483292,
+          "evidence": "ai-confirmation-summary.json",
+          "source": "83b4fb8"
+        }
+      ]
     }
   ],
   "pending_measurement_classes": [
