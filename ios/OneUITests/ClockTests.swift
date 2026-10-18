@@ -169,7 +169,7 @@ final class ClockTests: XCTestCase {
         let startStop = app.buttons["stopwatch.startStop"]
         let lapReset = app.buttons["stopwatch.lapReset"]
         XCTAssertTrue(time.waitForExistence(timeout: 3))
-        XCTAssertEqual(time.label, "00:00.00")
+        XCTAssertEqual(time.label, "Stopwatch, 0 seconds")
         XCTAssertEqual(lapReset.label, "Lap")
         XCTAssertFalse(lapReset.isEnabled, "Lap is off before the first start")
 
@@ -181,7 +181,7 @@ final class ClockTests: XCTestCase {
         lapReset.tap()
         // Lap 3 (running) + two finished laps.
         XCTAssertEqual(laps.count, 3)
-        XCTAssertNotEqual(time.label, "00:00.00", "it is running")
+        XCTAssertNotEqual(time.label, "Stopwatch, 0 seconds, running", "it is running")
 
         // Keeps running on another tab.
         app.buttons["Today"].firstMatch.tap()
@@ -196,7 +196,7 @@ final class ClockTests: XCTestCase {
         sleep(1)
         XCTAssertEqual(time.label, stopped, "stopped means stopped")
         lapReset.tap()
-        XCTAssertEqual(time.label, "00:00.00")
+        XCTAssertEqual(time.label, "Stopwatch, 0 seconds")
         XCTAssertEqual(laps.count, 0)
         XCTAssertEqual(lapReset.label, "Lap")
     }
