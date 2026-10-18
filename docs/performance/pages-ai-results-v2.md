@@ -38,6 +38,32 @@ Canonical root: `/Users/yuanlu/code/one-app/tests/results/runs/performance-pages
 
 ## Remaining work
 
-Capture/follow-up/confirmation and plan/Apply baseline is queued on the same compiled products. Settings/Activity and Search/Quick Reminder/detail methods remain unexecuted. Additional Settings subpages and event/alarm draft tests are source-ready only and require a subsequent bounded incremental build. Complete [coverage inventory](page-coverage-v2.md) remains the scope: no claim that every page has been measured yet. Per-page memory/retention, hitch/frame work, persistence success/latency, internal AI kind/title stages and actual usable/presented endpoints remain pending. Physical model/HealthKit/AlarmKit/battery and App Store thinning remain outside this simulator-only lane.
+Capture/follow-up/confirmation and plan/Apply baseline is now measured below on the same compiled products. Settings/Activity and Search/Quick Reminder/detail methods remain unexecuted. Additional Settings subpages and event/alarm draft tests are source-ready only and require a subsequent bounded incremental build. Complete [coverage inventory](page-coverage-v2.md) remains the scope: no claim that every page has been measured yet. Per-page memory/retention, hitch/frame work, persistence success/latency, internal AI kind/title stages and actual usable/presented endpoints remain pending. Physical model/HealthKit/AlarmKit/battery and App Store thinning remain outside this simulator-only lane.
 
 No authorized same-protocol competitor measurements exist. Numeric top-app gap is unknown. Platform responsiveness budgets are linked in [protocol v2](pages-ai-protocol-v2.md), separately from owner relative3x/10x goals. No optimization plateau is claimed.
+
+## AI capture and planning baseline
+
+Same83b4fb8 compiled products and endpoint definitions, no compilation; two methods passed: capture/follow-up/confirmation90.277s and plan/Apply/Undo69.746s. Each method repeated the same journey in three fresh processes. Capture first turn uses unavailable-model fallback; the fixed-history time correction uses rules. Plan is local rules, not inference. Confirmed Add/Apply and Undo are correctness guards; no commit/save latency was instrumented. Shutdown/release12:20:16 PDT inside12:16:01–12:26:01 window.
+
+| Journey / backend | Endpoint | Raw ms | Median ms | Required /3 | Stretch /10 |
+| --- | --- | --- | ---: | ---: | ---: |
+| capture first turn / fallback_model_unavailable | ai_ready_to_response_layout | 91.275, 104.180, 108.046 | 104.180 | 34.727 | 10.418 |
+| capture time correction / rules | ai_ready_to_response_layout | 74.789, 59.665, 91.815 | 74.789 | 24.930 | 7.479 |
+| capture first turn / fallback_model_unavailable | ai_send_to_feedback_layout | 446.842, 448.771, 917.255 | 448.771 | 149.590 | 44.877 |
+| capture time correction / rules | ai_send_to_feedback_layout | 96.290, 78.677, 118.330 | 96.290 | 32.096 | 9.629 |
+| capture first turn / fallback_model_unavailable | ai_send_to_first_response_ready | 399.185, 387.209, 842.592 | 399.185 | 133.062 | 39.919 |
+| capture time correction / rules | ai_send_to_first_response_ready | 21.563, 19.073, 26.570 | 21.563 | 7.188 | 2.156 |
+| capture first turn / fallback_model_unavailable | ai_send_to_full_response_ready | 399.185, 387.209, 842.592 | 399.185 | 133.062 | 39.919 |
+| capture time correction / rules | ai_send_to_full_response_ready | 21.563, 19.073, 26.570 | 21.563 | 7.188 | 2.156 |
+| capture first turn / fallback_model_unavailable | ai_turn_to_response_layout | 490.461, 491.389, 950.638 | 491.389 | 163.796 | 49.139 |
+| capture time correction / rules | ai_turn_to_response_layout | 96.351, 78.738, 118.385 | 96.351 | 32.117 | 9.635 |
+| local plan preview / rules | ai_ready_to_response_layout | 235.698, 319.573, 414.808 | 319.573 | 106.524 | 31.957 |
+| local plan preview / rules | ai_send_to_feedback_layout | 317.224, 460.423, 548.150 | 460.423 | 153.474 | 46.042 |
+| local plan preview / rules | ai_send_to_first_response_ready | 81.617, 140.911, 133.448 | 133.448 | 44.483 | 13.345 |
+| local plan preview / rules | ai_send_to_full_response_ready | 81.617, 140.911, 133.448 | 133.448 | 44.483 | 13.345 |
+| local plan preview / rules | ai_turn_to_response_layout | 317.315, 460.483, 548.256 | 460.483 | 153.494 | 46.048 |
+
+The independent medians above cannot be added to reconstruct a turn. Current plan result-layout wait is larger than response-ready wait, but these proxy durations do not identify chart/card CPU or rendering. Attribute stages before selecting an optimization.
+
+Raw evidence: `baseline-ai-confirmation-9faa0bd0.log`, command/context, `ai-confirmation-summary.json`, complete closed `baseline-ai-confirmation/ui.xcresult`; archived QA session `performance-pages-ai-confirmation-20261018`. No p95 or overall3x/10x gain is claimed.
