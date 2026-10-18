@@ -281,3 +281,44 @@ extension YearMarksTests {
         }
     }
 }
+
+extension YearMarksTests {
+    func testBatchedTripBandsKeepEveryOverlappingSpanInInputOrder() {
+        let weeks: [[Date?]] = [
+            [nil, nil, nil, nil, date(2026, 10, 1), date(2026, 10, 2), date(2026, 10, 3)],
+            (4...10).map { date(2026, 10, $0) },
+            Array(repeating: nil, count: 7)
+        ]
+        let spans = [
+            (start: date(2026, 9, 30), end: date(2026, 10, 6)),
+            (start: date(2026, 10, 2), end: date(2026, 10, 5)),
+            (start: date(2026, 9, 28), end: date(2026, 10, 1)),
+            (start: date(2026, 10, 11), end: date(2026, 10, 13))
+        ]
+        XCTAssertEqual(YearEventMarks.segmentsByWeek(spans: spans, weeks: weeks, calendar: cal), [
+            [YearBandPlacement(spanIndex: 0, firstColumn: 4, lastColumn: 6),
+             YearBandPlacement(spanIndex: 1, firstColumn: 5, lastColumn: 6)],
+            [YearBandPlacement(spanIndex: 0, firstColumn: 0, lastColumn: 1),
+             YearBandPlacement(spanIndex: 1, firstColumn: 0, lastColumn: 0)],
+            []
+        ])
+        XCTAssertEqual(YearEventMarks.segmentsByWeek(spans: [], weeks: weeks, calendar: cal), [[], [], []])
+    }
+
+    func testBatchedTripBandsUseCalendarDayEndsAcrossBothDSTTransitions() {
+        var local = cal
+        local.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        for (month, day) in [(3, 8), (11, 1)] {
+            let start = local.date(from: DateComponents(year: 2026, month: month, day: day))!
+            let next = local.date(byAdding: .day, value: 1, to: start)!
+            let after = local.date(byAdding: .day, value: 2, to: start)!
+            let spans = [(start: start, end: next), (start: next, end: after), (start: start, end: after)]
+            XCTAssertEqual(YearEventMarks.segmentsByWeek(spans: spans,
+                weeks: [[start, next, after, nil, nil, nil, nil]], calendar: local), [[
+                    YearBandPlacement(spanIndex: 0, firstColumn: 0, lastColumn: 0),
+                    YearBandPlacement(spanIndex: 1, firstColumn: 1, lastColumn: 1),
+                    YearBandPlacement(spanIndex: 2, firstColumn: 0, lastColumn: 1)
+                ]])
+        }
+    }
+}

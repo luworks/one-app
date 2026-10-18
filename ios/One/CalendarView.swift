@@ -637,9 +637,7 @@ private struct MiniMonth: View {
     private let cal = Calendar.current
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
 
-    private var days: [Date] { CalendarMath.monthWeeks(of: month).flatMap { $0 }.compactMap { $0 } }
-
-    private var summary: String {
+    private func summary(days: [Date]) -> String {
         var parts = days.compactMap { holidays[$0] }.flatMap { $0 }
         let busyCount = days.filter { busy.contains($0) }.count
         if busyCount > 0 { parts.append("\(busyCount) busy day\(busyCount == 1 ? "" : "s")") }
@@ -649,6 +647,9 @@ private struct MiniMonth: View {
 
     var body: some View {
         let weeks = CalendarMath.monthWeeks(of: month)
+        let days = weeks.flatMap { $0 }.compactMap { $0 }
+        let bandsByWeek = YearEventMarks.segmentsByWeek(
+            spans: trips.map { (start: $0.start, end: $0.end) }, weeks: weeks, calendar: cal)
         let isCurrent = cal.isDate(month, equalTo: .now, toGranularity: .month)
         VStack(alignment: .leading, spacing: 6) {
             Button(action: onTap) {
@@ -660,7 +661,7 @@ private struct MiniMonth: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel(month.formatted(.dateTime.month(.wide).year()))
-            .accessibilityValue(summary)
+            .accessibilityValue(summary(days: days))
             .accessibilityHint("Shows this month")
             .accessibilityIdentifier(CalendarIDs.month(month))
             VStack(spacing: 6.5) {
@@ -674,7 +675,7 @@ private struct MiniMonth: View {
                             }
                         }
                     }
-                    .background { bands(week: w, weeks: weeks) }
+                    .background { bands(w < bandsByWeek.count ? bandsByWeek[w] : []) }
                 }
             }
         }
@@ -705,19 +706,18 @@ private struct MiniMonth: View {
         .accessibilityIdentifier("year.\(CalendarIDs.day(d))")
     }
 
-    private func bands(week: Int, weeks: [[Date?]]) -> some View {
+    private func bands(_ placements: [YearBandPlacement]) -> some View {
         GeometryReader { geometry in
             // The earliest span owns overlapping cells; all event names remain available to VoiceOver.
             // Draw later spans first so overlapping bands never accumulate a darker tint.
             ZStack(alignment: .topLeading) {
-                ForEach(Array(trips.reversed())) { trip in
-                    ForEach(YearEventMarks.segments(start: trip.start, end: trip.end, weeks: weeks, calendar: cal).filter { $0.week == week }, id: \.firstColumn) { segment in
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(EventTint.fill(trip.color))
-                            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 3))
-                            .frame(width: geometry.size.width * CGFloat(segment.lastColumn - segment.firstColumn + 1) / 7, height: 16)
-                            .offset(x: geometry.size.width * CGFloat(segment.firstColumn) / 7)
-                    }
+                ForEach(Array(placements.reversed()), id: \.spanIndex) { segment in
+                    let trip = trips[segment.spanIndex]
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(EventTint.fill(trip.color))
+                        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 3))
+                        .frame(width: geometry.size.width * CGFloat(segment.lastColumn - segment.firstColumn + 1) / 7, height: 16)
+                        .offset(x: geometry.size.width * CGFloat(segment.firstColumn) / 7)
                 }
             }
         }

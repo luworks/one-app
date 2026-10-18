@@ -297,19 +297,50 @@ enum YearEventMarks {
 
     /// Clip an exclusive-end span to each visible week, including partial weeks at month edges.
     static func segments(start: Date, end: Date, weeks: [[Date?]], calendar: Calendar = .current) -> [YearBandSegment] {
-        weeks.enumerated().compactMap { row, days in
-            let columns = days.indices.filter { index in
-                guard let day = days[index], let next = calendar.date(byAdding: .day, value: 1, to: day) else { return false }
-                return start < next && end > day
+        segmentsByWeek(spans: [(start: start, end: end)], weeks: weeks, calendar: calendar)
+            .enumerated().compactMap { row, placements in
+                placements.first.map { YearBandSegment(week: row, firstColumn: $0.firstColumn, lastColumn: $0.lastColumn) }
             }
-            guard let first = columns.first, let last = columns.last else { return nil }
-            return YearBandSegment(week: row, firstColumn: first, lastColumn: last)
+    }
+
+    /// Materialize all bands once per month. Calendar day ends are shared across spans and rows.
+    /// Placements retain input order so the view can draw later spans first, preserving overlap ownership.
+    static func segmentsByWeek(spans: [(start: Date, end: Date)], weeks: [[Date?]],
+                               calendar: Calendar = .current) -> [[YearBandPlacement]] {
+        var result = Array(repeating: [YearBandPlacement](), count: weeks.count)
+        guard !spans.isEmpty else { return result }
+        let dayIntervals = weeks.map { days in
+            days.map { day -> (start: Date, end: Date)? in
+                guard let day, let next = calendar.date(byAdding: .day, value: 1, to: day) else { return nil }
+                return (start: day, end: next)
+            }
         }
+        for (spanIndex, span) in spans.enumerated() {
+            for (row, days) in dayIntervals.enumerated() {
+                var first: Int?, last: Int?
+                for (column, day) in days.enumerated() {
+                    guard let day, span.start < day.end && span.end > day.start else { continue }
+                    if first == nil { first = column }
+                    last = column
+                }
+                if let first, let last {
+                    result[row].append(YearBandPlacement(spanIndex: spanIndex, firstColumn: first, lastColumn: last))
+                }
+            }
+        }
+        return result
     }
 }
 
 struct YearBandSegment: Equatable {
     var week: Int
+    var firstColumn: Int
+    var lastColumn: Int
+}
+
+/// A month's band placement, referring to the unchanged input span order.
+struct YearBandPlacement: Equatable {
+    var spanIndex: Int
     var firstColumn: Int
     var lastColumn: Int
 }
