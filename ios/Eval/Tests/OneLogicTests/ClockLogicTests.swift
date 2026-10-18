@@ -170,6 +170,22 @@ final class OverlapTests: XCTestCase {
         XCTAssertEqual(window.first?.duration, 9 * 3600)
     }
 
+    func testHomeDayAndOverlapAcrossBothDSTTransitions() throws {
+        let home = tz("America/Los_Angeles")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = home
+        for (month, day, hours) in [(3, 8, 23.0), (11, 1, 25.0)] {
+            let noon = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 12)))
+            let window = WorldClock.day(containing: noon, in: home)
+            XCTAssertEqual(window.duration, hours * 3600)
+            let overlap = try XCTUnwrap(WorldClock.overlap([], home: home, on: noon).first)
+            XCTAssertEqual(overlap.duration, 9 * 3600)
+            XCTAssertEqual(WorldClock.hourMinute(zone: home, at: overlap.start).hour, 9)
+            XCTAssertEqual(WorldClock.hourMinute(zone: home, at: overlap.end).hour, 18)
+            XCTAssertEqual(WorldClock.workCurve([], home: home, on: noon, stepMinutes: 60).count, Int(hours) + 1)
+        }
+    }
+
     func testWorkCurve() {
         let curve = WorldClock.workCurve([tz("America/New_York"), tz("Europe/London")], home: tz("America/Los_Angeles"),
                                          on: Date(timeIntervalSince1970: 1_792_263_600), stepMinutes: 60)
@@ -279,5 +295,28 @@ final class StopwatchTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "StopwatchTests-\(UUID())"))
         defaults.set(Data("not json".utf8), forKey: StopwatchState.defaultsKey)
         XCTAssertEqual(StopwatchState.load(from: defaults), StopwatchState())
+    }
+
+    func testPausedRelaunchPreservesUnfinishedLapAndResumesWithoutCountingPause() throws {
+        let suite = "StopwatchPaused-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var state = StopwatchState()
+        state.start(at: t0)
+        state.lap(at: t0.addingTimeInterval(3))
+        state.stop(at: t0.addingTimeInterval(5))
+        state.save(to: defaults)
+
+        var loaded = StopwatchState.load(from: defaults)
+        let resumedAt = t0.addingTimeInterval(3600)
+        XCTAssertFalse(loaded.isRunning)
+        XCTAssertEqual(loaded.elapsed(at: resumedAt), 5)
+        XCTAssertEqual(loaded.currentLap(at: resumedAt), 2)
+        loaded.start(at: resumedAt)
+        loaded.lap(at: resumedAt.addingTimeInterval(4))
+        XCTAssertEqual(loaded.laps, [3, 6])
+        XCTAssertEqual(loaded.bestLapIndex, 0)
+        XCTAssertEqual(loaded.worstLapIndex, 1)
+        XCTAssertEqual(loaded.elapsed(at: resumedAt.addingTimeInterval(4)), 9)
     }
 }
