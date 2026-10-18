@@ -167,3 +167,28 @@ AI stage elapsed spans, n3 same fresh-process Hello turns (not CPU, executor con
 Do not add/subtract independent medians to predict a total. Async scheduling and await elapsed time motivate one bounded deterministic-local-reply experiment, not a CPU attribution or verified gain. Its full-layout target is444.196/3=148.065ms for this cohort, but final candidate acceptance must use matching diagnostic schema/configuration and correctness gates. Model-available paths remain outside simulator inference evidence.
 
 Evidence: `baseline-v2-round4-54c0dcf2.log`, `round4-command.json`, `staged-source-v2-round4/manifest.json`, `round4-summary.json`, `round4-stages.json`, full closed `baseline-v2-round4/ui.xcresult`; archived QA session `performance-pages-v2-round4-20261018`. Exit0; all owned simulator/panel closed, live heavy/booted empty12:54:18 PDT. Remaining tertiary pages, per-page memory/hitches, persistence outcomes and model internals remain explicitly pending.
+
+
+## Common-schema reference and tertiary pages
+
+Productionb1fc12b plus common measuremented92fc7. The dispatch-aware schema is now built and verified on the original asynchronous implementation, before measuring the local-response candidate. Three methods passed: conversation67.334s, Alarm/Timer Sound72.249s, Year key/new-list editor61.350s. Same Debug-O, fixed derived-optimized, device/fixture/context; stage dispatch explicitly async. No production optimization is present.
+
+| Endpoint | Raw ms | Median ms | Required /3 | Stretch /10 |
+| --- | --- | ---: | ---: | ---: |
+| page.alarm.editor | 515.833, 199.389, 199.349 | 199.389 | 66.463 | 19.939 |
+| page.alarm.sound | 232.726, 116.320, 99.293 | 116.320 | 38.773 | 11.632 |
+| page.timer.sound | 149.158, 132.601, 149.193 | 149.158 | 49.719 | 14.916 |
+| ai_ready_to_response_layout | 125.491, 127.000, 154.741 | 127.000 | 42.333 | 12.700 |
+| ai_send_to_feedback_layout | 609.474, 662.173, 426.765 | 609.474 | 203.158 | 60.947 |
+| ai_send_to_first_response_ready | 500.658, 552.623, 272.098 | 500.658 | 166.886 | 50.066 |
+| ai_send_to_full_response_ready | 500.658, 552.623, 272.098 | 500.658 | 166.886 | 50.066 |
+| ai_turn_to_response_layout | 626.149, 679.623, 426.839 | 626.149 | 208.716 | 62.615 |
+| page.ai | 1421.343, 4171.340, 1265.850 | 1421.343 | 473.781 | 142.134 |
+| page.calendar.year.key | 452.186, 234.032, 201.745 | 234.032 | 78.011 | 23.403 |
+| page.list.editor | 1127.494, 315.489, 299.603 | 315.489 | 105.163 | 31.549 |
+
+This common-schema conversation reference supersedes earlier diagnostic cohorts **only for the forthcoming matched candidate comparison**; older measurements remain unchanged and unpooled. Its full-layout3x goal is208.716ms. The n3 range426.839–679.623ms is material variability, not a p95 or stable population estimate. Ask-open itself also varies1265.850–4171.340ms; no candidate effect on open latency is assumed.
+
+Sound screens were opened/backed out without selection/save; Year key opened/dismissed and new-list draft cancelled. These four additional endpoints make26 distinct accepted page/modal/state endpoints across cohorts; variants, menu actions, per-page memory/hitches and persistence remain partial. Seven root transitions remain separate.
+
+Evidence: `baseline-v2-round5-reference-f326dd61.log`, `round5-reference-{summary,stages}.json`, `round5-reference-command.json`, `staged-source-v2-round5-reference/manifest.json`, full closed `baseline-v2-round5-reference/ui.xcresult`. Executed app and UI runner preserved in `round5-reference-products/`, executable UUID/hash in provenance.json. Exit0; owned device/panel shut down and live heavy/booted empty13:08:35 PDT before EventSave handoff. Candidate09f9860 is source-only until its matched run and trace-disabled correctness journeys.
