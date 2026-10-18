@@ -23,8 +23,10 @@ Reusable commands, source inventory and platform boundaries are in [the coverage
 | [#37](https://github.com/luworks/one-app/issues/37) | A midnight point alarm belongs to the preceding day | [#43](https://github.com/luworks/one-app/pull/43) | Half-open day membership, including DST boundaries |
 | [#38](https://github.com/luworks/one-app/issues/38) | Share inbox is consumed before SwiftData save succeeds | [#45](https://github.com/luworks/one-app/pull/45), [#46](https://github.com/luworks/one-app/pull/46) | Old ordering loses a real file-backed draft with an injected persistence throw; six durability cases pass against a transaction stand-in. Real SwiftData UI journeys are prepared, not yet executed |
 | [#39](https://github.com/luworks/one-app/issues/39) | A 90-day Health comparison has only 13 days of previous-period history | [#44](https://github.com/luworks/one-app/pull/44) | Uneven 180-day readings reproduced incorrect comparison; corrected history and fixture bounds pass |
+| [#47](https://github.com/luworks/one-app/issues/47) | A leading relative time hides the imperative from chat routing, so “30分钟后关烤箱” produces no reminder preview | [#48](https://github.com/luworks/one-app/pull/48) | Full UI reproduced missing Add; four route assertions failed before fix, 44 focused routing/dialogue tests passed after fix. UI acceptance pending |
 
 The Share stack must merge in order: #42, then retarget #45 to main, then retarget #46 to main after #45 merges.
+The AI stack must merge #40 before retargeting #48 to main.
 No existing model is removed. The import receipt is additive; `Habit` and `LedgerEntry` stay in the schema.
 The Share persistence injection throws before save and is not evidence of a spontaneous SwiftData storage error.
 
@@ -36,6 +38,7 @@ The Share persistence injection throws before save and is not evidence of a spon
 | Integration `1d843b0`, PRs #40–45 plus runner #41 | 613 executed, 0 skipped, 0 failures; capture train 46/46, test 22/22 | `/tmp/today-overnight-integrated-swift.log` |
 | Runner host contracts | 6 passed; no simulator/build invoked | `python3 -m unittest discover -s ios/Eval -p test_e2e_runner.py` |
 | Share persistence UI additions in #46 | DEBUG/non-DEBUG syntax parsing and diff check passed; runtime pending | `/tmp/today-overnight-share-platform-report.md` |
+| Relative-time routing in #48 | 44 focused tests passed; no full logic or UI rerun in this child lane | `/tmp/today-overnight-ai-relative-green.log` |
 | Rendered screenshots | 38 existing light/dark screenshots inspected; no verified visual defect in this subset | `/tmp/today-overnight-rendered-audit.md` |
 
 The integrated 100k Activity benchmark ran on the Mac: 2.67 seconds insertion, 47 MB file,
