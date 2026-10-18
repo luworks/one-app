@@ -1110,8 +1110,6 @@ private struct WeekPage: View {
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor, lineWidth: 1))
                     .contentShape(Rectangle())
             }
-            .frame(width: width, height: height)
-            .contentShape(Rectangle())
         } else {
             HStack(spacing: 0) {
                 Rectangle().fill(e.color).frame(width: min(3, width))
