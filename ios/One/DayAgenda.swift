@@ -18,6 +18,10 @@ struct DayAgenda: View {
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
     @AppStorage(SettingsKey.healthSummary) private var showsHealth = true
+    @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
+    @AppStorage(Preferences.eveningHourKey) private var eveningHour = Preferences.eveningHour
+    @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
+    @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
     @Environment(\.scenePhase) private var scenePhase
     @State private var health = HealthLineModel()
     /// The open "Review today" sheet: tomorrow and its first items, taken when the row is tapped.
@@ -124,7 +128,7 @@ struct DayAgenda: View {
             } else {
                 Section { timelineContent(items) }
             }
-            if !showsWeekStrip, cal.isDateInToday(day) { tomorrowSection(after: items) }
+            if !showsWeekStrip, showsTomorrow, cal.isDateInToday(day) { tomorrowSection(after: items) }
         }
         .listStyle(.plain)
         // Rows set their own 44pt minimum where they can be tapped; this lets the alarm and now lines sit tighter.
@@ -176,10 +180,12 @@ struct DayAgenda: View {
             switch $0 { case .nowMarker, .gap: false
             default: true }
         }.map(\.start)
-        let expanded = expandsTomorrow ?? TomorrowPreview.opensByItself(now: now, todayStarts: todayStarts)
+        // Settings > Today > "Evening starts at" (nil = off: Tomorrow opens only when nothing timed is left today).
+        let evening = eveningHour == Preferences.off ? nil : eveningHour
+        let expanded = expandsTomorrow ?? TomorrowPreview.opensByItself(now: now, todayStarts: todayStarts, eveningHour: evening)
         let shown = expanded ? entries : Array(entries.prefix(TomorrowPreview.limit))
         Section {
-            if EveningReview.shows(now: now) {
+            if EveningReview.shows(now: now, eveningHour: evening) {
                 Button {
                     review = ReviewRequest(tomorrow: tomorrow, peek: Array(entries.compactMap(Self.peek).prefix(EveningReview.tomorrowLimit)))
                 } label: {
@@ -300,7 +306,10 @@ struct DayAgenda: View {
         }
         // Untimed reminders get a suggested time in a free gap (flagged first); what doesn't fit is "Anytime".
         untimed.sort { ($0.flagged ? 0 : 1, $0.createdAt) < ($1.flagged ? 0 : 1, $1.createdAt) }
-        let starts = DaySchedule.suggestedStarts(minutes: untimed.map(\.durationMinutes), busy: busy, day: day, now: now)
+        // Settings > Today > "Suggest times for reminders": off leaves them under "Anytime today".
+        let starts = suggestsTimes
+            ? DaySchedule.suggestedStarts(minutes: untimed.map(\.durationMinutes), busy: busy, day: day, now: now)
+            : [Date?](repeating: nil, count: untimed.count)
         var anytime: [OneTask] = []
         for (task, start) in zip(untimed, starts) {
             if let start {
@@ -311,7 +320,9 @@ struct DayAgenda: View {
             }
         }
         // What is still free after the suggestions, as quiet "Free 1 h 30 min" rows.
-        timeline += DaySchedule.freeGaps(busy: busy, day: day, now: now).map(TimelineItem.gap)
+        if showsFreeTime {
+            timeline += DaySchedule.freeGaps(busy: busy, day: day, now: now).map(TimelineItem.gap)
+        }
         if showsAlarms {
             timeline += CalendarAlarms.occurrences(of: alarms.map(\.spec), on: day, now: now).map { TimelineItem.alarm(alarms[$0.index], $0.date) }
         }

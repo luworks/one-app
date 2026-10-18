@@ -101,8 +101,9 @@ struct AlarmEditor: View {
         _label = State(initialValue: alarm?.label ?? "")
         _weekdays = State(initialValue: Set(alarm?.weekdays ?? []))
         _snooze = State(initialValue: alarm?.snooze ?? true)
-        _sound = State(initialValue: alarm?.sound ?? "")
-        _snoozeMinutes = State(initialValue: AlarmPlan.snoozeMinutes(nearest: alarm?.snoozeMinutes ?? AlarmPlan.defaultSnoozeMinutes))
+        // A new alarm starts with the sound and snooze length chosen in Settings > Alarms; an existing one keeps its own.
+        _sound = State(initialValue: alarm?.sound ?? Preferences.newAlarmSoundName())
+        _snoozeMinutes = State(initialValue: AlarmPlan.snoozeMinutes(nearest: alarm?.snoozeMinutes ?? Preferences.newAlarmSnoozeMinutes()))
     }
 
     var body: some View {

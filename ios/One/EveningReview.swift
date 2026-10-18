@@ -11,8 +11,8 @@ import Foundation
 /// - Drop: the reminder is deleted (Undo brings it back). Not offered for repeating reminders, which would lose the series.
 /// A reminder due today that moves to tomorrow stays due today, so after midnight it shows as overdue: the preview says so.
 enum EveningReview {
-    /// Same hour the Tomorrow section opens by itself (Apple Reminders' "Tonight").
-    static var eveningHour: Int { TomorrowPreview.eveningHour }
+    /// Same hour the Tomorrow section opens by itself (Settings → "Evening starts at", 18:00 unless changed); nil = off.
+    static var eveningHour: Int? { Preferences.reviewStart() }
     /// How many of tomorrow's items the review shows.
     static let tomorrowLimit = 3
 
@@ -39,9 +39,9 @@ enum EveningReview {
         var planned: Int { done.count + left.count }
     }
 
-    /// The Review row shows from 18:00, on today only.
-    static func shows(now: Date, calendar: Calendar = .current) -> Bool {
-        calendar.component(.hour, from: now) >= eveningHour
+    /// The Review row shows from the evening hour (18:00 unless changed in Settings), on today only.
+    static func shows(now: Date, eveningHour: Int? = EveningReview.eveningHour, calendar: Calendar = .current) -> Bool {
+        eveningHour.map { calendar.component(.hour, from: now) >= $0 } ?? false
     }
 
     /// Done today (whenever it was planned), and what is still open for today: planned today, or with no plan and due

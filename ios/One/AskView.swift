@@ -57,6 +57,7 @@ struct AskView: View {
 
     private static let endID = "chat-end"
     @Query(sort: \OneList.order) private var lists: [OneList]
+    @AppStorage(Preferences.askSuggestionsKey) private var showsSuggestions = Preferences.askSuggestions
     @State private var thinking = false
     @State private var captureTask: Task<Void, Never>?
     @State private var plan: [(task: OneTask, start: Date)] = []
@@ -243,7 +244,7 @@ struct AskView: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("What do you want to plan?")
                 .font(.title2.bold())
-            AskSuggestionList(onSend: send)
+            if showsSuggestions { AskSuggestionList(onSend: send) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -775,7 +776,8 @@ struct AskView: View {
         messages.append(message)
     }
 
-    /// A task goes to the list it clearly belongs to, else the Inbox. Never silently to whatever list is the default.
+    /// A task goes to the list it clearly belongs to, else the list chosen in Settings > Reminders ("New reminders go to"),
+    /// else the Inbox. Never silently to whatever list is the default.
     private func filed(_ capture: Capture) -> Capture {
         guard capture.kind == .task, !capture.ringsAsAlarm, capture.listName == nil else { return capture }
         var c = capture
@@ -783,7 +785,7 @@ struct AskView: View {
         let candidates = lists.map { list in
             ListGuess.Candidate(name: list.name, titles: tasks.filter { $0.listName == list.name }.suffix(300).map(\.title))
         }
-        c.listName = ListGuess.guess(c.title, lists: candidates).list ?? ListGuess.inbox(in: names)
+        c.listName = ListGuess.guess(c.title, lists: candidates).list ?? Preferences.newReminderList(existing: names) ?? ListGuess.inbox(in: names)
         return c
     }
 
