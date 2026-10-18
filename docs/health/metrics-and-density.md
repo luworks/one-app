@@ -108,4 +108,4 @@ Weight
  -0.4 kg vs previous 90 days
 ```
 
-Add metric: a sheet listing only metrics not shown yet, grouped, each with a one-line description; tap to tick, "Add" confirms. Adding asks for the Apple Health read permission for those types only. Today's line is unchanged (steps + sleep) while both are shown; if either is hidden it uses the first two shown metrics that have a value for today.
+Manage Metrics: a sheet listing every supported metric, grouped, each with a one-line description and a visibility toggle. Shown metrics start on; hidden metrics start off. Done or dismissing the sheet saves visibility, retaining the order of existing rows. Only newly shown metrics request Apple Health read access, after the sheet closes. Today's line is unchanged (steps + sleep) while both are shown; if either is hidden it uses the first two shown metrics that have a value for today.
