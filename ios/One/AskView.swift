@@ -536,6 +536,13 @@ struct AskView: View {
         thinking = true
         traceBackend(generationToken, modelPath: intent != .capture)
         let token = generationToken
+        if intent == .conversation && !AICapture.isAvailable {
+            if AIResponseTrace.enabled { AIResponseTrace.shared.localReply(.before, token: token) }
+            thinking = false
+            messages.append(ChatMessage(role: .ai, text: ChatRouting.fallbackReply(text)))
+            if AIResponseTrace.enabled { AIResponseTrace.shared.localReply(.after, token: token) }
+            return
+        }
         captureTask = Task { @MainActor in
             if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("task_enter", token: token) }
             defer { finishEmission(token) }
