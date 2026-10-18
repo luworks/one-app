@@ -346,16 +346,22 @@ struct AskView: View {
         let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
         messages.append(ChatMessage(role: .user, text: text))
         turnStart = .now
-        closeOpenCards("ignored", plansOnly: true)
-        plan = []
-        tidy = []
-        undoRow = nil
+        // Clear conversation must not be mistaken for a follow-up that changes a pending card.
+        let intent = ChatRouting.intent(text)
+        if intent == .conversation {
+            if ChatRouting.isAgendaQuestion(text) {
+                recordTurn("question", text)
+                messages.append(ChatMessage(role: .ai, text: todaySummary))
+            } else {
+                respond(text, history: history, intent: intent)
+            }
+            return
+        }
         // The message may answer what the last turn left open, or edit the preview that is showing.
         if answerOpenTurn(text, history: history) {
             recordTurn("answer", text)
             return
         }
-        followup = nil
         if OverdueTidy.isRequest(text) {
             recordTurn("tidy", text)
             clearPreviews()
@@ -367,26 +373,43 @@ struct AskView: View {
         } else if SentenceRoute.isReviewRequest(text) {
             recordTurn("review", text)
             messages.append(ChatMessage(role: .ai, text: reviewSummary))
-        } else if isQuestion(text) {
-            // A question does not throw away the card the user is looking at.
-            recordTurn("question", text)
-            messages.append(ChatMessage(role: .ai, text: todaySummary))
         } else if Editing.looksLikeEdit(text, items: editCandidates().items) {
             recordTurn("edit", text)
             clearPreviews()
             proposeEdit(text, history: history)
         } else {
-            recordTurn("capture", text)
-            clearPreviews()
-            propose(text)
+            respond(text, history: history, intent: intent)
         }
     }
 
-    /// A new line moves on: cards still waiting for Add stay in the chat as Dropped, and a pending change goes.
+    /// Route before either extractor. Conversation leaves pending previews and follow-ups untouched.
+    private func respond(_ text: String, history: String, intent: ChatRouting.Intent) {
+        thinking = true
+        captureTask = Task { @MainActor in
+            let result = await ChatResponse.respond(text, history: history, intent: intent)
+            guard !Task.isCancelled else { return }
+            thinking = false
+            switch result {
+            case .capture:
+                recordTurn("capture", text)
+                clearPreviews()
+                propose(text)
+            case .reply(let reply):
+                recordTurn("conversation", text)
+                messages.append(ChatMessage(role: .ai, text: reply))
+            }
+        }
+    }
+
+    /// Moving on drops pending cards in place, recording their resolution without removing chat history.
     private func clearPreviews() {
         closeOpenCards("ignored", plansOnly: false)
         dropOpenCards()
         change = nil
+        plan = []
+        tidy = []
+        undoRow = nil
+        followup = nil
     }
 
     // MARK: Activity data (tier 2)
@@ -1013,11 +1036,6 @@ struct AskView: View {
             for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
             try? context.save()
         }
-    }
-
-    private func isQuestion(_ text: String) -> Bool {
-        text.hasSuffix("?") || text.hasSuffix("？") || ["什么", "怎么", "吗", "多少", "几"].contains { text.contains($0) }
-            || ["what", "how", "when", "which", "do ", "is ", "am ", "any"].contains { text.lowercased().hasPrefix($0) }
     }
 
     /// "Review today": what got done against what the day held, and what is left. Read only; moving or dropping what is

@@ -82,7 +82,9 @@ final class AskMultiTurnTests: XCTestCase {
         XCTAssertFalse(app.otherElements["change-card"].exists)
         XCTAssertFalse(label(containing: "Which one").exists, "no question about existing items")
         send("哦，我想卖家里的一些东西，然后去 Marketplace。今天下午 3 点提醒我吧")
-        XCTAssertTrue(label(containing: "Marketplace").waitForExistence(timeout: 90), "the card is the new reminder")
+        let card = app.descendants(matching: .any)["capture-stack"]
+        let newTitle = card.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Marketplace")).firstMatch
+        XCTAssertTrue(newTitle.waitForExistence(timeout: 90), "wait for the new preview, not the echoed user message")
         XCTAssertTrue(label(containing: "15:00").exists)
         XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1)
         XCTAssertFalse(app.otherElements["change-card"].exists, "never a change to an existing item")
