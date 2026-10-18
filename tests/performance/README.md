@@ -94,3 +94,14 @@ recorded limitation, not an invitation to change profiling/privacy settings.
 Current metric table and gaps: [climb-current-state.md](../../docs/performance/climb-current-state.md).
 The app comparator requires each corresponding functional method to pass;
 failed/incomplete logs retain diagnostic ratios but cannot pass the3x/10x gates.
+
+`profile_year_journey.py --simulator <owned-ID> --derived-data <existing-DD>
+--project <frozen-project> --output <new-dir> --wall-limit 140` runs only the
+existing Year memory method without building, then attempts one exact-PID 20s
+Time Profiler attachment. Explicit global handoff and a visible booted simulator
+are prerequisites; installed/product executable hashes must match. The hard wall
+budget includes cleanup, named/cache locks and optional TOC export. The original
+30s PID discovery attempt failed before any TestCase or profiler began. The
+current up-to-60s readiness budget is static-checked only, not runtime verified.
+Retain failed raw evidence and honor the granted window's no-retry rule; profile
+results never enter unprofiled speed comparisons.
