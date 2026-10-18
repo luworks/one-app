@@ -410,7 +410,7 @@ struct CaptureCard: View {
                 HStack {
                     Button(cancelTitle, action: onCancel).buttonStyle(.bordered)
                     Spacer()
-                    Button("Add", action: onAdd).buttonStyle(.borderedProminent)
+                    Button("Add", action: onAdd).buttonStyle(.borderedProminent).disabled(!capture.isReadyToAdd)
                 }
                 .padding(.top, 4)
             } else {

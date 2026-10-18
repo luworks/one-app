@@ -13,6 +13,16 @@ final class CaptureTitleCleanupTests: XCTestCase {
         calendar.date(from: DateComponents(year: 2026, month: 10, day: 18, hour: 9, minute: 41))!
     }
 
+    func testMissingTimeAlarmCannotBeAddedAsReminder() {
+        var capture = Capture(title: "Sleep", day: now, hasDay: false, ringsAsAlarm: true)
+        XCTAssertFalse(capture.isReadyToAdd)
+        capture.hour = 23
+        XCTAssertTrue(capture.isReadyToAdd)
+        capture.hour = nil
+        capture.ringsAsAlarm = false
+        XCTAssertTrue(capture.isReadyToAdd, "an untimed reminder still supports Add")
+    }
+
     func testReportedReminderKeepsModalityAndTiming() {
         let capture = CaptureParser.parse("今天晚上11点的时候提醒我，必须要睡觉", now: now, calendar: calendar)
         XCTAssertEqual(capture.title, "必须要睡觉")

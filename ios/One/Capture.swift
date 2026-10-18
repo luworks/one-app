@@ -32,6 +32,9 @@ struct Capture: Equatable, Codable {
     /// Every other clock time on a reminder is when it alerts: it is written as the reminder's due time, alert at 0 min.
     var isWorkBlock: Bool = false
 
+    /// An alarm without a chosen time remains a preview, never an ordinary reminder.
+    var isReadyToAdd: Bool { !ringsAsAlarm || hour != nil }
+
     var plannedStart: Date? {
         guard let hour else { return nil }
         return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: day)

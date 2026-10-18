@@ -878,6 +878,7 @@ struct AskView: View {
     private func commit(_ id: UUID) -> Capture? {
         guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.add) else { return nil }
         let capture = proposals[i].capture
+        guard capture.isReadyToAdd else { return nil }
         let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
         recordCard(resolved: "capture", edits.isEmpty ? "applied" : "edited", edits: edits)
         let written = capture.insertRecorded(into: context, actor: .todayAI, channel: .ask, approval: .asked)

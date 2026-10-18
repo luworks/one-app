@@ -95,6 +95,7 @@ struct CaptureStack: View {
                 Spacer()
                 if openCount > 1 {
                     Button("Add all", action: onAddAll)
+                        .disabled(!proposals.contains { $0.status == .open && $0.capture.isReadyToAdd })
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .accessibilityIdentifier("capture-add-all")
@@ -177,6 +178,7 @@ struct CompactCaptureRow: View {
             .buttonBorderShape(.circle)
             .accessibilityLabel("Add")
             .accessibilityIdentifier("capture-row-add")
+            .disabled(!capture.isReadyToAdd)
         }
         .padding(10)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
