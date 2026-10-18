@@ -112,6 +112,7 @@ enum LedgerAction: String {
     case unscheduled
     /// The deadline changed (Tidy overdue).
     case redated
+    case renamed
     case undone
     case granted, revoked
 
@@ -125,6 +126,7 @@ enum LedgerAction: String {
         case .moved: "Moved"
         case .unscheduled: "Unscheduled"
         case .redated: "New date for"
+        case .renamed: "Renamed"
         case .undone: "Undid"
         case .granted: "Allowed"
         case .revoked: "Revoked"
@@ -214,7 +216,7 @@ enum LedgerFormat {
         guard !alreadyUndone, itemKind == "task", approval != .observed else { return false }
         switch action {
         case .deleted: return hasSnapshot
-        case .completed, .reopened, .planned, .moved, .unscheduled, .redated, .created: return hasItem
+        case .completed, .reopened, .planned, .moved, .unscheduled, .redated, .renamed, .created: return hasItem
         case .undone, .granted, .revoked: return false
         }
     }
