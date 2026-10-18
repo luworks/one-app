@@ -5,7 +5,6 @@ import fcntl
 import functools
 import hashlib
 import http.server
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -58,6 +57,9 @@ def install():
 
 
 def main():
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, interrupted)
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--watch', choices=SCREENS, default='reminders')
     p.add_argument('--port', type=int, default=0, help='Loopback port; 0 chooses a free port')
