@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -16,6 +17,14 @@ spec.loader.exec_module(e2e)
 
 
 class RunnerContracts(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        real_journal = e2e.Journal
+        patcher = patch.object(e2e, "Journal", side_effect=lambda: real_journal(Path(directory.name) / "activity.sqlite"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_dry_run_does_not_probe_or_write(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "must-not-exist"
@@ -83,6 +92,76 @@ class RunnerContracts(unittest.TestCase):
             })):
                 with self.assertRaises(ValueError):
                     e2e.select_simulator(args)
+
+    def test_observation_modes_never_open_database(self):
+        with patch.object(e2e, "Journal", side_effect=AssertionError("database opened")), \
+             patch.object(e2e.subprocess, "check_output", side_effect=AssertionError("process")), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(e2e.main(["--inventory"]), 0)
+            self.assertEqual(e2e.main(["--full", "--dry-run"]), 0)
+            with self.assertRaises(SystemExit) as result:
+                e2e.main(["--help"])
+            self.assertEqual(result.exception.code, 0)
+
+    def test_default_output_is_primary_checkout_results(self):
+        with patch.object(e2e, "Journal", side_effect=AssertionError("database opened")), \
+             contextlib.redirect_stdout(io.StringIO()) as stdout:
+            self.assertEqual(e2e.main(["--full", "--dry-run"]), 0)
+        plan = json.loads(stdout.getvalue())
+        self.assertEqual(Path(plan["output"]).parent, e2e.results_root() / "runs")
+
+    def test_journal_failure_does_not_replace_test_failure(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(e2e, "Journal", side_effect=OSError("journal unavailable")), \
+             patch.object(e2e, "capture", return_value="head"), \
+             patch.object(e2e, "select_simulator", return_value="owned-id"), \
+             patch.object(e2e, "run_logged", return_value=7), \
+             patch.object(e2e.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)), \
+             contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            output = Path(directory) / "evidence"
+            self.assertEqual(e2e.main(["--full", "--output", str(output)]), 7)
+            self.assertEqual(json.loads((output / "summary.json").read_text())["journal_errors"], ["journal unavailable"])
+
+    def test_real_command_records_ui_and_test_events(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+            directory = Path(directory)
+            journal = e2e.RunJournal("host", [])
+            fixture = e2e.ROOT / "tests/qa/fixtures/attempts.log"
+            command = [sys.executable, "-c", "from pathlib import Path; print(Path(" + repr(str(fixture)) + ").read_text()); raise SystemExit(7)"]
+            self.assertEqual(e2e.run_logged(command, directory / "ui.log", directory / "progress.jsonl", [], journal), 7)
+            rows = journal.store.query("host")
+            self.assertEqual([r["kind"] for r in rows].count("qa.ui.operation"), 3)
+            self.assertEqual([r["kind"] for r in rows].count("qa.test"), 4)
+            self.assertEqual(json.loads(rows[-1]["props"])["exit_code"], 7)
+            operations = [r for r in rows if r["kind"] == "qa.ui.operation"]
+            self.assertEqual([r["subject_ref"] for r in operations],
+                             ["-[OneUITests.Sample testFirst]", "-[OneUITests.Sample testSecond]", "-[OneUITests.Sample testSecond]"])
+            journal.store.close()
+
+    def test_external_output_is_retained_after_original_is_removed_without_reimport(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "external"
+            bundle = output / "fake.xcresult/Data"
+            bundle.mkdir(parents=True)
+            (output / "ui.log").write_bytes(b"original raw log\r\n")
+            (bundle / "object").write_bytes(b"result object")
+            journal = e2e.RunJournal("external-host", [])
+            db = journal.store.path
+            journal.record("qa.test", "already recorded live", status="passed", subject="testLive")
+            journal.finish(output, {"status": "passed"})
+            shutil.rmtree(output)
+            from journal import Journal, digest
+            reopened = Journal(db)
+            self.addCleanup(reopened.close)
+            rows = reopened.query("external-host")
+            self.assertEqual(len([r for r in rows if r["kind"] == "qa.test"]), 1)
+            retained = Path(next(r["action"] for r in rows if r["kind"] == "qa.archive"))
+            self.assertEqual((retained / "ui.log").read_bytes(), b"original raw log\r\n")
+            self.assertEqual((retained / "fake.xcresult/Data/object").read_bytes(), b"result object")
+            for row in rows:
+                if row["kind"] == "qa.artifact":
+                    self.assertEqual(digest(row["action"]), json.loads(row["props"])["sha256"])
 
     def test_log_preserves_failure_exit_code_and_case_order(self):
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):

@@ -1,0 +1,38 @@
+{
+  "prior_rows_preserved": 14171,
+  "lost_or_modified_rows": 0,
+  "duplicate_uids": 0,
+  "counts": [
+    [
+      "qa.command.imported",
+      1
+    ],
+    [
+      "qa.import.provenance",
+      1
+    ],
+    [
+      "qa.run",
+      1
+    ],
+    [
+      "qa.run.checkpoint",
+      1
+    ],
+    [
+      "qa.test",
+      1457
+    ],
+    [
+      "qa.ui.operation",
+      6490
+    ],
+    [
+      "qa.ui.subject",
+      6220
+    ]
+  ],
+  "integrity_check": "ok",
+  "source_read_only": true,
+  "archive_performed": false
+}
