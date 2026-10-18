@@ -70,9 +70,9 @@ final class CRUDTests: XCTestCase {
         undo.tap()
     }
 
-    /// The navigation bar's back button (the pushed list's "Lists").
+    /// The pushed list's inline back button ("Lists").
     private func goBack() {
-        let back = app.navigationBars.buttons.element(boundBy: 0)
+        let back = app.buttons["reminders.back"]
         XCTAssertTrue(back.waitForExistence(timeout: 5))
         back.tap()
     }

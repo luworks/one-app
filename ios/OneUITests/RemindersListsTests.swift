@@ -72,7 +72,7 @@ final class RemindersListsTests: XCTestCase {
         // Tappable: the first opens its list; the last one is reached by scrolling the row sideways.
         XCTAssertTrue(pills[0].isHittable)
         pills[0].tap()
-        let back = app.navigationBars.buttons.element(boundBy: 0)
+        let back = app.buttons["reminders.back"]
         XCTAssertTrue(back.waitForExistence(timeout: 5), "a smart list screen is open")
         back.tap()
         XCTAssertTrue(pills[0].waitForExistence(timeout: 5))
@@ -80,7 +80,22 @@ final class RemindersListsTests: XCTestCase {
         app.revealReminderPill(completed)
         XCTAssertTrue(completed.isHittable, "scrolling the row sideways reaches Completed")
         completed.tap()
-        XCTAssertTrue(app.navigationBars.buttons.element(boundBy: 0).waitForExistence(timeout: 5), "Completed opened")
+        XCTAssertTrue(app.buttons["reminders.back"].waitForExistence(timeout: 5), "Completed opened")
+        back.tap()
+
+        let all = element("smart.all")
+        app.revealReminderPill(all)
+        let originalX = all.frame.minX
+        all.tap()
+        XCTAssertTrue(back.waitForExistence(timeout: 5), "All opened")
+        XCTAssertEqual(back.label, "Lists", "the back destination keeps its accessible name")
+        XCTAssertGreaterThanOrEqual(back.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(back.frame.height, 44)
+        let heading = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'All, '")).firstMatch
+        XCTAssertTrue(heading.waitForExistence(timeout: 5), "All still announces its reminder count")
+        back.tap()
+        XCTAssertTrue(all.waitForExistence(timeout: 5))
+        XCTAssertEqual(all.frame.minX, originalX, accuracy: 2, "back preserves the parent pill scroll position")
     }
 
     func testAddListIsVisibleAndCreatesAList() {
