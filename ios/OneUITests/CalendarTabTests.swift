@@ -106,6 +106,25 @@ final class CalendarTabTests: XCTestCase {
         XCTAssertEqual(title.label, monthName(january1), "tapping a mini month opens it")
     }
 
+    /// Year marks holidays (a red day number, read out as the month's value) and explains its marks in a key.
+    /// The built-in "Christmas, Easter and more" set is on in every region by default.
+    func testYearMarksHolidaysAndHasAKey() {
+        modeButton("Year").tap()
+        XCTAssertTrue(element("calendar.year.scroll").waitForExistence(timeout: 5))
+        let year = cal.component(.year, from: .now)
+        let december = element(String(format: "miniMonth.%04d-12", year))
+        XCTAssertTrue(december.waitForExistence(timeout: 5))
+        let value = december.value as? String ?? ""
+        XCTAssertTrue(value.contains("Christmas Day"), "December's holidays are read out: \(value)")
+        let october = element(String(format: "miniMonth.%04d-10", year))
+        XCTAssertTrue((october.value as? String ?? "").contains("Halloween"))
+        let key = element("calendar.year.key").firstMatch
+        XCTAssertTrue(key.waitForExistence(timeout: 5), "an (i) opens the key")
+        key.tap()
+        XCTAssertTrue(app.staticTexts["Unusually busy"].waitForExistence(timeout: 5), "the key says what the gray tint means")
+        XCTAssertTrue(app.staticTexts["Holiday or festival"].exists)
+    }
+
     /// Week keeps the time grid with all-day banners on top.
     func testWeekShowsAllDayBanner() {
         modeButton("Week").tap()

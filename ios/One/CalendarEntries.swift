@@ -23,6 +23,8 @@ struct CalEntry: Identifiable {
     let color: Color
     var calendarTitle = ""
     var repeats = false
+    /// From a subscribed, holiday or Birthdays calendar (see `YearLoad`).
+    var isBackground = false
 
     var isTask: Bool { if case .task = source { true } else { false } }
     var isAlarm: Bool { if case .alarm = source { true } else { false } }
@@ -84,7 +86,7 @@ enum CalendarEntries {
             }
             result.append(CalEntry(id: x.id, source: .system(x.eventIdentifier), title: x.title, location: x.location,
                                    start: x.start, end: end, isAllDay: x.isAllDay, color: x.color, calendarTitle: x.calendarTitle,
-                                   repeats: x.repeats))
+                                   repeats: x.repeats, isBackground: x.isBackground))
         }
 
         for t in tasks where !t.isDone {

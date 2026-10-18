@@ -355,16 +355,6 @@ enum CalendarLayout {
         return (day, min(max(minute, 0), 24 * 60 - 15))
     }
 
-    /// How busy a day looks in the Year view's heatmap: 0 (nothing), 1 (one or two items), 2 (three or four), 3 (five or more).
-    static func busyLevel(count: Int) -> Int {
-        switch count {
-        case ..<1: 0
-        case 1...2: 1
-        case 3...4: 2
-        default: 3
-        }
-    }
-
     /// Hour heights the Week grid can be pinched to, in points: compact enough for a whole day, roomy enough to read short events.
     static let hourHeights: ClosedRange<Double> = 28...120
 
