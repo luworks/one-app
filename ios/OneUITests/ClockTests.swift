@@ -132,27 +132,29 @@ final class ClockTests: XCTestCase {
         XCTAssertFalse(app.buttons["worldClock.overlap"].exists, "no Overlap capsule")
         let before = clocks.map(\.label)
 
-        // Drag right across the Tokyo card: every city advances into the future.
-        tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        // Start inside the card, clear of the sidebar's reserved 44pt edge: every city advances into the future.
+        tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
         XCTAssertTrue(pill.label.hasSuffix("AFTER NOW"), "the pill says how far: \(pill.label)")
         for (clock, original) in zip(clocks, before) {
             XCTAssertNotEqual(clock.label, original, "every clock moved")
         }
         XCTAssertEqual(cityRows.count, 2, "a drag scrubs; it never deletes")
 
-        pill.tap()
+        XCTAssertTrue(pill.isFullyVisible(in: app.frame))
+        pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertEqual(pill.label, "NOW", "tapping the pill goes back to NOW")
         XCTAssertEqual(clocks.map(\.label), before)
 
         // Drag left from Now: every city moves into the past.
-        tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
+        tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
         XCTAssertTrue(pill.label.hasSuffix("BEFORE NOW"), pill.label)
         for (clock, original) in zip(clocks, before) {
             XCTAssertNotEqual(clock.label, original, "every clock moved")
         }
-        pill.tap()
+        XCTAssertTrue(pill.isFullyVisible(in: app.frame))
+        pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertEqual(pill.label, "NOW")
         XCTAssertEqual(clocks.map(\.label), before)
     }
