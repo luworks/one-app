@@ -1,0 +1,54 @@
+{
+  "database": "/Users/yuanlu/code/one-app/tests/results/activity.sqlite",
+  "integrity_check": "ok",
+  "user_version": 1,
+  "journal_mode": "wal",
+  "counts": [
+    [
+      "overnight-20261018",
+      "qa.command.imported",
+      1
+    ],
+    [
+      "overnight-20261018",
+      "qa.run",
+      1
+    ],
+    [
+      "overnight-20261018",
+      "qa.run.checkpoint",
+      1
+    ],
+    [
+      "overnight-20261018",
+      "qa.test",
+      1445
+    ],
+    [
+      "overnight-20261018",
+      "qa.ui.operation",
+      6220
+    ],
+    [
+      "qa-journal-implementation-20261018",
+      "qa.command.completed",
+      1
+    ],
+    [
+      "qa-journal-implementation-20261018",
+      "qa.development",
+      1
+    ]
+  ],
+  "run_states": [
+    [
+      "qa.run",
+      "running"
+    ],
+    [
+      "qa.run.checkpoint",
+      "running"
+    ]
+  ],
+  "artifacts": 0
+}

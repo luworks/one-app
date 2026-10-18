@@ -19,6 +19,9 @@ import uuid
 
 IOS = Path(__file__).resolve().parents[1]
 ROOT = IOS.parent
+sys.path.insert(0, str(ROOT / "tests/qa"))
+from journal import Journal, results_root, is_ui_operation
+
 CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
 
 
@@ -85,19 +88,33 @@ def ui_command(selected, simulator, derived, output):
             *["-only-testing:" + value for value in selected]]
 
 
-def run_logged(command, logfile, progress, attempts):
+def run_logged(command, logfile, progress, attempts, journal=None):
+    command_id = uuid.uuid4().hex
+    if journal:
+        journal.record("qa.command.started", shlex.join(command), status="started", subject=command_id)
     print("+ " + shlex.join(command), flush=True)
     with logfile.open("w") as log:
         process = subprocess.Popen(command, cwd=IOS, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, bufsize=1, start_new_session=True)
         try:
+            current_test = None
             for line in process.stdout:
                 log.write(line)
                 log.flush()
+                started_case = re.search(r"Test Case '(.*?)' started", line)
+                if started_case:
+                    current_test = started_case[1]
+                    if journal:
+                        journal.record("qa.test", line.rstrip(), status="started", subject=current_test)
+                if journal and is_ui_operation(line):
+                    journal.record("qa.ui.operation", line.rstrip(), subject=current_test)
                 match = CASE.search(line)
                 if match:
                     entry = {"test": match[1], "status": match[2]}
                     attempts.append(entry)
+                    if journal:
+                        journal.record("qa.test", line.rstrip(), status=match[2], subject=match[1])
+                    current_test = None
                     with progress.open("a") as stream:
                         stream.write(json.dumps({"time": datetime.now(timezone.utc).isoformat(), **entry}) + "\n")
                     print(f"[{len(attempts)} completed] {line.strip()}", flush=True)
@@ -114,14 +131,70 @@ def run_logged(command, logfile, progress, attempts):
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait()
             process.stdout.close()
+            if journal:
+                journal.record("qa.command.completed", shlex.join(command), status="completed",
+                               subject=command_id, props={"exit_code": process.returncode})
+
+
+class RunJournal:
+    """Journal errors are reported separately and never replace a test exit code."""
+    def __init__(self, session, errors):
+        self.session, self.errors, self.store = session, errors, None
+        try:
+            self.store = Journal()
+        except Exception as error:
+            self.error(error)
+
+    def error(self, error):
+        self.errors.append(str(error))
+        print(f"QA journal error: {error}", file=sys.stderr)
+
+    def record(self, kind, text, **kwargs):
+        if self.store:
+            try:
+                return self.store.record(self.session, kind, text, **kwargs)
+            except Exception as error:
+                self.error(error)
+
+    def action(self, command, function, **kwargs):
+        subject = uuid.uuid4().hex
+        self.record("qa.command.started", shlex.join(command), status="started", subject=subject)
+        try:
+            value = function(command, **kwargs)
+            self.record("qa.command.completed", shlex.join(command), status="completed", subject=subject,
+                        props={"exit_code": getattr(value, "returncode", 0)})
+            return value
+        except BaseException as error:
+            self.record("qa.command.failed", str(error), status="failed", subject=subject)
+            raise
+
+    def finish(self, output, summary):
+        self.record("qa.run.result", json.dumps(summary), status=summary["status"])
+        if self.store:
+            try:
+                # Immutable indexed report; summary.json may later include journal errors.
+                retained = output / "summary-retained.json"
+                retained.write_text(json.dumps(summary, indent=2) + "\n")
+                if not output.resolve().is_relative_to(results_root().resolve()):
+                    self.store.archive_files(output, self.session)
+                else:
+                    for path in sorted(output.rglob("*")):
+                        if path.is_file() and not path.is_symlink() and path.name != "summary.json":
+                            self.store.artifact(self.session, path)
+            except Exception as error:
+                self.error(error)
+            finally:
+                self.store.close()
+
 
 
 def capture(command):
     return subprocess.check_output(command, cwd=IOS, text=True).strip()
 
 
-def select_simulator(args):
-    devices = json.loads(capture(["xcrun", "simctl", "list", "devices", "available", "--json"]))
+def select_simulator(args, journal=None):
+    read = (lambda command: journal.action(command, capture)) if journal else capture
+    devices = json.loads(read(["xcrun", "simctl", "list", "devices", "available", "--json"]))
     all_devices = [d for group in devices["devices"].values() for d in group]
     if args.simulator_id:
         matches = [d for d in all_devices if d["udid"].lower() == args.simulator_id.lower()]
@@ -135,7 +208,7 @@ def select_simulator(args):
         if matches[0]["state"] != "Shutdown":
             raise ValueError("Owned simulator is already active; wait for its runner and shut it down first")
         return matches[0]["udid"]
-    return capture(["xcrun", "simctl", "create", args.simulator_name, args.device_type, args.runtime])
+    return read(["xcrun", "simctl", "create", args.simulator_name, args.device_type, args.runtime])
 
 
 def main(argv=None):
@@ -152,7 +225,7 @@ def main(argv=None):
     except ValueError as error:
         p.error(str(error))
     derived = (args.derived_data or IOS / ".build" / args.simulator_name).resolve()
-    output = (args.output or Path(tempfile.gettempdir()) /
+    output = (args.output or results_root() / "runs" /
               ("today-qa-" + datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])).resolve()
     planned = [ui_command(selected, args.simulator_id or "<owned-simulator-udid>", derived, output)]
     if args.logic:
@@ -166,6 +239,7 @@ def main(argv=None):
     locks = []
     simulator = None
     evidence_created = False
+    journal = None
     started = time.monotonic()
     summary = {"started_at": datetime.now(timezone.utc).isoformat(), "selection": selected,
                "derived_data": str(derived), "simulator_name": args.simulator_name,
@@ -177,8 +251,11 @@ def main(argv=None):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         output.mkdir(parents=True, exist_ok=False)
         evidence_created = True
-        summary["head"] = capture(["git", "rev-parse", "HEAD"])
-        summary["working_tree"] = capture(["git", "status", "--short"])
+        summary["run_id"] = output.name + "-" + uuid.uuid4().hex[:8]
+        journal = RunJournal(summary["run_id"], summary.setdefault("journal_errors", []))
+        journal.record("qa.run", str(output), status="running")
+        summary["head"] = journal.action(["git", "rev-parse", "HEAD"], capture)
+        summary["working_tree"] = journal.action(["git", "status", "--short"], capture)
         summary["timezone"] = time.tzname
         summary["environment"] = {k: v for k, v in os.environ.items()
                                   if "SHOTS" in k or k == "ACTIVITY_BENCH_ROWS"}
@@ -189,25 +266,26 @@ def main(argv=None):
             command = ["swift", "test", "--jobs", "2"]
             summary["commands"].append(command)
             summary["attempts"]["logic"] = []
-            code = run_logged(command, output / "logic.log", output / "progress.jsonl", summary["attempts"]["logic"])
+            code = run_logged(command, output / "logic.log", output / "progress.jsonl", summary["attempts"]["logic"], journal)
             summary["stages"]["logic"] = code
             if code:
                 summary["status"] = "failed"
                 return code
-        simulator = select_simulator(args)
+        journal.record("qa.ui.operation", "Select owned simulator " + args.simulator_name, status="started")
+        simulator = select_simulator(args, journal)
         summary["simulator_id"] = simulator
-        subprocess.run(["xcrun", "simctl", "boot", simulator], check=True)
-        subprocess.run(["xcrun", "simctl", "bootstatus", simulator, "-b"], check=True)
+        journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)
+        journal.action(["xcrun", "simctl", "bootstatus", simulator, "-b"], subprocess.run, check=True)
         command = ui_command(selected, simulator, derived, output)
         summary["commands"].append(command)
         summary["attempts"]["ui"] = []
-        code = run_logged(command, output / "ui.log", output / "progress.jsonl", summary["attempts"]["ui"])
+        code = run_logged(command, output / "ui.log", output / "progress.jsonl", summary["attempts"]["ui"], journal)
         summary["stages"]["ui"] = code
         summary["status"] = "passed" if code == 0 else "failed"
         if (output / "ui.xcresult").exists():
             with (output / "xcresult-summary.json").open("w") as stream, (output / "xcresult-summary.log").open("w") as errors:
-                summary["stages"]["xcresult_summary"] = subprocess.run(
-                    ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(output / "ui.xcresult")],
+                summary["stages"]["xcresult_summary"] = journal.action(
+                    ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(output / "ui.xcresult")], subprocess.run,
                     stdout=stream, stderr=errors).returncode
         return code
     except (OSError, ValueError, subprocess.SubprocessError) as error:
@@ -221,7 +299,7 @@ def main(argv=None):
     finally:
         if simulator:
             try:
-                summary["stages"]["shutdown"] = subprocess.run(["xcrun", "simctl", "shutdown", simulator]).returncode
+                summary["stages"]["shutdown"] = journal.action(["xcrun", "simctl", "shutdown", simulator], subprocess.run).returncode
             except OSError as error:
                 summary["shutdown_error"] = str(error)
         summary["elapsed_seconds"] = round(time.monotonic() - started, 3)
@@ -230,6 +308,9 @@ def main(argv=None):
         # Never overwrite evidence from a pre-existing output directory.
         if evidence_created:
             (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+            if journal:
+                journal.finish(output, summary)
+                (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
             print(f"{summary['status']}: {summary['counts']}; evidence: {output}", flush=True)
         for lock in locks:
             lock.close()
