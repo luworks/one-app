@@ -1,6 +1,7 @@
 import Foundation
 import Darwin
 
+#if DEBUG
 /// Separate opt-in resource cohort. Sampling maxima are not exact allocation peaks or leak evidence.
 /// All mutable sampling state belongs to the serial queue; latency endpoints remain unchanged.
 final class PageResourceTrace: @unchecked Sendable {
@@ -171,3 +172,13 @@ final class PageResourceTrace: @unchecked Sendable {
         Task { @MainActor in completion(encoded) }
     }
 }
+#else
+/// Resource diagnostics are absent from Release; normal navigation keeps the same API.
+final class PageResourceTrace: @unchecked Sendable {
+    static let shared = PageResourceTrace()
+    static let enabled = false
+    func begin(generation: Int, start: UInt64) {}
+    func layout(generation: Int, sequence: Int, name: String, route: String, visit: Int, end: UInt64,
+                completion: @escaping @MainActor @Sendable (String) -> Void) {}
+}
+#endif
