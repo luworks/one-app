@@ -206,7 +206,7 @@ struct AlarmEditor: View {
             }
             Divider().padding(.horizontal, 18)
             NavigationLink {
-                SoundScreen(sound: $sound)
+                SoundScreen(sound: $sound).performanceDestination("alarm.sound")
             } label: {
                 Row {
                     Text("Sound").foregroundStyle(.primary)
@@ -219,6 +219,7 @@ struct AlarmEditor: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("alarm.sound")
+            .performanceNavigationAction("alarm.sound")
             Divider().padding(.horizontal, 18)
             Row {
                 Text("Snooze")
