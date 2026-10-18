@@ -145,7 +145,10 @@ final class CalendarTabTests: XCTestCase {
             XCTAssertTrue(scroll.waitForExistence(timeout: 5))
             for _ in 0..<12 {
                 if cell.exists && cell.isFullyVisible(in: scroll.frame) && cell.frame.maxY < app.frame.maxY - 140 && cell.isHittable { break }
-                scroll.swipeUp()
+                let isAbove = cell.exists && cell.frame.minY < scroll.frame.minY
+                let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: isAbove ? 0.4 : 0.7))
+                let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: isAbove ? 0.7 : 0.4))
+                start.press(forDuration: 0.01, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
             }
             XCTAssertTrue(cell.isFullyVisible(in: scroll.frame) && cell.frame.maxY < app.frame.maxY - 140 && cell.isHittable, "chosen day is visible in Year")
             cell.tap()
