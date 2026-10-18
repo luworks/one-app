@@ -54,6 +54,15 @@ final class WorldClockStore {
         }
     }
 
+    #if DEBUG
+    static func previewFixture() -> WorldClockStore {
+        let store = WorldClockStore()
+        store.keys = store.database.migrate(["Europe/London", "Asia/Shanghai", "Asia/Tokyo"])
+        store.homeOverride = store.database.city(forTimeZone: "America/Los_Angeles")
+        return store
+    }
+    #endif
+
     /// The starred first card: the city that stands for the device's time zone.
     var home: CityRecord {
         homeOverride ?? database.city(forTimeZone: homeZoneIdentifier) ?? CityRecord(id: 0, name: homeZoneIdentifier, tz: homeZoneIdentifier)
@@ -101,6 +110,14 @@ struct WorldClockView: View {
     @State private var dragStart: Int?
     /// How far the page is pulled past the end of the scale (points, signed).
     @State private var rubber: CGFloat = 0
+
+    init() {}
+
+    #if DEBUG
+    init(previewStore: WorldClockStore) {
+        _store = State(initialValue: previewStore)
+    }
+    #endif
 
     private var db: CityDatabase { store.database }
 
@@ -516,3 +533,9 @@ struct CityPicker: View {
         .contentShape(Rectangle())
     }
 }
+
+#if DEBUG
+#Preview("World Clock") {
+    WorldClockView(previewStore: .previewFixture())
+}
+#endif

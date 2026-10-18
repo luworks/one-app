@@ -7,6 +7,12 @@ struct OneApp: App {
     let container: ModelContainer
 
     init() {
+        #if DEBUG
+        if PreviewFixtures.isAxe {
+            container = PreviewFixtures.reminders
+            return
+        }
+        #endif
         LaunchTimer.mark("app init")
         Appearance.applyLaunchOverride()
         Preferences.applyLaunchOverride()
@@ -16,7 +22,15 @@ struct OneApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if PreviewFixtures.isAxe {
+                Color.clear
+            } else {
+                HomeView().appearanceRoot()
+            }
+            #else
             HomeView().appearanceRoot()
+            #endif
         }
         .modelContainer(container)
     }

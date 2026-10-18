@@ -22,3 +22,6 @@ ios/Eval/open/results/
 
 # Persistent QA database and raw evidence; fixtures and tools stay versioned.
 tests/results/
+
+# Worktree-local, checksummed preview tools
+.preview-tools/
