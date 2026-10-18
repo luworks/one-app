@@ -26,7 +26,7 @@ enum ChatResponse {
                 Example: 我进行一个测试，然后看看我的 Activity 中是不是会选择显示 is conversation, not a task called 测试.
                 If unsure, respond conversationally or ask what the user means; do not propose an item.
                 Reply in the user's language. Do not claim to have read Activity or changed any data.
-                Activity is the change ledger; chatting itself doesn't record a change. Add/Apply requires confirmation.
+                Chatting records an AI interaction according to Activity data settings, not a change-ledger entry. Message text is kept only when enabled. Add/Apply requires confirmation.
                 This turn's rule intent is \(intent == .conversation ? "conversation: requestsCapture MUST be false" : "undecided").
                 """)
             return try? await session.respond(to: "Previous conversation (context only):\n\(history)\nLatest user message:\n\(text)", generating: ChatTurn.self).content

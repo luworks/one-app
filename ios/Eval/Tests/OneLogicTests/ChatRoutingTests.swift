@@ -16,10 +16,24 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testEmbeddedCreationWordsDoNotOverrideConversation() {
+        for text in [
+            "What happens if I set an alarm for 7am?",
+            "Can you tell me how to add a reminder?",
+            "How does remind me work?",
+            "为什么设置闹钟需要权限？", "如何添加一个提醒？",
+            "Yesterday I set an alarm for 7am", "我昨天设置了明天7点的闹钟",
+            "Don’t remind me to buy milk", "不要提醒我明天买牛奶",
+        ] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+        }
+    }
+
     func testExplicitAndTerseRequestsStillReachCapture() {
         for text in [
             "Can you buy milk?", "买几个苹果", "Buy milk", "Call Alex tomorrow at 3pm", "Pay studio invoice",
-            "明天下午3点开会", "Dentist tomorrow at 3pm", "Set an alarm for 7am",
+            "明天下午3点开会", "Dentist tomorrow at 3pm", "Set an alarm for 7am", "Can you set an alarm for 7am?",
+            "When I get home remind me to buy milk", "明天提醒我设置闹钟",
             "提醒我明天买牛奶", "明天早上7点叫醒我", "Can you remind me to call Mom?",
             "可以明天提醒我买牛奶吗？", "Buy milk; Call Alex tomorrow at 3pm",
             "请把我可以卖的东西都放到车库去，然后今天下午 3 点的时候提醒我移动一下",

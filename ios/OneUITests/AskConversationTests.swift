@@ -24,7 +24,7 @@ final class AskConversationTests: XCTestCase {
 
     func testReportedActivityMessageIsConversation() {
         send("我进行一个测试，然后看看我的 Activity 中是不是会选择显示")
-        XCTAssertTrue(reply("Activity 记录的是实际发生的变更").waitForExistence(timeout: 10))
+        XCTAssertTrue(reply("才会留下对应的变更记录").waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["Add"].exists)
         XCTAssertFalse(app.buttons["capture-add-all"].exists)
         XCTAssertFalse(reply("Here's what I understood").exists)

@@ -12,7 +12,7 @@ struct ChatMessage: Identifiable, Equatable, Codable {
 }
 
 /// Full-screen AI page, modeled on ChatGPT / Claude mobile.
-/// No live model yet: statements become a capture preview; questions get a local summary.
+/// Conversation stays conversational; only requests to add items become capture previews.
 /// Nothing is created until the user taps Add on the preview card.
 struct AskView: View {
     @Environment(\.dismiss) private var dismiss

@@ -12,8 +12,10 @@ enum ChatRouting {
     static func intent(_ raw: String) -> Intent {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         // Talking ABOUT reminders, or explicitly declining one, is not asking for one.
-        if has(text, #"don't (?:add|create|set|remind)|do not (?:add|create|set|remind)|不要(?:创建|添加|提醒|设)|不用(?:创建|添加|提醒|设)|只是聊|just (?:chatting|talking)|\bhow (?:do|can) (?:i|you)\b|怎么(?:创建|添加|设)|如何"#) { return .conversation }
+        if has(text, #"don['’]t (?:add|create|set|remind)|do not (?:add|create|set|remind)|不要(?:创建|添加|提醒|设)|不用(?:创建|添加|提醒|设)|只是聊|just (?:chatting|talking)|\bhow (?:do|can) (?:i|you)\b|怎么(?:创建|添加|设)|如何"#) { return .conversation }
         if has(text, #"^(?:i (?:already|just|have)|i've) (?:set|added|created|finished|completed)|我(?:已经|刚刚|刚才).*(?:了|过)|我记得|^i (?:remember|asked)\b|^(?:what (?:does|is)|can you explain)|是什么意思|怎么用"#) { return .conversation }
+        // Embedded command words in an explanation question or a past report are not a new request.
+        if has(text, #"^(?:what happens\b|why (?:did|does|do|would)\b|how (?:does|would)\b|(?:can|could) you (?:explain|tell me)\b)|^(?:为什么|怎么(?:才能|会|设置|添加|创建)|如何)|^(?:yesterday|last night|this morning)[, ]+i (?:set|added|created)\b|^我(?:昨天|昨晚|今天早上)(?:设置了|设了|添加了|创建了)"#) { return .conversation }
         if Dialogue.startsNewItem(text) || has(text, #"(?:set|create|add) (?:me )?(?:an? )?(?:alarm|timer)\b|(?:设|定|加|创建).{0,6}(?:闹钟|计时器)|wake me|叫醒我|叫我起床"#) { return .capture }
         if has(text, #"^(?:hi|hello|hey|thanks|thank you|good morning|good night)\b|^(?:你好|嗨|谢谢|早上好|晚安)|\bi(?: am| was|'m| have| already| just)\b|我(?:正在|在|刚|已经|进行|只是)|(?:感觉|心情|很累|累了|难过|聊聊)|\b(?:feel|feeling)\b|activity|活动记录"#) { return .conversation }
         if has(text, #"^(?:write|draft|compose|make) (?:me|us)\b|^(?:帮我写|给我写|给我讲)|^(?:write|tell|make).*(?:poem|story|joke|诗|故事|笑话)|\b(?:already|finished|completed|yesterday)\b|已经|昨天"#) { return .conversation }
@@ -40,8 +42,8 @@ enum ChatRouting {
         let chinese = has(text, #"\p{Han}"#)
         if has(text, #"activity|活动记录"#) {
             return chinese
-                ? "可以，普通聊天不会创建任务、日程或闹钟，也不会产生变更记录。Activity 记录的是实际发生的变更，确认添加或应用修改后，才会留下对应的变更记录。"
-                : "Chatting doesn't create a task, event or alarm, or a change in Activity. Activity records actual changes; confirming Add or Apply records the corresponding change."
+                ? "可以，普通聊天不会创建任务、日程或闹钟，也不会产生变更记录。确认添加或应用修改后，才会留下对应的变更记录。聊天也会按 Activity 数据设置记录 AI 交互；是否保留消息文字可在设置中更改。"
+                : "Chatting doesn't create a task, event or alarm, or a change in Activity. Confirming Add or Apply records the corresponding change. Activity data also records AI interactions according to your settings, including message text when enabled."
         }
         if has(text, #"^(?:thanks|thank you|谢谢)"#) { return chinese ? "不客气，随时聊。" : "You're welcome. I'm here if you'd like to chat." }
         if has(text, #"^(?:hi|hello|hey|你好|嗨|早上好)"#) { return chinese ? "你好！今天想聊些什么？" : "Hello! What's on your mind?" }
