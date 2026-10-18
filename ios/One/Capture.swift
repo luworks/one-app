@@ -31,6 +31,8 @@ struct Capture: Equatable, Codable {
     /// The time is working time ("work on the report for 2 hours"), so the item is written with a planned time.
     /// Every other clock time on a reminder is when it alerts: it is written as the reminder's due time, alert at 0 min.
     var isWorkBlock: Bool = false
+    /// Verbatim context retained when a concise title separates action from motivation.
+    var notes: String? = nil
 
     /// An alarm without a chosen time remains a preview, never an ordinary reminder.
     var isReadyToAdd: Bool { !ringsAsAlarm || hour != nil }
@@ -313,7 +315,7 @@ enum CaptureParser {
                               repeatRule: repeatRule, durationMinutes: duration,
                               kind: kind(title: finalTitle, hour: hour, duration: rangeDuration, repeatRule: repeatRule))
         capture.isWorkBlock = isWorkTime(raw, hasLength: duration != nil)
-        return capture
+        return CaptureTitleRefinement.fallback(capture, source: raw)
     }
 
     /// True when the sentence is about time to work on something ("work on the report for 2 hours", "专注写方案"), not a
@@ -924,4 +926,91 @@ enum CaptureDraftMapper {
         - allDay is true only for an event on a whole day (birthday, holiday, trip day) with no time.
         """
     }
+}
+
+
+/// Title-only content refinement. The model has no scheduling fields to generate or mutate.
+/// The injected generator is the production path as well as the host-test seam.
+enum CaptureTitleRefinement {
+    static func fallback(_ capture: Capture, source: String) -> Capture {
+        var result = capture
+        let title = CaptureParser.cleanRequestTitle(capture.title)
+        let motive = #"[，,。;；]\s*(?:因为|我需要|我想|这样|以便|(?i:because\b|so that\b|I need to\b|I want to\b))"#
+        if let range = title.range(of: motive, options: .regularExpression) {
+            let action = String(title[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !action.isEmpty {
+                result.title = action
+                result.notes = retainedNotes(capture.notes, source: source)
+            }
+        } else { result.title = title }
+        // A narrow offline normalization for an explicit watch + sleep purpose, not a general semantic model.
+        // We describe the requested action, never promise a score or a device capability.
+        if source.localizedCaseInsensitiveContains("Apple Watch"),
+           source.range(of: "睡眠|sleep", options: [.regularExpression, .caseInsensitive]) != nil,
+           result.title.range(of: #"^(?:带上|戴上|佩戴)\s*Apple\s*Watch$"#, options: [.regularExpression, .caseInsensitive]) != nil {
+            result.title = "佩戴Apple Watch记录睡眠"
+            result.notes = retainedNotes(capture.notes, source: source)
+        }
+        return result
+    }
+
+    static func refine(_ capture: Capture, source: String, history: String = "", available: Bool,
+                       timeout: TimeInterval = 4,
+                       generate: @escaping @Sendable (String) async -> String?) async -> Capture {
+        let backup = fallback(capture, source: source)
+        guard available else { return backup }
+        let prompt = "Current request: " + source + "\nExisting action: " + backup.title
+            + "\nRelevant user context: " + String(history.suffix(1600))
+        guard let generated = await bounded(seconds: timeout, work: { await generate(prompt) }) else { return backup }
+        let title = CaptureParser.cleanRequestTitle(generated)
+        guard !title.isEmpty else { return backup }
+        var result = backup
+        result.title = title
+        result.fromAppleIntelligence = true
+        // Keep all original facts, motivation, numbers and modality even when the model paraphrases the action.
+        result.notes = retainedNotes(backup.notes, source: source)
+        return result
+    }
+
+    private static func retainedNotes(_ notes: String?, source: String) -> String {
+        guard let notes, !notes.isEmpty, notes != source else { return source }
+        return notes.contains(source) ? notes : notes + "\n" + source
+    }
+
+    private static func bounded(seconds: TimeInterval, work: @escaping @Sendable () async -> String?) async -> String? {
+        await withCheckedContinuation { continuation in
+            let once = Completion(continuation)
+            let task = Task { once.resume(await work()) }
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+                once.resume(nil)
+                task.cancel()
+            }
+        }
+    }
+
+    private final class Completion: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<String?, Never>?
+        init(_ continuation: CheckedContinuation<String?, Never>) { self.continuation = continuation }
+        func resume(_ value: String?) {
+            lock.lock()
+            let pending = continuation
+            continuation = nil
+            lock.unlock()
+            pending?.resume(returning: value)
+        }
+    }
+
+    static let instructions = """
+    Rewrite ONE planner action into a concise, natural title in the user's language. Understand the requested action and its \
+    purpose; do not merely truncate or remove words. Preserve names, objects, numbers, negation, conditions and meaningful \
+    urgency. You may put purpose into the title when it clarifies the action. Do not invent specifics, device capabilities, \
+    diagnoses or promised results. The full original request is retained separately as notes, so avoid repeating a long explanation.
+    Return only the title, no quotes, commentary or scheduling fields. Never create or claim to have created an item.
+    Example: 今天晚上9点的时候提醒我带上Apple Watch，我需要去测量今天晚上的睡眠分数 -> 佩戴Apple Watch记录睡眠.
+    Example: Remind me to bring my passport because I need it at the appointment -> Bring passport to the appointment.
+    Example: 提醒我一定不能再吃饭了 -> 不要再吃饭. Never turn a prohibition into a positive action.
+    Keep explicit user-specified title wording unchanged when they explicitly ask for that exact wording.
+    """
 }

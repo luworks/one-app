@@ -399,6 +399,9 @@ struct CaptureCard: View {
                 return onRename(title)
             }).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
+            if let notes = capture.notes, !notes.isEmpty {
+                Text(notes).font(.callout).foregroundStyle(.secondary).accessibilityIdentifier("capture-notes")
+            }
             if capture.kind == .task, !capture.ringsAsAlarm {
                 if status == .open {
                     if !lists.isEmpty { ListMenu(capture: $capture, lists: lists).font(.subheadline) }

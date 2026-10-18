@@ -11,6 +11,8 @@ final class OneAlarm {
     var hour: Int
     var minute: Int
     var label: String
+    /// Context retained from AI capture; additive default for existing stores.
+    var note: String = ""
     /// Calendar weekdays (1 = Sunday … 7 = Saturday). Empty = rings once, at the next occurrence.
     var weekdays: [Int] = []
     var isOn: Bool = true
@@ -40,6 +42,7 @@ final class OneAlarm {
     /// An unsaved copy with the same settings, to put a deleted alarm back (Undo). It gets its own AlarmKit id.
     func copy() -> OneAlarm {
         let a = OneAlarm(hour: hour, minute: minute, label: label, weekdays: weekdays, snooze: snooze)
+        a.note = note
         a.isOn = isOn
         a.sound = sound
         a.snoozeMinutes = snoozeMinutes
