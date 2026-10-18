@@ -1,0 +1,42 @@
+{
+  "scope": "Source methods and observed XCTest outcomes across baseline plus targeted repairs. This is not a full-suite pass on one final revision.",
+  "source_methods": 270,
+  "observed_methods": 270,
+  "latest_passed": 268,
+  "latest_failed": [],
+  "latest_skipped": [
+    "AlarmTests/testRingAsAlarmFires",
+    "EntryActionsTests/testShakeOffersUndoAfterDelete"
+  ],
+  "unobserved": [],
+  "unexpected": [],
+  "source_inventory_sha256": "ed1a58c5d2695ae25082b92fbc8fbde97a957c87cd47aa25429e3379b83b90af",
+  "runs": [
+    {
+      "revision": "55e73d5",
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-20261018/4261dc27c25bac66b796ad22c5f716d22b4e1a02572d93b70857aed1facf4b05/full-ui.log",
+      "sha256": "2aa5dd2497308dec4beee53f7e1bba715769cb11a2e72bc90ff7bc81732b83d9",
+      "outcomes": 265
+    },
+    {
+      "revision": "00c2b2f",
+      "path": "/Users/yuanlu/code/one-app/tests/results/runs/integrated-core-acceptance-20261018/ui.log",
+      "sha256": "7911d017debcf328c4fef124dd8d3b601dadc16cdc0a8959c9a95ed97497fee0",
+      "outcomes": 10
+    },
+    {
+      "revision": "270d20d",
+      "path": "/Users/yuanlu/code/one-app/tests/results/runs/integrated-readiness-acceptance-20261018/ui.log",
+      "sha256": "2e09af8e5a52c466a0480c61d699670e035d0d0aec61859b14485dca9ec476c6",
+      "outcomes": 18
+    },
+    {
+      "revision": "c9b3973",
+      "path": "/Users/yuanlu/code/one-app/tests/results/runs/week-hit-passthrough-acceptance-20261018/ui.log",
+      "sha256": "feca6abbe2b70372b56805fb8bd48a99c33e73445f797f1577a9870dec761693",
+      "outcomes": 6
+    }
+  ],
+  "method_report": "/Users/yuanlu/code/one-app/tests/results/runs/overnight-coordination/ui-method-coverage-20261018.json",
+  "method_report_sha256": "2ab115b0b463c600a3b525e5623c4811decf3e0397baf562e08632a29792938d"
+}
