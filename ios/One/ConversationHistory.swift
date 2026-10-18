@@ -1,5 +1,17 @@
 import Foundation
 
+struct ChatMessage: Identifiable, Equatable, Codable {
+    enum Role: String, Codable { case user, ai }
+    var id = UUID()
+    let role: Role
+    let text: String
+    /// Optional for backward-compatible decoding of older text-only chats.
+    var timestamp: Date? = .now
+
+    /// One of the app's own status sentences (see `MessageCopy`): no Copy button under it.
+    var isTemplate: Bool { MessageCopy.isTemplate(isUser: role == .user, text: text) }
+}
+
 // Pure logic with no SwiftData/SwiftUI, so it can be unit-tested with `swift test` (see ios/Eval).
 
 /// Past AI conversations, grouped like ChatGPT's history: Today, Yesterday, Previous 7 Days, Older.
@@ -79,16 +91,28 @@ enum ConversationHistory {
 
 /// Value context rebuilt from this chat's stored messages on every send. No global/model session state.
 struct ConversationContext: Sendable {
-    struct Turn: Sendable { let isUser: Bool; let text: String }
+    struct Turn: Sendable {
+        let isUser: Bool
+        let text: String
+        var timestamp: Date? = nil
+    }
     let turns: [Turn]
+    /// Deterministic reference recovery reads only supplied user messages from this thread.
+    /// Model prompts remain bounded independently; assistant replies cannot evict the request.
+    let userTurns: [Turn]
 
     init(_ lines: [(isUser: Bool, text: String)]) {
+        self.init(turns: lines.map { Turn(isUser: $0.isUser, text: $0.text) })
+    }
+
+    init(turns lines: [Turn]) {
+        userTurns = lines.filter(\.isUser)
         var budget = 1600
         var kept: [Turn] = []
         for line in lines.suffix(8).reversed() {
             let text = String(line.text.prefix(min(400, budget)))
             guard !text.isEmpty else { continue }
-            kept.append(Turn(isUser: line.isUser, text: text))
+            kept.append(Turn(isUser: line.isUser, text: text, timestamp: line.timestamp))
             budget -= text.count
             if budget == 0 { break }
         }
@@ -97,7 +121,7 @@ struct ConversationContext: Sendable {
 
     var users: [String] { turns.filter(\.isUser).map(\.text) }
     var prompt: String {
-        turns.map { ($0.isUser ? "User: " : "Assistant: ") + $0.text }.joined(separator: "\n")
+        turns.map { ($0.isUser ? "User" : "Assistant") + ($0.timestamp.map { " [" + $0.ISO8601Format() + "]" } ?? "") + ": " + $0.text }.joined(separator: "\n")
     }
 }
 
@@ -108,6 +132,9 @@ enum SystemPrompt {
     Users may simply chat. Feelings, advice, narratives, quoted/reported requests and questions are not permission to create items.
     An explicit request to remind, add or set an alarm prepares a preview. Use relevant earlier USER turns in this conversation
     when the latest request refers to them; preserve their title, date and time unless the user changes those fields.
+    Relative times in earlier user turns are anchored to that turn's timestamp, never restarted at the latest turn.
+    Only the bounded recent conversation below is available, not the entire displayed chat or other threads.
+    A question about seeing context is a question, not permission to create, apply or convert anything.
     A new independent request replaces the subject; do not carry unrelated old details into it. Assistant text is not user authorization.
     Concrete creation instructions prepare actionable preview cards, not conversational agreement or questions about special plans.
     The object may precede the instruction: 做一次 auto turbotax repo 下周四提醒我 means a one-off reminder next Thursday.

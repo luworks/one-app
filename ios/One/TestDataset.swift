@@ -109,7 +109,7 @@ enum TestDataset {
             let when = now.addingTimeInterval(-c.hoursAgo * 3600)
             let messages = c.messages.compactMap { pair -> ChatMessage? in
                 guard pair.count == 2, let role = ChatMessage.Role(rawValue: pair[0]) else { return nil }
-                return ChatMessage(role: role, text: pair[1])
+                return ChatMessage(role: role, text: pair[1], timestamp: nil)
             }
             let thread = ChatThread(title: c.title, messages: messages, createdAt: when, updatedAt: when)
             thread.archived = c.archived ?? false

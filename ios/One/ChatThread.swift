@@ -42,7 +42,15 @@ final class ChatThread {
     }
 
     var messages: [ChatMessage] {
-        get { (try? JSONDecoder().decode([ChatMessage].self, from: messagesData)) ?? [] }
+        get {
+            var restored = (try? JSONDecoder().decode([ChatMessage].self, from: messagesData)) ?? []
+            // Legacy chats have no per-turn clock. Only the first request has a reliable
+            // thread-creation anchor; never assign the reopening time to older messages.
+            if let first = restored.firstIndex(where: { $0.role == .user }), restored[first].timestamp == nil {
+                restored[first].timestamp = createdAt
+            }
+            return restored
+        }
         set { messagesData = Self.encode(newValue) }
     }
 

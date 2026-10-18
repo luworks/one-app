@@ -457,7 +457,7 @@ enum CaptureParser {
 
     private static func requestBody(_ title: String) -> String? {
         if let body = CaptureLeadIn.strip(title) { return body }
-        let pattern = #"^(?:(?:请|麻烦(?:你)?|帮我)\s*)*提醒(?:我|一下)\s*|^(?:(?:can|could|would|will)\s+(?:you|u)\s+)?(?:please\s+|pls\s+)?remind\s+me\b\s*(?:to\b\s*)?"#
+        let pattern = #"^(?:(?:请|麻烦(?:你)?|帮我)\s*)*提醒(?:我|一下|(?=\s))\s*|^(?:(?:can|could|would|will)\s+(?:you|u)\s+)?(?:please\s+|pls\s+)?remind\s+me\b\s*(?:to\b\s*)?"#
         guard let range = title.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { return nil }
         let body = title[range.upperBound...].trimmingCharacters(in: titleBoundary)
         return body.isEmpty ? nil : body
@@ -680,9 +680,18 @@ enum CaptureParser {
         return action
     }
 
+    static func hasRelativeTime(_ raw: String) -> Bool {
+        var text = raw
+        return takeRelativeMinutes(from: &text) != nil
+    }
+
     /// Minutes from now for "30分钟后", "半小时后", "一个半小时后", "in 2 hours", "in an hour", "in half an hour". Removes the match.
     private static func takeRelativeMinutes(from text: inout String) -> Int? {
         let num = #"\d+|[零一二两三四五六七八九十]{1,3}"#
+        if let m = take(#"(?<![0-9A-Za-z])(\d+)\s*(hours?|hrs?|h|minutes?|mins?|m)\s*(?:以后|之后|后)"#, from: &text),
+           let n = Int(m[0] ?? ""), n <= 525600 {
+            return n * ((m[1] ?? "").lowercased().hasPrefix("h") ? 60 : 1)
+        }
         if let m = take(#"\b(?:set\s+(?:a\s+)?)?timer\s+(?:for\s+)?(\d+)\s*(hours?|hrs?|minutes?|mins?)\b"#, from: &text), let n = Int(m[0] ?? "") {
             return n * ((m[1] ?? "").hasPrefix("h") ? 60 : 1)
         }
@@ -710,7 +719,7 @@ enum CaptureParser {
             #"\b(?:please\s+)?(?:add(?:ing)?|set(?:ting)?|create|make|start)\s+(?:an?\s+|the\s+)?(?:alarm|timer)\b(?:\s+(?:for|to|at|that))?"#,
             #"\b(?:alarm|timer)\s+(?:for|to|at)\b"#, #"\bremind\s+me\s+(?:to|about|of)?\b"#, #"\bwake\s+me(?:\s+up)?\b"#,
             #"\b(?:alarm|timer|after|later|from\s+now)\b"#,
-            #"(?:帮我)?(?:设(?:置)?|定|订|加)(?:一?个)?闹钟"#, "闹钟", "提醒我", "叫醒我", "叫我(?=起床)",
+            #"(?:帮我)?(?:设(?:置)?|定|订|加)(?:一?个)?闹钟"#, "闹钟", #"提醒(?:我|一下|(?=\s))\s*"#, "叫醒我", "叫我(?=起床)",
         ]
         for p in patterns { t = t.replacingOccurrences(of: p, with: " ", options: [.regularExpression, .caseInsensitive]) }
         t = t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)

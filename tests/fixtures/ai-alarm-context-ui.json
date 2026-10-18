@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "about": "IMG6815 full mistaken assistant history. The first user timestamp is ten minutes before fixture load; following stored messages have no known per-turn timestamp.",
+  "lists": [
+    {
+      "name": "Reminders",
+      "color": 0
+    }
+  ],
+  "reminders": [],
+  "events": [],
+  "alarms": [],
+  "chats": [
+    {
+      "title": "Dryer full wrong chat",
+      "hoursAgo": 0.16666666666666666,
+      "messages": [
+        [
+          "user",
+          "提醒 烘干衣服 45min 后 alarm"
+        ],
+        [
+          "ai",
+          "Got it. What else would you like to plan or check?"
+        ],
+        [
+          "user",
+          "make a alarm"
+        ],
+        [
+          "ai",
+          "What time should the alarm ring? Nothing is added until you confirm."
+        ],
+        [
+          "user",
+          "... 你可以看到我上面的 context 吗"
+        ],
+        [
+          "ai",
+          "Got it. Would you like to check anything else or set a new reminder?"
+        ]
+      ]
+    }
+  ]
+}

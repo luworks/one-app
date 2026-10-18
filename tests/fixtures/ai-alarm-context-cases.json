@@ -1,0 +1,54 @@
+[
+  {
+    "name": "IMG6815",
+    "steps": [
+      {
+        "user": "提醒 烘干衣服 45min 后 alarm",
+        "assistant": "Got it. What else would you like to plan or check?",
+        "elapsedMinutes": 0,
+        "route": "capture",
+        "title": "烘干衣服"
+      },
+      {
+        "user": "make a alarm",
+        "assistant": "What time should the alarm ring? Nothing is added until you confirm.",
+        "elapsedMinutes": 5,
+        "route": "capture",
+        "title": "烘干衣服"
+      },
+      {
+        "user": "... 你可以看到我上面的 context 吗",
+        "assistant": "Got it. Would you like to check anything else or set a new reminder?",
+        "elapsedMinutes": 10,
+        "route": "conversation",
+        "title": "烘干衣服"
+      }
+    ]
+  },
+  {
+    "name": "English",
+    "steps": [
+      {
+        "user": "Set an alarm for dry clothes in 45 minutes",
+        "assistant": "Got it. What else would you like to plan or check?",
+        "elapsedMinutes": 0,
+        "route": "capture",
+        "title": "Dry clothes"
+      },
+      {
+        "user": "make an alarm",
+        "assistant": "What time should the alarm ring? Nothing is added until you confirm.",
+        "elapsedMinutes": 5,
+        "route": "capture",
+        "title": "Dry clothes"
+      },
+      {
+        "user": "Can you see the above context?",
+        "assistant": "Got it. Would you like to check anything else or set a new reminder?",
+        "elapsedMinutes": 10,
+        "route": "conversation",
+        "title": "Dry clothes"
+      }
+    ]
+  }
+]

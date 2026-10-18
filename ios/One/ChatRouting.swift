@@ -53,6 +53,7 @@ enum ChatRouting {
 
     static func intent(_ raw: String) -> Intent {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isContextQuestion(text) { return .conversation }
         // A complete leading clock phrase may introduce an explicit imperative.
         let withoutClock = text.replacingOccurrences(of: #"^(?:at\s+)?[0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)\s*(?:today|tonight|tomorrow)?[, ]+"#,
                                                      with: "", options: [.regularExpression, .caseInsensitive])
@@ -85,7 +86,7 @@ enum ChatRouting {
             return .capture
         }
         // Alarm verbs must be the request itself, not words embedded in a question or report.
-        let alarmRequest = has(text, #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#)
+        let alarmRequest = has(text, #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add|make) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#)
         if alarmRequest { return .capture }
         // A leading relative time may precede the imperative. Reuse capture's time grammar and
         // the ordinary request boundary, rather than treating any dated statement as a request.
@@ -99,7 +100,7 @@ enum ChatRouting {
             if has(requestBody(text), #"^[\p{Han}0-9]"#) {
                 let when = chineseTimeToken
                 let direct = #"^(?:(?:请|麻烦|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?"#
-                    + when + #"*(?:的时候)?(?:吧)?[，,]?\s*(?:就)?(?:提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
+                    + when + #"*(?:的时候)?(?:吧)?[，,]?\s*(?:就)?(?:提醒我|提醒一下|提醒(?=\s+\S)|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
                 // A narrative can end in an explicit timed reminder clause. Its earlier words
                 // need not be a command, but the reminder clause itself must start at a boundary.
                 let timedClause = #"(?:^|[，,。；;]|然后)\s*"# + when + #"+(?:的时候)?提醒我"#
@@ -142,6 +143,26 @@ enum ChatRouting {
     static func isAgendaQuestion(_ text: String) -> Bool {
         isQuestion(text) && has(text, #"^(?:(?:what(?:['’]s| is)|anything) left|what(?:['’]s| is) on) today\s*[?？]*$|\b(?:my (?:schedule|agenda|tasks|events|meetings)|what(?:'s| is) (?:on my|next)|free time)\b|(?:今天|今日).*(?:安排|日程|待办|任务|会议)|接下来.*(?:安排|什么)|空闲"#)
             && !has(text, #"activity|活动记录"#)
+    }
+
+    static func isContextQuestion(_ text: String) -> Bool {
+        has(text, #"^[\s.…]*(?:(?:请问)?你\s*)?(?:能|可以|会|是否).*(?:看到|看见|读取|记得|记住).*(?:上面|之前|前面|历史|context|上下文|聊天)|^[\s.…]*(?:can|could|do) you (?:see|read|remember|access).*(?:above|previous|earlier|context|history|conversation)"#)
+    }
+
+    /// Answer from the actual request context, including on the fast unavailable-model path.
+    /// Quoting an earlier USER turn reports visibility; it never authorizes a planner change.
+    static func contextReply(_ text: String, context: ConversationContext) -> String? {
+        guard isContextQuestion(text) else { return nil }
+        let chinese = has(text, #"\p{Han}"#)
+        let subject = context.userTurns.map(\.text).last { !isContextQuestion($0) && !CaptureConversation.referencesAlarm($0)
+            && !CaptureConversation.referencesReminder($0) }
+        let quoted = subject.map { chinese ? "其中你说过：“\($0)”。" : " You said: “\($0)”." } ?? ""
+        if chinese {
+            return "我能读取当前聊天已保存的消息，并从中恢复相关请求。设备上的模型收到的是最近历史的精简内容；我不能读取其他聊天。" + quoted
+                + "这只是回答你的问题，不会添加或更改任何事项；预览仍需要你点 Add 或 Apply。"
+        }
+        return "I can read the saved messages in this chat and recover relevant requests from them. The on-device model receives a shortened recent history. I cannot read other chats."
+            + quoted + " This answer creates or changes nothing. Previews still need your Add or Apply tap."
     }
 
     static func fallbackReply(_ text: String) -> String {
