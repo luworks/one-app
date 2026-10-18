@@ -26,7 +26,7 @@ Reusable commands, source inventory and platform boundaries are in [the coverage
 | [#47](https://github.com/luworks/one-app/issues/47) | A leading relative time hides the imperative from chat routing, so “30分钟后关烤箱” produces no reminder preview | [#48](https://github.com/luworks/one-app/pull/48) | Full UI reproduced missing Add; four route assertions failed before fix, 44 focused routing/dialogue tests passed after fix. Five-sentence capture UI passed on integration |
 | [#49](https://github.com/luworks/one-app/issues/49) | “Anything left today?” and “What's on today?” fail to select the read-only agenda summary | [#50](https://github.com/luworks/one-app/pull/50) | Existing CRUD and MessageCopy UI failed. Initial fix: two agenda-route assertions failed, then 31 focused tests passed. Follow-up `3135fd4`: three on-today route assertions failed, then 32 focused tests passed. UI acceptance pending |
 
-Issue [#53](https://github.com/luworks/one-app/issues/53) adds a real Week alarm interaction regression: the visible Take medicine marker ignores an in-bounds tap in the canonical populated calendar. Full UI, an unchanged representative and a fresh manual device session reproduce it. A native Button attempt failed and was reverted. Runtime UIKit hit testing returned the SwiftUI root host, not the transparent slot UIView. A final task-block frame candidate also failed and was removed. A minimal alarm-only 13:00 fixture still fails; changing only the time to09:30 succeeds, removing tasks does not help, and scrolling does not repair it. A resolved handler breakpoint recorded zero hits for the failed tap. A marker-local fixed-frame candidate is now under targeted acceptance; no fix is claimed yet.
+Issue [#53](https://github.com/luworks/one-app/issues/53) adds a real Week alarm interaction regression: the visible Take medicine marker ignores an in-bounds tap in the canonical populated calendar. Full UI, an unchanged representative and a fresh manual device session reproduce it. A native Button attempt failed and was reverted. Runtime UIKit hit testing returned the SwiftUI root host, not the transparent slot UIView. A final task-block frame candidate also failed and was removed. A minimal alarm-only 13:00 fixture still fails; changing only the time to09:30 succeeds, removing tasks does not help, and scrolling does not repair it. A resolved handler breakpoint recorded zero hits for the failed tap. The marker-local fixed-frame candidate also failed. All three unsuccessful candidates have been removed from delivery source. A separate temporary diagnostic branch isolates layout/menu/slot interactions in one build; no fix is claimed yet.
 
 The Share stack must merge in order: #42, then retarget #45 to main, then retarget #46 to main after #45 merges.
 The AI stack must merge #40, retarget #48 to main and merge it, then retarget #50 to main.
@@ -64,7 +64,7 @@ the label is visibly present in the exact PNG. That finding was withdrawn; no pr
 Infrastructure delivery: #41 merged to remote main at `bc4fcaca5f000c10fd20fc5b521876f3668a58a9`;
 #52 was then retargeted and merged at `bf969dbbaa37cec5a6aca970007c32895e7ceba4`.
 After the frozen run completed, the primary checkout temporarily uses `codex/overnight-ui-validation-20261018` to reuse its incremental build cache. It will return to main at delivery.
-These merges contain QA tooling and documentation. App fixes #40/#42/#43/#44/#45/#46/#48 and fixtures #51 have since passed their relevant acceptance and merged; #50 and root UI repairs remain under acceptance.
+These merges contain QA tooling and documentation. App fixes #40/#42/#43/#44/#45/#46/#48 and fixtures #51 have since passed their relevant acceptance and merged; #50 is now merged, and root UI repairs have passed their changed journeys. Sidebar downstream acceptance and issue53 diagnosis continue.
 
 [PR #51](https://github.com/luworks/one-app/pull/51) replaces temporary UI dataset generators with
 versioned overlap and repeating-reminder files under `tests/fixtures/`. The fixture catalog maps each
@@ -93,7 +93,7 @@ Prepared test repairs retain their original behavior: the search journey creates
 the Health summary test requires its initial sleep content instead of a tautological assertion;
 Journey J5 locates the Today pill by its stable identifier and asserts a numeric reminder count.
 The baseline log exposes `smart.today` as accessibility type `Other`, while J5 searched `Button`.
-These source changes passed syntax parsing only; targeted UI acceptance remains pending.
+These changed journeys have now passed targeted simulator UI acceptance; the full baseline failure record is retained.
 
 The sole full run completed with **265 total, 245 passed, 18 failed, 2 skipped**, and `uiExit=65`.
 Its XCTest duration is 9105.788 seconds. The wrapper exit 0 is not a passing suite result.
@@ -122,7 +122,7 @@ The runtime runner recorded commands, actions, results and artifacts without jou
 Prepared UI repairs retain strict postconditions and address observed frame, type and lazy-list prerequisites;
 the integration build and targeted acceptance are now in progress. No second full suite is planned.
 
-App/Share extension compilation, all three persistent Share journeys, the new AI interruption journey, relative capture and old-store additive upgrade are now accepted. Remaining acceptance covers agenda-driven Sidebar bodies, root readiness repairs and unresolved Week issue53.
+App/Share extension compilation, all three persistent Share journeys, the new AI interruption journey, relative capture and old-store additive upgrade are now accepted. Root changes have passed Activity Clear, both English/Chinese Apply, unique-title search, Health summary Hide, J5 inline reminder add, Rename, Anytime, CRUD chat and MessageCopy. The 18-method readiness batch is still running its seven Sidebar bodies; its canonical Week marker failed while dense overlap passed. No whole-batch green result is claimed. Issue53 remains open separately.
 The runner has now completed an actual six-method simulator batch: boot, incremental build, method results,
 xcresult summary, canonical artifacts, SQLite events and final shutdown were observed. This infrastructure evidence
 is separate from acceptance of the prepared app fixes. A synthetic file store created by baseline55e now contains
