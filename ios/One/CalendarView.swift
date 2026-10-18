@@ -169,6 +169,9 @@ private struct MonthView: View {
     @Query private var tasks: [OneTask]
     @Query private var allAlarms: [OneAlarm]
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
+    // Read so the grid is laid out again when Settings changes them (the layout itself asks `Calendar.app`).
+    @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
+    @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
     /// Months from the current one, the id of each page in the pager.
     @State private var pos: Int? = 0
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 51
@@ -185,7 +188,10 @@ private struct MonthView: View {
         VStack(spacing: 0) {
             weekdayHeader
             Rectangle().fill(Color(.separator)).frame(height: 0.5)
-            pager
+            HStack(spacing: 0) {
+                if showsWeekNumbers { weekNumberColumn }
+                pager
+            }
             DayAgendaList(day: day, events: events, tasks: tasks, alarms: alarms, open: open, edit: edit)
         }
         .onChange(of: day) { _, new in
@@ -201,19 +207,36 @@ private struct MonthView: View {
     }
 
     private var weekdayHeader: some View {
-        let reference = CalendarMath.weekStart(of: .now)
         let letters = CalendarMath.weekdayLetters()
         return HStack(spacing: 0) {
+            if showsWeekNumbers { Color.clear.frame(width: Self.weekNumberWidth, height: 1) }
             ForEach(0..<7, id: \.self) { i in
-                let weekend = cal.date(byAdding: .day, value: i, to: reference).map { cal.isDateInWeekend($0) } ?? false
                 Text(letters[i])
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(weekend ? Color.secondary : Color.primary)
                     .frame(maxWidth: .infinity)
             }
         }
         .padding(.vertical, 4)
         .accessibilityHidden(true)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    static let weekNumberWidth: CGFloat = 26
+
+    /// Settings > Calendar > "Show week numbers": the week of the year at the start of each row of the visible month.
+    private var weekNumberColumn: some View {
+        let weeks = CalendarMath.monthWeeks(of: month(current))
+        return VStack(spacing: 0) {
+            ForEach(weeks.indices, id: \.self) { w in
+                let number = weeks[w].compactMap { $0 }.first.map { CalendarMath.weekNumber(of: $0) }
+                Text(number.map(String.init) ?? "")
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .frame(width: Self.weekNumberWidth, height: rowHeight)
+                    .accessibilityLabel(number.map { "Week \($0)" } ?? "")
+                    .accessibilityIdentifier("calendar.weekNumber")
+            }
+        }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
@@ -254,6 +277,8 @@ private struct MonthPage: View {
     let alarms: [OneAlarm]
     var onTap: (Date) -> Void
     private let cal = Calendar.current
+    @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
+    @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
 
     var body: some View {
         let weeks = CalendarMath.monthWeeks(of: month)
@@ -279,13 +304,12 @@ private struct MonthPage: View {
     private func cell(_ d: Date, _ items: [CalEntry]) -> some View {
         let isToday = cal.isDateInToday(d)
         let isSelected = cal.isDate(d, inSameDayAs: selected)
-        let weekend = cal.isDateInWeekend(d)
-        let past = d < cal.startOfDay(for: .now)
+        let past = dimsPast && d < cal.startOfDay(for: .now)
         // Today is a red circle when selected (red number otherwise); any other selected day is a label-colored circle.
-        // Days that are over are dimmed; weekends get a faint tint behind the cell.
+        // Days that are over are dimmed (Settings > Calendar > "Dim past days"). Weekends look like any other day.
         let fill: Color = isSelected ? (isToday ? .red : Color(.label)) : .clear
         let text: Color = isSelected ? (isToday ? .white : Color(.systemBackground))
-            : (isToday ? .red : (past ? Color(.tertiaryLabel) : (weekend ? Color(.secondaryLabel) : Color(.label))))
+            : (isToday ? .red : (past ? Color(.tertiaryLabel) : Color(.label)))
         return Button { onTap(d) } label: {
             VStack(spacing: 4) {
                 Text("\(cal.component(.day, from: d))")
@@ -300,7 +324,6 @@ private struct MonthPage: View {
             }
             .padding(.top, 4)
             .frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .top)
-            .background(weekend ? DayTint.weekend : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -388,12 +411,13 @@ struct AgendaRow: View {
     let entry: CalEntry
     let day: Date
     @Environment(\.displayScale) private var scale
+    @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
     private let cal = Calendar.current
 
     var body: some View {
         let span = entry.span(on: day)
-        // Events that are over fade, like Apple's.
-        let over = span.allDay ? cal.startOfDay(for: day) < cal.startOfDay(for: .now) : span.end <= .now
+        // Events that are over fade, like Apple's (Settings > Calendar > "Dim past days").
+        let over = dimsPast && (span.allDay ? cal.startOfDay(for: day) < cal.startOfDay(for: .now) : span.end <= .now)
         let titleColor: Color = over ? Color(.secondaryLabel) : Color(.label)
         HStack(alignment: .top, spacing: 12) {
             if entry.isAlarm {
@@ -458,6 +482,7 @@ private struct YearView: View {
     @Query private var tasks: [OneTask]
     @Query private var allAlarms: [OneAlarm]
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
+    @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
     @State private var cache = BusyCache()
     private let cal = Calendar.current
     private let baseYear = Calendar.current.dateInterval(of: .year, for: .now)?.start ?? .now
@@ -559,6 +584,7 @@ private struct MiniMonth: View {
     var counts: [Date: Int] = [:]
     var onTap: () -> Void
     private let cal = Calendar.current
+    @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
 
     private var busyDays: Int {
         CalendarMath.monthWeeks(of: month).flatMap { $0 }.compactMap { $0 }.filter { (counts[$0] ?? 0) > 0 }.count
@@ -627,6 +653,7 @@ private struct WeekView: View {
     @Query private var tasks: [OneTask]
     @Query private var allAlarms: [OneAlarm]
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
+    @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
     @State private var pos: Int? = 0
     /// The hour at the top of the grid, shared by all pages so paging keeps your place.
     @State private var topHour: Int? = 7
@@ -670,6 +697,8 @@ private struct WeekView: View {
             day = cal.date(byAdding: .day, value: shift * dayCount, to: day) ?? day
         }
         .onChange(of: weekTitle, initial: true) { _, new in title = new }
+        // A new first day of the week moves every page: stay on the week that holds the selected day.
+        .onChange(of: firstWeekday) { _, _ in pos = offset(of: day) }
         .onAppear { pos = offset(of: day) }
     }
 
@@ -698,6 +727,9 @@ private struct WeekPage: View {
     @State private var pinchStart: CGFloat?
     private let gutter: CGFloat = 44
     private let cal = Calendar.current
+    @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
+    @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
+    @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
 
     var body: some View {
         let days = (0..<dayCount).compactMap { cal.date(byAdding: .day, value: $0, to: weekStart) }
@@ -718,21 +750,27 @@ private struct WeekPage: View {
     private func header(_ days: [Date]) -> some View {
         let letters = CalendarMath.weekdayLetters()
         return HStack(spacing: 0) {
-            Color.clear.frame(width: gutter, height: 1)
+            // Settings > Calendar > "Show week numbers": "W42" over the hour labels (a 7-day week only).
+            let showsNumber = showsWeekNumbers && dayCount == 7
+            Text(showsNumber ? "W\(CalendarMath.weekNumber(of: weekStart))" : "")
+                .font(.system(size: 10, weight: .medium).monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(width: gutter)
+                .accessibilityLabel("Week \(CalendarMath.weekNumber(of: weekStart))")
+                .accessibilityHidden(!showsNumber)
+                .accessibilityIdentifier("calendar.weekNumber")
             ForEach(Array(days.enumerated()), id: \.offset) { i, d in
                 let isToday = cal.isDateInToday(d)
                 let isSelected = cal.isDate(d, inSameDayAs: selected)
-                let past = d < cal.startOfDay(for: .now)
+                let past = dimsPast && d < cal.startOfDay(for: .now)
                 Button { openDay(d) } label: {
                     VStack(spacing: 2) {
                         Text(dayCount == 7 ? letters[i] : d.formatted(.dateTime.weekday(.abbreviated)))
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(cal.isDateInWeekend(d) ? Color.secondary : Color.primary)
                         Text("\(cal.component(.day, from: d))")
                             .font(.system(size: 17, weight: .medium))
                             .foregroundStyle(isToday ? Color.white : (isSelected ? Color(.systemBackground)
-                                                                      : (past ? Color(.tertiaryLabel)
-                                                                         : (cal.isDateInWeekend(d) ? Color(.secondaryLabel) : Color(.label)))))
+                                                                      : (past ? Color(.tertiaryLabel) : Color(.label))))
                             .frame(width: 29, height: 29)
                             .background(isToday ? Color.red : (isSelected ? Color(.label) : Color.clear), in: Circle())
                     }
@@ -826,13 +864,12 @@ private struct WeekPage: View {
 
                 GeometryReader { geo in
                     let colW = (geo.size.width - gutter - 8) / CGFloat(dayCount)
-                    weekendColumns(days, colW: colW)
                     // Bottom layer: long-press an empty slot to make an event there. Blocks above keep their own taps and menus.
                     pressLayer(days, timed, alarms, colW: colW)
                     ForEach(Array(days.enumerated()), id: \.offset) { index, d in
                         let x = gutter + CGFloat(index) * colW
                         let placed = place(timed, on: d)
-                        let past = d < cal.startOfDay(for: .now)
+                        let past = dimsPast && d < cal.startOfDay(for: .now)
                         ForEach(placed, id: \.entry.id) { p in
                             let w = (colW - 2) / CGFloat(p.count)
                             block(p.entry, colW: colW, lines: p.titleLines)
@@ -1026,19 +1063,6 @@ private struct WeekPage: View {
         }
     }
 
-    /// A very faint tint behind weekend columns.
-    private func weekendColumns(_ days: [Date], colW: CGFloat) -> some View {
-        ForEach(Array(days.enumerated()), id: \.offset) { index, d in
-            if cal.isDateInWeekend(d) {
-                DayTint.weekend
-                    .frame(width: colW)
-                    .offset(x: gutter + CGFloat(index) * colW)
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
     /// Long-press an empty slot: a one-hour placeholder appears there (snapped to 15 minutes) and follows the finger;
     /// releasing opens the new-event editor for that time. Like Apple Calendar's Week and Day views. The same gesture shape
     /// A UIKit long-press (see `SlotPressView`): moving before it is recognized fails it, so scrolling and week paging are
@@ -1193,9 +1217,8 @@ struct DraggableTaskBlock<Content: View>: View {
     }
 }
 
-/// Quiet cues on the Week and Month grids: weekends get a very faint tint, days that are over are dimmed.
+/// Quiet cues on the Week and Month grids: days that are over are dimmed (a Setting). Weekends look like any other day.
 enum DayTint {
-    static let weekend = Color.primary.opacity(0.035)
     /// Opacity of event blocks on days that are over.
     static let past = 0.55
     /// Year heatmap: fill behind a day number for busy levels 1...3 (see `CalendarLayout.busyLevel`).
