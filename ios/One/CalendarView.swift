@@ -674,7 +674,7 @@ private struct WeekView: View {
     }
 
     private var weekTitle: String {
-        weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).formatted(.dateTime.month(.wide).year())
+        weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).formatted(.dateTime.month(.wide))
     }
 }
 
