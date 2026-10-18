@@ -31,6 +31,11 @@ struct Capture: Equatable, Codable {
     /// The time is working time ("work on the report for 2 hours"), so the item is written with a planned time.
     /// Every other clock time on a reminder is when it alerts: it is written as the reminder's due time, alert at 0 min.
     var isWorkBlock: Bool = false
+    /// Verbatim context retained when a concise title separates action from motivation.
+    var notes: String? = nil
+
+    /// An alarm without a chosen time remains a preview, never an ordinary reminder.
+    var isReadyToAdd: Bool { !ringsAsAlarm || hour != nil }
 
     var plannedStart: Date? {
         guard let hour else { return nil }
@@ -310,7 +315,7 @@ enum CaptureParser {
                               repeatRule: repeatRule, durationMinutes: duration,
                               kind: kind(title: finalTitle, hour: hour, duration: rangeDuration, repeatRule: repeatRule))
         capture.isWorkBlock = isWorkTime(raw, hasLength: duration != nil)
-        return capture
+        return CaptureTitleRefinement.fallback(capture, source: raw)
     }
 
     /// True when the sentence is about time to work on something ("work on the report for 2 hours", "专注写方案"), not a
@@ -397,6 +402,36 @@ enum CaptureParser {
         #"\s*提醒我$"#,
     ]
 
+    /// Clean request syntax without rewriting the requested action or its modality.
+    /// Also accepts model titles whose time words have already been removed.
+    static func cleanRequestTitle(_ title: String) -> String {
+        var text = title
+        while true {
+            let previous = text
+            text = text.trimmingCharacters(in: titleBoundary)
+            text = stripTemporalConnector(text)
+            if let body = requestBody(text) { text = body }
+            if text == previous { return text }
+        }
+    }
+
+    private static let titleBoundary = CharacterSet.whitespacesAndNewlines
+        .union(CharacterSet(charactersIn: ",，。.、:：;；!！?？~"))
+
+    private static func stripTemporalConnector(_ title: String) -> String {
+        // A removed clock time can leave "的时候提醒我…" at the start. Do not remove
+        // a condition inside the action ("下雨的时候带伞") or "时候到了检查烤箱".
+        title.replacingOccurrences(of: #"^的时候(?:吧)?[，,\s]*(?:就\s*(?=提醒))?"#, with: "", options: .regularExpression)
+    }
+
+    private static func requestBody(_ title: String) -> String? {
+        if let body = CaptureLeadIn.strip(title) { return body }
+        let pattern = #"^(?:(?:请|麻烦(?:你)?|帮我)\s*)*提醒(?:我|一下)\s*|^(?:(?:can|could|would|will)\s+(?:you|u)\s+)?(?:please\s+|pls\s+)?remind\s+me\b\s*(?:to\b\s*)?"#
+        guard let range = title.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { return nil }
+        let body = title[range.upperBound...].trimmingCharacters(in: titleBoundary)
+        return body.isEmpty ? nil : body
+    }
+
     /// What is left of a line once date, time and repeat words are gone: no filler words, no deadline leftovers, no emoji.
     private static func cleanTitle(_ title: String, raw: String) -> String {
         var t = String(title.unicodeScalars.filter { !($0.properties.isEmojiPresentation || $0.value == 0xFE0F || $0.value == 0x200D) })
@@ -414,8 +449,10 @@ enum CaptureParser {
         var hadLeadIn = false
         while changed {
             changed = false
-            t = t.trimmingCharacters(in: CharacterSet(charactersIn: " ,，。.、!！?？~"))
-            if !hadLeadIn, let rest = CaptureLeadIn.strip(t) {
+            t = t.trimmingCharacters(in: titleBoundary)
+            let withoutConnector = stripTemporalConnector(t)
+            if withoutConnector != t { t = withoutConnector; changed = true }
+            if !hadLeadIn, let rest = requestBody(t) {
                 t = rest
                 hadLeadIn = true
                 changed = true
@@ -445,7 +482,7 @@ enum CaptureParser {
             let trimmed = trimConnectors(t)
             if trimmed != t { t = trimmed; changed = true }
         }
-        return t.trimmingCharacters(in: CharacterSet(charactersIn: " ,，。.、!！?？~"))
+        return t.trimmingCharacters(in: titleBoundary)
     }
 
     /// Connector words that a removed date or time leaves dangling: "…车库去，然后 的时候提醒我…" (the time sat between them),
@@ -747,7 +784,7 @@ enum CaptureDraftMapper {
     /// durations and repeat names are dropped instead of guessed.
     static func capture(from draft: CaptureDraft, now: Date = .now, calendar: Calendar = .current) -> Capture? {
         // The model sometimes keeps the instruction ("增加一个 reminder 吧：…"); the title is what comes after it.
-        let title = CaptureLeadIn.stripped(draft.title.trimmingCharacters(in: .whitespacesAndNewlines))
+        let title = CaptureParser.cleanRequestTitle(draft.title)
         guard !title.isEmpty else { return nil }
 
         let today = calendar.startOfDay(for: now)
@@ -875,7 +912,11 @@ enum CaptureDraftMapper {
         - Return one item per separate thing the user mentions, in the order mentioned, at most 5.
         - kind is "event" for something at a fixed time with other people or a place (meeting, appointment, lunch, flight, class) \
         or with a start and end time; otherwise "task" (things to do, buy, send, call, pay).
-        - title is short, without the date, time or repeat words. Keep the user's language.
+        - title is concise and faithful to the requested action, in the user's language. Remove scheduling date/time/repeat words, \
+        their dangling connectors (such as 的时候), request phrases (such as 提醒我 / remind me to), and boundary punctuation. \
+        Preserve meaningful conditions, negation and modality (必须要 / 一定要 / must / must not); do not reduce the action to one word.
+        - Example: 今天晚上11点的时候提醒我，必须要睡觉 -> title 必须要睡觉, time 23:00, date today. \
+        下雨的时候带伞 keeps 下雨的时候; remind me to never skip medication keeps never skip medication.
         - date is yyyy-MM-dd. A bare weekday ("Friday") is its next occurrence after today. "next <weekday>" is that weekday in the \
         following week, marked (next week) in the table. For dates beyond the table use the year of today, or next year if the date has passed. \
         Leave date empty when the text names no day.
@@ -885,4 +926,93 @@ enum CaptureDraftMapper {
         - allDay is true only for an event on a whole day (birthday, holiday, trip day) with no time.
         """
     }
+}
+
+
+/// Title-only content refinement. The model has no scheduling fields to generate or mutate.
+/// The injected generator is the production path as well as the host-test seam.
+enum CaptureTitleRefinement {
+    static func fallback(_ capture: Capture, source: String) -> Capture {
+        var result = capture
+        let title = CaptureParser.cleanRequestTitle(capture.title)
+        let motive = #"[，,。;；]\s*(?:因为|我需要|我想|这样|以便|(?i:because\b|so that\b|I need to\b|I want to\b|I am allergic\b))"#
+        if let range = title.range(of: motive, options: .regularExpression) {
+            let action = String(title[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !action.isEmpty {
+                result.title = action
+                result.notes = retainedNotes(capture.notes, source: source)
+            }
+        } else { result.title = title }
+        result.title = result.title.replacingOccurrences(of: #"^not to\s+"#, with: "Do not ", options: [.regularExpression, .caseInsensitive])
+        // A narrow offline normalization for an explicit watch + sleep purpose, not a general semantic model.
+        // We describe the requested action, never promise a score or a device capability.
+        if source.localizedCaseInsensitiveContains("Apple Watch"),
+           source.range(of: "(?:测量|记录|监测|追踪).{0,12}睡眠", options: .regularExpression) != nil,
+           source.range(of: "不|别|禁止|关闭|停止", options: .regularExpression) == nil,
+           result.title.range(of: #"^(?:带上|戴上|佩戴)\s*Apple\s*Watch$"#, options: [.regularExpression, .caseInsensitive]) != nil {
+            result.title = "佩戴Apple Watch记录睡眠"
+            result.notes = retainedNotes(capture.notes, source: source)
+        }
+        return result
+    }
+
+    static func refine(_ capture: Capture, source: String, history: String = "", available: Bool,
+                       timeout: TimeInterval = 4,
+                       generate: @escaping @Sendable (String) async -> String?) async -> Capture {
+        let backup = fallback(capture, source: source)
+        guard available else { return backup }
+        let prompt = "Current request: " + source + "\nExisting action: " + backup.title
+            + "\nRelevant user context: " + String(history.suffix(1600))
+        guard let generated = await bounded(seconds: timeout, work: { await generate(prompt) }) else { return backup }
+        let title = CaptureParser.cleanRequestTitle(generated)
+        guard !title.isEmpty else { return backup }
+        var result = backup
+        result.title = title
+        result.fromAppleIntelligence = true
+        // Keep all original facts, motivation, numbers and modality even when the model paraphrases the action.
+        result.notes = retainedNotes(backup.notes, source: source)
+        return result
+    }
+
+    private static func retainedNotes(_ notes: String?, source: String) -> String {
+        guard let notes, !notes.isEmpty, notes != source else { return source }
+        return notes.contains(source) ? notes : notes + "\n" + source
+    }
+
+    private static func bounded(seconds: TimeInterval, work: @escaping @Sendable () async -> String?) async -> String? {
+        await withCheckedContinuation { continuation in
+            let once = Completion(continuation)
+            let task = Task { once.resume(await work()) }
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+                once.resume(nil)
+                task.cancel()
+            }
+        }
+    }
+
+    private final class Completion: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<String?, Never>?
+        init(_ continuation: CheckedContinuation<String?, Never>) { self.continuation = continuation }
+        func resume(_ value: String?) {
+            lock.lock()
+            let pending = continuation
+            continuation = nil
+            lock.unlock()
+            pending?.resume(returning: value)
+        }
+    }
+
+    static let instructions = """
+    Rewrite ONE planner action into a concise, natural title in the user's language. Understand the requested action and its \
+    purpose; do not merely truncate or remove words. Preserve names, objects, numbers, negation, conditions and meaningful \
+    urgency. You may put purpose into the title when it clarifies the action. Do not invent specifics, device capabilities, \
+    diagnoses or promised results. The full original request is retained separately as notes, so avoid repeating a long explanation.
+    Return only the title, no quotes, commentary or scheduling fields. Never create or claim to have created an item.
+    Example: 今天晚上9点的时候提醒我带上Apple Watch，我需要去测量今天晚上的睡眠分数 -> 佩戴Apple Watch记录睡眠.
+    Example: Remind me to bring my passport because I need it at the appointment -> Bring passport to the appointment.
+    Example: 提醒我一定不能再吃饭了 -> 不要再吃饭. Never turn a prohibition into a positive action.
+    Keep explicit user-specified title wording unchanged when they explicitly ask for that exact wording.
+    """
 }

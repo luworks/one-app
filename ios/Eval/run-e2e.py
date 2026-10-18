@@ -58,6 +58,9 @@ def parser():
     p.add_argument("--device-type", default="com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max")
     p.add_argument("--runtime", default="com.apple.CoreSimulator.SimRuntime.iOS-27-0")
     p.add_argument("--derived-data", type=Path, help="incremental cache; default ios/.build/<simulator-name>")
+    p.add_argument("--test-products", type=Path, help="lane-owned relocated .xctestrun; test without compiling")
+    p.add_argument("--appearance", choices=["light", "dark"], help="simulator system appearance")
+    p.add_argument("--content-size", help="simctl ui content_size category, e.g. extra-extra-extra-large")
     p.add_argument("--output", type=Path, help="new evidence directory; must not exist")
     return p
 
@@ -78,9 +81,11 @@ def selectors(args, source):
     return list(dict.fromkeys(result))
 
 
-def ui_command(selected, simulator, derived, output):
+def ui_command(selected, simulator, derived, output, test_products=None):
     # Preserve project signing, including simulated App Group entitlements for Share.
-    return ["xcodebuild", "test", "-jobs", "2", "-project", "One.xcodeproj", "-scheme", "One",
+    target = (["test-without-building", "-xctestrun", str(test_products)] if test_products else
+              ["test", "-project", "One.xcodeproj", "-scheme", "One"])
+    return ["xcodebuild", *target, "-jobs", "2",
             "-destination", f"platform=iOS Simulator,id={simulator}",
             "-derivedDataPath", str(derived), "-resultBundlePath", str(output / "ui.xcresult"),
             "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
@@ -195,7 +200,7 @@ def capture(command):
 def select_simulator(args, journal=None):
     read = (lambda command: journal.action(command, capture)) if journal else capture
     devices = json.loads(read(["xcrun", "simctl", "list", "devices", "available", "--json"]))
-    all_devices = [d for group in devices["devices"].values() for d in group]
+    all_devices = [dict(d, runtime=runtime) for runtime, group in devices["devices"].items() for d in group]
     if args.simulator_id:
         matches = [d for d in all_devices if d["udid"].lower() == args.simulator_id.lower()]
         if len(matches) != 1 or matches[0]["name"] != args.simulator_name:
@@ -205,6 +210,9 @@ def select_simulator(args, journal=None):
     if len(matches) > 1:
         raise ValueError("Multiple simulators have this name; select the owned one with --simulator-id")
     if matches:
+        actual = matches[0]
+        if actual.get("deviceTypeIdentifier") != args.device_type or actual["runtime"] != args.runtime:
+            raise ValueError("Owned simulator model/runtime differs from requested configuration")
         if matches[0]["state"] != "Shutdown":
             raise ValueError("Owned simulator is already active; wait for its runner and shut it down first")
         return matches[0]["udid"]
@@ -227,7 +235,7 @@ def main(argv=None):
     derived = (args.derived_data or IOS / ".build" / args.simulator_name).resolve()
     output = (args.output or results_root() / "runs" /
               ("today-qa-" + datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])).resolve()
-    planned = [ui_command(selected, args.simulator_id or "<owned-simulator-udid>", derived, output)]
+    planned = [ui_command(selected, args.simulator_id or "<owned-simulator-udid>", derived, output, args.test_products)]
     if args.logic:
         planned.insert(0, ["swift", "test", "--jobs", "2"])
     if args.dry_run:
@@ -274,9 +282,18 @@ def main(argv=None):
         journal.record("qa.ui.operation", "Select owned simulator " + args.simulator_name, status="started")
         simulator = select_simulator(args, journal)
         summary["simulator_id"] = simulator
+        summary["device_type"] = args.device_type
+        summary["runtime"] = args.runtime
         journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)
         journal.action(["xcrun", "simctl", "bootstatus", simulator, "-b"], subprocess.run, check=True)
-        command = ui_command(selected, simulator, derived, output)
+        if args.test_products:
+            summary["test_products"] = str(args.test_products.resolve())
+            summary["test_products_sha256"] = hashlib.sha256(args.test_products.read_bytes()).hexdigest()
+        for setting, value in (("appearance", args.appearance), ("content_size", args.content_size)):
+            if value:
+                journal.action(["xcrun", "simctl", "ui", simulator, setting, value], subprocess.run, check=True)
+        summary["display_settings"] = {"appearance": args.appearance, "content_size": args.content_size}
+        command = ui_command(selected, simulator, derived, output, args.test_products)
         summary["commands"].append(command)
         summary["attempts"]["ui"] = []
         code = run_logged(command, output / "ui.log", output / "progress.jsonl", summary["attempts"]["ui"], journal)

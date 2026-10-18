@@ -93,6 +93,16 @@ class RunnerContracts(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     e2e.select_simulator(args)
 
+    def test_same_name_wrong_model_or_runtime_is_rejected(self):
+        args = e2e.parser().parse_args(["--full"])
+        for runtime, device_type in ((args.runtime, "another-model"), ("another-runtime", args.device_type)):
+            with self.subTest(runtime=runtime, device_type=device_type), patch.object(e2e, "capture", return_value=json.dumps({
+                "devices": {runtime: [{"name": args.simulator_name, "udid": "owned-id", "state": "Shutdown",
+                                       "deviceTypeIdentifier": device_type}]}
+            })):
+                with self.assertRaisesRegex(ValueError, "model/runtime"):
+                    e2e.select_simulator(args)
+
     def test_observation_modes_never_open_database(self):
         with patch.object(e2e, "Journal", side_effect=AssertionError("database opened")), \
              patch.object(e2e.subprocess, "check_output", side_effect=AssertionError("process")), \

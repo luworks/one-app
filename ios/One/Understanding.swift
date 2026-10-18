@@ -167,7 +167,7 @@ enum Understanding {
 
     /// Model output → preview. Pure and testable. Nil means "didn't understand", so the caller falls back.
     static func capture(from action: ParsedAction, now: Date, calendar: Calendar) -> Capture? {
-        let title = action.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = CaptureParser.cleanRequestTitle(action.title)
         guard action.kind != .other, !title.isEmpty else { return nil }
 
         let today = calendar.startOfDay(for: now)
@@ -360,7 +360,7 @@ enum Understanding {
 
     /// Variant B: the model's kind and title; day / time / duration come from running the parser on the model's date words.
     static func combine(when a: WhenAction, now: Date, calendar: Calendar) -> Capture? {
-        let title = a.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = CaptureParser.cleanRequestTitle(a.title)
         guard !title.isEmpty else { return nil }
         let p = CaptureParser.parse(a.when ?? "", now: now, calendar: calendar)
         var c = Capture(title: title, day: p.day, hasDay: p.hasDay, hour: p.hour, minute: p.minute,
