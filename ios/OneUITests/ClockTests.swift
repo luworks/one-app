@@ -1,6 +1,6 @@
 import XCTest
 
-/// Clock's sections inside the Alarms tab: the switcher, World Clock (add / delete a city) and the Stopwatch.
+/// Clock's sections inside the Clock tab: the switcher, World Clock (add / delete a city) and the Stopwatch.
 /// Set TEST_RUNNER_CLOCK_SHOTS=<folder> to save light and dark screenshots of each section (`testScreenshots`).
 final class ClockTests: XCTestCase {
     var app: XCUIApplication!
@@ -13,7 +13,7 @@ final class ClockTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-uiTesting"] + extra
         app.launch()
-        let alarms = app.buttons["Alarms"].firstMatch
+        let alarms = app.buttons["Clock"].firstMatch
         XCTAssertTrue(alarms.waitForExistence(timeout: 5))
         alarms.tap()
     }
@@ -51,7 +51,7 @@ final class ClockTests: XCTestCase {
         // The section is kept when you leave the tab and come back.
         app.buttons["Today"].firstMatch.tap()
         XCTAssertTrue(plus.waitForExistence(timeout: 3), "+ is back on other tabs")
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         XCTAssertTrue(section("timer").waitForExistence(timeout: 3))
         XCTAssertTrue(section("timer").isSelected, "back on Timer")
         XCTAssertFalse(plus.exists)
@@ -185,7 +185,7 @@ final class ClockTests: XCTestCase {
 
         // Keeps running on another tab.
         app.buttons["Today"].firstMatch.tap()
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         XCTAssertTrue(startStop.waitForExistence(timeout: 3))
         XCTAssertEqual(startStop.label, "Stop", "still running after switching tabs")
 

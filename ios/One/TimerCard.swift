@@ -1,7 +1,7 @@
 import SwiftUI
 import AppIntents
 
-/// "Focus timer" card at the top of the Alarms tab: a restrained Pomodoro on a kitchen-timer dial (turn right to add,
+/// "Focus timer" card at the top of the Clock tab: a restrained Pomodoro on a kitchen-timer dial (turn right to add,
 /// left to take away), chips Focus 25 / Short break 5 / Long break 15 and Start; while running, the time left with
 /// Pause/Resume and Cancel. Today's finished Focus rounds show as dots; after a countdown ends the card offers one
 /// next step (a break, or Focus again) and a quiet "Done for now". Logic: Pomodoro.swift.

@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 enum HomeTab: String, CaseIterable, Identifiable {
-    case today, calendar, tasks, alarms
+    case today, calendar, tasks, clock
 
     var id: Self { self }
 
@@ -11,7 +11,7 @@ enum HomeTab: String, CaseIterable, Identifiable {
         case .today: "Today"
         case .calendar: "Calendar"
         case .tasks: "Reminders"
-        case .alarms: "Alarms"
+        case .clock: "Clock"
         }
     }
 
@@ -20,7 +20,7 @@ enum HomeTab: String, CaseIterable, Identifiable {
         case .today: "sun.max"
         case .calendar: "calendar"
         case .tasks: "checklist"
-        case .alarms: "alarm"
+        case .clock: "clock"
         }
     }
 }
@@ -40,14 +40,15 @@ struct HomeView: View {
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
     // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
     @State private var calendarMode: CalendarView.Mode = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey) ?? .week
-    /// Alarms · World Clock · Stopwatch · Timer inside the Alarms tab.
+    /// Alarms · World Clock · Stopwatch · Timer inside the Clock tab.
     @State private var clockSection: ClockSection = Self.restored(ClockSection.self, key: Self.clockSectionKey) ?? .alarms
     @State private var addingCity = false
     // The tab and the Calendar view also survive a restart (not in UI tests, which always start the same way).
     private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode", clockSectionKey = "today.last.clockSection"
     private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
         guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
-        return UserDefaults.standard.string(forKey: key).flatMap(T.init(rawValue:))
+        // A tab saved under an old name (`alarms`, now `clock`) still opens on the same tab.
+        return UserDefaults.standard.string(forKey: key).map { key == tabKey ? TabMemory.migrated($0) : $0 }.flatMap(T.init(rawValue:))
     }
     @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
@@ -218,7 +219,7 @@ struct HomeView: View {
                 case .today:
                     DayAgenda(day: $todayDay, showsWeekStrip: false) {
                         clockSection = .timer
-                        withAnimation(.snappy) { tab = .alarms }
+                        withAnimation(.snappy) { tab = .clock }
                     }
                 case .calendar:
                     CalendarView(day: $calendarDay, mode: $calendarMode) { picked in
@@ -226,7 +227,7 @@ struct HomeView: View {
                         withAnimation(.snappy) { tab = .today }
                     }
                 case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath)
-                case .alarms: AlarmsView(section: $clockSection)
+                case .clock: AlarmsView(section: $clockSection)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -465,16 +466,16 @@ struct HomeView: View {
     private var smartNewItem: NewItem {
         switch tab {
         case .calendar: .event
-        case .alarms: .alarm
+        case .clock: .alarm
         case .today, .tasks: .task
         }
     }
 
     /// On World Clock, + adds a city.
-    private var plusAddsCity: Bool { tab == .alarms && clockSection == .worldClock }
+    private var plusAddsCity: Bool { tab == .clock && clockSection == .worldClock }
 
     /// Stopwatch and Timer have nothing to add: no + there, like Clock.
-    private var showsPlus: Bool { !(tab == .alarms && (clockSection == .stopwatch || clockSection == .timer)) }
+    private var showsPlus: Bool { !(tab == .clock && (clockSection == .stopwatch || clockSection == .timer)) }
 
     private var bottomButtons: some View {
         HStack(spacing: 10) {
@@ -491,7 +492,7 @@ struct HomeView: View {
                 .glassCapsule()
             }
             .buttonStyle(PressScale())
-            // +: tap adds what fits the page you are on (alarm on Alarms, a city on World Clock, event on Calendar,
+            // +: tap adds what fits the page you are on (alarm on the Clock tab, a city on World Clock, event on Calendar,
             // otherwise a reminder); press and hold to pick.
             if showsPlus { plusButton }
         }

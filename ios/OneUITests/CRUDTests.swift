@@ -466,9 +466,9 @@ final class CRUDTests: XCTestCase {
         app.switches.matching(NSPredicate(format: "identifier == 'alarm.toggle' AND label CONTAINS %@", label)).firstMatch
     }
 
-    /// + on Alarms > Save; edit time and label; switch off and on; swipe to delete, Undo; Delete Alarm in the editor.
+    /// + on the Alarms section > Save; edit time and label; switch off and on; swipe to delete, Undo; Delete Alarm in the editor.
     func testAlarmCreateEditToggleDelete() {
-        openTab("Alarms")
+        openTab("Clock")
         XCTAssertTrue(alarmRow("Wake up").waitForExistence(timeout: 5), "the dataset's alarms")
         XCTAssertEqual(alarmRows.count, 4)
 
@@ -523,7 +523,7 @@ final class CRUDTests: XCTestCase {
 
     /// Switching off a dataset alarm that is on, and on one that is off.
     func testAlarmTogglesFromDataset() {
-        openTab("Alarms")
+        openTab("Clock")
         let run = alarmSwitch("Weekend run")
         XCTAssertTrue(run.waitForExistence(timeout: 5))
         XCTAssertEqual(run.value as? String, "0", "Weekend run starts off")
@@ -535,7 +535,7 @@ final class CRUDTests: XCTestCase {
         XCTAssertTrue(wait(wake, "value == '0'"))
         // Leaving the tab and coming back keeps both.
         openTab("Today")
-        openTab("Alarms")
+        openTab("Clock")
         XCTAssertTrue(wait(alarmSwitch("Weekend run"), "value == '1'"))
         XCTAssertTrue(wait(alarmSwitch("Wake up"), "value == '0'"))
     }

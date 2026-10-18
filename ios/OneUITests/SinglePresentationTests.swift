@@ -84,7 +84,7 @@ final class SinglePresentationTests: XCTestCase {
 
     /// The alarm editor is Clock's sheet: its title is text, not a navigation bar.
     func testTappingAnAlarmOpensOneEditor() {
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         let row = app.buttons.matching(identifier: "alarm.row").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()

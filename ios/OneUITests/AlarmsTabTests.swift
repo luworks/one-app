@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Alarms tab as a copy of Clock's Alarms tab: add, edit (time, repeat, label), switch, delete.
+/// The Alarms section of the Clock tab, a copy of Clock's Alarms tab: add, edit (time, repeat, label), switch, delete.
 /// Run against a fresh in-memory store (no alarms to start with). The simulator denies AlarmKit,
 /// so these check the list and the editor, not the ringing.
 final class AlarmsTabTests: XCTestCase {
@@ -11,7 +11,7 @@ final class AlarmsTabTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = ["-uiTesting"]
         app.launch()
-        let alarms = app.buttons["Alarms"].firstMatch
+        let alarms = app.buttons["Clock"].firstMatch
         XCTAssertTrue(alarms.waitForExistence(timeout: 5))
         alarms.tap()
         XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5), "the app-wide + is there to add an alarm")
@@ -182,7 +182,7 @@ final class AlarmDefaultTimeTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-uiTestingNow", "10:56"]
         app.launch()
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
         app.buttons["New"].tap()
         XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
