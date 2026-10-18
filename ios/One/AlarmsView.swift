@@ -9,7 +9,7 @@ import UserNotifications
 /// you marked "Ring as alarm" follow in their own section. Reminders and event alerts live in Apple Reminders / Calendar.
 /// Like Clock, the tab has four sections (Alarms · World Clock · Stopwatch · Timer), picked from a quiet switcher under
 /// the top bar. The section lives in `HomeView`, so leaving the tab and coming back finds the same one.
-/// The Pomodoro focus-timer card (`TimerCard`, a kitchen-timer dial) is the Timer section: one AlarmKit countdown at a time.
+/// The Timer section (`TimerSection`) is a copy of Apple's Timers screen: wheel picker, Recents, running timers (AlarmKit countdowns).
 struct AlarmsView: View {
     @Binding var section: ClockSection
     @Environment(\.scenePhase) private var scenePhase
@@ -35,12 +35,7 @@ struct AlarmsView: View {
                 case .alarms: alarmsList
                 case .worldClock: WorldClockView()
                 case .stopwatch: StopwatchView()
-                case .timer:
-                    ScrollView {
-                        TimerSection()
-                            .padding(.horizontal, 20)
-                            .padding(.top, 8)
-                    }
+                case .timer: TimerSection()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

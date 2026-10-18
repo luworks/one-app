@@ -1,304 +1,131 @@
 import SwiftUI
-import AppIntents
 
-/// "Focus timer" card at the top of the Clock tab: a restrained Pomodoro on a kitchen-timer dial (turn right to add,
-/// left to take away), chips Focus 25 / Short break 5 / Long break 15 and Start; while running, the time left with
-/// Pause/Resume and Cancel. Today's finished Focus rounds show as dots; after a countdown ends the card offers one
-/// next step (a break, or Focus again) and a quiet "Done for now". Logic: Pomodoro.swift.
-struct TimerCard: View {
-    @Environment(\.openURL) private var openURL
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var controller = TimerController.shared
-    @State private var seconds = PomodoroPhase.focus.seconds
-    /// The chip picked last; a custom dial value counts as Focus (`Pomodoro.phase`).
-    @State private var chosen: PomodoroPhase? = .focus
+/// The look of Apple's Timers screen, measured from its screenshots (440 pt wide): a dark-green round play button with a
+/// light-green triangle, a gray round X, light gray numerals. All adaptive: the same colors read as Clock's light look
+/// in light mode (a soft green circle and iOS green triangle).
+enum TimerLook {
+    static let playFill = adaptive(dark: (18, 41, 20), light: (214, 240, 218))
+    static let playGlyph = adaptive(dark: (103, 206, 103), light: (52, 199, 89))
 
-    private var phase: PomodoroPhase { Pomodoro.phase(seconds: seconds, chosen: chosen) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Focus timer")
-                    .font(.title3.weight(.bold))
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
-                roundDots
-            }
-            // Dial beside the controls; stacked when that does not fit (a narrow phone or a large text size).
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 20) { dialAndControls }
-                VStack(spacing: 16) { dialAndControls }
-            }
-            if let message = controller.message {
-                HStack(spacing: 8) {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("timer.message")
-                    if Ringer.isDenied {
-                        Button("Open Settings") {
-                            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
-                        }
-                        .font(.footnote.weight(.semibold))
-                    }
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .onAppear {
-            controller.refresh()
-            preset(for: controller.log.nextStep)
-        }
-        .onChange(of: AlarmCenter.shared.states) { controller.refresh() }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { controller.refresh() } }
-        .onChange(of: controller.log.nextStep) { _, next in preset(for: next) }
-        .onChange(of: seconds) { _, value in
-            // Turning the dial away from the offered step means the user wants something else: show the chips.
-            if let next = controller.log.nextStep, value != next.seconds { controller.dismissNextStep() }
-        }
-    }
-
-    /// Puts the offered next step on the dial, so it shows what the primary button will start. Also while the
-    /// finished countdown is still ringing (the dial is hidden then), so after Stop the dial already matches.
-    private func preset(for next: PomodoroPhase?) {
-        guard let next else { return }
-        chosen = next
-        seconds = next.seconds
-    }
-
-    /// Today's finished Focus rounds, ●●●○ in groups of 4.
-    private var roundDots: some View {
-        let rounds = controller.log.rounds
-        return Text(Pomodoro.dots(rounds).joined(separator: " "))
-            .font(.footnote)
-            .tracking(1.5)
-            .foregroundStyle(rounds > 0 ? Color.orange : Color(.tertiaryLabel))
-            .accessibilityLabel(Pomodoro.spokenRounds(rounds))
-            .accessibilityIdentifier("pomodoro.rounds")
-    }
-
-    private func nextStepControls(_ next: PomodoroPhase) -> some View {
-        VStack(spacing: 10) {
-            Button {
-                Task { await controller.start(seconds: next.seconds, phase: next) }
-            } label: {
-                Text(Pomodoro.nextTitle(next))
-                    .font(.body.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .tint(.orange)
-            .accessibilityIdentifier("pomodoro.next")
-            Button("Done for now") { controller.dismissNextStep() }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .buttonStyle(.plain)
-                .padding(.vertical, 6)
-                .accessibilityIdentifier("pomodoro.done")
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder private var dialAndControls: some View {
-        if let running = controller.running {
-            RunningDial(timer: running, isRinging: controller.isRinging)
-            runningControls(running)
-        } else if let next = controller.log.nextStep {
-            TimerDialView(seconds: $seconds)
-            nextStepControls(next)
-        } else {
-            TimerDialView(seconds: $seconds)
-            setControls
-        }
-    }
-
-    private var setControls: some View {
-        VStack(spacing: 8) {
-            ForEach(Pomodoro.chips, id: \.self) { chip($0) }
-            Button {
-                Task { await controller.start(seconds: seconds, phase: phase) }
-            } label: {
-                Text("Start").font(.body.weight(.semibold)).frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .tint(.orange)
-            .disabled(seconds == 0)
-            .accessibilityIdentifier("timer.start")
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func chip(_ chip: PomodoroPhase) -> some View {
-        let selected = seconds == chip.seconds && phase == chip
-        return Button {
-            chosen = chip
-            seconds = chip.seconds
-            controller.message = nil
-        } label: {
-            Text(chip.chipLabel)
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
-                .fixedSize()
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
-        // Unselected chips use the primary color: a gray tint put gray text on a gray fill.
-        .tint(selected ? .orange : .primary)
-        .accessibilityLabel("\(chip.chipLabel) minutes")
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("timer.chip.\(chip.minutes)")
-    }
-
-    private func runningControls(_ timer: RunningTimer) -> some View {
-        VStack(spacing: 10) {
-            if controller.isRinging {
-                Button { controller.cancel() } label: {
-                    Text("Stop").font(.body.weight(.semibold)).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .accessibilityIdentifier("timer.stop")
-            } else {
-                Button { timer.isPaused ? controller.resume() : controller.pause() } label: {
-                    Text(timer.isPaused ? "Resume" : "Pause").font(.body.weight(.semibold)).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .accessibilityIdentifier("timer.pause")
-                Button(role: .cancel) { controller.cancel() } label: {
-                    Text("Cancel").font(.body.weight(.semibold)).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("timer.cancel")
-            }
-        }
-        .buttonBorderShape(.capsule)
-        .frame(maxWidth: .infinity)
+    private static func adaptive(dark: (Int, Int, Int), light: (Int, Int, Int)) -> Color {
+        func ui(_ c: (Int, Int, Int)) -> UIColor { UIColor(red: CGFloat(c.0) / 255, green: CGFloat(c.1) / 255, blue: CGFloat(c.2) / 255, alpha: 1) }
+        return Color(UIColor { $0.userInterfaceStyle == .dark ? ui(dark) : ui(light) })
     }
 }
 
-/// The rotary dial: big MM:SS in the middle, a knob dot on the rim. One full turn is 5 minutes.
-struct TimerDialView: View {
-    @Binding var seconds: Int
-    /// The continuous value under the finger (between steps); equal to `seconds` when not turning.
-    @State private var raw: Double = 0
-    @State private var lastAngle: Double?
+/// A round button: a filled circle with one symbol. Green play (start / resume), orange pause, gray X (cancel).
+struct TimerRoundButton: View {
+    enum Kind { case play, pause, cancel }
 
-    static let size: CGFloat = 156
+    let kind: Kind
+    var size: CGFloat = 72
+    let action: () -> Void
 
     var body: some View {
-        ZStack {
-            ring
-            Text(TimerDial.format(seconds))
-                .font(.system(size: 38, weight: .light, design: .rounded).monospacedDigit())
-                .contentTransition(.numericText())
-                .allowsHitTesting(false)
-                .accessibilityIdentifier("timer.digits")
-        }
-        .frame(width: Self.size, height: Self.size)
-        .sensoryFeedback(.selection, trigger: seconds)
-        .onAppear { raw = Double(seconds) }
-        .onChange(of: seconds) { if lastAngle == nil { raw = Double(seconds) } }
-    }
-
-    private var ring: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-            let radius = side / 2 - 8
-            let angle = TimerDial.knobFraction(lastAngle == nil ? Double(seconds) : raw) * 2 * .pi
+        Button(action: action) {
             ZStack {
-                Circle()
-                    .strokeBorder(Color(.tertiaryLabel).opacity(0.5), lineWidth: 2)
-                    .padding(4)
-                ForEach(0..<20, id: \.self) { i in
-                    Capsule()
-                        .fill(Color(.tertiaryLabel))
-                        .frame(width: 1.5, height: i % 4 == 0 ? 8 : 4)
-                        .offset(y: -(radius - 12))
-                        .rotationEffect(.degrees(Double(i) * 18))
-                }
-                Circle()
-                    .fill(Color.orange)
-                    .frame(width: 14, height: 14)
-                    .position(x: center.x + radius * sin(angle), y: center.y - radius * cos(angle))
+                Circle().fill(fill)
+                Image(systemName: symbol)
+                    .font(.system(size: glyphSize, weight: kind == .cancel ? .light : .semibold))
+                    .foregroundStyle(glyph)
             }
+            .frame(width: size, height: size)
             .contentShape(Circle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let a = atan2(Double(value.location.y - center.y), Double(value.location.x - center.x))
-                        if let last = lastAngle {
-                            raw = TimerDial.rotate(raw, by: TimerDial.angleDelta(from: last, to: a))
-                            let snapped = TimerDial.snap(raw)
-                            if snapped != seconds { seconds = snapped }
-                        } else {
-                            raw = Double(seconds)
-                        }
-                        lastAngle = a
-                    }
-                    .onEnded { _ in
-                        lastAngle = nil
-                        raw = Double(seconds)
-                    }
-            )
         }
-        .accessibilityElement()
-        .accessibilityLabel("Timer")
-        .accessibilityValue(TimerDial.spoken(seconds))
-        .accessibilityHint("Turn clockwise to add time, counterclockwise to take it away.")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: seconds = TimerDial.increment(seconds)
-            case .decrement: seconds = TimerDial.decrement(seconds)
-            @unknown default: break
-            }
+        .buttonStyle(.plain)
+    }
+
+    private var symbol: String {
+        switch kind {
+        case .play: "play.fill"
+        case .pause: "pause.fill"
+        case .cancel: "xmark"
         }
-        .accessibilityIdentifier("timer.dial")
+    }
+
+    private var glyphSize: CGFloat {
+        switch kind {
+        case .cancel: size * 0.42
+        default: size * 0.39
+        }
+    }
+
+    private var fill: Color {
+        switch kind {
+        case .play: TimerLook.playFill
+        case .pause: Color.orange.opacity(0.2)
+        case .cancel: Color(.tertiarySystemFill)
+        }
+    }
+
+    private var glyph: Color {
+        switch kind {
+        case .play: TimerLook.playGlyph
+        case .pause: Color.orange
+        case .cancel: Color(.tertiaryLabel)
+        }
     }
 }
 
-/// The dial while a timer runs: the time left counting down and the knob moving back toward the top.
-private struct RunningDial: View {
+/// A running timer, above the picker (like Clock, several stack): a ring that runs down around the time left, the
+/// name under it, and a round pause / resume button and cancel X. While it rings the ring is gone and X says Stop.
+/// The time comes from `RunningTimer` (TimerDial.swift); what the controller does is in TimerController.swift.
+struct RunningTimerCard: View {
     let timer: RunningTimer
     let isRinging: Bool
+    let onPauseResume: () -> Void
+    let onCancel: () -> Void
+
+    private let ring: CGFloat = 124
+    private let lineWidth: CGFloat = 6
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            let left = Int(timer.remaining(now: context.date).rounded(.up))
-            let fraction = timer.total > 0 ? Double(left) / Double(timer.total) : 0
-            ZStack {
-                Circle()
-                    .stroke(Color(.tertiaryLabel).opacity(0.5), lineWidth: 2)
-                    .padding(4)
-                Circle()
-                    .trim(from: 0, to: fraction)
-                    .stroke(Color.orange, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .padding(4)
-                VStack(spacing: 2) {
-                    Text(TimerDial.format(left))
-                        .font(.system(size: 38, weight: .light, design: .rounded).monospacedDigit())
-                        .contentTransition(.numericText(countsDown: true))
-                        .accessibilityIdentifier("timer.remaining")
-                    if timer.isPaused || isRinging {
-                        Text(isRinging ? "Ringing" : "Paused")
-                            .font(.caption)
+            let left = timer.remaining(now: context.date)
+            let fraction = timer.total > 0 && !isRinging ? left / Double(timer.total) : 0
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle().stroke(Color(.tertiarySystemFill), lineWidth: lineWidth)
+                    Circle()
+                        .trim(from: 0, to: fraction)
+                        .stroke(timer.isPaused ? Color(.systemGray) : Color.orange,
+                                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 0) {
+                        Text(isRinging ? "0:00" : TimerList.clock(left))
+                            .font(.system(size: 30, weight: .light).monospacedDigit())
+                            .foregroundStyle(timer.isPaused ? Color.secondary : Color.primary)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                            .contentTransition(.numericText(countsDown: true))
+                            .accessibilityLabel(TimerList.spokenRemaining(timer, ringing: isRinging, now: context.date))
+                            .accessibilityIdentifier("timer.remaining")
+                        Text(isRinging ? "Time's up" : TimerList.title(timer))
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
-                    } else {
-                        Text(timer.pomodoroPhase.title)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .accessibilityHidden(true)
                     }
+                    .padding(.horizontal, lineWidth + 12)
                 }
+                .frame(width: ring, height: ring)
+                .accessibilityElement(children: .contain)
+                Spacer(minLength: 0)
+                if !isRinging {
+                    TimerRoundButton(kind: timer.isPaused ? .play : .pause, size: 56, action: onPauseResume)
+                        .accessibilityLabel(timer.isPaused ? "Resume" : "Pause")
+                        .accessibilityIdentifier("timer.pause")
+                }
+                TimerRoundButton(kind: .cancel, size: 56, action: onCancel)
+                    .accessibilityLabel(isRinging ? "Stop" : "Cancel timer")
+                    .accessibilityIdentifier(isRinging ? "timer.stop" : "timer.cancel")
             }
-            .frame(width: TimerDialView.size, height: TimerDialView.size)
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("timer.card")
     }
 }

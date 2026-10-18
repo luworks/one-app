@@ -1,7 +1,7 @@
 import AppIntents
 import SwiftUI
 
-// Timers by voice. Every timer starts the same way (`TimerController.start(source: .voice)`): a real AlarmKit
+// Timers by voice. Every timer starts the same way (`TimerController.start`): a real AlarmKit
 // countdown that rings full-screen, shows as a Live Activity, and appears on the Today tab and the Timer tab.
 // Asking Siri is the user's own decision, so these act directly (AI prepares, the user decides: here the user decided).
 // Several timers may run at once. They run in the app's process; phrases in Chinese: AppShortcuts.xcstrings.
@@ -100,7 +100,7 @@ enum TimerIntentSupport {
     static func start(seconds: Int, name: String?) async throws -> String {
         let controller = TimerController.shared
         controller.refresh()
-        guard let timer = await controller.start(seconds: seconds, label: name, source: .voice) else {
+        guard let timer = await controller.start(seconds: seconds, label: name) else {
             ActivityCenter.record(ActivityEvents.intentRun(name: "start_timer", outcome: "failed"))
             throw IntentMessage(controller.message ?? "Couldn't start the timer.")
         }
@@ -187,7 +187,7 @@ struct CreateTimerIntent {
         }
         let controller = TimerController.shared
         controller.refresh()
-        guard let timer = await controller.start(seconds: seconds, label: label, source: .voice) else {
+        guard let timer = await controller.start(seconds: seconds, label: label) else {
             throw IntentMessage(controller.message ?? "Couldn't start the timer.")
         }
         return .result(value: TimerEntity(timer, ringing: false))

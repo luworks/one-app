@@ -1,72 +1,12 @@
 import Foundation
 
-/// The kitchen-timer dial on the Clock tab: turn right to add time, left to take it away.
-/// One full turn is 5 minutes. The value snaps to 15 s steps under 5 min, 30 s under 15 min and 1 min above,
-/// up to 90:00. Foundation only, so it runs under `swift test`.
+/// The limits and spoken form of a timer length. The picker on the Timer tab is Apple's three-wheel hours / min / sec
+/// picker, up to 23:59:59. Foundation only, so it runs under `swift test`.
 enum TimerDial {
-    static let maxSeconds = 90 * 60
-    static let secondsPerTurn = 5.0 * 60
-    // The chips under the dial are Pomodoro phases (Focus 25, Short break 5, Long break 15), see Pomodoro.swift.
+    /// The longest timer: 23 h 59 min, like the Clock app (whole minutes, so Siri can ask for "1439 minutes").
+    static let maxSeconds = 24 * 3600 - 60
 
-    /// The step size at a value: 15 s under 5 min, 30 s under 15 min, 1 min from 15 min up.
-    static func step(at seconds: Int) -> Int {
-        if seconds < 5 * 60 { return 15 }
-        if seconds < 15 * 60 { return 30 }
-        return 60
-    }
-
-    static func clamp(_ seconds: Int) -> Int { min(max(seconds, 0), maxSeconds) }
-
-    static func clamp(_ raw: Double) -> Double { min(max(raw, 0), Double(maxSeconds)) }
-
-    /// Rounds a continuous value to the step grid of its range, clamped to 0...90:00.
-    static func snap(_ raw: Double) -> Int {
-        let value = clamp(raw)
-        let step = Double(step(at: Int(value.rounded())))
-        return clamp(Int((value / step).rounded() * step))
-    }
-
-    /// The shortest turn between two angles (radians), in (-π, π]. Positive is clockwise on screen
-    /// (y grows downward), so crossing the ±π seam, e.g. 170° to -170°, is +20°, not -340°.
-    static func angleDelta(from a: Double, to b: Double) -> Double {
-        var d = (b - a).truncatingRemainder(dividingBy: 2 * .pi)
-        if d > .pi { d -= 2 * .pi }
-        if d <= -.pi { d += 2 * .pi }
-        return d
-    }
-
-    /// The continuous value after turning the dial by `delta` radians (clockwise adds), clamped.
-    static func rotate(_ raw: Double, by delta: Double) -> Double {
-        clamp(raw + delta / (2 * .pi) * secondsPerTurn)
-    }
-
-    /// Where the knob sits on the rim, as a fraction of a turn (0 = top, clockwise).
-    static func knobFraction(_ raw: Double) -> Double {
-        let r = clamp(raw)
-        if r >= Double(maxSeconds) { return 0 }
-        return r.truncatingRemainder(dividingBy: secondsPerTurn) / secondsPerTurn
-    }
-
-    /// One step up (the accessibility increment): 4:45 → 5:00, 5:00 → 5:30, 14:30 → 15:00, 15:00 → 16:00.
-    static func increment(_ seconds: Int) -> Int {
-        let s = clamp(seconds)
-        return snap(Double(s + step(at: s)))
-    }
-
-    /// One step down: 5:00 → 4:45, 15:00 → 14:30, 16:00 → 15:00, never below 0.
-    static func decrement(_ seconds: Int) -> Int {
-        let s = clamp(seconds)
-        guard s > 0 else { return 0 }
-        return snap(Double(s - step(at: s - 1)))
-    }
-
-    /// "05:00", "90:00".
-    static func format(_ seconds: Int) -> String {
-        let s = max(seconds, 0)
-        return String(format: "%02d:%02d", s / 60, s % 60)
-    }
-
-    /// "8 minutes 0 seconds", "1 minute 15 seconds" (VoiceOver value of the dial).
+    /// "8 minutes 0 seconds", "1 minute 15 seconds" (VoiceOver value of a length).
     static func spoken(_ seconds: Int) -> String {
         let s = max(seconds, 0)
         let m = s / 60, r = s % 60
@@ -74,8 +14,9 @@ enum TimerDial {
     }
 }
 
-/// Who started a timer. The Pomodoro card owns one timer at a time (`card`); timers made by voice, Siri or Shortcuts
-/// (`voice`) run alongside it, as many as the user likes.
+/// What kind of timer it is. `card` is a Pomodoro timer (a Focus or break preset): one at a time, it counts a round.
+/// `voice` is every other timer, however it was started (the picker, Siri, Shortcuts): as many as the user likes.
+/// The raw values are what older versions saved.
 enum TimerSource: String, Codable, Equatable, Sendable {
     case card, voice
 }
@@ -106,7 +47,7 @@ struct RunningTimer: Codable, Equatable, Identifiable {
 
     var isPaused: Bool { pausedRemaining != nil }
     var pomodoroPhase: PomodoroPhase { phase ?? .focus }
-    /// The Pomodoro card's timer (a Focus or break countdown), as opposed to one started by voice.
+    /// A Pomodoro timer (a Focus or break preset), as opposed to any other timer.
     var isCard: Bool { source != .voice }
 
     /// True when the countdown reached its end (so it rang), as opposed to being cancelled early.
