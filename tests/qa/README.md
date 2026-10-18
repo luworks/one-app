@@ -19,10 +19,11 @@ python3 tests/qa/journal.py record dev-20261018 qa.command.started 'python3 -m u
 python3 tests/qa/journal.py record dev-20261018 qa.ui.operation 'Tap Today tab'
 python3 tests/qa/journal.py record dev-20261018 qa.link 'https://github.com/owner/repo/pull/123'
 python3 tests/qa/journal.py import /tmp/today-overnight-20261018 --session overnight-20261018
-# Only after the owner has confirmed the process stopped and its actual exit result:
+# Only after the runner has stopped and its actual exit result is known:
 python3 tests/qa/journal.py import /tmp/today-overnight-20261018 --session overnight-20261018 --status failed --archive
 python3 tests/qa/journal.py query --session overnight-20261018
-python3 tests/qa/journal.py export --session overnight-20261018 > tests/qa/evidence/overnight-events.jsonl
+mkdir -p /Users/yuanlu/code/one-app/tests/results/exports
+python3 tests/qa/journal.py export --session overnight-20261018 > /Users/yuanlu/code/one-app/tests/results/exports/overnight-events.jsonl
 ```
 
 The archive command above is an example, not a declaration that the run failed.

@@ -1,0 +1,139 @@
+# Today overnight QA — 2026-10-18
+
+Status: **in progress**. This document is an evidence checkpoint, not a release sign-off.
+
+## Scope and execution
+
+The owner requested comprehensive user journeys, reusable tests, verified issues, fixes and PRs merged to main.
+The frozen baseline is `55e73d571f57987e5adc57d5d6b710bcec7a998a`.
+The full simulator suite runs once against that baseline, with default signing and optional screenshot journeys enabled.
+Repairs and new journeys will receive targeted checks after the full run; a targeted pass does not overwrite a full-run failure.
+Independent agents use isolated worktrees. Pure Swift runs share a mutex and use `--jobs 2`; only one simulator UI runner runs at a time.
+
+Reusable commands, source inventory and platform boundaries are in [the coverage matrix](coverage-matrix.md).
+
+## Verified defects and prepared fixes
+
+| Issue | Reproduced behavior | Fix PR | Evidence before integration |
+|---|---|---|---|
+| [#33](https://github.com/luworks/one-app/issues/33) | A new timed reminder answers an older event's pending time question | [#40](https://github.com/luworks/one-app/pull/40) | English/Chinese logic regression failed before fix; related 57 tests passed after fix |
+| [#34](https://github.com/luworks/one-app/issues/34) | Old daily/weekly recurrence history exhausts the expansion cap before the visible date | [#43](https://github.com/luworks/one-app/pull/43) | Dedicated calendar regressions plus 76 related passing tests |
+| [#35](https://github.com/luworks/one-app/issues/35) | Week/Month projection adds a date to EventKit's exclusive all-day end | [#43](https://github.com/luworks/one-app/pull/43) | Exact production projection extracted and tested; live EventKit edge not yet exercised |
+| [#36](https://github.com/luworks/one-app/issues/36) | Corrupt Share inbox is deleted/overwritten; failed submission dismisses as success | [#42](https://github.com/luworks/one-app/pull/42) | Two new file-backed cases failed before fix; 91 related tests passed (one optional benchmark skipped) |
+| [#37](https://github.com/luworks/one-app/issues/37) | A midnight point alarm belongs to the preceding day | [#43](https://github.com/luworks/one-app/pull/43) | Half-open day membership, including DST boundaries |
+| [#38](https://github.com/luworks/one-app/issues/38) | Share inbox is consumed before SwiftData save succeeds | [#45](https://github.com/luworks/one-app/pull/45), [#46](https://github.com/luworks/one-app/pull/46) | Old ordering loses a real file-backed draft with an injected persistence throw; six durability cases pass against a transaction stand-in. All three real file-backed SwiftData UI journeys passed on integration; injected failures remain explicit test hooks |
+| [#39](https://github.com/luworks/one-app/issues/39) | A 90-day Health comparison has only 13 days of previous-period history | [#44](https://github.com/luworks/one-app/pull/44) | Uneven 180-day readings reproduced incorrect comparison; corrected history and fixture bounds pass |
+| [#47](https://github.com/luworks/one-app/issues/47) | A leading relative time hides the imperative from chat routing, so “30分钟后关烤箱” produces no reminder preview | [#48](https://github.com/luworks/one-app/pull/48) | Full UI reproduced missing Add; four route assertions failed before fix, 44 focused routing/dialogue tests passed after fix. Five-sentence capture UI passed on integration |
+| [#49](https://github.com/luworks/one-app/issues/49) | “Anything left today?” and “What's on today?” fail to select the read-only agenda summary | [#50](https://github.com/luworks/one-app/pull/50) | Existing CRUD and MessageCopy UI failed. Initial fix: two agenda-route assertions failed, then 31 focused tests passed. Follow-up `3135fd4`: three on-today route assertions failed, then 32 focused tests passed. UI acceptance pending |
+
+Issue [#53](https://github.com/luworks/one-app/issues/53) adds a real Week alarm interaction regression: the visible Take medicine marker ignores an in-bounds tap in the canonical populated calendar. Full UI, an unchanged representative and a fresh manual device session reproduce it. A native Button attempt failed and was reverted. Runtime UIKit hit testing returned the SwiftUI root host, not the transparent slot UIView. A final task-block frame candidate also failed and was removed. A minimal alarm-only 13:00 fixture still fails; changing only the time to09:30 succeeds, removing tasks does not help, and scrolling does not repair it. A resolved handler breakpoint recorded zero hits for the failed tap. The marker-local fixed-frame candidate also failed. All three unsuccessful candidates have been removed from delivery source. A separate temporary diagnostic branch isolates layout/menu/slot interactions in one build; no fix is claimed yet.
+
+The Share stack must merge in order: #42, then retarget #45 to main, then retarget #46 to main after #45 merges.
+The AI stack must merge #40, retarget #48 to main and merge it, then retarget #50 to main.
+No existing model is removed. The import receipt is additive; `Habit` and `LedgerEntry` stay in the schema.
+The Share persistence injection throws before save and is not evidence of a spontaneous SwiftData storage error.
+
+## Completed checks
+
+| Revision / scope | Actual result | Evidence |
+|---|---|---|
+| Frozen baseline, full simulator UI | 265 total: 245 passed, 18 failed, 2 skipped; xcodebuild exit 65 | Completed xcresult summary and log agree; retained bundle is readable |
+| Unchanged app/UI representatives, tooling-only main `bf969db` | 6 methods: 3 passed, 3 failed; 446.596 seconds UI / 494.496 seconds total | `tests/results/runs/baseline-representatives-20261018/summary.json`; journal errors empty and shutdown exit 0 |
+| Frozen baseline, pure logic with optional 100k benchmark | 590 executed, 0 skipped, 0 failures; capture train 46/46, test 22/22 | `/tmp/today-overnight-20261018/logic.log` |
+| Integration `1d843b0`, PRs #40–45 plus runner #41 | 613 executed, 0 skipped, 0 failures; capture train 46/46, test 22/22 | `/tmp/today-overnight-integrated-swift.log` |
+| Integration `bd6053d`, all prepared logic fixes | 617 executed, 0 skipped, 0 failures; capture train 46/46, test 22/22 | `tests/results/runs/integrated-logic-20261018/`; 83.469 seconds total |
+| App, UI tests and Share extension at `bd6053d` | Build succeeded; Calendar overlap cases 2 passed, canonical marker 1 failed | `tests/results/runs/integrated-calendar-hit-20261018/` |
+| Integration `00c2b2f`, core runtime acceptance | 10 methods:9 passed,1 failed;620.932 seconds total | `tests/results/runs/integrated-core-acceptance-20261018/`; only Week marker failed, journal errors empty, shutdown0 |
+| Baseline file store opened by integrated app | Unique task retained; receipt table added; Habit/LedgerEntry retained; UI committed-state probe matched | `tests/results/runs/schema-upgrade/upgrade-proof.json`; frozen synthetic input now versioned in `tests/fixtures/migrations/` |
+| Runner host contracts at `97527cd` | 11 passed; no simulator/build invoked | `python3 -m unittest discover -s ios/Eval -p test_e2e_runner.py` |
+| Activity-compatible QA journal at `97527cd` | 7 passed; real SQLite reopen, immutable import, coherent archive and retained external output covered | `python3 -m unittest discover -s tests/qa -p test_*.py` |
+| Share persistence UI additions in #46 | All three new file-backed UI journeys passed; app and extension compiled | `/tmp/today-overnight-share-platform-report.md` |
+| Relative-time routing in #48 | 44 focused tests passed; no full logic or UI rerun in this child lane | `/tmp/today-overnight-ai-relative-green.log` |
+| Rendered screenshots | 38 existing light/dark screenshots inspected; no verified visual defect in this subset | `/tmp/today-overnight-rendered-audit.md` |
+
+The final integrated 100k Activity benchmark ran on the Mac: 2.33 seconds insertion, 47 MB file,
+0.59 ms newest page, 1.55 ms deep page, 0.12 ms one-day count and 29 ms search.
+These numbers do not establish iPhone performance. All prepared package logic is included in the 617-test result;
+new platform journeys compile but still require runtime acceptance.
+The visual pass covers the available Today, Calendar, Reminders, Clock, Timer, Settings and Alarm images,
+not every interaction or system surface. A reported missing World Clock NOW label was independently rechecked:
+the label is visibly present in the exact PNG. That finding was withdrawn; no product change or new test is justified by it.
+
+## Durable test inputs and action history
+
+Infrastructure delivery: #41 merged to remote main at `bc4fcaca5f000c10fd20fc5b521876f3668a58a9`;
+#52 was then retargeted and merged at `bf969dbbaa37cec5a6aca970007c32895e7ceba4`.
+After the frozen run completed, the primary checkout temporarily uses `codex/overnight-ui-validation-20261018` to reuse its incremental build cache. It will return to main at delivery.
+These merges contain QA tooling and documentation. App fixes #40/#42/#43/#44/#45/#46/#48 and fixtures #51 have since passed their relevant acceptance and merged; #50 is now merged, and root UI repairs have passed their changed journeys. Sidebar downstream acceptance and issue53 diagnosis continue.
+
+[PR #51](https://github.com/luworks/one-app/pull/51) replaces temporary UI dataset generators with
+versioned overlap and repeating-reminder files under `tests/fixtures/`. The fixture catalog maps each
+file to its consumers and records relative-date/default behavior. Existing package-bound capture
+resources and small test constants stay beside their tests.
+
+[PR #52](https://github.com/luworks/one-app/pull/52) adds the QA Activity journal using the app's
+exact v1 SQLite schema. The canonical file is `/Users/yuanlu/code/one-app/tests/results/activity.sqlite`,
+separate from app user data and independent of a disposable worktree. Commands, test lifecycle,
+observed XCTest operations, issue/PR links and artifact hashes are queryable. This does not claim
+that every historical agent tool call was recorded. Imported timestamps explicitly mean import time;
+original execution timing remains in raw logs.
+
+Completed child logs/reports and the coordinating scripts have been retained under the canonical
+`tests/results/runs/overnight-prepared-fixes/` and `tests/results/runs/recorded-test-runs/`.
+A coherent hashed archive of the prepared evidence is indexed in SQLite. Large logs, screenshots,
+videos and complete xcresult bundles remain files; SQLite holds their paths, sizes and SHA-256 values.
+The completed full-run bundle was archived only after the process exited and triage finished exporting.
+The committed [storage checkpoint](../../tests/qa/evidence/overnight-storage-checkpoint-20261018.json)
+records integrity and counts at its capture time, not final test totals. Runtime results are Git-ignored;
+code, fixtures and compact proof remain versioned. Do not delete `tests/results/` as build output.
+
+## Full UI run and remaining work
+
+Prepared test repairs retain their original behavior: the search journey creates a non-fixture title;
+the Health summary test requires its initial sleep content instead of a tautological assertion;
+Journey J5 locates the Today pill by its stable identifier and asserts a numeric reminder count.
+The baseline log exposes `smart.today` as accessibility type `Other`, while J5 searched `Button`.
+These changed journeys have now passed targeted simulator UI acceptance; the full baseline failure record is retained.
+
+The sole full run completed with **265 total, 245 passed, 18 failed, 2 skipped**, and `uiExit=65`.
+Its XCTest duration is 9105.788 seconds. The wrapper exit 0 is not a passing suite result.
+The skips explicitly require physical AlarmKit ringing and unsupported XCTest shake synthesis.
+At completion all three owned simulators were verified Shutdown. Subsequent narrow batches reuse Today-Codex.
+
+All exports finished before the coherent run tree was archived under the primary checkout:
+`tests/results/archives/overnight-20261018/4261dc27c25bac66b796ad22c5f716d22b4e1a02572d93b70857aed1facf4b05/`.
+It retains 1431 regular files / 587406150 logical bytes, including the complete xcresult, raw logs,
+40 failed/skipped details/activity JSON files, all failed-method attachments, decoded representative frames,
+frozen source excerpts and the final triage report. SHA-256 values were checked during copying.
+`xcresulttool` successfully read the retained bundle and returned the same counts;
+[the compact archive proof](../../tests/qa/evidence/full-ui-archive-20261018.json) records this verification.
+The original `/tmp/today-overnight-20261018/` is a secondary copy, not the sole evidence location.
+
+The 18 failures form nine groups: agenda routing (9 methods), relative-time routing (1),
+Apply frame/keyboard readiness (2), clipped Activity Clear (1), Week alarm interaction (1),
+native menu accessibility (1), smart-pill accessibility type (1), rename keyboard delivery (1),
+and an unmaterialized Anytime section (1). Seven Sidebar methods stop at the same agenda setup gate;
+their own downstream journeys have not yet been accepted.
+
+One unchanged representative per unresolved group ran on the cached simulator. Activity Clear,
+Health hide and Rename passed; English Apply, Week marker and Anytime failed again.
+Full-fail/single-pass evidence is retained rather than relabeled as product regressions.
+The runtime runner recorded commands, actions, results and artifacts without journal errors and shut down successfully.
+Prepared UI repairs retain strict postconditions and address observed frame, type and lazy-list prerequisites;
+the integration build and targeted acceptance are now in progress. No second full suite is planned.
+
+App/Share extension compilation, all three persistent Share journeys, the new AI interruption journey, relative capture and old-store additive upgrade are now accepted. Root changes have passed Activity Clear, both English/Chinese Apply, unique-title search, Health summary Hide, J5 inline reminder add, Rename, Anytime, CRUD chat and MessageCopy. The 18-method readiness batch is still running its seven Sidebar bodies; its canonical Week marker failed while dense overlap passed. No whole-batch green result is claimed. Issue53 remains open separately.
+The runner has now completed an actual six-method simulator batch: boot, incremental build, method results,
+xcresult summary, canonical artifacts, SQLite events and final shutdown were observed. This infrastructure evidence
+is separate from acceptance of the prepared app fixes. A synthetic file store created by baseline55e now contains
+one retained task and no receipt table; its SQLite backup is preserved for the upcoming additive-schema check.
+
+## Platform limits
+
+Simulator fallback does not verify Apple Intelligence generation. Simulator tests do not establish physical AlarmKit ringing,
+Focus/Silent behavior, HealthKit authorization/data/query performance on the owner's phone, real account/invitation effects,
+widgets on system surfaces, Siri/Shortcuts, Lock Screen Live Activities or 100k-row iPhone performance.
+The owner is asleep; this run does not drive the phone or ring real alarms.
+Apple/Overlap reference screenshots are unavailable, so screenshot capture is not a parity verdict.
+The most recently installed/launched phone build remains baseline `55e73d5`; these overnight repairs are not yet installed there.
+No finite test run establishes absolute freedom from bugs.

@@ -137,8 +137,46 @@ final class AskMultiTurnTests: XCTestCase {
         send(conversation)
         XCTAssertTrue(label(containing: "Today 15:00 → Today 17:00").exists)
         XCTAssertTrue(app.buttons["Apply"].exists)
-        app.buttons["Apply"].tap()
+        tapStableApplyAboveComposer()
         XCTAssertTrue(label(containing: "Moved “Dentist”").waitForExistence(timeout: 5))
+    }
+
+    /// Sending another turn scrolls the existing card while the keyboard and composer settle.
+    /// Matching the reply text again would accept the identical reply from the previous turn.
+    private func tapStableApplyAboveComposer() {
+        var previousFrame: CGRect?
+        let ready = NSPredicate { [self] _, _ in
+            let apply = app.buttons["Apply"].firstMatch
+            let composer = field
+            guard apply.exists, apply.isHittable, composer.exists else {
+                previousFrame = nil
+                return false
+            }
+            let frame = apply.frame
+            var visible = app.frame
+            visible.size.height = max(0, composer.frame.minY - visible.minY)
+            let keyboard = app.keyboards.firstMatch
+            if keyboard.exists {
+                visible.size.height = min(visible.height, keyboard.frame.minY - visible.minY)
+            }
+            guard frame.width > 0, frame.height > 0, visible.contains(frame) else {
+                previousFrame = nil
+                return false
+            }
+            defer { previousFrame = frame }
+            guard let previousFrame else { return false }
+            return abs(frame.minX - previousFrame.minX) < 1
+                && abs(frame.minY - previousFrame.minY) < 1
+                && abs(frame.width - previousFrame.width) < 1
+                && abs(frame.height - previousFrame.height) < 1
+        }
+        let settled = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: ready, object: app)], timeout: 10)
+        XCTAssertEqual(settled, .completed, "Apply is fully visible above the composer with a stable frame")
+        guard settled == .completed else { return }
+        // Reacquire after the wait; element.tap() can reuse a pre-scroll activation point.
+        let frame = app.buttons["Apply"].firstMatch.frame
+        app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: frame.midX - app.frame.minX, dy: frame.midY - app.frame.minY)).tap()
     }
 
     /// The sample data has "Dentist" at 15:00 today. A new request that merely mentions 3pm must not be read as an edit of it,

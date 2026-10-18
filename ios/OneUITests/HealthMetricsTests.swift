@@ -144,16 +144,19 @@ final class HealthMetricsTests: XCTestCase {
 
     func testHidingSleepMakesTheTodayLineUseTheNextMetric() {
         let app = launch()
+        let line = app.buttons["health.summary"]
+        let initial = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND label CONTAINS 'slept'"), object: line)
+        XCTAssertEqual(XCTWaiter().wait(for: [initial], timeout: 5), .completed,
+                       "the initial Today summary includes sleep")
         openSheet(app)
-        XCTAssertTrue(app.buttons["health.summary"].exists || true)
         row(app, "sleep").press(forDuration: 1.0)
-        let hide = app.buttons["Hide"]
+        // The native menu item is a PopUpButton on some OS snapshots.
+        let hide = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Hide'")).firstMatch
         XCTAssertTrue(hide.waitForExistence(timeout: 3), "the long-press menu has Hide")
-        hide.tap()
+        hide.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(row(app, "sleep").waitForNonExistence(timeout: 3))
         app.buttons["Done"].tap()
 
-        let line = app.buttons["health.summary"]
         let updated = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'steps' AND NOT (label CONTAINS 'slept')"), object: line)
         XCTAssertEqual(XCTWaiter().wait(for: [updated], timeout: 5), .completed, "no sleep in the line: \(line.label)")
         XCTAssertTrue(line.label.contains("kg") || line.label.contains("lb"), "steps plus the next shown metric (weight): \(line.label)")

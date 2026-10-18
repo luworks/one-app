@@ -687,6 +687,8 @@ final class CRUDTests: XCTestCase {
 
     /// What was created in the session can be found, and what was deleted can't.
     func testSearchSeesCreatedAndDeletedItems() {
+        let createdTitle = "QA bank reminder"
+        XCTAssertFalse(app.staticTexts[createdTitle].exists, "the fixture cannot satisfy the creation assertion")
         openTab("Reminders")
         let reminders = element("list.Reminders")
         reveal(reminders)
@@ -694,8 +696,9 @@ final class CRUDTests: XCTestCase {
         let field = app.textFields["newReminderField"]
         reveal(field)
         field.tap()
-        field.typeText("Call the bank\n")
-        XCTAssertTrue(app.staticTexts["Call the bank"].waitForExistence(timeout: 5))
+        field.typeText(createdTitle + "\n")
+        XCTAssertTrue(app.staticTexts[createdTitle].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts.matching(identifier: createdTitle).count, 1, "one newly created reminder")
         let article = app.staticTexts["Read that design article"]
         XCTAssertTrue(article.exists)
         swipeDelete(article)
@@ -706,8 +709,8 @@ final class CRUDTests: XCTestCase {
         app.buttons["Search"].tap()
         let search = app.textFields["search.field"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
-        search.typeText("bank")
-        XCTAssertTrue(searchResult("Call the bank").waitForExistence(timeout: 5), "a reminder made in this session")
+        search.typeText(createdTitle)
+        XCTAssertTrue(searchResult(createdTitle).waitForExistence(timeout: 5), "a reminder made in this session")
         app.buttons["Clear text"].tap()
         search.typeText("design article")
         XCTAssertTrue(any("label CONTAINS 'No Results'").waitForExistence(timeout: 5), "a deleted reminder is not found")

@@ -67,6 +67,7 @@ final class CalendarAlarmTests: XCTestCase {
         XCTAssertTrue(medicineMarker.waitForExistence(timeout: 5), "the 13:00 alarm is on the grid")
         medicineMarker.tap()
         XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5), "tapping the marker opens the alarm editor")
+        XCTAssertEqual(app.textFields["alarm.label"].value as? String, "Take medicine", "the marker opens its own alarm")
     }
 
     /// Week: a ring during an event has its own horizontal lane, and remains a working tap target.

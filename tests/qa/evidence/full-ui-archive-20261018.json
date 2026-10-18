@@ -1,0 +1,27 @@
+{
+  "archive": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-20261018/4261dc27c25bac66b796ad22c5f716d22b4e1a02572d93b70857aed1facf4b05",
+  "manifest_sha256": "4261dc27c25bac66b796ad22c5f716d22b4e1a02572d93b70857aed1facf4b05",
+  "file_count": 1431,
+  "total_bytes": 587406150,
+  "xcresult_readable_after_archive": true,
+  "summary": {
+    "result": "Failed",
+    "totalTestCount": 265,
+    "passedTests": 245,
+    "failedTests": 18,
+    "skippedTests": 2,
+    "startTime": 1792312270.932,
+    "finishTime": 1792321376.72
+  },
+  "verification_command": [
+    "xcrun",
+    "xcresulttool",
+    "get",
+    "test-results",
+    "summary",
+    "--path",
+    "/Users/yuanlu/code/one-app/tests/results/archives/overnight-20261018/4261dc27c25bac66b796ad22c5f716d22b4e1a02572d93b70857aed1facf4b05/full-ui.xcresult"
+  ],
+  "sha256_verified_during_archive": true,
+  "integrity_check": "ok"
+}
