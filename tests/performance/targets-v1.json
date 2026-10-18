@@ -1,0 +1,363 @@
+{
+  "version": 1,
+  "baseline_source": "c42b88e6712882f1d627d68d5769913d959bc72c",
+  "baseline_tool_commit": "fc683a739ed17cbc0aa798a116eb1e717d36f0d1",
+  "policy": {
+    "size_reduction_required": 0.51,
+    "size_reduction_stretch": 0.6,
+    "speedup_required": 3,
+    "speedup_stretch": 10,
+    "targets_are_not_results": true,
+    "comparison": "same configuration, hardware/runtime, fixture, endpoint, cache state and controlled host load; never substitute Debug-to-Release or XCTest-overhead removal for a product gain",
+    "small_sample": "n=3-5 raw samples, median and range; no small-n p95; baseline n=1 metrics remeasure before hard comparison"
+  },
+  "metrics": [
+    {
+      "id": "release_bundle",
+      "unit": "bytes",
+      "baseline": 23374117,
+      "context": "c42b88e/fc683a7 production source; same generic Release build or Debug simulator configuration and inventory method",
+      "kind": "size",
+      "required_max": 11453317.33,
+      "stretch_max": 9349646.8
+    },
+    {
+      "id": "release_zip_proxy",
+      "unit": "bytes",
+      "baseline": 7621937,
+      "context": "c42b88e/fc683a7 production source; same generic Release build or Debug simulator configuration and inventory method",
+      "kind": "size",
+      "required_max": 3734749.13,
+      "stretch_max": 3048774.8000000003
+    },
+    {
+      "id": "debug_sim_bundle",
+      "unit": "bytes",
+      "baseline": 35631443,
+      "context": "c42b88e/fc683a7 production source; same generic Release build or Debug simulator configuration and inventory method",
+      "kind": "size",
+      "required_max": 17459407.07,
+      "stretch_max": 14252577.200000001
+    },
+    {
+      "id": "debug_sim_zip_proxy",
+      "unit": "bytes",
+      "baseline": 10583652,
+      "context": "c42b88e/fc683a7 production source; same generic Release build or Debug simulator configuration and inventory method",
+      "kind": "size",
+      "required_max": 5185989.4799999995,
+      "stretch_max": 4233460.8
+    },
+    {
+      "id": "audio_resources",
+      "unit": "bytes",
+      "baseline": 5280736,
+      "context": "c42b88e/fc683a7 production source; same generic Release build or Debug simulator configuration and inventory method",
+      "kind": "size",
+      "required_max": 2587560.64,
+      "stretch_max": 2112294.4
+    },
+    {
+      "id": "all_release_macho",
+      "unit": "bytes",
+      "baseline": 17861152,
+      "context": "c42b88e/fc683a7 production source; same generic Release build or Debug simulator configuration and inventory method",
+      "kind": "size",
+      "required_max": 8751964.48,
+      "stretch_max": 7144460.800000001
+    },
+    {
+      "id": "main_release_executable",
+      "unit": "bytes",
+      "baseline": 16731520,
+      "context": "c42b88e/fc683a7 production source; same generic Release build or Debug simulator configuration and inventory method",
+      "kind": "size",
+      "required_max": 8198444.8,
+      "stretch_max": 6692608.0
+    },
+    {
+      "id": "debug_process_to_onappear",
+      "unit": "ms",
+      "baseline": 2323,
+      "context": "standalone Debug simulator; process-cold/OS-warm; named device; same fixture, no XCTest",
+      "kind": "latency",
+      "required_max": 774.3333333333334,
+      "stretch_max": 232.3,
+      "absolute_budget": 1000
+    },
+    {
+      "id": "year_scroll_peak_physical_median",
+      "unit": "MiB",
+      "baseline": 286.97,
+      "context": "Debug simulator; original XCTest Year/navigation protocol; RSS separate from physical footprint",
+      "kind": "size",
+      "required_max": 140.61530000000002,
+      "stretch_max": 114.78800000000001
+    },
+    {
+      "id": "year_scroll_absolute_physical_median",
+      "unit": "MiB",
+      "baseline": 229.32,
+      "context": "Debug simulator; original XCTest Year/navigation protocol; RSS separate from physical footprint",
+      "kind": "size",
+      "required_max": 112.3668,
+      "stretch_max": 91.72800000000001
+    },
+    {
+      "id": "navigation_peak_rss",
+      "unit": "MiB",
+      "baseline": 610.796875,
+      "context": "Debug simulator; original XCTest Year/navigation protocol; RSS separate from physical footprint",
+      "kind": "size",
+      "required_max": 299.29046875,
+      "stretch_max": 244.31875000000002
+    },
+    {
+      "id": "activity_newest_page",
+      "unit": "ms",
+      "baseline": 1.09,
+      "context": "native macOS Swift Package Debug, 100k generated rows; same query/batch/fixture semantics; original n=1 baseline provisional",
+      "kind": "latency",
+      "required_max": 0.36333333333333334,
+      "stretch_max": 0.10900000000000001
+    },
+    {
+      "id": "activity_deep_page",
+      "unit": "ms",
+      "baseline": 1.57,
+      "context": "native macOS Swift Package Debug, 100k generated rows; same query/batch/fixture semantics; original n=1 baseline provisional",
+      "kind": "latency",
+      "required_max": 0.5233333333333333,
+      "stretch_max": 0.157
+    },
+    {
+      "id": "activity_day_count",
+      "unit": "ms",
+      "baseline": 0.12,
+      "context": "native macOS Swift Package Debug, 100k generated rows; same query/batch/fixture semantics; original n=1 baseline provisional",
+      "kind": "latency",
+      "required_max": 0.04,
+      "stretch_max": 0.012
+    },
+    {
+      "id": "activity_search",
+      "unit": "ms",
+      "baseline": 27.8,
+      "context": "native macOS Swift Package Debug, 100k generated rows; same query/batch/fixture semantics; original n=1 baseline provisional",
+      "kind": "latency",
+      "required_max": 9.266666666666667,
+      "stretch_max": 2.7800000000000002
+    },
+    {
+      "id": "activity_bulk_100k",
+      "unit": "ms",
+      "baseline": 2280,
+      "context": "native macOS Swift Package Debug, 100k generated rows; same query/batch/fixture semantics; original n=1 baseline provisional",
+      "kind": "latency",
+      "required_max": 760.0,
+      "stretch_max": 228.0
+    },
+    {
+      "id": "release_launch_usable_content",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 500
+    },
+    {
+      "id": "warm_resume_usable_content",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "today_to_week",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "week_to_month",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "month_to_year",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "calendar_to_reminders",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "reminders_to_clock",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "clock_to_today",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "open_health",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "open_settings",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "open_quick_create",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "quick_create_commit",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 50
+    },
+    {
+      "id": "open_reminder",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "complete_reminder",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "search_results_after_input",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "plan_preview_after_submit",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "apply_plan_commit",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 50
+    },
+    {
+      "id": "single_file_store_save",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized simulator app-side monotonic signpost boundary; baseline must be captured on frozen production baseline with identical instrumentation before accepting a speedup",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 50
+    }
+  ],
+  "pending": [
+    {
+      "id": "app_store_thinned_download_install",
+      "rule": "baseline unknown; eventual 51% reduction against valid same-variant export; no claims from ZIP or unsigned app"
+    },
+    {
+      "id": "hitch_rate",
+      "rule": "collect supported trace baseline; at least 51% lower if nonzero; <=5 ms/s, ideal zero"
+    },
+    {
+      "id": "main_thread_frame_work",
+      "rule": "collect supported trace baseline; 3x faster with <=5 ms app-update budget; no claim of 3x display refresh above hardware limit"
+    },
+    {
+      "id": "steady_release_physical_memory_and_10_cycle_growth",
+      "rule": "capture optimized simulator baseline; 51% smaller steady/peak, no sustained growth beyond 5% after settling"
+    },
+    {
+      "id": "energy",
+      "rule": "optional CPU/wakeup proxy only; no battery claims"
+    }
+  ]
+}
