@@ -195,8 +195,14 @@ struct AskView: View {
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(messages.isEmpty ? .top : .bottom)
                 .onChange(of: messages) {
+                    if AIResponseTrace.enabled { AIResponseTrace.shared.stage("persist_before", token: generationToken) }
                     persist()
+                    if AIResponseTrace.enabled {
+                        AIResponseTrace.shared.stage("persist_after", token: generationToken)
+                        AIResponseTrace.shared.stage("scroll_request_before", token: generationToken)
+                    }
                     withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }
+                    if AIResponseTrace.enabled { AIResponseTrace.shared.stage("scroll_request_after", token: generationToken) }
                 }
                 .onChange(of: proposals.count) {
                     withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }

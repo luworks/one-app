@@ -67,7 +67,7 @@ final class AIResponseTrace {
         guard conversationStageToken == current.token, current.pending.isEmpty else { return nil }
         let fields = stageTimes.keys.sorted().map { "\($0)_ns=\(stageTimes[$0]!)" }.joined(separator: ";")
         // Retain one complete line only after both layout timestamps are frozen.
-        completedStageLine = "PERF_STAGE_AI v=1;turn=\(current.token.uuidString);backend=\(current.backend);dispatch=\(stageDispatch);\(fields)"
+        completedStageLine = "PERF_STAGE_AI v=1;turn=\(current.token.uuidString);backend=\(current.backend);dispatch=\(stageDispatch);layout_attribution=1;\(fields)"
         stageTimes.removeAll(keepingCapacity: true)
         stageToken = nil
         conversationStageToken = nil
@@ -165,6 +165,8 @@ struct AIResponseContentProbe: UIViewRepresentable {
             self.token = token
             self.phase = phase
             ticks = 0
+            // Ignored bookkeeping is exported only after both existing endpoints freeze.
+            AIResponseTrace.shared.stage(phase.rawValue + "_probe_arm", token: token)
             isUserInteractionEnabled = false
             isAccessibilityElement = false
             let link = CADisplayLink(target: self, selector: #selector(tick))
@@ -174,9 +176,11 @@ struct AIResponseContentProbe: UIViewRepresentable {
 
         @objc private func tick() {
             guard let token, AIResponseTrace.shared.wants(phase, token: token) else { stop(); return }
+            AIResponseTrace.shared.stage(phase.rawValue + "_probe_callback", token: token)
             guard let window, window.windowScene?.activationState == .foregroundActive,
                   !isHidden, bounds.width > 0, bounds.height > 0,
                   convert(bounds, to: window).intersects(window.bounds) else { return }
+            AIResponseTrace.shared.stage(phase.rawValue + "_probe_eligible", token: token)
             ticks += 1
             if ticks >= 2 {
                 AIResponseTrace.shared.layout(phase, token: token)

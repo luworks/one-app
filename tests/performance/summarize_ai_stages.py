@@ -19,6 +19,18 @@ PAIRS = {
     'ready_to_layout': ('ready', 'response_layout'),
 }
 ASYNC_POINTS = {'task_enter', 'chat_response_await_before', 'chat_response_await_after'}
+LAYOUT_PAIRS = {
+    'persist_call': ('persist_before', 'persist_after'),
+    'scroll_request_call': ('scroll_request_before', 'scroll_request_after'),
+    'ready_to_response_arm': ('ready', 'response_probe_arm'),
+}
+for phase in ('feedback', 'response'):
+    LAYOUT_PAIRS.update({
+        phase + '_arm_to_callback': (phase + '_probe_arm', phase + '_probe_callback'),
+        phase + '_callback_to_eligible': (phase + '_probe_callback', phase + '_probe_eligible'),
+        phase + '_eligible_to_layout': (phase + '_probe_eligible', phase + '_layout'),
+    })
+
 
 
 def reduce(text):
@@ -42,6 +54,9 @@ def reduce(text):
                 raise ValueError('local dispatch contains async diagnostic points')
             pairs = {key: value for key, value in pairs.items() if not ASYNC_POINTS.intersection(value)}
             pairs['local_reply'] = ('local_reply_before', 'local_reply_after')
+        if fields.get('layout_attribution') == '1':
+            pairs.update(LAYOUT_PAIRS)
+            required.update(point for pair in LAYOUT_PAIRS.values() for point in pair)
         if required - points.keys():
             raise ValueError('missing diagnostic points: ' + ', '.join(sorted(required - points.keys())))
         result = {'backend': fields['backend'], 'dispatch': dispatch, 'points_ns': points, 'elapsed_ms': {}}
