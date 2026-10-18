@@ -67,3 +67,19 @@ Existing startup trace modeled union export succeeded3.25s to a new sibling
 path. Its named/phase attribution is not presumed from a successful exporter.
 No new profile/cold build or silent window extension was used. End verified
 no booted sim/noheavy and directly notified root/compat.
+
+## Startup reassessment and Year diagnostic limit
+
+Actual modeled startup data resolves83images and6app signposts. Target interval
+main CPU621ms; Swift runtime conformance214ms self,54ms unresolved. Ringer9ms
+inclusive does not support the proposed cancellation optimization as a material
+startup win. Profiled2396.860ms wall is diagnosis only, never a new denominator.
+No safe app-owned removable dominant cost is established.
+
+Year diagnostic attempt639a8cb: test-without-building had noTestCase/appPID
+within30s discovery cap, so helper cancelled/cleaned36.7s and noprofiler started.
+No compile/retry/new candidate ran. Full failed evidence retained, shutdown and
+release11:50:20. Static readiness repair allows60s bounded discovery with40s
+active-work/10s-cleanup reservations inside the same total budget; not rerun.
+Remaining Year attribution is an evidence boundary; no claim of a proven
+plateau or full target fulfillment is made.

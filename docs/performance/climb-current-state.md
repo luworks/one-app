@@ -54,7 +54,7 @@ No competitor has been measured under an authorized identical protocol. Therefor
 
 Canonical root: `/Users/yuanlu/code/one-app/tests/results/runs/performance-climb-20261018/`. Release rawlog/inventory, read-only product+dSYM snapshot, frozen source tar/patch, reference optimized product, complete baseline-ui/ui.xcresult, app samples/context and QA archive are retained and indexed in the separate QA Activity SQLite.Reference3/3 and candidate3/3 UI methods passed. Host initial9methods:8passed, damagedfixture method failed2assertions; fixture-only repair35467e7 then failedmethod+readbenchmark2/2passed. The8other methods were not rerun, and no unrestricted/full-suite pass is claimed. Original failure is retained. Damage came from removing NOT NULL inside an index WHERE clause; no production decoder repair was needed. Shutdown/live no-heavy/no-booted verification completed11:10:14 and11:29:05; directly notified root/compat. No phone/signing/data deletion.
 
-Next3actions: (1) analyze the completed modeled startup export and only then choose a narrow source candidate if it identifies a material app-owned cost; (2) diagnose Year initial-scroll work with a Year-specific trace before another layout/cache change; (3) evaluate any accepted optimization on the final integrated main revision under a fresh explicitly labeled context, preserving the frozen comparisons. The -Osize experiment is complete but not adopted: extra ZIP saving4.55% is small and paired Release runtime acceptance is absent. Current10sTimeProfiler capture and raw time-sample export succeeded, but user stacks are addresses, stdout is empty and stages are unaligned; no named hotspot or cancellation count is established. The later modeled union export completed3.25s in its next granted slot and writes a new sibling directory; analysis is pending. No profiler/exporter remains active. Two tooling findings from the single focused review are fixed: reverted candidates cannot silently leave tracked baseline files stale, and failed functional journeys cannot pass speed acceptance. The climb is in progress, not at a demonstrated plateau.
+Next3actions: (1) analyze the completed modeled startup export and only then choose a narrow source candidate if it identifies a material app-owned cost; (2) diagnose Year initial-scroll work with a Year-specific trace before another layout/cache change; (3) evaluate any accepted optimization on the final integrated main revision under a fresh explicitly labeled context, preserving the frozen comparisons. The -Osize experiment is complete but not adopted: extra ZIP saving4.55% is small and paired Release runtime acceptance is absent. The10sTimeProfiler capture and modeled export now resolve83images, actual app UUID/load mapping and6init/bootstrap/layout signposts. In the app-init→endpoint interval, main CPU sample weight is621ms; swift_conformsToProtocolMaybeInstantiateSuperclasses is214ms self(34.46% of sampled main CPU), unresolved54ms(8.70%). This is not wall time or a nonprofiled latency estimate. Ringer/AlarmScheduler is9ms inclusive; cancellation is not established as a dominant removable cost, and sampling cannot count cancellations. Profiled wall2396.860ms is excluded from timing comparisons. No safe material app-owned startup candidate was identified. The modeled union export completed3.25s in its granted slot and writes a new sibling directory; its completed analysis/reducer is retained separately. No profiler/exporter remains active. Two tooling findings from the single focused review are fixed: reverted candidates cannot silently leave tracked baseline files stale, and failed functional journeys cannot pass speed acceptance. The climb is in progress, not at a demonstrated plateau.
 
 ## Integration and local stopping boundaries
 
@@ -71,3 +71,26 @@ remaining selected-package822,296-byte gap. Further removing choices, shortening
 alarms, discarding city/locale data, bypassing Add/Apply or weakening reachability
 checks is not justified by the target. This is not a claim of a global optimum;
 startup/Year profiling is still being assessed before declaring a local plateau.
+
+## Year diagnosis boundary
+
+A separate, explicitly granted3-minute diagnostic window attempted only the
+existing `testYearScrollMemory` without building. The helper timed out after30s
+without observing the exact app PID; XCTest worker printed Runningtests near
+that cap and noTestCase began. The runner was cancelled/cleaned in36.7s. No
+profiler started, noYear trace exists, and noSwiftCompile marker occurred.
+Cleanup DVT operation dumps do not prove a root cause or app regression.
+All raw logs/partialxcresult are archived with failed status. The simulator was
+shut down, noheavy/booted verified, and root/compat explicitly notified11:50:20.
+Per the window's failure/no-retry instruction, no second attempt ran. The tool
+now permits up to60s PID discovery while reserving40s active journey work plus
+10s cleanup within the same hard wall limit; this repair is static-only,
+not verified by another runtime attempt.
+
+The safe candidate set has narrowed, but this is **an evidence boundary, not a
+proven local/global optimum**: the remaining Year initial-scroll hypothesis
+still lacks attribution. No unmeasured rendering rewrite or discarded product
+behavior is shipped to claim the51%/3×/10× goals. Next concrete work is the
+bounded Year diagnosis with the corrected readiness budget, followed only by
+an evidence-backed candidate; final main integration has its own validation
+context. The current measured goals remain honestly unmet where shown above.

@@ -42,9 +42,13 @@ def main(argv=None):
     p.add_argument('--project', type=Path)
     p.add_argument('--wall-limit', type=float, default=150,
                    help='Total seconds INCLUDING 10s reserved cleanup; max150')
+    p.add_argument('--pid-wait-limit', type=float, default=60,
+                   help='Target-discovery cap; leaves40s active work plus reserved cleanup')
     a = p.parse_args(argv)
     if not 15 <= a.wall_limit <= 150:
         p.error('--wall-limit must be between15 and150 seconds including cleanup')
+    if not 1 <= a.pid_wait_limit <= 60:
+        p.error('--pid-wait-limit must be between1 and60 seconds')
     out = a.output.expanduser().absolute()
     try:
         out.mkdir(parents=True, exist_ok=False)
@@ -126,14 +130,20 @@ def main(argv=None):
                 '-destination', 'id=' + a.simulator,
                 '-only-testing:OneUITests/PerformanceClimbTests/testYearScrollMemory',
                 '-parallel-testing-enabled', 'NO', '-jobs', '2', '-resultBundlePath', str(out / 'ui.xcresult')]
+        # A cold XCTest worker can take most of30s before the app even starts.
+        # Preserve a separate capture/journey budget instead of cancelling at that point.
+        if remaining() <= 40:
+            raise TimeoutError('Insufficient active budget for target discovery and journey')
         runner = launch('ui-runner', test)
-        pid_end = min(active_end, time.monotonic() + 30)
+        pid_end = min(active_end - 40, time.monotonic() + a.pid_wait_limit)
+        status['pid_wait_limit'] = a.pid_wait_limit
+        status['pid_discovery_budget'] = max(0, pid_end - time.monotonic())
         iteration = 0
         while True:
             if runner.poll() is not None:
                 raise RuntimeError('UI runner exited before target discovery; see raw log')
             if time.monotonic() >= pid_end:
-                raise TimeoutError('Target PID not discovered within bounded30s')
+                raise TimeoutError('Target PID not discovered within bounded readiness budget')
             found = ps(f'pid-{iteration}')
             if len(found) > 1:
                 raise RuntimeError('Ambiguous exact target PIDs; no alternate attach')
