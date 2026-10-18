@@ -47,6 +47,7 @@ final class PageResourceTrace: @unchecked Sendable {
         var route: String?
         var name: String?
         var visit = 0
+        var visitBasis = "page_route"
         var samples: [Sample] = []
         var completion: (@MainActor @Sendable (String) -> Void)?
     }
@@ -63,6 +64,7 @@ final class PageResourceTrace: @unchecked Sendable {
         let name: String
         let route: String
         let route_visit: Int
+        let visit_basis: String
         let pid: Int32
         let start_ns: UInt64
         let layout_ns: UInt64
@@ -78,6 +80,7 @@ final class PageResourceTrace: @unchecked Sendable {
         let postlayout_resident_size_bytes: Summary?
     }
     private var window: Window?
+    private var operationVisits: [String: Int] = [:]
 
     func begin(generation: Int, start: UInt64) {
         guard Self.enabled else { return }
@@ -99,7 +102,15 @@ final class PageResourceTrace: @unchecked Sendable {
             window?.sequence = sequence
             window?.route = route
             window?.name = name
-            window?.visit = visit
+            if visit > 0 {
+                window?.visit = visit
+                window?.visitBasis = "page_route"
+            } else {
+                let next = (operationVisits[name] ?? 0) + 1
+                operationVisits[name] = next
+                window?.visit = next
+                window?.visitBasis = "layout_operation_name"
+            }
             window?.completion = completion
         }
     }
@@ -155,7 +166,7 @@ final class PageResourceTrace: @unchecked Sendable {
         let valid = measured.filter(\.valid)
         let errors = current.samples.filter { !$0.valid }.count
         let payload = Payload(status: errors == 0 && !valid.isEmpty && !postlayout.isEmpty ? "complete" : "missing_or_error",
-                              seq: sequence, name: name, route: route, route_visit: current.visit, pid: getpid(), start_ns: current.start,
+                              seq: sequence, name: name, route: route, route_visit: current.visit, visit_basis: current.visitBasis, pid: getpid(), start_ns: current.start,
                               layout_ns: layout, window_end_ns: deadline, collection_end_ns: observedEnd,
                               period_ms: Double(interval) / 1_000_000, samples: current.samples, valid_count: valid.count,
                               error_count: errors, postlayout_valid_count: postlayout.count,

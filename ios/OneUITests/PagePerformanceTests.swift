@@ -73,51 +73,8 @@ final class PagePerformanceTests: XCTestCase {
     }
 
     private func readResources(sequence: Int, start: UInt64, layout: UInt64, route: String) {
-        let reports = app.staticTexts.matching(identifier: "performance.trace")
-        let prefix = "v=1;seq=\(sequence);"
-        let predicate = NSPredicate { _, _ in
-            reports.allElementsBoundByIndex.contains {
-                $0.label.hasPrefix(prefix) && $0.label.contains(";resource_b64=")
-            }
-        }
-        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: 5),
-                       .completed, "Same-sequence resource window: \(route)")
-        guard let report = reports.allElementsBoundByIndex.map(\.label).first(where: {
-            $0.hasPrefix(prefix) && $0.contains(";resource_b64=")
-        }), let encoded = report.components(separatedBy: ";resource_b64=").last,
-              let data = Data(base64Encoded: encoded), let json = String(data: data, encoding: .utf8),
-              let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let samples = payload["samples"] as? [[String: Any]] else {
-            XCTFail("Missing or invalid resource payload: \(route)"); return
-        }
-        // Retain raw errors before checking acceptance, including in a failed functional attempt.
-        print("PERF_RESOURCE_APP \(json)")
-        let attachment = XCTAttachment(string: json)
-        attachment.name = "resources.\(route).seq\(sequence)"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-        lastReport = report
-        XCTAssertEqual(payload["schema"] as? Int, 1)
-        XCTAssertEqual(payload["seq"] as? Int, sequence)
-        XCTAssertEqual(payload["route"] as? String, route)
-        XCTAssertEqual((payload["start_ns"] as? NSNumber)?.uint64Value, start)
-        XCTAssertEqual((payload["layout_ns"] as? NSNumber)?.uint64Value, layout)
-        XCTAssertEqual((payload["window_end_ns"] as? NSNumber)?.uint64Value, layout + 1_000_000_000)
-        XCTAssertEqual(payload["status"] as? String, "complete")
-        XCTAssertFalse(samples.isEmpty)
-        XCTAssertGreaterThan(payload["postlayout_valid_count"] as? Int ?? 0, 0)
-        var previous: UInt64 = 0
-        for sample in samples {
-            XCTAssertEqual(sample["valid"] as? Bool, true)
-            XCTAssertEqual(sample["kern_return"] as? Int, 0)
-            let timestamp = (sample["ns"] as? NSNumber)?.uint64Value ?? 0
-            XCTAssertGreaterThanOrEqual(timestamp, start)
-            XCTAssertGreaterThan(timestamp, previous)
-            previous = timestamp
-            for key in ["phys_footprint_bytes", "resident_size_bytes"] {
-                let value = (sample[key] as? NSNumber)?.doubleValue ?? .nan
-                XCTAssertTrue(value.isFinite && value > 0, "Valid app memory sample: \(key)")
-            }
+        if let report = capturePageResourceWindow(app: app, sequence: sequence, start: start, layout: layout, route: route) {
+            lastReport = report
         }
     }
 
@@ -137,9 +94,38 @@ final class PagePerformanceTests: XCTestCase {
         testSettingsSubpageAndActivityEndpoints()
     }
 
+    func testSearchReminderResourceWindows() {
+        app.launchArguments.append("-performanceResources")
+        testSearchQuickReminderAndReminderDetailEndpoints()
+    }
+
     private func tap(_ target: XCUIElement, route: String, ready: XCUIElement) {
         XCTAssertTrue(target.waitForExistence(timeout: 5))
-        XCTAssertTrue(target.isHittable, "Action is reachable: \(route)")
+        let hittable = target.isHittable
+        if !hittable {
+            // Diagnose the original failed observation without retrying or changing the action.
+            let identifier = target.identifier
+            let label = target.label
+            let sameType = app.descendants(matching: target.elementType)
+            let identifierCount: Any = identifier.isEmpty ? NSNull()
+                : sameType.matching(NSPredicate(format: "identifier == %@", identifier)).count
+            let labelCount: Any = label.isEmpty ? NSNull()
+                : sameType.matching(NSPredicate(format: "label == %@", label)).count
+            let context: [String: Any] = ["route": route, "identifier": identifier, "label": label,
+                "element_type": target.elementType.rawValue, "frame": String(describing: target.frame),
+                "exists": target.exists, "enabled": target.isEnabled, "hittable": hittable,
+                "same_type_identifier_count": identifierCount, "same_type_label_count": labelCount]
+            if let data = try? JSONSerialization.data(withJSONObject: context, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                print("PERF_REACHABILITY_FAILURE \(json)")
+            }
+            print("PERF_REACHABILITY_HIERARCHY_BEGIN route=\(route)\n\(app.debugDescription)\nPERF_REACHABILITY_HIERARCHY_END route=\(route)")
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "unreachable.\(route)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertTrue(hittable, "Action is reachable: \(route)")
         target.tap()
         readSample(name: "page.\(route)", route: route)
         XCTAssertTrue(ready.waitForExistence(timeout: 5), "Destination content: \(route)")
@@ -167,8 +153,10 @@ final class PagePerformanceTests: XCTestCase {
     /// Estimated 90-150 seconds. Reads Settings and Activity data without toggles, export, Clear or Delete.
     func testSettingsSubpageAndActivityEndpoints() {
         launch()
+        let menu = app.buttons["Open menu"]
+        let closedMenuX = menu.frame.minX
         for _ in 0..<3 {
-            app.buttons["Open menu"].tap()
+            menu.tap()
             tap(app.buttons["Settings"], route: "settings", ready: app.navigationBars["Settings"])
             let data = app.buttons["settings.activityData"]
             app.revealSettingsRow(data)
@@ -180,6 +168,13 @@ final class PagePerformanceTests: XCTestCase {
             XCTAssertTrue(app.buttons["activity.filter.All"].exists)
             app.buttons["Done"].firstMatch.tap()
             app.buttons["Close sidebar"].tap()
+            // Wait for the closing page to return before the next menu tap can reach it.
+            let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                !self.app.buttons["Close sidebar"].exists && menu.isHittable
+                    && abs(menu.frame.minX - closedMenuX) < 0.5
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter().wait(for: [closed], timeout: 5), .completed,
+                           "Sidebar closes before the next opening action")
         }
     }
 

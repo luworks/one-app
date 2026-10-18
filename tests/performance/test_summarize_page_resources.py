@@ -65,3 +65,10 @@ class PageResourceSummaryTests(unittest.TestCase):
         self.assertEqual(window['derived']['sampled_operation_max_bytes'], 1000)
         self.assertEqual(window['derived']['excluded_after_window_samples'], 1)
         self.assertEqual(window['samples'][-1]['phys_footprint_bytes'], 9000)
+
+    def test_different_visit_bases_are_not_pooled(self):
+        rows = [self.row(i) for i in (1, 2, 3)]
+        rows[1]['visit_basis'] = 'layout_operation_name'
+        result = resources.summarize(self.log(rows))
+        self.assertEqual(len(result['revisit_groups']), 2)
+        self.assertFalse(any(g['baseline_usable'] for g in result['revisit_groups']))

@@ -77,12 +77,12 @@ def summarize(text):
         for row in attempt['windows']:
             row['functional_pass'] = attempt['status'] == 'passed'
             row['baseline_usable'] = row['functional_pass'] and row['window_usable']
-        identities = sorted({(r['name'], r['route'], r['pid']) for r in attempt['windows']})
-        for name, route, pid in identities:
-            rows = [r for r in attempt['windows'] if (r['name'], r['route'], r['pid']) == (name, route, pid)]
+        identities = sorted({(r['name'], r['route'], r['pid'], r.get('visit_basis', 'legacy_route_visit')) for r in attempt['windows']})
+        for name, route, pid, basis in identities:
+            rows = [r for r in attempt['windows'] if (r['name'], r['route'], r['pid'], r.get('visit_basis', 'legacy_route_visit')) == (name, route, pid, basis)]
             rows.sort(key=lambda r: r['route_visit'])
             complete = [r['route_visit'] for r in rows] == [1, 2, 3] and all(r['baseline_usable'] for r in rows)
-            groups.append(dict(method=attempt['method'], name=name, route=route, pid=pid,
+            groups.append(dict(method=attempt['method'], name=name, route=route, pid=pid, visit_basis=basis,
                                ordered_visits=[r['route_visit'] for r in rows],
                                fixed_window_medians_bytes=[r['derived']['fixed_window_median_bytes'] for r in rows],
                                visit1_to_visit3_bytes=(rows[2]['derived']['fixed_window_median_bytes'] - rows[0]['derived']['fixed_window_median_bytes']) if complete else None,
