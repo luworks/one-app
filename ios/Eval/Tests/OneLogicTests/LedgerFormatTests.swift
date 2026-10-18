@@ -39,6 +39,9 @@ final class LedgerFormatTests: XCTestCase {
         }
         XCTAssertTrue(can(.planned, approval: .autoUnderGrant))
         XCTAssertTrue(can(.completed))
+        XCTAssertTrue(can(.renamed))
+        XCTAssertFalse(can(.renamed, item: false), "renaming Undo never resurrects a missing reminder")
+        XCTAssertFalse(can(.renamed, kind: "alarm"), "alarm title Undo uses its toast")
         XCTAssertTrue(can(.deleted, item: false, snapshot: true))
         XCTAssertFalse(can(.deleted, item: false, snapshot: false))
         XCTAssertFalse(can(.planned, undone: true), "once undone, no second Undo")

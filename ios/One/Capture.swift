@@ -397,6 +397,36 @@ enum CaptureParser {
         #"\s*提醒我$"#,
     ]
 
+    /// Clean request syntax without rewriting the requested action or its modality.
+    /// Also accepts model titles whose time words have already been removed.
+    static func cleanRequestTitle(_ title: String) -> String {
+        var text = title
+        while true {
+            let previous = text
+            text = text.trimmingCharacters(in: titleBoundary)
+            text = stripTemporalConnector(text)
+            if let body = requestBody(text) { text = body }
+            if text == previous { return text }
+        }
+    }
+
+    private static let titleBoundary = CharacterSet.whitespacesAndNewlines
+        .union(CharacterSet(charactersIn: ",，。.、:：;；!！?？~"))
+
+    private static func stripTemporalConnector(_ title: String) -> String {
+        // A removed clock time can leave "的时候提醒我…" at the start. Do not remove
+        // a condition inside the action ("下雨的时候带伞") or "时候到了检查烤箱".
+        title.replacingOccurrences(of: #"^的时候\s*"#, with: "", options: .regularExpression)
+    }
+
+    private static func requestBody(_ title: String) -> String? {
+        if let body = CaptureLeadIn.strip(title) { return body }
+        let pattern = #"^(?:(?:请|麻烦(?:你)?|帮我)\s*)*提醒(?:我|一下)\s*|^(?:(?:can|could|would|will)\s+(?:you|u)\s+)?(?:please\s+|pls\s+)?remind\s+me\b\s*(?:to\b\s*)?"#
+        guard let range = title.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { return nil }
+        let body = title[range.upperBound...].trimmingCharacters(in: titleBoundary)
+        return body.isEmpty ? nil : body
+    }
+
     /// What is left of a line once date, time and repeat words are gone: no filler words, no deadline leftovers, no emoji.
     private static func cleanTitle(_ title: String, raw: String) -> String {
         var t = String(title.unicodeScalars.filter { !($0.properties.isEmojiPresentation || $0.value == 0xFE0F || $0.value == 0x200D) })
@@ -414,8 +444,10 @@ enum CaptureParser {
         var hadLeadIn = false
         while changed {
             changed = false
-            t = t.trimmingCharacters(in: CharacterSet(charactersIn: " ,，。.、!！?？~"))
-            if !hadLeadIn, let rest = CaptureLeadIn.strip(t) {
+            t = t.trimmingCharacters(in: titleBoundary)
+            let withoutConnector = stripTemporalConnector(t)
+            if withoutConnector != t { t = withoutConnector; changed = true }
+            if !hadLeadIn, let rest = requestBody(t) {
                 t = rest
                 hadLeadIn = true
                 changed = true
@@ -445,7 +477,7 @@ enum CaptureParser {
             let trimmed = trimConnectors(t)
             if trimmed != t { t = trimmed; changed = true }
         }
-        return t.trimmingCharacters(in: CharacterSet(charactersIn: " ,，。.、!！?？~"))
+        return t.trimmingCharacters(in: titleBoundary)
     }
 
     /// Connector words that a removed date or time leaves dangling: "…车库去，然后 的时候提醒我…" (the time sat between them),
@@ -747,7 +779,7 @@ enum CaptureDraftMapper {
     /// durations and repeat names are dropped instead of guessed.
     static func capture(from draft: CaptureDraft, now: Date = .now, calendar: Calendar = .current) -> Capture? {
         // The model sometimes keeps the instruction ("增加一个 reminder 吧：…"); the title is what comes after it.
-        let title = CaptureLeadIn.stripped(draft.title.trimmingCharacters(in: .whitespacesAndNewlines))
+        let title = CaptureParser.cleanRequestTitle(draft.title)
         guard !title.isEmpty else { return nil }
 
         let today = calendar.startOfDay(for: now)
@@ -875,7 +907,11 @@ enum CaptureDraftMapper {
         - Return one item per separate thing the user mentions, in the order mentioned, at most 5.
         - kind is "event" for something at a fixed time with other people or a place (meeting, appointment, lunch, flight, class) \
         or with a start and end time; otherwise "task" (things to do, buy, send, call, pay).
-        - title is short, without the date, time or repeat words. Keep the user's language.
+        - title is concise and faithful to the requested action, in the user's language. Remove scheduling date/time/repeat words, \
+        their dangling connectors (such as 的时候), request phrases (such as 提醒我 / remind me to), and boundary punctuation. \
+        Preserve meaningful conditions, negation and modality (必须要 / 一定要 / must / must not); do not reduce the action to one word.
+        - Example: 今天晚上11点的时候提醒我，必须要睡觉 -> title 必须要睡觉, time 23:00, date today. \
+        下雨的时候带伞 keeps 下雨的时候; remind me to never skip medication keeps never skip medication.
         - date is yyyy-MM-dd. A bare weekday ("Friday") is its next occurrence after today. "next <weekday>" is that weekday in the \
         following week, marked (next week) in the table. For dates beyond the table use the year of today, or next year if the date has passed. \
         Leave date empty when the text names no day.

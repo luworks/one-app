@@ -67,7 +67,7 @@ private struct ProposedItems {
 @available(iOS 26, *)
 @Generable(description: "One task or event to propose")
 private struct ProposedItem {
-    @Guide(description: "The user's own words for the thing, without the date, time or repeat words. Copy them; never translate or shorten to one word")
+    @Guide(description: "Concise faithful action in the user's language. Omit scheduling words, dangling temporal connectors, reminder requests and boundary punctuation. Preserve conditions, negation and modality such as 必须要 or must not; never reduce to one word")
     var title: String
     @Guide(description: "event: fixed time or place or start and end; task: something to do")
     var kind: ProposedKind

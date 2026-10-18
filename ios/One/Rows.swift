@@ -342,6 +342,8 @@ struct CaptureCard: View {
     var onUndo: () -> Void = {}
     var onOpen: () -> Void = {}
 
+    var onRename: (String) -> Bool = { _ in false }
+
     enum Mode: Hashable, CaseIterable { case task, event, alarm }
 
     /// An alarm is a task that rings; it needs a time, so switching to Alarm with none picks the next full hour.
@@ -391,7 +393,11 @@ struct CaptureCard: View {
                              },
                              identifier: { "capture.kind." + String(describing: $0) })
             }
-            Text(capture.title).font(.headline)
+            CaptureTitleButton(title: capture.title, editable: status == .open || status == .added,
+                               onSave: { title in
+                if status == .open { capture.title = title; return true }
+                return onRename(title)
+            }).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
             if capture.kind == .task, !capture.ringsAsAlarm {
                 if status == .open {
@@ -480,5 +486,69 @@ struct WeekStrip: View {
 
     private func shift(_ days: Int) {
         if let d = cal.date(byAdding: .day, value: days, to: selected) { selected = d }
+    }
+}
+
+/// The title itself is the edit affordance, shared by full cards and compact rows.
+/// Draft text is local to the sheet until Save; Add remains a separate decision.
+struct CaptureTitleButton: View {
+    let title: String
+    var editable = true
+    var onSave: (String) -> Bool
+    @State private var editing = false
+
+    var body: some View {
+        Group {
+            if editable {
+                Button { editing = true } label: {
+                    Text(title).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Change title")
+                .accessibilityIdentifier("capture-title")
+            } else { Text(title) }
+        }
+        .sheet(isPresented: $editing) { CaptureTitleEditor(title: title, onSave: onSave) }
+    }
+}
+
+private struct CaptureTitleEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var failed = false
+    @FocusState private var focused: Bool
+    let onSave: (String) -> Bool
+
+    init(title: String, onSave: @escaping (String) -> Bool) {
+        _title = State(initialValue: title)
+        self.onSave = onSave
+    }
+
+    private var trimmed: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Title", text: $title, axis: .vertical)
+                    .focused($focused)
+                    .accessibilityIdentifier("capture-title-field")
+                if failed { Text("Couldn't save this title. The item may have been deleted.").foregroundStyle(.secondary) }
+            }
+            .navigationTitle("Title")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.accessibilityIdentifier("capture-title-cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if onSave(trimmed) { dismiss() } else { failed = true }
+                    }
+                    .disabled(trimmed.isEmpty)
+                    .accessibilityIdentifier("capture-title-save")
+                }
+            }
+            .task { focused = true }
+        }
     }
 }

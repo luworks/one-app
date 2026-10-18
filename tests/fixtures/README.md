@@ -42,6 +42,10 @@ values were added to replace these defaults.
   versioned, declared as a copied resource in `ios/Package.swift`, and read through
   `Bundle.module` by `CaptureEvalTests`. Moving it here would change package resource
   behavior unnecessarily.
+- [`CaptureTitleCleanupTests.swift`](../../ios/Eval/Tests/OneLogicTests/CaptureTitleCleanupTests.swift)
+  keeps small Chinese/English title regressions inline: the exact 23:00 sleep
+  reminder, dangling temporal connectors, request punctuation, conditions, negation
+  and modality, plus model mapping with unchanged date/time/type/repeat fields.
 - Small constants and synthetic generators in Swift test files are already
   versioned test inputs. Keep them with their corresponding tests rather than
   duplicating thousands of literals in JSON.
@@ -73,3 +77,7 @@ For a committed-state accessibility probe also pass `-uiTestingShareInbox`,
 `-uiTestingShareID <fresh UUID>` and `-uiTestingShareProbeTitle 'Upgrade baseline 20261018'`;
 expect `acknowledged;tasks=1;receipts=0;pending=0`. Do not reseed the reminder.
 The fixture is intentionally frozen; future schema changes should keep opening it.
+- `AskCardStaysTests` keeps three short capture title journeys inline: the owner's
+  exact Chinese sleep request, a pending reminder title draft, and an Added alarm
+  title Save/Cancel/reopen/creation-Undo journey. These inputs require no external
+  dataset beyond the existing `today-dataset.json` used by the suite.
