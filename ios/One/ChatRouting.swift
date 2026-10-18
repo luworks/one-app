@@ -38,7 +38,10 @@ enum ChatRouting {
         // Attributive/past action plus an inquiry, or a completed action being confirmed.
         if has(remainder, #"^(?:的|了|过).*(?:什么|谁|哪(?:个|些|条|一)|多少|是否|是不是)"#) { return true }
         if has(remainder, #"^(?:了|过).*(?<!好)(?<!行)(?<!可以)吗[?？]*$"#) { return true }
-        return has(remainder, #"(?:的是(?:谁|什么|哪(?:个|些|条|一))|(?:了|过)(?:吗|没有|没))[?？]*$"#)
+        // A 没有/没 completion check describes this action only immediately after its verb.
+        // Later checks can be the reminder's object, such as 确认报告提交了没有.
+        if has(remainder, #"^(?:了|过)(?:没有|没)[?？]*$"#) { return true }
+        return has(remainder, #"(?:的是(?:谁|什么|哪(?:个|些|条|一))|(?:了|过)吗)[?？]*$"#)
     }
 
     static func intent(_ raw: String) -> Intent {

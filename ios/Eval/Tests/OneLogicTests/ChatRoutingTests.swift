@@ -161,6 +161,33 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testExplicitReminderWithEmbeddedCompletionQuestionStillCaptures() {
+        XCTAssertEqual(ChatRouting.intent("下周一提醒我确认报告提交了没有"), .capture)
+    }
+
+    func testReminderObjectsCanContainCompletionChecks() {
+        for text in ["提醒我检查门锁好了没", "提醒我确认报告提交了没有",
+                     "下星期五下午3点提醒我检查门锁好了没",
+                     "帮我添加一个提醒，确认报告提交了没有",
+                     "添加一个提醒，确认报告提交了没有",
+                     "本周一添加一个提醒，检查门锁好了没",
+                     "可以帮我添加一个提醒，确认报告提交了没有？"] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
+    func testLeadingCompletedActionInquiriesRemainConversation() {
+        for prefix in ["", "本周一", "明天"] {
+            for question in ["添加了没有？", "创建了没？", "提醒我了没有？", "提醒我了没？",
+                             "添加了一个提醒吗？", "提醒我买牛奶了吗？",
+                             "添加的提醒是什么？", "提醒我开会的是谁？"] {
+                let text = prefix + question
+                XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+                XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+            }
+        }
+    }
+
     func testPoliteEnglishPrefixPreservesChineseReminderRequest() {
         for text in ["Please 提醒我明天买牛奶", "Can you 明天提醒我买牛奶?"] {
             XCTAssertEqual(ChatRouting.intent(text), .capture, text)
