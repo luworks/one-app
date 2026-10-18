@@ -126,9 +126,29 @@ final class AIResponsePerformanceTests: XCTestCase {
                 XCTAssertEqual(values["backend"], backend)
                 XCTAssertFalse(diagnostic.contains(text), "Stage metadata must not contain the input")
                 for key in ["context_complete", "respond_enter", "record_turn_before", "record_turn_after",
-                            "task_enter", "chat_response_await_before", "chat_response_await_after",
-                            "finish_emission_enter", "finish_emission_assigned", "on_change_enter"] {
+                            "finish_emission_enter", "finish_emission_assigned", "on_change_enter",
+                            "send", "ready", "feedback_layout", "response_layout"] {
                     XCTAssertNotNil(UInt64(values[key + "_ns"] ?? ""), "Missing conversation stage: \(key)")
+                }
+                switch values["dispatch"] ?? "" {
+                case "async":
+                    for key in ["task_enter", "chat_response_await_before", "chat_response_await_after"] {
+                        XCTAssertNotNil(UInt64(values[key + "_ns"] ?? ""), "Missing async stage: \(key)")
+                    }
+                    XCTAssertFalse(values.keys.contains { $0.hasPrefix("local_reply_") }, "Async dispatch has no local reply markers")
+                case "local_sync":
+                    for key in ["local_reply_before", "local_reply_after"] {
+                        XCTAssertNotNil(UInt64(values[key + "_ns"] ?? ""), "Missing local reply stage: \(key)")
+                    }
+                    XCTAssertFalse(values.keys.contains {
+                        $0.hasPrefix("task_enter_") || $0.hasPrefix("chat_response_await_")
+                    }, "Synchronous dispatch must not fabricate async timestamps")
+                    if let before = UInt64(values["local_reply_before_ns"] ?? ""),
+                       let after = UInt64(values["local_reply_after_ns"] ?? "") {
+                        XCTAssertGreaterThanOrEqual(after, before)
+                    }
+                default:
+                    XCTFail("Unknown conversation dispatch mode: \(values["dispatch"] ?? "missing")")
                 }
                 XCTAssertEqual(UInt64(values["send_ns"] ?? ""), starts["ai_send_to_feedback_layout"])
                 XCTAssertEqual(UInt64(values["ready_ns"] ?? ""), ends["ai_send_to_full_response_ready"])

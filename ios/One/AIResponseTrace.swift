@@ -9,6 +9,7 @@ final class AIResponseTrace {
     static let showsHistory = enabled && ProcessInfo.processInfo.arguments.contains("-uiTesting")
 
     enum Phase: String, Hashable { case feedback, response }
+    enum LocalReplyBoundary: String { case before, after }
     private struct Turn {
         let token: UUID
         let start: UInt64
@@ -24,6 +25,7 @@ final class AIResponseTrace {
     @ObservationIgnored private var stageToken: UUID?
     @ObservationIgnored private var conversationStageToken: UUID?
     @ObservationIgnored private var completedStageLine: String?
+    @ObservationIgnored private var stageDispatch = "async"
     private(set) var history: [String] = []
 
     func begin(_ token: UUID, modelAvailable: Bool) {
@@ -31,6 +33,7 @@ final class AIResponseTrace {
         cancel()
         turn = Turn(token: token, start: DispatchTime.now().uptimeNanoseconds, modelAvailable: modelAvailable)
         stageToken = token
+        stageDispatch = "async"
         stageTimes = ["send": turn?.start ?? 0]
     }
 
@@ -38,6 +41,17 @@ final class AIResponseTrace {
     func diagnoseConversation(_ token: UUID) {
         guard Self.enabled, stageToken == token else { return }
         conversationStageToken = token
+    }
+
+    /// Call around actual synchronous fallback work; never synthesize task or await timestamps.
+    func localReply(_ boundary: LocalReplyBoundary, token: UUID) {
+        guard Self.enabled, stageToken == token, conversationStageToken == token else { return }
+        switch boundary {
+        case .before: stageDispatch = "local_sync"
+        case .after:
+            guard stageDispatch == "local_sync" else { return }
+        }
+        stage("local_reply_" + boundary.rawValue, token: token)
     }
 
     func stage(_ name: String, token: UUID, at timestamp: UInt64? = nil) {
@@ -53,7 +67,7 @@ final class AIResponseTrace {
         guard conversationStageToken == current.token, current.pending.isEmpty else { return nil }
         let fields = stageTimes.keys.sorted().map { "\($0)_ns=\(stageTimes[$0]!)" }.joined(separator: ";")
         // Retain one complete line only after both layout timestamps are frozen.
-        completedStageLine = "PERF_STAGE_AI v=1;turn=\(current.token.uuidString);backend=\(current.backend);\(fields)"
+        completedStageLine = "PERF_STAGE_AI v=1;turn=\(current.token.uuidString);backend=\(current.backend);dispatch=\(stageDispatch);\(fields)"
         stageTimes.removeAll(keepingCapacity: true)
         stageToken = nil
         conversationStageToken = nil
@@ -110,6 +124,7 @@ final class AIResponseTrace {
         stageToken = nil
         conversationStageToken = nil
         completedStageLine = nil
+        stageDispatch = "async"
     }
 
     private func emit(_ name: String, start: UInt64, end: UInt64, turn: Turn, diagnostic: String? = nil) {
