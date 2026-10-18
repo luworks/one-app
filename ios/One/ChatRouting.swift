@@ -78,6 +78,12 @@ enum ChatRouting {
         // Embedded command words in an explanation question or a past report are not a new request.
         if has(text, #"^(?:what happens\b|why (?:did|does|do|would)\b|how (?:does|would)\b|(?:can|could) you (?:explain|tell me|show me)\b)|^(?:为什么|怎么(?:才能|会|设置|添加|创建)|如何)|^(?:yesterday|last night|this morning)[, ]+i (?:set|added|created)\b|^我(?:昨天|昨晚|今天早上)(?:设置了|设了|添加了|创建了)"#) { return .conversation }
         if isChineseReportedActionQuestion(text) { return .conversation }
+        // A concrete object may precede the reminder instruction. Require a complete suffix,
+        // and keep quoted/reported statements behind the conversation boundary above.
+        if !has(text, #"["“”「」]|(?:他说|她说|说过|昨天|已经)|\b(?:said|asked|already|finished|completed|yesterday)\b"#),
+           has(text, #"^.+(?:下下|下|本|这)?(?:周|星期|礼拜)[一二三四五六日天]\s*提醒我(?:吧)?[。.!！]*$|^.+\s+(?:next\s+)?(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[,， ]+remind me[.!]*$"#) {
+            return .capture
+        }
         // Alarm verbs must be the request itself, not words embedded in a question or report.
         let alarmRequest = has(text, #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#)
         if alarmRequest { return .capture }

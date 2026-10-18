@@ -213,6 +213,19 @@ enum CaptureConversation {
         return has(text, #"^(?:(?:no[, ]*|actually[, ]*|please\s+|just\s+|can you\s+|could you\s+|i need you to (?:help me )?\s*|i want you to\s+))*(?:(?:set|add|create|make)(?:\s+it)?\s+(?:me\s+)?(?:(?:an?|that)\s+)?alarm(?:\s+(?:for (?:it|that)|instead|please))?|make (?:it|that) an alarm)[.!?]*$|^(?:(?:没有|不是|不|就是|只要|就|请|可以|你|我需要|我想要|来|帮我|，|,|\s))*(?:加|设定|设置|设|定|创建)(?:一?个)?闹钟(?:就可以|就行|即可|吧|哦|啊|呢|了|。|！|!)*$"#)
     }
 
+    /// These complete requests supply a kind, never a new subject or permission to write.
+    static func referencesReminder(_ raw: String) -> Bool {
+        has(raw.trimmingCharacters(in: .whitespacesAndNewlines), #"^(?:(?:就|只要|请|帮我|你|麻烦|\s))*(?:设定|设置|设|定|创建|添加|加)(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒)(?:就行|就可以|吧)?[。.!！]*$|^(?:(?:please|just|no|actually)[, ]+)*(?:set|add|create|make)(?: it)? (?:a |the |that )?reminder(?: for (?:it|that))?[.!]*$"#)
+    }
+
+    private static func proceeds(_ text: String) -> Bool {
+        has(text, #"^\s*(?:你做吧|你来吧|就这样做吧|do it|please do|go ahead)[。.!！]*\s*$"#)
+    }
+
+    private static func acknowledges(_ text: String) -> Bool {
+        has(text, #"^\s*(?:够|够了|好的|好|嗯|ok|okay|enough|that's enough)[。.!！]*\s*$"#)
+    }
+
     /// The same parser result is used with or without Apple Intelligence. Explicit reminders are
     /// tasks even when their object contains event words (e.g. "don't eat dinner").
     static func parse(_ text: String, now: Date, calendar: Calendar) -> Capture {
@@ -234,8 +247,10 @@ enum CaptureConversation {
     static func resolve(_ text: String, context: ConversationContext, pending: Capture?,
                         now: Date = .now, calendar: Calendar = .current) -> Capture? {
         let alarm = referencesAlarm(text)
+        let reminder = referencesReminder(text)
+        let proceed = proceeds(text)
         let time = Dialogue.isOnlyWhen(text, now: now, calendar: calendar)
-        guard alarm || (time && pending == nil) else { return nil }
+        guard alarm || reminder || proceed || (time && pending == nil) else { return nil }
         var prior: Capture?
         var requested = false
         for user in context.users {
@@ -244,6 +259,13 @@ enum CaptureConversation {
                 prior?.kind = .task
                 prior?.ringsAsAlarm = true
                 requested = true
+            } else if referencesReminder(user) {
+                prior?.kind = .task
+                prior?.ringsAsAlarm = false
+            } else if acknowledges(user) || proceeds(user) {
+                // Keep the active user subject through short acknowledgments, without treating
+                // them as creation requests. Unrelated conversation below still clears it.
+                continue
             } else if let current = prior, Dialogue.isOnlyWhen(user, now: now, calendar: calendar),
                       case .updated(let updated) = Dialogue.refine(current, with: user, now: now, calendar: calendar) {
                 prior = updated
@@ -267,6 +289,11 @@ enum CaptureConversation {
             result.kind = .task
             result.ringsAsAlarm = true
             result.isAllDay = false
+            return result
+        }
+        if reminder || proceed {
+            guard requested, var result = pending ?? prior else { return nil }
+            if reminder { result.kind = .task; result.ringsAsAlarm = false }
             return result
         }
         guard requested, let prior,
