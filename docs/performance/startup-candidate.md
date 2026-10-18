@@ -105,3 +105,103 @@ Share import, auto-plan, widgets or first content. The dominant historical
 pre-init Debug time is outside these owned statements. After the parent captures
 stage samples/profiling, optimize only a measured dominant cost with preserved
 end semantics; keep such a candidate in a second separable commit.
+
+## Optimized Debug baseline: source/stage diagnosis (2026-10-18)
+
+The parent ran the frozen-source optimized Debug launch method successfully.
+Read-only verification used canonical raw log
+`tests/results/runs/performance-climb-20261018/baseline-optimized-ui-d436a759.log`,
+launch method lines 2435–2532. These are three ordered app-side proxy samples,
+not shipping Release, real usable-content or touch-to-photon results. This lane
+ran no compiler, build, UI or profiling during diagnosis.
+
+Raw launch proxy milliseconds: `[2299.458791, 1562.401, 1576.318375]`;
+median `1576.318375`, range `1562.401–2299.458791`, n=3.
+Store: `[139.081166, 69.886625, 73.906333]`;
+bootstrap: `[69.33575, 55.847542, 56.500167]`;
+post-bootstrap endpoint: `[817.770375, 609.52975, 587.674917]`.
+Raw warm-resume proxy: `[73.626084, 47.012667, 37.815708]` ms;
+median `47.012667`, range `37.815708–73.626084`, n=3.
+The first sample is slower, but cache warming is only a hypothesis; retain all
+three and do not discard it as an outlier.
+
+The report also supplies init-to-store values
+`[7.474750, 6.217333, 6.030375]` ms. Arithmetic on corresponding samples gives:
+
+- Init → bootstrap_start: `[1412.352666, 897.023708, 932.143291]` ms.
+  This includes the measured init overrides and store interval.
+- Store_ready → bootstrap_start:
+  `[1265.796750, 820.919750, 852.206583]` ms, derived as total minus
+  init-to-store, store, bootstrap and post-bootstrap intervals.
+- Store_ready → bootstrap_start plus post-bootstrap endpoint accounts for
+  `[90.61%, 91.55%, 91.34%]` of the corresponding total proxy durations.
+  Even a hypothetical zero-cost store/bootstrap would leave most of the proxy
+  unchanged; their measured durations alone cannot explain a 3x opportunity.
+  Required store/import/migration work must remain intact.
+
+### What the gaps contain, and what remains unknown
+
+The first gap is **after** `OneStore.start` returns and **before** the existing
+HomeView bootstrap `.task` starts. It can include the rest of App initialization,
+app/scene delegate work (`QuickActions.swift` registers background refresh and
+sets up the scene), WindowGroup/model-context attachment, HomeView/DayAgenda
+state and @Query initialization, SwiftUI graph/body construction, initial List
+and controls, appearance/window work and task scheduling. The `.task` is not
+invoked synchronously from `OneApp.init`; this gap is not extra fixture loading,
+which is inside the measured bootstrap. The available marks cannot divide app
+CPU, SwiftUI/UIKit/framework initialization, query work and scheduler waiting.
+The historical pre-init Debug duration is excluded by this new endpoint and
+cannot explain this residual by definition.
+
+After bootstrap, inserted fixture objects can invalidate HomeView's three
+queries and DayAgenda's three queries, rebuilding the agenda/List with real
+content. DayAgenda computes today's items and tomorrow's preview, observes the
+Health line, and starts scroll-to-now on appearance. HomeView also observes
+`reminderSignature` and starts its existing 300 ms debounce task. The probe must
+receive `bootstrapComplete` through SwiftUI, be updated/armed, acquire nonzero
+geometry and an active foreground window, then receive two eligible display-link
+callbacks. Thus the post-bootstrap span can include content/graph/layout work,
+other main-actor tasks, scene activation gating and probe observation delay.
+It does **not** establish 588–818 ms of drawing CPU or a finished animation.
+
+The 250 ms scroll-to-now sleep, 300 ms resync debounce and 1.5 s sidebar sleep
+are asynchronous waits, not additive blocking startup costs. Their work may
+interleave if their deadlines fall inside a gap, but current marks do not show
+that ordering. Do not remove them or attribute their full nominal duration to
+this measurement. Bootstrap completion is still not a barrier for Health,
+notification/AlarmKit reconciliation, EventKit refresh or scroll completion.
+
+### One next narrow hypothesis: cancelled debounce tasks still reconcile
+
+Source evidence: `HomeView.main` uses `.task(id: reminderSignature)` followed by
+`try? await Task.sleep(for: .milliseconds(300))`, then alarm retirement,
+`Reminders.shared.resync()`, `Ringer.sync(context)` and widget update. When a new
+signature cancels an older sleeping task, `try?` swallows CancellationError and
+the older task can proceed immediately. Fixture insertion changes the queried
+signature; alarm reconciliation can also mutate alarm fields. Consequently a
+superseded task **may** perform a redundant pass during startup instead of being
+coalesced into the latest pass. This is a concrete cancellation path, not yet a
+measured frequency or dominant-cost finding.
+
+The simulator does not make the path automatically free:
+`Reminders.resync` first awaits notification authorization status;
+`AlarmScheduler.reconcile` fetches alarms/tasks/events and assigns missing alarm
+IDs before its authorization guard. `WidgetFeed.update` does skip UI-test writes.
+Do not infer notification permission or actual AlarmKit work from source alone.
+
+The next diagnostic should count debounce generations, cancellation exits and
+actual reconciliation entries, and locate their main-thread stacks against the
+two residual intervals. Profile only when the parent grants the host lane.
+If repeated cancelled generations actually reconcile inside a dominant interval,
+the single candidate is a cancellation-aware exit **at the existing debounce
+sleep boundary**, leaving the newest generation's same 300 ms delay and full
+retirement/resync/AlarmKit/widget pass unchanged. Do not abort a partially started
+reconciliation, delete a pass that has no successor, defer required data import,
+change tab state or move the endpoint earlier. Verify that final scheduling
+still reflects the newest model state before accepting the candidate.
+
+Reject this startup hypothesis if there are no superseded passes, if they finish
+outside the measured gaps, or if measured cost cannot credibly clear 5%. Then
+profile the residual framework/List/graph versus main-actor wait costs before
+selecting a different candidate; do not guess a cache or remove content. No
+production edit or speedup acceptance is authorized by this diagnosis alone.
