@@ -69,7 +69,7 @@ struct AskView: View {
     @State private var responseBaseline: ResponseSignature?
 
     private enum ResponseTarget: Equatable {
-        case reply(UUID), capture(UUID), bottom
+        case reply(UUID), capture(UUID), plan, tidy, change(UUID), choices([UUID])
     }
 
     private struct ResponseSignature: Equatable {
@@ -96,10 +96,14 @@ struct AskView: View {
         if signature.proposals != baseline.proposals,
            let proposal = proposals.last(where: { p in baseline.proposals.first(where: { $0.id == p.id }) != p && p.status == .open }) {
             responseTarget = .capture(proposal.batch)
-        } else if (!plan.isEmpty && signature.plan != baseline.plan) || (!tidy.isEmpty && signature.tidy != baseline.tidy) || (change != nil && (signature.change != baseline.change || signature.changeStart != baseline.changeStart)) {
-            responseTarget = .bottom
-        } else if case .chooseItem? = followup, signature.followup != baseline.followup {
-            responseTarget = .bottom
+        } else if !plan.isEmpty && signature.plan != baseline.plan {
+            responseTarget = .plan
+        } else if !tidy.isEmpty && signature.tidy != baseline.tidy {
+            responseTarget = .tidy
+        } else if let change, signature.change != baseline.change || signature.changeStart != baseline.changeStart {
+            responseTarget = .change(change.id)
+        } else if case .chooseItem(_, let options)? = followup, signature.followup != baseline.followup {
+            responseTarget = .choices(options.map(\.id))
         } else if let reply = messages.last(where: { $0.role == .ai }), reply.id != baseline.messages.last(where: { $0.role == .ai })?.id {
             responseTarget = .reply(reply.id)
         } else { return }
@@ -204,7 +208,7 @@ struct AskView: View {
                     }
                 }
             }
-            .safeAreaInset(edge: .bottom) { inputArea.background { responseProbe(.bottom) } }
+            .safeAreaInset(edge: .bottom) { inputArea }
             .navigationTitle("AI")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -336,10 +340,12 @@ struct AskView: View {
             if !plan.isEmpty {
                 PlanCard(plan: plan, grantUntil: planGrant?.expires, onApply: { applyPlan() }, onAlways: applyPlanAlways,
                          onCancel: { recordCard(resolved: "plan", "cancelled", items: plan.count); plan = [] })
+                    .background { responseProbe(.plan) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if !tidy.isEmpty {
                 TidyCard(rows: $tidy, onApply: applyTidy, onCancel: { recordCard(resolved: "tidy", "cancelled", items: tidy.count); tidy = [] })
+                    .background { responseProbe(.tidy) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let undo = undoRow {
@@ -357,12 +363,14 @@ struct AskView: View {
             }
             if case .chooseItem(_, let options)? = followup {
                 ChoiceBar(options: options, onPick: tapChoice)
+                    .background { responseProbe(.choices(options.map(\.id))) }
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { choiceFrame = $0 }
                     .onDisappear { choiceFrame = .zero }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let change {
                 ChangeCard(change: change, onApply: { apply(change) }, onCancel: { recordCard(resolved: "change", "cancelled"); self.change = nil })
+                    .background { responseProbe(.change(change.id)) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: 8) {
