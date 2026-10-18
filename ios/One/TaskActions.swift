@@ -51,8 +51,10 @@ final class UndoToast {
     func performUndo() {
         // The toast's button and the shake prompt undo the same change; once it is undone, forget the shake entry.
         undoManager?.removeAllActions(withTarget: self)
+        let previousToken = token
         undo?()
-        dismiss()
+        // An Undo failure may replace this toast with a useful notice.
+        if token == previousToken { dismiss() }
     }
 
     /// "Deleted “Buy milk”" reads as "Undo Delete" in the shake prompt.
@@ -78,8 +80,18 @@ enum TaskActions {
     /// Every change is also written to the Activity ledger (`Ledger`), as made by `actor` through `channel`.
     static func toggleDone(_ task: OneTask, context: ModelContext, toast: UndoToast?,
                            actor: LedgerActor = .you, channel: LedgerChannel = .app) {
+        let oldDone = task.isDone
+        let oldDoneAt = task.doneAt
+        let accepted: RemindersSync.Remote?
+        do {
+            accepted = try RemindersSync.shared.commitCompletion(task, done: !oldDone)
+        } catch {
+            toast?.showNotice("Couldn’t update Apple Reminders. " + error.localizedDescription + " Tap the circle to retry.")
+            return
+        }
         guard !task.isDone else {
             withAnimation { task.toggleDone() }
+            guard persistCompletion(task, context: context, toast: toast, oldDone: oldDone, oldDoneAt: oldDoneAt) else { return }
             Ledger.record(.reopened, task: task, title: task.title, actor: actor, channel: channel, context: context)
             return
         }
@@ -92,11 +104,18 @@ enum TaskActions {
             task.toggleDone()
             if let next { context.insert(next) }
         }
-        if next != nil { try? context.save() }
+        guard persistCompletion(task, context: context, toast: toast, oldDone: oldDone, oldDoneAt: oldDoneAt, next: next) else { return }
         let suffix = next.map { n in " · next " + DayLabel.withTime(n.plannedStart ?? n.due ?? .now) } ?? ""
         let entry = Ledger.record(.completed, task: task, title: task.title, after: next.map { _ in "Next one added" } ?? "",
                                   actor: actor, channel: channel, context: context)
         toast?.show("Completed “\(task.title)”" + suffix) {
+            let undoDone = task.isDone
+            let undoDoneAt = task.doneAt
+            do { try RemindersSync.shared.commitCompletion(task, done: false, restoringDue: oldDue, restoresDue: true, expected: accepted) }
+            catch {
+                toast?.showNotice("Couldn’t reopen in Apple Reminders. " + error.localizedDescription)
+                return
+            }
             withAnimation {
                 // Not toggleDone(): Apple may already have rolled a repeating reminder back to open (next occurrence).
                 if task.isDone { task.toggleDone() }
@@ -104,7 +123,33 @@ enum TaskActions {
                 if task.due != oldDue { task.due = oldDue }
                 if task.plannedStart != oldPlanned { task.plannedStart = oldPlanned }
             }
-            Ledger.recordUndo(of: entry, context: context)
+            if persistCompletion(task, context: context, toast: toast, oldDone: undoDone, oldDoneAt: undoDoneAt, restoredDue: true) {
+                Ledger.recordUndo(of: entry, context: context)
+            }
+        }
+    }
+
+    /// After EventKit accepts a linked write, do not undo it if the local save fails. Keep the accepted
+    /// state in memory and retry saving on reconciliation. Local-only failures restore only this action.
+    private static func persistCompletion(_ task: OneTask, context: ModelContext, toast: UndoToast?,
+                                          oldDone: Bool, oldDoneAt: Date?, next: OneTask? = nil, restoredDue: Bool = false) -> Bool {
+        do {
+            try context.save()
+            RemindersSync.shared.didPersistCompletion(task, restoredDue: restoredDue)
+            return true
+        } catch {
+            if task.externalID == nil {
+                task.isDone = oldDone
+                task.doneAt = oldDoneAt
+                if let next { context.delete(next) }
+                toast?.showNotice("Couldn’t save the reminder. " + error.localizedDescription + " Tap the circle to retry.")
+            } else {
+                // Keep the old persisted baseline until the local copy actually saves. Otherwise a
+                // restart with the old open copy could be misread as a request to reopen Apple.
+                RemindersSync.shared.scheduleReconcile(after: .milliseconds(50))
+                toast?.showNotice("Apple Reminders was updated, but Today couldn’t save its copy. " + error.localizedDescription + " Reopen Today to retry.")
+            }
+            return false
         }
     }
 

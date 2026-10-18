@@ -7,6 +7,7 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 `today-dataset.json`; that dataset is unchanged.
 
 | Dataset | Consumers and original generator |
+| [`today-reminder-completion.json`](today-reminder-completion.json) | `TodayReminderCompletionTests`: owner-reported Bring the water cup at 12:30, with notes and planned time. Tests namespace the title and seed the simulator EventKit store through `addToday`; no user reminder is used. |
 | --- | --- |
 | [`today-dataset.json`](today-dataset.json) | Shared UI journeys using `TestData.launchArguments` / `TestData.path`, including `DevDataTests.testDatasetFillsChatsAlarmsAndReminders` and the ordinary `CalendarAlarmTests.launch(pinned:)` setup. This is the canonical multi-screen dataset, not a generated per-run input. |
 | Same `today-dataset.json` | `PerformanceBaselineTests` and `tests/performance/launch_probe.py`: small feature-variety performance baseline (17 reminders, 13 events, 4 alarms, 3 lists, 7 chats), application clock pinned to 09:41. Not a large-history fixture. |
