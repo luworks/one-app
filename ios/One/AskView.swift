@@ -127,7 +127,7 @@ struct AskView: View {
                     withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }
                 }
                 .onChange(of: proposals) { persistCards() }
-                .sheet(item: $openedItem) { item in
+                .sheet(item: $openedItem, onDismiss: refreshCardTitles) { item in
                     switch item {
                     case .task(let task): TaskEditor(task: task)
                     case .alarm(let alarm): AlarmEditor(alarm: alarm)
@@ -146,6 +146,7 @@ struct AskView: View {
             .task {
                 // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
                 if messages.isEmpty { focused = true }
+                refreshCardTitles()
                 Understander.prewarm()
             }
             .onDisappear { closeOpenCards("ignored") }
@@ -840,7 +841,7 @@ struct AskView: View {
         let batches = proposals.filter { $0.anchor == anchor }.map(\.batch).reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
         ForEach(batches, id: \.self) { batch in
             CaptureStack(proposals: batchBinding(batch), lists: lists.map(\.name),
-                         onAdd: add, onSkip: skip, onAddAll: addAll, onUndo: undo, onOpen: open)
+                         onAdd: add, onSkip: skip, onAddAll: addAll, onUndo: undo, onOpen: open, onRename: rename)
                 .id(batch)
         }
     }
@@ -877,6 +878,7 @@ struct AskView: View {
     private func commit(_ id: UUID) -> Capture? {
         guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.add) else { return nil }
         let capture = proposals[i].capture
+        guard capture.isReadyToAdd else { return nil }
         let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
         recordCard(resolved: "capture", edits.isEmpty ? "applied" : "edited", edits: edits)
         let written = capture.insertRecorded(into: context, actor: .todayAI, channel: .ask, approval: .asked)
@@ -919,6 +921,40 @@ struct AskView: View {
         case .event(let event): onOpenDay(event.start)
         case nil: messages.append(ChatMessage(role: .ai, text: "“\(p.capture.title)” isn't there any more."))
         }
+    }
+
+    /// Save changes the existing item, then every card in this chat that refers to it.
+    private func rename(_ id: UUID, to title: String) -> Bool {
+        guard let p = proposals.first(where: { $0.id == id }), p.status == .added,
+              let old = CaptureUndo.title(p.itemRef, in: context) else { return false }
+        guard old != title else { refreshCardTitles(); return true }
+        guard CaptureUndo.rename(p.itemRef, to: title, in: context) else { return false }
+        let task: OneTask?
+        let kind: String
+        switch CaptureUndo.resolve(p.itemRef, in: context) {
+        case .task(let t): task = t; kind = "task"
+        case .alarm: task = nil; kind = "alarm"
+        case .event: task = nil; kind = "event"
+        case nil: return false
+        }
+        let entry = Ledger.record(.renamed, task: task, kind: kind, title: title,
+                                  before: old, after: title, channel: .ask, context: context)
+        refreshCardTitles()
+        toast?.show("Changed title") {
+            // Do not replace another edit made since this save, or resurrect an item deleted since.
+            guard CaptureUndo.title(p.itemRef, in: context) == title,
+                  CaptureUndo.rename(p.itemRef, to: old, in: context) else { return }
+            Ledger.recordUndo(of: entry, task: task, channel: .ask, context: context)
+            refreshCardTitles()
+        }
+        return true
+    }
+
+    private func refreshCardTitles() {
+        for i in proposals.indices where proposals[i].status == .added {
+            if let title = CaptureUndo.title(proposals[i].itemRef, in: context) { proposals[i].capture.title = title }
+        }
+        persistCards()
     }
 
     private func isPlanRequest(_ text: String) -> Bool { SentenceRoute.isPlanRequest(text) }

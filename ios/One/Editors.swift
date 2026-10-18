@@ -282,6 +282,7 @@ struct EventEditor: View {
                     }
                 }
                 if let event {
+                    if !event.note.isEmpty { Section("Notes") { Text(event.note) } }
                     Section {
                         Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
                             let backup = event.copy()

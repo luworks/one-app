@@ -253,6 +253,11 @@ enum Ledger {
             t.plannedStart = entry.beforeDate
         case .redated:
             t.due = entry.beforeDate
+        case .renamed:
+            guard t.title == entry.after else { return false }
+            t.title = entry.before
+            try? context.save()
+            RemindersSync.shared.scheduleReconcile()
         case .created:
             RemindersSync.shared.noteDeleted(reminder: t.externalID)
             context.delete(t)

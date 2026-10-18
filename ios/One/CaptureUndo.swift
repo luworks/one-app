@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import EventKit
 
 /// Takes back exactly what a card's Add wrote, and finds it again for Open. The card keeps the created item's id
 /// (`Ledger.ref` JSON) and the Activity entry of its creation (`StoredCard.itemRef` / `entryID`).
@@ -76,5 +77,66 @@ enum CaptureUndo {
         } else {
             Ledger.record(.deleted, kind: kind, title: title, channel: .ask, context: context)
         }
+    }
+}
+
+
+/// A title-only edit never copies a stale Capture back over dates, recurrence or alarm state.
+extension CaptureUndo {
+    static func title(_ ref: String?, in context: ModelContext) -> String? {
+        switch resolve(ref, in: context) {
+        case .task(let task): return task.title
+        case .alarm(let alarm): return alarm.label
+        case .event(let event):
+            if let externalID = event.externalID {
+                return CalendarSync.shared.nativeEvent(identifier: externalID)?.0.title
+            }
+            return event.title
+        case nil: return nil
+        }
+    }
+
+    /// Resolving again at commit time prevents a deleted item from being resurrected by an open sheet or Undo toast.
+    @discardableResult
+    static func rename(_ ref: String?, to title: String, in context: ModelContext) -> Bool {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        switch resolve(ref, in: context) {
+        case .alarm(let alarm):
+            let old = alarm.label
+            alarm.label = title
+            do { try context.save() } catch { alarm.label = old; return false }
+            Task { await Ringer.sync(context) }
+        case .task(let task):
+            let old = task.title
+            task.title = title
+            do { try context.save() } catch { task.title = old; return false }
+            RemindersSync.shared.scheduleReconcile()
+        case .event(let event):
+            let old = event.title
+            // Local events stay local. For linked events, edit the existing EventKit object only:
+            // the general save path also writes dates/repeats and can create a replacement.
+            var linked: (EKEvent, EKEventStore)?
+            var oldLinkedTitle: String?
+            if let externalID = event.externalID {
+                guard let existing = CalendarSync.shared.nativeEvent(identifier: externalID),
+                      existing.0.calendar.allowsContentModifications else { return false }
+                linked = existing
+                oldLinkedTitle = existing.0.title
+                existing.0.title = title
+                do { try existing.1.save(existing.0, span: .thisEvent) }
+                catch { existing.0.title = oldLinkedTitle; return false }
+            }
+            event.title = title
+            do { try context.save() } catch {
+                event.title = old
+                if let linked {
+                    linked.0.title = oldLinkedTitle
+                    try? linked.1.save(linked.0, span: .thisEvent)
+                }
+                return false
+            }
+        case nil: return false
+        }
+        return true
     }
 }
