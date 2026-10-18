@@ -94,6 +94,11 @@ final class PagePerformanceTests: XCTestCase {
         testSettingsSubpageAndActivityEndpoints()
     }
 
+    func testSearchReminderResourceWindows() {
+        app.launchArguments.append("-performanceResources")
+        testSearchQuickReminderAndReminderDetailEndpoints()
+    }
+
     private func tap(_ target: XCUIElement, route: String, ready: XCUIElement) {
         XCTAssertTrue(target.waitForExistence(timeout: 5))
         let hittable = target.isHittable
