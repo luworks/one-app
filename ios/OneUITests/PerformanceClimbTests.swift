@@ -15,14 +15,20 @@ final class PerformanceClimbTests: XCTestCase {
         app.descendants(matching: .any)[id].firstMatch
     }
 
+    private func reports() -> Set<String> {
+        Set(app.staticTexts.matching(identifier: "performance.trace").allElementsBoundByIndex.map(\.label))
+    }
+
     @discardableResult
     private func sample(_ name: String, after previous: String = "") -> String {
-        let probe = app.staticTexts["performance.trace"]
+        var report = ""
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            probe.exists && probe.label != previous && probe.label.contains(";name=\(name);")
+            let matches = self.reports().filter { $0 != previous && $0.contains(";name=\(name);") }
+            guard matches.count == 1, let value = matches.first else { return false }
+            report = value
+            return true
         }, object: nil)
         XCTAssertEqual(XCTWaiter().wait(for: [ready], timeout: 10), .completed, "App endpoint: \(name)")
-        let report = probe.label
         let fields = Dictionary(uniqueKeysWithValues: report.split(separator: ";").compactMap { field -> (String, String)? in
             let pair = field.split(separator: "=", maxSplits: 1)
             return pair.count == 2 ? (String(pair[0]), String(pair[1])) : nil
@@ -43,7 +49,9 @@ final class PerformanceClimbTests: XCTestCase {
     }
 
     private func tap(_ label: String, sample name: String, ready: XCUIElement) {
-        let previous = app.staticTexts["performance.trace"].label
+        let current = reports()
+        XCTAssertEqual(current.count, 1, "Visible trace mirrors must agree before navigation")
+        let previous = current.first ?? ""
         app.buttons[label].firstMatch.tap()
         sample(name, after: previous)
         XCTAssertTrue(ready.waitForExistence(timeout: 5), "Destination content exists: \(label)")

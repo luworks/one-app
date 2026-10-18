@@ -83,3 +83,17 @@ Search/Quick Reminder/list/detail method passed107.627s, same83b4fb8 products. E
 Evidence: `baseline-settings-search-9f7a18ad.log`, full closed `baseline-settings-search/ui.xcresult`; `settings-repro-6ab29add.log` and full closed `settings-repro/ui.xcresult`; `settings-failure-analysis/` contains exported activity tree, original video, metadata and `failure-last-frame.png`. Both failed runs remain failed in the QA journal. Shutdown/release12:27:12 PDT; no further attempt in that window.
 
 Next measurement-only repair: ensure the trace-enabled navigation timer begins in its state-binding action, and attach the destination probe to the actual Activity data Form. Keep original trace-disabled links and all test assertions. Revalidate the one representative failure with new source before accepting these page metrics.
+
+
+## Launch/resume and root navigation
+
+Same frozen83b4fb8 products, productionb1fc12b, Debug-O and fixture/context above. `testLaunchAndResumeEndpoints` passed44.381s (three process launches/OS-warm and matching resume operations). Init starts at the first explicit `OneApp.init` statement: dyld/pre-init is excluded. Both endpoints end at content geometry plus two display-link callbacks, not full usability.
+
+| Metric | Raw ms | Median ms | Required /3 | Stretch /10 |
+| --- | --- | ---: | ---: | ---: |
+| app_init_to_content_layout | 2624.286, 1633.695, 1450.897 | 1633.695 | 544.565 | 163.370 |
+| resume_to_content_layout | 81.810, 49.768, 31.782 | 49.768 | 16.589 | 4.977 |
+
+No p95 or speedup is claimed. `testNavigationEndpointsAndKeptState` failed28.553s at Clock because XCTest found two `performance.trace` StaticTexts carrying the identical interval. Its preceding n1 transitions are retained as diagnostics, not accepted navigation baselines; state-retention assertions were not reached. A measurement-reader repair deduplicates identical interval strings, requires exactly one distinct matching report, and rejects disagreeing mirrors before navigation. Endpoint definitions and all destination/state assertions are unchanged. The repair is source-only until the next incremental build and focused navigation run.
+
+Evidence: `baseline-root-navigation-c334b127.log`, `root-navigation-command.json`, `root-navigation-summary.json`, full closed `baseline-root-navigation/ui.xcresult`; QA archive `performance-pages-root-navigation-20261018`. Simulator shutdown/panel closed and live heavy/booted empty before12:36 resource handoff.
