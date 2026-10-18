@@ -1,8 +1,10 @@
-# Existing event save investigation — issue #79
+# Existing Calendar event save compatibility — issue #79
 
-Status: iOS 27 compatibility fallback implemented; unchanged and failure regressions
-passed. Final changed/all-day harness repair is queued for simulator verification.
-A build alone is not completion of the owner-reported bug.
+Status: fixed through the iOS 27 existing-event compatibility entry. Focused build
+and simulator journeys passed; the underlying native More Options service is not
+claimed repaired. No physical-device acceptance is claimed.
+
+## Retained baseline investigation
 
 - Clean inherited base: `edb7d737710cfae5603dd3ec462c4f04da8ac842`.
 - Screenshot is the native EventKitUI editor, not the local SwiftUI `EventEditor`.
@@ -112,7 +114,7 @@ recurrence UI and More Options completion remain unverified unless recorded belo
   repair keeps all-day date editing in the full native options and shows the
   inclusive date range in the fallback, with a one-day completion regression.
 - `fallback-focused-repair/` runs the two failed metadata checks using an explicit
-  accessible Alerts value, plus the distinct all-day journey. Result pending.
+  accessible Alerts value, plus the distinct all-day journey. Results are recorded below.
 
 - Source `bf31d0e`, `fallback-focused-repair/`: build succeeded. Unchanged
   completion, Calendar return, persisted reopen, notes, URL and two alerts all
@@ -128,3 +130,31 @@ recurrence UI and More Options completion remain unverified unless recorded belo
   deletes only each journey's unique title and its exact updated-title variant.
   Final validation is limited to changed save and the corrected all-day input;
   the passing unchanged/failure behavior is not rerun.
+
+## Final regression evidence and delivery
+
+- `0495fa4059e389730dff7b389fbbedd96d4e4629`, clean tree,
+  `fallback-final-two/`: incremental build and both UI methods passed.
+  Changed-title save closes, returns to Calendar, survives relaunch and reopens
+  with notes, URL and both alerts intact (57.080 s). The corrected single-day
+  all-day fixture displays only its actual day and completes/reopens with the
+  same metadata intact (60.567 s). Teardown cleanup ran successfully.
+- Existing timed event unchanged save/reopen plus notes/URL/two-alert preservation
+  passed at `bf31d0e` (50.739 s). Later production changes were DEBUG test hooks;
+  no unchanged save behavior changed, so this passing journey was not repeated.
+- Injected failure keeps the editor, draft title and meaningful error at
+  `79df2a7` (41.294 s). The later all-day display, accessibility and test-fixture
+  changes do not change that error-handling path, so it was not repeated.
+- Local daily unchanged save/reopen remains the earlier 23.458 s passing evidence.
+  No logic suite, full UI suite, signing, migration or phone work was performed.
+- Runner exit, UI/xcresult/shutdown stages were all 0 for the final batch. Named
+  Today-EventSave was shut down and its panel closed at 13:25:22 PDT; actual
+  booted/heavy inventories were empty and resources were released directly to
+  the performance owner. The same independent cache was reused throughout.
+
+PR81 contains the production fallback, fixtures, five reusable UI journeys and
+this compact history. Original failed logs/recordings and complete xcresults are
+retained, not overwritten. All evidence lives under the primary checkout's
+`tests/results/runs/calendar-save-20261018/` and is indexed in the QA Activity
+SQLite journal. iCloud/Family server behavior, invitee delivery, recurrence scope
+UI, native advanced save and physical devices remain unverified.
