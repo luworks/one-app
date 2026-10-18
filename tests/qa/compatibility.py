@@ -46,17 +46,21 @@ def copy_products(source, destination):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--products", type=Path, required=True, help="completed Build/Products; no active build")
-    p.add_argument("--source-head", required=True, help="exact git SHA of that build; must match this checkout")
+    p.add_argument("--source-head", required=True, help="exact git SHA of that build; app/test/fixture sources must match")
     p.add_argument("--lane", action="append", choices=["small", "standard", "mini"], required=True)
     p.add_argument("--workers", type=int, choices=[1, 2, 3], default=2)
     p.add_argument("--output", type=Path, required=True, help="new batch directory under persistent results")
     args = p.parse_args()
     args.output = args.output.resolve()
     args.products = args.products.resolve()
-    if e2e.capture(["git", "rev-parse", "HEAD"]) != args.source_head:
-        p.error("Build source HEAD differs from this checkout")
+    inputs = ["ios/One", "ios/OneUITests", "ios/Shared", "ios/ShareExtension", "ios/TodayWidgets",
+              "ios/One.xcodeproj", "tests/fixtures"]
+    # A later docs/runner-only commit can reuse the exact app binary.
+    changed = e2e.capture(["git", "diff", args.source_head, "HEAD", "--name-only", "--", *inputs])
+    if changed:
+        p.error("Build app/test/fixture sources differ from this checkout: " + changed)
     # Infrastructure edits are allowed; app/tests/fixture edits require a new build.
-    dirty = e2e.capture(["git", "diff", "HEAD", "--name-only", "--", "ios/One", "ios/OneUITests", "ios/Shared", "tests/fixtures"])
+    dirty = e2e.capture(["git", "diff", "HEAD", "--name-only", "--", *inputs])
     if dirty:
         p.error("Unbuilt app/test/fixture changes: " + dirty)
     config = json.loads(Path(__file__).with_name("compatibility.json").read_text())
@@ -123,7 +127,7 @@ def main():
             journal.store.artifact(args.output.name, path)
         journal.store.close()
     print(json.dumps(summary, indent=2))
-    return int(any(codes))
+    return 130 if stopping.is_set() else int(any(codes))
 
 
 if __name__ == "__main__":

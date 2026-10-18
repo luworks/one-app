@@ -211,7 +211,7 @@ def select_simulator(args, journal=None):
         raise ValueError("Multiple simulators have this name; select the owned one with --simulator-id")
     if matches:
         actual = matches[0]
-        if actual.get("deviceTypeIdentifier", args.device_type) != args.device_type or actual["runtime"] != args.runtime:
+        if actual.get("deviceTypeIdentifier") != args.device_type or actual["runtime"] != args.runtime:
             raise ValueError("Owned simulator model/runtime differs from requested configuration")
         if matches[0]["state"] != "Shutdown":
             raise ValueError("Owned simulator is already active; wait for its runner and shut it down first")

@@ -117,7 +117,7 @@ python3 tests/qa/compatibility.py \
 
 Journal the build command/result using `journal.py` or the existing `RunJournal`
 helpers. Stop the build before copying Products. `--source-head` is the caller's
-explicit build provenance assertion, checked against HEAD; it does not infer a
+explicit build provenance assertion, checked against current app/test/fixture inputs (runner/docs-only commits can reuse it); it does not infer a
 binary's source revision. Rebuild after app/UI-test/fixture changes. Relocation
 requires `__TESTROOT__`/`__TESTHOST__` bundle paths; signed bundles are copied intact.
 The runner refuses existing lane outputs and locks names/caches. SIGINT/SIGTERM
