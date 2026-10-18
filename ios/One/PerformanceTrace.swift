@@ -23,7 +23,7 @@ final class PerformanceTrace {
     func mark(_ event: String) {
         guard Self.enabled else { return }
         let now = DispatchTime.now().uptimeNanoseconds
-        os_signpost(.event, log: log, name: "PerformanceEndpoint", "%{public}s uptime_ns=%llu", event, now)
+        os_signpost(.event, log: log, name: "PerformanceEndpoint", "%{public}@ uptime_ns=%llu", event as NSString, now)
         print("PERF_TRACE v=1 event=\(event) uptime_ns=\(now)")
     }
 
@@ -60,7 +60,7 @@ final class PerformanceTrace {
         sequence += 1
         let ms = Double(end - pending.start) / 1_000_000
         report = "v=1;seq=\(sequence);name=\(pending.name);route=\(route);start_ns=\(pending.start);end_ns=\(end);ms=\(ms)"
-        os_signpost(.event, log: log, name: "PerformanceSample", "%{public}s", report)
+        os_signpost(.event, log: log, name: "PerformanceSample", "%{public}@", report as NSString)
         print("PERF_SAMPLE_APP \(report)")
     }
 }
