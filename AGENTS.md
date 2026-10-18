@@ -14,6 +14,10 @@ Read `CLAUDE.md` and `ios/README.md` before changing the app. Their product prin
 - For ordinary changes, use one focused review and resolve its concrete findings together. Avoid serial broad review rounds and speculative edge-case expansion. Re-review only a substantive unresolved risk or a requested acceptance condition.
 - Report what actually ran, its result and any important unchecked behavior. Clearly distinguish build, logic, simulator UI and physical-device evidence. Do not hold unrelated delivery hostage to unavailable screenshots or phone-only checks.
 
+## Delivery coordination
+
+For authorized multi-task Today iOS coordination, follow [Zhugeliang](docs/operations/agents/zhugeliang.md), including its delegation, optional-role and root-only schedule links. Loading the policy does not activate workers or timers.
+
 ## Efficient execution
 
 - Use agents for independent implementation, diagnosis or review when that shortens delivery. Keep ownership clear and avoid multiple agents editing the same files.
