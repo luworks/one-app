@@ -130,3 +130,117 @@ Its ratio cannot establish wholeRender, Month-to-Year, scrolling, footprint or
 package acceptance. No benchmark/build/Swift/UI command was run for this addition;
 all gains remain unmeasured. Retain raw output through the QA journal when the
 parent executes it.
+
+## Next bottleneck diagnosis: initial Year target resolution (read-only)
+
+Status: one source-supported hypothesis, **not a demonstrated bottleneck**.
+No production edit, build, Swift test, UI run or profile was performed for this
+review. Source inspected at `a754991`. Parent candidate-3 UI remained in progress;
+its supplied provisional action-to-layout-plus-two-displaylink samples were
+baseline `[815.636, 682.625, 682.670]` ms and candidate
+`[815.528, 716.910, 632.837]` ms (medians 682.670 and 716.910 ms). These supplied
+samples were not independently re-extracted here; they do not establish a 3x
+Year transition improvement. The dense-trip component comparison is separate
+and was still pending at this handoff.
+
+### One narrow hypothesis
+
+On a fresh YearView identity, the default leading content and subsequent
+`onAppear { proxy.scrollTo(offset(of: day), anchor: .top) }` **may** cause
+non-target year sections to be evaluated before settling at the selected year.
+If so, supplying the selected year identity as the initial scroll position could
+avoid some speculative marks/materialization work. No estimated speed or memory
+gain is attached. Do not implement until a Year-specific trace shows the work.
+
+Source chain and limits:
+
+- YearView uses `LazyVStack` and `ForEach(-20...20)` with stable integer IDs,
+  including explicit `.id(y)`. The first element is the current year minus 20;
+  the requested element is the selected date's year, not necessarily year zero.
+  The code schedules an initial proxy scroll only in `onAppear`, then animated
+  scrolls on external `day` changes. A lazy range of 41 IDs does **not** prove 41
+  rendered sections, a leading section evaluation, or a visible initial flash.
+- `yearSection` calls `marks(in:)` before constructing its VStack. Any actual
+  invocation therefore hashes every queried event/task via `dataSignature`,
+  even on a mark-cache hit. On a miss, `computeMarks` merges the whole year's
+  entries, derives loads/trips and computes holidays. `CalendarEntries.make`
+  loops local events and calls recurrence expansion, scans planned tasks, and
+  invokes `CalendarSync.events(in:)`. With sync on/ready, that path executes a
+  year-wide EventKit predicate; with UI-test sync off it returns no system rows.
+  Chinese holiday selection additionally scans that year through the Chinese
+  calendar. Costs depend on settings/data and cannot be inferred from ID count.
+- MarksCache retains each requested year's holiday dictionary, busy set and
+  trips until its signature changes or YearView identity ends; scrolling a lazy
+  section away does not evict these values. Thus speculative years could persist
+  beyond their views. This is bounded by visited/requested years, not evidence
+  of a leak. Cache hits also do not prove full section layout was skipped.
+- `MiniMonth` grid/date creation, formatting, accessibility and day buttons remain
+  separate work. The trip-band candidate reduces one component only. The mode
+  switch constructs YearView in CalendarView's Year branch; the externally kept
+  selected day/mode do not imply that its internal marks cache survives leaving
+  that branch. Distinguish fresh Year entry from scrolling an existing Year view.
+
+### API evidence and preservation risks
+
+Read the installed iPhoneOS SDK's SwiftUI/SwiftUICore `.swiftinterface` files:
+`scrollTargetLayout` and `scrollPosition(id:anchor:)` are available from iOS 17;
+`ScrollPosition(id:anchor:)`, `scrollPosition(_:anchor:)` and role-specific
+`defaultScrollAnchor(_:for:)` from iOS 18. The project's iOS 27 target permits
+them. This verifies declarations/availability, not compilation of a proposed edit.
+
+Apple explains that target layout supplies identity knowledge for lazy items
+that have not been created, and that scroll-position bindings also update as
+the user scrolls. See [Beyond scroll views, Targets and positions](https://developer.apple.com/videos/play/wwdc2023/10159/).
+An initial `ScrollPosition(id: selectedOffset, anchor: .top)` with the stack marked
+as a scroll target layout is therefore a plausible experiment. However, Apple's
+[scrollPosition documentation](https://developer.apple.com/documentation/swiftui/view/scrollposition(_:anchor:))
+explicitly discusses initial layout at the top followed by maintaining a bound
+identity: this API **does not promise zero evaluation of leading content**.
+The [identity initializer](https://developer.apple.com/documentation/swiftui/scrollposition/init(id:anchor:))
+expresses an ID, not a precomputed pixel offset.
+
+[defaultScrollAnchor(_:for:)](https://developer.apple.com/documentation/swiftui/view/defaultscrollanchor(_:for:))
+controls a content-relative UnitPoint for initial offset, size changes or small
+content alignment. `.center` is not an arbitrary selected-year/top anchor;
+computing a fraction from the integer year range assumes content geometry that
+this source does not establish. Do not substitute a center anchor as a fix.
+
+Any later experiment must keep all 41 years, chronological order, exact selected
+day/month taps and top-aligned initial year. Keep scroll state separate from
+`day`: scrolling currently does not change the selected date. Preserve external
+day-change animation, re-entry behavior, manual free scrolling, boundary years,
+week-start/holiday settings and VoiceOver. Do not add view-aligned snapping,
+fixed section heights, persistent cross-screen caches or data/range cuts.
+
+### What a Year-specific trace must distinguish (not executed)
+
+The current `startup-candidate.md` profile plan launches into **Today**; it cannot
+settle this Year hypothesis. A later parent-owned, bounded Year-entry capture
+must include the mode-change action through final selected-year layout, on a
+fresh Year identity, with identical clock/settings/fixture/binary and symbols.
+Retain the existing proxy endpoint but also verify the selected year's header
+position: a nonzero foreground layout and two displaylinks alone do not prove
+correct Year scroll settlement.
+
+Correlate main-thread samples/layout activity with year-keyed counts/order of
+`yearSection`, signature hashing, cache hits/misses and `computeMarks`, plus the
+initial onAppear/scroll request and first selected-year layout. If sampling
+cannot reveal year arguments/order, prepare narrowly scoped identical diagnostic
+signposts/counters on baseline and candidate **in a separately authorized future
+batch**; production changes are not part of this diagnosis. Track cache key/count,
+trip-entry counts and time-aligned physical footprint; counts alone are not bytes.
+
+- Leading/off-target misses before the target, followed by retained unused cache
+  keys and measurable CPU/allocation cost, would support the hypothesis. Early
+  ID/section enumeration across many years without corresponding layout is a
+  distinct mechanism; an initial-position API may not cure that enumeration.
+- Only target/adjacent visible-year work before settlement, or negligible
+  off-target cost, rejects this as a material next candidate. Repeated signature
+  hashing, selected-year recurrence/EventKit/holiday CPU, or layout/formatting
+  would then be the observed alternatives, not authorization for another change.
+- Long proxy duration with little app CPU instead points toward framework wait,
+  animation or endpoint behavior; do not attribute that interval to marks.
+
+A future initial-position experiment is justified only after that distinction;
+compare actual section/cold-mark work and whole Year-entry latency/footprint,
+not just fewer source calls. No conclusion is possible without a Year profile.
