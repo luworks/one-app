@@ -32,6 +32,15 @@ Tests that need Apple Calendar (`CalendarSyncTests`, `CalendarDeleteSyncTests`, 
   Calendar app. Tests also use it to clean up.
 - `-uiTestingStore <name>` — keeps the test store in a file, so a second launch sees what the first saved.
 
+## SwiftUI visual development
+
+Use `python3 scripts/swiftui_preview.py` from the repository root for the pinned
+axe three-screen gallery and strict Health detail watch. See
+[`docs/swiftui-preview-workflow.md`](../docs/swiftui-preview-workflow.md) for
+ownership, setup, cleanup, known limitations and worktree use, and
+[`docs/qa/swiftui-preview.md`](../docs/qa/swiftui-preview.md) for measured evidence.
+Obtain the host's shared-resource window before building or booting a simulator.
+
 ## Run it on your iPhone (free Apple ID, no paid account)
 
 1. Open `ios/One.xcodeproj` in Xcode.
