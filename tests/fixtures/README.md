@@ -72,3 +72,18 @@ For a committed-state accessibility probe also pass `-uiTestingShareInbox`,
 `-uiTestingShareID <fresh UUID>` and `-uiTestingShareProbeTitle 'Upgrade baseline 20261018'`;
 expect `acknowledged;tasks=1;receipts=0;pending=0`. Do not reseed the reminder.
 The fixture is intentionally frozen; future schema changes should keep opening it.
+
+## Bilingual semantic title and conversation evaluation
+
+- [`ai-title-rewrite-cases.json`](ai-title-rewrite-cases.json): 38 authored cases,
+  46 turns, 25 development / 13 reserved validation (not blind). Consumed by the
+  offline [`TitleQuality/score.py`](../../ios/Eval/TitleQuality/score.py); this is
+  an evaluation resource, not an app `TestDataset` JSON. Frozen clock, thread
+  transitions, route/type/time, semantic facts, note retention and Add/Apply
+  expectations are explained in the [rubric/interface](../../ios/Eval/TitleQuality/README.md).
+- [`ai-title-rewrite-observed.json`](ai-title-rewrite-observed.json): sparse
+  historical owner-screenshot transcription and attributed review. Unknown notes,
+  gates and model path are intentionally omitted, not marked passing. The raw
+  screenshot and scorer logs stay in canonical `tests/results/`, indexed by QA
+  journal session `ai-title-quality-20261018`. This fixture is evidence for the
+  scorer and baseline only, not a fresh app/model execution.
