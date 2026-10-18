@@ -53,7 +53,12 @@ def install():
         # Official checksummed archive; preserve sibling Resources and libraries.
         (TOOLS / 'idb').mkdir(exist_ok=True)
         subprocess.run(['tar', '-xzf', str(archive), '-C', str(TOOLS / 'idb')], check=True)
-    os.environ['PATH'] = str(TOOLS / 'idb') + os.pathsep + os.environ['PATH']
+    bin_dir = TOOLS / 'bin'
+    bin_dir.mkdir(exist_ok=True)
+    wrapper = bin_dir / 'xcodebuild'
+    if not wrapper.exists():
+        wrapper.symlink_to(ROOT / 'scripts/preview_xcodebuild.py')
+    os.environ['PATH'] = str(bin_dir) + os.pathsep + str(TOOLS / 'idb') + os.pathsep + os.environ['PATH']
 
 
 def main():
@@ -69,7 +74,7 @@ def main():
     args = p.parse_args()
     sim_name = 'Today-Preview-POC-' + LANE[:8]
     common = ['--project', str(ROOT / 'ios/One.xcodeproj'), '--scheme', 'One', '--configuration', 'Debug', '--device', '<owned UDID>']
-    report = [str(TOOLS / 'axe'), 'preview', 'report', *[str(ROOT / 'ios/One' / f) for f in SCREENS.values()], '--format', 'html', '--wait', '2s', '-o', '<run>/gallery', *common]
+    report = [str(TOOLS / 'axe'), 'preview', 'report', *[str(ROOT / 'ios/One' / f) for f in SCREENS.values()], '--format', 'html', '--concurrency', '1', '--wait', '2s', '-o', '<run>/gallery', *common]
     watch = [str(TOOLS / 'axe'), 'preview', 'watch', str(ROOT / 'ios/One' / SCREENS[args.watch]), '--reuse-build', '--headless', *common]
     if args.plan:
         print(json.dumps({'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'simulator': sim_name, 'derivedData': str(DD), 'report': report, 'watch': watch, 'budget': args.budget}, indent=2))
@@ -111,6 +116,7 @@ def main():
             raise RuntimeError(f'{name} failed ({code}); see {out / (name + ".log")}')
 
     try:
+        os.environ['TODAY_PREVIEW_BUILD_LOGS'] = str(out / 'xcodebuild')
         event('installation.start')
         install()
         event('installation.end')
