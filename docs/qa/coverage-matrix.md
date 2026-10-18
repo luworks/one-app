@@ -6,6 +6,12 @@ Read [issue #32](https://github.com/luworks/one-app/issues/32), [AGENTS.md](../.
 This is a coverage map, **not a green-suite report**. The overnight coordinator owns the only full UI run;
 adding this runner does not require restarting or replacing that run.
 
+The baseline inventory below remains frozen for comparison. The completed overnight work added five UI methods:
+new-request interruption, three persisted Share journeys, and the minimal late-alarm regression.
+The [current method proof](../../tests/qa/evidence/ui-method-coverage-20261018.json) covers all 270 current UI methods;
+[the final report](overnight-2026-10-18.md) distinguishes baseline results from targeted repair evidence.
+`--inventory` always reads the current source, including all 617 logic methods.
+
 ## Repeatable entry point
 
 `python3 ios/Eval/run-e2e.py --help` describes the new standalone standard-library entry point.
@@ -22,12 +28,12 @@ python3 ios/Eval/run-e2e.py \
   --only JourneyTests/testJ1_addTimedTaskFromOneLine \
   --only JourneyTests/testJ3_completeAndUndo \
   --only AskMultiTurnTests/testFollowUpChangesTheTimeOnTheSameCard \
-  --simulator-name Today-QA-Repair --output /tmp/today-qa-repair-001
+  --simulator-name Today-QA-Repair --output tests/results/runs/repair-001
 
 # Only when authorized, alone, once at the final integrated revision.
 # --logic is optional: omit if this revision already has passing logic evidence.
 python3 ios/Eval/run-e2e.py --full --logic --simulator-name Today-QA \
-  --output /tmp/today-qa-full-001
+  --output tests/results/runs/full-001
 
 # Host-only harness checks (no Xcode, Swift, simulator or device commands).
 python3 ios/Eval/test_e2e_runner.py
