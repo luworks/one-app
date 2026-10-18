@@ -162,8 +162,29 @@ struct HomeView: View {
         guard let i = all.firstIndex(of: tab) else { return }
         let next = i + step
         guard all.indices.contains(next) else { return }
+        traceTabAction(to: all[next])
         withAnimation(.snappy) { tab = all[next] }
         tabSwipes += 1
+    }
+
+    private var traceRoute: String {
+        tab == .calendar ? "calendar.\(calendarMode.rawValue.lowercased())" : tab.rawValue
+    }
+
+    private func traceTabAction(to destination: HomeTab) {
+        guard PerformanceTrace.enabled, destination != tab else { return }
+        let target = destination == .calendar ? "calendar.\(calendarMode.rawValue.lowercased())" : destination.rawValue
+        PerformanceTrace.shared.begin("\(traceRoute)_to_\(target)", destination: target)
+    }
+
+    private var tracedCalendarMode: Binding<CalendarView.Mode> {
+        Binding(get: { calendarMode }, set: { mode in
+            if mode != calendarMode {
+                let target = "calendar.\(mode.rawValue.lowercased())"
+                PerformanceTrace.shared.begin("\(traceRoute)_to_\(target)", destination: target)
+            }
+            calendarMode = mode
+        })
     }
 
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
@@ -277,7 +298,7 @@ struct HomeView: View {
                         withAnimation(.snappy) { tab = .clock }
                     }
                 case .calendar:
-                    CalendarView(day: $calendarDay, mode: $calendarMode) { picked in
+                    CalendarView(day: $calendarDay, mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode) { picked in
                         todayDay = picked
                         withAnimation(.snappy) { tab = .today }
                     }
@@ -286,6 +307,12 @@ struct HomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                if PerformanceTrace.enabled {
+                    PerformanceContentProbe(route: traceRoute, generation: PerformanceTrace.shared.generation,
+                                            bootstrapComplete: PerformanceTrace.shared.bootstrapComplete)
+                }
+            }
         }
         .safeAreaInset(edge: .bottom) { if !keyboardUp { bottomBar } }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
@@ -305,6 +332,7 @@ struct HomeView: View {
             }
         }
         .task {
+            if PerformanceTrace.enabled { PerformanceTrace.shared.mark("bootstrap_start") }
             #if DEBUG
             if let path = DevImport.requestedPath {
                 do {
@@ -357,9 +385,16 @@ struct HomeView: View {
             #endif
             autoPlan()
             await FirstRun.calendar()
+            if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
         }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {
+            if PerformanceTrace.enabled {
+                Text(PerformanceTrace.shared.report).font(.system(size: 1)).opacity(0.01)
+                    .accessibilityIdentifier("performance.trace")
+                    .accessibilityLabel(PerformanceTrace.shared.report)
+                    .allowsHitTesting(false)
+            }
             // UI tests read the cold start time from this invisible label.
             if ProcessInfo.processInfo.arguments.contains("-uiTesting"), let ms = LaunchTimer.milliseconds {
                 Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier("coldStartMs").accessibilityLabel(String(ms))
@@ -401,6 +436,9 @@ struct HomeView: View {
         .onChange(of: clockSection) { _, s in UserDefaults.standard.set(s.rawValue, forKey: Self.clockSectionKey) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
+                    PerformanceTrace.shared.begin("resume_to_content_layout", destination: traceRoute)
+                }
                 dropDeletedMirrors()
                 importShared()
                 ActivityCenter.importOutbox()
@@ -490,6 +528,7 @@ struct HomeView: View {
         HStack(spacing: PillStyle.spacing) {
             ForEach(HomeTab.allCases) { item in
                 TabPill(tab: item, isSelected: item == tab) {
+                    traceTabAction(to: item)
                     withAnimation(.snappy) { tab = item }
                 }
             }

@@ -1,0 +1,116 @@
+import SwiftUI
+import UIKit
+import os.signpost
+
+/// Opt-in benchmark probes. Times are app-side layout proxies, never touch-to-photon measurements.
+@MainActor @Observable
+final class PerformanceTrace {
+    static let shared = PerformanceTrace()
+    static let enabled = ProcessInfo.processInfo.arguments.contains("-performanceTrace")
+    private let log = OSLog(subsystem: "com.luworks.one", category: "PerformanceTrace")
+    private struct Pending {
+        let name: String
+        let destination: String?
+        let start: UInt64
+    }
+    private var pending: Pending?
+    private var sequence = 0
+    private(set) var bootstrapComplete = false
+    private(set) var launchComplete = false
+    private(set) var generation = 0
+    private(set) var report = ""
+
+    func mark(_ event: String) {
+        guard Self.enabled else { return }
+        let now = DispatchTime.now().uptimeNanoseconds
+        os_signpost(.event, log: log, name: "PerformanceEndpoint", "%{public}s uptime_ns=%llu", event, now)
+        print("PERF_TRACE v=1 event=\(event) uptime_ns=\(now)")
+    }
+
+    func beginLaunch() {
+        guard Self.enabled else { return }
+        begin("app_init_to_content_layout", destination: nil)
+    }
+
+    func finishBootstrap() {
+        guard Self.enabled else { return }
+        mark("bootstrap_complete")
+        bootstrapComplete = true
+    }
+
+    func begin(_ name: String, destination: String?) {
+        guard Self.enabled else { return }
+        // A superseded operation is not silently turned into a successful sample.
+        if let pending { mark("cancel.\(pending.name)") }
+        pending = Pending(name: name, destination: destination, start: DispatchTime.now().uptimeNanoseconds)
+        generation += 1
+        mark("begin.\(name)")
+    }
+
+    func wantsLayout(_ route: String) -> Bool {
+        guard Self.enabled, bootstrapComplete, let pending else { return false }
+        return pending.destination == nil || pending.destination == route
+    }
+
+    func finishLayout(_ route: String, generation expected: Int) {
+        guard expected == generation, wantsLayout(route), let pending else { return }
+        let end = DispatchTime.now().uptimeNanoseconds
+        self.pending = nil
+        if pending.name == "app_init_to_content_layout" { launchComplete = true }
+        sequence += 1
+        let ms = Double(end - pending.start) / 1_000_000
+        report = "v=1;seq=\(sequence);name=\(pending.name);route=\(route);start_ns=\(pending.start);end_ns=\(end);ms=\(ms)"
+        os_signpost(.event, log: log, name: "PerformanceSample", "%{public}s", report)
+        print("PERF_SAMPLE_APP \(report)")
+    }
+}
+
+/// Attached to the real content's background, after its bootstrap state has been published.
+/// Two display-link callbacks leave a display opportunity between layout and the endpoint;
+/// neither callback proves compositor presentation, animation completion or asynchronous sync.
+struct PerformanceContentProbe: UIViewRepresentable {
+    let route: String
+    let generation: Int
+    let bootstrapComplete: Bool
+
+    func makeUIView(context: Context) -> ProbeView { ProbeView() }
+    func updateUIView(_ view: ProbeView, context: Context) {
+        view.arm(route: route, generation: generation, ready: bootstrapComplete)
+    }
+    static func dismantleUIView(_ view: ProbeView, coordinator: ()) { view.stop() }
+
+    final class ProbeView: UIView {
+        private var link: CADisplayLink?
+        private var route = ""
+        private var generation = -1
+        private var ticks = 0
+
+        func arm(route: String, generation: Int, ready: Bool) {
+            guard ready, PerformanceTrace.shared.wantsLayout(route) else { stop(); return }
+            guard self.route != route || self.generation != generation || link == nil else { return }
+            stop()
+            self.route = route
+            self.generation = generation
+            ticks = 0
+            isUserInteractionEnabled = false
+            isAccessibilityElement = false
+            let link = CADisplayLink(target: self, selector: #selector(tick))
+            self.link = link
+            link.add(to: .main, forMode: .common)
+        }
+
+        @objc private func tick() {
+            guard window != nil, bounds.width > 0, bounds.height > 0,
+                  window?.windowScene?.activationState == .foregroundActive else { return }
+            // Observe normal layout; never force the app to perform layout early for the benchmark.
+            guard !isHidden else { return }
+            ticks += 1
+            if ticks >= 2 {
+                PerformanceTrace.shared.finishLayout(route, generation: generation)
+                stop()
+            }
+        }
+
+        func stop() { link?.invalidate(); link = nil }
+    }
+}
