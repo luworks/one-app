@@ -2,7 +2,7 @@
 
 Owner authorization: >50% smaller package/footprint, at least 3x faster, stretch 10x or better. These are acceptance targets, not verified gains. No production optimization is accepted on a guessed or incomparable baseline.
 
-Source baseline: `c42b88e` production / `fc683a7` tooling. Machine-readable registry: [`tests/performance/targets-v1.json`](../../tests/performance/targets-v1.json). Historical baseline values remain frozen. Release simulator app-side endpoint baselines must be filled before their first candidate comparison.
+Source baseline: `c42b88e` production / `fc683a7` tooling. Machine-readable registry: [`tests/performance/targets-v1.json`](../../tests/performance/targets-v1.json). Historical baseline values remain frozen. True Release usable-content endpoint baselines remain pending. This round explicitly selects **optimized Debug (`-O`) with the existing DEBUG fixture guards** for baseline/candidate, measuring monotonic init/store/bootstrap and tab action-to-layout/display-link proxies. These are not presented frames, real-touch latency or full usability. No PERFORMANCE compilation condition is introduced.
 
 | Metric | Unit | Existing baseline | Required ceiling | Stretch ceiling |
 | --- | --- | ---: | ---: | ---: |
@@ -58,3 +58,5 @@ For each candidate record hypothesis, owned files, expected metric, changed vari
 Continue through independent high-value hypotheses. A local plateau is reached only after profiling the remaining dominant costs, trying materially different safe candidates, and finding no remaining candidate with credible >5% benefit at proportionate product risk/cost. Two consecutive low/no-gain candidates trigger a bottleneck reassessment, not automatic completion. Record the failed hypotheses and residual gap; never assert a global optimum or that unmet targets were achieved. A hard platform floor or unavailable simulator metric is a documented blocker, not fabricated success.
 
 Delegation: independent packaging, audio, startup/instrumentation and calendar-render lanes; explicit file ownership. Agents perform lightweight source work concurrently; builds/tests/traces stay under one coordinated holder. No recurring scheduler or autonomous goal object is created.
+
+New phase gates (all pending matched baseline): `app_init_to_store`, `store_to_bootstrap_complete`, `tab_action_to_layout_displaylink_proxy`: required baseline/3, stretch baseline/10, with 100 ms interim phase budget. Shipping generic Release package bytes remain a separate measurement.

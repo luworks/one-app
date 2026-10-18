@@ -336,6 +336,36 @@
       "required_formula": "new_same_context_baseline / 3",
       "stretch_formula": "new_same_context_baseline / 10",
       "absolute_budget": 50
+    },
+    {
+      "id": "app_init_to_store",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized Debug -O simulator, monotonic app-side phase; layout/display-link proxy is not presented/realTouch/full usable",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "store_to_bootstrap_complete",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized Debug -O simulator, monotonic app-side phase; layout/display-link proxy is not presented/realTouch/full usable",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
+    },
+    {
+      "id": "tab_action_to_layout_displaylink_proxy",
+      "unit": "ms",
+      "baseline": null,
+      "context": "optimized Debug -O simulator, monotonic app-side phase; layout/display-link proxy is not presented/realTouch/full usable",
+      "kind": "latency",
+      "required_formula": "new_same_context_baseline / 3",
+      "stretch_formula": "new_same_context_baseline / 10",
+      "absolute_budget": 100
     }
   ],
   "pending": [
@@ -359,5 +389,6 @@
       "id": "energy",
       "rule": "optional CPU/wakeup proxy only; no battery claims"
     }
-  ]
+  ],
+  "selected_measurement_configuration": "Debug with SWIFT_OPTIMIZATION_LEVEL=-O, unchanged DEBUG fixture guards; identical baseline/candidate flags. Shipping generic Release package size measured separately."
 }
