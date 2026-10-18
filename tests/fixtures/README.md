@@ -11,6 +11,7 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 | [`today-dataset.json`](today-dataset.json) | Shared UI journeys using `TestData.launchArguments` / `TestData.path`, including `DevDataTests.testDatasetFillsChatsAlarmsAndReminders` and the ordinary `CalendarAlarmTests.launch(pinned:)` setup. This is the canonical multi-screen dataset, not a generated per-run input. |
 | [`week-alarm-overlap-1.json`](week-alarm-overlap-1.json) | `CalendarAlarmTests.testWeekOverlappingEventAndAlarmHaveDisjointFramesAndOpenAlarmEditor` → `assertWeekOverlap(eventCount: 1)`. Replaces that helper's temporary JSON generator: event `Lane overlap event 0`, today at 09:00 for 60 minutes; `Lane overlap alarm` at 09:30. Clock pinned to 09:00; alarms pinned on. |
 | [`week-alarm-overlap-8.json`](week-alarm-overlap-8.json) | `CalendarAlarmTests.testWeekDenseOverlapClusterStaysInsideAssignedFramesAndOpensAlarmEditor` → `assertWeekOverlap(eventCount: 8)`. Replaces the same generator with events `Lane overlap event 0` through `7`, all today at 09:00 for 60 minutes, and the same 09:30 alarm. Clock pinned to 09:00; alarms pinned on. |
+| [`week-alarm-afternoon.json`](week-alarm-afternoon.json) | `CalendarAlarmTests.testWeekLateAlarmOpensItsEditorWithoutOtherEntries`. Minimal issue #53 reproduction: one Take medicine alarm at 13:00, no events/reminders/chats; clock pinned to 09:00 and alarms on. Distinguishes late-grid touch delivery from event density or task gestures. |
 | [`repeating-reminder-daily-home.json`](repeating-reminder-daily-home.json) | `RepeatingReminderTests.setUp()` for `testCompletingARepeatingReminderMovesItToItsNextDay` and `testUndoBringsBackTheSameRowAtTheSameTime`. Replaces its temporary JSON generator: Home list (color 1), daily `Clean the drain filter`, due today at 07:00 and planned at 09:00. Clock pinned to 09:41. |
 
 ## Dates, defaults and isolation
@@ -71,8 +72,3 @@ For a committed-state accessibility probe also pass `-uiTestingShareInbox`,
 `-uiTestingShareID <fresh UUID>` and `-uiTestingShareProbeTitle 'Upgrade baseline 20261018'`;
 expect `acknowledged;tasks=1;receipts=0;pending=0`. Do not reseed the reminder.
 The fixture is intentionally frozen; future schema changes should keep opening it.
-
-`week-alarm-afternoon.json` is the minimal issue53 reproduction: a single13:00
-Take medicine alarm, no events/reminders/chats. Consumer:
-`CalendarAlarmTests/testWeekLateAlarmOpensItsEditorWithoutOtherEntries`.
-It distinguishes late-grid touch delivery from event density or task gestures.
