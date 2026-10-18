@@ -1,6 +1,6 @@
 # Health 模块（原型）
 
-**现状：不做第 5 个 tab。** Today tab 顶部（只在今天）一行安静的摘要「6,240 steps · slept 7 hr 12 min」，点开是 Health sheet（下面这些卡片：步数 7 天、体重趋势、近几晚睡眠）。Settings → Today → "Health summary" 开关（默认开）；第一次要显示这行时才请求 HealthKit 授权。代码：`ios/One/TodayHealthLine.swift`（这一行 + sheet）、`HealthView.swift`、`HealthSource.swift`、`HealthLogic.swift`（纯逻辑 + 样例数据，`swift test` 覆盖）。截图：`docs/qa/health-review/`。下面是原型（tab 版）时的调研与说明。
+**现状：不做第 5 个 tab。** Today tab 顶部（只在今天）一行安静的摘要「6,240 steps · slept 7 hr 12 min」（默认步数 + 睡眠；任一被隐藏时用显示列表里的前两项），点开是 Health sheet：一个**紧凑的分组列表**（Activity / Sleep & Recovery / Body），每行 = 指标名 + 最新值（大号数字、小号单位）+ 很淡的日期标签（Today / Yesterday / 日期）+ 右侧 7 天迷你图（累计型柱状，读数型点线）。点一行进详情（7 / 30 / 90 天、一张图、平均 / 最低 / 最高 / 与上一段的变化，不生成文字总结）。用户可以「Add Metric」（静息心率、活动能量、锻炼分钟、步行+跑步距离、体脂、正念分钟、日照时间），右滑「Hide」（只隐藏，不删 Apple Health 数据），长按菜单 Hide / Move Up / Move Down，按住拖动在分组内排序；选择和顺序存在 UserDefaults（`today.health.metrics`，JSON id 列表），健康数值不落盘。Settings → Today → "Health summary" 开关（默认开）、"Health metrics" 打开同一个 sheet；第一次要显示这行时才请求 HealthKit 授权（只请求这一行用到的类型），Add Metric 时只请求新增类型。设计说明：`metrics-and-density.md`。代码：`ios/One/TodayHealthLine.swift`、`HealthView.swift`、`HealthMetricDetail.swift`、`HealthMetricPicker.swift`、`HealthSparkline.swift`、`HealthModel.swift`、`HealthSource.swift` / `HealthKitSource.swift`、`HealthMetrics.swift`（目录、选择、格式化、迷你图和区间统计，`swift test` 覆盖）、`HealthSampleSeries.swift`（样例数据）。截图（样例数据，模拟器 Today-Health2，亮/暗）：`docs/health/list-*.png`（列表）、`detail-*.png`（详情）、`add-metric-*.png`、`today-line-*.png`；用 `TEST_RUNNER_HEALTH_SHOTS=1` 加 `-only-testing:OneUITests/HealthMetricsTests/testScreenshots` 重新生成。下面是原型（tab 版）时的调研与说明，其中「放什么、不放什么」已被 `metrics-and-density.md` 取代。
 
 ## Apple 健康 App 是怎么做的（调研摘要）
 
@@ -44,10 +44,7 @@ Health tab 上 + 仍然是"新提醒"（和 Today/Reminders 一样）。Health �
 
 ## 截图
 
-样例数据，模拟器 Today-Health（iPhone 18 Pro Max），当时用 `-uiTestingTab health`（已随 tab 一起删掉）：
-
-- `health-light.png` / `health-dark.png`：步数、体重
-- `health-light-2.png` / `health-dark-2.png`：体重、睡眠、页脚
+（tab 版的截图已随 tab 一起删掉，现行截图见上面。）
 
 ## 已知问题（tab 版，已撤掉）
 

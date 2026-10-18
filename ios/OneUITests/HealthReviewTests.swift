@@ -40,9 +40,8 @@ final class HealthReviewTests: XCTestCase {
         XCTAssertTrue(line.label.contains("slept"), "last night's sleep: \(line.label)")
         line.tap()
 
-        XCTAssertTrue(app.otherElements["health.steps"].firstMatch.waitForExistence(timeout: 5)
-                      || app.staticTexts["Steps"].waitForExistence(timeout: 5), "the sheet shows the steps card")
-        XCTAssertTrue(app.staticTexts["Weight"].exists || app.buttons["Weight"].exists || app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Weight'")).firstMatch.exists)
+        XCTAssertTrue(app.buttons["health.row.steps"].waitForExistence(timeout: 5), "the sheet lists the steps row")
+        XCTAssertTrue(app.buttons["health.row.weight"].exists, "and the weight row")
         app.buttons["Done"].tap()
         XCTAssertTrue(line.waitForExistence(timeout: 3))
     }
