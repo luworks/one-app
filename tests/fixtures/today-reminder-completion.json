@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "reminders": [{
+    "title": "Bring the water cup",
+    "note": "Keep the water cup and documents together.",
+    "due": {"day": 0, "time": "12:30"},
+    "planned": {"day": 0, "time": "12:30"}
+  }],
+  "events": [], "alarms": [], "chats": []
+}
