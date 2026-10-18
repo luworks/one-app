@@ -49,6 +49,7 @@ struct TimerSection: View {
                 siriNote.row(top: 18, bottom: 24, leading: Inset.recents, trailing: Inset.recents)
             }
             .listStyle(.plain)
+            .accessibilityIdentifier("timer.list")
             // Runtime List bounds extend 32 pt behind the floating composer; leave another 8 pt of clearance.
             .contentMargins(.bottom, 40, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)

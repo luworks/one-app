@@ -34,7 +34,7 @@ extension XCUIApplication {
     }
 
     /// The Timer screen exposes one native CollectionView, including when the picker has scrolled out of view.
-    private var timerList: XCUIElement { collectionViews.firstMatch }
+    private var timerList: XCUIElement { collectionViews["timer.list"].firstMatch }
 
     var timerViewport: CGRect {
         guard timerList.exists else { return .null }
