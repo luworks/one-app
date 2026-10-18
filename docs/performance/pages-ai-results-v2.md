@@ -192,3 +192,8 @@ This common-schema conversation reference supersedes earlier diagnostic cohorts 
 Sound screens were opened/backed out without selection/save; Year key opened/dismissed and new-list draft cancelled. These four additional endpoints make26 distinct accepted page/modal/state endpoints across cohorts; variants, menu actions, per-page memory/hitches and persistence remain partial. Seven root transitions remain separate.
 
 Evidence: `baseline-v2-round5-reference-f326dd61.log`, `round5-reference-{summary,stages}.json`, `round5-reference-command.json`, `staged-source-v2-round5-reference/manifest.json`, full closed `baseline-v2-round5-reference/ui.xcresult`. Executed app and UI runner preserved in `round5-reference-products/`, executable UUID/hash in provenance.json. Exit0; owned device/panel shut down and live heavy/booted empty13:08:35 PDT before EventSave handoff. Candidate09f9860 is source-only until its matched run and trace-disabled correctness journeys.
+
+
+## Delivery integration
+
+The baseline/tooling branch merges main `edb7d73` (adopted preview workflow). The sole source conflict was `OneApp.init`: keep the performance start as its first explicit statement and retain the DEBUG/axe-only early fixture return and blank preview scene. Preview-only guards/previews auto-merged with opt-in page probes. No endpoint was moved; no production local-response candidate is in PR76. Merge validation is manual conflict/diff inspection, reusing the13 targeted method results at their explicitly frozen revisions above; it is not a new runtime measurement of merged main. This keeps baseline delivery independent of PR80's pending speed acceptance.
