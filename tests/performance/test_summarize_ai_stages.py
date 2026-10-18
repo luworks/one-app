@@ -19,9 +19,19 @@ class StageSummaryTests(unittest.TestCase):
         row = self.line()
         result = stages.reduce(row + '\n' + row)
         self.assertEqual(len(result['turns']), 1)
-        self.assertEqual(result['spans']['fallback_model_unavailable/response_await']['raw_ms'], [1])
-        self.assertIsNone(result['spans']['fallback_model_unavailable/response_await']['p95_ms'])
+        self.assertEqual(result['spans']['fallback_model_unavailable/async/response_await']['raw_ms'], [1])
+        self.assertIsNone(result['spans']['fallback_model_unavailable/async/response_await']['p95_ms'])
 
     def test_missing_point_rejected_instead_of_empty_success(self):
         with self.assertRaisesRegex(ValueError, 'missing diagnostic'):
             stages.reduce(self.line().replace('chat_response_await_after_ns=7000000;', ''))
+
+    def test_local_work_does_not_fabricate_zero_async_spans(self):
+        line = self.line().replace('backend=fallback_model_unavailable;', 'backend=fallback_model_unavailable;dispatch=local_sync;')
+        line = line.replace('task_enter_ns=5000000;', '').replace('chat_response_await_before_ns=6000000;', '')
+        line = line.replace('chat_response_await_after_ns=7000000;', 'local_reply_before_ns=6000000;local_reply_after_ns=7000000;')
+        result = stages.reduce(line)
+        self.assertEqual(result['spans']['fallback_model_unavailable/local_sync/local_reply']['raw_ms'], [1])
+        self.assertFalse(any('response_await' in name or 'task_queue' in name for name in result['spans']))
+        with self.assertRaisesRegex(ValueError, 'contains async'):
+            stages.reduce(line + ';task_enter_ns=5000000')

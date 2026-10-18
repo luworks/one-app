@@ -18,6 +18,7 @@ PAIRS = {
     'observation_to_ready': ('on_change_enter', 'ready'),
     'ready_to_layout': ('ready', 'response_layout'),
 }
+ASYNC_POINTS = {'task_enter', 'chat_response_await_before', 'chat_response_await_after'}
 
 
 def reduce(text):
@@ -28,12 +29,23 @@ def reduce(text):
             continue
         fields = dict(p.split('=', 1) for p in found[1].split(';') if '=' in p)
         token = fields['turn']
+        dispatch = fields.get('dispatch', 'async')
+        if dispatch not in ('async', 'local_sync'):
+            raise ValueError('unknown dispatch mode: ' + dispatch)
         points = {k[:-3]: int(v) for k, v in fields.items() if k.endswith('_ns')}
         required = {point for pair in PAIRS.values() for point in pair}
+        pairs = dict(PAIRS)
+        if dispatch == 'local_sync':
+            required -= ASYNC_POINTS
+            required.update(('local_reply_before', 'local_reply_after'))
+            if ASYNC_POINTS & points.keys():
+                raise ValueError('local dispatch contains async diagnostic points')
+            pairs = {key: value for key, value in pairs.items() if not ASYNC_POINTS.intersection(value)}
+            pairs['local_reply'] = ('local_reply_before', 'local_reply_after')
         if required - points.keys():
             raise ValueError('missing diagnostic points: ' + ', '.join(sorted(required - points.keys())))
-        result = {'backend': fields['backend'], 'points_ns': points, 'elapsed_ms': {}}
-        for name, (a, b) in PAIRS.items():
+        result = {'backend': fields['backend'], 'dispatch': dispatch, 'points_ns': points, 'elapsed_ms': {}}
+        for name, (a, b) in pairs.items():
             if a in points and b in points:
                 if points[b] < points[a]:
                     raise ValueError('nonmonotonic stage: ' + name)
@@ -44,7 +56,7 @@ def reduce(text):
     grouped = {}
     for row in turns.values():
         for name, value in row['elapsed_ms'].items():
-            grouped.setdefault(row['backend'] + '/' + name, []).append(value)
+            grouped.setdefault(row['backend'] + '/' + row['dispatch'] + '/' + name, []).append(value)
     return {'scope': 'diagnostic elapsed intervals; not CPU/inference/persistence; no speed acceptance',
             'turns': turns, 'spans': {key: {'n': len(v), 'raw_ms': v, 'median_ms': statistics.median(v),
                                           'min_ms': min(v), 'max_ms': max(v), 'p95_ms': None}
