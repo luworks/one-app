@@ -32,8 +32,7 @@ struct CalEntry: Identifiable {
     var isAlarm: Bool { if case .alarm = source { true } else { false } }
 
     func overlaps(_ day: Date, calendar: Calendar = .current) -> Bool {
-        guard let interval = calendar.dateInterval(of: .day, for: day) else { return false }
-        return start < interval.end && end > interval.start || (start == end && interval.contains(start))
+        CalendarEntryDates.overlaps(start: start, end: end, day: day, calendar: calendar)
     }
 
     /// How the entry reads on `day`: all-day rows, or a start/end clipped to that day.
@@ -85,13 +84,10 @@ enum CalendarEntries {
             }
         }
 
-        // Year uses EventKit's exclusive all-day end directly for span and single-day classification.
+        // Every view preserves EventKit's exclusive all-day end.
         for x in sync.events(in: interval, excluding: mirrors) {
-            var end = x.end
-            if x.isAllDay && !forYearMarks {
-                // Preserve the existing Week/Month normalization; Year reads the raw exclusive end.
-                end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: x.end)) ?? x.end
-            }
+            let end = CalendarEntryDates.systemEnd(x.end, isAllDay: x.isAllDay,
+                                                   forYearMarks: forYearMarks, calendar: calendar)
             result.append(CalEntry(id: x.id, source: .system(x.eventIdentifier), title: x.title, location: x.location,
                                    start: x.start, end: end, isAllDay: x.isAllDay, color: x.color, calendarTitle: x.calendarTitle,
                                    repeats: x.repeats, isBackground: x.isBackground, isBirthday: x.isBirthday, isHoliday: x.isHoliday))
