@@ -155,6 +155,8 @@ def main(argv=None):
             time.sleep(min(0.25, remaining()))
         status['runner_exit_code'] = runner.returncode
         status['profiler_exit_code'] = profiler.returncode
+        if runner.returncode != 0 or profiler.returncode != 0:
+            raise RuntimeError('Producer failed at completion; inspect raw logs; no retry')
         # Both producers have closed before any optional TOC read. No schema guessing.
         if active_end - time.monotonic() > 6:
             read('toc-export', ['xcrun', 'xctrace', 'export', '--input', str(out / 'year.trace'),
