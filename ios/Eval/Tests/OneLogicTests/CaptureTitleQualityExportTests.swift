@@ -20,7 +20,7 @@ final class CaptureTitleQualityExportTests: XCTestCase {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         let now = try XCTUnwrap(formatter.date(from: root["now"] as? String ?? ""))
-        let subset: Set<String> = ["watch-sleep-zh", "must-sleep-zh", "no-eating-zh"]
+        let subset: Set<String> = ["watch-sleep-zh", "must-sleep-zh", "no-peanuts-en"]
         let directory = URL(fileURLWithPath: output, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var rows: [[String: Any]] = []
