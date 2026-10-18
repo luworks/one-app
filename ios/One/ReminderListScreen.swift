@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+#if DEBUG
+import UIKit
+#endif
 
 /// One list pushed from Reminders: a smart list (Today, Scheduled, All, Flagged, Completed), the default
 /// list, or a list from My Lists. Big colored title, the reminders, and an inline "New Reminder" row.
@@ -178,6 +181,13 @@ struct ReminderListScreen: View {
         .navigationTitle("")
         // Keep the native stack (including edge-swipe back), without a second navigation row.
         .toolbar(.hidden, for: .navigationBar)
+        #if DEBUG
+        .background {
+            if ProcessInfo.processInfo.arguments.contains("-debugNativePopProbe") {
+                ReminderNativePopProbe().allowsHitTesting(false).accessibilityHidden(true)
+            }
+        }
+        #endif
         .sheet(item: $editing) { ListEditor(list: $0) }
         .deleteListAlert($pendingDelete)
         .onChange(of: isMissing) { _, missing in if missing { dismiss() } }
@@ -557,3 +567,111 @@ private struct NewReminderRow: View {
         return true
     }
 }
+
+#if DEBUG
+/// Opt-in observation only: never changes the native recognizer's delegate, enabled flag or state.
+private struct ReminderNativePopProbe: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> ProbeController { ProbeController() }
+    func updateUIViewController(_ controller: ProbeController, context: Context) {}
+    static func dismantleUIViewController(_ controller: ProbeController, coordinator: ()) { controller.stop() }
+
+    final class ProbeController: UIViewController {
+        private weak var observed: UIGestureRecognizer?
+        private var timer: Timer?
+        private var output: FileHandle?
+        private var lastSample = ""
+        private var lastWrite = Date.distantPast
+
+        override func loadView() {
+            view = UIView()
+            view.isUserInteractionEnabled = false
+        }
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            guard parent != nil, timer == nil else { return }
+            let directory = URL.applicationSupportDirectory.appendingPathComponent("NativePopProbe", isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                let path = directory.appendingPathComponent(UUID().uuidString + ".jsonl")
+                guard FileManager.default.createFile(atPath: path.path, contents: nil) else { return }
+                output = try FileHandle(forWritingTo: path)
+                print("NativePopProbe: " + path.path)
+            } catch {
+                print("NativePopProbe: could not open diagnostic output: \(error)")
+            }
+            let sampling = Timer(timeInterval: 0.05, target: self, selector: #selector(sample), userInfo: nil, repeats: true)
+            timer = sampling
+            RunLoop.main.add(sampling, forMode: .common)
+            sample()
+        }
+
+        // Resolve through this embedded controller's actual containment, never another window's stack.
+        private var owningNavigation: UINavigationController? {
+            var ancestor: UIViewController? = self
+            while let controller = ancestor {
+                if let navigation = controller as? UINavigationController { return navigation }
+                if let navigation = controller.navigationController { return navigation }
+                ancestor = controller.parent
+            }
+            return nil
+        }
+
+        @objc private func sample() { record("sample") }
+        @objc private func gestureChanged(_ gesture: UIGestureRecognizer) { record("targetAction") }
+
+        private func record(_ event: String) {
+            let navigation = owningNavigation
+            let gesture = navigation?.interactivePopGestureRecognizer
+            if observed !== gesture {
+                observed?.removeTarget(self, action: #selector(gestureChanged(_:)))
+                observed = gesture
+                gesture?.addTarget(self, action: #selector(gestureChanged(_:)))
+            }
+            let state: String
+            switch gesture?.state {
+            case .possible?: state = "possible"
+            case .began?: state = "began"
+            case .changed?: state = "changed"
+            case .ended?: state = "ended"
+            case .cancelled?: state = "cancelled"
+            case .failed?: state = "failed"
+            default: state = "unavailable"
+            }
+            func identity(_ object: AnyObject?) -> String {
+                object.map { "\(type(of: $0))@\(ObjectIdentifier($0))" } ?? "nil"
+            }
+            let fields: [String: String] = [
+                "event": event, "navigation": identity(navigation),
+                "recognizer": identity(gesture), "state": state,
+                "enabled": gesture.map { String($0.isEnabled) } ?? "nil",
+                "delegate": identity(gesture?.delegate),
+                "depth": navigation.map { String($0.viewControllers.count) } ?? "nil",
+                "transition": String(navigation?.transitionCoordinator != nil),
+                "top": identity(navigation?.topViewController),
+                "visible": identity(navigation?.visibleViewController),
+                "barHidden": navigation.map { String($0.isNavigationBarHidden) } ?? "nil",
+                "probeInWindow": String(viewIfLoaded?.window != nil)
+            ]
+            guard let data = try? JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys]),
+                  let sample = String(data: data, encoding: .utf8) else { return }
+            let now = Date()
+            guard event != "sample" || sample != lastSample || now.timeIntervalSince(lastWrite) >= 1 else { return }
+            lastSample = sample
+            lastWrite = now
+            let line = "{\"timestamp\":\(now.timeIntervalSince1970),\"observation\":\(sample)}\n"
+            if let bytes = line.data(using: .utf8) { try? output?.write(contentsOf: bytes) }
+        }
+
+        func stop() {
+            record("dismantle")
+            timer?.invalidate()
+            timer = nil
+            observed?.removeTarget(self, action: #selector(gestureChanged(_:)))
+            observed = nil
+            try? output?.close()
+            output = nil
+        }
+    }
+}
+#endif

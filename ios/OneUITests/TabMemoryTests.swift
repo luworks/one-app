@@ -6,6 +6,9 @@ final class TabMemoryTests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = TestData.launchArguments
+        if ProcessInfo.processInfo.environment["ONE_DEBUG_NATIVE_POP_PROBE"] == "1" {
+            app.launchArguments.append("-debugNativePopProbe")
+        }
         app.launch()
 
         // Reminders: open the Home list, go to Today, come back.
