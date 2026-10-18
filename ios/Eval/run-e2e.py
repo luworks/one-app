@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""Serial simulator QA with retained evidence; help/dry-run/inventory never probe devices."""
+import argparse
+from collections import Counter
+from datetime import datetime, timezone
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+
+IOS = Path(__file__).resolve().parents[1]
+ROOT = IOS.parent
+CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
+
+
+def inventory():
+    """Source declarations, not XCTest discovery or a claim that tests ran."""
+    result = {}
+    for lane, directory in (("ui", IOS / "OneUITests"),
+                            ("logic", IOS / "Eval/Tests/OneLogicTests")):
+        suites = []
+        for path in sorted(directory.glob("*.swift")):
+            suite = None
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                match = re.search(r"\bclass\s+(\w+)\s*:\s*XCTestCase", line)
+                if match:
+                    suite = {"suite": match[1], "path": str(path.relative_to(ROOT)), "methods": []}
+                    suites.append(suite)
+                method = re.match(r"\s*func\s+(test\w+)\s*\(", line)
+                if method and suite is not None:
+                    suite["methods"].append({"name": method[1], "line": number})
+        result[lane] = suites
+    return result
+
+
+def parser():
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--full", action="store_true", help="run all OneUITests once; explicit owner authorization required")
+    mode.add_argument("--only", action="append", metavar="SUITE[/METHOD]", help="narrow selection; repeat for related tests")
+    mode.add_argument("--inventory", action="store_true", help="print current UI and logic source inventory as JSON; no tools run")
+    p.add_argument("--logic", action="store_true", help="first run swift test --jobs 2 (includes capture eval)")
+    p.add_argument("--dry-run", action="store_true", help="print plan only; no subprocesses, devices, locks or files")
+    p.add_argument("--simulator-name", default="Today-QA", help="owned simulator name; must start with Today-")
+    p.add_argument("--simulator-id", help="reuse only if its name matches --simulator-name")
+    p.add_argument("--device-type", default="com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max")
+    p.add_argument("--runtime", default="com.apple.CoreSimulator.SimRuntime.iOS-27-0")
+    p.add_argument("--derived-data", type=Path, help="incremental cache; default ios/.build/<simulator-name>")
+    p.add_argument("--output", type=Path, help="new evidence directory; must not exist")
+    return p
+
+
+def selectors(args, source):
+    if args.full:
+        return ["OneUITests"]
+    known = {s["suite"]: {m["name"] for m in s["methods"]} for s in source["ui"]}
+    result = []
+    for value in args.only:
+        value = value.removeprefix("OneUITests/")
+        pieces = value.split("/")
+        if len(pieces) not in (1, 2) or pieces[0] not in known:
+            raise ValueError(f"Unknown UI selection: {value}; use --inventory")
+        if len(pieces) == 2 and pieces[1] not in known[pieces[0]]:
+            raise ValueError(f"Unknown UI method: {value}; use --inventory")
+        result.append("OneUITests/" + value)
+    return list(dict.fromkeys(result))
+
+
+def ui_command(selected, simulator, derived, output):
+    # Preserve project signing, including simulated App Group entitlements for Share.
+    return ["xcodebuild", "test", "-jobs", "2", "-project", "One.xcodeproj", "-scheme", "One",
+            "-destination", f"platform=iOS Simulator,id={simulator}",
+            "-derivedDataPath", str(derived), "-resultBundlePath", str(output / "ui.xcresult"),
+            "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
+            "-maximum-parallel-testing-workers", "1", "-collect-test-diagnostics", "never",
+            *["-only-testing:" + value for value in selected]]
+
+
+def run_logged(command, logfile, progress, attempts):
+    print("+ " + shlex.join(command), flush=True)
+    with logfile.open("w") as log:
+        process = subprocess.Popen(command, cwd=IOS, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, bufsize=1, start_new_session=True)
+        try:
+            for line in process.stdout:
+                log.write(line)
+                log.flush()
+                match = CASE.search(line)
+                if match:
+                    entry = {"test": match[1], "status": match[2]}
+                    attempts.append(entry)
+                    with progress.open("a") as stream:
+                        stream.write(json.dumps({"time": datetime.now(timezone.utc).isoformat(), **entry}) + "\n")
+                    print(f"[{len(attempts)} completed] {line.strip()}", flush=True)
+                elif any(token in line for token in ("Test Suite '", "Test Case '", "Executed ", "CAPTURE ", "error:", "** TEST")):
+                    print(line.rstrip(), flush=True)
+            return process.wait()
+        finally:
+            # Stop the whole runner group before shutting down its simulator.
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGTERM)
+                try:
+                    process.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+            process.stdout.close()
+
+
+def capture(command):
+    return subprocess.check_output(command, cwd=IOS, text=True).strip()
+
+
+def select_simulator(args):
+    devices = json.loads(capture(["xcrun", "simctl", "list", "devices", "available", "--json"]))
+    all_devices = [d for group in devices["devices"].values() for d in group]
+    if args.simulator_id:
+        matches = [d for d in all_devices if d["udid"].lower() == args.simulator_id.lower()]
+        if len(matches) != 1 or matches[0]["name"] != args.simulator_name:
+            raise ValueError("Simulator ID must identify the exact owned --simulator-name")
+    else:
+        matches = [d for d in all_devices if d["name"] == args.simulator_name]
+    if len(matches) > 1:
+        raise ValueError("Multiple simulators have this name; select the owned one with --simulator-id")
+    if matches:
+        if matches[0]["state"] != "Shutdown":
+            raise ValueError("Owned simulator is already active; wait for its runner and shut it down first")
+        return matches[0]["udid"]
+    return capture(["xcrun", "simctl", "create", args.simulator_name, args.device_type, args.runtime])
+
+
+def main(argv=None):
+    p = parser()
+    args = p.parse_args(argv)
+    source = inventory()
+    if args.inventory:
+        print(json.dumps(source, indent=2))
+        return 0
+    if not re.fullmatch(r"Today-[A-Za-z0-9_-]+", args.simulator_name):
+        p.error("--simulator-name must be Today- followed by letters, digits, underscores or hyphens")
+    try:
+        selected = selectors(args, source)
+    except ValueError as error:
+        p.error(str(error))
+    derived = (args.derived_data or IOS / ".build" / args.simulator_name).resolve()
+    output = (args.output or Path(tempfile.gettempdir()) /
+              ("today-qa-" + datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])).resolve()
+    planned = [ui_command(selected, args.simulator_id or "<owned-simulator-udid>", derived, output)]
+    if args.logic:
+        planned.insert(0, ["swift", "test", "--jobs", "2"])
+    if args.dry_run:
+        print(json.dumps({"cwd": str(IOS), "simulator_name": args.simulator_name,
+                          "derived_data": str(derived), "output": str(output), "commands": planned,
+                          "lifecycle": "lock name and cache; select/create owned shutdown simulator; boot; test; finally shutdown"}, indent=2))
+        return 0
+    # Locks cover separate checkouts using the same name or absolute cache path.
+    locks = []
+    simulator = None
+    evidence_created = False
+    started = time.monotonic()
+    summary = {"started_at": datetime.now(timezone.utc).isoformat(), "selection": selected,
+               "derived_data": str(derived), "simulator_name": args.simulator_name,
+               "status": "incomplete", "stages": {}, "attempts": {}}
+    try:
+        for key in sorted(["name:" + args.simulator_name, "cache:" + str(derived)]):
+            lock = open(Path(tempfile.gettempdir()) / ("today-qa-lock-" + hashlib.sha256(key.encode()).hexdigest()), "a")
+            locks.append(lock)
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        output.mkdir(parents=True, exist_ok=False)
+        evidence_created = True
+        summary["head"] = capture(["git", "rev-parse", "HEAD"])
+        summary["working_tree"] = capture(["git", "status", "--short"])
+        summary["timezone"] = time.tzname
+        summary["environment"] = {k: v for k, v in os.environ.items()
+                                  if "SHOTS" in k or k == "ACTIVITY_BENCH_ROWS"}
+        (output / "inventory.json").write_text(json.dumps(source, indent=2) + "\n")
+        print(f"Evidence: {output}", flush=True)
+        summary["commands"] = []
+        if args.logic:
+            command = ["swift", "test", "--jobs", "2"]
+            summary["commands"].append(command)
+            summary["attempts"]["logic"] = []
+            code = run_logged(command, output / "logic.log", output / "progress.jsonl", summary["attempts"]["logic"])
+            summary["stages"]["logic"] = code
+            if code:
+                summary["status"] = "failed"
+                return code
+        simulator = select_simulator(args)
+        summary["simulator_id"] = simulator
+        subprocess.run(["xcrun", "simctl", "boot", simulator], check=True)
+        subprocess.run(["xcrun", "simctl", "bootstatus", simulator, "-b"], check=True)
+        command = ui_command(selected, simulator, derived, output)
+        summary["commands"].append(command)
+        summary["attempts"]["ui"] = []
+        code = run_logged(command, output / "ui.log", output / "progress.jsonl", summary["attempts"]["ui"])
+        summary["stages"]["ui"] = code
+        summary["status"] = "passed" if code == 0 else "failed"
+        if (output / "ui.xcresult").exists():
+            with (output / "xcresult-summary.json").open("w") as stream, (output / "xcresult-summary.log").open("w") as errors:
+                summary["stages"]["xcresult_summary"] = subprocess.run(
+                    ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(output / "ui.xcresult")],
+                    stdout=stream, stderr=errors).returncode
+        return code
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        summary["error"] = str(error)
+        summary["status"] = "failed"
+        print(f"QA failed: {error}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        summary["status"] = "interrupted"
+        return 130
+    finally:
+        if simulator:
+            try:
+                summary["stages"]["shutdown"] = subprocess.run(["xcrun", "simctl", "shutdown", simulator]).returncode
+            except OSError as error:
+                summary["shutdown_error"] = str(error)
+        summary["elapsed_seconds"] = round(time.monotonic() - started, 3)
+        summary["counts"] = {lane: dict(Counter(a["status"] for a in attempts))
+                             for lane, attempts in summary["attempts"].items()}
+        # Never overwrite evidence from a pre-existing output directory.
+        if evidence_created:
+            (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+            print(f"{summary['status']}: {summary['counts']}; evidence: {output}", flush=True)
+        for lock in locks:
+            lock.close()
+
+
+if __name__ == "__main__":
+    # SIGTERM follows the same cleanup path as Ctrl-C.
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+    sys.exit(main())
