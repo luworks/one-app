@@ -963,8 +963,9 @@ private struct WeekPage: View {
                         }
                         // Beside the blocks: a thin marker at the alarm's time (no duration).
                         ForEach(markers, id: \.entry.id) { m in
-                            alarmMarker(m.entry, width: CGFloat(lanes.alarmWidth))
+                            alarmMarker(m.entry)
                                 .opacity(past ? DayTint.past : 1)
+                                .frame(width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
                                 .offset(x: x + CGFloat(lanes.alarmX), y: m.y)
                         }
                     }
@@ -1067,7 +1068,7 @@ private struct WeekPage: View {
 
     /// An alarm on the grid: a thin accent line and bell, with a label when it fits. Tap opens the alarm editor;
     /// it has no duration and no drag (only flexible tasks move).
-    private func alarmMarker(_ e: CalEntry, width: CGFloat) -> some View {
+    private func alarmMarker(_ e: CalEntry) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 2) {
                 Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
@@ -1078,7 +1079,7 @@ private struct WeekPage: View {
         }
         .foregroundStyle(EventTint.text(e.color))
         .padding(.horizontal, 3)
-        .frame(width: width, height: Self.markerHeight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(EventTint.fill(e.color))
         .overlay(alignment: .top) { Rectangle().fill(e.color).frame(height: 1.5) }
         .clipShape(RoundedRectangle(cornerRadius: 3))
