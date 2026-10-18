@@ -92,7 +92,7 @@ enum ChatRouting {
             // boundary require the request itself, rather than a report/question quoting its words.
             if has(requestBody(text), #"^[\p{Han}0-9]"#) {
                 let when = chineseTimeToken
-                let direct = #"^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?"#
+                let direct = #"^(?:(?:请|麻烦|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?"#
                     + when + #"*(?:的时候)?(?:吧)?[，,]?\s*(?:就)?(?:提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
                 // A narrative can end in an explicit timed reminder clause. Its earlier words
                 // need not be a command, but the reminder clause itself must start at a boundary.
