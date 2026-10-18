@@ -1,8 +1,6 @@
 import SwiftUI
 import SwiftData
-#if DEBUG
 import UIKit
-#endif
 
 /// One list pushed from Reminders: a smart list (Today, Scheduled, All, Flagged, Completed), the default
 /// list, or a list from My Lists. Big colored title, the reminders, and an inline "New Reminder" row.
@@ -181,6 +179,7 @@ struct ReminderListScreen: View {
         .navigationTitle("")
         // Keep the native stack (including edge-swipe back), without a second navigation row.
         .toolbar(.hidden, for: .navigationBar)
+        .background { ReminderNativePopAccess().allowsHitTesting(false).accessibilityHidden(true) }
         #if DEBUG
         .background {
             if ProcessInfo.processInfo.arguments.contains("-debugNativePopProbe") {
@@ -568,6 +567,111 @@ private struct NewReminderRow: View {
     }
 }
 
+/// Scope the hidden-bar exception to the detail's own native edge-pop recognizer.
+private struct ReminderNativePopAccess: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> AccessController { AccessController() }
+    func updateUIViewController(_ controller: AccessController, context: Context) {}
+    static func dismantleUIViewController(_ controller: AccessController, coordinator: ()) { controller.detach() }
+
+    final class AccessController: UIViewController, UIGestureRecognizerDelegate {
+        private weak var gesture: UIGestureRecognizer?
+        private var original: (any UIGestureRecognizerDelegate)?
+
+        override func loadView() {
+            view = UIView()
+            view.isUserInteractionEnabled = false
+        }
+
+        private var owningNavigation: UINavigationController? {
+            var ancestor = parent
+            while let controller = ancestor {
+                if let navigation = controller as? UINavigationController { return navigation }
+                if let navigation = controller.navigationController { return navigation }
+                ancestor = controller.parent
+            }
+            return nil
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard let candidate = owningNavigation?.interactivePopGestureRecognizer else { return }
+            if candidate.delegate === self { return }
+            detach()
+            gesture = candidate
+            original = candidate.delegate
+            candidate.delegate = self
+            trace(["event": "attached"])
+        }
+
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            detach()
+        }
+
+        func detach() {
+            if let gesture, gesture.delegate === self { gesture.delegate = original }
+            gesture = nil
+            original = nil
+        }
+
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            let prior = original?.gestureRecognizerShouldBegin?(recognizer) ?? true
+            guard let navigation = owningNavigation, recognizer === gesture else { return prior }
+            var ancestor = parent
+            while let controller = ancestor, controller !== navigation.topViewController { ancestor = controller.parent }
+            let eligible = viewIfLoaded?.window != nil && ancestor != nil
+                && navigation.visibleViewController === navigation.topViewController
+                && navigation.viewControllers.count > 1 && navigation.transitionCoordinator == nil
+                && navigation.presentedViewController == nil
+            let result = eligible && (navigation.isNavigationBarHidden || prior)
+            trace(["event": "shouldBegin", "original": String(prior), "eligible": String(eligible), "result": String(result)])
+            return result
+        }
+
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            let result = original?.gestureRecognizer?(recognizer, shouldReceive: touch) ?? true
+            if let navigation = owningNavigation {
+                let point = touch.location(in: navigation.view)
+                trace(["event": "receiveTouch", "original": String(result),
+                       "pointInNavigation": NSStringFromCGPoint(point),
+                       "insideNavigation": String(navigation.view.bounds.contains(point))])
+            }
+            return result
+        }
+
+        // Preserve every other optional delegate method, including event and gesture relationships.
+        override func responds(to selector: Selector!) -> Bool {
+            super.responds(to: selector) || (original?.responds(to: selector) ?? false)
+        }
+        override func forwardingTarget(for selector: Selector!) -> Any? {
+            if original?.responds(to: selector) == true { return original }
+            return super.forwardingTarget(for: selector)
+        }
+
+        private func trace(_ fields: [String: String]) {
+            #if DEBUG
+            guard ProcessInfo.processInfo.arguments.contains("-debugNativePopProbe") else { return }
+            let directory = URL.applicationSupportDirectory.appendingPathComponent("NativePopProbe", isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                let path = directory.appendingPathComponent("delegate-decisions.jsonl")
+                if !FileManager.default.fileExists(atPath: path.path) { FileManager.default.createFile(atPath: path.path, contents: nil) }
+                let handle = try FileHandle(forWritingTo: path)
+                defer { try? handle.close() }
+                try handle.seekToEnd()
+                var row = fields
+                row["timestamp"] = String(Date().timeIntervalSince1970)
+                row["navigation"] = owningNavigation.map { String(describing: ObjectIdentifier($0)) } ?? "nil"
+                row["originalDelegate"] = original.map { String(describing: type(of: $0)) } ?? "nil"
+                var bytes = try JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
+                bytes.append(0x0a)
+                try handle.write(contentsOf: bytes)
+            } catch { print("NativePopProbe: could not record delegate decision: \(error)") }
+            #endif
+        }
+    }
+}
+
 #if DEBUG
 /// Opt-in observation only: never changes the native recognizer's delegate, enabled flag or state.
 private struct ReminderNativePopProbe: UIViewControllerRepresentable {
@@ -651,7 +755,9 @@ private struct ReminderNativePopProbe: UIViewControllerRepresentable {
                 "top": identity(navigation?.topViewController),
                 "visible": identity(navigation?.visibleViewController),
                 "barHidden": navigation.map { String($0.isNavigationBarHidden) } ?? "nil",
-                "probeInWindow": String(viewIfLoaded?.window != nil)
+                "probeInWindow": String(viewIfLoaded?.window != nil),
+                "navigationFrameInWindow": navigation.map { NSStringFromCGRect($0.view.convert($0.view.bounds, to: nil)) } ?? "nil",
+                "gestureFrameInWindow": gesture?.view.map { NSStringFromCGRect($0.convert($0.bounds, to: nil)) } ?? "nil"
             ]
             guard let data = try? JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys]),
                   let sample = String(data: data, encoding: .utf8) else { return }

@@ -86,3 +86,34 @@ interactive transition. A missing navigation controller is explicitly logged as
 `nil`/`unavailable`, not mistaken for a disabled recognizer. Probe timing itself
 adds small DEBUG-only overhead. Do not mix this diagnostic with candidate B or
 weaken the original native-back assertion.
+
+## Candidate B (unverified)
+
+The latest actual probe found the detail's own UIKit navigation controller at
+stack depth 2 with its bar hidden, native pop enabled and the UIKit transition
+delegate retained. During the failing drag only `possible` samples were observed.
+This supports testing a local hidden-bar exception, but does not prove a delegate
+veto. Existing records did not capture the native navigation view frame, so the
+application-relative drag start at (0.01, 0.50) cannot yet be proven inside its
+interactive view. The opt-in probe now also records navigation and recognizer
+view bounds converted to window coordinates.
+
+A is reverted in a separate ordinary commit on this branch; compatibility must
+apply this only after its active build ends. Candidate B installs a proxy only
+through the detail's actual containment after appearance. It changes only native
+pop `shouldBegin`: a visible top detail, stack depth > 1, no transition coordinator
+and no presented controller may bypass the original rejection while the bar is
+hidden. It never sets recognizer enabled/state, pops manually or changes global
+navigation. The original delegate receives its original shouldBegin call once;
+all other optional methods are forwarded, with shouldReceiveTouch returning the
+original result unchanged. The original delegate is restored on disappearance or
+dismantle, only if this adapter still owns it. The native enabled flag is untouched.
+
+With the existing DEBUG probe flag, `delegate-decisions.jsonl` records attachment,
+original shouldBegin/eligibility/result and original touch-admission decisions,
+including the actual touch point and whether it is inside navigation bounds.
+These diagnostics and all probe sampling remain excluded from Release. A false
+touch-admission result is deliberately preserved; if that blocks B, the evidence
+identifies the remaining constraint rather than broadly bypassing UIKit rules.
+No B build or runtime success is claimed. Validate the unchanged TabMemory method
+once in the coordinator's next slot; do not retry A or weaken the edge assertion.
