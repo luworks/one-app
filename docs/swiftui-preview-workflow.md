@@ -7,7 +7,8 @@ python3 /path/to/worktree/scripts/swiftui_preview.py --budget 540 --port 49731
 ```
 
 Use `--plan` for a read-only ownership/command listing. `--watch world` or
-`--watch health` selects a different individual screen. `--once` captures the
+`--watch reminders` selects another individual screen (see the known Reminders
+watch limitation below). `--once` captures the
 three-screen report and shuts down. Port `0` (the default) asks the OS for a free
 loopback port. The command prints the gallery URL and persistent evidence path.
 Ctrl-C or SIGTERM stops the session; its budget includes download, build, render,
@@ -102,3 +103,22 @@ build with no axe compiler flags, limited to the owned simulator architecture an
 `-jobs 2`. It verifies Release compile inputs exclude `PreviewFixtures.swift`, and
 checks the built executable for fixture/bootstrap symbols and the axe environment
 marker. This proves build/exclusion, not a physical-device or Release UI journey.
+
+A focused rerun can pass `--reuse-report <previous-run-directory>` to retain the
+already accepted static captures when every Swift source hash still matches.
+This mode does not refresh the static catalog and is not a warm full-gallery
+measurement. Regenerate the report after changes to non-Swift resources.
+
+To reproduce the recorded source-edit experiment after `watch.captured` appears:
+
+```sh
+python3 scripts/measure_preview_edits.py /path/to/current-run
+```
+
+It changes the production Health navigation title three times, waits for each axe
+reload and actual PNG, then restores the original bytes and captures the restored
+screen. Run it within the same host window and stop after a concrete failure.
+Inspect `edit-1.png`, `edit-2.png`, `edit-3.png` and `edit-reverted.png`; frame hashes
+alone cannot prove that the expected title became visible. The measurements cover
+edit → axe render event → a 0.5-second settling delay → PNG capture, plus up to one
+second for browser polling; they do not claim arbitrary Swift edits are supported.

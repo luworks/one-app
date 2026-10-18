@@ -55,3 +55,13 @@ Costs below are qualitative engineering assessments for Today, inferred from the
 Evaluate pinned **axe v0.0.14** first for the CLI/watch workflow, retaining its static report as review evidence. Keep **eure/swift-storybook** as the direct existing-package option if interactive in-app browsing is the actual requirement. Consider Prefire or SnapshotTesting only when visual regression assertions become a concrete need; AJ Storybook is most attractive when explicit controls justify manual registration.
 
 **Do not build a custom preview framework for this proof of concept.** Existing packages cover the distinct capture, catalog and assertion needs. Preview fixtures should use local deterministic data and preserve Today's Add/Apply/Undo and system-data boundaries. A rendered preview validates that fixture's appearance; it does not prove navigation, persistence, EventKit/AlarmKit behavior, or a complete app journey.
+
+## Local POC result (after the read-only research)
+
+[The recorded evaluation](../qa/swiftui-preview.md) subsequently verified axe
+v0.0.14 on this project's Xcode 27.1 / iOS 27.0 simulator: three production-view
+captures, a real browser gallery, and three strict Health body-edit injections
+passed. Ordinary Release compilation and preview exclusion also passed. The
+Reminders watch exposed a missing-`mutating` thunk-generation error and remains
+unsupported; this qualifies the recommendation rather than proving universal
+Xcode 27.1 compatibility. The other four tools were researched, not installed.
