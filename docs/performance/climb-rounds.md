@@ -26,3 +26,26 @@ Build log confirms GenerateDSYM precedes `strip -D -x -S` in all three targets.
 Detailed UUID/source lookup verification remains in the packaging lane.
 Raw log `round1-release-456fc756.log` and `round1-release-inventory.json` live
 under canonical `performance-climb-20261018`; no runtime speedup is established.
+
+## Matched round1 results (second bounded window)
+
+Source f388d25, identical optimized Debug -O probes/dataset/device. Reference and
+candidate3/3UI methods pass. App init→layout proxy1576.318→1512.878ms(1.042×),
+Month→Year682.670→716.910ms(0.952×), peak physical median278.721→233.190MiB
+(−16.34%). Overall3×/10× and51%memory goals are not met; ranges/noise preclude
+causal attribution of small changes. See current-state table and raw comparison.
+
+Dense52-trip Year calculation:5alternating paired samples, complete ordered
+placement equality/checksum,69.366993→0.954924ms per12months (72.641×). This is a
+component gain, not whole-render/user latency. Warm100k host reads n5: newest
+0.353337→0.206385ms(1.712×), deep1.205417→1.046355ms(1.152×), search
+0.504175→0.357540ms(1.410×); no3×. Retain narrow equivalent code; deprioritize
+further tiny hydration wins compared with startup/Year.
+
+Initial9host methods had8passes and one malformedfixture SQL failure;35467e7
+fixes only test schema rewriting, keeping assertions. Isolated failedmethod plus
+readbenchmark2/2pass; other green tests are not repeated. All raw failures remain.
+10sstartup TimeProfiler capture/export succeeded; actual user stacks are raw
+addresses, stdout empty, so named/staged CPU diagnosis is still pending model
+export/symbol evidence. Window released early11:29:05, simulator shutdown and
+noheavy/booted verified. No extra-Osize build starts until the next handoff.
