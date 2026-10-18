@@ -198,3 +198,5 @@ Event-save supplemental EventKit metadata is seeded by the versioned DEBUG hooks
 - Timestamp round-trip, unknown legacy time, assistant-role rejection, bounded
   model prompt versus full user reference recovery, midnight and spring DST cases
   are small inline inputs in `AlarmContextTests`.
+
+- `empty-relaunch.json`: empty dataset for file-backed relaunch checks; preserves saved list order without reseeding.
