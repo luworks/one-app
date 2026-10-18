@@ -150,8 +150,10 @@ enum Dialogue {
 
     // MARK: Answering "when?"
 
-    /// The new start for a "when should I move it to?" answer: "5pm", "tomorrow", "明天下午3点". Nil when it gives no time.
+    /// The new start for a "when should I move it to?" answer: "5pm", "tomorrow", "明天下午3点".
+    /// A new request with its own action is not an answer, even when it contains a time.
     static func answerTime(_ text: String, keeping old: Date?, now: Date = .now, calendar: Calendar = .current) -> Date? {
+        guard isOnlyWhen(text, now: now, calendar: calendar) else { return nil }
         let today = calendar.startOfDay(for: now)
         let parsed = CaptureParser.parse(text, now: today, calendar: calendar)
         guard parsed.hasDay || parsed.hour != nil else { return nil }

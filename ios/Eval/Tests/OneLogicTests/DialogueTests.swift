@@ -100,6 +100,16 @@ final class DialogueTests: XCTestCase {
         XCTAssertNil(Dialogue.answerTime("hmm", keeping: old, now: now, calendar: cal))
     }
 
+    /// After "Move Dentist" asks when, an unrelated timed reminder must remain a new request.
+    func testNewTimedRequestDoesNotAnswerAnExistingItemsTimePrompt() {
+        let old = cal.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 15))!
+        for request in ["Remind me to call Mom tomorrow at 5pm", "明天下午5点提醒我给妈妈打电话"] {
+            XCTAssertEqual(ChatRouting.intent(request), .capture, request)
+            XCTAssertNil(Dialogue.answerTime(request, keeping: old, now: now, calendar: cal),
+                         "A new reminder must not turn into a move of Dentist: \(request)")
+        }
+    }
+
     func testRecapIsShort() {
         let lines = (0..<10).map { (isUser: $0 % 2 == 0, text: String(repeating: "x", count: 300)) }
         let recap = Dialogue.recap(lines)
