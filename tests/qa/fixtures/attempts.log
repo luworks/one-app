@@ -1,0 +1,5 @@
+Test Case '-[OneUITests.Sample testFirst]' started.
+    t =     1.23s Tap "Today" Button
+Test Case '-[OneUITests.Sample testFirst]' failed (1 s).
+Test Case '-[OneUITests.Sample testFirst]' started.
+Test Case '-[OneUITests.Sample testFirst]' passed (1 s).
