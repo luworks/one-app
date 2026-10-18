@@ -198,8 +198,18 @@ final class RemindersListsTests: XCTestCase {
         app.openSidebar()
         app.buttons["Settings"].firstMatch.tap()
         let toggles = ["smartToggle.scheduled", "smartToggle.today"].map { app.switches[$0] }
-        app.revealSettingsRow(toggles[0])
-        XCTAssertTrue(toggles[0].waitForExistence(timeout: 5))
+        for toggle in toggles {
+            app.revealSettingsRow(toggle)
+            XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        }
+        // Revealing Today scrolls the lazy Form again: both rows must still be on screen for the order comparison.
+        for toggle in toggles {
+            guard toggle.isFullyVisible(in: app.settingsRowViewport) else {
+                XCTFail("both smart-list toggles must be fully visible before comparing their order")
+                return
+            }
+            XCTAssertTrue(toggle.isHittable)
+        }
         XCTAssertLessThan(toggles[0].frame.minY, toggles[1].frame.minY, "Settings shows Scheduled before Today too")
         app.buttons["Done"].firstMatch.tap()
         app.closeSidebar()

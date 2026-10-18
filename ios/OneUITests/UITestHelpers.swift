@@ -12,16 +12,15 @@ extension XCUIApplication {
     /// and its order can change. Drag within that row so the app's tab swipe gesture is not used.
     func revealReminderPill(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         func visible(_ pill: XCUIElement) -> Bool {
-            pill.exists && pill.isHittable && pill.frame.minX >= frame.minX
-                && pill.frame.maxX <= frame.maxX
+            pill.isFullyVisible(in: frame) && pill.isHittable
         }
         if visible(target) { return }
-        let pills = buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'smart.' OR identifier BEGINSWITH 'pinned.'"))
+        let pills = descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'smart.' OR identifier BEGINSWITH 'pinned.'"))
         let startsTowardsEnd = !target.exists || target.frame.minX >= frame.minX
         for towardsEnd in [startsTowardsEnd, !startsTowardsEnd] {
             for _ in 0..<12 {
                 if visible(target) { return }
-                guard let anchor = pills.allElementsBoundByIndex.first(where: { $0.isHittable && $0.frame.intersects(frame) }) else {
+                guard let anchor = pills.allElementsBoundByIndex.first(where: { visible($0) }) else {
                     XCTFail("No visible reminder pill to scroll", file: file, line: line)
                     return
                 }
@@ -34,15 +33,35 @@ extension XCUIApplication {
         XCTAssertTrue(visible(target), "Reminder pill is on screen and hittable: \(target)", file: file, line: line)
     }
 
-    /// SwiftUI Form rows are lazy: scroll before requiring an off-screen control to exist.
+    /// The Form can extend behind its navigation bar and home indicator. Only accept rows inside its usable viewport.
+    var settingsRowViewport: CGRect {
+        let screen = frame
+        let form = collectionViews.allElementsBoundByIndex.last(where: { $0.isFullyVisible(in: screen) })
+        var viewport = form?.frame.intersection(screen) ?? screen
+        let navigation = navigationBars["Settings"]
+        let top = navigation.exists ? max(viewport.minY, navigation.frame.maxY + 8) : viewport.minY
+        let bottom = min(viewport.maxY, screen.maxY - 44)
+        viewport = CGRect(x: viewport.minX, y: top, width: viewport.width, height: max(0, bottom - top))
+        return viewport
+    }
+
+    /// SwiftUI Form rows are lazy: scroll before requiring an off-screen control to exist or be hittable.
     func revealSettingsRow(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        func visible() -> Bool {
+            element.isFullyVisible(in: settingsRowViewport) && element.isHittable
+        }
         for _ in 0..<12 {
-            if element.exists && element.isHittable { return }
-            let start = coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
-            let end = coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            if visible() { return }
+            let viewport = settingsRowViewport
+            let towardsTop = element.exists && element.frame.minY < viewport.minY
+            let origin = coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: viewport.midX - frame.minX,
+                dy: viewport.minY - frame.minY + viewport.height * (towardsTop ? 0.35 : 0.8)))
+            let end = origin.withOffset(CGVector(dx: viewport.midX - frame.minX,
+                dy: viewport.minY - frame.minY + viewport.height * (towardsTop ? 0.8 : 0.35)))
             start.press(forDuration: 0.05, thenDragTo: end)
         }
-        XCTAssertTrue(element.exists && element.isHittable, "Settings row is visible: \(element)", file: file, line: line)
+        XCTAssertTrue(visible(), "Settings row is fully visible and hittable: \(element)", file: file, line: line)
     }
 
     /// The sidebar is a full screen with no Today row, and Settings opens over it, so after Settings the sidebar is still open.
@@ -62,6 +81,16 @@ extension XCUIApplication {
 }
 
 extension XCUIElement {
+    /// Check geometry before isHittable: XCTest can throw while deriving an off-screen element's activation point.
+    func isFullyVisible(in viewport: CGRect) -> Bool {
+        guard exists else { return false }
+        let bounds = frame
+        guard !bounds.isNull, !bounds.isEmpty, !viewport.isNull, !viewport.isEmpty,
+              [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY,
+               viewport.minX, viewport.minY, viewport.maxX, viewport.maxY].allSatisfy({ $0.isFinite }) else { return false }
+        return viewport.contains(bounds)
+    }
+
     /// Flips a switch by tapping its knob (a tap on the middle of a labeled switch can land on the label and do nothing)
     /// and waits for the new value, so the next line sees it.
     func toggleSwitch(file: StaticString = #filePath, line: UInt = #line) {
