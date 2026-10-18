@@ -601,6 +601,17 @@ enum CaptureParser {
         return s
     }
 
+    /// The action after a leading relative time, using the same vocabulary as date extraction.
+    /// A time inside a story does not qualify: removing it must leave an unchanged suffix.
+    static func actionAfterLeadingRelativeTime(_ raw: String) -> String? {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var remainder = text
+        guard takeRelativeMinutes(from: &remainder) != nil else { return nil }
+        let action = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !action.isEmpty, action != text, text.hasSuffix(action) else { return nil }
+        return action
+    }
+
     /// Minutes from now for "30分钟后", "半小时后", "一个半小时后", "in 2 hours", "in an hour", "in half an hour". Removes the match.
     private static func takeRelativeMinutes(from text: inout String) -> Int? {
         let num = #"\d+|[零一二两三四五六七八九十]{1,3}"#
