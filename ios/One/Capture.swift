@@ -119,19 +119,18 @@ enum CaptureParser {
         }
         func offset(_ n: Int) -> Date? { calendar.date(byAdding: .day, value: n, to: today) }
 
-        // "每周三" / "every Monday": weekly, first on the next such weekday.
-        let englishDays = weekdayNames.map(\.0).joined(separator: "|")
-        if let m = take(#"每(?:个)?(?:周|星期|礼拜)([一二三四五六日天])"#, from: &text) {
-            repeatRule = RepeatRule.weekly.rawValue
-            setDay(upcoming(chinese(m[0]), today: today, calendar: calendar, allowToday: true))
-        } else if let m = take(#"\bevery\s+("# + englishDays + #")\b"#, from: &text) {
-            repeatRule = RepeatRule.weekly.rawValue
-            setDay(upcoming(weekday(m[0]), today: today, calendar: calendar, allowToday: true))
+        // Consume the entire weekday list before generic "每周" / "every week" tokens.
+        // The stored rule carries every day, rather than relying on the first due date alone.
+        let weeklyDays = takeWeeklyDays(from: &text)
+        if !weeklyDays.isEmpty {
+            repeatRule = RepeatRule.weeklyOn(weeklyDays).rawValue
+            setDay(weeklyDays.compactMap { upcoming($0, today: today, calendar: calendar, allowToday: true) }.min())
         }
 
         // Repeat ("every day", "weekly", "每天"…). Weekday first so "every weekday" isn't read as "every week".
         let repeats: [(String, RepeatRule)] = [
-            (#"\bevery\s+weekday\b|\bweekdays\b|工作日|每个工作日"#, .weekdays),
+            (#"\bevery\s+weekday\b|\bweekdays\b|每(?:个)?工作日|工作日"#, .weekdays),
+            (#"\bevery\s+weekends?\b|\bweekends\b|每(?:个)?周末"#, .weeklyOn([1, 7])),
             (#"\bevery\s*day\b|\bdaily\b|每天|每日"#, .daily),
             (#"\bevery\s*week\b|\bweekly\b|每周|每星期"#, .weekly),
             (#"\bevery\s*month\b|\bmonthly\b|每月|每个月"#, .monthly),
@@ -139,6 +138,11 @@ enum CaptureParser {
         ]
         for (pattern, rule) in repeats where take(pattern, from: &text) != nil {
             repeatRule = rule.rawValue
+            if rule == .weekdays {
+                setDay([2, 3, 4, 5, 6].compactMap { upcoming($0, today: today, calendar: calendar, allowToday: true) }.min())
+            } else if case .weeklyOn(let days) = rule {
+                setDay(days.compactMap { upcoming($0, today: today, calendar: calendar, allowToday: true) }.min())
+            }
             break
         }
 
@@ -299,6 +303,13 @@ enum CaptureParser {
             setDay(offset(1))
         }
 
+        // A repeating occurrence whose time passed today advances within its own weekday set.
+        if let h = hour, let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)),
+           calendar.isDate(day, inSameDayAs: today),
+           let time = calendar.date(bySettingHour: h, minute: minute, second: 0, of: day), time < now {
+            setDay(rule.next(after: day, calendar: calendar))
+        }
+
         // Leftover connectors at either end ("Pay rent on", "at Call").
         var title = text
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
@@ -342,6 +353,25 @@ enum CaptureParser {
     }
 
     // MARK: Helpers
+
+    /// Shared complete list grammar for parsing and leading temporal request routing.
+    static let chineseWeeklyDays = #"每(?:个|逢)?(?:周|星期|礼拜)[一二三四五六日天](?:\s*[、，,和及与]\s*(?:(?:每(?:个)?)?(?:周|星期|礼拜))?[一二三四五六日天])*"#
+    private static let englishDay = #"(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tues|tue|wed|thurs|thur|thu|fri|sat)s?\b"#
+    static let englishWeeklyDays = #"\bevery\s+"# + englishDay + #"(?:\s*(?:,\s*(?:and\s+)?|and\s+|&\s*)(?:every\s+)?"# + englishDay + #")*"#
+
+    private static func takeWeeklyDays(from text: inout String) -> [Int] {
+        let pattern = chineseWeeklyDays + "|" + englishWeeklyDays
+        guard let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { return [] }
+        let phrase = String(text[range])
+        text.replaceSubrange(range, with: " ")
+        if phrase.contains("每") {
+            return Array(Set(phrase.compactMap { chineseWeekdays[$0] })).sorted()
+        }
+        let lower = phrase.lowercased()
+        return Array(Set(weekdayNames.compactMap { name, day in
+            lower.range(of: "\\b" + name + "s?\\b", options: .regularExpression) == nil ? nil : day
+        })).sorted()
+    }
 
     private static func weekday(_ name: String?) -> Int {
         let n = (name ?? "").lowercased()
@@ -776,6 +806,8 @@ struct CaptureDraft: Equatable {
     /// "daily", "weekdays", "weekly", "monthly", "yearly"; nil or "none" = one-off.
     var repeatRule: String? = nil
     var isAllDay: Bool = false
+    /// Explicit Calendar weekdays (Sunday = 1); empty/nil keeps the legacy repeat name.
+    var repeatWeekdays: [Int]? = nil
 }
 
 enum CaptureDraftMapper {
@@ -814,8 +846,23 @@ enum CaptureDraftMapper {
         var duration: Int?
         if !allDay, let d = draft.durationMinutes, (1...1440).contains(d) { duration = d }
 
+        var recurrence = repeatRule(draft.repeatRule)
+        if let days = draft.repeatWeekdays, !days.isEmpty {
+            guard days.allSatisfy({ (1...7).contains($0) }), recurrence == RepeatRule.weekly.rawValue || recurrence == RepeatRule.weekdays.rawValue else { return nil }
+            recurrence = RepeatRule.weeklyOn(Array(Set(days)).sorted()).rawValue
+            let lowerBound = hasDay ? day : today
+            let candidates = days.compactMap { weekday -> Date? in
+                let delta = (weekday - calendar.component(.weekday, from: lowerBound) + 7) % 7
+                guard let candidate = calendar.date(byAdding: .day, value: delta, to: lowerBound) else { return nil }
+                if let hour, let time = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: candidate), time < now {
+                    return calendar.date(byAdding: .day, value: 7, to: candidate)
+                }
+                return candidate
+            }
+            if let next = candidates.min() { day = next; hasDay = true }
+        }
         var capture = Capture(title: title, day: day, hasDay: hasDay, hour: hour, minute: minute,
-                              repeatRule: repeatRule(draft.repeatRule), durationMinutes: duration, kind: kind,
+                              repeatRule: recurrence, durationMinutes: duration, kind: kind,
                               isAllDay: allDay, fromAppleIntelligence: true)
         // The model gives a length only for work time; a plain time on a task is when it alerts.
         capture.isWorkBlock = kind == .task && duration != nil
@@ -923,6 +970,8 @@ enum CaptureDraftMapper {
         - time is 24-hour HH:mm. A bare hour from 1 to 6 with no am/pm means the afternoon. Leave time empty when none is given.
         - durationMinutes only when a length or an end time is given ("3-4pm" is 60). Otherwise leave it empty.
         - repeat only when the text says it repeats (every day, weekdays, weekly, monthly, yearly). Otherwise never.
+        - For weekly requests copy ALL named weekdays into repeatWeekdays (Sunday=1, Monday=2, ..., Saturday=7).
+        Friday and Sunday is [6,1], not just Friday. Recurring chores are tasks unless an event or alarm is explicitly requested.
         - allDay is true only for an event on a whole day (birthday, holiday, trip day) with no time.
         """
     }
@@ -934,13 +983,30 @@ enum CaptureDraftMapper {
 enum CaptureTitleRefinement {
     static func fallback(_ capture: Capture, source: String) -> Capture {
         var result = capture
-        let title = CaptureParser.cleanRequestTitle(capture.title)
+        var title = CaptureParser.cleanRequestTitle(capture.title)
+        // Explicit notes use the same content path as motivation, preserving existing notes.
+        // Read the note from the original request so scheduling extraction cannot alter its text.
+        let noteLabel = #"[，,;；]\s*(?:备注(?:写|为|是)?\s*[:：]?|(?i:notes?)\s*[:：])\s*"#
+        if let marker = source.range(of: noteLabel, options: .regularExpression),
+           !insideQuotedText(source, at: marker.lowerBound) {
+            let note = String(source[marker.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "。"))
+            if !note.isEmpty {
+                if let label = title.range(of: noteLabel, options: .regularExpression) {
+                    let action = String(title[..<label.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !action.isEmpty { title = action }
+                }
+                if let existing = result.notes, !existing.isEmpty {
+                    if !existing.contains(note) { result.notes = existing + "\n" + note }
+                } else { result.notes = note }
+            }
+        }
         let motive = #"[，,。;；]\s*(?:因为|我需要|我想|这样|以便|(?i:because\b|so that\b|I need to\b|I want to\b|I am allergic\b))"#
         if let range = title.range(of: motive, options: .regularExpression) {
             let action = String(title[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !action.isEmpty {
                 result.title = action
-                result.notes = retainedNotes(capture.notes, source: source)
+                result.notes = retainedNotes(result.notes, source: source)
             }
         } else { result.title = title }
         result.title = result.title.replacingOccurrences(of: #"^not to\s+"#, with: "Do not ", options: [.regularExpression, .caseInsensitive])
@@ -951,7 +1017,7 @@ enum CaptureTitleRefinement {
            source.range(of: "不|别|禁止|关闭|停止", options: .regularExpression) == nil,
            result.title.range(of: #"^(?:带上|戴上|佩戴)\s*Apple\s*Watch$"#, options: [.regularExpression, .caseInsensitive]) != nil {
             result.title = "佩戴Apple Watch记录睡眠"
-            result.notes = retainedNotes(capture.notes, source: source)
+            result.notes = retainedNotes(result.notes, source: source)
         }
         return result
     }
@@ -972,6 +1038,14 @@ enum CaptureTitleRefinement {
         // Keep all original facts, motivation, numbers and modality even when the model paraphrases the action.
         result.notes = retainedNotes(backup.notes, source: source)
         return result
+    }
+
+    private static func insideQuotedText(_ text: String, at index: String.Index) -> Bool {
+        let prefix = text[..<index]
+        // A note label inside an explicitly quoted name belongs to that name.
+        return prefix.filter { $0 == "\"" }.count % 2 == 1
+            || prefix.filter { $0 == "“" }.count > prefix.filter { $0 == "”" }.count
+            || prefix.filter { $0 == "「" }.count > prefix.filter { $0 == "」" }.count
     }
 
     private static func retainedNotes(_ notes: String?, source: String) -> String {

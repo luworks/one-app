@@ -213,15 +213,20 @@ final class RemindersSync {
     }
 
     nonisolated static func repeatRule(from rules: [EKRecurrenceRule]?) -> RepeatRule? {
-        guard let r = rules?.first, r.interval == 1 else { return nil }
+        guard let rules, rules.count == 1, let r = rules.first, r.interval == 1 else { return nil }
         switch r.frequency {
         case .daily: return .daily
         case .monthly: return .monthly
         case .yearly: return .yearly
         case .weekly:
+            // Positional weekdays and extra filters cannot be represented by a plain weekly set.
+            guard (r.daysOfTheWeek ?? []).allSatisfy({ $0.weekNumber == 0 }),
+                  (r.daysOfTheMonth ?? []).isEmpty, (r.monthsOfTheYear ?? []).isEmpty,
+                  (r.weeksOfTheYear ?? []).isEmpty, (r.daysOfTheYear ?? []).isEmpty,
+                  (r.setPositions ?? []).isEmpty else { return nil }
             let days = Set((r.daysOfTheWeek ?? []).map { $0.dayOfTheWeek.rawValue })
             if days == [2, 3, 4, 5, 6] { return .weekdays }
-            return days.count <= 1 ? .weekly : nil
+            return days.isEmpty ? .weekly : .weeklyOn(days.sorted())
         @unknown default: return nil
         }
     }
@@ -232,8 +237,11 @@ final class RemindersSync {
         case .weekly: return EKRecurrenceRule(recurrenceWith: .weekly, interval: 1, end: nil)
         case .monthly: return EKRecurrenceRule(recurrenceWith: .monthly, interval: 1, end: nil)
         case .yearly: return EKRecurrenceRule(recurrenceWith: .yearly, interval: 1, end: nil)
-        case .weekdays:
-            let days = [EKWeekday.monday, .tuesday, .wednesday, .thursday, .friday].map { EKRecurrenceDayOfWeek($0) }
+        case .weekdays, .weeklyOn:
+            let values: [Int]
+            if case .weeklyOn(let selected) = rule { values = selected } else { values = [2, 3, 4, 5, 6] }
+            precondition(!values.isEmpty && values.allSatisfy { (1...7).contains($0) }, "Invalid weekly weekdays")
+            let days = Set(values).sorted().map { EKRecurrenceDayOfWeek(EKWeekday(rawValue: $0)!) }
             return EKRecurrenceRule(recurrenceWith: .weekly, interval: 1, daysOfTheWeek: days, daysOfTheMonth: nil,
                                     monthsOfTheYear: nil, weeksOfTheYear: nil, daysOfTheYear: nil, setPositions: nil, end: nil)
         }

@@ -117,3 +117,22 @@ they do not inject model output or verify Apple Intelligence. Chinese screenshot
 are retained as XCTest attachments inside the eventual xcresult bundle.
 
 - `ios/Eval/Tests/OneLogicTests/conversation-journeys.json` is a copied Swift package resource: thirteen bilingual multi-turn journeys with expected route, title, time/date, preview action and zero writes before Add/Apply. `ConversationJourneyTests` exercises the production context resolver, routing and parser; UI journeys additionally check the real confirmation gate.
+
+## Recurring reminder goals
+
+- `ai-title-rewrite-recurring-cases.json`: 16 cases / 19 turns in the existing
+  TitleQuality observation/scoring format; 9 development / 7 reserved validation
+  cases (reserved, not blind). Exact owner Sunday and Friday+Sunday requests are
+  mandatory development inputs. Route, type, time, actual weekdays, title meaning,
+  notes and Add/Apply are independent expectations. No observations are invented.
+- `RecurringReminderTests` and `RepeatWeekdayTests` keep small pure inputs inline;
+  the three observed-goal regression methods additionally read the unchanged
+  development cases from `ai-title-rewrite-recurring-cases.json`;
+  `RecurringReminderExportTests` reads the versioned fixture with
+  `AI_RECURRING_EVAL_FIXTURES` and writes actual fallback artifacts to
+  `AI_RECURRING_EVAL_OUTPUT`. Gates, writes and FM remain unmeasured there.
+- `AIRecurringReminderTests` reuses `ai-context-ui.json` as an empty planner and
+  keeps three short journey inputs inline: Chinese Sunday preview, Friday+Sunday
+  Add/editor Save/reopen, English add-repeat/time-correction. These use production
+  simulator fallback, not an injected model. XCTest attachments belong in the
+  complete retained xcresult bundle.

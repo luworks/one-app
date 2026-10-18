@@ -89,7 +89,7 @@ struct QuickReminderSheet: View {
             Menu {
                 Picker("Repeat", selection: $repeatRule) {
                     Text("Never").tag(RepeatRule?.none)
-                    ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                    ForEach(RepeatRule.choices(including: repeatRule), id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
                 }
             } label: {
                 Image(systemName: "repeat").frame(width: 40, height: 40)

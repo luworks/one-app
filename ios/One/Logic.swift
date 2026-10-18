@@ -19,16 +19,80 @@ enum DayLabel {
 }
 
 /// How a task repeats. Completing a repeating task creates the next one (OmniFocus / Reminders style).
-enum RepeatRule: String, CaseIterable, Codable {
+enum RepeatRule: RawRepresentable, CaseIterable, Codable, Hashable {
     case daily, weekdays, weekly, monthly, yearly
+    /// Calendar weekday numbers (Sunday = 1). Callers must supply a nonempty subset of 1...7.
+    case weeklyOn([Int])
+
+    static let allCases: [RepeatRule] = [.daily, .weekdays, .weekly, .monthly, .yearly]
+
+    static func choices(including rule: RepeatRule?) -> [RepeatRule] {
+        guard let rule, !allCases.contains(rule) else { return allCases }
+        return allCases + [rule]
+    }
+
+    init?(rawValue: String) {
+        switch rawValue {
+        case "daily": self = .daily
+        case "weekdays": self = .weekdays
+        case "weekly": self = .weekly
+        case "monthly": self = .monthly
+        case "yearly": self = .yearly
+        default:
+            guard rawValue.hasPrefix("weekly:") else { return nil }
+            let parts = rawValue.dropFirst("weekly:".count).split(separator: ",", omittingEmptySubsequences: false)
+            // Accept only individual ASCII weekday digits; never silently drop malformed entries.
+            guard !parts.isEmpty, parts.allSatisfy({ ["1", "2", "3", "4", "5", "6", "7"].contains(String($0)) }) else { return nil }
+            self = .weeklyOn(Set(parts.compactMap { Int($0) }).sorted())
+        }
+    }
+
+    private static func canonicalDays(_ days: [Int]) -> [Int] {
+        precondition(!days.isEmpty && days.allSatisfy { (1...7).contains($0) }, "Invalid weekly weekdays")
+        return Set(days).sorted()
+    }
+
+    var rawValue: String {
+        switch self {
+        case .daily: "daily"
+        case .weekdays: "weekdays"
+        case .weekly: "weekly"
+        case .monthly: "monthly"
+        case .yearly: "yearly"
+        case .weeklyOn(let days): "weekly:" + Self.canonicalDays(days).map(String.init).joined(separator: ",")
+        }
+    }
+
+    static func == (lhs: RepeatRule, rhs: RepeatRule) -> Bool { lhs.rawValue == rhs.rawValue }
+
+    func hash(into hasher: inout Hasher) { hasher.combine(rawValue) }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        guard let rule = Self(rawValue: raw) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid repeat rule: \(raw)")
+        }
+        self = rule
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 
     var label: String {
         switch self {
-        case .daily: "Every day"
-        case .weekdays: "Every weekday"
-        case .weekly: "Every week"
-        case .monthly: "Every month"
-        case .yearly: "Every year"
+        case .daily: return "Every day"
+        case .weekdays: return "Every weekday"
+        case .weekly: return "Every week"
+        case .monthly: return "Every month"
+        case .yearly: return "Every year"
+        case .weeklyOn(let days):
+            let selected = Self.canonicalDays(days)
+            let names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+            return "Every " + [2, 3, 4, 5, 6, 7, 1].filter { selected.contains($0) }
+                .map { names[$0 - 1] }.joined(separator: ", ")
         }
     }
 
@@ -45,6 +109,16 @@ enum RepeatRule: String, CaseIterable, Codable {
             return d
         case .weekly:
             return calendar.date(byAdding: .day, value: 7, to: date) ?? date
+        case .weeklyOn(let days):
+            let selected = Self.canonicalDays(days)
+            // Always add from the original clock time, so a DST adjustment on an intervening day cannot drift it.
+            for offset in 1...7 {
+                if let next = calendar.date(byAdding: .day, value: offset, to: date),
+                   next > date, selected.contains(calendar.component(.weekday, from: next)) {
+                    return next
+                }
+            }
+            return date
         case .monthly:
             return calendar.date(byAdding: .month, value: 1, to: date) ?? date
         case .yearly:

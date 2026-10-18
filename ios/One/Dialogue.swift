@@ -70,7 +70,7 @@ enum Dialogue {
     }
 
     /// Words that only carry an instruction about the preview ("make it", "改成", "instead").
-    private static let filler = #"actually|make it|change (?:it )?to|set (?:it )?to|move (?:it )?to|should be|instead|please|rather|no,?|oh,?|and|as|for|it|the|to|at|on|改成|改到|改为|换成|设为|设成|还是|不是|应该是|应该|是|要|吧|啊|呢|的|,|，|。|\.|!"#
+    private static let filler = #"make (?:it|that) repeat|keeping|\brepeat\b|\bthat\b|actually|make it|change (?:it )?to|set (?:it )?to|move (?:it )?to|should be|instead|please|rather|no,?|oh,?|and|as|for|it|the|to|at|on|改成|改到|改为|换成|设为|设成|还是|不是|应该是|应该|是|要|吧|啊|呢|的|,|，|。|\.|!"#
 
     /// Reads a follow-up as an edit of the preview: "make it an alarm", "改成下午4点", "tomorrow instead", "call it Quarterly report".
     /// A message that has its own action text ("Call Mia at 5pm") is not a refinement, even though it has a time.
@@ -97,6 +97,25 @@ enum Dialogue {
         var c = capture
         var changed = false
         var rest = text
+        // In an explicit "not <old clock>, change to <new clock>" correction, the
+        // rejected clock is context, never the replacement parsed below.
+        if let prefix = rest.range(of: #"^不是([^，,]+)[，,]\s*(?=改成|改到|改为|换成)"#, options: .regularExpression) {
+            let rejected = String(rest[prefix]).replacingOccurrences(of: #"^不是|[，,]\s*$"#, with: "", options: .regularExpression)
+            if isOnlyWhen(rejected, now: now, calendar: calendar) { rest.removeSubrange(prefix) }
+        }
+        // A trailing "keep these weekdays" is a constraint, not a new date.
+        // Remove it only when it names exactly the preview's existing weekday set.
+        let weekdayList = #"(?:周|星期|礼拜)[一二三四五六日天](?:\s*[、和及与]\s*(?:(?:周|星期|礼拜))?[一二三四五六日天])*"#
+        if let suffix = rest.range(of: #"[，,]\s*("# + weekdayList + #")都保留[。.!！]*$"#, options: .regularExpression) {
+            let clause = String(rest[suffix]).trimmingCharacters(in: CharacterSet(charactersIn: "，,。.!！ "))
+            let named = CaptureParser.parse("每" + clause.replacingOccurrences(of: "都保留", with: ""), now: now, calendar: calendar)
+            let current: RepeatRule? = capture.repeatRule.flatMap(RepeatRule.init(rawValue:))
+            let expected: RepeatRule?
+            if current == .weekdays { expected = .weeklyOn([2, 3, 4, 5, 6]) }
+            else if current == .weekly { expected = .weeklyOn([calendar.component(.weekday, from: capture.day)]) }
+            else { expected = current }
+            if named.repeatRule.flatMap(RepeatRule.init(rawValue:)) == expected, expected != nil { rest.removeSubrange(suffix) }
+        }
 
         // Kind: alarm / event / task.
         let wantsAlarm = has(text, #"alarm|wake me|闹钟|叫我起床|叫醒"#)

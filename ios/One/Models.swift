@@ -209,7 +209,7 @@ extension Capture {
     }
 
     /// An alarm request becomes a real alarm (Alarms tab) when it can be one: it rings within the next day, or repeats
-    /// daily / on weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
+    /// daily / on selected weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
     func makeAlarm(now: Date = .now) -> OneAlarm? {
         guard kind == .task, ringsAsAlarm, let start = plannedStart else { return nil }
         let cal = Calendar.current
@@ -221,6 +221,7 @@ extension Capture {
         case .daily: weekdays = Array(1...7)
         case .weekdays: weekdays = [2, 3, 4, 5, 6]
         case .weekly: weekdays = [cal.component(.weekday, from: start)]
+        case .weeklyOn(let days): weekdays = Set(days).sorted()
         default: return nil
         }
         let c = cal.dateComponents([.hour, .minute], from: start)
