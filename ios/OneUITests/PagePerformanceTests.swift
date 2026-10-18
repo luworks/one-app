@@ -153,8 +153,10 @@ final class PagePerformanceTests: XCTestCase {
     /// Estimated 90-150 seconds. Reads Settings and Activity data without toggles, export, Clear or Delete.
     func testSettingsSubpageAndActivityEndpoints() {
         launch()
+        let menu = app.buttons["Open menu"]
+        let closedMenuX = menu.frame.minX
         for _ in 0..<3 {
-            app.buttons["Open menu"].tap()
+            menu.tap()
             tap(app.buttons["Settings"], route: "settings", ready: app.navigationBars["Settings"])
             let data = app.buttons["settings.activityData"]
             app.revealSettingsRow(data)
@@ -166,6 +168,13 @@ final class PagePerformanceTests: XCTestCase {
             XCTAssertTrue(app.buttons["activity.filter.All"].exists)
             app.buttons["Done"].firstMatch.tap()
             app.buttons["Close sidebar"].tap()
+            // Wait for the closing page to return before the next menu tap can reach it.
+            let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                !self.app.buttons["Close sidebar"].exists && menu.isHittable
+                    && abs(menu.frame.minX - closedMenuX) < 0.5
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter().wait(for: [closed], timeout: 5), .completed,
+                           "Sidebar closes before the next opening action")
         }
     }
 
