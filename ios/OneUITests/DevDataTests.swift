@@ -21,8 +21,10 @@ final class DevDataTests: XCTestCase {
 
         app.buttons["Reminders"].firstMatch.tap()
         let completed = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Completed, 3'")).firstMatch
+        app.revealReminderPill(completed)
         XCTAssertTrue(completed.waitForExistence(timeout: 5), "completed reminders")
         let flagged = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Flagged, 3'")).firstMatch
+        app.revealReminderPill(flagged)
         XCTAssertTrue(flagged.exists, "flagged reminders")
     }
 }

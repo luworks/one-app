@@ -8,6 +8,32 @@ extension XCUIApplication {
         start.press(forDuration: 0.05, thenDragTo: end)
     }
 
+    /// Smart lists and pinned lists share one horizontal row. Search both ways because its offset survives navigation
+    /// and its order can change. Drag within that row so the app's tab swipe gesture is not used.
+    func revealReminderPill(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        func visible(_ pill: XCUIElement) -> Bool {
+            pill.exists && pill.isHittable && pill.frame.minX >= frame.minX
+                && pill.frame.maxX <= frame.maxX
+        }
+        if visible(target) { return }
+        let pills = buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'smart.' OR identifier BEGINSWITH 'pinned.'"))
+        let startsTowardsEnd = !target.exists || target.frame.minX >= frame.minX
+        for towardsEnd in [startsTowardsEnd, !startsTowardsEnd] {
+            for _ in 0..<12 {
+                if visible(target) { return }
+                guard let anchor = pills.allElementsBoundByIndex.first(where: { $0.isHittable && $0.frame.intersects(frame) }) else {
+                    XCTFail("No visible reminder pill to scroll", file: file, line: line)
+                    return
+                }
+                let y = anchor.frame.midY - frame.minY
+                let from = coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.width * (towardsEnd ? 0.85 : 0.15), dy: y))
+                let to = coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.width * (towardsEnd ? 0.15 : 0.85), dy: y))
+                from.press(forDuration: 0.05, thenDragTo: to)
+            }
+        }
+        XCTAssertTrue(visible(target), "Reminder pill is on screen and hittable: \(target)", file: file, line: line)
+    }
+
     /// SwiftUI Form rows are lazy: scroll before requiring an off-screen control to exist.
     func revealSettingsRow(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         for _ in 0..<12 {

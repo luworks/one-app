@@ -26,6 +26,7 @@ final class RemindersListsTests: XCTestCase {
 
     /// Long-press a list and pick an item from its menu.
     private func menu(_ el: XCUIElement, _ item: String) {
+        if el.identifier.hasPrefix("smart.") || el.identifier.hasPrefix("pinned.") { app.revealReminderPill(el) }
         el.press(forDuration: 1.0)
         let button = app.buttons[item].firstMatch
         // A press can pick the row up for reordering instead of opening the menu; a person would press again.
@@ -45,6 +46,7 @@ final class RemindersListsTests: XCTestCase {
         XCTAssertLessThan(today.frame.height, 50, "a pill, not a big card")
         XCTAssertLessThan(today.frame.minY, 170, "no empty band above the smart lists")
         let completed = element("smart.completed")
+        app.revealReminderPill(completed)
         XCTAssertTrue(completed.exists)
         XCTAssertLessThan(element("list.Home").frame.minY - completed.frame.maxY, 160, "My Lists follows the pills closely")
     }
@@ -75,7 +77,7 @@ final class RemindersListsTests: XCTestCase {
         back.tap()
         XCTAssertTrue(pills[0].waitForExistence(timeout: 5))
         let completed = pills[4]
-        for _ in 0..<3 where !completed.isHittable { pills[0].swipeLeft() }
+        app.revealReminderPill(completed)
         XCTAssertTrue(completed.isHittable, "scrolling the row sideways reaches Completed")
         completed.tap()
         XCTAssertTrue(app.navigationBars.buttons.element(boundBy: 0).waitForExistence(timeout: 5), "Completed opened")
@@ -102,7 +104,7 @@ final class RemindersListsTests: XCTestCase {
         let pin = app.buttons["Pin"]
         XCTAssertTrue(pin.waitForExistence(timeout: 3), "swipe from the right reveals Pin")
         pin.tap()
-        app.swipeDown(velocity: .fast)
+        app.revealReminderPill(element("pinned.Work"))
         XCTAssertTrue(element("pinned.Work").waitForExistence(timeout: 5), "a pinned list joins the pills at the top")
     }
 
@@ -141,6 +143,7 @@ final class RemindersListsTests: XCTestCase {
         reveal(work)
         menu(work, "Pin")
         let pill = element("pinned.Work")
+        app.revealReminderPill(pill)
         XCTAssertTrue(pill.waitForExistence(timeout: 5), "Pin puts the list with the pills at the top")
         sleep(1)   // let the row's menu finish closing before the next long press
         menu(pill, "Unpin")
@@ -160,6 +163,7 @@ final class RemindersListsTests: XCTestCase {
 
     func testLongPressHidesASmartListAndSettingsBringsItBack() {
         let flagged = element("smart.flagged")
+        app.revealReminderPill(flagged)
         XCTAssertTrue(flagged.waitForExistence(timeout: 5))
         menu(flagged, "Hide “Flagged”")
         XCTAssertTrue(flagged.waitForNonExistence(timeout: 5), "Hide removes the pill")
@@ -167,12 +171,13 @@ final class RemindersListsTests: XCTestCase {
         app.openSidebar()
         app.buttons["Settings"].firstMatch.tap()
         let toggle = app.switches["smartToggle.flagged"]
-        for _ in 0..<4 where !toggle.isHittable { app.swipeUp() }
+        app.revealSettingsRow(toggle)
         XCTAssertTrue(toggle.waitForExistence(timeout: 5), "Settings lists the smart lists")
         XCTAssertEqual(toggle.value as? String, "0")
         toggle.switches.firstMatch.tap()
         app.buttons["Done"].firstMatch.tap()
         app.closeSidebar()
+        app.revealReminderPill(flagged)
         XCTAssertTrue(flagged.waitForExistence(timeout: 5), "turned back on in Settings, the pill returns")
     }
 
@@ -193,7 +198,7 @@ final class RemindersListsTests: XCTestCase {
         app.openSidebar()
         app.buttons["Settings"].firstMatch.tap()
         let toggles = ["smartToggle.scheduled", "smartToggle.today"].map { app.switches[$0] }
-        for _ in 0..<4 where !toggles[0].isHittable { app.swipeUp() }
+        app.revealSettingsRow(toggles[0])
         XCTAssertTrue(toggles[0].waitForExistence(timeout: 5))
         XCTAssertLessThan(toggles[0].frame.minY, toggles[1].frame.minY, "Settings shows Scheduled before Today too")
         app.buttons["Done"].firstMatch.tap()
@@ -213,6 +218,7 @@ final class RemindersListsTests: XCTestCase {
             let row = element("list.\(name)")
             reveal(row)
             menu(row, "Pin")
+            app.revealReminderPill(element("pinned.\(name)"))
             XCTAssertTrue(element("pinned.\(name)").waitForExistence(timeout: 5))
             sleep(1)
         }

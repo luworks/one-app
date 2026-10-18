@@ -57,7 +57,7 @@ final class RepeatingReminderTests: XCTestCase {
         // Scheduled lists it once, with the new date.
         app.buttons["Reminders"].firstMatch.tap()
         let scheduled = app.descendants(matching: .any)["smart.scheduled"]
-        for _ in 0..<6 where !(scheduled.exists && scheduled.isHittable) { app.swipeDown() }
+        app.revealReminderPill(scheduled)
         XCTAssertTrue(scheduled.waitForExistence(timeout: 5))
         scheduled.tap()
         let rows = app.staticTexts.matching(NSPredicate(format: "label == %@", title))

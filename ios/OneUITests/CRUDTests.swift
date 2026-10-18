@@ -158,10 +158,12 @@ final class CRUDTests: XCTestCase {
         XCTAssertTrue(renamed.waitForNonExistence(timeout: 5), "a completed reminder leaves the open list")
         goBack()
         let completed = element("smart.completed")
-        reveal(completed, up: false)
+        app.revealReminderPill(completed)
         XCTAssertTrue(wait(completed, "label BEGINSWITH 'Completed, 4'"), "Completed counts it: \(completed.label)")
         let flagged = element("smart.flagged")
+        app.revealReminderPill(flagged)
         XCTAssertTrue(flagged.label.hasPrefix("Flagged, 3"), "a completed reminder no longer counts as flagged: \(flagged.label)")
+        app.revealReminderPill(completed)
         completed.tap()
         let done = app.staticTexts["Buy printer ink and paper"]
         XCTAssertTrue(done.waitForExistence(timeout: 5), "it is in Completed")
@@ -193,7 +195,7 @@ final class CRUDTests: XCTestCase {
         XCTAssertTrue(app.buttons["quick.save"].waitForNonExistence(timeout: 5), "Save closes the sheet")
 
         let scheduled = element("smart.scheduled")
-        reveal(scheduled, up: false)
+        app.revealReminderPill(scheduled)
         scheduled.tap()
         let row = app.staticTexts["Water the garden"]
         reveal(row)
@@ -218,7 +220,7 @@ final class CRUDTests: XCTestCase {
         flag.tap()
         goBack()
         let flagged = element("smart.flagged")
-        reveal(flagged, up: false)
+        app.revealReminderPill(flagged)
         XCTAssertTrue(wait(flagged, "label BEGINSWITH 'Flagged, 4'"), "four flagged now: \(flagged.label)")
         flagged.tap()
         XCTAssertTrue(app.staticTexts["Backup photos"].waitForExistence(timeout: 5), "it is in Flagged")
@@ -290,7 +292,7 @@ final class CRUDTests: XCTestCase {
         alert.buttons["Delete List, Keep Reminders"].tap()
         XCTAssertTrue(home.waitForNonExistence(timeout: 5), "Home is gone")
         let all = element("smart.all")
-        reveal(all, up: false)
+        app.revealReminderPill(all)
         all.tap()
         XCTAssertTrue(app.staticTexts["Backup photos"].waitForExistence(timeout: 5), "its reminders are kept")
     }
