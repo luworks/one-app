@@ -394,10 +394,6 @@ final class CalendarLayoutTests: XCTestCase {
         XCTAssertEqual(late.minute, 23 * 60 + 45, "starts no later than 23:45")
     }
 
-    func testBusyLevelSteps() {
-        XCTAssertEqual([0, 1, 2, 3, 4, 5, 12].map { CalendarLayout.busyLevel(count: $0) }, [0, 1, 1, 2, 2, 3, 3])
-    }
-
     func testPinchZoomStaysInRange() {
         XCTAssertEqual(CalendarLayout.zoomedHourHeight(48, scale: 2), 96)
         XCTAssertEqual(CalendarLayout.zoomedHourHeight(48, scale: 10), 120, "no taller than 120pt an hour")

@@ -456,9 +456,9 @@ private struct YearView: View {
     var pickMonth: (Date) -> Void
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query private var tasks: [OneTask]
-    @Query private var allAlarms: [OneAlarm]
-    @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
-    @State private var cache = BusyCache()
+    @AppStorage(YearMarkSettings.holidaysKey) private var holidaySetting = YearMarkSettings.auto
+    @State private var cache = MarksCache()
+    @State private var showsKey = false
     private let cal = Calendar.current
     private let baseYear = Calendar.current.dateInterval(of: .year, for: .now)?.start ?? .now
 
@@ -479,69 +479,91 @@ private struct YearView: View {
             .onChange(of: day) { _, new in withAnimation(.snappy) { proxy.scrollTo(offset(of: new), anchor: .top) } }
         }
         .accessibilityIdentifier("calendar.year.scroll")
+        .sheet(isPresented: $showsKey) { YearKeySheet() }
     }
 
-    /// Counts per year, kept until the data changes: a year's worth of Apple Calendar events is one EventKit query,
+    /// Marks per year, kept until the data changes: a year's worth of Apple Calendar events is one EventKit query,
     /// not one per redraw. (A class, so filling it while drawing doesn't count as a state change.)
-    final class BusyCache {
+    final class MarksCache {
         var signature = 0
-        var years: [Date: [Date: Int]] = [:]
+        var years: [Date: YearMarks] = [:]
+    }
+
+    /// What one year of the Year view marks: holidays by day and the unusually busy days (both keyed by start of day).
+    struct YearMarks {
+        var holidays: [Date: [String]] = [:]
+        var busy: Set<Date> = []
     }
 
     private var dataSignature: Int {
         var h = Hasher()
         h.combine(CalendarSync.shared.version)
+        h.combine(holidaySetting)
         for e in events { h.combine(e.start); h.combine(e.durationMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay) }
-        for t in tasks { h.combine(t.plannedStart); h.combine(t.isDone) }
-        // A one-time alarm rings on the day of its next occurrence, so the day itself is part of the signature.
-        h.combine(alarms.count); h.combine(cal.startOfDay(for: TodayClock.now))
-        for a in alarms { h.combine(a.hour); h.combine(a.minute); h.combine(a.weekdays); h.combine(a.isOn) }
+        for t in tasks { h.combine(t.plannedStart); h.combine(t.due); h.combine(t.repeatRule); h.combine(t.isDone) }
+        h.combine(cal.startOfDay(for: TodayClock.now))
         return h.finalize()
     }
 
-    /// Alarms follow Settings → "Show alarms in the day", like the Today timeline.
-    private var alarms: [OneAlarm] { showsAlarms ? allAlarms : [] }
-
-    /// How many items each day of the year has (start of day → count); a multi-day event counts on each of its days.
-    private func counts(in start: Date) -> [Date: Int] {
+    private func marks(in start: Date) -> YearMarks {
         let signature = dataSignature
         if cache.signature != signature { cache.signature = signature; cache.years = [:] }
         if let hit = cache.years[start] { return hit }
-        let result = countDays(in: start)
+        let result = computeMarks(in: start)
         cache.years[start] = result
         return result
     }
 
-    private func countDays(in start: Date) -> [Date: Int] {
-        guard let end = cal.date(byAdding: .year, value: 1, to: start) else { return [:] }
-        var result: [Date: Int] = [:]
-        for e in CalendarEntries.make(in: DateInterval(start: start, end: end), events: events, tasks: tasks, alarms: alarms) {
-            // A repeating alarm (a daily "Wake up") would light every day and hide the busy ones: only one-time alarms count.
-            if case .alarm = e.source, e.repeats { continue }
-            let last = cal.startOfDay(for: max(e.start, e.end.addingTimeInterval(-1)))
-            var d = cal.startOfDay(for: max(e.start, start))
-            while d <= last, d < end {
-                result[d, default: 0] += 1
-                guard let next = cal.date(byAdding: .day, value: 1, to: d) else { break }
-                d = next
-            }
+    private func computeMarks(in start: Date) -> YearMarks {
+        guard let end = cal.date(byAdding: .year, value: 1, to: start) else { return YearMarks() }
+        let interval = DateInterval(start: start, end: end)
+        // Alarms are left out on purpose: a ring is not load. Everything else comes from the same merge as Week and Month.
+        var items = CalendarEntries.make(in: interval, events: events, tasks: tasks).filter { !$0.isAlarm }.map {
+            YearLoadItem(start: $0.start, end: $0.end, isAllDay: $0.isAllDay, repeats: $0.repeats, isBackground: $0.isBackground)
+        }
+        // A reminder that is still due counts on its due day, unless it is already planned for that day (then it is counted above).
+        let today = cal.startOfDay(for: TodayClock.now)
+        for t in tasks where !t.isDone && t.repeatRule == nil {
+            guard let due = t.due else { continue }
+            let dueDay = cal.startOfDay(for: due)
+            guard dueDay >= today, interval.contains(dueDay), let next = cal.date(byAdding: .day, value: 1, to: dueDay) else { continue }
+            if let planned = t.plannedStart, cal.isDate(planned, inSameDayAs: dueDay) { continue }
+            items.append(YearLoadItem(start: dueDay, end: next, isAllDay: true, repeats: false, isBackground: false))
+        }
+        var result = YearMarks()
+        result.busy = YearBusy.days(loads: YearLoad.counts(items, in: interval, calendar: cal))
+        let sets = YearMarkSettings.sets(holidaySetting)
+        let names = Holidays.days(inYear: cal.component(.year, from: start), sets: sets)
+        for (key, list) in names {
+            if let date = cal.date(from: DateComponents(year: key.year, month: key.month, day: key.day)) { result.holidays[date] = list }
         }
         return result
     }
 
     private func yearSection(_ start: Date) -> some View {
         let isCurrent = cal.isDate(start, equalTo: .now, toGranularity: .year)
-        let busy = counts(in: start)
+        let marked = marks(in: start)
         return VStack(spacing: 14) {
-            Text(start.formatted(.dateTime.year()))
-                .font(.largeTitle.bold())
-                .foregroundStyle(isCurrent ? Color.red : Color.primary)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.top, 12)
+            HStack {
+                Text(start.formatted(.dateTime.year()))
+                    .font(.largeTitle.bold())
+                    .foregroundStyle(isCurrent ? Color.red : Color.primary)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button { showsKey = true } label: {
+                    Image(systemName: "info.circle").font(.title3).foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("What the marks mean")
+                .accessibilityIdentifier("calendar.year.key")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: 3), spacing: 12) {
                 ForEach(0..<12, id: \.self) { m in
                     if let month = cal.date(byAdding: .month, value: m, to: start) {
-                        MiniMonth(month: month, counts: busy) { pickMonth(month) }
+                        MiniMonth(month: month, busy: marked.busy, holidays: marked.holidays) { pickMonth(month) }
                     }
                 }
             }
@@ -551,17 +573,28 @@ private struct YearView: View {
     }
 }
 
-/// A small month for the Year view: name (red for the current month), then its day numbers, each shaded by how busy
-/// the day is (a heatmap in the accent color; Month keeps Apple's dots).
+/// A small month for the Year view: name (red for the current month), then its day numbers. Three marks, each with one
+/// meaning: a red number is a holiday or festival, a quiet gray tint is a day that is unusually busy for you, the red
+/// circle is today (see `YearMarks.swift` and docs/design/year-view.md). Month keeps Apple's dots.
 private struct MiniMonth: View {
     let month: Date
-    /// Items per day (start of day → count), for the heatmap.
-    var counts: [Date: Int] = [:]
+    /// Unusually busy days (start of day).
+    var busy: Set<Date> = []
+    /// Holiday names by day (start of day).
+    var holidays: [Date: [String]] = [:]
     var onTap: () -> Void
     private let cal = Calendar.current
 
-    private var busyDays: Int {
-        CalendarMath.monthWeeks(of: month).flatMap { $0 }.compactMap { $0 }.filter { (counts[$0] ?? 0) > 0 }.count
+    private var days: [Date] { CalendarMath.monthWeeks(of: month).flatMap { $0 }.compactMap { $0 } }
+
+    /// What a screen reader says about the month beyond its name: the holidays and how many busy days.
+    private var summary: String {
+        var parts: [String] = []
+        let names = days.compactMap { holidays[$0] }.flatMap { $0 }
+        if !names.isEmpty { parts.append(names.joined(separator: ", ")) }
+        let busyCount = days.filter { busy.contains($0) }.count
+        if busyCount > 0 { parts.append("\(busyCount) busy day\(busyCount == 1 ? "" : "s")") }
+        return parts.joined(separator: "; ")
     }
 
     var body: some View {
@@ -579,16 +612,16 @@ private struct MiniMonth: View {
                             ForEach(0..<7, id: \.self) { i in
                                 if w < weeks.count, let d = weeks[w][i] {
                                     let today = cal.isDateInToday(d)
-                                    let level = CalendarLayout.busyLevel(count: counts[d] ?? 0)
+                                    let holiday = holidays[d] != nil
                                     Text("\(cal.component(.day, from: d))")
-                                        .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
-                                        .foregroundStyle(today ? Color.white : Color.primary)
+                                        .font(.system(size: 10.5, weight: holiday ? .bold : .semibold).monospacedDigit())
+                                        .foregroundStyle(today ? Color.white : (holiday ? DayTint.holiday : Color.primary))
                                         .frame(maxWidth: .infinity, minHeight: 16)
                                         .background {
                                             if today {
                                                 Circle().fill(Color.red).frame(width: 16, height: 16)
-                                            } else if level > 0 {
-                                                RoundedRectangle(cornerRadius: 4).fill(DayTint.busy(level)).frame(width: 18, height: 16)
+                                            } else if busy.contains(d) {
+                                                RoundedRectangle(cornerRadius: 4).fill(DayTint.busyDay).frame(width: 18, height: 16)
                                             }
                                         }
                                 } else {
@@ -604,7 +637,7 @@ private struct MiniMonth: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(month.formatted(.dateTime.month(.wide).year()))
-        .accessibilityValue(busyDays == 0 ? "" : "\(busyDays) busy day\(busyDays == 1 ? "" : "s")")
+        .accessibilityValue(summary)
         .accessibilityHint("Shows this month")
         .accessibilityIdentifier(CalendarIDs.month(month))
     }
@@ -1198,10 +1231,12 @@ enum DayTint {
     static let weekend = Color.primary.opacity(0.035)
     /// Opacity of event blocks on days that are over.
     static let past = 0.55
-    /// Year heatmap: fill behind a day number for busy levels 1...3 (see `CalendarLayout.busyLevel`).
-    static func busy(_ level: Int) -> Color {
-        Color.accentColor.opacity([0, 0.16, 0.34, 0.58][min(max(level, 0), 3)])
-    }
+    /// Year: the day number of a holiday or festival.
+    static let holiday = Color.red
+    /// Year: a day that is unusually busy for you (see `YearBusy`). Neutral on purpose: color is for what a day is, not how full.
+    static let busyDay = Color(UIColor { t in
+        t.userInterfaceStyle == .dark ? UIColor(white: 0.92, alpha: 0.22) : UIColor(white: 0.24, alpha: 0.16)
+    })
 }
 
 /// Accessibility identifiers for days and months, in the local time zone ("day.2026-10-15", "miniMonth.2026-10") so UI tests can find them.

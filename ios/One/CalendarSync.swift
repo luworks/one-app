@@ -20,6 +20,8 @@ struct ExternalEvent: Identifiable, Hashable {
     var place: TravelPlace? = nil
     /// Part of a repeating series (Delete asks "this event or all future", and offers no Undo).
     var repeats = false
+    /// From a subscribed, holiday or Birthdays calendar: background, not the user's own load (Year's busy days).
+    var isBackground = false
 
     var durationMinutes: Int { max(1, Int(end.timeIntervalSince(start) / 60)) }
 }
@@ -183,7 +185,10 @@ final class CalendarSync {
                               start: e.startDate, end: e.endDate, isAllDay: e.isAllDay,
                               calendarID: e.calendar.calendarIdentifier,
                               calendarTitle: e.calendar.title, color: Color(cgColor: e.calendar.cgColor),
-                              place: Self.place(e), repeats: e.hasRecurrenceRules)
+                              place: Self.place(e), repeats: e.hasRecurrenceRules,
+                              isBackground: YearLoad.isBackgroundCalendar(isSubscription: e.calendar.type == .subscription,
+                                                                           isBirthday: e.calendar.type == .birthday,
+                                                                           title: e.calendar.title))
             }
     }
 

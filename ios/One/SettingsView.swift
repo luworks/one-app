@@ -91,6 +91,19 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
+                        YearHolidaysSettingsView()
+                    } label: {
+                        Label("Holidays in Year", systemImage: "flag")
+                    }
+                    .accessibilityIdentifier("settings.yearHolidays")
+                } header: {
+                    Text("Calendar")
+                } footer: {
+                    Text("Which holidays and festivals the Year view marks.")
+                }
+
+                Section {
+                    NavigationLink {
                         AutomaticChangesView()
                     } label: {
                         HStack {
