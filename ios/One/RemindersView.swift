@@ -413,16 +413,6 @@ struct RemindersView: View {
             ForEach(ordered) { list in
                 listRow(list, stats: stats)
             }
-            // List owns insertion targets; a row-level View drop destination does not receive these drops.
-            .dropDestination(for: String.self) { (names: [String], destination: Int) in
-                guard let name = names.first, let source = ordered.firstIndex(where: { $0.name == name }) else { return }
-                var reordered = ordered
-                reordered.move(fromOffsets: IndexSet(integer: source), toOffset: destination)
-                withAnimation(.snappy) {
-                    ListActions.reorder(reordered, in: context)
-                    listsReordered = true
-                }
-            }
             .onMove { from, to in
                 var reordered = ordered
                 reordered.move(fromOffsets: from, toOffset: to)
@@ -475,9 +465,28 @@ struct RemindersView: View {
             RowAction.pin(list.pinned) { ListActions.togglePinned(list, in: context) }
         }
         .contextMenu { listMenu(list) }
-        // Press, hold and drag: the List's ForEach receives the insertion index for this payload.
+        // Press, hold and drag: the menu gives way to the system drag (as in Files or Apple Reminders); dropping the
+        // row on another row puts it just before that row.
         .draggable(list.name) {
             ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol, count: stats.open[list.name] ?? 0, pinned: list.pinned)
+        }
+        .dropDestination(for: String.self) { names, _ in
+            guard let name = names.first else { return false }
+            moveList(named: name, before: list)
+            return true
+        }
+    }
+
+    /// Moves the list called `name` to sit just before `target` (a press-hold-drag and drop in My Lists).
+    private func moveList(named name: String, before target: OneList) {
+        var ordered = sortedLists
+        guard let from = ordered.firstIndex(where: { $0.name == name }), ordered[from] !== target else { return }
+        let moved = ordered.remove(at: from)
+        guard let to = ordered.firstIndex(where: { $0 === target }) else { return }
+        ordered.insert(moved, at: to)
+        withAnimation(.snappy) {
+            ListActions.reorder(ordered, in: context)
+            listsReordered = true
         }
     }
 

@@ -1,5 +1,5 @@
 {
-  "status": "checkpoint_pending_reorder_acceptance",
+  "status": "infrastructure_delivered_product_failures_open",
   "base_app_source": "c42b88e6712882f1d627d68d5769913d959bc72c",
   "supported_device_family": [
     1
@@ -141,6 +141,108 @@
       "shutdown_exit": 0,
       "journal_errors": [],
       "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-mini-20261018/mini/ui.xcresult"
+    },
+    {
+      "run": "compatibility-header-integrated-20261018/small",
+      "head": "dc51a26cf731946b65c98c3851caa48da779c55f",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "failed": 2,
+          "passed": 1
+        }
+      },
+      "elapsed_seconds": 199.033,
+      "simulator_id": "04269E85-F517-4360-B08B-7F1BE4DE608B",
+      "simulator_name": "Today-Compatibility-Small",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "journal_errors": [],
+      "shutdown_exit": 0,
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-header-integrated-20261018/small/ui.xcresult"
+    },
+    {
+      "run": "compatibility-header-integrated-20261018/standard-ai",
+      "head": "dc51a26cf731946b65c98c3851caa48da779c55f",
+      "status": "passed",
+      "counts": {
+        "ui": {
+          "passed": 3
+        }
+      },
+      "elapsed_seconds": 173.229,
+      "simulator_id": "0B5AF982-6B76-43E9-B5BF-F56C2D16E529",
+      "simulator_name": "Today-Compatibility-Standard",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "journal_errors": [],
+      "shutdown_exit": 0,
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-header-integrated-20261018/standard-ai/ui.xcresult"
+    },
+    {
+      "run": "compatibility-header-isolated-20261018",
+      "head": "dc51a26cf731946b65c98c3851caa48da779c55f",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "failed": 1
+        }
+      },
+      "elapsed_seconds": 81.653,
+      "simulator_id": "04269E85-F517-4360-B08B-7F1BE4DE608B",
+      "simulator_name": "Today-Compatibility-Small",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "journal_errors": [],
+      "shutdown_exit": 0,
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-header-isolated-20261018/ui.xcresult"
+    },
+    {
+      "run": "ai-final-integrated-20261018/header-A",
+      "head": "73b7565aa684088bb9dd0718ef26c19b5cac15d9",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "failed": 1
+        }
+      },
+      "elapsed_seconds": 91.35,
+      "simulator_id": "04269E85-F517-4360-B08B-7F1BE4DE608B",
+      "simulator_name": "Today-Compatibility-Small",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "journal_errors": [],
+      "shutdown_exit": 0,
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/ai-final-integrated-20261018/header-A/ui.xcresult"
+    },
+    {
+      "run": "ai-final-integrated-20261018/ai-core",
+      "head": "73b7565aa684088bb9dd0718ef26c19b5cac15d9",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "failed": 3,
+          "passed": 2
+        }
+      },
+      "elapsed_seconds": 228.976,
+      "simulator_id": "0B5AF982-6B76-43E9-B5BF-F56C2D16E529",
+      "simulator_name": "Today-Compatibility-Standard",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "journal_errors": [],
+      "shutdown_exit": 0,
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/ai-final-integrated-20261018/ai-core/ui.xcresult"
     }
   ],
   "raw_ui_attempts": {
@@ -151,5 +253,14 @@
   "header_pr": 63,
   "delivery_pr": 61,
   "issue": 62,
-  "quiet_window_handoff": "2026-10-18T10:23:53-07:00"
+  "quiet_window_handoff": "2026-10-18T10:23:53-07:00",
+  "product_candidate_shipped": false,
+  "context_diagnosis": {
+    "representative_ax": "ai-final-integrated-20261018/ai-core/attachments/36DD35F9-DBFB-4ADB-93B6-CC4757D0C38D.txt",
+    "observed_title_type": "Button",
+    "observed_title_identifier": "capture-title",
+    "observed_title": "一定不能再吃饭了",
+    "observed_time": "Today 18:00",
+    "later_context_assertions_executed": false
+  }
 }

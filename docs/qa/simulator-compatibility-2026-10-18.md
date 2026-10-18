@@ -50,7 +50,7 @@ One focused infrastructure review identified and resolved parent signal
 forwarding, actual model/runtime validation and relative-path relocation issues.
 Host checks: 12 runner contracts and 3 product-relocation/command checks pass.
 No package logic changed, so no duplicate pure Swift run was required.
-The list-drop product candidate below is awaiting simulator regression.
+No product fix is included in the final infrastructure delivery.
 
 ## Reorder diagnosis and handoff checkpoint
 
@@ -64,20 +64,47 @@ failed on SE 3; it passed on Mini. This is not a proven cross-screen harness fix
 The original 1.5 s real drag and strict final order assertion are restored in source,
 with added full-visibility/frame diagnostics. No assertion was weakened.
 
-Issue #62 tracks the reproduced failure. The next candidate (`7de52de`) moves
-String drops from individual View rows to the native ForEach insertion-index
-API, keeping native onMove, card styling and existing persistence/Activity paths.
-Local SDK confirms DynamicViewContent's `([String], Int) -> Void` overload. This
-candidate is **not built or runtime-accepted at this checkpoint**. It must pass
-the original regression before being called a fix.
+Issue #62 remains open. The ForEach insertion-index candidate (`7de52de`) was
+built and failed the unchanged 1.5 s regression in the integrated small-screen
+batch. The final PR restores `RemindersView.swift` to main; it delivers the reusable
+runner, matrix, strict test diagnostics and evidence, without an unproven fix.
 
-At 10:23:53 PDT, Mini's 5/5 batch was complete, all compatibility simulators were
-Shutdown and host checks found no xcodebuild/Swift-test/UI runner. The performance
-thread received the quiet window, so no new heavy work starts until it returns it.
-PR #63's inline reminder header will then integrate on this same source path and
-incremental cache. The small-screen batch will select reorder plus smart-list
-back/count/scroll and tab-memory/More/native-edge-back journeys (three methods).
-No hardware-matrix expansion or repeated Pro Max baseline is planned.
+## Integrated follow-up evidence
+
+The same source path and incremental build cache were retained. Separate copied
+Products and output directories identify each frozen revision:
+
+| Revision / run | Device | Selected results |
+| --- | --- | --- |
+| `dc51a26`, header-integrated/small | SE 3 | Smart-list back/count/scroll passed; reorder and native edge-back failed (1/3 passed) |
+| `dc51a26`, header-integrated/standard-ai | iPhone 16 | Old title-editing source `05ea0d9`: 3/3 passed |
+| `dc51a26`, header-isolated | SE 3 | Original TabMemory edge-back failed alone at low preboot load (42.523 s) |
+| `73b7565`, ai-final-integrated/header-A | SE 3 | Drawer gesture candidate A: same edge-back failed (43.655 s) |
+| `73b7565`, ai-final-integrated/ai-core | iPhone 16 | Final title source `3881c77`: 2 passed; context `7f47288`: 3 shared locator failures |
+
+The original header failure persisted without the earlier load-106 confounder.
+Exported AX and final frame show the Home detail still visible after native edge
+swipe. Candidate A is insufficient; neither a recognizer root cause nor a fix is
+established. PR #63 remains unaccepted. Its later diagnostic probe was not built
+or executed in this batch.
+
+The final integrated app built successfully once (`73b7565`). Its targeted Swift
+ConversationJourneyTests passed 2 methods / 13 fixture journeys. The two title UI
+checks passed the Chinese title/time and actual alarm Add, title Save/Cancel,
+stored-card reopening and Undo. These results apply to final production behavior
+`9b6ea3c`, not just the earlier `05ea0d9` acceptance.
+
+All three context UI checks stopped at their first title locator. One existing
+Chinese failure AX proves `capture-stack` exists, with a `capture-title` **Button**
+labelled `一定不能再吃饭了`, `New reminder`, `Today 18:00` and Add. The helper
+queried StaticText. This is a shared harness mismatch, not evidence of missing
+capture/title content; later context/time/confirmation assertions did not execute.
+The author owns the narrow selector correction. No equivalent UI retries followed.
+PRs #65/#69 are not jointly accepted on this evidence.
+
+At approximately 11:02 PDT, both final runners had shutdown exit 0 and no journal
+errors; live booted devices and heavy runner checks were empty. The performance
+thread received the next quiet window. No further matrix or Pro Max run is planned.
 
 ## Durable evidence
 
@@ -95,6 +122,12 @@ in the separate QA `activity.sqlite`, never the app's user Activity database.
 - `runs/compatibility-gesture-build-20261018/` and `runs/compatibility-gesture-20261018/`:
   pickup timing diagnostic.
 - `runs/compatibility-mini-20261018/`: complete dark/XXXL 5/5 batch on `ed3a2da`.
+- `runs/compatibility-header-{build,integrated,isolated}-20261018/`: frozen old
+  title/header integration and unchanged isolated edge-back evidence.
+- `runs/ai-final-conversation-logic-20261018/` and `runs/ai-final-build-20261018/`:
+  final targeted logic and incremental build logs.
+- `runs/ai-final-integrated-20261018/`: final frozen Products identity, Header A
+  and AI-core logs, summaries, attachments and complete xcresult bundles.
 - Exported failure movies, accessibility snapshots, synthesized event coordinates
   and filmstrips are retained beside their completed bundles and indexed separately.
 
