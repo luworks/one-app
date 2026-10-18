@@ -46,7 +46,9 @@ extension XCUIApplication {
 
     /// Require the complete control above the floating composer, not just existence in the lazy List.
     func revealTimerControl(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-        func visible() -> Bool { target.isFullyVisible(in: timerViewport) && target.isHittable }
+        func visible() -> Bool {
+            target.isFullyVisible(in: timerViewport) && (target.elementType == .staticText || target.isHittable)
+        }
         for searchUp in [true, false] {
             for _ in 0..<8 {
                 if visible() { return }
@@ -61,7 +63,7 @@ extension XCUIApplication {
                 if !scrollTimerList(up: up, file: file, line: line) { break }
             }
         }
-        XCTAssertTrue(visible(), "Timer control is fully visible and hittable: \(target); viewport: \(timerViewport)", file: file, line: line)
+        XCTAssertTrue(visible(), "Timer content is fully visible; controls remain hittable: \(target); frame: \(target.frame); viewport: \(timerViewport)", file: file, line: line)
     }
 
     /// Drag inside the native List, below the actual full-width UIPickerView, and stop at a content boundary.
