@@ -117,8 +117,14 @@ final class RemindersListsTests: XCTestCase {
         let field = alert.textFields.firstMatch
         field.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard is up")
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "Office")
-        XCTAssertEqual(field.value as? String, "Office")
+        let current = field.value as? String ?? ""
+        XCTAssertEqual(current, "Work", "Rename starts with the current list name")
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+        let cleared = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == ''"), object: field)
+        XCTAssertEqual(XCTWaiter().wait(for: [cleared], timeout: 3), .completed, "the old name is cleared before typing")
+        field.typeText("Office")
+        let replaced = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == 'Office'"), object: field)
+        XCTAssertEqual(XCTWaiter().wait(for: [replaced], timeout: 3), .completed, "the new name is fully entered")
         // The alert slides up when the keyboard shows; a tap on Save while it moves misses. A person would tap again.
         let save = alert.buttons["Save"]
         save.tap()

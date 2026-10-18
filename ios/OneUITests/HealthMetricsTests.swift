@@ -150,9 +150,10 @@ final class HealthMetricsTests: XCTestCase {
                        "the initial Today summary includes sleep")
         openSheet(app)
         row(app, "sleep").press(forDuration: 1.0)
-        let hide = app.buttons["Hide"]
+        // The native menu item is a PopUpButton on some OS snapshots.
+        let hide = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Hide'")).firstMatch
         XCTAssertTrue(hide.waitForExistence(timeout: 3), "the long-press menu has Hide")
-        hide.tap()
+        hide.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(row(app, "sleep").waitForNonExistence(timeout: 3))
         app.buttons["Done"].tap()
 
