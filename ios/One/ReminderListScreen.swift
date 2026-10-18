@@ -134,9 +134,11 @@ struct ReminderListScreen: View {
         // The reader lets the New Reminder row scroll itself fully into view as it grows (note, date, flag).
         ScrollViewReader { proxy in
             List {
-                titleBlock
-                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
-                    .listRowSeparator(.hidden)
+                if isListScreen, !done.isEmpty {
+                    titleBlock
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
+                        .listRowSeparator(.hidden)
+                }
 
                 ForEach(groups) { group in
                     Section {
@@ -177,7 +179,21 @@ struct ReminderListScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle("")
         .toolbar(.visible, for: .navigationBar)
-        .toolbar { menu }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 8) {
+                    Text(title).font(.headline)
+                    Text("\(smart == .completed ? done.count : open.count)")
+                        .font(.headline.monospacedDigit())
+                        .contentTransition(.numericText())
+                }
+                .foregroundStyle(color)
+                .accessibilityElement(children: .ignore)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityLabel("\(title), \(reminderCountText(smart == .completed ? done.count : open.count))")
+            }
+            menu
+        }
         .performanceDestination("reminders.list")
         .sheet(item: $editing) { ListEditor(list: $0) }
         .deleteListAlert($pendingDelete)
@@ -186,21 +202,6 @@ struct ReminderListScreen: View {
 
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(color)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityLabel("\(title), \(reminderCountText(smart == .completed ? done.count : open.count))")
-                Spacer(minLength: 8)
-                if smart != nil {
-                    Text("\(smart == .completed ? done.count : open.count)")
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(color)
-                        .contentTransition(.numericText())
-                        .accessibilityHidden(true)
-                }
-            }
             if isListScreen, !done.isEmpty {
                 Button {
                     withAnimation(.snappy) { showsCompleted.toggle() }
