@@ -45,6 +45,14 @@ The original Year merge retains the original branch's incomplete behavior. Separ
 - Actual integrated main: 515 logic tests, 1 skipped, 0 failures; simulator build passed; Stopwatch Start/Lap/Stop/Reset and TabMemory both passed (2/2). Primary shut down afterwards.
 - Evidence: `/tmp/today-codex-clock-sequential-report.md`, `/tmp/today-codex-clock-sequential-*`, `/tmp/today-codex-main-clock-{swift,build,smoke}.log`, `/tmp/today-codex-main-clock-smoke.xcresult`. No physical ringing or reference pixel comparison claimed.
 
+### World Clock (sixth branch)
+
+- Prepared merge `81cbf7f`; actual main adoption `e1c104c`, retaining earlier main validation and helper fixes. Package source union retained.
+- Actual main logic: 537 executed, 1 skipped, 0 failures; default-signing simulator build passed.
+- Prior high-load keyboard-focus failure rerun alone unchanged: Add/Delete City passed. Remaining 9 methods: 8 passed, 1 optional screenshot skip, 0 failures (403.034 seconds). Thus 10 unique methods, 9 passed, 1 skipped. City English/Chinese search, delete/Undo, long-press sorting, scrub, overlap graph, Stopwatch and section retention covered.
+- Evidence: `/tmp/today-codex-main-world-{swift,build,add-alone,remaining}.log`, corresponding two xcresults, progress JSON. Primary shut down. Original interrupted secondary run remains partial evidence only; no fix was made for its non-reproduced keyboard failure.
+- Original owner screenshots still missing; no Apple/Overlap pixel or real-phone comparison claimed.
+
 ## Remaining
 
-World Clock and Timer sequential gates; branch completion gaps; Health moving averages; Week alarm lane; PR #29; final full UI run; real-device checks listed in issue #32. Reference screenshots requested from the owner; not received yet.
+Timer sequential gate; branch completion gaps; Health moving averages; Week alarm lane; PR #29; final full UI run; real-device checks listed in issue #32. Reference screenshots requested from the owner; not received yet.
