@@ -1,161 +1,246 @@
 import SwiftUI
-import Charts
 
-/// The saved World Clock cities (time zone identifiers, in the user's order), kept in UserDefaults. The home city
-/// (the device's time zone) is not stored: it is always shown first. A singleton, so the list survives leaving the tab.
-/// UI tests start empty (or from `-uiTestingCities a,b`).
+extension CityDatabase {
+    /// The bundled list (`cities.json`). Empty if the file is missing, so the tab still opens.
+    static let shared: CityDatabase = {
+        guard let url = Bundle.main.url(forResource: "cities", withExtension: "json"),
+              let data = try? Data(contentsOf: url), let db = try? CityDatabase.decode(data) else { return CityDatabase(cities: []) }
+        return db
+    }()
+}
+
+private extension Color {
+    init(_ rgb: WorldClock.RGB) { self.init(red: rgb.r / 255, green: rgb.g / 255, blue: rgb.b / 255) }
+}
+
+/// The saved World Clock cities (city keys, in the user's order), kept in UserDefaults. Old installs saved time zone
+/// identifiers; they are converted to cities when loaded (`CityDatabase.migrate`). The home city (the device's time
+/// zone, mapped to a named city) is not stored: it is always shown first. A singleton, so the list survives leaving the tab.
+/// UI tests start empty (or from `-uiTestingCities Europe/London,g1816670`) and can pin the home zone with
+/// `-uiTestingHomeZone America/Los_Angeles`.
 @MainActor
 @Observable
 final class WorldClockStore {
     static let shared = WorldClockStore()
     static let defaultsKey = "today.worldClock.cities"
 
-    private(set) var identifiers: [String]
-    /// The overlap chart is open (not saved: World Clock opens on the plain list).
-    var showsOverlap = false
+    private(set) var keys: [String]
+    /// The overlap graph is open instead of the cards (not saved: World Clock opens on the cards).
+    var showsGraph = false
+    let database = CityDatabase.shared
+    private let homeZoneIdentifier: String
+    /// UI tests only (`-uiTestingHomeCity g5392171`): a chosen home city instead of the one for the zone.
+    private var homeOverride: CityRecord?
 
     private init() {
         let args = ProcessInfo.processInfo.arguments
+        let db = CityDatabase.shared
         if args.contains("-uiTesting") {
             UserDefaults.standard.removeObject(forKey: Self.defaultsKey)
             if let i = args.firstIndex(of: "-uiTestingCities"), i + 1 < args.count {
-                identifiers = args[i + 1].split(separator: ",").map(String.init)
+                keys = db.migrate(args[i + 1].split(separator: ",").map(String.init))
             } else {
-                identifiers = []
+                keys = []
             }
+            if let i = args.firstIndex(of: "-uiTestingHomeZone"), i + 1 < args.count { homeZoneIdentifier = args[i + 1] }
+            else { homeZoneIdentifier = TimeZone.current.identifier }
+            if let i = args.firstIndex(of: "-uiTestingHomeCity"), i + 1 < args.count { homeOverride = db.city(forKey: args[i + 1]) }
         } else {
-            identifiers = WorldClock.load(UserDefaults.standard.stringArray(forKey: Self.defaultsKey),
-                                          known: Set(TimeZone.knownTimeZoneIdentifiers))
+            let stored = UserDefaults.standard.stringArray(forKey: Self.defaultsKey)
+            let migrated = db.migrate(stored)
+            if migrated != (stored ?? []) { UserDefaults.standard.set(migrated, forKey: Self.defaultsKey) }
+            keys = migrated
+            homeZoneIdentifier = TimeZone.current.identifier
         }
     }
 
-    /// The device's time zone: the starred first card.
-    var home: String { TimeZone.current.identifier }
+    /// The starred first card: the city that stands for the device's time zone.
+    var home: CityRecord {
+        homeOverride ?? database.city(forTimeZone: homeZoneIdentifier) ?? CityRecord(id: 0, name: homeZoneIdentifier, tz: homeZoneIdentifier)
+    }
 
     /// The cities after home, in the user's order.
-    var others: [String] { WorldClock.others(identifiers, home: home) }
+    var others: [CityRecord] { WorldClock.others(keys, home: home.key).compactMap { database.city(forKey: $0) } }
 
-    func add(_ identifier: String) { set(WorldClock.adding(identifier, to: identifiers)) }
+    func contains(_ city: CityRecord) -> Bool { city.key == home.key || keys.contains(city.key) }
 
-    func remove(_ identifier: String) { set(identifiers.filter { $0 != identifier }) }
+    func add(_ city: CityRecord) { set(WorldClock.adding(city.key, to: keys)) }
 
-    func insert(_ identifier: String, at index: Int) {
-        guard !identifiers.contains(identifier) else { return }
-        var list = others
-        list.insert(identifier, at: min(max(0, index), list.count))
+    func remove(_ city: CityRecord) { set(keys.filter { $0 != city.key }) }
+
+    func insert(_ city: CityRecord, at index: Int) {
+        guard !keys.contains(city.key) else { return }
+        var list = others.map(\.key)
+        list.insert(city.key, at: min(max(0, index), list.count))
         set(list)
     }
 
     /// Reorders the cities after home (`others` indices, as `List.onMove` gives them).
     func move(from source: IndexSet, to destination: Int) {
-        set(WorldClock.moving(others, from: source, to: destination))
+        set(WorldClock.moving(others.map(\.key), from: source, to: destination))
     }
 
     private func set(_ list: [String]) {
-        identifiers = list
+        keys = list
         UserDefaults.standard.set(list, forKey: Self.defaultsKey)
     }
 }
 
-/// World Clock, modeled on the app "Overlap": one card per city, tinted by the time of day there (night indigo,
-/// morning and evening blue, working hours green), home first with a star. Drag sideways anywhere on the list to move
-/// every clock together in 15-minute steps; the capsule at the bottom says how far ("3 hours from now") and a tap on it
-/// goes back to now. "Overlap" shows the hours today when every city is within working hours.
-/// No Edit button (editing works as everywhere in the app): a long press on a city offers Move Up / Move Down and
-/// Delete, and press, hold and drag reorders (the sideways swipe belongs to scrubbing). + adds a city.
+/// World Clock, a copy of the look and the gestures of the app "Overlap" (see docs/design/world-clock.md): one card per
+/// city, colored by the time of day there (green inside good hours, 9:00 to 18:00), home first with a star. Drag sideways
+/// anywhere to move every clock together in 15-minute steps; the pill at the bottom says how far ("15 HOURS BEFORE NOW",
+/// "NOW") and a tap on it goes back to now. The bell curve at the right of the pill swaps the cards for the overlap graph.
+/// No Edit button: a long press on a city offers Move Up / Move Down and Delete, press, hold and drag reorders
+/// (the sideways swipe belongs to scrubbing). + adds a city.
 struct WorldClockView: View {
     @Environment(UndoToast.self) private var toast: UndoToast?
+    @Environment(\.colorScheme) private var colorScheme
     @State private var store = WorldClockStore.shared
     /// Minutes away from now; 0 = now.
     @State private var scrub = 0
     @State private var dragStart: Int?
+    /// How far the page is pulled past the end of the scale (points, signed).
+    @State private var rubber: CGFloat = 0
+
+    private var db: CityDatabase { store.database }
 
     var body: some View {
-        TimelineView(.everyMinute) { context in
-            let date = WorldClock.Scrub.date(now: context.date, offset: scrub)
-            List {
-                controlsRow
-                if store.showsOverlap { overlapRow(date: date, now: context.date) }
-                CityCard(identifier: store.home, date: date, isHome: true)
-                    .moveDisabled(true)
-                    .deleteDisabled(true)
-                // A sideways drag scrubs time, so there is no swipe-to-delete here: Delete and the order are in the
-                // long-press menu, and a press, hold and drag reorders.
-                ForEach(store.others, id: \.self) { id in
-                    CityCard(identifier: id, date: date, isHome: false)
-                        .contextMenu { cityMenu(id) }
-                        .plainClockRow(top: 5, bottom: 5)
-                        .deleteDisabled(true)
+        TimelineView(.everyMinute) { _ in
+            let now = TodayClock.now
+            let date = WorldClock.Scrub.date(now: now, offset: scrub)
+            let home = store.home
+            let others = store.others
+            let graph = store.showsGraph
+            ZStack {
+                (colorScheme == .dark ? Color.black : Color(.systemBackground)).ignoresSafeArea()
+                if graph {
+                    WaveBackground(waves: WorldClock.waves(zones: ([home] + others).compactMap(\.timeZone), start: date))
+                        .ignoresSafeArea(edges: .bottom)
+                        .transition(.opacity)
                 }
-                .onMove { store.move(from: $0, to: $1) }
-                if store.others.isEmpty { hint }
+                List {
+                    CityCard(city: home, home: home, date: date, isHome: true, flat: graph, db: db)
+                        .moveDisabled(true)
+                        .deleteDisabled(true)
+                    // A sideways drag scrubs time, so there is no swipe-to-delete here: Delete and the order are in the
+                    // long-press menu, and a press, hold and drag reorders.
+                    ForEach(others) { city in
+                        CityCard(city: city, home: home, date: date, isHome: false, flat: graph, db: db)
+                            .contextMenu { cityMenu(city) }
+                            .deleteDisabled(true)
+                    }
+                    .onMove { store.move(from: $0, to: $1) }
+                    if others.isEmpty && !graph { hint }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .environment(\.defaultMinListRowHeight, 0)
+                .contentMargins(.top, 6, for: .scrollContent)
+                .offset(x: rubber)
+                .gesture(HorizontalPan(onChange: dragged, onEnd: dragEnded))
+                .safeAreaInset(edge: .bottom, spacing: 0) { bottomArea(home: home, others: others, date: date, graph: graph) }
             }
-            .listStyle(.plain)
-            .gesture(HorizontalPan(onChange: dragged, onEnd: { dragStart = nil }))
-            .safeAreaInset(edge: .bottom, spacing: 0) { scrubCapsule }
+            .animation(.snappy, value: graph)
         }
-        .sensoryFeedback(.impact(weight: .light), trigger: scrub)
+        .sensoryFeedback(trigger: scrub) { _, new in new % 60 == 0 ? .impact(weight: .medium) : .impact(weight: .light) }
+        .sensoryFeedback(.impact(weight: .heavy), trigger: abs(scrub) == WorldClock.Scrub.limitMinutes)
     }
 
     // MARK: Scrubbing
 
     private func dragged(_ width: CGFloat) {
         if dragStart == nil { dragStart = scrub }
-        let next = WorldClock.Scrub.offset(start: dragStart ?? 0, dragWidth: Double(width))
+        let start = dragStart ?? 0
+        let next = WorldClock.Scrub.offset(start: start, dragWidth: Double(width))
         if next != scrub { scrub = next }
+        let stretch = CGFloat(WorldClock.Scrub.rubberBand(WorldClock.Scrub.excess(start: start, dragWidth: Double(width))))
+        rubber = width < 0 ? -stretch : stretch
     }
 
-    private var scrubCapsule: some View {
-        Button {
+    private func dragEnded() {
+        dragStart = nil
+        if rubber != 0 { withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { rubber = 0 } }
+    }
+
+    // MARK: Bottom: sentence, pill, graph button
+
+    private func bottomArea(home: CityRecord, others: [CityRecord], date: Date, graph: Bool) -> some View {
+        VStack(spacing: 14) {
+            if graph { overlapSentence(home: home, others: others, date: date) }
+            ZStack {
+                scrubPill
+                HStack {
+                    Spacer()
+                    graphButton(graph)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+    }
+
+    private var scrubPill: some View {
+        let parts = WorldClock.Scrub.pillParts(scrub)
+        var text = AttributedString(parts.lead)
+        text.font = .system(size: 15, weight: .regular)
+        var keyword = AttributedString(parts.keyword)
+        keyword.font = .system(size: 15, weight: .bold)
+        text.append(keyword)
+        return Button {
             withAnimation(.snappy) { scrub = 0 }
         } label: {
-            HStack(spacing: 6) {
-                if scrub != 0 { Image(systemName: "arrow.uturn.backward").font(.footnote.weight(.semibold)) }
-                Text(WorldClock.Scrub.label(scrub))
-                    .contentTransition(.numericText())
-            }
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(scrub == 0 ? Color.secondary : Color.primary)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 36)
-            .glassCapsule()
+            Text(text)
+                .tracking(0.2)
+                .foregroundStyle(.white)
+                .contentTransition(.numericText())
+                .padding(.horizontal, 18)
+                .frame(height: 36)
+                .background(Capsule().fill(Color(WorldClock.Look.pill)))
         }
         .buttonStyle(PressScale())
-        .disabled(scrub == 0)
-        .accessibilityLabel(WorldClock.Scrub.label(scrub))
+        .accessibilityLabel(WorldClock.Scrub.pillText(scrub))
         .accessibilityHint(scrub == 0 ? "Drag sideways on the cities to see other times." : "Goes back to now.")
         .accessibilityIdentifier("worldClock.scrub")
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity)
+    }
+
+    private func graphButton(_ on: Bool) -> some View {
+        Button {
+            withAnimation(.snappy) { store.showsGraph.toggle() }
+        } label: {
+            BellCurve()
+                .stroke(style: StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round))
+                .frame(width: 26, height: 16)
+                .foregroundStyle(on ? Color(WorldClock.Look.green) : Color.secondary)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(on ? "Show cities" : "Show overlap graph")
+        .accessibilityIdentifier("worldClock.graph")
+    }
+
+    private func overlapSentence(home: CityRecord, others: [CityRecord], date: Date) -> some View {
+        let hm = WorldClock.hourMinute(zone: home.timeZone ?? .current, at: date)
+        let parts = AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute)
+        let segments = WorldClock.overlapSegments(cities: others.map { db.displayName($0) }, home: db.displayName(home),
+                                                  time: parts.time + (parts.suffix.map { " " + $0 } ?? ""), offset: scrub)
+        var text = AttributedString()
+        for s in segments {
+            var run = AttributedString(s.text)
+            run.font = .system(size: 24, weight: s.bold ? .bold : .light)
+            text.append(run)
+        }
+        return Text(text)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 6)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("worldClock.overlapText")
     }
 
     // MARK: Rows
-
-    /// The Overlap switch. No Edit button: a city's long-press menu reorders and deletes.
-    private var controlsRow: some View {
-        HStack {
-            PillButton(title: "Overlap", icon: "chart.line.uptrend.xyaxis", isSelected: store.showsOverlap,
-                       identifier: "worldClock.overlap") {
-                withAnimation(PillStyle.selectionAnimation) { store.showsOverlap.toggle() }
-            }
-            Spacer()
-        }
-        .plainClockRow(top: 2, bottom: 6)
-        .moveDisabled(true)
-        .deleteDisabled(true)
-    }
-
-    private func overlapRow(date: Date, now: Date) -> some View {
-        OverlapCard(home: store.home, others: store.others, date: date) { start in
-            // Tap the card: scrub to the start of the overlap.
-            let minutes = Int(start.timeIntervalSince(now) / 60)
-            withAnimation(.snappy) { scrub = WorldClock.Scrub.clamp(WorldClock.Scrub.snap(minutes)) }
-        }
-        .plainClockRow(top: 0, bottom: 8)
-        .moveDisabled(true)
-        .deleteDisabled(true)
-        .transition(.opacity.combined(with: .move(edge: .top)))
-    }
 
     private var hint: some View {
         Text("Tap + to add a city. Drag sideways to see their time later or earlier.")
@@ -165,15 +250,17 @@ struct WorldClockView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 12)
             .accessibilityIdentifier("worldClock.hint")
-            .plainClockRow(top: 0, bottom: 0)
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
             .moveDisabled(true)
             .deleteDisabled(true)
     }
 
     /// A city's long-press menu: move it up or down among your cities (home stays first), or delete it.
     @ViewBuilder
-    private func cityMenu(_ id: String) -> some View {
-        let i = store.others.firstIndex(of: id) ?? 0
+    private func cityMenu(_ city: CityRecord) -> some View {
+        let others = store.others
+        let i = others.firstIndex(of: city) ?? 0
         Button { withAnimation(.snappy) { store.move(from: [i], to: i - 1) } } label: {
             Label("Move Up", systemImage: "arrow.up")
         }
@@ -181,26 +268,17 @@ struct WorldClockView: View {
         Button { withAnimation(.snappy) { store.move(from: [i], to: i + 2) } } label: {
             Label("Move Down", systemImage: "arrow.down")
         }
-        .disabled(i >= store.others.count - 1)
+        .disabled(i >= others.count - 1)
         Divider()
-        RowAction.delete { remove(id) }
+        RowAction.delete { remove(city) }
     }
 
-    private func remove(_ id: String) {
-        guard let index = store.others.firstIndex(of: id) else { return }
-        withAnimation(.snappy) { store.remove(id) }
-        let name = WorldClock.cityName(fromIdentifier: id) ?? id
-        toast?.show("Removed \(name)") {
-            withAnimation(.snappy) { store.insert(id, at: index) }
+    private func remove(_ city: CityRecord) {
+        guard let index = store.others.firstIndex(of: city) else { return }
+        withAnimation(.snappy) { store.remove(city) }
+        toast?.show("Removed \(db.displayName(city))") {
+            withAnimation(.snappy) { store.insert(city, at: index) }
         }
-    }
-}
-
-private extension View {
-    func plainClockRow(top: CGFloat, bottom: CGFloat) -> some View {
-        listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: top, leading: 16, bottom: bottom, trailing: 16))
     }
 }
 
@@ -237,185 +315,169 @@ private struct HorizontalPan: UIGestureRecognizerRepresentable {
     }
 }
 
-/// The card colors per time of day: deep in dark mode, a little lighter in light mode; white text on both.
-private enum BandStyle {
-    static func gradient(_ band: WorldClock.DayBand, dark: Bool) -> LinearGradient {
-        let (top, bottom) = colors(band, dark: dark)
-        return LinearGradient(colors: [top, bottom], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    private static func colors(_ band: WorldClock.DayBand, dark: Bool) -> (Color, Color) {
-        switch (band, dark) {
-        case (.night, false): (Color(red: 0.31, green: 0.29, blue: 0.58), Color(red: 0.22, green: 0.20, blue: 0.46))
-        case (.night, true): (Color(red: 0.18, green: 0.16, blue: 0.38), Color(red: 0.11, green: 0.10, blue: 0.27))
-        case (.morning, false), (.evening, false): (Color(red: 0.35, green: 0.57, blue: 0.86), Color(red: 0.27, green: 0.47, blue: 0.78))
-        case (.morning, true), (.evening, true): (Color(red: 0.14, green: 0.32, blue: 0.57), Color(red: 0.09, green: 0.23, blue: 0.45))
-        case (.work, false): (Color(red: 0.33, green: 0.68, blue: 0.48), Color(red: 0.24, green: 0.58, blue: 0.40))
-        case (.work, true): (Color(red: 0.13, green: 0.42, blue: 0.27), Color(red: 0.08, green: 0.32, blue: 0.20))
-        }
+/// The bell curve of Overlap's toolbar: a flat foot, a hill, a flat foot.
+private struct BellCurve: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.maxY))
+        p.addCurve(to: CGPoint(x: r.midX, y: r.minY), control1: CGPoint(x: r.width * 0.34, y: r.maxY), control2: CGPoint(x: r.width * 0.30, y: r.minY))
+        p.addCurve(to: CGPoint(x: r.maxX, y: r.maxY), control1: CGPoint(x: r.width * 0.70, y: r.minY), control2: CGPoint(x: r.width * 0.66, y: r.maxY))
+        return p
     }
 }
 
-/// One city: "+3 hrs · Sat, Oct 18" and the name on the left, its time big and light on the right, on a card tinted
-/// by the time of day there. Home has a star instead of the offset.
+/// One city: the name and "+2" (a star for home) on the left, the time big and heavy with the date under it on the
+/// right, on a card colored by the time of day there. In graph mode the card is flat: no background, content moved inward.
 private struct CityCard: View {
-    let identifier: String
+    let city: CityRecord
+    let home: CityRecord
     let date: Date
     let isHome: Bool
+    let flat: Bool
+    let db: CityDatabase
 
     @Environment(\.colorScheme) private var colorScheme
-    @ScaledMetric(relativeTo: .largeTitle) private var timeSize = 44
-    @ScaledMetric(relativeTo: .title) private var suffixSize = 22
 
-    private var zone: TimeZone { TimeZone(identifier: identifier) ?? .current }
-    private var name: String { WorldClock.cityName(fromIdentifier: identifier) ?? zone.localizedName(for: .generic, locale: .current) ?? identifier }
-    private var band: WorldClock.DayBand { .init(zone: zone, at: date) }
-    private var offset: String { WorldClock.offsetText(zone: zone, local: .current, at: date) }
-    private var dateText: String { WorldClock.dateText(zone: zone, at: date) }
+    private var zone: TimeZone { city.timeZone ?? .current }
+    private var homeZone: TimeZone { home.timeZone ?? .current }
+    private var name: String { db.displayName(city) }
+    private var colors: WorldClock.CardColors { WorldClock.Look.card(zone: zone, at: date) }
+    private var offset: String { WorldClock.offsetBadge(zone: zone, home: homeZone, at: date) }
+    private var dateText: String { WorldClock.longDate(zone: zone, at: date) }
     private var parts: (time: String, suffix: String?) {
         let hm = WorldClock.hourMinute(zone: zone, at: date)
         return AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute)
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        let c = colors
+        HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    if isHome { Image(systemName: "star.fill").font(.caption2) }
-                    Text((isHome ? "Home" : offset) + " · " + dateText)
-                }
-                .font(.subheadline)
-                .opacity(0.85)
                 Text(name)
-                    .font(.title2.weight(.medium))
+                    .font(.system(size: 19, weight: .bold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-            }
-            Spacer(minLength: 8)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(parts.time)
-                    .font(.system(size: timeSize, weight: .light).monospacedDigit())
-                    .contentTransition(.numericText())
-                if let suffix = parts.suffix {
-                    Text(suffix).font(.system(size: suffixSize, weight: .regular))
+                if isHome {
+                    Image(systemName: "star.fill").font(.system(size: 12))
+                } else {
+                    Text(offset)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .opacity(0.9)
                 }
             }
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
+            .padding(.top, 21)
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: -1) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(parts.time)
+                        .font(.system(size: flat ? 33 : 35, weight: .heavy, design: .rounded).monospacedDigit())
+                        .contentTransition(.numericText())
+                    if let suffix = parts.suffix { Text(suffix).font(.system(size: 14, weight: .semibold)) }
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                Text(dateText)
+                    .font(.system(size: 10, weight: .medium))
+                    .tracking(0.5)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .padding(.top, 11)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .background(BandStyle.gradient(band, dark: colorScheme == .dark), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .animation(.easeInOut(duration: 0.35), value: band)
-        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, flat ? 41 : 16)
+        .frame(height: flat ? 78 : 82, alignment: .top)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .circular)
+                .fill(LinearGradient(colors: [Color(c.leading), Color(c.trailing)], startPoint: .leading, endPoint: .trailing))
+                .opacity(flat ? 0 : 1)
+        )
+        .animation(.easeInOut(duration: 0.25), value: c)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .circular))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+        .listRowInsets(EdgeInsets(top: 1, leading: 15, bottom: 1, trailing: 15))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name), \(isHome ? "Home" : offset), \(WorldClock.dayLabel(zone: zone, local: .current, at: date)), \(parts.time) \(parts.suffix ?? "")")
+        .accessibilityLabel("\(name), \(isHome ? "Home" : offset), \(dateText.capitalized), \(parts.time) \(parts.suffix ?? "")")
         .accessibilityIdentifier(isHome ? "worldClock.home" : "worldClock.row")
     }
 }
 
-/// When everyone is at work: a smooth wave of how many cities are within working hours across the home day, the
-/// overlap shaded, a line at the time shown, and "Overlap for Dallas, Boston and 1 more when it's 08:00 in San Jose".
-/// Tapping it moves the clocks to the start of the overlap.
-private struct OverlapCard: View {
-    let home: String
-    let others: [String]
-    let date: Date
-    let jump: (Date) -> Void
-
-    private var homeZone: TimeZone { TimeZone(identifier: home) ?? .current }
-    private var zones: [TimeZone] { others.compactMap(TimeZone.init(identifier:)) }
-    private func name(_ id: String) -> String { WorldClock.cityName(fromIdentifier: id) ?? id }
+/// The waves behind the graph: three layers of green, the front one solid, the two behind translucent and fading up
+/// into the black. Height is the share of cities in the window, at most 70 % of the page.
+private struct WaveBackground: View {
+    let waves: [[Double]]
 
     var body: some View {
-        let overlap = WorldClock.overlap(zones, home: homeZone, on: date)
-        let curve = WorldClock.workCurve(zones, home: homeZone, on: date, stepMinutes: 30)
-        let total = zones.count + 1
-        VStack(alignment: .leading, spacing: 10) {
-            if others.isEmpty {
-                Text("Add a city to see when your working hours overlap.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(WorldClock.overlapSentence(cities: others.map(name), home: name(home), homeZone: homeZone, overlap: overlap))
-                    .font(.subheadline.weight(.medium))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("worldClock.overlapText")
-                Chart {
-                    ForEach(curve, id: \.date) { point in
-                        AreaMark(x: .value("Time", point.date), y: .value("Working", point.count))
-                            .interpolationMethod(.monotone)
-                            .foregroundStyle(LinearGradient(colors: [Color(.systemGreen).opacity(0.55), Color(.systemGreen).opacity(0.08)],
-                                                            startPoint: .top, endPoint: .bottom))
-                    }
-                    ForEach(overlap, id: \.start) { window in
-                        RectangleMark(xStart: .value("Start", window.start), xEnd: .value("End", window.end))
-                            .foregroundStyle(Color(.systemGreen).opacity(0.22))
-                    }
-                    RuleMark(x: .value("Shown", date))
-                        .foregroundStyle(Color.primary.opacity(0.7))
-                        .lineStyle(StrokeStyle(lineWidth: 1.5))
-                }
-                .chartYScale(domain: 0...total)
-                .chartYAxis(.hidden)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
-                        AxisGridLine().foregroundStyle(Color.secondary.opacity(0.2))
-                        AxisValueLabel(format: .dateTime.hour())
+        GeometryReader { geo in
+            let maxHeight = geo.size.height * 0.7
+            ZStack(alignment: .bottom) {
+                ForEach([2, 1, 0], id: \.self) { layer in
+                    if layer < waves.count, !waves[layer].isEmpty {
+                        wave(waves[layer], in: geo.size, maxHeight: maxHeight)
+                            .fill(fill(layer))
                     }
                 }
-                .frame(height: 84)
-                .accessibilityHidden(true)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .onTapGesture { if let start = overlap.first?.start { jump(start) } }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(overlap.isEmpty ? [] : .isButton)
-        .accessibilityHint(overlap.isEmpty ? "" : "Moves the clocks to the start of the overlap.")
-        .accessibilityIdentifier("worldClock.overlapCard")
+    }
+
+    private func fill(_ layer: Int) -> AnyShapeStyle {
+        let green = Color(WorldClock.Look.green)
+        switch layer {
+        case 0: return AnyShapeStyle(green)
+        case 1: return AnyShapeStyle(LinearGradient(colors: [green.opacity(0), green.opacity(0.5)], startPoint: .top, endPoint: .bottom))
+        default: return AnyShapeStyle(LinearGradient(colors: [green.opacity(0), green.opacity(0.32)], startPoint: .top, endPoint: .bottom))
+        }
+    }
+
+    private func wave(_ heights: [Double], in size: CGSize, maxHeight: CGFloat) -> Path {
+        var p = Path()
+        let n = heights.count
+        p.move(to: CGPoint(x: 0, y: size.height))
+        for (i, h) in heights.enumerated() {
+            let x = size.width * CGFloat(i) / CGFloat(max(1, n - 1))
+            let y = size.height - maxHeight * CGFloat(max(h, 0.05))
+            p.addLine(to: CGPoint(x: x, y: y))
+        }
+        p.addLine(to: CGPoint(x: size.width, y: size.height))
+        p.closeSubpath()
+        return p
     }
 }
 
-/// Add a city: every time zone with a place name, searchable, A to Z. Cities already shown (home included) are checked.
+/// Add a city: about a thousand cities (every capital, every big city, the main hubs), searchable in English and Chinese,
+/// by city, country or time zone. Each row: "Beijing, China", the UTC offset and the local time there.
+/// Cities already shown (home included) are checked.
 struct CityPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var store = WorldClockStore.shared
     @State private var query = ""
 
-    private static let all = WorldClock.cities(from: TimeZone.knownTimeZoneIdentifiers)
-
     var body: some View {
-        let results = WorldClock.search(query, in: Self.all)
+        let db = store.database
+        let results = db.search(query)
+        let now = TodayClock.now
         NavigationStack {
-            List(results) { city in
-                let added = city.identifier == store.home || store.identifiers.contains(city.identifier)
-                Button {
-                    store.add(city.identifier)
-                    dismiss()
-                } label: {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(city.name).foregroundStyle(added ? .secondary : .primary)
-                            if let zoneName = TimeZone(identifier: city.identifier)?.localizedName(for: .generic, locale: .current) {
-                                Text(zoneName).font(.footnote).foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                        if added { Image(systemName: "checkmark").foregroundStyle(.secondary) }
+            List {
+                ForEach(results) { city in
+                    let added = store.contains(city)
+                    Button {
+                        store.add(city)
+                        dismiss()
+                    } label: {
+                        row(city, db: db, added: added, now: now)
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .disabled(added)
+                    .accessibilityIdentifier("city.\(city.name).\(city.cc)")
                 }
-                .buttonStyle(.plain)
-                .disabled(added)
-                .accessibilityIdentifier("city." + city.identifier)
+                Text("City data: GeoNames (CC BY 4.0)")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+                    .listRowSeparator(.hidden)
+                    .accessibilityIdentifier("cityPicker.credit")
             }
             .listStyle(.plain)
             .overlay {
@@ -424,9 +486,36 @@ struct CityPicker: View {
             .navigationTitle("Choose a City")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
+            .textInputAutocapitalization(.never)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
         }
+    }
+
+    private func row(_ city: CityRecord, db: CityDatabase, added: Bool, now: Date) -> some View {
+        let zone = city.timeZone ?? .current
+        let hm = WorldClock.hourMinute(zone: zone, at: now)
+        let time = AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute)
+        let country = CityDatabase.countryName(city.cc)
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(db.displayName(city) + (country.isEmpty ? "" : ", " + country))
+                    .foregroundStyle(added ? .secondary : .primary)
+                    .lineLimit(1)
+                Text(WorldClock.utcOffsetText(zone: zone, at: now))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if added {
+                Image(systemName: "checkmark").foregroundStyle(.secondary)
+            } else {
+                Text(time.time + (time.suffix.map { " " + $0 } ?? ""))
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .contentShape(Rectangle())
     }
 }

@@ -23,11 +23,20 @@ final class ClockTests: XCTestCase {
     private var laps: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "stopwatch.lap") }
     private var plus: XCUIElement { app.buttons["New"] }
 
-    /// The Overlap pill sits at the left of a full-width list row (XCUI reports the whole row as the button),
-    /// so tap where the pill is, not at the row's center.
-    private func toggleOverlap() {
-        app.buttons["worldClock.overlap"].coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)).tap()
+    private var pill: XCUIElement { app.buttons["worldClock.scrub"] }
+
+    /// Opens the picker and searches. `typeText` with Chinese characters needs the simulator to accept them;
+    /// the English searches are the reliable ones.
+    private func search(_ text: String) {
+        plus.tap()
+        XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        field.tap()
+        field.typeText(text)
     }
+
+    private func cityButton(_ name: String, _ cc: String) -> XCUIElement { app.buttons["city.\(name).\(cc)"].firstMatch }
 
     func testSwitchingSectionsAndPlus() {
         launch()
@@ -58,28 +67,24 @@ final class ClockTests: XCTestCase {
     }
 
     func testAddAndDeleteCity() {
-        launch()
+        launch(["-uiTestingHomeZone", "America/Los_Angeles"])
         section("worldClock").tap()
         XCTAssertTrue(app.descendants(matching: .any)["worldClock.hint"].waitForExistence(timeout: 3))
         XCTAssertEqual(cityRows.count, 0)
 
-        plus.tap()
-        XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
-        let search = app.searchFields.firstMatch
-        XCTAssertTrue(search.waitForExistence(timeout: 3))
-        search.tap()
-        search.typeText("Tokyo")
-        let tokyo = app.buttons["city.Asia/Tokyo"].firstMatch
+        search("Tokyo")
+        let tokyo = cityButton("Tokyo", "JP")
         XCTAssertTrue(tokyo.waitForExistence(timeout: 3), "search finds Tokyo")
+        XCTAssertTrue(tokyo.label.hasPrefix("Tokyo, "), "the row says the country: \(tokyo.label)")
+        XCTAssertTrue(tokyo.label.contains("UTC+9"), "and the UTC offset: \(tokyo.label)")
         tokyo.tap()
 
         XCTAssertTrue(cityRows.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(cityRows.count, 1)
         let label = cityRows.firstMatch.label
-        XCTAssertTrue(label.hasPrefix("Tokyo, "), label)
-        XCTAssertTrue(label.contains("hr"), "shows the offset: \(label)")
+        XCTAssertTrue(label.hasPrefix("Tokyo, +1"), "shows the offset to home (+16 or +17): \(label)")
         XCTAssertTrue(app.descendants(matching: .any)["worldClock.home"].exists, "home stays first")
-        XCTAssertTrue(label.contains("Today") || label.contains("Tomorrow") || label.contains("Yesterday"), label)
+        XCTAssertTrue(label.contains("Saturday") || label.contains("Sunday") || label.contains("Monday") || label.contains("Friday"), "and the date: \(label)")
 
         // A sideways drag scrubs time, so deleting is in the long-press menu; there is no Edit button.
         XCTAssertFalse(app.buttons["worldClock.edit"].exists, "no Edit button")
@@ -107,43 +112,80 @@ final class ClockTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["worldClock.hint"].waitForExistence(timeout: 3))
     }
 
-    /// Drag sideways on the cities: every clock moves, the capsule says how far, a tap on it goes back to now.
+    /// Drag sideways on the cities: every clock moves, the pill says how far ("3 HOURS AFTER NOW"), a tap on it goes back to NOW.
+    /// The pill is there from the start (reading NOW); there is no Overlap capsule.
     func testScrubbing() {
         launch(["-uiTestingCities", "Europe/London,Asia/Tokyo"])
         section("worldClock").tap()
-        let capsule = app.buttons["worldClock.scrub"]
         let tokyo = cityRows.element(boundBy: 1)
         XCTAssertTrue(tokyo.waitForExistence(timeout: 3))
-        XCTAssertEqual(capsule.label, "Now")
+        XCTAssertTrue(pill.exists, "the pill is always there")
+        XCTAssertEqual(pill.label, "NOW")
+        XCTAssertFalse(app.buttons["worldClock.overlap"].exists, "no Overlap capsule")
         let before = tokyo.label
 
         // Drag left across the Tokyo card: later.
         tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
             .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
-        XCTAssertTrue(capsule.label.hasSuffix("from now"), "the capsule says how far: \(capsule.label)")
+        XCTAssertTrue(pill.label.hasSuffix("AFTER NOW"), "the pill says how far: \(pill.label)")
         XCTAssertNotEqual(tokyo.label, before, "the clocks moved")
         XCTAssertEqual(cityRows.count, 2, "a drag scrubs; it never deletes")
 
-        capsule.tap()
-        XCTAssertEqual(capsule.label, "Now", "tapping the capsule goes back to now")
+        pill.tap()
+        XCTAssertEqual(pill.label, "NOW", "tapping the pill goes back to NOW")
         XCTAssertEqual(tokyo.label, before)
 
         // Drag right: earlier.
         tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.5))
             .press(forDuration: 0.05, thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
-        XCTAssertTrue(capsule.label.hasSuffix("ago"), capsule.label)
+        XCTAssertTrue(pill.label.hasSuffix("BEFORE NOW"), pill.label)
     }
 
-    func testOverlapCard() {
+    /// The graph is one icon next to the pill (no capsule): the cards flatten, the sentence appears, the icon swaps back.
+    func testOverlapGraph() {
         launch(["-uiTestingCities", "Europe/London,America/New_York"])
         section("worldClock").tap()
-        toggleOverlap()
+        let graph = app.buttons["worldClock.graph"]
+        XCTAssertTrue(graph.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["worldClock.overlapText"].exists, "the cards come first")
+        graph.tap()
         let text = app.staticTexts["worldClock.overlapText"]
-        XCTAssertTrue(text.waitForExistence(timeout: 3) || app.descendants(matching: .any)["worldClock.overlapCard"].exists)
-        let card = app.descendants(matching: .any)["worldClock.overlapCard"]
-        XCTAssertTrue(card.label.contains("London and New York"), card.label)
-        toggleOverlap()
-        XCTAssertTrue(card.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(text.waitForExistence(timeout: 3))
+        XCTAssertTrue(text.label.hasPrefix("Overlap for London and New York"), text.label)
+        XCTAssertTrue(pill.exists, "scrubbing still works in the graph")
+        XCTAssertEqual(cityRows.count, 2, "the cities stay, as flat rows")
+        graph.tap()
+        XCTAssertTrue(text.waitForNonExistence(timeout: 3))
+    }
+
+    /// 'Beijing' and the Chinese name find the same city; 'china' lists Chinese cities; adding Beijing shows its card.
+    func testSearchBeijingAndChina() {
+        launch(["-uiTestingHomeZone", "America/Los_Angeles"])
+        section("worldClock").tap()
+        search("china")
+        XCTAssertTrue(cityButton("Beijing", "CN").waitForExistence(timeout: 3), "'china' lists Beijing")
+        XCTAssertTrue(cityButton("Shanghai", "CN").exists, "and Shanghai")
+        XCTAssertTrue(cityButton("Shenzhen", "CN").exists || cityButton("Guangzhou", "CN").exists, "and the other big ones")
+        let field = app.searchFields.firstMatch
+        field.buttons["Clear text"].firstMatch.tap()
+        field.typeText("Beijing")
+        let beijing = cityButton("Beijing", "CN")
+        XCTAssertTrue(beijing.waitForExistence(timeout: 3), "search finds Beijing")
+        XCTAssertTrue(beijing.label.hasPrefix("Beijing, China"), beijing.label)
+        XCTAssertTrue(beijing.label.contains("UTC+8"), beijing.label)
+        beijing.tap()
+        XCTAssertTrue(cityRows.firstMatch.waitForExistence(timeout: 5))
+        let label = cityRows.firstMatch.label
+        XCTAssertTrue(label.hasPrefix("Beijing, +1"), "a card with the offset to home and its time: \(label)")
+    }
+
+    func testSearchByChineseName() {
+        launch()
+        section("worldClock").tap()
+        search("北京")
+        let beijing = cityButton("Beijing", "CN")
+        XCTAssertTrue(beijing.waitForExistence(timeout: 5), "the Chinese name finds Beijing")
+        XCTAssertTrue(app.buttons["city.Shanghai.CN"].firstMatch.exists == false, "and only the matching cities")
     }
 
     /// No Edit mode: a city's long-press menu moves it up or down.
@@ -224,7 +266,7 @@ final class ClockTests: XCTestCase {
             row.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
                 .press(forDuration: 0.05, thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0.1)
             shot("2b-world-clock-scrubbed")
-            app.buttons["worldClock.scrub"].tap()
+            pill.tap()
             plus.tap()
             XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
             shot("3-choose-city")
@@ -240,17 +282,26 @@ final class ClockTests: XCTestCase {
             shot("5-timer")
             app.terminate()
 
-            // Overlap, with cities that do share working hours; tapping the card scrubs to the start of the overlap.
-            launch(["-uiTestingCities", "America/New_York,America/Chicago,Europe/London"])
+            // The reference frames: home San Jose, Dallas, Boston, Aba, Beijing at 18:20 (the clock is pinned).
+            let reference = ["-uiTestingNow", "18:20", "-uiTestingHomeCity", "g5392171",
+                             "-uiTestingCities", "g4684888,g4930956,g2353151,g1816670"]
+            launch(reference)
             section("worldClock").tap()
-            toggleOverlap()
-            let card = app.descendants(matching: .any)["worldClock.overlapCard"]
-            XCTAssertTrue(card.waitForExistence(timeout: 3))
+            XCTAssertTrue(cityRows.firstMatch.waitForExistence(timeout: 3))
             usleep(500_000)
-            shot("2c-world-clock-overlap")
-            card.tap()
+            shot("6-reference-now")
+            let first = cityRows.element(boundBy: 0)
+            // 15 hours back: 60 steps of 15 minutes, 10 pt each = 600 pt: three drags.
+            for _ in 0..<3 {
+                first.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
+                    .press(forDuration: 0.05, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0.1)
+            }
+            usleep(500_000)
+            shot("6b-reference-scrubbed")
+            pill.tap()
+            app.buttons["worldClock.graph"].tap()
             usleep(800_000)
-            shot("2d-world-clock-overlap-jumped")
+            shot("6c-reference-graph")
             app.terminate()
         }
     }

@@ -70,6 +70,15 @@ extension WorldClock {
         return m == 0 ? "\(sign)\(h)" : "\(sign)\(h):" + String(format: "%02d", m)
     }
 
+    /// "UTC+8", "UTC-5", "UTC+5:30": a zone's difference to UTC at that moment, for the city picker.
+    static func utcOffsetText(zone: TimeZone, at date: Date) -> String {
+        let seconds = zone.secondsFromGMT(for: date)
+        let minutes = abs(seconds) / 60
+        let h = minutes / 60, m = minutes % 60
+        let sign = seconds < 0 ? "-" : "+"
+        return "UTC" + (seconds == 0 ? "" : m == 0 ? "\(sign)\(h)" : "\(sign)\(h):" + String(format: "%02d", m))
+    }
+
     /// "SATURDAY, OCTOBER 17" on the city's calendar, in the reader's language.
     static func longDate(zone: TimeZone, at date: Date, locale: Locale = .current) -> String {
         let f = DateFormatter()
@@ -118,15 +127,16 @@ extension WorldClock {
         let step = hours * 3600 / Double(samples - 1)
         // Sample wider than the window so the smoothing has data at both ends.
         let pad = Int((smoothingMinutes * 60 * 3 / step).rounded(.up))
-        func counts(_ from: Int, _ to: Int) -> [Double] {
-            (-pad..<(samples + pad)).map { i in
-                let t = start.addingTimeInterval(Double(i) * step)
-                let n = zones.filter { z in
-                    let h = Double(hourMinute(zone: z, at: t).hour) + Double(hourMinute(zone: z, at: t).minute) / 60
-                    return h >= Double(from) && h < Double(to)
-                }.count
-                return Double(n) / Double(zones.count)
+        // Local time of day (in hours) of every city at every sample, worked out once for the three waves.
+        let localHours: [[Double]] = (-pad..<(samples + pad)).map { i in
+            let t = start.addingTimeInterval(Double(i) * step)
+            return zones.map { z in
+                let hm = hourMinute(zone: z, at: t)
+                return Double(hm.hour) + Double(hm.minute) / 60
             }
+        }
+        func counts(_ from: Int, _ to: Int) -> [Double] {
+            localHours.map { row in Double(row.filter { $0 >= Double(from) && $0 < Double(to) }.count) / Double(zones.count) }
         }
         let sigma = smoothingMinutes * 60 / step
         func smooth(_ values: [Double]) -> [Double] {
