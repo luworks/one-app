@@ -54,6 +54,11 @@ values were added to replace these defaults.
   `ACTIVITY_BENCH_ROWS` (for example 100000). Keep the generator/configuration in
   test code and archive actual run arguments, environment overrides and results
   separately with the run evidence; do not check in 100000 generated rows.
+- `ActivityReadPerformanceTests.swift` under `ios/Eval/Tests/OneLogicTests/`
+  contains the deterministic `activity-read-v1` 100k-event generator, fixed UTC
+  timestamps/IDs and 150-row warm-read cases. Copy only this portable test into
+  the frozen baseline, never the candidate hydration implementation; enable with
+  `ACTIVITY_READ_BENCH=1`, retaining identical n=3–5 and configuration in both runs.
 
 The UI-test input inventory found only the two temporary JSON generators replaced
 above. Screenshot writes are run outputs, not dataset inputs. QA/development action

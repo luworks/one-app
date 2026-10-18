@@ -33,3 +33,28 @@ Raw JSON contains byte counts, not rounded MiB; report MiB as bytes / 1048576.
 After every producer exits, import/archive through `tests/qa/journal.py` to index
 paths/hashes, including complete xcresult bundles. Never prune this evidence in
 worktree cleanup.
+
+## Measured optimization climb
+
+Targets: [`climb-targets-v1.md`](../../docs/performance/climb-targets-v1.md),
+machine-readable `targets-v1.json`; decisions: `climb-rounds.md` beside that report.
+Pass `--session performance-climb-20261018` to the command recorder for this work.
+
+`materialize.py --revision <measurement-sha> --source <new-build-source>
+--evidence <new-evidence> --instrumentation <explicit-file> ...` retains the frozen
+`fc683a7` source tar, applies only listed instrumentation files, and records their
+hashes. This prevents concurrently committed optimization lanes leaking into the
+baseline. `--update --instrumentation <file>` adds only another portable measurement
+file; `--update` without that list overlays changed candidate files, preserving
+unchanged file timestamps for incremental build reuse. Build source is mutable
+cache; archives/patches/manifests and copied completed products are immutable
+evidence. No source deletion or branch checkout is performed.
+
+`compare_app.py` takes before/after raw UI logs and context JSONs. Required equal
+context keys are configuration, optimization, simulator ID/runtime, fixture hash,
+instrumentation hash and endpoint version. Duplicate app/test stdout records are
+deduplicated by monotonic interval identity; different test methods remain separate
+cohorts. n<3 cannot pass the 3x/10x gate, and p95 remains unknown. The reported app
+intervals are layout/display-link proxies, not compositor presentation, physical
+touch or full usability. Shipping Release size, optimized Debug phase timing and
+native host component benchmarks are three separate tracks.
