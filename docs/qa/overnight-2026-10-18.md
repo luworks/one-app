@@ -24,7 +24,7 @@ Reusable commands, source inventory and platform boundaries are in [the coverage
 | [#38](https://github.com/luworks/one-app/issues/38) | Share inbox is consumed before SwiftData save succeeds | [#45](https://github.com/luworks/one-app/pull/45), [#46](https://github.com/luworks/one-app/pull/46) | Old ordering loses a real file-backed draft with an injected persistence throw; six durability cases pass against a transaction stand-in. Real SwiftData UI journeys are prepared, not yet executed |
 | [#39](https://github.com/luworks/one-app/issues/39) | A 90-day Health comparison has only 13 days of previous-period history | [#44](https://github.com/luworks/one-app/pull/44) | Uneven 180-day readings reproduced incorrect comparison; corrected history and fixture bounds pass |
 | [#47](https://github.com/luworks/one-app/issues/47) | A leading relative time hides the imperative from chat routing, so “30分钟后关烤箱” produces no reminder preview | [#48](https://github.com/luworks/one-app/pull/48) | Full UI reproduced missing Add; four route assertions failed before fix, 44 focused routing/dialogue tests passed after fix. UI acceptance pending |
-| [#49](https://github.com/luworks/one-app/issues/49) | “Anything left today?” fails to select the read-only agenda summary selected by “What's left today?” | [#50](https://github.com/luworks/one-app/pull/50) | Existing CRUD UI failed; two agenda-route assertions failed before fix, 31 focused tests passed afterward. UI acceptance pending |
+| [#49](https://github.com/luworks/one-app/issues/49) | “Anything left today?” and “What's on today?” fail to select the read-only agenda summary | [#50](https://github.com/luworks/one-app/pull/50) | Existing CRUD and MessageCopy UI failed. Initial fix: two agenda-route assertions failed, then 31 focused tests passed. Follow-up `3135fd4`: three on-today route assertions failed, then 32 focused tests passed. UI acceptance pending |
 
 The Share stack must merge in order: #42, then retarget #45 to main, then retarget #46 to main after #45 merges.
 The AI stack must merge #40, retarget #48 to main and merge it, then retarget #50 to main.
@@ -80,6 +80,12 @@ records integrity and counts at its capture time, not final test totals. Runtime
 code, fixtures and compact proof remain versioned. Do not delete `tests/results/` as build output.
 
 ## Full UI run and remaining work
+
+Prepared test repairs retain their original behavior: the search journey creates a non-fixture title;
+the Health summary test requires its initial sleep content instead of a tautological assertion;
+Journey J5 locates the Today pill by its stable identifier and asserts a numeric reminder count.
+The baseline log exposes `smart.today` as accessibility type `Other`, while J5 searched `Button`.
+These source changes passed syntax parsing only; targeted UI acceptance remains pending.
 
 The full run is still active. Authoritative artifacts are under `/tmp/today-overnight-20261018/`:
 `command.json`, `progress.json`, `full-ui.log`, `full-ui.xcresult`, and `screenshots/`.
