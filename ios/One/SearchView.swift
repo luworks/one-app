@@ -105,7 +105,7 @@ struct SearchView: View {
                     if !r.tasks.isEmpty {
                         Section(header: header("Reminders", r.tasks.count)) {
                             ForEach(r.tasks.prefix(limit)) { task in
-                                Button { opened = .task(task) } label: {
+                                Button { PerformanceTrace.shared.beginPage("reminder.editor"); opened = .task(task) } label: {
                                     ResultRow(symbol: task.isDone ? "checkmark.circle.fill" : "circle", tint: task.isDone ? .green : .blue,
                                               title: task.title, detail: detail(task), dimmed: task.isDone)
                                 }
@@ -136,6 +136,7 @@ struct SearchView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .performanceDestination(query.isEmpty ? "search" : "search.results")
             .safeAreaInset(edge: .top, spacing: 0) { searchBar }
             .overlay {
                 if (!query.isEmpty || quick != nil), r.isEmpty {
@@ -160,7 +161,7 @@ struct SearchView: View {
         HStack(spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Reminders, events, alarms", text: $query)
+                TextField("Reminders, events, alarms", text: $query.performanceAction { _ in "search.results" })
                     .focused($focused)
                     .submitLabel(.search)
                     .autocorrectionDisabled()

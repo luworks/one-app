@@ -56,6 +56,7 @@ struct TimerSection: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showsSound) {
                 SoundScreen(sound: Binding(get: { controller.sound }, set: { controller.sound = $0 }))
+                    .performanceDestination("timer.sound")
             }
         }
         .onAppear { controller.refresh() }
@@ -129,7 +130,7 @@ struct TimerSection: View {
             .padding(.horizontal, 20)
             .frame(minHeight: 52)
             Divider().padding(.horizontal, 20)
-            Button { showsSound = true } label: {
+            Button { PerformanceTrace.shared.beginPage("timer.sound"); showsSound = true } label: {
                 HStack {
                     Text("Sound")
                     Spacer()

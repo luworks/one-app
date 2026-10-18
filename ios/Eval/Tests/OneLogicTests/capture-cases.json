@@ -347,7 +347,7 @@
    "input": "Run every weekday",
    "title": "Run",
    "day": 0,
-   "hasDay": false,
+   "hasDay": true,
    "repeat": "weekdays",
    "kind": "task"
   },
@@ -483,7 +483,7 @@
    "hasDay": true,
    "hour": 19,
    "minute": 0,
-   "repeat": "weekly"
+   "repeat": "weekly:4"
   },
   {
    "split": "train",

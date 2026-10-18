@@ -60,6 +60,69 @@ struct AskView: View {
     @AppStorage(Preferences.askSuggestionsKey) private var showsSuggestions = Preferences.askSuggestions
     @State private var thinking = false
     @State private var captureTask: Task<Void, Never>?
+    /// Diagnostic-only identity: production cancellation behavior stays unchanged when tracing is off.
+    @State private var generationToken = UUID()
+    @State private var emittedTurn: UUID?
+    @State private var responseTurn: UUID?
+    @State private var sentMessageID: UUID?
+    @State private var responseTarget: ResponseTarget?
+    @State private var responseBaseline: ResponseSignature?
+
+    private enum ResponseTarget: Equatable {
+        case reply(UUID), capture(UUID), plan, tidy, change(UUID), choices([UUID])
+    }
+
+    private struct ResponseSignature: Equatable {
+        let messages: [ChatMessage]
+        let proposals: [CaptureProposal]
+        let followup: Followup?
+        let change: PendingChange?
+        let changeStart: Date?
+        let plan: [Date]
+        let tidy: [String]
+    }
+
+    private var responseSignature: ResponseSignature? {
+        guard AIResponseTrace.enabled else { return nil }
+        return ResponseSignature(messages: messages, proposals: proposals, followup: followup, change: change, changeStart: change?.newStart,
+                                 plan: plan.map(\.start), tidy: tidy.map { "\($0.id):\($0.choice)" })
+    }
+
+    /// A state mutation alone cannot finish a turn. Its own synchronous/async handler must first emit a result.
+    private func finishEmission(_ token: UUID) {
+        if AIResponseTrace.enabled { AIResponseTrace.shared.stage("finish_emission_enter", token: token) }
+        guard AIResponseTrace.enabled, token == generationToken, !thinking,
+              let signature = responseSignature, let baseline = responseBaseline,
+              signature != baseline else { return }
+        if signature.proposals != baseline.proposals,
+           let proposal = proposals.last(where: { p in baseline.proposals.first(where: { $0.id == p.id }) != p && p.status == .open }) {
+            responseTarget = .capture(proposal.batch)
+        } else if !plan.isEmpty && signature.plan != baseline.plan {
+            responseTarget = .plan
+        } else if !tidy.isEmpty && signature.tidy != baseline.tidy {
+            responseTarget = .tidy
+        } else if let change, signature.change != baseline.change || signature.changeStart != baseline.changeStart {
+            responseTarget = .change(change.id)
+        } else if case .chooseItem(_, let options)? = followup, signature.followup != baseline.followup {
+            responseTarget = .choices(options.map(\.id))
+        } else if let reply = messages.last(where: { $0.role == .ai }), reply.id != baseline.messages.last(where: { $0.role == .ai })?.id {
+            responseTarget = .reply(reply.id)
+        } else { return }
+        emittedTurn = token
+        AIResponseTrace.shared.stage("finish_emission_assigned", token: token)
+    }
+
+    @ViewBuilder private func responseProbe(_ target: ResponseTarget) -> some View {
+        if AIResponseTrace.enabled, responseTarget == target, let responseTurn {
+            AIResponseContentProbe(token: responseTurn, phase: .response)
+        }
+    }
+
+    private func traceBackend(_ token: UUID, modelPath: Bool) {
+        guard AIResponseTrace.enabled else { return }
+        // Public AI APIs hide timeout/empty-result fallback, so availability is never claimed as model success.
+        AIResponseTrace.shared.backend(modelPath ? (AICapture.isAvailable ? "model_available_outcome_unobserved" : "fallback_model_unavailable") : "rules", token: token)
+    }
     @State private var plan: [(task: OneTask, start: Date)] = []
     /// The "Plan reminders into free time" grant, while one is active (the plan card then says so instead of offering it).
     @State private var planGrant: AIGrant?
@@ -103,12 +166,23 @@ struct AskView: View {
                         LazyVStack(alignment: .leading, spacing: 16) {
                             ForEach(messages) { message in
                                 MessageView(message: message).id(message.id)
+                                    .background {
+                                        if AIResponseTrace.enabled, message.id == sentMessageID {
+                                            AIResponseContentProbe(token: generationToken, phase: .feedback)
+                                        }
+                                        responseProbe(.reply(message.id))
+                                    }
                                 cards(under: message.id)
                             }
                             if thinking {
                                 HStack(spacing: 8) {
                                     ProgressView()
                                     Text("Thinking…").foregroundStyle(.secondary)
+                                }
+                                .background {
+                                    if AIResponseTrace.enabled {
+                                        AIResponseContentProbe(token: generationToken, phase: .feedback)
+                                    }
                                 }
                             }
                             Color.clear.frame(height: 1).id(Self.endID)
@@ -117,6 +191,7 @@ struct AskView: View {
                         .animation(.snappy, value: proposals.map(\.status))
                     }
                 }
+                .performanceDestination("ai")
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(messages.isEmpty ? .top : .bottom)
                 .onChange(of: messages) {
@@ -127,10 +202,12 @@ struct AskView: View {
                     withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }
                 }
                 .onChange(of: proposals) { persistCards() }
-                .sheet(item: $openedItem) { item in
+                .sheet(item: $openedItem, onDismiss: refreshCardTitles) { item in
                     switch item {
                     case .task(let task): TaskEditor(task: task)
+                            .overlay(alignment: .topTrailing) { AIResponseTraceHistory() }
                     case .alarm(let alarm): AlarmEditor(alarm: alarm)
+                            .overlay(alignment: .topTrailing) { AIResponseTraceHistory() }
                     }
                 }
             }
@@ -146,9 +223,19 @@ struct AskView: View {
             .task {
                 // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
                 if messages.isEmpty { focused = true }
+                refreshCardTitles()
                 Understander.prewarm()
             }
-            .onDisappear { closeOpenCards("ignored") }
+            .onChange(of: emittedTurn) { _, token in
+                if AIResponseTrace.enabled, let token { AIResponseTrace.shared.stage("on_change_enter", token: token) }
+                guard let token, token == generationToken, !thinking, responseSignature != responseBaseline else { return }
+                AIResponseTrace.shared.ready(token)
+                responseTurn = token
+            }
+            .onDisappear {
+                closeOpenCards("ignored")
+                if AIResponseTrace.enabled { AIResponseTrace.shared.cancel(generationToken) }
+            }
         }
         .background(Color(.systemBackground).ignoresSafeArea())
         // A soft edge on the left while the screen slides away, like the drawer's page.
@@ -171,6 +258,7 @@ struct AskView: View {
         }
         // Clear, so what this screen goes back to (the sidebar or the page) shows underneath during a back swipe.
         .presentationBackground(.clear)
+        .overlay(alignment: .topTrailing) { AIResponseTraceHistory() }
     }
 
     // MARK: Going back
@@ -256,10 +344,12 @@ struct AskView: View {
             if !plan.isEmpty {
                 PlanCard(plan: plan, grantUntil: planGrant?.expires, onApply: { applyPlan() }, onAlways: applyPlanAlways,
                          onCancel: { recordCard(resolved: "plan", "cancelled", items: plan.count); plan = [] })
+                    .background { responseProbe(.plan) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if !tidy.isEmpty {
                 TidyCard(rows: $tidy, onApply: applyTidy, onCancel: { recordCard(resolved: "tidy", "cancelled", items: tidy.count); tidy = [] })
+                    .background { responseProbe(.tidy) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let undo = undoRow {
@@ -277,12 +367,14 @@ struct AskView: View {
             }
             if case .chooseItem(_, let options)? = followup {
                 ChoiceBar(options: options, onPick: tapChoice)
+                    .background { responseProbe(.choices(options.map(\.id))) }
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { choiceFrame = $0 }
                     .onDisappear { choiceFrame = .zero }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let change {
                 ChangeCard(change: change, onApply: { apply(change) }, onCancel: { recordCard(resolved: "change", "cancelled"); self.change = nil })
+                    .background { responseProbe(.change(change.id)) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: 8) {
@@ -340,13 +432,43 @@ struct AskView: View {
     private func send(_ raw: String) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        let token = AIResponseTrace.enabled ? UUID() : generationToken
+        if AIResponseTrace.enabled {
+            AIResponseTrace.shared.begin(token, modelAvailable: AICapture.isAvailable)
+            generationToken = token
+            emittedTurn = nil
+            responseTurn = nil
+            responseTarget = nil
+        }
+        defer { finishEmission(token) }
         draft = ""
         captureTask?.cancel()
         thinking = false
-        let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
+        let turnContext = ConversationContext(messages.map { ($0.role == .user, $0.text) })
+        let history = turnContext.prompt
+        if AIResponseTrace.enabled { AIResponseTrace.shared.stage("context_complete", token: token) }
         messages.append(ChatMessage(role: .user, text: text))
+        if AIResponseTrace.enabled {
+            sentMessageID = messages.last?.id
+            responseBaseline = responseSignature
+        }
         turnStart = .now
         let intent = ChatRouting.intent(text)
+        if let resolved = CaptureConversation.resolve(text, context: turnContext, pending: pending) {
+            recordTurn("answer", text)
+            if pending != nil { pending = resolved }
+            else { clearPreviews(); show([resolved]) }
+            if resolved.hour == nil && resolved.ringsAsAlarm {
+                followup = .alarmTime
+                messages.append(ChatMessage(role: .ai, text: text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                    ? "闹钟要设在几点？确认添加后才会生效。" : "What time should the alarm ring? Nothing is added until you confirm."))
+            } else {
+                followup = nil
+                messages.append(ChatMessage(role: .ai, text: text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                    ? "预览已更新，点 Add 后才会添加。" : "The preview is ready. Tap Add to create it."))
+            }
+            return
+        }
         // A question-shaped answer to our time prompt may edit a preview; other conversation cannot.
         let hasTimeContext: Bool
         switch followup {
@@ -397,6 +519,10 @@ struct AskView: View {
 
     /// Route before either extractor. Conversation leaves pending previews and follow-ups untouched.
     private func respond(_ text: String, history: String, intent: ChatRouting.Intent) {
+        if AIResponseTrace.enabled, intent == .conversation {
+            AIResponseTrace.shared.diagnoseConversation(generationToken)
+            AIResponseTrace.shared.stage("respond_enter", token: generationToken)
+        }
         // Record the sent interaction before cancellation can discard its reply. The model has not resolved unsure input yet.
         let initialIntent: String
         switch intent {
@@ -404,16 +530,24 @@ struct AskView: View {
         case .conversation: initialIntent = "conversation"
         case .unsure: initialIntent = "unsure"
         }
+        if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("record_turn_before", token: generationToken) }
         recordTurn(initialIntent, text)
+        if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("record_turn_after", token: generationToken) }
         thinking = true
+        traceBackend(generationToken, modelPath: intent != .capture)
+        let token = generationToken
         captureTask = Task { @MainActor in
+            if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("task_enter", token: token) }
+            defer { finishEmission(token) }
+            if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("chat_response_await_before", token: token) }
             let result = await ChatResponse.respond(text, history: history, intent: intent)
-            guard !Task.isCancelled else { return }
+            if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("chat_response_await_after", token: token) }
+            guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
             switch result {
             case .capture:
                 clearPreviews()
-                propose(text)
+                propose(text, history: history)
             case .reply(let reply):
                 messages.append(ChatMessage(role: .ai, text: reply))
             }
@@ -585,11 +719,14 @@ struct AskView: View {
     }
 
     /// On-device model when available, scripted parser otherwise. Only produces the preview card.
-    private func understand(_ text: String) {
+    private func understand(_ text: String, history: String = "") {
         thinking = true
+        traceBackend(generationToken, modelPath: true)
+        let token = generationToken
         captureTask = Task { @MainActor in
-            let capture = await Understander.parse(text)
-            guard !Task.isCancelled else { return }
+            defer { finishEmission(token) }
+            let capture = await Understander.parse(text, history: history)
+            guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
             show([capture])
         }
@@ -616,10 +753,13 @@ struct AskView: View {
             return
         }
         thinking = true
+        traceBackend(generationToken, modelPath: true)
+        let token = generationToken
         captureTask = Task { @MainActor in
+            defer { finishEmission(token) }
             let items = candidates.items
             let plan = await ModelTimeout.run(seconds: 20) { try? await Editing.plan(text, items: items, now: .now, calendar: .current, history: history) }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
             if plan == nil {
                 messages.append(ChatMessage(role: .ai, text: "The on-device model didn't answer in time. Try again in a moment, or name the item."))
@@ -776,9 +916,9 @@ struct AskView: View {
         })
     }
 
-    /// One item per line: the rule parser reads the day / time / title and the on-device model only says task / event / alarm.
+    /// One item per line: rules own scheduling, followed by kind classification and title-only refinement.
     /// A line that lists several things goes to the multi-item model path when it is available.
-    private func propose(_ text: String) {
+    private func propose(_ text: String, history: String = "") {
         // UI tests only (`-uiTesting -uiTestingMultiCapture`): the simulator has no on-device model, so a line with ";"
         // is split by the rule parser into several proposals, to exercise the multi-item card.
         if ProcessInfo.processInfo.arguments.contains("-uiTestingMultiCapture"), text.contains(";") {
@@ -788,7 +928,7 @@ struct AskView: View {
         if AICapture.isAvailable, text.range(of: #"[；;\n]|然后|另外还|\band then\b"#, options: [.regularExpression, .caseInsensitive]) != nil {
             proposeList(text)
         } else {
-            understand(text)
+            understand(text, history: history)
         }
     }
 
@@ -799,9 +939,12 @@ struct AskView: View {
             return
         }
         thinking = true
+        traceBackend(generationToken, modelPath: true)
+        let token = generationToken
         captureTask = Task { @MainActor in
+            defer { finishEmission(token) }
             let proposed = await AICapture.propose(text)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
             show(proposed ?? [CaptureParser.parse(text)])
         }
@@ -840,8 +983,9 @@ struct AskView: View {
         let batches = proposals.filter { $0.anchor == anchor }.map(\.batch).reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
         ForEach(batches, id: \.self) { batch in
             CaptureStack(proposals: batchBinding(batch), lists: lists.map(\.name),
-                         onAdd: add, onSkip: skip, onAddAll: addAll, onUndo: undo, onOpen: open)
+                         onAdd: add, onSkip: skip, onAddAll: addAll, onUndo: undo, onOpen: open, onRename: rename)
                 .id(batch)
+                .background { responseProbe(.capture(batch)) }
         }
     }
 
@@ -877,6 +1021,7 @@ struct AskView: View {
     private func commit(_ id: UUID) -> Capture? {
         guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.add) else { return nil }
         let capture = proposals[i].capture
+        guard capture.isReadyToAdd else { return nil }
         let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
         recordCard(resolved: "capture", edits.isEmpty ? "applied" : "edited", edits: edits)
         let written = capture.insertRecorded(into: context, actor: .todayAI, channel: .ask, approval: .asked)
@@ -919,6 +1064,40 @@ struct AskView: View {
         case .event(let event): onOpenDay(event.start)
         case nil: messages.append(ChatMessage(role: .ai, text: "“\(p.capture.title)” isn't there any more."))
         }
+    }
+
+    /// Save changes the existing item, then every card in this chat that refers to it.
+    private func rename(_ id: UUID, to title: String) -> Bool {
+        guard let p = proposals.first(where: { $0.id == id }), p.status == .added,
+              let old = CaptureUndo.title(p.itemRef, in: context) else { return false }
+        guard old != title else { refreshCardTitles(); return true }
+        guard CaptureUndo.rename(p.itemRef, to: title, in: context) else { return false }
+        let task: OneTask?
+        let kind: String
+        switch CaptureUndo.resolve(p.itemRef, in: context) {
+        case .task(let t): task = t; kind = "task"
+        case .alarm: task = nil; kind = "alarm"
+        case .event: task = nil; kind = "event"
+        case nil: return false
+        }
+        let entry = Ledger.record(.renamed, task: task, kind: kind, title: title,
+                                  before: old, after: title, channel: .ask, context: context)
+        refreshCardTitles()
+        toast?.show("Changed title") {
+            // Do not replace another edit made since this save, or resurrect an item deleted since.
+            guard CaptureUndo.title(p.itemRef, in: context) == title,
+                  CaptureUndo.rename(p.itemRef, to: old, in: context) else { return }
+            Ledger.recordUndo(of: entry, task: task, channel: .ask, context: context)
+            refreshCardTitles()
+        }
+        return true
+    }
+
+    private func refreshCardTitles() {
+        for i in proposals.indices where proposals[i].status == .added {
+            if let title = CaptureUndo.title(proposals[i].itemRef, in: context) { proposals[i].capture.title = title }
+        }
+        persistCards()
     }
 
     private func isPlanRequest(_ text: String) -> Bool { SentenceRoute.isPlanRequest(text) }

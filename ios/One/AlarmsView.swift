@@ -26,7 +26,7 @@ struct AlarmsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ClockSectionBar(selection: $section)
+            ClockSectionBar(selection: $section.performanceAction { "clock.\($0.rawValue)" })
                 .padding(.horizontal, 20)
                 .padding(.top, 2)
                 .padding(.bottom, 6)
@@ -39,6 +39,7 @@ struct AlarmsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .performanceDestination("clock.\(section.rawValue)")
         }
         .background(Color(.systemBackground))
         .sheet(item: $editing) { AlarmEditor(alarm: $0) }

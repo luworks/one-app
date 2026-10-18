@@ -103,7 +103,7 @@ struct TaskEditor: View {
                     }
                     Picker(selection: $repeatRule) {
                         Text("Never").tag(RepeatRule?.none)
-                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                        ForEach(RepeatRule.choices(including: repeatRule), id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
                     } label: {
                         Label("Repeat", systemImage: "repeat")
                     }
@@ -154,6 +154,7 @@ struct TaskEditor: View {
                     }
                 }
             }
+            .performanceDestination("reminder.editor")
             .navigationTitle(task == nil ? "New reminder" : "Reminder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -266,7 +267,7 @@ struct EventEditor: View {
                     DatePicker("Ends", selection: $end, in: start..., displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
                     Picker(selection: $repeatRule) {
                         Text("Never").tag(RepeatRule?.none)
-                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                        ForEach(RepeatRule.choices(including: repeatRule), id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
                     } label: {
                         Text("Repeat")
                     }
@@ -282,6 +283,7 @@ struct EventEditor: View {
                     }
                 }
                 if let event {
+                    if !event.note.isEmpty { Section("Notes") { Text(event.note) } }
                     Section {
                         Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
                             let backup = event.copy()
@@ -303,6 +305,7 @@ struct EventEditor: View {
                 }
             }
             .onAppear { if event == nil { titleFocused = true } }
+            .performanceDestination("event.editor")
             .navigationTitle(event == nil ? "New event" : "Event")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "about": "AIContextJourneyTests: empty planner with a text-only stored chat. Assistant aside deliberately mentions another activity and time; follow-ups must recover the user's dinner alarm context. Dates use the current local day.",
+  "lists": [{ "name": "Reminders", "color": 0 }],
+  "reminders": [],
+  "events": [],
+  "alarms": [],
+  "chats": [
+    {
+      "title": "Dinner alarm context",
+      "hoursAgo": 0.25,
+      "messages": [
+        ["user", "At 6pm tonight, remind me not to eat dinner again."],
+        ["ai", "We can talk about watering plants at 9am too."],
+        ["user", "No, just add an alarm."],
+        ["ai", "Nothing is added until you tap Add."]
+      ]
+    }
+  ]
+}

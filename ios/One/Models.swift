@@ -136,6 +136,7 @@ final class OneTask {
 /// Later this is replaced by the system calendar (EventKit).
 @Model
 final class OneEvent {
+    var note: String = ""
     var title: String
     var start: Date
     var durationMinutes: Int
@@ -179,6 +180,7 @@ final class OneEvent {
     /// Everything needed to recreate a deleted event (for Undo).
     func copy() -> OneEvent {
         let e = OneEvent(title: title, start: start, durationMinutes: durationMinutes, calendarName: calendarName)
+        e.note = note
         e.reminderOffsetMinutes = reminderOffsetMinutes
         e.isAllDay = isAllDay
         e.ringsAsAlarm = ringsAsAlarm
@@ -198,6 +200,7 @@ extension Capture {
     func makeTask() -> OneTask {
         let timing = taskTiming
         let t = OneTask(title: title, plannedStart: timing.plannedStart, durationMinutes: durationMinutes ?? 25, due: timing.due)
+        t.note = notes ?? ""
         if let minutes = timing.alertMinutesBefore { t.reminderOffsetMinutes = minutes }
         t.repeatRule = repeatRule
         t.ringsAsAlarm = ringsAsAlarm && plannedStart != nil
@@ -206,7 +209,7 @@ extension Capture {
     }
 
     /// An alarm request becomes a real alarm (Alarms tab) when it can be one: it rings within the next day, or repeats
-    /// daily / on weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
+    /// daily / on selected weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
     func makeAlarm(now: Date = .now) -> OneAlarm? {
         guard kind == .task, ringsAsAlarm, let start = plannedStart else { return nil }
         let cal = Calendar.current
@@ -218,15 +221,19 @@ extension Capture {
         case .daily: weekdays = Array(1...7)
         case .weekdays: weekdays = [2, 3, 4, 5, 6]
         case .weekly: weekdays = [cal.component(.weekday, from: start)]
+        case .weeklyOn(let days): weekdays = Set(days).sorted()
         default: return nil
         }
         let c = cal.dateComponents([.hour, .minute], from: start)
-        return OneAlarm(hour: c.hour ?? 0, minute: c.minute ?? 0, label: title, weekdays: weekdays)
+        let alarm = OneAlarm(hour: c.hour ?? 0, minute: c.minute ?? 0, label: title, weekdays: weekdays)
+        alarm.note = notes ?? ""
+        return alarm
     }
 
     func makeEvent() -> OneEvent {
         let start = plannedStart ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
         let e = OneEvent(title: title, start: isAllDay ? day : start, durationMinutes: isAllDay ? 1440 : durationMinutes ?? 60)
+        e.note = notes ?? ""
         e.isAllDay = isAllDay
         e.repeatRule = repeatRule
         return e

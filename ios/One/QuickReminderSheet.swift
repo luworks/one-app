@@ -45,6 +45,7 @@ struct QuickReminderSheet: View {
         }
         .padding(.top, 16)
         .background(Color(.systemBackground))
+        .performanceDestination("reminder.quick")
         .onAppear {
             focused = true
             // Settings > Reminders > "New reminders go to" (Auto leaves the list as it was opened).
@@ -89,7 +90,7 @@ struct QuickReminderSheet: View {
             Menu {
                 Picker("Repeat", selection: $repeatRule) {
                     Text("Never").tag(RepeatRule?.none)
-                    ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                    ForEach(RepeatRule.choices(including: repeatRule), id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
                 }
             } label: {
                 Image(systemName: "repeat").frame(width: 40, height: 40)

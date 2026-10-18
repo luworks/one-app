@@ -270,17 +270,7 @@ final class CalendarSync {
         ek.endDate = event.start.addingTimeInterval(event.duration)
         ek.isAllDay = event.isAllDay
         if let rule = event.repeats {
-            let freq: EKRecurrenceFrequency = switch rule {
-            case .daily, .weekdays: .daily
-            case .weekly: .weekly
-            case .monthly: .monthly
-            case .yearly: .yearly
-            }
-            var days: [EKRecurrenceDayOfWeek]?
-            if rule == .weekdays { days = [.init(.monday), .init(.tuesday), .init(.wednesday), .init(.thursday), .init(.friday)] }
-            ek.recurrenceRules = [EKRecurrenceRule(recurrenceWith: freq, interval: 1, daysOfTheWeek: days, daysOfTheMonth: nil,
-                                                   monthsOfTheYear: nil, weeksOfTheYear: nil, daysOfTheYear: nil,
-                                                   setPositions: nil, end: nil)]
+            ek.recurrenceRules = [RemindersSync.recurrence(for: rule)]
         } else {
             ek.recurrenceRules = nil
         }

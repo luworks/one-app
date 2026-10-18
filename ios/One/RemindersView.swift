@@ -206,7 +206,12 @@ struct RemindersView: View {
                 withAnimation(.snappy) { _ = ListActions.rename(list, to: renameText, in: context) }
             }
         }
-        .task { await FirstRun.reminders() }
+        .task {
+            #if DEBUG
+            guard !PreviewFixtures.isAxe else { return }
+            #endif
+            await FirstRun.reminders()
+        }
         .onChange(of: path.count) { _, n in isPushed = n > 0 }
         .onAppear { isPushed = !path.isEmpty }
         .onDisappear { isPushed = false }
@@ -426,7 +431,7 @@ struct RemindersView: View {
 
             // An inline row at the end of the list, not a floating button: the app's own bottom bar owns
             // the bottom of the screen, so this stays visible and tappable.
-            Button { addingList = true } label: {
+            Button { PerformanceTrace.shared.beginPage("list.editor"); addingList = true } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 26))
@@ -576,3 +581,10 @@ private struct ListRow: View {
         .accessibilityLabel(pinned ? "\(name), pinned, \(reminderCountText(count))" : "\(name), \(reminderCountText(count))")
     }
 }
+
+#if DEBUG
+#Preview("My Lists") {
+    RemindersView(isPushed: .constant(false), path: .constant([]))
+        .modelContainer(PreviewFixtures.reminders)
+}
+#endif

@@ -17,7 +17,7 @@ enum CaptureLeadIn {
 
     private static let patterns: [String] = [
         // 帮我增加一个 reminder 吧：…   帮我加个提醒，…   新建一条待办 …
-        "^" + zhPolite + zhVerb + #"\s*(?:一个|一条|一下|个|条)\s*"# + zhNoun + zhParticle + #"\s*[:：，,]?\s*"#,
+        "^" + zhPolite + zhVerb + #"\s*(?:一个|一条|一下|个|条)\s*(?:的\s*)?"# + zhNoun + zhParticle + #"\s*[:：，,]?\s*"#,
         // 增加提醒：…   帮我设置提醒，…  (no "一个": the colon or comma has to be there)
         "^" + zhPolite + zhVerb + #"\s*"# + zhNoun + zhParticle + #"\s*[:：，,]\s*"#,
         // 提醒我：…   请提醒我，…   帮我提醒一下：…

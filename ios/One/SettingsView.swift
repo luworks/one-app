@@ -44,7 +44,7 @@ struct SettingsView: View {
                 Section {
                     Toggle(isOn: $calendarOn) { Label("Apple Calendar", systemImage: "calendar") }
                     Toggle(isOn: $remindersOn) { Label("Apple Reminders", systemImage: "checklist") }
-                    Button { showsCalendars = true } label: {
+                    Button { PerformanceTrace.shared.beginPage("settings.calendars"); showsCalendars = true } label: {
                         HStack {
                             Label("Calendars", systemImage: "calendar.badge.checkmark")
                             Spacer()
@@ -97,7 +97,12 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        YearHolidaysSettingsView()
+                        YearHolidaysSettingsView().performanceDestination("settings.holidays")
+                    } label: {
+                        Label("Holidays in Year", systemImage: "flag")
+                    }
+                    .performanceControlledNavigation("settings.holidays") {
+                        YearHolidaysSettingsView().performanceDestination("settings.holidays")
                     } label: {
                         Label("Holidays in Year", systemImage: "flag")
                     }
@@ -111,7 +116,12 @@ struct SettingsView: View {
                 Section {
                     AutomaticChangesToggle()
                     NavigationLink("Scope and duration") {
-                        AutomaticChangesView()
+                        AutomaticChangesView().performanceDestination("settings.automaticChanges")
+                    }
+                    .performanceControlledNavigation("settings.automaticChanges") {
+                        AutomaticChangesView().performanceDestination("settings.automaticChanges")
+                    } label: {
+                        Text("Scope and duration")
                     }
                     .accessibilityIdentifier("settings.automaticChanges")
                     AskSuggestionsSettingRow()
@@ -125,6 +135,15 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
+                        ActivityDataView()
+                    } label: {
+                        HStack {
+                            Label("Activity data", systemImage: "clock.arrow.circlepath")
+                            Spacer()
+                            Text(activityPaused ? "Paused" : "On").foregroundStyle(.secondary)
+                        }
+                    }
+                    .performanceControlledNavigation("settings.activityData") {
                         ActivityDataView()
                     } label: {
                         HStack {
@@ -157,6 +176,7 @@ struct SettingsView: View {
                     Text("Clears what Today stores on this device. Your Apple Calendar and Apple Reminders are not changed.")
                 }
             }
+            .performanceDestination("settings")
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -187,7 +207,7 @@ struct SettingsView: View {
             } message: {
                 Text("This deletes the reminders, events, alarms, lists and Activity Today keeps on this device. It can't be undone.")
             }
-            .sheet(isPresented: $showsCalendars) { CalendarsSheet() }
+            .sheet(isPresented: $showsCalendars) { CalendarsSheet().performanceDestination("settings.calendars") }
             .sheet(isPresented: $askingSecond) {
                 DeleteDataConfirmation {
                     DataReset.run(context)

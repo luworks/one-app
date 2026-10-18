@@ -196,7 +196,7 @@ struct TaskRow: View {
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture { editing = true }
+        .onTapGesture { PerformanceTrace.shared.beginPage("reminder.editor"); editing = true }
         .sheet(isPresented: $editing) { TaskEditor(task: task) }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: compact ? 1 : 4, leading: 20, bottom: compact ? 1 : 4, trailing: 20))
@@ -207,7 +207,7 @@ struct TaskRow: View {
             RowAction.flag(task.flagged) { withAnimation { task.flagged.toggle() } }
         }
         .contextMenu {
-            Button { editing = true } label: { Label("Show Details", systemImage: "info.circle") }
+            Button { PerformanceTrace.shared.beginPage("reminder.editor"); editing = true } label: { Label("Show Details", systemImage: "info.circle") }
             Button { task.flagged.toggle() } label: {
                 Label(task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }
@@ -342,6 +342,8 @@ struct CaptureCard: View {
     var onUndo: () -> Void = {}
     var onOpen: () -> Void = {}
 
+    var onRename: (String) -> Bool = { _ in false }
+
     enum Mode: Hashable, CaseIterable { case task, event, alarm }
 
     /// An alarm is a task that rings; it needs a time, so switching to Alarm with none picks the next full hour.
@@ -391,8 +393,15 @@ struct CaptureCard: View {
                              },
                              identifier: { "capture.kind." + String(describing: $0) })
             }
-            Text(capture.title).font(.headline)
+            CaptureTitleButton(title: capture.title, editable: status == .open || status == .added,
+                               onSave: { title in
+                if status == .open { capture.title = title; return true }
+                return onRename(title)
+            }).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
+            if let notes = capture.notes, !notes.isEmpty {
+                Text(notes).font(.callout).foregroundStyle(.secondary).accessibilityIdentifier("capture-notes")
+            }
             if capture.kind == .task, !capture.ringsAsAlarm {
                 if status == .open {
                     if !lists.isEmpty { ListMenu(capture: $capture, lists: lists).font(.subheadline) }
@@ -404,7 +413,7 @@ struct CaptureCard: View {
                 HStack {
                     Button(cancelTitle, action: onCancel).buttonStyle(.bordered)
                     Spacer()
-                    Button("Add", action: onAdd).buttonStyle(.borderedProminent)
+                    Button("Add", action: onAdd).buttonStyle(.borderedProminent).disabled(!capture.isReadyToAdd)
                 }
                 .padding(.top, 4)
             } else {
@@ -480,5 +489,69 @@ struct WeekStrip: View {
 
     private func shift(_ days: Int) {
         if let d = cal.date(byAdding: .day, value: days, to: selected) { selected = d }
+    }
+}
+
+/// The title itself is the edit affordance, shared by full cards and compact rows.
+/// Draft text is local to the sheet until Save; Add remains a separate decision.
+struct CaptureTitleButton: View {
+    let title: String
+    var editable = true
+    var onSave: (String) -> Bool
+    @State private var editing = false
+
+    var body: some View {
+        Group {
+            if editable {
+                Button { editing = true } label: {
+                    Text(title).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Change title")
+                .accessibilityIdentifier("capture-title")
+            } else { Text(title) }
+        }
+        .sheet(isPresented: $editing) { CaptureTitleEditor(title: title, onSave: onSave) }
+    }
+}
+
+private struct CaptureTitleEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var failed = false
+    @FocusState private var focused: Bool
+    let onSave: (String) -> Bool
+
+    init(title: String, onSave: @escaping (String) -> Bool) {
+        _title = State(initialValue: title)
+        self.onSave = onSave
+    }
+
+    private var trimmed: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Title", text: $title, axis: .vertical)
+                    .focused($focused)
+                    .accessibilityIdentifier("capture-title-field")
+                if failed { Text("Couldn't save this title. The item may have been deleted.").foregroundStyle(.secondary) }
+            }
+            .navigationTitle("Title")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.accessibilityIdentifier("capture-title-cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if onSave(trimmed) { dismiss() } else { failed = true }
+                    }
+                    .disabled(trimmed.isEmpty)
+                    .accessibilityIdentifier("capture-title-save")
+                }
+            }
+            .task { focused = true }
+        }
     }
 }

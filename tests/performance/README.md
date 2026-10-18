@@ -1,35 +1,82 @@
-# Performance tools
+# Current-main page and AI performance tools
 
-Protocol: [`docs/performance/protocol.md`](../../docs/performance/protocol.md).
-Results and targets: [`baseline-2026-10-18.md`](../../docs/performance/baseline-2026-10-18.md).
+Read [protocol v2](../../docs/performance/pages-ai-protocol-v2.md),
+[complete source inventory](../../docs/performance/page-coverage-v2.md) and
+[AI stage audit](../../docs/performance/ai-response-baseline-v2.md).
 
-- `inventory.py <app> --output <json>` reads actual bundle bytes, nested extensions,
-  Mach-O metadata, exact duplicate hashes and a ZIP deflate-9 proxy. It does not
-  infer App Store size or asset reachability.
-- `record_command.py --label <label> -- <command...>` stores command output and
-  host context under canonical primary `tests/results/runs/<session>/`, recording
-  the action in the separate QA journal. Default session is this baseline; pass
-  `--session` for a later run. It does not archive still-active files.
-- `launch_probe.py --simulator <udid> --output <durable-directory>` requires the
-  booted `Today-Performance` simulator and an installed Debug app. It performs one
-  excluded warmup and three process relaunches using the versioned dataset. It
-  terminates only Today's app on that simulator. No cold cache/reboot is implied.
-  The output directory must be new; repeated runs cannot overwrite prior launch evidence.
-- `memory_sample.py --simulator <udid> --output <csv> -- <command...>` samples
-  only the exact simulator app executable's RSS every 0.5 seconds while the
-  command runs; records UTC and PID for alignment with test logs. It does not
-  measure physical footprint, GPU allocation, battery or test-runner memory.
-- `summarize.py <ui.log> --output <json>` retains all explicit `PERF_SAMPLE`
-  values and emits n, median and range; leaves p95 unknown.
-- UI instrumentation: `ios/OneUITests/PerformanceBaselineTests.swift`; use the
-  existing E2E runner for the four named methods, never the full suite for this
-  baseline. These additions do not change production app behavior.
-- Store benchmark: existing `ActivityStoreTests.testBenchmarkLarge`, enabled by
-  `ACTIVITY_BENCH_ROWS=100000`. The versioned generator is in
-  `ios/One/ActivityExport.swift`; no required input is generated into `/tmp`.
+Production source is frozen `b1fc12b`; measurement revision for the first batch is
+`83b4fb8`. Historical package/performance experiments are on separate branches.
+This directory contains measurement tools, not a background scheduler.
 
-Tool validation: `python3 -m unittest discover -s tests/performance -v`.
-Raw JSON contains byte counts, not rounded MiB; report MiB as bytes / 1048576.
-After every producer exits, import/archive through `tests/qa/journal.py` to index
-paths/hashes, including complete xcresult bundles. Never prune this evidence in
-worktree cleanup.
+Freeze before obtaining a quiet window, choosing a new canonical directory:
+
+```sh
+python3 tests/performance/freeze_source.py \
+  --base b1fc12b62e796ac6c232da5e524235a59edba945 --revision 83b4fb8 \
+  --paths-file tests/performance/measurement-paths-v2.json \
+  --output /Users/yuanlu/code/one-app/tests/results/runs/performance-pages-ai-20261018/new-frozen
+```
+
+The explicit path allowlist rejects unrelated iOS production changes. The
+archive, patch and SHA256 manifest are retained beside the frozen source. Never
+modify an indexed frozen source/patch to repair a failure; create new evidence.
+
+Obtain the explicit host-holder handoff before boot/build/UI. Reuse only
+Today-Performance and the fixed owned DD:
+`/Users/yuanlu/code/one-app/tests/results/runs/performance-climb-20261018/derived-optimized`.
+Use `with_owned_runner.py` named/cache locks, `record_command.py --session
+performance-pages-ai-20261018`, xcodebuild jobs2/parallelNO/Debug -O and the frozen
+project path. Build once, then `test-without-building` on the same products for
+later methods. A lock does not grant a global quiet slot. Bound each batch to its
+agreed deadline, stop producers, shut down and explicitly release the slot.
+
+Initial methods are three page/AI baseline groups, not the full app suite:
+
+- `AIResponsePerformanceTests/testConversationFreshLaunchN3`
+- `PagePerformanceTests/testHealthListDetailAndPickerEndpoints`
+- `PagePerformanceTests/testClockModesAndCityPickerEndpoints`
+
+Later focused methods on the same compiled revision:
+
+- `AIResponsePerformanceTests/testCaptureFollowupConfirmationFreshLaunchN3`
+- `AIResponsePerformanceTests/testPlanConfirmationFreshLaunchN3`
+- `PagePerformanceTests/testSettingsSubpageAndActivityEndpoints`
+- `PagePerformanceTests/testSearchQuickReminderAndReminderDetailEndpoints`
+
+Do not rerun passing methods without a changed source, failure or concrete gap.
+These methods expose only some inventory rows. A completed method does not mark
+all pages measured; actual provider, save-success, frame/hitch and memory classes
+remain separate pending metrics in `page-metrics-v2.json`.
+
+`summarize_pages.py <closed.log> --output <new.json>` keeps raw samples by method,
+name and backend, deduplicates repeated app/test stdout, reports n/median/range
+and leaves p95 unknown. Incomplete/failed functional methods cannot produce an
+accepted baseline. Read context and raw ordered samples: the initial page
+sequence is first cycle plus two revisits; AI uses three fresh process launches.
+Never compare rules/fallback with model generation or typing-inclusive XCTest
+elapsed time with app-side intervals. Goals baseline/3 and baseline/10 are not gains.
+
+`compare_app.py` retains the earlier same-context app-proxy comparison; use
+`extract_xct_metrics.py` only when a method actually emits XCTest physical-memory
+or scroll metrics. Scroll duration is not FPS/hitch rate; in-memory save UI is
+not disk persistence. After producers exit, index closed raw logs, contexts,
+source manifests and complete xcresults through `tests/qa/journal.py`.
+
+Focused pure-tool validation:
+
+```sh
+python3 -m unittest discover -s tests/performance -p 'test_*.py' -v
+```
+
+
+## Historical first baseline utilities
+
+The original [protocol](../../docs/performance/protocol.md), [static inventory](../../docs/performance/static-audit.md) and [2026-10-18 report](../../docs/performance/baseline-2026-10-18.md) retain their original source/configuration and automation-inclusive limitations. They are historical evidence, not replacement current-main measurements; use the v2 protocol/results above for page/AI comparisons.
+
+- `inventory.py`: file categories/top contributors and local ZIP estimate for a built app.
+- `launch_probe.py`: simulator process launch probe; do not equate its duration to usable content.
+- `memory_sample.py`: simulator memory sampling proxy.
+- `summarize.py`: original automation log reducer, separate from monotonic app-side reducers.
+- `ios/OneUITests/PerformanceBaselineTests.swift`: original authored baseline journeys. Their historical results do not establish new merged-main runtime acceptance.
+
+Keep all generated outputs under primary `tests/results/` and index closed evidence through the existing QA journal. No new build or repeated passing UI run is required for this documentation merge.
