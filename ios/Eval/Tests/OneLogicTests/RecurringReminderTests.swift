@@ -14,6 +14,7 @@ final class RecurringReminderTests: XCTestCase {
             ("每周日下午5点提醒我丢垃圾", [1]),
             ("添加一个reminder：每周五、每周日下午5点提醒我丢垃圾", [1, 6]),
             ("每周五和周日下午五点提醒我丢垃圾", [1, 6]),
+            ("添加一个 reminder：每周五、每周日下午 5 点提醒我丢垃圾", [1, 6]),
             ("Every Friday and Sunday at 5pm remind me to take out trash", [1, 6])
         ] {
             XCTAssertEqual(ChatRouting.intent(text), .capture, text)
