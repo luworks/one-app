@@ -125,7 +125,12 @@ struct PerformanceContentProbe: UIViewRepresentable {
             guard window != nil, bounds.width > 0, bounds.height > 0,
                   window?.windowScene?.activationState == .foregroundActive else { return }
             // Observe normal layout; never force the app to perform layout early for the benchmark.
-            guard !isHidden else { return }
+            guard !isHidden, let window else { return }
+            // A sheet can leave its presenting root mounted and nonhidden underneath it.
+            var foreground = window.rootViewController
+            while let presented = foreground?.presentedViewController { foreground = presented }
+            guard let foregroundView = foreground?.viewIfLoaded, isDescendant(of: foregroundView),
+                  convert(bounds, to: window).intersects(window.bounds) else { return }
             ticks += 1
             if ticks >= 2 {
                 PerformanceTrace.shared.finishLayout(route, generation: generation)
