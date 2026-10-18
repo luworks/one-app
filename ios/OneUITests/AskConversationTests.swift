@@ -80,6 +80,18 @@ final class AskConversationTests: XCTestCase {
         XCTAssertTrue(app.buttons["Add"].exists)
     }
 
+    func testChineseExistingActionQuestionsInFreshChatDoNotProposeItems() {
+        for (index, question) in ["有没有人提醒我明天的会议？", "有人添加了一个提醒吗？"].enumerated() {
+            send(question)
+            let replies = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "我们可以直接聊聊"))
+            let answered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count == %d", index + 1), object: replies)
+            XCTAssertEqual(XCTWaiter().wait(for: [answered], timeout: 10), .completed)
+            XCTAssertFalse(app.buttons["Add"].exists)
+            XCTAssertFalse(app.buttons["capture-add-all"].exists)
+            XCTAssertFalse(app.otherElements["change-card"].exists)
+        }
+    }
+
     func testQuestionAndUnknownStatementDoNotCreateCards() {
         send("How are you?")
         XCTAssertTrue(reply("We can just chat").waitForExistence(timeout: 10))

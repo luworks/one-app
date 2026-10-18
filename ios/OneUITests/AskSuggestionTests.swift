@@ -110,4 +110,20 @@ final class AskSuggestionTests: XCTestCase {
         XCTAssertFalse(app.buttons["tidy.apply"].exists)
     }
 
+    func testCanonicalRemainingTodayQuestionReadsCurrentDataset() {
+        launch(at: "09:41")
+        send("What's left today?")
+        let summary = app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "Today: ")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        XCTAssertTrue(summary.label.contains("open tasks and"))
+        XCTAssertTrue(summary.label.contains("upcoming event"))
+        // Read the current dataset, including its overdue item, rather than the saved fixture reply.
+        XCTAssertTrue(summary.label.contains("Pay studio invoice"))
+        XCTAssertTrue(summary.label.contains("Buy milk"))
+        XCTAssertFalse(reply(containing: "We can just chat").exists)
+        XCTAssertFalse(app.buttons["Add"].exists)
+        XCTAssertFalse(app.buttons["plan.apply"].exists)
+        XCTAssertFalse(app.buttons["tidy.apply"].exists)
+    }
+
 }

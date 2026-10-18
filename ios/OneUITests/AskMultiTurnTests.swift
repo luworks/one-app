@@ -90,11 +90,20 @@ final class AskMultiTurnTests: XCTestCase {
         assertQuestionTimeAnswer("How about 5pm?", conversation: "Can you write a story?")
     }
 
+    func testChineseExistingReminderQuestionPreservesTimeFollowupAndChangeUntilApply() {
+        assertQuestionTimeAnswer("下午5点，可以吗？", conversation: "有没有人提醒我明天的会议？")
+    }
+
+    func testChineseAddedReminderQuestionPreservesTimeFollowupAndChangeUntilApply() {
+        assertQuestionTimeAnswer("How about 5pm?", conversation: "有人添加了一个提醒吗？")
+    }
+
     private func assertQuestionTimeAnswer(_ answer: String, conversation: String) {
         send("Move Dentist")
         XCTAssertTrue(label(containing: "When should I move “Dentist” to?").waitForExistence(timeout: 90))
         send(conversation)
-        let expectedReply = conversation.contains("我") ? "我们可以直接聊聊" : "We can just chat"
+        let expectedReply = conversation.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+            ? "我们可以直接聊聊" : "We can just chat"
         XCTAssertTrue(label(containing: expectedReply).waitForExistence(timeout: 10))
         XCTAssertFalse(app.otherElements["change-card"].exists)
         XCTAssertFalse(app.buttons["Add"].exists)

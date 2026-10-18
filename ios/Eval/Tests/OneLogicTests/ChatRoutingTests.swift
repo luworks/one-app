@@ -71,6 +71,50 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testChineseExistingActionQuestionsDoNotBecomeNewRequests() {
+        for text in [
+            "有没有人提醒我明天的会议？", "有人添加了一个提醒吗？",
+            "是否有人提醒我明天的会议？", "谁提醒我明天的会议？",
+            "有人添加了一个提醒", "有没有人提醒我明天的会议",
+            "你提醒我明天买牛奶了吗？", "我添加了明天7点的提醒吗？",
+        ] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+            XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+            XCTAssertFalse(ChatRouting.isAgendaQuestion(text), text)
+        }
+    }
+
+    func testChineseRequestBoundaryPreservesExplicitRequests() {
+        for text in [
+            "提醒我明天买牛奶", "明天提醒我设置闹钟", "7点提醒我买牛奶",
+            "可以明天提醒我买牛奶吗？", "能不能帮我添加一个提醒？",
+            "请添加一个明天买牛奶的提醒", "帮我记一下明天买牛奶", "别忘了买牛奶",
+            "请把我可以卖的东西都放到车库去，然后今天下午 3 点的时候提醒我移动一下",
+            "哦，我想卖家里的一些东西，然后去 Marketplace。今天下午 3 点提醒我吧",
+            "Can you remind me to 买牛奶 tomorrow?", "Can you add a reminder for 买牛奶?",
+        ] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
+    func testPoliteEnglishPrefixPreservesChineseReminderRequest() {
+        for text in ["Please 提醒我明天买牛奶", "Can you 明天提醒我买牛奶?"] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
+    func testCanonicalRemainingTodayQuestionUsesAgendaRoute() {
+        for text in ["What's left today?", "What’s left today?", "What is left today?"] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+            XCTAssertTrue(ChatRouting.isAgendaQuestion(text), text)
+            XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+        }
+        for text in ["How are you today?", "What's left of my story today?",
+                     "What's left today in Activity?", "What's your favorite movie?"] {
+            XCTAssertFalse(ChatRouting.isAgendaQuestion(text), text)
+        }
+    }
+
     func testPoliteContentGenerationStaysConversation() {
         for prefix in ["", "Please ", "Can you ", "Could you "] {
             for request in ["write a story?", "write me a poem?", "write me a cover letter?", "make a joke?"] {

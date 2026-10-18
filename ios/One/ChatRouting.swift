@@ -38,8 +38,13 @@ enum ChatRouting {
             // Dialogue's unanchored matcher also protects editing follow-ups. At this NEW-message
             // boundary require the request itself, rather than a report/question quoting its words.
             if has(requestBody(text), #"^[\p{Han}0-9]"#) {
-                if isQuestion(text), has(text, #"^(?:我|你|他|她|我们|你们)"#) { return .conversation }
-                return .capture // Includes Chinese time-before-request and explicit narrative requests.
+                let when = #"[明天早上下晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]"#
+                let direct = #"^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?"#
+                    + when + #"*(?:的时候)?(?:提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
+                // A narrative can end in an explicit timed reminder clause. Its earlier words
+                // need not be a command, but the reminder clause itself must start at a boundary.
+                let timedClause = #"(?:^|[，,。；;]|然后)\s*"# + when + #"+(?:的时候)?提醒我"#
+                return has(requestBody(text), direct) || has(text, timedClause) ? .capture : .conversation
             }
             return has(requestBody(text), #"^(?:remind me|don't forget|new (?:reminder|task|event)|add (?:a |an )?(?:reminder|task|event|to-?do)|set (?:a |an )?reminder)\b|^when i\b.+\bremind me\b"#)
                 ? .capture : .conversation
@@ -76,7 +81,7 @@ enum ChatRouting {
     }
 
     static func isAgendaQuestion(_ text: String) -> Bool {
-        isQuestion(text) && has(text, #"\b(?:my (?:schedule|agenda|tasks|events|meetings)|what(?:'s| is) (?:on my|next)|free time)\b|(?:今天|今日).*(?:安排|日程|待办|任务|会议)|接下来.*(?:安排|什么)|空闲"#)
+        isQuestion(text) && has(text, #"^what(?:['’]s| is) left today\s*[?？]*$|\b(?:my (?:schedule|agenda|tasks|events|meetings)|what(?:'s| is) (?:on my|next)|free time)\b|(?:今天|今日).*(?:安排|日程|待办|任务|会议)|接下来.*(?:安排|什么)|空闲"#)
             && !has(text, #"activity|活动记录"#)
     }
 
