@@ -112,7 +112,18 @@ final class ActivityDataTests: XCTestCase {
     /// While recording is paused nothing applies by itself under a grant (no Activity entry or Undo would exist), and the
     /// plan card still waits for a tap.
     func testPausedRecordingStopsAutomaticChanges() {
-        launch(["-uiTestingGrant", "-uiTestingActivityPaused"])
+        let store = "settings-paused-grant-" + UUID().uuidString
+        launch(["-uiTestingStore", store, "-uiTestingActivityPaused"])
+        app.openSidebar()
+        app.buttons["Settings"].firstMatch.tap()
+        let toggle = app.switches["settings.automaticChanges.toggle"]
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        app.revealSettingsRow(toggle)
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.toggleSwitch()
+        XCTAssertTrue(app.staticTexts["grant.recordingWarning"].exists, "granting never silently resumes Activity")
+        app.terminate()
+        app.launch()
         let toast = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Planned ' AND label ENDSWITH ' into free time'")).firstMatch
         XCTAssertTrue(app.staticTexts["Buy milk"].firstMatch.waitForExistence(timeout: 10), "Today is up")
         XCTAssertFalse(toast.waitForExistence(timeout: 4), "no automatic change while paused")

@@ -35,7 +35,6 @@ struct SettingsView: View {
     @State private var askingFirst = false
     @State private var askingSecond = false
     @AppStorage(ActivitySettings.pausedKey) private var activityPaused = false
-    @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
 
     var body: some View {
         NavigationStack {
@@ -110,14 +109,9 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink {
+                    AutomaticChangesToggle()
+                    NavigationLink("Scope and duration") {
                         AutomaticChangesView()
-                    } label: {
-                        HStack {
-                            Label("Automatic changes", systemImage: "sparkles")
-                            Spacer()
-                            Text(activeGrants == 0 ? "Off" : "\(activeGrants) on").foregroundStyle(.secondary)
-                        }
                     }
                     .accessibilityIdentifier("settings.automaticChanges")
                     AskSuggestionsSettingRow()
@@ -126,7 +120,7 @@ struct SettingsView: View {
                 } header: {
                     Text("AI")
                 } footer: {
-                    Text("AI changes wait for your tap. On a card that only changes Today's own planned times, “Always for 7 days” lets that kind of change happen by itself for a week; each one shows a toast with Undo and an entry in Activity.")
+                    Text("Turn on for 7 days to plan untimed reminders due today into free time. Only Today’s own planned times change. Every automatic change has Undo and an Activity entry.")
                 }
 
                 Section {
@@ -247,8 +241,6 @@ struct SettingsView: View {
         .padding(.vertical, 2)
     }
 
-    private var activeGrants: Int { grants.filter { $0.info?.isActive(at: .now) ?? false }.count }
-
     private func statusRow(title: String, icon: String, value: String, showsSettings: Bool, turnOn: (() -> Void)? = nil) -> some View {
         HStack {
             Label(title, systemImage: icon)
@@ -331,7 +323,51 @@ enum DataReset {
     }
 }
 
-/// Settings → AI → Automatic changes: the grants given with "Always for 7 days", each with its end date and Revoke.
+/// Both Settings entry points edit the existing bounded grant, without a second preference.
+private struct AutomaticChangesToggle: View {
+    @Environment(\.modelContext) private var context
+    @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
+    @AppStorage(ActivitySettings.pausedKey) private var paused = false
+    @AppStorage(ActivitySettings.tierKey(.changes)) private var recordsChanges = true
+    @State private var saveFailed = false
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { _ in
+            let active = Grants.active(grants.compactMap(\.info), scope: .planFreeTime, now: .now)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: Binding(get: { active != nil }, set: { enabled in
+                    do {
+                        try GrantStore.setEnabled(enabled, scope: .planFreeTime, context: context)
+                    } catch {
+                        saveFailed = true
+                    }
+                })) {
+                    Label("Automatic changes", systemImage: "sparkles")
+                }
+                .accessibilityIdentifier("settings.automaticChanges.toggle")
+                if let active {
+                    Text("Until " + active.expires.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("grant.expiry")
+                } else {
+                    Text("Off. Turn on for 7 days.").font(.footnote).foregroundStyle(.secondary)
+                }
+                if paused || !recordsChanges {
+                    Text("Automatic changes wait while Activity recording is paused or Changes is off.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("grant.recordingWarning")
+                }
+            }
+        }
+        .alert("Couldn’t save automatic changes", isPresented: $saveFailed) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please try again.")
+        }
+    }
+}
+
+/// Settings → AI → Automatic changes: the same seven-day scope as the plan card, with its end date and Revoke.
 /// What no grant can ever cover is listed too (see `AutonomyPolicy`).
 struct AutomaticChangesView: View {
     @Environment(\.modelContext) private var context
@@ -341,6 +377,11 @@ struct AutomaticChangesView: View {
 
     var body: some View {
         Form {
+            Section {
+                AutomaticChangesToggle()
+            } footer: {
+                Text("Turn on for 7 days. Only Today’s own planned times change; every automatic change has Undo and an Activity entry.")
+            }
             Section {
                 if active.isEmpty {
                     Text("None. AI changes wait for your tap.").foregroundStyle(.secondary)
