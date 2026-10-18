@@ -1,6 +1,6 @@
 import Foundation
 
-/// The kitchen-timer dial on the Alarms tab: turn right to add time, left to take it away.
+/// The kitchen-timer dial on the Clock tab: turn right to add time, left to take it away.
 /// One full turn is 5 minutes. The value snaps to 15 s steps under 5 min, 30 s under 15 min and 1 min above,
 /// up to 90:00. Foundation only, so it runs under `swift test`.
 enum TimerDial {

@@ -145,7 +145,7 @@ final class SidebarTests: XCTestCase {
         // The page stays visible beside the sidebar (its pills included), so look inside the sidebar itself.
         let sidebar = app.otherElements["sidebar"]
         XCTAssertTrue(sidebar.exists)
-        for name in ["Today", "Calendar", "Reminders", "Alarms"] {
+        for name in ["Today", "Calendar", "Reminders", "Clock"] {
             let byId = sidebar.buttons.matching(identifier: name).count
             let byLabel = sidebar.buttons.matching(NSPredicate(format: "label == %@", name)).count
             XCTAssertEqual(byId + byLabel, 0, "no \(name) row in the sidebar")

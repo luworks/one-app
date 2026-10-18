@@ -2,8 +2,8 @@ import SwiftUI
 import SwiftData
 import UserNotifications
 
-/// The Alarms tab, modeled on the Alarms tab of Apple's Clock app: big light times with a small AM/PM and a green switch per row.
-/// No Edit button or large title (the app's top bar already says "Alarms"); swipe left or long-press a row to delete.
+/// The Alarms section of the Clock tab, modeled on the Alarms tab of Apple's Clock app: big light times with a small AM/PM and a green switch per row.
+/// No Edit button or large title (the tab pills on top already say "Clock"); swipe left or long-press a row to delete.
 /// Adding is the app-wide + at the bottom right.
 /// Alarms are real: each one is an AlarmKit alarm (they ring through Silent and Focus). The tasks and events
 /// you marked "Ring as alarm" follow in their own section. Reminders and event alerts live in Apple Reminders / Calendar.

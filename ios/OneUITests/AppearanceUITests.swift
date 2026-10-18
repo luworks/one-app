@@ -79,7 +79,7 @@ final class AppearanceUITests: XCTestCase {
             shot("1-today", mode)
             app.buttons["Calendar"].firstMatch.tap(); shot("2-calendar-week", mode)
             app.buttons["Reminders"].firstMatch.tap(); shot("3-reminders", mode)
-            app.buttons["Alarms"].firstMatch.tap(); shot("4-alarms", mode)
+            app.buttons["Clock"].firstMatch.tap(); shot("4-alarms", mode)
             app.buttons["Today"].firstMatch.tap()
             app.openSidebar(); shot("5-sidebar", mode)
             app.buttons["Settings"].firstMatch.tap(); shot("6-settings", mode)
@@ -119,10 +119,10 @@ final class AppearanceUITests: XCTestCase {
             app.terminate()
             app.launchArguments = TestData.launchArguments + ["-appearance", mode]
             app.launch()
-            app.buttons["Alarms"].firstMatch.tap()
+            app.buttons["Clock"].firstMatch.tap()
             app.buttons["World Clock"].firstMatch.tap(); shot("15-world-clock", mode)
             app.buttons["Timer"].firstMatch.tap(); shot("16-timer", mode)
-            app.buttons.matching(NSPredicate(format: "label == 'Alarms'")).element(boundBy: 1).tap()
+            app.buttons.matching(NSPredicate(format: "label == 'Alarms'")).element(boundBy: 0).tap()
             app.buttons["New"].firstMatch.tap(); shot("17-alarm-editor", mode)
         }
     }

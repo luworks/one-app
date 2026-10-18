@@ -99,7 +99,7 @@ final class JourneyTests: XCTestCase {
         // A new alarm starts at the next quarter hour; in the last quarter hour of the day that is tomorrow.
         let c = Calendar.current.dateComponents([.hour, .minute], from: .now)
         try XCTSkipIf(c.hour! == 23 && c.minute! >= 45, "the default alarm time is tomorrow")
-        tab("Alarms")
+        tab("Clock")
         tap(app.buttons["New"])   // + adds an alarm on the Alarms page
         tap(app.buttons["Save"])
         XCTAssertTrue(app.buttons["alarm.row"].waitForExistence(timeout: 5), "the alarm is listed on the Alarms page")

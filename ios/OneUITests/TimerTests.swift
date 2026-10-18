@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Pomodoro focus-timer card (the Timer section of the Alarms tab): chips set the dial, turning the dial changes the time,
+/// The Pomodoro focus-timer card (the Timer section of the Clock tab): chips set the dial, turning the dial changes the time,
 /// today's rounds show as dots, and after a round the card offers one next step.
 /// The simulator denies AlarmKit, so Start only shows the "needs alarm access" line here; ringing is checked on a phone.
 final class TimerTests: XCTestCase {
@@ -14,10 +14,10 @@ final class TimerTests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments = TestData.launchArguments + (rounds.map { ["-pomodoroRounds", "\($0)"] } ?? [])
         app.launch()
-        let alarms = app.buttons["Alarms"].firstMatch
+        let alarms = app.buttons["Clock"].firstMatch
         XCTAssertTrue(alarms.waitForExistence(timeout: 5))
         alarms.tap()
-        // The timer is the Timer section of the Alarms tab.
+        // The timer is the Timer section of the Clock tab.
         let timer = app.buttons["clock.section.timer"].firstMatch
         XCTAssertTrue(timer.waitForExistence(timeout: 5))
         timer.tap()
@@ -30,7 +30,7 @@ final class TimerTests: XCTestCase {
     func testPomodoroChipsSetTheDial() {
         launch()
         let focus = app.buttons["timer.chip.25"].firstMatch
-        XCTAssertTrue(focus.waitForExistence(timeout: 5), "the timer card is on the Alarms tab")
+        XCTAssertTrue(focus.waitForExistence(timeout: 5), "the timer card is on the Clock tab")
         XCTAssertFalse(app.buttons["timer.chip.1"].exists, "the 1 min chip is gone")
         XCTAssertFalse(app.buttons["timer.chip.10"].exists, "the 10 min chip is gone")
         XCTAssertEqual(digits.label, "25:00", "Focus 25 is the default")

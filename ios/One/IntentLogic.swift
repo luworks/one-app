@@ -28,7 +28,7 @@ enum IntentReminder {
 }
 
 enum IntentTimer {
-    /// Whole minutes Siri can start, the same range as the dial on the Alarms tab.
+    /// Whole minutes Siri can start, the same range as the dial on the Clock tab.
     static let maxMinutes = TimerDial.maxSeconds / 60
 
     /// Seconds for a "Start Timer" request, or nil when the minutes are out of range.

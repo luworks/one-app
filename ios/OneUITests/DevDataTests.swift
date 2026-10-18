@@ -15,7 +15,7 @@ final class DevDataTests: XCTestCase {
         XCTAssertTrue(app.buttons["conversation.archived"].exists, "an archived chat")
         app.closeSidebar()
 
-        app.buttons["Alarms"].firstMatch.tap()
+        app.buttons["Clock"].firstMatch.tap()
         let wake = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Wake up'")).firstMatch
         XCTAssertTrue(wake.waitForExistence(timeout: 5), "alarms")
 
