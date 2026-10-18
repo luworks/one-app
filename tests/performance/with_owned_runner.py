@@ -7,6 +7,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from simulator_policy import validate_command
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -15,8 +17,12 @@ def main():
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
-    if args.simulator_name != 'Today-Performance' or not command:
-        parser.error('requires the owned Today-Performance runner and a command')
+    if not command:
+        parser.error('requires a command')
+    try:
+        validate_command(args.simulator_name, command)
+    except ValueError as error:
+        parser.error(str(error))
     locks = []
     try:
         for key in sorted(['name:' + args.simulator_name, 'cache:' + str(args.derived_data.resolve())]):

@@ -1,5 +1,7 @@
 # Current-main page and AI performance tools
 
+Read the [PosterBoard recovery and evidence impact](../../docs/performance/posterboard-recovery-20261018.md) before running any simulator command. The original Today-Performance device is quarantined; use the explicit selection in `simulator_policy.py`. This is a new device context, with boot-only evidence and no Today acceptance yet.
+
 Read [protocol v2](../../docs/performance/pages-ai-protocol-v2.md),
 [complete source inventory](../../docs/performance/page-coverage-v2.md) and
 [AI stage audit](../../docs/performance/ai-response-baseline-v2.md).
@@ -22,7 +24,7 @@ archive, patch and SHA256 manifest are retained beside the frozen source. Never
 modify an indexed frozen source/patch to repair a failure; create new evidence.
 
 Obtain the explicit host-holder handoff before boot/build/UI. Reuse only
-Today-Performance and the fixed owned DD:
+the active owned simulator from `simulator_policy.py` and the fixed owned DD:
 `/Users/yuanlu/code/one-app/tests/results/runs/performance-climb-20261018/derived-optimized`.
 Use `with_owned_runner.py` named/cache locks, `record_command.py --session
 performance-pages-ai-20261018`, xcodebuild jobs2/parallelNO/Debug -O and the frozen

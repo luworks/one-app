@@ -8,17 +8,23 @@ import statistics
 import subprocess
 import time
 
+from simulator_policy import ACTIVE_NAME, require_active
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--simulator', required=True)
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
+    try:
+        require_active(args.simulator)
+    except ValueError as error:
+        parser.error(str(error))
     if args.output.exists():
         parser.error('output directory must not exist; preserve prior evidence and select a new path')
     devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', '-j']))['devices']
     owned = [d for group in devices.values() for d in group
-             if d['udid'] == args.simulator and d['name'] == 'Today-Performance' and d['state'] == 'Booted']
+             if d['udid'] == args.simulator and d['name'] == ACTIVE_NAME and d['state'] == 'Booted']
     if len(owned) != 1:
         parser.error('UDID must be the booted Today-Performance simulator')
     args.output.mkdir(parents=True, exist_ok=False)

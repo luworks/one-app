@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One bounded current-Year Allocations diagnosis, never speed acceptance.
 
-Caller holds Today-Performance, shows its Booted simulator, and has built the
+Caller holds the active owned performance simulator, shows its Booted simulator, and has built the
 current products for testing once. No build, boot, manual install, settings,
 app termination or retries. The parent owns the journey and device release.
 Only the first app PID after the exact method start may be attached. Producer
@@ -21,7 +21,9 @@ import tempfile
 import time
 
 
-SIMULATOR = '3243BEDB-4F6A-4807-AE9E-30115C528377'
+from simulator_policy import ACTIVE_NAME, ACTIVE_UDID
+
+SIMULATOR = ACTIVE_UDID
 ROOT = Path('/Users/yuanlu/code/one-app/tests/results/runs')
 DD = ROOT / 'performance-climb-20261018/derived-optimized'
 PROJECT = ROOT / 'performance-pages-ai-20261018/build-source/ios/One.xcodeproj'
@@ -51,9 +53,9 @@ def owned_booted_device(inventory):
         raise RuntimeError('Exactly one owned simulator required')
     runtime, dev = matches[0]
     if (not runtime.startswith('com.apple.CoreSimulator.SimRuntime.iOS-')
-            or dev.get('name') != 'Today-Performance'
+            or dev.get('name') != ACTIVE_NAME
             or dev.get('state') != 'Booted' or dev.get('isAvailable') is not True):
-        raise RuntimeError('Available Booted Today-Performance required; caller owns visibility')
+        raise RuntimeError('Available Booted active performance simulator required; caller owns visibility')
     return dev
 
 
@@ -178,7 +180,7 @@ def main(argv=None):
         status['script_sha256'] = digest(Path(__file__))
         save()
         # Share the established nonblocking name/DD lock namespace with other profilers.
-        for key in sorted(['name:Today-Performance', 'cache:' + str(DD.resolve(strict=True))]):
+        for key in sorted(['name:' + ACTIVE_NAME, 'cache:' + str(DD.resolve(strict=True))]):
             path = Path(tempfile.gettempdir()) / ('today-qa-lock-' + hashlib.sha256(key.encode()).hexdigest())
             lock = path.open('a')
             locks.append(lock)
