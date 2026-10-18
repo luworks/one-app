@@ -347,7 +347,7 @@
    "input": "Run every weekday",
    "title": "Run",
    "day": 0,
-   "hasDay": false,
+   "hasDay": true,
    "repeat": "weekdays",
    "kind": "task"
   },

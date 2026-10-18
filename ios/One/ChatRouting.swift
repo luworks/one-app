@@ -26,7 +26,7 @@ enum ChatRouting {
 
     // Match CaptureParser's weekday vocabulary as complete tokens, including Sunday 日/天.
     private static let chineseWeekday = #"(?:下下|下|这个?|本|每(?:个)?)?(?:周|星期|礼拜)[一二三四五六日天]"#
-    private static let chineseTimeToken = #"(?:"# + #"每(?:个)?工作日|每(?:个)?周末|"# + CaptureParser.chineseWeeklyDays + "|" + chineseWeekday + #"|[明天早上下晚今后午晨点分半零一二三四五六七八九十两0-9:：\s])"#
+    private static let chineseTimeToken = #"(?:"# + #"每(?:个)?工作日|每(?:个)?周末|"# + CaptureParser.chineseWeeklyDays + "|" + chineseWeekday + #"|[明天早上下晚今后中午晨点分半零一二三四五六七八九十两0-9:：\s])"#
 
     /// Inspect the leading action, not action words inside the object of an explicit request.
     private static func isChineseReportedActionQuestion(_ text: String) -> Bool {
