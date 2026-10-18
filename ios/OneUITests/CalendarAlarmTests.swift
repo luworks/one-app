@@ -70,6 +70,20 @@ final class CalendarAlarmTests: XCTestCase {
         XCTAssertEqual(app.textFields["alarm.label"].value as? String, "Take medicine", "the marker opens its own alarm")
     }
 
+    /// Even an otherwise empty afternoon grid must let the alarm receive its tap.
+    func testWeekLateAlarmOpensItsEditorWithoutOtherEntries() {
+        app.terminate()
+        app.launchArguments = TestData.fixtureArguments("week-alarm-afternoon.json")
+            + ["-uiTestingNow", "09:00"] + Self.pinAlarmsOn
+        app.launch()
+        app.buttons["Calendar"].firstMatch.tap()
+        mode("Week").tap()
+        XCTAssertTrue(medicineMarker.waitForExistence(timeout: 5))
+        medicineMarker.tap()
+        XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["alarm.label"].value as? String, "Take medicine")
+    }
+
     /// Week: a ring during an event has its own horizontal lane, and remains a working tap target.
     func testWeekOverlappingEventAndAlarmHaveDisjointFramesAndOpenAlarmEditor() throws {
         try assertWeekOverlap(eventCount: 1)
