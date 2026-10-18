@@ -31,7 +31,7 @@ final class TimerTests: XCTestCase {
     }
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }
-    private var recentRows: XCUIElementQuery { app.buttons.matching(identifier: "timer.recent") }
+    private var recentRows: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "timer.recent") }
     private var playButtons: XCUIElementQuery { app.buttons.matching(identifier: "timer.recent.start") }
     private var cards: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "timer.card") }
 
@@ -40,6 +40,47 @@ final class TimerTests: XCTestCase {
     }
 
     private func scrollToTop() { app.scrollTimerToTop() }
+
+    /// Read the spoken duration, rather than assuming XCTest reaches the card in its first second.
+    private func remainingSeconds(_ label: String, name: String) -> Int? {
+        let pattern = "^" + NSRegularExpression.escapedPattern(for: name)
+            + " (?:(\\d+) hours?, )?(?:(\\d+) minutes?, )?(\\d+) seconds? remaining$"
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(in: label, range: NSRange(label.startIndex..., in: label)) else { return nil }
+        func number(_ group: Int) -> Int {
+            guard let range = Range(match.range(at: group), in: label) else { return 0 }
+            return Int(label[range]) ?? 0
+        }
+        let hours = number(1), minutes = number(2), seconds = number(3)
+        guard minutes < 60, seconds < 60 else { return nil }
+        return hours * 3600 + minutes * 60 + seconds
+    }
+
+    private func assertRunningCountdown(name: String, seconds: Int, startedAt: TimeInterval,
+                                        file: StaticString = #filePath, line: UInt = #line) {
+        let remaining = element("timer.remaining")
+        XCTAssertTrue(remaining.waitForExistence(timeout: 5), "started without another Start tap", file: file, line: line)
+        func sample() -> Int? {
+            let label = remaining.label
+            guard let left = remainingSeconds(label, name: name) else {
+                XCTFail("Expected a running countdown for \(name): \(label)", file: file, line: line)
+                return nil
+            }
+            // The start tap and subsequent scrolling consume time; allow two seconds for timeline/snapshot lag.
+            let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+            XCTAssertGreaterThanOrEqual(left, max(1, seconds - Int(ceil(elapsed)) - 2), label, file: file, line: line)
+            XCTAssertLessThanOrEqual(left, seconds, label, file: file, line: line)
+            return left
+        }
+        guard let first = sample() else { return }
+        let decreases = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            guard let next = self.remainingSeconds(remaining.label, name: name) else { return false }
+            return next < first
+        }, object: remaining)
+        XCTAssertEqual(XCTWaiter().wait(for: [decreases], timeout: 4), .completed,
+                       "The running countdown decreases", file: file, line: line)
+        _ = sample()
+    }
 
     // MARK: The screen
 
@@ -74,10 +115,9 @@ final class TimerTests: XCTestCase {
         let label = app.textFields["timer.label"]
         label.tap()
         label.typeText("Pasta\n")
+        let startedAt = ProcessInfo.processInfo.systemUptime
         element("timer.start").tap()
-        XCTAssertTrue(element("timer.remaining").waitForExistence(timeout: 5), "the ring card counts down")
-        XCTAssertTrue(element("timer.remaining").label.hasPrefix("Pasta 2 minutes, 59 seconds")
-                      || element("timer.remaining").label.hasPrefix("Pasta 3 minutes, 0 seconds"), element("timer.remaining").label)
+        assertRunningCountdown(name: "Pasta", seconds: 180, startedAt: startedAt)
         XCTAssertEqual(app.textFields["timer.label"].value as? String, "Timer", "the label field is empty again (shows its placeholder)")
     }
 
@@ -101,18 +141,16 @@ final class TimerTests: XCTestCase {
         XCTAssertEqual(recentRows.element(boundBy: 0).label, "Timer 7 minutes")
         XCTAssertEqual(recentRows.element(boundBy: 1).label, "Timer 20 minutes, go to lion market")
         XCTAssertEqual(recentRows.element(boundBy: 2).label, "Timer 1 hour, have a rest")
-        XCTAssertFalse(app.buttons["Timer 25 minutes, Focus"].exists, "the presets give way")
+        XCTAssertFalse(recentRows.matching(NSPredicate(format: "label == %@", "Timer 25 minutes, Focus")).firstMatch.exists, "the presets give way")
     }
 
     func testPlayStartsAtOnceAndTheRecentMovesToTheTop() {
         launch(recents: "420,1200:go to lion market")
         reveal(playButtons.element(boundBy: 1))
+        let startedAt = ProcessInfo.processInfo.systemUptime
         playButtons.element(boundBy: 1).tap()
         scrollToTop()
-        let remaining = element("timer.remaining")
-        XCTAssertTrue(remaining.waitForExistence(timeout: 5), "started without touching the wheel")
-        XCTAssertTrue(remaining.label.hasPrefix("go to lion market 19 minutes, 59 seconds")
-                      || remaining.label.hasPrefix("go to lion market 20 minutes, 0 seconds"), remaining.label)
+        assertRunningCountdown(name: "go to lion market", seconds: 1200, startedAt: startedAt)
         reveal(recentRows.element(boundBy: 0))
         XCTAssertEqual(recentRows.element(boundBy: 0).label, "Timer 20 minutes, go to lion market", "newest first")
         XCTAssertEqual(recentRows.count, 2, "no repeats")
@@ -134,7 +172,7 @@ final class TimerTests: XCTestCase {
         recentRows.element(boundBy: 1).swipeLeft()
         app.buttons["Delete"].firstMatch.tap()
         XCTAssertEqual(recentRows.count, 2)
-        XCTAssertFalse(app.buttons["Timer 20 minutes, go to lion market"].exists)
+        XCTAssertFalse(recentRows.matching(NSPredicate(format: "label == %@", "Timer 20 minutes, go to lion market")).firstMatch.exists)
     }
 
     func testSeededPresetsHaveNothingToDelete() {
@@ -152,8 +190,21 @@ final class TimerTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(identifier: "timer.remaining").element(boundBy: 0).label.hasPrefix("Timer 4 minutes")
                       || app.staticTexts.matching(identifier: "timer.remaining").element(boundBy: 0).label.hasPrefix("Timer 5 minutes"),
                       "soonest first: the unnamed 5 minutes")
-        XCTAssertTrue(app.pickerWheels.firstMatch.isHittable == false || app.pickerWheels.firstMatch.frame.minY > cards.element(boundBy: 1).frame.maxY - 1,
-                      "the picker is under the cards")
+        // Compare List cells in the same coordinate space, rather than a wheel's accessibility component
+        // with a card's accessibility group. Hittability alone says nothing about their vertical order.
+        let cardCells = app.cells.containing(.any, identifier: "timer.remaining")
+        let pickerCell = app.cells.containing(.any, identifier: "timer.wheel").firstMatch
+        XCTAssertEqual(cardCells.count, 2, "each running timer occupies its own List cell")
+        XCTAssertTrue(pickerCell.exists, "the whole picker has a List cell below the cards")
+        let first = cardCells.element(boundBy: 0).frame
+        let second = cardCells.element(boundBy: 1).frame
+        let picker = pickerCell.frame
+        for bounds in [first, second, picker] {
+            XCTAssertFalse(bounds.isNull || bounds.isEmpty)
+            XCTAssertTrue([bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].allSatisfy { $0.isFinite })
+        }
+        XCTAssertLessThanOrEqual(first.maxY, second.minY + 1, "the running cards stack")
+        XCTAssertLessThanOrEqual(second.maxY, picker.minY + 1, "the picker is under both cards")
     }
 
     func testPauseResumeAndCancelFromTheCard() {
@@ -183,9 +234,11 @@ final class TimerTests: XCTestCase {
 
     func testFocusRoundsAreACaptionUnderRecents() {
         launch(rounds: 2)
-        reveal(element("pomodoro.rounds"))
-        XCTAssertEqual(element("pomodoro.rounds").label, "2 focus rounds today")
-        XCTAssertTrue(app.staticTexts["Focus rounds today: 2"].exists)
+        let caption = app.staticTexts["pomodoro.rounds"]
+        reveal(caption)
+        XCTAssertEqual(caption.label, "2 focus rounds today")
+        XCTAssertTrue(caption.isFullyVisible(in: app.timerViewport) && caption.isHittable,
+                      "The spoken rounds caption is visible under Recents")
     }
 
     func testPlayingTheFocusPresetStartsAFocusTimer() {

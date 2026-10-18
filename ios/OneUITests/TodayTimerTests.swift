@@ -88,7 +88,7 @@ final class TodayTimerTests: XCTestCase {
         app.buttons["Clock"].firstMatch.tap()
         app.buttons["clock.section.timer"].firstMatch.tap()
         let note = app.staticTexts["timer.siriNote"]
-        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        app.revealTimerControl(note)
         XCTAssertTrue(note.label.contains("aren't visible to other apps"), note.label)
         XCTAssertTrue(note.label.contains("Start a timer in Today"), note.label)
     }

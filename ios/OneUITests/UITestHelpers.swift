@@ -33,43 +33,84 @@ extension XCUIApplication {
         XCTAssertTrue(visible(target), "Reminder pill is on screen and hittable: \(target)", file: file, line: line)
     }
 
-    /// Scroll the Timer list at its edge, away from the picker wheels. Stop only when the whole control is clear of
-    /// the app's bottom bar; lazy Recents can exist before their play button is actually reachable.
-    func revealTimerControl(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-        let section = buttons["clock.section.timer"].firstMatch
+    /// The Timer screen exposes one native CollectionView, including when the picker has scrolled out of view.
+    private var timerList: XCUIElement { collectionViews.firstMatch }
+
+    var timerViewport: CGRect {
+        guard timerList.exists else { return .null }
+        let bounds = timerList.frame.intersection(frame)
         let composer = buttons["Ask AI or add anything"].firstMatch
-        let top = section.exists ? section.frame.maxY : frame.minY + frame.height * 0.15
-        let bottom = composer.exists ? composer.frame.minY - 8 : frame.maxY - 140
-        func visible() -> Bool {
-            target.isFullyVisible(in: CGRect(x: frame.minX, y: top, width: frame.width, height: max(0, bottom - top))) && target.isHittable
-        }
+        let bottom = composer.exists ? min(bounds.maxY, composer.frame.minY) : bounds.maxY
+        return CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: max(0, bottom - bounds.minY))
+    }
+
+    /// Require the complete control above the floating composer, not just existence in the lazy List.
+    func revealTimerControl(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        func visible() -> Bool { target.isFullyVisible(in: timerViewport) && target.isHittable }
         for searchUp in [true, false] {
-            for _ in 0..<12 {
+            for _ in 0..<8 {
                 if visible() { return }
-                if target.exists && !target.frame.isEmpty {
-                    scrollTimerList(up: target.frame.minY >= top)
-                } else {
-                    scrollTimerList(up: searchUp)
+                var up = searchUp
+                if target.exists {
+                    let bounds = target.frame
+                    if bounds.isFiniteAndNonempty {
+                        if bounds.minY < timerViewport.minY { up = false }
+                        else if bounds.maxY > timerViewport.maxY { up = true }
+                    }
                 }
+                if !scrollTimerList(up: up, file: file, line: line) { break }
             }
         }
-        XCTAssertTrue(visible(), "Timer control is on screen and clear of the bottom bar: \(target)", file: file, line: line)
+        XCTAssertTrue(visible(), "Timer control is fully visible and hittable: \(target); viewport: \(timerViewport)", file: file, line: line)
     }
 
-    func scrollTimerList(up: Bool) {
-        let top = coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.4))
-        let bottom = coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.7))
-        (up ? bottom : top).press(forDuration: 0.05, thenDragTo: up ? top : bottom)
+    /// Drag inside the native List, below the actual full-width UIPickerView, and stop at a content boundary.
+    @discardableResult
+    private func scrollTimerList(up: Bool, file: StaticString, line: UInt) -> Bool {
+        var region = timerViewport.insetBy(dx: 12, dy: 12)
+        let picker = descendants(matching: .any)["timer.wheel"].firstMatch
+        if picker.exists, picker.frame.isFiniteAndNonempty, picker.frame.intersects(region) {
+            let above = CGRect(x: region.minX, y: region.minY, width: region.width,
+                               height: max(0, picker.frame.minY - 12 - region.minY))
+            let belowTop = min(region.maxY, picker.frame.maxY + 12)
+            let below = CGRect(x: region.minX, y: belowTop, width: region.width, height: region.maxY - belowTop)
+            region = below.height >= above.height ? below : above
+        }
+        guard region.isFiniteAndNonempty, region.height >= 60 else {
+            XCTFail("No Timer List drag region outside the picker: \(region)", file: file, line: line)
+            return false
+        }
+        let recentCell = timerList.cells.containing(.button, identifier: "timer.recent.start").firstMatch
+        let marker = recentCell.exists ? recentCell : timerList.cells.firstMatch
+        let before = marker.exists ? marker.frame : .null
+        let wheels = pickerWheels.allElementsBoundByIndex.map { $0.value as? String }
+        // The middle of a visible Recent cell is inside the List, rather than its right-edge scroll indicator.
+        let recentCells = timerList.cells.containing(.button, identifier: "timer.recent.start").allElementsBoundByIndex
+        let candidates = recentCells.map { $0.frame.intersection(region) }.filter { $0.isFiniteAndNonempty && $0.height >= 40 }
+        let anchor = up ? candidates.last : candidates.first
+        let startY = anchor?.midY ?? (up ? region.maxY - 8 : region.minY + 8)
+        let distance = min(240, region.height * 0.6)
+        let endY = up ? max(region.minY, startY - distance) : min(region.maxY, startY + distance)
+        let origin = coordinate(withNormalizedOffset: .zero)
+        let start = origin.withOffset(CGVector(dx: region.midX - frame.minX, dy: startY - frame.minY))
+        let end = origin.withOffset(CGVector(dx: region.midX - frame.minX, dy: endY - frame.minY))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        let afterWheels = pickerWheels.allElementsBoundByIndex.map { $0.value as? String }
+        if wheels.count == 3 && afterWheels.count == 3 {
+            XCTAssertEqual(afterWheels, wheels, "Scrolling the List must not turn hours, minutes or seconds", file: file, line: line)
+        }
+        let after = marker.exists ? marker.frame : .null
+        return before != after
     }
 
-    /// Return from Recents to the title without turning the picker or dragging a timer card.
     func scrollTimerToTop(file: StaticString = #filePath, line: UInt = #line) {
         let title = staticTexts["timer.title"].firstMatch
-        for _ in 0..<16 {
-            if title.isFullyVisible(in: frame) && title.isHittable { return }
-            scrollTimerList(up: false)
+        for _ in 0..<8 {
+            if title.isFullyVisible(in: timerViewport) && title.isHittable { return }
+            if !scrollTimerList(up: false, file: file, line: line) { break }
         }
-        XCTAssertTrue(title.isFullyVisible(in: frame) && title.isHittable, "Timer title is visible after scrolling to the top", file: file, line: line)
+        XCTAssertTrue(title.isFullyVisible(in: timerViewport) && title.isHittable,
+                      "Timer title is visible after scrolling to the top", file: file, line: line)
     }
 
     /// The Form can extend behind its navigation bar and home indicator. Only accept rows inside its usable viewport.
@@ -116,6 +157,12 @@ extension XCUIApplication {
         let menu = buttons["Open menu"]
         let deadline = Date().addingTimeInterval(3)
         while menu.exists, menu.frame.minX > 30, Date() < deadline { usleep(100_000) }
+    }
+}
+
+private extension CGRect {
+    var isFiniteAndNonempty: Bool {
+        !isNull && !isEmpty && [minX, minY, maxX, maxY].allSatisfy { $0.isFinite }
     }
 }
 

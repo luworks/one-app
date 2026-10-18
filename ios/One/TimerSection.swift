@@ -49,6 +49,8 @@ struct TimerSection: View {
                 siriNote.row(top: 18, bottom: 24, leading: Inset.recents, trailing: Inset.recents)
             }
             .listStyle(.plain)
+            // Runtime List bounds extend 32 pt behind the floating composer; leave another 8 pt of clearance.
+            .contentMargins(.bottom, 40, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showsSound) {
@@ -233,7 +235,6 @@ private struct RecentTimerRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
             .accessibilityLabel("Timer \(IntentTimer.spoken(seconds: recent.seconds))" + (recent.label.map { ", \($0)" } ?? ""))
             .accessibilityHint("Puts it on the picker")
             .accessibilityIdentifier("timer.recent")
