@@ -1,6 +1,6 @@
 # Current-main Release footprint adoption v2
 
-Frozen baseline `fc7fc84aeb6b641ae4d926c2cc839fba7ef71db2` (merged page baseline, historical utilities, Calendar fix and local-conversation candidate). Packaging source `eacdaf16197916b3f9680c3db6bf76343581e97f` adds only the historical validated packaging/audio scope to that main. Current source builds are pending below; historical byte measurements are motivation, not current results.
+Frozen baseline `fc7fc84aeb6b641ae4d926c2cc839fba7ef71db2` (merged page baseline, historical utilities, Calendar fix and local-conversation candidate). Packaging source `eacdaf16197916b3f9680c3db6bf76343581e97f` adds only the historical validated packaging/audio scope to that main. Both matched current-source builds passed. Historical byte measurements below remain separate from the current results.
 
 ## Scope and unchanged contracts
 
@@ -20,6 +20,19 @@ For each product inspect actual strip invocation, match executable/dSYM UUIDs, v
 
 ## Results and decision
 
-Current build/inventory/dSYM verification: pending. Source `plutil -lint` and diff check passed. One focused source-adoption audit recommends this narrow scope; it did not rerun the historical experiments.
+Both unsigned generic Release builds exited0 (SDK iPhoneOS27.1, arm64, default Release optimization, jobs2). Each was built once using the same retained cache. Source `plutil -lint` and diff check passed. One focused source-adoption audit recommended this narrow scope.
+
+| Metric/context | Baseline | Candidate | Reduction | Proposed goal / gap |
+|---|---:|---:|---:|---|
+| Complete One.app logical bytes, including two extensions |24,351,341B|9,707,057B|60.14%|51% reduction met; ceiling11,932,157B|
+| Local deflate9 ZIP of app files |7,829,466B|4,679,034B|40.24%|51% target3,836,438B;842,596B still required|
+
+These are deterministic single-artifact counts, not latency distributions; p50/p95 and repeated builds add no useful statistical evidence here. Confidence is high for these preserved artifacts, limited for a future signed/thinned distribution. `comparison.json`, both inventories and product snapshots retain exact values, per-file categories, hashes, Mach-O details and top contributors.
+
+All three candidate strip commands actually used `-D -x -S`, without `-T`. Each baseline and candidate executable matched its dSYM UUID; all six DWARF verifications and positive owned-source address lookups passed. `tests/performance/verify_release_products.py` reproduces these read-only checks. The first two baseline inspection attempts falsely rejected extension/shared source paths; their failed outputs remain in `baseline-symbols/` and `baseline-symbols-v2/`. Corrected `baseline-symbols-v3/` and `candidate-symbols/` passed without rebuilding products.
+
+All three audio contract tests passed, including native Core Audio decode. Actual Release compile lists exclude PreviewFixtures.swift. TestDataset/CalendarDemoSeed/HealthDebugSeed retain whole-file DEBUG guards; no fixture resources or named debug-seed symbols appeared in the preserved products. Runtime opt-in performance helpers remain compiled: stripped symbol-name absence is not evidence of code exclusion.
+
+Decision: adopt the narrow Release stripping/audio change. P1 value:60.14% fewer logical package bytes with a small, isolated build/resource delta; cost was two incremental generic builds plus artifact checks. P1 remaining gap: local ZIP needs another842,596B reduction; investigate measured compressed contributors before selecting another candidate. P2 risk: audio sample-rate compatibility with every AlarmKit playback context and subjective quality remain unmeasured; codec/names/durations are unchanged. No current Release simulator behavioral journey was run for this packaging delta. Generic build, decode and symbolication checks establish their stated contracts, not runtime UI, ringing or battery acceptance. There is no claimed startup or AI latency improvement from this change.
 
 Raw app logical bytes, local deflate9 ZIP estimate, simulator Debug app and App Store thinned download/install size are different contexts. No signed archive/export/thinning is performed, so actual App Store download/install size remains unknown. Relative goals are baseline×0.49 for bytes; they are targets until actual matched numbers exist. Release behavioral smoke is reported separately from Debug-O simulator evidence and generic build validity.
