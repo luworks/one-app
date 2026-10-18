@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "reminders": [],
+  "events": [{"title": "Local save fixture", "start": {"day": 0, "time": "13:45"}, "minutes": 60, "repeat": "daily"}],
+  "alarms": [],
+  "chats": []
+}
