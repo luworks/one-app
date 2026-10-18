@@ -2,6 +2,7 @@ import XCTest
 
 /// Real simulator EventKit, actual Today circle, fresh EventKit and SwiftData readback across launches.
 final class TodayReminderCompletionTests: XCTestCase {
+    override func setUp() { continueAfterFailure = false }
     private func launch(title: String, store: String, seed: Bool = false, fail: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTesting", "-uiTestingRemindersSync", "-uiTestingStore", store,
