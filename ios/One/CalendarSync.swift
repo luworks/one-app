@@ -394,6 +394,11 @@ final class CalendarSync {
         e.title = title
         e.startDate = repeating ? cal.date(byAdding: .day, value: -1, to: hour) ?? hour : hour
         e.endDate = e.startDate.addingTimeInterval(1800)
+        if ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSaveMetadata") {
+            e.notes = "Preserve event notes"
+            e.url = URL(string: "https://example.com/calendar-save")
+            e.alarms = [EKAlarm(relativeOffset: -1800), EKAlarm(relativeOffset: -300)]
+        }
         if repeating { e.recurrenceRules = [EKRecurrenceRule(recurrenceWith: .daily, interval: 1, end: nil)] }
         do { try store.save(e, span: .futureEvents) } catch { log.error("debug create failed \(error.localizedDescription, privacy: .public)") }
         version += 1
@@ -480,8 +485,19 @@ enum NativeEvents {
     /// `identifier` nil = a new event starting at `start`.
     /// `start`: for an existing event, the start of the occurrence that was tapped; for a new event, when it starts.
     /// `end`: for a new event, when it ends (default one hour after `start`).
-    static func edit(identifier: String? = nil, start: Date = .now, end: Date? = nil) {
+    static func edit(identifier: String? = nil, start: Date = .now, end: Date? = nil,
+                     fullOptions: Bool = false, onComplete: ((EKEventEditViewAction) -> Void)? = nil) {
         let sync = CalendarSync.shared
+        // iOS 27's remote editor disables Done for an unchanged existing event.
+        // Keep completion and explicit EventKit errors under our control; new events
+        // and the full system options still use Apple's editor.
+        if #available(iOS 27, *), !fullOptions, let identifier,
+           let (event, store) = sync.nativeEvent(identifier: identifier, occurrence: start),
+           let top = topViewController() {
+            let host = UIHostingController(rootView: ExistingCalendarEventEditor(event: event, store: store))
+            top.present(host, animated: true)
+            return
+        }
         let vc = EKEventEditViewController()
         vc.eventStore = sync.eventStore
         if let identifier {
@@ -497,7 +513,7 @@ enum NativeEvents {
             event.calendar = sync.eventStore.defaultCalendarForNewEvents
             vc.event = event
         }
-        let d = Delegate()
+        let d = Delegate(onComplete: onComplete)
         delegate = d
         vc.editViewDelegate = d
         vc.presentationController?.delegate = d
@@ -518,7 +534,8 @@ enum NativeEvents {
                 if sync.eventStore.event(withIdentifier: identifier) == nil || sync.occurrence(identifier, at: occurrence) == nil {
                     log.info("editor: event is gone, closing")
                     CalendarSync.shared.refresh()
-                    vc.dismiss(animated: true)
+                    let completion = delegate?.onComplete
+                    vc.dismiss(animated: true) { completion?(.deleted) }
                     delegate = nil
                     return
                 }
@@ -536,6 +553,8 @@ enum NativeEvents {
     }
 
     private final class Delegate: NSObject, EKEventEditViewDelegate, UIAdaptivePresentationControllerDelegate {
+        let onComplete: ((EKEventEditViewAction) -> Void)?
+        init(onComplete: ((EKEventEditViewAction) -> Void)?) { self.onComplete = onComplete }
         /// Swiped down: nothing to save; refetch in case something changed meanwhile.
         func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
             Task { @MainActor in
@@ -549,9 +568,152 @@ enum NativeEvents {
             NativeEvents.log.info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
             Task { @MainActor in
                 CalendarSync.shared.refresh()
-                controller.dismiss(animated: true)
+                controller.dismiss(animated: true) { self.onComplete?(action) }
                 NativeEvents.delegate = nil
             }
+        }
+    }
+}
+
+/// A narrow fallback for the iOS 27 remote editor's disabled unchanged Done.
+/// Retains the original EventKit item: attendees, recurrence, structured location,
+/// attachments and all other unedited properties are never reconstructed.
+private struct ExistingCalendarEventEditor: View {
+    let event: EKEvent
+    let store: EKEventStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var start: Date
+    @State private var end: Date
+    @State private var allDay: Bool
+    @State private var location: String
+    @State private var notes: String
+    @State private var error: String?
+    @State private var chooseScope = false
+    private let original: Draft
+
+    private struct Draft: Equatable {
+        var title: String
+        var start: Date
+        var end: Date
+        var allDay: Bool
+        var location: String
+        var notes: String
+        init(_ event: EKEvent) {
+            title = event.title ?? ""
+            start = event.startDate
+            end = event.endDate
+            allDay = event.isAllDay
+            location = event.location ?? ""
+            notes = event.notes ?? ""
+        }
+    }
+
+    init(event: EKEvent, store: EKEventStore) {
+        self.event = event
+        self.store = store
+        let draft = Draft(event)
+        original = draft
+        _title = State(initialValue: draft.title)
+        _start = State(initialValue: draft.start)
+        _end = State(initialValue: draft.end)
+        _allDay = State(initialValue: draft.allDay)
+        _location = State(initialValue: draft.location)
+        _notes = State(initialValue: draft.notes)
+    }
+
+    private var changed: Bool {
+        title != original.title || start != original.start || end != original.end ||
+        allDay != original.allDay || location != original.location || notes != original.notes
+    }
+    private var writable: Bool { event.calendar.allowsContentModifications }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Title", text: $title)
+                        .accessibilityIdentifier("title-field")
+                    Toggle("All-day", isOn: $allDay)
+                    DatePicker("Starts", selection: Binding(get: { start }, set: { value in
+                        end = value.addingTimeInterval(end.timeIntervalSince(start))
+                        start = value
+                    }), displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
+                    DatePicker("Ends", selection: $end, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
+                }.disabled(!writable)
+                Section("Location") { TextField("Location", text: $location) }.disabled(!writable)
+                Section("Notes") { TextField("Notes", text: $notes, axis: .vertical) }.disabled(!writable)
+                Section {
+                    LabeledContent("Calendar", value: event.calendar.title)
+                    LabeledContent("Alerts", value: "\(event.alarms?.count ?? 0) alerts")
+                    if let url = event.url { Text(url.absoluteString) }
+                    Button("More Options…") {
+                        NativeEvents.edit(identifier: event.eventIdentifier, start: event.startDate, fullOptions: true) { action in
+                            if action == .saved || action == .deleted { dismiss() }
+                        }
+                    }
+                        .disabled(changed)
+                } footer: {
+                    Text(changed ? "Save or cancel these changes before opening all event options."
+                         : "All event options, including alerts, repeat, invitees and deletion, are available in the system editor.")
+                }
+                if !writable {
+                    Section { Text("This calendar is read-only. You can view this event, but cannot save changes.") }
+                }
+                if let error {
+                    Section { Text(error).foregroundStyle(.red).accessibilityIdentifier("event.save.error") }
+                }
+            }
+            .navigationTitle("Edit Event")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        if changed && event.hasRecurrenceRules { chooseScope = true }
+                        else { save(span: .thisEvent) }
+                    }
+                    .disabled(changed && (!writable || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || end <= start))
+                }
+            }
+            .confirmationDialog("Save repeating event", isPresented: $chooseScope, titleVisibility: .visible) {
+                Button("Save This Event") { save(span: .thisEvent) }
+                Button("Save All Future Events") { save(span: .futureEvents) }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+        .interactiveDismissDisabled(changed)
+    }
+
+    private func save(span: EKSpan) {
+        // Completing an unchanged event must not write metadata or notify invitees.
+        guard changed else { dismiss(); return }
+        guard writable else { error = "This calendar is read-only."; return }
+        // Refetch before applying only the fields the user changed. Concurrent edits
+        // to other fields remain Apple's source of truth.
+        guard event.refresh() else {
+            error = "This event is no longer available. Cancel and reopen it from Calendar."
+            return
+        }
+        if title != original.title { event.title = title }
+        if start != original.start { event.startDate = start }
+        if end != original.end { event.endDate = end }
+        if allDay != original.allDay { event.isAllDay = allDay }
+        if location != original.location { event.location = location }
+        if notes != original.notes { event.notes = notes }
+        do {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uiTestingEventSaveFailure") {
+                throw NSError(domain: "EventSaveTest", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "Calendar is temporarily unavailable."])
+            }
+            #endif
+            try store.save(event, span: span, commit: true)
+            CalendarSync.shared.refresh()
+            dismiss()
+        } catch {
+            event.reset() // Discard failed pending writes; the user's draft stays in State.
+            self.error = "Couldn’t save this event: \(error.localizedDescription)"
         }
     }
 }

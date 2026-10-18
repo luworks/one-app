@@ -21,10 +21,15 @@ final class EventSaveTests: XCTestCase {
         nativeSave(changed: true)
     }
 
-    private func nativeSave(changed: Bool) {
+    func testExistingNativeEventSaveFailureKeepsEditor() {
+        nativeSave(changed: true, failing: true)
+    }
+
+    private func nativeSave(changed: Bool, failing: Bool = false) {
         let title = "Save check \(UUID().uuidString.prefix(8))"
         let app = XCUIApplication()
-        let base = TestData.fixtureArguments("event-save.json") + ["-uiTestingCalendarSync", "-appearance", "dark"]
+        let base = TestData.fixtureArguments("event-save.json") + ["-uiTestingCalendarSync", "-uiTestingCalendarSaveMetadata", "-appearance", "dark"]
+            + (failing ? ["-uiTestingEventSaveFailure"] : [])
         app.launchArguments = base
         app.launch()
         enableCalendarSync(app)
@@ -45,6 +50,18 @@ final class EventSaveTests: XCTestCase {
             field.typeText(" updated")
         }
         app.buttons["Done"].tap()
+        if failing {
+            let error = app.staticTexts["event.save.error"]
+            XCTAssertTrue(error.waitForExistence(timeout: 3))
+            XCTAssertTrue(error.label.contains("Calendar is temporarily unavailable"))
+            XCTAssertTrue(editor.exists, "a failed save keeps the editor and draft open")
+            XCTAssertEqual(app.textFields["title-field"].value as? String, savedTitle)
+            app.buttons["Cancel"].tap()
+            app.terminate()
+            app.launchArguments = base + ["-debugDeleteSystemEvent", title]
+            app.launch()
+            return
+        }
         XCTAssertTrue(editor.waitForNonExistence(timeout: 5), "successful checkmark save returns to Calendar")
         XCTAssertTrue(app.buttons["calendar.mode.month"].isHittable)
         app.terminate()
@@ -54,6 +71,11 @@ final class EventSaveTests: XCTestCase {
         XCTAssertTrue(row(app, savedTitle).waitForExistence(timeout: 10), "saved event survives a fresh local store")
         row(app, savedTitle).tap()
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["https://example.com/calendar-save"].exists, "unedited URL survives saving")
+        XCTAssertTrue(app.staticTexts["2 alerts"].exists, "all original alerts survive saving")
+        XCTAssertTrue(app.textViews.matching(NSPredicate(format: "value == %@", "Preserve event notes")).firstMatch.exists
+                      || app.textFields.matching(NSPredicate(format: "value == %@", "Preserve event notes")).firstMatch.exists,
+                      "unedited notes survive saving")
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.lifetime = .keepAlways
         add(shot)
