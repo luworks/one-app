@@ -99,30 +99,37 @@ final class HealthMetricsTests: XCTestCase {
 
     // MARK: Add Metric, Hide
 
-    func testAddMetricAddsRowsAndOffersOnlyWhatIsHidden() {
-        let app = launch()
+    func testMetricTogglesShowCurrentVisibilityAndPersistChanges() {
+        var app = launch()
         openSheet(app)
-        XCTAssertFalse(row(app, "activeEnergy").exists)
         app.buttons["health.add"].tap()
-        XCTAssertTrue(app.buttons["health.pick.activeEnergy"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["health.pick.steps"].exists, "steps is already shown, so it is not offered")
-        XCTAssertFalse(app.buttons["health.pick.add"].isEnabled, "nothing chosen yet")
-        app.buttons["health.pick.activeEnergy"].tap()
-        app.buttons["health.pick.mindfulMinutes"].tap()
-        XCTAssertEqual(app.buttons["health.pick.activeEnergy"].value as? String, "Selected")
-        XCTAssertTrue(app.buttons["health.pick.add"].isEnabled)
+        let steps = app.switches["health.pick.steps"]
+        let energy = app.switches["health.pick.activeEnergy"]
+        XCTAssertTrue(steps.waitForExistence(timeout: 5))
+        XCTAssertEqual(steps.value as? String, "1", "shown metrics start enabled")
+        XCTAssertEqual(energy.value as? String, "0", "hidden metrics start disabled")
+        steps.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(steps.value as? String, "0")
+        energy.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(energy.value as? String, "1")
         app.buttons["health.pick.add"].tap()
+        XCTAssertTrue(row(app, "steps").waitForNonExistence(timeout: 5))
+        XCTAssertTrue(row(app, "activeEnergy").waitForExistence(timeout: 5))
+        XCTAssertTrue(row(app, "activeEnergy").label.contains("kcal"))
+        app.terminate()
 
-        XCTAssertTrue(row(app, "activeEnergy").waitForExistence(timeout: 5), "the chosen metric is a row now")
-        XCTAssertTrue(row(app, "activeEnergy").label.contains("kcal"), row(app, "activeEnergy").label)
-        XCTAssertTrue(row(app, "mindfulMinutes").exists)
-        XCTAssertTrue(row(app, "mindfulMinutes").label.contains("no data"), "no data is a dash, never a zero: \(row(app, "mindfulMinutes").label)")
-        XCTAssertFalse(row(app, "mindfulMinutes").label.contains(" 0 "), row(app, "mindfulMinutes").label)
-
+        app = launch(["-uiTestingKeepHealthMetrics"])
+        app.openSidebar()
+        app.buttons["Settings"].firstMatch.tap()
+        let link = app.buttons["settings.healthMetrics"]
+        app.revealSettingsRow(link)
+        link.tap()
+        XCTAssertTrue(row(app, "activeEnergy").waitForExistence(timeout: 5))
+        XCTAssertFalse(row(app, "steps").exists)
         app.buttons["health.add"].tap()
-        XCTAssertTrue(app.buttons["health.pick.restingHeartRate"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["health.pick.activeEnergy"].exists, "added ones leave the picker")
-        app.buttons["Cancel"].tap()
+        XCTAssertEqual(app.switches["health.pick.steps"].value as? String, "0")
+        XCTAssertEqual(app.switches["health.pick.activeEnergy"].value as? String, "1")
+        app.buttons["health.pick.add"].tap()
     }
 
     func testHideRemovesTheRowAndAddMetricBringsItBack() {
@@ -136,8 +143,11 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertTrue(row(app, "steps").exists && row(app, "sleep").exists)
 
         app.buttons["health.add"].tap()
-        XCTAssertTrue(app.buttons["health.pick.weight"].waitForExistence(timeout: 5), "hidden, not deleted: it can be added again")
-        app.buttons["health.pick.weight"].tap()
+        let weightToggle = app.switches["health.pick.weight"]
+        for _ in 0..<4 where !weightToggle.isHittable || weightToggle.frame.maxY > app.frame.maxY - 60 { app.swipeUp() }
+        XCTAssertTrue(app.switches["health.pick.weight"].waitForExistence(timeout: 5), "hidden, not deleted: it can be added again")
+        weightToggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(weightToggle.value as? String, "1")
         app.buttons["health.pick.add"].tap()
         XCTAssertTrue(row(app, "weight").waitForExistence(timeout: 5))
     }
@@ -248,8 +258,8 @@ final class HealthMetricsTests: XCTestCase {
         shot(app, "detail-sleep-30")
         app.buttons["health.detail.done"].tap()
         app.buttons["health.add"].tap()
-        XCTAssertTrue(app.buttons["health.pick.daylight"].waitForExistence(timeout: 5))
-        app.buttons["health.pick.daylight"].tap()
+        XCTAssertTrue(app.switches["health.pick.daylight"].waitForExistence(timeout: 5))
+        app.switches["health.pick.daylight"].tap()
         shot(app, "add-metric")
     }
 }
