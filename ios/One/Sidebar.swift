@@ -295,23 +295,15 @@ private struct ConversationRow: View {
     var action: () -> Void
 
     var body: some View {
-        // At accessibility sizes the time goes under the title, so the title is not squeezed to a few letters.
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+        // No time on the row: the list is already ordered by time and grouped by day. VoiceOver still reads it.
         Button(action: action) {
-            layout {
-                Text(thread.title)
-                    .font(.body)
-                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(ConversationHistory.timeText(thread.updatedAt, now: now))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
+            Text(thread.title)
+                .font(.body)
+                .lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(thread.title)
