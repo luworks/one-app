@@ -80,7 +80,7 @@ enum ChatRouting {
         if isChineseReportedActionQuestion(text) { return .conversation }
         // A concrete object may precede the reminder instruction. Require a complete suffix,
         // and keep quoted/reported statements behind the conversation boundary above.
-        if !has(text, #"["“”「」]|(?:他说|她说|说过)|\b(?:said|asked)\b"#),
+        if !has(text, #"["“”「」]|(?:他说|她说|说过|昨天|已经)|\b(?:said|asked|already|finished|completed|yesterday)\b"#),
            has(text, #"^.+(?:下下|下|本|这)?(?:周|星期|礼拜)[一二三四五六日天]\s*提醒我(?:吧)?[。.!！]*$|^.+\s+(?:next\s+)?(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[,， ]+remind me[.!]*$"#) {
             return .capture
         }

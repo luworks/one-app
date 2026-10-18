@@ -174,5 +174,15 @@
     "name": "no-context",
     "text": "Go ahead.",
     "capture": false
+  },
+  {
+    "name": "unquoted-past-report",
+    "text": "我昨天写的是做一次 auto turbotax repo 下周四提醒我",
+    "capture": false
+  },
+  {
+    "name": "english-unquoted-past-report",
+    "text": "Yesterday I wrote Review auto turbotax repo next Thursday, remind me",
+    "capture": false
   }
 ]
