@@ -493,21 +493,8 @@ private struct YearView: View {
     @AppStorage(YearMarkSettings.holidaysKey) private var holidaySetting = YearMarkSettings.auto
     @State private var cache = MarksCache()
     @State private var showsKey = false
-    @State private var yearPosition: Int?
-    private let cal: Calendar
-    private let baseYear: Date
-
-    init(day: Binding<Date>, openDay: @escaping (Date) -> Void, pickMonth: @escaping (Date) -> Void) {
-        let cal = Calendar.current
-        let now = Date.now
-        let baseYear = cal.dateInterval(of: .year, for: now)?.start ?? now
-        self._day = day
-        self.openDay = openDay
-        self.pickMonth = pickMonth
-        self.cal = cal
-        self.baseYear = baseYear
-        self._yearPosition = State(initialValue: cal.component(.year, from: day.wrappedValue) - cal.component(.year, from: baseYear))
-    }
+    private let cal = Calendar.current
+    private let baseYear = Calendar.current.dateInterval(of: .year, for: .now)?.start ?? .now
 
     private func year(_ offset: Int) -> Date { cal.date(byAdding: .year, value: offset, to: baseYear) ?? baseYear }
     private func offset(of date: Date) -> Int { cal.component(.year, from: date) - cal.component(.year, from: baseYear) }
@@ -520,10 +507,8 @@ private struct YearView: View {
                         yearSection(year(y)).id(y)
                     }
                 }
-                .scrollTargetLayout()
                 .padding(.bottom, 24)
             }
-            .scrollPosition(id: $yearPosition, anchor: .top)
             .onAppear { proxy.scrollTo(offset(of: day), anchor: .top) }
             .onChange(of: day) { _, new in withAnimation(.snappy) { proxy.scrollTo(offset(of: new), anchor: .top) } }
         }
