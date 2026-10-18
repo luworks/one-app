@@ -259,3 +259,14 @@ extension Capture {
         return (model.persistentModelID, entry)
     }
 }
+
+/// Committed with a Share reminder. Kept after Undo/deletion so an unacknowledged share cannot resurrect it.
+/// Separate from OneTask.externalID, which belongs exclusively to EventKit.
+@Model
+final class ShareImportReceipt {
+    var sharedID: UUID = UUID()
+
+    init(sharedID: UUID) {
+        self.sharedID = sharedID
+    }
+}

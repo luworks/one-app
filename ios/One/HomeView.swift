@@ -188,23 +188,40 @@ struct HomeView: View {
                 ShareInbox.append(SharedReminder(title: args[i + 1], note: "https://example.com", due: ShareInbox.due(for: .tomorrow)))
             }
         }
-        let shared = ShareInbox.drain()
-        guard !shared.isEmpty else { return }
-        ActivityCenter.record(ActivityEvents.shareImport(count: shared.count))
+        // A separate context makes this transaction independent of unrelated, unsaved editor changes.
+        // Autosave stays off: failure leaves only the durable inbox, never partially inserted tasks.
+        let importing = ModelContext(context.container)
+        importing.autosaveEnabled = false
         let listNames = ((try? context.fetch(FetchDescriptor<OneList>())) ?? []).map(\.name)
-        let chosenList = Preferences.newReminderList(existing: listNames)   // Settings > Reminders > "New reminders go to"
-        let added = shared.map { s in
-            let t = OneTask(title: s.title, note: s.note, due: s.due)
-            if let chosenList { t.listName = chosenList }
-            context.insert(t)
-            return t
+        let chosenList = Preferences.newReminderList(existing: listNames)
+        let added: [OneTask]
+        do {
+            let result = try ShareImport.run(committedIDs: {
+                Set(try importing.fetch(FetchDescriptor<ShareImportReceipt>()).map(\.sharedID))
+            }, persist: { shared in
+                let tasks = shared.map { s in
+                    let task = OneTask(title: s.title, note: s.note, due: s.due)
+                    if let chosenList { task.listName = chosenList }
+                    importing.insert(task)
+                    importing.insert(ShareImportReceipt(sharedID: s.id))
+                    return task
+                }
+                try importing.save()
+                return tasks.map(\.persistentModelID)
+            })
+            added = result.added.compactMap { context.model(for: $0) as? OneTask }
+        } catch {
+            // Keep the original drafts for the next activation. Do not roll back the UI's context.
+            return
         }
-        try? context.save()
+        guard !added.isEmpty else { return }
+        ActivityCenter.record(ActivityEvents.shareImport(count: added.count))
         let entries = added.map {
             Ledger.record(.created, task: $0, title: $0.title, after: LedgerFormat.time($0.due, none: ""), actor: .share,
                           channel: .share, context: context)
         }
-        toast.show(shared.count == 1 ? "Added “\(shared[0].title)” from Share" : "Added \(shared.count) reminders from Share") {
+        toast.show(added.count == 1 ? "Added “\(added[0].title)” from Share" : "Added \(added.count) reminders from Share") {
+            // Receipts survive Undo, including when inbox acknowledgment failed.
             added.forEach { context.delete($0) }
             try? context.save()
             entries.forEach { Ledger.recordUndo(of: $0, context: context) }
