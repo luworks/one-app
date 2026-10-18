@@ -9,6 +9,7 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 | Dataset | Consumers and original generator |
 | --- | --- |
 | [`today-dataset.json`](today-dataset.json) | Shared UI journeys using `TestData.launchArguments` / `TestData.path`, including `DevDataTests.testDatasetFillsChatsAlarmsAndReminders` and the ordinary `CalendarAlarmTests.launch(pinned:)` setup. This is the canonical multi-screen dataset, not a generated per-run input. |
+| Same `today-dataset.json` | `PerformanceBaselineTests` and `tests/performance/launch_probe.py`: small feature-variety performance baseline (17 reminders, 13 events, 4 alarms, 3 lists, 7 chats), application clock pinned to 09:41. Not a large-history fixture. |
 | [`year-day-month-agenda.json`](year-day-month-agenda.json) | `CalendarTabTests.testYearDayOpensMonthWithChosenDateAndItsItems`: an all-day event and a planned reminder on today and 400 days later. Verifies Year day taps select the exact date in Month and list only its items, including across years. |
 | [`week-alarm-overlap-1.json`](week-alarm-overlap-1.json) | `CalendarAlarmTests.testWeekOverlappingEventAndAlarmHaveDisjointFramesAndOpenAlarmEditor` → `assertWeekOverlap(eventCount: 1)`. Replaces that helper's temporary JSON generator: event `Lane overlap event 0`, today at 09:00 for 60 minutes; `Lane overlap alarm` at 09:30. Clock pinned to 09:00; alarms pinned on. |
 | [`week-alarm-overlap-8.json`](week-alarm-overlap-8.json) | `CalendarAlarmTests.testWeekDenseOverlapClusterStaysInsideAssignedFramesAndOpensAlarmEditor` → `assertWeekOverlap(eventCount: 8)`. Replaces the same generator with events `Lane overlap event 0` through `7`, all today at 09:00 for 60 minutes, and the same 09:30 alarm. Clock pinned to 09:00; alarms pinned on. |
@@ -136,3 +137,15 @@ are retained as XCTest attachments inside the eventual xcresult bundle.
   Add/editor Save/reopen, English add-repeat/time-correction. These use production
   simulator fallback, not an injected model. XCTest attachments belong in the
   complete retained xcresult bundle.
+
+## SwiftUI development previews
+
+The small inline fixtures in `ios/One/PreviewFixtures.swift` (DEBUG only) seed
+three reminder lists and three reminders in an in-memory SwiftData container.
+`WorldClockStore.previewFixture()` in `ios/One/WorldClockView.swift` provides
+London, Shanghai and Tokyo with Los Angeles as home in a separate store instance.
+`HealthMetricDetail.swift`'s `Weight trend` preview reuses the versioned
+`HealthSampleSeries.swift` algorithm and `PreviewFixtures.healthNow` fixed date.
+The three corresponding `#Preview` declarations render production views.
+No required input lives in a temporary directory; screenshots and timing outputs
+belong in the persistent QA results directory, not this fixture catalog.

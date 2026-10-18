@@ -226,3 +226,11 @@ struct HealthMetricDetail: View {
         .accessibilityIdentifier("health.fact.\(title.lowercased())")
     }
 }
+
+#if DEBUG
+#Preview("Weight trend") {
+    HealthMetricDetail(metric: .weight,
+                       series: HealthSampleSeries.series(for: .weight, now: PreviewFixtures.healthNow),
+                       now: PreviewFixtures.healthNow)
+}
+#endif
