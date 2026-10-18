@@ -31,7 +31,7 @@ final class AIContextJourneyTests: XCTestCase {
     func testEnglishAlarmClarificationAndDateTimeCorrectionsPreserveTitle() {
         openNewChat()
         send("At 6pm tonight, remind me not to eat dinner again.")
-        let title = assertPreview(titleContaining: "not to eat dinner", kind: "New reminder", day: "Today", hour: 18)
+        let title = assertPreview(titleContaining: "Do not eat dinner again", kind: "New reminder", day: "Today", hour: 18)
         send("No, just add an alarm.")
         assertPreview(title: title, kind: "New alarm", day: "Today", hour: 18)
         send("I need you to help me set that alarm.")
@@ -47,8 +47,8 @@ final class AIContextJourneyTests: XCTestCase {
         openStoredThread()
         // The fixture contains text history, not a stored capture card. This turn must recover user context.
         send("I need you to help me set that alarm.")
-        let title = assertPreview(titleContaining: "not to eat dinner", kind: "New alarm", day: "Today", hour: 18)
-        XCTAssertFalse(preview.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "watering plants")).firstMatch.exists,
+        let title = assertPreview(titleContaining: "Do not eat dinner again", kind: "New alarm", day: "Today", hour: 18)
+        XCTAssertFalse(previewTitle.label.localizedCaseInsensitiveContains("watering plants"),
                        "An assistant aside must not replace the user's dinner request")
 
         closeChatToSidebar()
@@ -60,8 +60,8 @@ final class AIContextJourneyTests: XCTestCase {
         XCTAssertTrue(preview.buttons["Add"].waitForExistence(timeout: 10))
         XCTAssertTrue(preview.staticTexts["New alarm"].exists)
         XCTAssertFalse(preview.buttons["Add"].isEnabled, "An alarm without a time cannot be added")
-        XCTAssertTrue(preview.staticTexts["Alarm"].exists, "The new thread has a generic alarm title")
-        XCTAssertFalse(preview.staticTexts[title].exists, "The dinner title stays in its own thread")
+        XCTAssertEqual(previewTitle.label, "Alarm", "The new thread has a generic alarm title")
+        XCTAssertNotEqual(previewTitle.label, title, "The dinner title stays in its own thread")
         XCTAssertFalse(preview.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", formattedTime(18))).firstMatch.exists,
                        "The new thread cannot borrow the old thread's 6pm time")
         XCTAssertFalse(app.descendants(matching: .any)["capture-added"].exists)
@@ -78,6 +78,8 @@ final class AIContextJourneyTests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: "capture-stack")
             .containing(.button, identifier: "Add").firstMatch
     }
+
+    private var previewTitle: XCUIElement { preview.buttons["capture-title"].firstMatch }
 
     private var field: XCUIElement {
         let input = app.textFields["Ask AI or add anything"].firstMatch
@@ -123,9 +125,10 @@ final class AIContextJourneyTests: XCTestCase {
     @discardableResult
     private func assertPreview(titleContaining fragment: String, kind: String, day: String, hour: Int,
                                file: StaticString = #filePath, line: UInt = #line) -> String {
-        let title = preview.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", fragment)).firstMatch
-        XCTAssertTrue(title.waitForExistence(timeout: 15), "The capture card contains the user's intended title", file: file, line: line)
+        let title = previewTitle
+        XCTAssertTrue(title.waitForExistence(timeout: 15), "The capture card exposes its editable title", file: file, line: line)
         let value = title.label
+        XCTAssertTrue(value.localizedCaseInsensitiveContains(fragment), "The capture card contains the user's intended title: \(value)", file: file, line: line)
         assertPreview(title: value, kind: kind, day: day, hour: hour, file: file, line: line)
         return value
     }
@@ -134,7 +137,7 @@ final class AIContextJourneyTests: XCTestCase {
                                file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(preview.buttons["Add"].waitForExistence(timeout: 15), file: file, line: line)
         XCTAssertTrue(preview.staticTexts[kind].waitForExistence(timeout: 10), file: file, line: line)
-        XCTAssertTrue(preview.staticTexts[title].exists, "The full title survives the correction", file: file, line: line)
+        XCTAssertEqual(previewTitle.label, title, "The full title survives the correction", file: file, line: line)
         let summary = preview.staticTexts.containing(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", day, formattedTime(hour))).firstMatch
         XCTAssertTrue(summary.waitForExistence(timeout: 10), "The card preserves the requested day and time", file: file, line: line)
         XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1, "Only one proposal awaits approval", file: file, line: line)

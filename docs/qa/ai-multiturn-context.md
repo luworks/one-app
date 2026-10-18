@@ -21,3 +21,13 @@ The same pure context/parser seam is used by the app fallback and the package jo
 - No app build, simulator UI, real FoundationModels generation, or physical-device verification has run in this lane. Shared integration build/UI will be coordinated after resource handoff; no full suite is requested.
 
 Evidence: canonical primary checkout `tests/results/ai-context-20261018/`, including the owner screenshot and raw logs, hash-indexed in `tests/results/activity.sqlite` under session `ai-context-20261018`.
+
+## Integrated UI locator diagnosis
+
+On integration `73b7565`, the three context methods stopped at their first title lookup. Existing AX attachments under primary checkout `tests/results/runs/ai-final-integrated-20261018/ai-core/attachments/` establish that the cards were present:
+
+- `36DD35F9-DBFB-4ADB-93B6-CC4757D0C38D.txt:133-140`: capture-stack, New reminder, Button `capture-title` labelled `一定不能再吃饭了`, Today 18:00.
+- `8EBB3795-9AA1-43B1-A265-B117996338D4.txt:139-140`: Button `capture-title` labelled `Do not eat dinner again`, Today 18:00.
+- `D439C6D3-80F9-4A76-929F-D1C29B797E96.txt:134-135`: restored-thread New alarm title Button labelled `Do not eat dinner again`, Alarm Today 18:00.
+
+The shared helper queried StaticText. It now reads the stable `capture-title` Button and compares its full label after each correction, including generic Alarm/new-thread checks. The initial English expectation uses the complete observed imperative title instead of the old request fragment `not to eat dinner`; negation and the full subject remain asserted. Time, one Add, disabled Add for missing time, no writes, thread isolation and persistence assertions are retained. Production code is unchanged. Subsequent turns were not reached in this failed batch and are not claimed green. No Swift/build/UI runs were started during the performance quiet window; a coordinated representative retry remains pending.
