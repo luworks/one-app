@@ -144,10 +144,10 @@ final class CalendarTabTests: XCTestCase {
             let scroll = element("calendar.year.scroll")
             XCTAssertTrue(scroll.waitForExistence(timeout: 5))
             for _ in 0..<12 {
-                if cell.exists && cell.isFullyVisible(in: scroll.frame) && cell.isHittable { break }
+                if cell.exists && cell.isFullyVisible(in: scroll.frame) && cell.frame.maxY < app.frame.maxY - 140 && cell.isHittable { break }
                 scroll.swipeUp()
             }
-            XCTAssertTrue(cell.isFullyVisible(in: scroll.frame) && cell.isHittable, "chosen day is visible in Year")
+            XCTAssertTrue(cell.isFullyVisible(in: scroll.frame) && cell.frame.maxY < app.frame.maxY - 140 && cell.isHittable, "chosen day is visible in Year")
             cell.tap()
             let title = element("calendar.monthTitle")
             XCTAssertTrue(title.waitForExistence(timeout: 5))
