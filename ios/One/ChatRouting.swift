@@ -9,6 +9,21 @@ enum ChatRouting {
         text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
+    /// Use the same polite request boundary for creation and content-generation exclusions.
+    private static func requestBody(_ text: String) -> String {
+        text.replacingOccurrences(of: #"^(?:(?:please|can you|could you|would you)\s+)+"#, with: "",
+                                  options: [.regularExpression, .caseInsensitive])
+    }
+
+    /// Only complete, supported operation requests may bypass generic chat. The legacy matchers
+    /// also find words inside explanations, so they are not sufficient at this boundary.
+    static func isSupportedOperationRequest(_ text: String) -> Bool {
+        guard SentenceRoute.isPlanRequest(text) || OverdueTidy.isRequest(text)
+                || SentenceRoute.isReviewRequest(text) else { return false }
+        let body = requestBody(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        return has(body, #"^(?:plan my day|plan today|schedule my day|(?:tidy(?: up)?|clean up|clear|reschedule|sort out) (?:my )?(?:\d+ )?overdue(?: reminders)?|(?:review|recap) (?:my )?(?:today|the day|day))\s*[.!?]*$|^(?:安排今天|规划今天|帮我安排今天|(?:整理|处理|清理)(?:\d+条)?过期(?:提醒)?|(?:回顾|复盘|总结)(?:一下)?今天|今天(?:回顾|复盘|总结))(?:好吗|可以吗)?[。！？?]*$"#)
+    }
+
     static func intent(_ raw: String) -> Intent {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         // Talking ABOUT reminders, or explicitly declining one, is not asking for one.
@@ -18,11 +33,22 @@ enum ChatRouting {
         if has(text, #"^(?:what happens\b|why (?:did|does|do|would)\b|how (?:does|would)\b|(?:can|could) you (?:explain|tell me|show me)\b)|^(?:为什么|怎么(?:才能|会|设置|添加|创建)|如何)|^(?:yesterday|last night|this morning)[, ]+i (?:set|added|created)\b|^我(?:昨天|昨晚|今天早上)(?:设置了|设了|添加了|创建了)"#) { return .conversation }
         // Alarm verbs must be the request itself, not words embedded in a question or report.
         let alarmRequest = has(text, #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#)
-        if Dialogue.startsNewItem(text) || alarmRequest { return .capture }
+        if alarmRequest { return .capture }
+        if Dialogue.startsNewItem(text) {
+            // Dialogue's unanchored matcher also protects editing follow-ups. At this NEW-message
+            // boundary require the request itself, rather than a report/question quoting its words.
+            if has(requestBody(text), #"^[\p{Han}0-9]"#) {
+                if isQuestion(text), has(text, #"^(?:我|你|他|她|我们|你们)"#) { return .conversation }
+                return .capture // Includes Chinese time-before-request and explicit narrative requests.
+            }
+            return has(requestBody(text), #"^(?:remind me|don't forget|new (?:reminder|task|event)|add (?:a |an )?(?:reminder|task|event|to-?do)|set (?:a |an )?reminder)\b|^when i\b.+\bremind me\b"#)
+                ? .capture : .conversation
+        }
+        if isSupportedOperationRequest(text) { return .unsure } // Existing plan/tidy/review dispatch, not capture.
         if has(text, #"^(?:hi|hello|hey|thanks|thank you|good morning|good night)\b|^(?:你好|嗨|谢谢|早上好|晚安)|\bi(?: am| was|'m| have| already| just)\b|我(?:正在|在|刚|已经|进行|只是)|(?:感觉|心情|很累|累了|难过|聊聊)|\b(?:feel|feeling)\b|activity|活动记录"#) { return .conversation }
-        if has(text, #"^(?:write|draft|compose|make) (?:me|us)\b|^(?:帮我写|给我写|给我讲)|^(?:write|tell|make).*(?:poem|story|joke|诗|故事|笑话)|\b(?:already|finished|completed|yesterday)\b|已经|昨天"#) { return .conversation }
+        if has(requestBody(text), #"^(?:write|draft|compose|make) (?:me|us)\b|^(?:帮我写|给我写|给我讲)|^(?:write|tell|make).*(?:poem|story|joke|诗|故事|笑话)|\b(?:already|finished|completed|yesterday)\b|已经|昨天"#) { return .conversation }
         // Keep terse planner input working, including no-date errands. Dates alone are not an intent.
-        if has(text, #"^(?:(?:please|can you|could you)\s+)?(?:buy|pay|send|email|submit|sign|print|book|order|pack|clean|wash|write|finish|fix|water|take out|pick up|drop off|return|renew|file|read|study|prepare|update|reply|follow up|check|call|get|cook|make|gym|workout|run|jog|swim|yoga|walk)\b|^(?:请|帮我)?(?:买|付|交|发|寄|回复|写|整理|订|预订|预约|打电话|取|拿|洗|倒垃圾|遛狗|充电|续|缴|健身|跑步|游泳|瑜伽)"#) { return .capture }
+        if has(requestBody(text), #"^(?:buy|pay|send|email|submit|sign|print|book|order|pack|clean|wash|write|finish|fix|water|take out|pick up|drop off|return|renew|file|read|study|prepare|update|reply|follow up|check|call|get|cook|make|gym|workout|run|jog|swim|yoga|walk)\b|^(?:请|帮我)?(?:买|付|交|发|寄|回复|写|整理|订|预订|预约|打电话|取|拿|洗|倒垃圾|遛狗|充电|续|缴|健身|跑步|游泳|瑜伽)"#) { return .capture }
         if isQuestion(text) { return .conversation }
         // First-person intentions can be a story or a request; let the model ask/decide, rather than guessing from a date.
         if has(text, #"\bi (?:want|need|plan|wonder)\b|我(?:想|要|打算)"#) { return .unsure }

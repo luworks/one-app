@@ -369,8 +369,9 @@ struct AskView: View {
             }
             return
         }
-        // The message may answer what the last turn left open, or edit the preview that is showing.
-        if answerOpenTurn(text, history: history) {
+        // Explicit supported operations go to their handlers, not broad preview/time refinement.
+        // Other messages may answer what the last turn left open, or edit the preview that is showing.
+        if !ChatRouting.isSupportedOperationRequest(text), answerOpenTurn(text, history: history) {
             recordTurn("answer", text)
             return
         }

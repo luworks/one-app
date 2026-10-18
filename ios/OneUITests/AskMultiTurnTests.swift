@@ -82,6 +82,14 @@ final class AskMultiTurnTests: XCTestCase {
         assertQuestionTimeAnswer("下午5点，可以吗？", conversation: "我是不是设了7点的闹钟？")
     }
 
+    func testReminderQuestionPreservesTimeFollowupAndChangeUntilApply() {
+        assertQuestionTimeAnswer("How about 5pm?", conversation: "Did I add a reminder for 7am?")
+    }
+
+    func testPoliteStoryQuestionPreservesTimeFollowupAndChangeUntilApply() {
+        assertQuestionTimeAnswer("How about 5pm?", conversation: "Can you write a story?")
+    }
+
     private func assertQuestionTimeAnswer(_ answer: String, conversation: String) {
         send("Move Dentist")
         XCTAssertTrue(label(containing: "When should I move “Dentist” to?").waitForExistence(timeout: 90))

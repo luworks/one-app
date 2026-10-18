@@ -56,6 +56,77 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testQuestionsAndReportsAboutRequestsStayConversation() {
+        for text in [
+            "Did I add a reminder for 7am?", "Did you remind me to call Mom?",
+            "Have you set a reminder for tomorrow?", "Does add a reminder need permission?",
+            "Should I remind me to call Mom?", "Would adding a reminder help?",
+            "Can you confirm you added a reminder?", "Could you check whether you remind me?",
+            "Is it possible to add a reminder?", "What does add a reminder do?",
+            "You said remind me to call Mom", "Yesterday you said add a reminder",
+            "你提醒我明天买牛奶了吗？", "我添加了明天7点的提醒吗？",
+        ] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+            XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+        }
+    }
+
+    func testPoliteContentGenerationStaysConversation() {
+        for prefix in ["", "Please ", "Can you ", "Could you "] {
+            for request in ["write a story?", "write me a poem?", "write me a cover letter?", "make a joke?"] {
+                XCTAssertEqual(ChatRouting.intent(prefix + request), .conversation, prefix + request)
+            }
+        }
+        for text in ["Remind me to write a story tomorrow", "Can you remind me to write a poem tomorrow?",
+                     "Write the report tomorrow", "Could you write the report tomorrow?"] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
+    func testSupportedOperationQuestionsReachExistingDispatch() {
+        for text in ["Can you plan my day?", "Could you schedule my day?", "Can you tidy overdue?",
+                     "Could you tidy my 2 overdue reminders?", "总结一下今天好吗？"] {
+            // Unsure continues to the existing planner handlers, rather than generic chat/capture.
+            XCTAssertEqual(ChatRouting.intent(text), .unsure, text)
+        }
+        for text in ["How does Plan my day work?", "Does plan my day move events?",
+                     "Can you explain tidy overdue?", "Did you plan my day?",
+                     "Could you tell me how to tidy overdue?", "总结一下今天是什么意思？"] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+        }
+    }
+
+    func testEnglishRequestBoundaryDoesNotDependOnTitleLanguage() {
+        for text in ["Did you remind me to 买牛奶?", "You said add a reminder for 买牛奶"] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+        }
+        for text in ["Remind me to 买牛奶 tomorrow", "Can you add a reminder for 买牛奶?",
+                     "7点提醒我买牛奶", "可以明天提醒我买牛奶吗？"] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
+    func testOperationBoundaryRequiresCompleteSupportedRequest() {
+        for text in ["Plan my day", "Can you plan my day?", "Could you tidy my 2 overdue reminders?",
+                     "Tidy 2 overdue", "整理2条过期提醒", "总结一下今天好吗？", "Review today"] {
+            XCTAssertTrue(ChatRouting.isSupportedOperationRequest(text), text)
+            XCTAssertTrue(SentenceRoute.isPlanRequest(text) || OverdueTidy.isRequest(text)
+                          || SentenceRoute.isReviewRequest(text), "Must reach an existing handler: \(text)")
+        }
+        for text in ["Does plan my day move events at 5pm?", "How does Plan my day work?",
+                     "Can you explain tidy overdue?", "Did you plan my day?",
+                     "Can you plan my day without asking?", "总结一下今天是什么意思？",
+                     "Could you review tomorrow?", "Can you tidy my overdue?"] {
+            XCTAssertFalse(ChatRouting.isSupportedOperationRequest(text), text)
+        }
+        for text in ["Would you remind me to call Mom?", "Please add a reminder for tomorrow",
+                     "Don't forget to pay rent tomorrow", "Set a reminder for 7am"] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+        XCTAssertEqual(ChatRouting.intent("Would you write a story?"), .conversation)
+        XCTAssertEqual(ChatRouting.intent("Would you remind me to write a story tomorrow?"), .capture)
+    }
+
     func testContextualTimeAnswersRequireOpenTimeContext() throws {
         let now = Date(timeIntervalSince1970: 1_792_000_000)
         var cal = Calendar(identifier: .gregorian)
