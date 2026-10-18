@@ -107,7 +107,7 @@ weekday and ordinary conversation tests passed. Structured content evidence is
 separate from app persistence and the confirmation gate.
 
 The benchmark is **not green**. Source-aware, attributed content review of actual
-outputs identifies three remaining goals, retained without changing expectations:
+outputs identifies three goals at that revision, retained without changing expectations:
 
 - Colloquial `麻烦帮我加个每逢周五…的提醒` stays conversational.
 - `不是下午五点，改成下午六点，周五和周日都保留。` is not recognized as
@@ -122,3 +122,38 @@ rather than fabricating passing values. Semantic review is attributed derived
 analysis (`observations-reviewed.json`); raw backend artifacts remain unchanged.
 This wider benchmark exposes gaps beyond the repaired weekday pipeline and is not
 represented as model quality, full app acceptance or successful persistence.
+
+## Observed goal repairs at 48d2d81
+
+The three observed failures were then repaired in the existing production seams,
+without changing expected answers or adding cases:
+
+- Chinese routing accepts the polite 麻烦 prefix; full weekly-list parsing accepts
+  每逢. Existing lead-in cleanup handles scheduling before 的提醒.
+- `Dialogue` excludes the rejected old clock in an explicit correction, and only
+  treats a keep-weekdays clause as a retained constraint when its complete day set
+  equals the pending preview. A mismatch does not silently discard specified days.
+- With the title author's ownership confirmation, explicit note labels are handled
+  inside `CaptureTitleRefinement.fallback`, alongside existing motivation handling.
+  Source note text is preserved, existing notes are retained, repeated calls are
+  idempotent, and a note label inside a quoted name is not extracted.
+
+After compat explicitly released its batch and performance agreed the short slot,
+only `RecurringReminderTests/testObserved|RecurringReminderExportTests` ran:
+**3 affected regressions + 1 actual exporter passed**, at source `48d2d81`.
+The warmed `--jobs 2`/global-lock slot ended at 11:20:15 PDT and was handed directly
+back to performance. No 86-test or 68-input capture baseline rerun occurred.
+
+Refreshed raw backend outputs are in `fallback-goal-repairs/`. They show:
+colloquial Friday18:00 task + reason notes; Chinese correction keeps Friday/Sunday
+and changes to18:00; NAS title `备份 NAS`, notes `run before firmware update`,
+Tuesday/Friday20:00. The exact screenshot cases also remain correct in this real
+11-turn export. Source-aware attributed review rates the colloquial title's
+remaining 记得 prefix as adequate but less concise, not a critical semantic error.
+
+The current scorer result is **0 observed failures / 19 unmeasured / 0 reviewed
+passes**. Eight validation turns remain unexecuted; all UI gates, writes, model
+generation and persistence remain unmeasured. This supersedes the historical
+702c4fc three-failure benchmark result, without rewriting its retained artifacts.
+The patch is ready for centralized simulator build and the three UI journeys;
+no Xcode build or UI journey has yet run on this recurrence source.

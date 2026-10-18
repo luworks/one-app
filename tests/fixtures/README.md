@@ -126,6 +126,8 @@ are retained as XCTest attachments inside the eventual xcresult bundle.
   mandatory development inputs. Route, type, time, actual weekdays, title meaning,
   notes and Add/Apply are independent expectations. No observations are invented.
 - `RecurringReminderTests` and `RepeatWeekdayTests` keep small pure inputs inline;
+  the three observed-goal regression methods additionally read the unchanged
+  development cases from `ai-title-rewrite-recurring-cases.json`;
   `RecurringReminderExportTests` reads the versioned fixture with
   `AI_RECURRING_EVAL_FIXTURES` and writes actual fallback artifacts to
   `AI_RECURRING_EVAL_OUTPUT`. Gates, writes and FM remain unmeasured there.
