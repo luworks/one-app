@@ -45,8 +45,15 @@ Pass `--session performance-climb-20261018` to the command recorder for this wor
 `fc683a7` source tar, applies only listed instrumentation files, and records their
 hashes. This prevents concurrently committed optimization lanes leaking into the
 baseline. `--update --instrumentation <file>` adds only another portable measurement
-file; `--update` without that list overlays changed candidate files, preserving
-unchanged file timestamps for incremental build reuse. Build source is mutable
+file; `--update` without that list audits every tracked target-revision file
+against current source bytes, including files restored to baseline after an earlier
+candidate. Equal bytes retain their timestamps for incremental build reuse.
+A `.SOURCE_NAME.materialize.json` provenance sidecar beside the source records
+managed paths; baseline or previously managed deletions are rejected before any
+update writes. Existing sources without a sidecar receive the full target audit;
+unrecorded historical additions cannot be identified and remain untracked.
+Untracked files and build caches are not traversed or cleaned; source symlinks
+and unsupported tracked members are rejected. Build source is mutable
 cache; archives/patches/manifests and copied completed products are immutable
 evidence. No source deletion or branch checkout is performed.
 
