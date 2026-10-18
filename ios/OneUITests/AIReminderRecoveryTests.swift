@@ -31,7 +31,12 @@ final class AIReminderRecoveryTests: XCTestCase {
         app.swipeUp()
         XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
         XCTAssertEqual(app.switches["Deadline"].value as? String, "1")
-        XCTAssertTrue(app.datePickers["Due"].exists, "The persisted reminder retains a due date")
+        // iOS 27 exposes the compact DatePicker as date/time buttons, not a named DatePicker.
+        print("Persisted reminder editor hierarchy:\n" + app.debugDescription)
+        let dueDate = nextThursday.formatted(.dateTime.month(.abbreviated).day().year())
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(
+            format: "label == %@ OR value == %@", dueDate, dueDate)).firstMatch.exists,
+                      "The persisted reminder retains the exact next-Thursday due date")
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS 'Repeat' AND label CONTAINS 'Never'")).firstMatch.exists)
         app.buttons["Cancel"].tap()
         app.buttons["capture-undo"].firstMatch.tap()
@@ -92,15 +97,18 @@ final class AIReminderRecoveryTests: XCTestCase {
         XCTAssertTrue(preview.staticTexts["New reminder"].exists)
         // Chinese 下周 is the next calendar week, independent of the test execution weekday.
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let weekday = calendar.component(.weekday, from: today)
-        let mondayOffset = (weekday + 5) % 7
-        let target = calendar.date(byAdding: .day, value: 7 - mondayOffset + 3, to: today)!
+        let target = nextThursday
         let day = calendar.isDateInTomorrow(target) ? "Tomorrow" : target.formatted(.dateTime.month().day())
         XCTAssertTrue(preview.staticTexts["Due " + day].exists, "Exact next-Thursday date with no invented time or recurrence")
         XCTAssertFalse(app.descendants(matching: .any)["capture-added"].exists)
         XCTAssertFalse(app.buttons["capture-undo"].exists)
         XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1)
+    }
+    private var nextThursday: Date {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let mondayOffset = (calendar.component(.weekday, from: today) + 5) % 7
+        return calendar.date(byAdding: .day, value: 7 - mondayOffset + 3, to: today)!
     }
     private func assertNoWritesAndReturn(_ thread: String) {
         app.buttons["Close"].firstMatch.tap()
