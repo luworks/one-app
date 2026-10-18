@@ -45,6 +45,12 @@ final class PerformanceClimbTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        if app.launchArguments.contains("-performanceResources") {
+            guard let sequence = Int(fields["seq"] ?? ""), let route = fields["route"] else {
+                XCTFail("Missing resource identity: \(report)"); return report
+            }
+            return capturePageResourceWindow(app: app, sequence: sequence, start: start, layout: end, route: route) ?? report
+        }
         return report
     }
 
@@ -71,6 +77,12 @@ final class PerformanceClimbTests: XCTestCase {
             XCTAssertTrue(app.staticTexts["todayDate"].exists)
             XCTAssertTrue(app.buttons["New"].isHittable)
         }
+    }
+
+    /// Resource-only wrapper: preserve the original navigation and kept-state journey unchanged.
+    func testRootNavigationResourceWindows() {
+        app.launchArguments.append("-performanceResources")
+        testNavigationEndpointsAndKeptState()
     }
 
     func testNavigationEndpointsAndKeptState() {
