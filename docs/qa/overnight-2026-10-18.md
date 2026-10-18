@@ -37,7 +37,8 @@ The Share persistence injection throws before save and is not evidence of a spon
 |---|---|---|
 | Frozen baseline, pure logic with optional 100k benchmark | 590 executed, 0 skipped, 0 failures; capture train 46/46, test 22/22 | `/tmp/today-overnight-20261018/logic.log` |
 | Integration `1d843b0`, PRs #40–45 plus runner #41 | 613 executed, 0 skipped, 0 failures; capture train 46/46, test 22/22 | `/tmp/today-overnight-integrated-swift.log` |
-| Runner host contracts | 6 passed; no simulator/build invoked | `python3 -m unittest discover -s ios/Eval -p test_e2e_runner.py` |
+| Runner host contracts at `97527cd` | 11 passed; no simulator/build invoked | `python3 -m unittest discover -s ios/Eval -p test_e2e_runner.py` |
+| Activity-compatible QA journal at `97527cd` | 7 passed; real SQLite reopen, immutable import, coherent archive and retained external output covered | `python3 -m unittest discover -s tests/qa -p test_*.py` |
 | Share persistence UI additions in #46 | DEBUG/non-DEBUG syntax parsing and diff check passed; runtime pending | `/tmp/today-overnight-share-platform-report.md` |
 | Relative-time routing in #48 | 44 focused tests passed; no full logic or UI rerun in this child lane | `/tmp/today-overnight-ai-relative-green.log` |
 | Rendered screenshots | 38 existing light/dark screenshots inspected; no verified visual defect in this subset | `/tmp/today-overnight-rendered-audit.md` |
@@ -49,6 +50,29 @@ the 613-test evidence precedes that UI/hook commit and must be interpreted accor
 The visual pass covers the available Today, Calendar, Reminders, Clock, Timer, Settings and Alarm images,
 not every interaction or system surface. A reported missing World Clock NOW label was independently rechecked:
 the label is visibly present in the exact PNG. That finding was withdrawn; no product change or new test is justified by it.
+
+## Durable test inputs and action history
+
+[PR #51](https://github.com/luworks/one-app/pull/51) replaces temporary UI dataset generators with
+versioned overlap and repeating-reminder files under `tests/fixtures/`. The fixture catalog maps each
+file to its consumers and records relative-date/default behavior. Existing package-bound capture
+resources and small test constants stay beside their tests.
+
+[PR #52](https://github.com/luworks/one-app/pull/52) adds the QA Activity journal using the app's
+exact v1 SQLite schema. The canonical file is `/Users/yuanlu/code/one-app/tests/results/activity.sqlite`,
+separate from app user data and independent of a disposable worktree. Commands, test lifecycle,
+observed XCTest operations, issue/PR links and artifact hashes are queryable. This does not claim
+that every historical agent tool call was recorded. Imported timestamps explicitly mean import time;
+original execution timing remains in raw logs.
+
+Completed child logs/reports and the coordinating scripts have been retained under the canonical
+`tests/results/runs/overnight-prepared-fixes/` and `tests/results/runs/recorded-test-runs/`.
+A coherent hashed archive of the prepared evidence is indexed in SQLite. Large logs, screenshots,
+videos and complete xcresult bundles remain files; SQLite holds their paths, sizes and SHA-256 values.
+The active full-run bundle remains untouched until the process exits and triage finishes exporting.
+The committed [storage checkpoint](../../tests/qa/evidence/overnight-storage-checkpoint-20261018.json)
+records integrity and counts at its capture time, not final test totals. Runtime results are Git-ignored;
+code, fixtures and compact proof remain versioned. Do not delete `tests/results/` as build output.
 
 ## Full UI run and remaining work
 

@@ -1,0 +1,249 @@
+{
+  "scope": "Completed evidence artifacts indexed before the full UI run finishes; active xcresult excluded",
+  "artifact_count": 60,
+  "all_files_present": true,
+  "all_sha256_match": true,
+  "integrity_check": "ok",
+  "artifacts": [
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/manifest-20261018T095920Z.json",
+      "sha256": "40c9e456d611af256bc6af2fe3d9aea13c01627b7611096eeb4b2346812824a5"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-calendar-after.log",
+      "sha256": "6eee34a7405ab18c515ba9ebe9a7832f3b2509bae54feb4b91898282f0827392"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-calendar-before.log",
+      "sha256": "4539eddd7e38f03cf00ee8405bbc31c1b133c566775299f0dcc0e53e6074289c"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-calendar-full.log",
+      "sha256": "7fd919012de3861642c594797fdaf8074f0843004896dc0e640a94019091a914"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-calendar-related-before.log",
+      "sha256": "e3e180dbef072bfaf229cafeca2a11dde4ecd479ae73c6e261c4a5d182ca74a8"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-harness-doc-plan.json",
+      "sha256": "340f511161d78a0a8df3417f6a808f3d879f5a44ed40157d22d56fe974450728"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-harness-full-plan-jobs2.json",
+      "sha256": "103b28fd597657aeeb0bf08beef7e864ac1ef55458dbb8b119a7302e112fcfa3"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-harness-full-plan.json",
+      "sha256": "38e7da8d141c0593db6612bde50d162e9c0f7f898f9083014853a6c336d3b804"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-harness-host-tests-jobs2.log",
+      "sha256": "7508879d45a5044a12c6a1f4893369e84654d4586a3823c358a41978a48f9b07"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-harness-host-tests.log",
+      "sha256": "28f1bfca7aa2a45212206bb8bf04a5ef9b6a0d6d3d4dd3de3efb7c08d09bf2e1"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-harness-inventory.json",
+      "sha256": "a5e1723a1d90591375ce949e5d351215b7992493be3a7003704241843f54f6f6"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-harness-narrow-plan-jobs2.json",
+      "sha256": "f433865d1691c4dfb9534f1a745bb31a0b6047055594c8c60d5ef53916642f3e"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-harness-narrow-plan.json",
+      "sha256": "345703a64d2b59438c5d92de73772209f87907b2936aec5fb83abf9a89a5e10e"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-health-clock-after.log",
+      "sha256": "480335d88bbcde3b08473af9ee22b58254ab37c0568d0c00197739961668d9e1"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-health-clock-fixture.log",
+      "sha256": "5a77f5925db9345a719b1f4483cc83c5d3e7ac7f1013e3b9ead252822576f54e"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-health-clock-repro.log",
+      "sha256": "3495660d7303ab088c900437657b227b90119e12de37a42826d551309ef38823"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-agenda-alias-green.log",
+      "sha256": "44cb9d58efe4dd1d16d19d21a58b76d326d61f9926d15e5c46ad7cd82dd4420a"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-agenda-alias-issue.md",
+      "sha256": "d301f2e39931a4461e5c94473ebe230705665cec2c0a6b7d0731cf5ba04e6b54"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-agenda-alias-pr.md",
+      "sha256": "faa0cc8207f0b78c21fca53215236a25d3227fa51c7b9c4ae772fddbb57c39da"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-agenda-alias-red.log",
+      "sha256": "5aaa7b3e3bc927f36e7be5e4c3456772f83c8a112d0b554f53b689970f12e369"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-agenda-alias-report.md",
+      "sha256": "1cd96911bdc4651caf71e6597858ff2aec738c9c1a695daf7dfbc902a6117025"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-focused.log",
+      "sha256": "6a4619e2d3f43b593cac696b17ac9710bdba1922aceb406769e1eca0169eecfa"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-full.log",
+      "sha256": "473b8123e8dbe50670b51b34379dff9673db835277b329ba73cbcc44770a4cf3"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-issue.md",
+      "sha256": "e1fa696f023ef5515cfc288d8e8ec5730f967f9cf3be09418fe7f5b647168172"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-pr.md",
+      "sha256": "43d28cfd427c4f253f008e5aa5e4342970f1e393721990add8c699ebd7b1f522"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-red.log",
+      "sha256": "9c904f6886746e778b9a59810404d91ecb02e21bd8e99bf2a227b865d0bb7f75"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-relative-green.log",
+      "sha256": "69f281e963afb4dede0c42bd5dd0eaf14292fc2fe7a3201158c502507984f558"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-relative-issue.md",
+      "sha256": "d874f23bdf90e7bbab74b97f2734b66111763b5062be12d4dd4a6863089311e6"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-relative-issues.json",
+      "sha256": "4523cbfe5013780c459adbcdb187507cbfb2576ae67413b10379c61e338f2237"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-relative-pr.md",
+      "sha256": "03671a62f503fff300ec7ce905a6b12f45a4504236ac78b81874e87188c6cfea"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-relative-red.log",
+      "sha256": "a9897d07cd2447518f0d3c74d596964683ecfeb2411ec9a42e19ac918c2228bd"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-relative-report.md",
+      "sha256": "5b07eb5a393faac7d10588c82d6dc310c4c3eb29f6c45b6b3f5882048b46e32f"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-ai-report.md",
+      "sha256": "dbaa3b03d474ba190070289c24c00f2c12a105688244c212be851c0e7fb711a6"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-calendar-report.md",
+      "sha256": "7493f18beef2cd00d7c03c17af2632d6970bec8f69f916c088b71e1aecb319c0"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-data-focused.log",
+      "sha256": "d78dc13818d23028c07209a671c52420d5f91f6116ae1f06facb650f50487692"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-data-full.log",
+      "sha256": "9cd8fb0c0795efdfbf6a9f3b1dce7ad58a69e80214e81a9d4d8eaa48e6c0e671"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-data-red.log",
+      "sha256": "4163864c3c04259be1761f5032f3e00ad0cccf6b2ee5519192976738e5b366dd"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-data-report.md",
+      "sha256": "14db6c2d594ede8bdf0ff83f3b40694a3ad54d5449ed9318121f0acbcd985eb8"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-harness-report.md",
+      "sha256": "4ce255b3f4871c87e1e89d6bbb4755cabe5e87e23b39ec17efe078cd3257ba7d"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-health-clock-report.md",
+      "sha256": "32da60f4315a24512bdfca07fd7b3a58051ed1eb01b3c9d3c7550dfc6230f2d2"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-idle-diagnosis.md",
+      "sha256": "a7d5738c7bd7d76d3a13cb0454223681623b23c1dd7c2c6e6edd98fed1f913f8"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-integrated-inventory.json",
+      "sha256": "c43af2f8659e4158bd775fc0c3ce5641799f46444b5a01e104616eb35ec9e4bf"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-integrated-swift.log",
+      "sha256": "94205297de9b823737324e7df9dfbafc4374bd30a2eef8f058d79bf1c096a993"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-issue32-ai-read.json",
+      "sha256": "090a0294b78878f1a23b9403c7d5f669f91df64f196b0da8469436571bb6533b"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-rendered-audit.md",
+      "sha256": "c711680804976c5f150c3ca7cf05c5130928023d4d6ff681e53d9aae4e2d0872"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-run.py",
+      "sha256": "ab2b20bb5bb05fe31e29891a627c18bed2160e635b64690f6934d761137ec0e2"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-crash-issue.md",
+      "sha256": "92c227cff8f0b5a4bc360962670a54b7f899455ac35fe96c20d3b7cafb6c5811"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-import-focused.log",
+      "sha256": "f43fb64e494850a7aa050ee01e019cc7a02939adc955d4cd44dd9b733dd025f1"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-import-issue.md",
+      "sha256": "23bdad5a4889bfd5bb82fb44208e63db5d9065157c930c94806502201e3d91d0"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-import-pr.md",
+      "sha256": "1e504616b988d6531d5cfd87e121b4f511dc565bad23a43714d88f52abdd075a"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-import-red-seam.swift",
+      "sha256": "382dfeb6a2f7fa45e8f6b28f6554e0667a0e62cad8ece9acb8f2381d9e224a61"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-import-red.log",
+      "sha256": "5f4cc96e1ac45e2fbee795aaa4b8b5aee25b448a8692c7bc8d259bd24a1e9102"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-import-report.md",
+      "sha256": "151d5982e1ef023e7e931971f2558ce2f76be36154ba171f324f25322502d25b"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-issue.md",
+      "sha256": "c5f81b586bdc1326a4fe4d1a5c737e10b46f053b8195623e7b2c9484b6c707da"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-platform-report.md",
+      "sha256": "ff421242f4c3eb4f9b690e3ddabdf401919a1e83d546c137699bfcd9a7d78132"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-share-pr.md",
+      "sha256": "7c6a012e09059d109d10fcc4ea0aee238f88d6203297e0f4c2c808d7e30ded25"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-overnight-swift.py",
+      "sha256": "b18cc5d278ff7111cea88c7c3cec32bf1d86c070ffb2dedbf55a6cca0f9824c6"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-qa-permanent-fixtures-report-27fe42342a9b.md",
+      "sha256": "27fe42342a9b7b9b8ffcb6d9517505ffc61f89be9822805061d76f7d2147f702"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-qa-permanent-fixtures-report.md",
+      "sha256": "27fe42342a9b7b9b8ffcb6d9517505ffc61f89be9822805061d76f7d2147f702"
+    },
+    {
+      "path": "/Users/yuanlu/code/one-app/tests/results/archives/overnight-prepared-fixes/1b4d2951d86a3441227b8ecef9ec39e20badbe20d12cb5124232d49e6cc3ff56/today-qa-sqlite-journal-report-544905dd3fc0.md",
+      "sha256": "544905dd3fc0bd9f55b4c30531f0bc050322c17295363745a66d8496f1dad3ee"
+    }
+  ]
+}
