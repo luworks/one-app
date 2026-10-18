@@ -37,4 +37,49 @@ final class ShareInboxTests: XCTestCase {
         XCTAssertEqual(ShareInbox.drain(at: url).map(\.title), ["One", "Two"])
         XCTAssertEqual(ShareInbox.drain(at: url), [], "taken once")
     }
+
+    func testDrainPreservesAnUndecodableInboxForRecovery() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("share-inbox-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        // A truncated file can still contain the user's reminder text.
+        let original = Data(#"[{"title":"Keep the original shared note""#.utf8)
+        try original.write(to: url)
+
+        XCTAssertTrue(ShareInbox.drain(at: url).isEmpty)
+        XCTAssertEqual(try Data(contentsOf: url), original, "a decode failure must not delete the only copy")
+    }
+
+    func testAppendDoesNotOverwriteAnUndecodableInbox() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("share-inbox-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        // Valid JSON with an unsupported record is also different from an empty inbox.
+        let original = Data(#"[{"title":"Keep this","due":"unreadable date"}]"#.utf8)
+        try original.write(to: url)
+
+        XCTAssertFalse(ShareInbox.append(SharedReminder(title: "New share"), at: url), "the Share sheet must report failure")
+        XCTAssertEqual(try Data(contentsOf: url), original, "a new share must not replace unimported data")
+    }
+
+    func testSubmissionFinishesOnlyAfterAWriteAndCanRetryTheSameDraft() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("share-inbox-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let draft = SharedReminder(title: "Edited title", note: "Keep my edited note", due: now, sharedAt: now)
+        var completions = 0
+        // No App Group is a real failure: it must not dismiss the Share sheet or emit a success event.
+        XCTAssertFalse(ShareInbox.submit(draft, at: nil) { completions += 1 })
+        XCTAssertEqual(completions, 0)
+
+        let damaged = Data("not JSON".utf8)
+        try damaged.write(to: url)
+        XCTAssertFalse(ShareInbox.submit(draft, at: url) { completions += 1 })
+        XCTAssertEqual(completions, 0)
+        XCTAssertEqual(try Data(contentsOf: url), damaged)
+
+        // After the inbox is repaired, retrying that same draft succeeds exactly once.
+        try XCTUnwrap(ShareInbox.encode([])).write(to: url)
+        XCTAssertTrue(ShareInbox.submit(draft, at: url) { completions += 1 })
+        XCTAssertEqual(completions, 1)
+        XCTAssertEqual(ShareInbox.drain(at: url), [draft], "title, note and date survive the failed submission and retry")
+        XCTAssertTrue(ShareInbox.drain(at: url).isEmpty)
+    }
 }

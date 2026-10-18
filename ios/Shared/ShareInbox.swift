@@ -49,10 +49,10 @@ enum ShareInbox {
         return (String(title.prefix(200)), noteLines.joined(separator: "\n"))
     }
 
-    static func decode(_ data: Data) -> [SharedReminder] {
+    static func decode(_ data: Data) -> [SharedReminder]? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([SharedReminder].self, from: data)) ?? []
+        return try? decoder.decode([SharedReminder].self, from: data)
     }
 
     static func encode(_ items: [SharedReminder]) -> Data? {
@@ -67,20 +67,46 @@ enum ShareInbox {
         guard let url else { return false }
         var ok = false
         coordinate(url) { url in
-            let items = (try? Data(contentsOf: url)).map(decode) ?? []
-            if let data = encode(items + [item]) { ok = (try? data.write(to: url, options: .atomic)) != nil }
+            do {
+                let items: [SharedReminder]
+                do {
+                    let data = try Data(contentsOf: url)
+                    guard let decoded = decode(data) else { return }
+                    items = decoded
+                } catch CocoaError.fileReadNoSuchFile {
+                    items = []
+                }
+                if let data = encode(items + [item]) {
+                    try data.write(to: url, options: .atomic)
+                    ok = true
+                }
+            } catch {
+                // An unreadable inbox is not empty. Keep its bytes for recovery and let the user retry.
+            }
         }
         return ok
     }
 
-    /// Everything waiting, oldest first; the inbox is empty afterwards.
+    /// Finishes a Share submission only after its reminder is safely in the inbox.
+    /// The caller keeps its editor open on false; success alone records the Activity event and closes the extension.
+    static func submit(_ item: SharedReminder, at url: URL? = fileURL, onSaved: () -> Void) -> Bool {
+        guard append(item, at: url) else { return false }
+        onSaved()
+        return true
+    }
+
+    /// Everything waiting, oldest first; the inbox is empty afterwards. Undecodable data stays untouched for recovery.
     static func drain(at url: URL? = fileURL) -> [SharedReminder] {
         guard let url else { return [] }
         var items: [SharedReminder] = []
         coordinate(url) { url in
-            guard let data = try? Data(contentsOf: url) else { return }
-            items = decode(data)
-            try? FileManager.default.removeItem(at: url)
+            guard let data = try? Data(contentsOf: url), let decoded = decode(data) else { return }
+            do {
+                try FileManager.default.removeItem(at: url)
+                items = decoded
+            } catch {
+                // Returning items without removing them would import them again on the next activation.
+            }
         }
         return items.sorted { $0.sharedAt < $1.sharedAt }
     }
