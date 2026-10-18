@@ -9,16 +9,17 @@ import SwiftUI
 struct HealthView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
-    @State private var model = HealthModel()
+    private let model = HealthModel.shared
     @State private var detail: HealthMetric?
     @State private var adding = false
+    /// What the picker chose. It is added only after the picker is gone, so Apple's permission sheet has a free
+    /// screen to appear on (presenting it over a sheet that is still closing is what left the request unanswered).
+    @State private var pendingBatch: [HealthMetric] = []
 
     var body: some View {
         List {
             if !model.isAvailable {
                 unavailable
-            } else if !model.hasLoaded {
-                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear).listRowSeparator(.hidden)
             } else {
                 ForEach(model.selection.groups, id: \.group) { entry in
                     Section {
@@ -67,10 +68,13 @@ struct HealthView: View {
         .sheet(item: $detail) { metric in
             HealthMetricDetail(metric: metric, series: model.series[metric] ?? .empty, now: TodayClock.now, units: model.units)
         }
-        .sheet(isPresented: $adding) {
-            HealthMetricPicker(hidden: model.selection.hidden) { chosen in
-                Task { await model.add(chosen) }
-            }
+        .sheet(isPresented: $adding, onDismiss: {
+            let batch = pendingBatch
+            pendingBatch = []
+            guard !batch.isEmpty else { return }
+            Task { await model.add(batch) }
+        }) {
+            HealthMetricPicker(hidden: model.selection.hidden) { pendingBatch = $0 }
         }
     }
 
@@ -78,16 +82,38 @@ struct HealthView: View {
 
     private func row(_ metric: HealthMetric) -> some View {
         let item = model.row(for: metric)
-        return Button { detail = metric } label: {
-            HealthRow(item: item)
+        let state = model.state(for: metric)
+        var failure: HealthFailure?
+        if case .failed(let reason) = state { failure = reason }
+        return VStack(alignment: .leading, spacing: 4) {
+            Button { detail = metric } label: {
+                HealthRow(item: item, isLoading: state == .loading && item.value == nil)
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(failure == nil ? item.accessibilityText : "\(item.accessibilityText). \(Self.cantRead)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("health.row.\(metric.rawValue)")
+            if let failure {
+                // A failed row says so quietly, once, and offers the one action that can help.
+                HStack(spacing: 8) {
+                    Text(Self.cantRead)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("health.note.\(metric.rawValue)")
+                    Spacer(minLength: 4)
+                    Button(failure == .accessUnanswered ? "Allow" : "Try Again") {
+                        Task { await model.retry(metric) }
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(HealthStyle.accent)
+                    .accessibilityIdentifier("health.action.\(metric.rawValue)")
+                }
+            }
         }
-        .buttonStyle(.plain)
         // About 60 pt: name, value line, and 6 pt above and below (the default cell padding makes rows 90 pt).
         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 16))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(item.accessibilityText)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("health.row.\(metric.rawValue)")
         // Hide only hides the row; Apple Health keeps everything. Same icon-only look as every swipe action.
         .swipeActions(edge: .trailing) {
             Button { withAnimation(.snappy) { model.hide(metric) } } label: {
@@ -104,6 +130,8 @@ struct HealthView: View {
         }
     }
 
+    static let cantRead = "Can't read this yet. Check Health access."
+
     /// Health never tells an app that reading was denied, so the hint covers both "no data" and "not allowed".
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -111,7 +139,7 @@ struct HealthView: View {
                 Text("Sample data. On iPhone this page reads Apple Health.")
                     .accessibilityIdentifier("health.sample")
             }
-            Text("Today only reads Apple Health; nothing leaves your iPhone. Missing something? Allow it in Health → Profile → Apps → Today.")
+            Text("Today only reads Apple Health; nothing leaves your iPhone. \"No data\" can also mean Today isn't allowed to read it: check Health → Profile → Apps → Today.")
             Button {
                 if let url = URL(string: "x-apple-health://") { openURL(url) }
             } label: {
@@ -145,6 +173,8 @@ struct HealthView: View {
 /// One row: name over the latest value (large number, small unit, quiet date label), and the sparkline on the right.
 private struct HealthRow: View {
     let item: HealthRowModel
+    /// Waiting for this metric's first answer: a small spinner in place of the number (never over the whole sheet).
+    var isLoading = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -165,13 +195,18 @@ private struct HealthRow: View {
                                 Text(part.unit).font(.subheadline).foregroundStyle(.secondary)
                             }
                         }
+                    } else if isLoading {
+                        ProgressView().controlSize(.small).frame(height: 28)
+                            .accessibilityIdentifier("health.row.loading.\(item.metric.rawValue)")
                     } else {
                         Text("—").font(.system(.title2, design: .rounded).weight(.semibold)).foregroundStyle(.secondary)
                     }
-                    Text(item.dateLabel)
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                        .padding(.leading, 4)
+                    if !isLoading {
+                        Text(item.dateLabel)
+                            .font(.footnote)
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 4)
+                    }
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)

@@ -35,6 +35,9 @@ enum OneStore {
             Reminders.shared.configure(container)
             RemindersSync.shared.configure(container)
             WidgetFeed.configure(container)
+            #if DEBUG
+            HealthDebugSeed.runIfRequested()
+            #endif
         }
         return container
     }

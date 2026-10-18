@@ -3,41 +3,99 @@ import SwiftUI
 /// The Health sheet's state: which metrics are shown (saved), and their last 90 days from Apple Health (memory only).
 /// Today never writes to Apple Health; nothing here goes to SwiftData, the widget snapshot or disk, except the choice
 /// and order of metrics.
+///
+/// Nothing here can hang the sheet: access requests and every metric's query run through `HealthLoader` with an 8 s
+/// timeout each. A row that is still waiting shows a spinner of its own; a row whose call stalled keeps its old data, or
+/// shows "—" with a quiet line and an action. The list itself is always on screen.
 @MainActor
 @Observable
 final class HealthModel {
     static let days = 90
+    /// One model for every Health sheet (Today line, Settings), so a reopened sheet starts from what was already read.
+    static let shared = HealthModel()
 
-    private let source: HealthSource = HealthSources.current()
-    private let store = HealthSelectionStore.shared
+    private let source: HealthSource
+    private let store: HealthSelectionStore
+    private let timeout: Double
     private(set) var selection: HealthSelection
     private(set) var series: [HealthMetric: HealthSeries] = [:]
-    /// False until the first load has answered, so the list does not flash "No data".
-    private(set) var hasLoaded = false
+    /// Per metric: waiting, answered, or failed. A metric not listed has not started yet and counts as waiting.
+    private(set) var states: [HealthMetric: HealthMetricState] = [:]
     /// lb or kg, mi or km: what Apple Health is set to (the region until it has answered).
     private(set) var units = HealthUnits()
+    /// The latest fetch started for each metric; an older fetch that answers late must not overwrite a newer answer.
+    @ObservationIgnored private var generation: [HealthMetric: Int] = [:]
 
-    init() { selection = HealthSelectionStore.shared.selection }
+    init(source: HealthSource = HealthSources.current(), store: HealthSelectionStore = .shared, timeout: Double = HealthTimeout.seconds) {
+        self.source = source
+        self.store = store
+        self.timeout = timeout
+        selection = store.selection
+    }
 
     var isAvailable: Bool { source.isAvailable }
     /// The page shows made-up numbers (UI tests and the simulator).
-    var isSample: Bool { source is MockHealthSource }
+    var isSample: Bool { source.isSample }
 
+    func state(for metric: HealthMetric) -> HealthMetricState { states[metric] ?? .loading }
+
+    /// Opening the sheet, pull to refresh, and the app becoming active again (which also asks again for access that
+    /// was never answered).
     func load() async {
-        guard source.isAvailable else { hasLoaded = true; return }
-        await source.requestAccess(for: selection.shown)
-        series = await source.series(for: selection.shown, days: Self.days, now: TodayClock.now)
-        if let preferred = await source.preferredUnits() { units = preferred }
-        hasLoaded = true
+        guard source.isAvailable else { return }
+        async let preferred: Void = refreshUnits()
+        await run(selection.shown)
+        await preferred
     }
 
-    /// Adds metrics at the end, asks Apple Health for those types only (it skips the ones already allowed), loads them.
+    /// Adds metrics at the end, then asks Apple Health for those types only (the caller has dismissed the picker, so
+    /// Apple's sheet can show), then reads them. The new rows are on screen at once, each with its own spinner.
     func add(_ metrics: [HealthMetric]) async {
+        let fresh = metrics.filter { !selection.shown.contains($0) }
+        guard !fresh.isEmpty else { return }
+        update { $0.add(fresh) }
+        await run(fresh)
+    }
+
+    /// "Allow" / "Try Again" on one row.
+    func retry(_ metric: HealthMetric) async {
+        states[metric] = .loading
+        await run([metric])
+    }
+
+    /// Requests access (once per new batch of types), then reads each metric on its own.
+    private func run(_ metrics: [HealthMetric]) async {
         guard !metrics.isEmpty else { return }
-        update { $0.add(metrics) }
-        await source.requestAccess(for: metrics)
-        let loaded = await source.series(for: metrics, days: Self.days, now: TodayClock.now)
-        series.merge(loaded) { _, new in new }
+        for metric in metrics where states[metric] == nil { states[metric] = .loading }
+        var tokens: [HealthMetric: Int] = [:]
+        for metric in metrics {
+            generation[metric, default: 0] += 1
+            tokens[metric] = generation[metric]
+        }
+        let tokenSnapshot = tokens
+        await HealthLoader.load(
+            metrics, source: source, days: Self.days, now: TodayClock.now, timeout: timeout,
+            onLateAccess: { [weak self] in
+                // The permission sheet answered after the timeout: read what it allowed.
+                Task { @MainActor in await self?.run(metrics) }
+            },
+            onResult: { [weak self] metric, result, access in
+                await self?.apply(metric, result, access: access, token: tokenSnapshot[metric] ?? 0)
+            })
+    }
+
+    private func apply(_ metric: HealthMetric, _ result: HealthFetchResult, access: HealthAccessOutcome, token: Int) {
+        guard generation[metric] == token else { return }
+        if case .series(let s) = result { series[metric] = s }
+        let hadData = series[metric].map { !$0.points.isEmpty } ?? false
+        states[metric] = HealthMetricState.settled(result, access: access, hadData: hadData)
+    }
+
+    private func refreshUnits() async {
+        let source = source
+        if case .value(let preferred) = await HealthTimeout.race(seconds: timeout, { await source.preferredUnits() }), let preferred {
+            units = preferred
+        }
     }
 
     /// Hides the row only. Nothing is deleted from Apple Health.
