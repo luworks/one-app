@@ -49,3 +49,21 @@ readbenchmark2/2pass; other green tests are not repeated. All raw failures remai
 addresses, stdout empty, so named/staged CPU diagnosis is still pending model
 export/symbol evidence. Window released early11:29:05, simulator shutdown and
 noheavy/booted verified. No extra-Osize build starts until the next handoff.
+
+## Round2 compiler-size experiment (not adopted)
+
+Window11:36:36–11:39:20, no simulator boot. Same compiled app/project/resource
+inputs as44daf47 confirmed by recorded git diff guard (only ios/Eval host fixture
+repair excluded). Source122eb13, same genericRelease arm64/sdk/strip/DD/jobs2,
+command-only SWIFT_OPTIMIZATION_LEVEL=-Osize and CODE_SIGNING_ALLOWED=NO.
+Actual app8,656,543B/ZIP4,349,508B; versus selected -O product7.82%/4.55% smaller.
+ZIP remains614,759B above original51%ceiling; original ZIP reduction42.93%.
+All3modules use-Osize; dSYM precedes strip, UUID/verification/source lookup pass.
+Snapshot and original control both immutable/indexed. No Release runtime pair
+was run; production optimization setting remains-O. Keep experiment separate
+and do not count an unadopted artifact as shipped/current gain.
+
+Existing startup trace modeled union export succeeded3.25s to a new sibling
+path. Its named/phase attribution is not presumed from a successful exporter.
+No new profile/cold build or silent window extension was used. End verified
+no booted sim/noheavy and directly notified root/compat.

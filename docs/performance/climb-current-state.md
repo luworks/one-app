@@ -1,6 +1,6 @@
 # Performance climb current state — 2026-10-18
 
-Status after bounded windows 11:02–11:10 and11:20–11:29 PDT. Targets are [versioned separately](climb-targets-v1.md); decisions and candidates are in [the ledger](climb-rounds.md). Baseline protocol/report is PR #66; optimization draft is [PR #72](https://github.com/luworks/one-app/pull/72). No overall3x/10x app-latency goal is met; component gains remain separately scoped.
+Status after bounded windows11:02–11:10,11:20–11:29 and11:36:36–11:39:20 PDT. Targets are [versioned separately](climb-targets-v1.md); decisions and candidates are in [the ledger](climb-rounds.md). Baseline protocol/report is PR #66; optimization draft is [PR #72](https://github.com/luworks/one-app/pull/72). The selected shipping configuration remains Release -O; the later -Osize command-only experiment is not adopted. No overall3x/10x app-latency goal is met; component gains remain separately scoped.
 
 ## Context
 
@@ -17,6 +17,9 @@ Status after bounded windows 11:02–11:10 and11:20–11:29 PDT. Targets are [ve
 | --- | --- | --- | --- |
 | Release app | 23,374,117→9,390,496 B, −59.83% | ≤11,453,317 B | High for this build method; raw ceiling met. Three dSYM UUIDs/verification/source lookups pass; no App Store or runtime claim. |
 | Local compressed proxy | 7,621,937→4,557,045 B, −40.21% | ≤3,734,749 B | High for local ZIP;822,296 B above ceiling. Next controlled -Osize experiment, unchanged resources/endpoint. |
+| Release main executable | 16,731,520→6,147,480 B (selected -O) | ≤8,198,445 B | Actual Mach-O logical bytes; target met, paired dSYM retained. |
+| All Release Mach-O | 17,861,152→6,716,288 B (selected -O) | ≤8,751,964 B | Target met; app and two extensions counted once. |
+| Experimental -Osize package | App8,656,543 B; ZIP4,349,508 B | Same original ceilings | Compared with selected -O:7.82% raw/4.55% ZIP smaller. Original ZIP reduction42.93%, still614,759 B above target. Compile/dSYM verified only; runtime tradeoff unknown, not adopted. |
 | Audio resources | 5,280,736→2,445,686 B, −53.69% | ≤2,587,561 B | Container/native decode/determinism/signal checks pass; all8choices/28s kept. Perceptual/AlarmKit exact-rate behavior unverified; do not cut duration to reach package goal. |
 | Init→layout opportunity | 1576.318→1512.878 ms; candidate range1451.389–2268.682; 1.042×; n3 each | ≤525.439 ms; stretch≤157.632 ms | Methods pass,3x/10x unmet. Descriptive one-batch medians; proxy only, not demonstrated causal gain/regression. Raw reference ranges retained in baseline-app-samples.json. |
 | Resume→layout opportunity | 47.013→34.516 ms; candidate range31.470–38.943; 1.362×; n3 each | ≤15.671 ms; stretch≤4.701 ms | Methods pass,3x/10x unmet. Descriptive one-batch medians; proxy only, not demonstrated causal gain/regression. Raw reference ranges retained in baseline-app-samples.json. |
@@ -51,4 +54,20 @@ No competitor has been measured under an authorized identical protocol. Therefor
 
 Canonical root: `/Users/yuanlu/code/one-app/tests/results/runs/performance-climb-20261018/`. Release rawlog/inventory, read-only product+dSYM snapshot, frozen source tar/patch, reference optimized product, complete baseline-ui/ui.xcresult, app samples/context and QA archive are retained and indexed in the separate QA Activity SQLite.Reference3/3 and candidate3/3 UI methods passed. Host initial9methods:8passed, damagedfixture method failed2assertions; fixture-only repair35467e7 then failedmethod+readbenchmark2/2passed. The8other methods were not rerun, and no unrestricted/full-suite pass is claimed. Original failure is retained. Damage came from removing NOT NULL inside an index WHERE clause; no production decoder repair was needed. Shutdown/live no-heavy/no-booted verification completed11:10:14 and11:29:05; directly notified root/compat. No phone/signing/data deletion.
 
-Next3actions: (1) separate command-only -Osize package experiment after the next handoff, source/resources frozen, with dSYM and runtime tradeoff gates; (2) export the already captured startup trace’s actual modeled profile/process/signpost tables before choosing a narrow source candidate; (3) diagnose Year initial-scroll work with a Year-specific trace before another layout/cache change. Current10sTimeProfiler capture and raw time-sample export succeeded, but user stacks are addresses, stdout is empty and stages are unaligned; no named hotspot or cancellation count is established. No later exporter runs outside its granted slot. Two tooling findings from the single focused review are fixed: reverted candidates cannot silently leave tracked baseline files stale, and failed functional journeys cannot pass speed acceptance. The climb is in progress, not at a demonstrated plateau.
+Next3actions: (1) analyze the completed modeled startup export and only then choose a narrow source candidate if it identifies a material app-owned cost; (2) diagnose Year initial-scroll work with a Year-specific trace before another layout/cache change; (3) evaluate any accepted optimization on the final integrated main revision under a fresh explicitly labeled context, preserving the frozen comparisons. The -Osize experiment is complete but not adopted: extra ZIP saving4.55% is small and paired Release runtime acceptance is absent. Current10sTimeProfiler capture and raw time-sample export succeeded, but user stacks are addresses, stdout is empty and stages are unaligned; no named hotspot or cancellation count is established. The later modeled union export completed3.25s in its next granted slot and writes a new sibling directory; analysis is pending. No profiler/exporter remains active. Two tooling findings from the single focused review are fixed: reverted candidates cannot silently leave tracked baseline files stale, and failed functional journeys cannot pass speed acceptance. The climb is in progress, not at a demonstrated plateau.
+
+## Integration and local stopping boundaries
+
+Parent reports integrated main91c1298 after these frozen comparison sources.
+The numbers above do not validate that newer main; source manifests identify
+exact tested code. No force-push/rebase, signing change or phone work was used.
+The third window stayed within4minutes and never booted a simulator; selected
+Release -O settings remain unchanged after the command-only experiment.
+
+Package candidates have diminishing verified compressed value: extension symbol
+processing saved87,316 ZIP bytes in the copy model; compiler -Osize adds207,537
+ZIP bytes versus the selected source-built -O product. Neither closes the
+remaining selected-package822,296-byte gap. Further removing choices, shortening
+alarms, discarding city/locale data, bypassing Add/Apply or weakening reachability
+checks is not justified by the target. This is not a claim of a global optimum;
+startup/Year profiling is still being assessed before declaring a local plateau.
