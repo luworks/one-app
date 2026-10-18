@@ -35,6 +35,17 @@ enum AICapture {
         return nil
     }
 
+    /// Single-item production title generation, separately bounded from kind classification.
+    /// The generated schema contains only a title; all dates, times, type and repeat fields come from the existing capture.
+    static func refineTitle(_ capture: Capture, source: String, history: String = "") async -> Capture {
+        await CaptureTitleRefinement.refine(capture, source: source, history: history, available: isAvailable) { prompt in
+            #if canImport(FoundationModels)
+            if #available(iOS 26, *) { return await OnDeviceCapture.refineTitle(prompt) }
+            #endif
+            return nil
+        }
+    }
+
     /// Whichever finishes first: the work, or nil when the time is up (the late result is dropped).
     private static func withTimeout(_ limit: Duration, _ work: @escaping @Sendable () async -> [Capture]?) async -> [Capture]? {
         await withCheckedContinuation { (cont: CheckedContinuation<[Capture]?, Never>) in
@@ -56,6 +67,12 @@ enum AICapture {
 }
 
 #if canImport(FoundationModels)
+
+@available(iOS 26, *)
+@Generable(description: "A concise faithful planner action title; no scheduling fields")
+private struct RefinedCaptureTitle {
+    var title: String
+}
 
 @available(iOS 26, *)
 @Generable(description: "Everything the user's line asks to add to their planner")
@@ -97,6 +114,17 @@ private enum OnDeviceCapture {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else { return false }
         return model.supportsLocale()
+    }
+
+    static func refineTitle(_ prompt: String) async -> String? {
+        guard isAvailable else { return nil }
+        let session = LanguageModelSession(model: .default, instructions: CaptureTitleRefinement.instructions)
+        var options = GenerationOptions()
+        options.temperature = 0
+        options.maximumResponseTokens = 160
+        do {
+            return try await session.respond(to: prompt, generating: RefinedCaptureTitle.self, options: options).content.title
+        } catch { return nil }
     }
 
     static func propose(_ text: String, now: Date, calendar: Calendar) async -> [Capture]? {

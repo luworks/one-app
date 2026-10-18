@@ -81,3 +81,9 @@ The fixture is intentionally frozen; future schema changes should keep opening i
   exact Chinese sleep request, a pending reminder title draft, and an Added alarm
   title Save/Cancel/reopen/creation-Undo journey. These inputs require no external
   dataset beyond the existing `today-dataset.json` used by the suite.
+
+- `CaptureTitleQualityExportTests` consumes the frozen PR #67 fixture selected by
+  `AI_TITLE_EVAL_FIXTURES`, exports actual parser/offline-refinement content to
+  `AI_TITLE_EVAL_OUTPUT`, and uses only development watch/sleep/peanut cases.
+  It does not feed expected answers to the implementation. UI gates and persisted
+  writes remain unobserved; reserved cases and Foundation Models stay unmeasured.

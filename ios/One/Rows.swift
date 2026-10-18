@@ -399,6 +399,9 @@ struct CaptureCard: View {
                 return onRename(title)
             }).font(.headline)
             Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
+            if let notes = capture.notes, !notes.isEmpty {
+                Text(notes).font(.callout).foregroundStyle(.secondary).accessibilityIdentifier("capture-notes")
+            }
             if capture.kind == .task, !capture.ringsAsAlarm {
                 if status == .open {
                     if !lists.isEmpty { ListMenu(capture: $capture, lists: lists).font(.subheadline) }
@@ -410,7 +413,7 @@ struct CaptureCard: View {
                 HStack {
                     Button(cancelTitle, action: onCancel).buttonStyle(.bordered)
                     Spacer()
-                    Button("Add", action: onAdd).buttonStyle(.borderedProminent)
+                    Button("Add", action: onAdd).buttonStyle(.borderedProminent).disabled(!capture.isReadyToAdd)
                 }
                 .padding(.top, 4)
             } else {
