@@ -416,7 +416,7 @@ enum CaptureParser {
     private static func stripTemporalConnector(_ title: String) -> String {
         // A removed clock time can leave "的时候提醒我…" at the start. Do not remove
         // a condition inside the action ("下雨的时候带伞") or "时候到了检查烤箱".
-        title.replacingOccurrences(of: #"^的时候(?:吧)?[，,\s]*(?:就\s*(?=提醒))?"#, with: "", options: .regularExpression)
+        title.replacingOccurrences(of: #"^的时候\s*"#, with: "", options: .regularExpression)
     }
 
     private static func requestBody(_ title: String) -> String? {
