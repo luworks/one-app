@@ -2,13 +2,19 @@
 """Synthesizes the app's alarm tones into ios/One/Sounds/*.caf (numpy + macOS afconvert).
 
 AlarmKit cannot use Apple's ringtones, only sound files bundled with the app, so the tones are made here: soft, musical,
-about 28 seconds long (the limit is 30) and getting a little louder as they go, so they wake you gently.
+exactly 28 seconds long (below the 30-second custom alert limit) and getting a little louder as they go.
+Synthesis stays at 44.1 kHz; afconvert low-pass resamples before IMA4 encoding.
+See docs/performance/audio-candidate.md for format evidence and fidelity limits.
 Run:  python3 ios/Tools/make_alarm_sounds.py
 """
-import os, subprocess, tempfile, wave
+import argparse, os, subprocess, tempfile, wave
 import numpy as np
 
 SR = 44100
+# Keep bright upper partials at 22.05 kHz. These two voices have no synthesized
+# partial above 5 kHz, so 16 kHz preserves their musical band with more headroom.
+OUTPUT_RATES = {"Beacon": 16000, "Morning Piano": 16000}
+DEFAULT_OUTPUT_RATE = 22050
 LENGTH = 28.0
 OUT = os.path.join(os.path.dirname(__file__), "..", "One", "Sounds")
 
@@ -96,7 +102,10 @@ TONES = {
 
 
 def main():
-    os.makedirs(OUT, exist_ok=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", default=OUT)
+    args = parser.parse_args()
+    os.makedirs(args.output_dir, exist_ok=True)
     for name, build in TONES.items():
         y = finish(build())
         with tempfile.TemporaryDirectory() as tmp:
@@ -104,8 +113,11 @@ def main():
             with wave.open(wav, "wb") as w:
                 w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
                 w.writeframes((y * 32767).astype(np.int16).tobytes())
-            dest = os.path.join(OUT, name.replace(" ", "") + ".caf")
-            subprocess.run(["afconvert", "-f", "caff", "-d", "ima4", wav, dest], check=True)
+            dest = os.path.join(args.output_dir, name.replace(" ", "") + ".caf")
+            rate = OUTPUT_RATES.get(name, DEFAULT_OUTPUT_RATE)
+            subprocess.run(["afconvert", "-f", "caff", "-d", f"ima4@{rate}",
+                            "-r", "127", "--src-complexity", "bats", "--no-filler",
+                            wav, dest], check=True)
         print("wrote", dest, f"{os.path.getsize(dest) / 1e6:.1f} MB")
 
 
