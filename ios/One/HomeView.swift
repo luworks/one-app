@@ -437,7 +437,13 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
-                    PerformanceTrace.shared.begin("resume_to_content_layout", destination: traceRoute)
+                    // Covered roots cannot prove the visible page resumed. Keep those samples absent.
+                    if ask == nil, !showsSettings, !showsActivity, !showsSearch, newItem == nil,
+                       !addingCity, !drawer.isOpen, remindersPath.isEmpty {
+                        PerformanceTrace.shared.begin("resume_to_content_layout", destination: traceRoute)
+                    } else {
+                        PerformanceTrace.shared.mark("skip.resume_covered_root")
+                    }
                 }
                 dropDeletedMirrors()
                 importShared()
