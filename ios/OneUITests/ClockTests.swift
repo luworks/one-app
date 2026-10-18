@@ -43,7 +43,7 @@ final class ClockTests: XCTestCase {
         XCTAssertTrue(section("alarms").waitForExistence(timeout: 5))
         XCTAssertTrue(section("alarms").isSelected, "Alarms is the default section")
         XCTAssertTrue(plus.exists, "+ adds an alarm")
-        XCTAssertFalse(app.buttons["timer.start"].exists, "the timer is no longer on top of the alarm list")
+        XCTAssertFalse(app.staticTexts["timer.title"].exists, "Timers has its own section, separate from the alarm list")
 
         section("worldClock").tap()
         XCTAssertTrue(app.descendants(matching: .any)["worldClock.home"].waitForExistence(timeout: 3), "home is always the first card")
@@ -54,7 +54,11 @@ final class ClockTests: XCTestCase {
         XCTAssertFalse(plus.exists, "no + on Stopwatch")
 
         section("timer").tap()
-        XCTAssertTrue(app.buttons["timer.start"].waitForExistence(timeout: 3), "the timer card is the Timer section")
+        XCTAssertTrue(app.staticTexts["timer.title"].waitForExistence(timeout: 3), "the Timers screen is the Timer section")
+        XCTAssertEqual(app.staticTexts["timer.title"].label, "Timers")
+        XCTAssertEqual(app.pickerWheels.count, 3, "hours, minutes and seconds")
+        app.revealTimerControl(app.buttons["timer.start"].firstMatch)
+        XCTAssertFalse(app.buttons["timer.start"].isEnabled, "the empty picker cannot start a timer")
         XCTAssertFalse(plus.exists, "no + on Timer")
 
         // The section is kept when you leave the tab and come back.
@@ -278,7 +282,8 @@ final class ClockTests: XCTestCase {
             app.buttons["stopwatch.startStop"].tap()
             shot("4-stopwatch")
             section("timer").tap()
-            XCTAssertTrue(app.buttons["timer.start"].waitForExistence(timeout: 3))
+            XCTAssertTrue(app.staticTexts["timer.title"].waitForExistence(timeout: 3))
+            XCTAssertEqual(app.pickerWheels.count, 3)
             shot("5-timer")
             app.terminate()
 

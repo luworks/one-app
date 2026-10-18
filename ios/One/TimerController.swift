@@ -4,9 +4,10 @@ import AppIntents
 import AlarmKit
 #endif
 
-/// Every countdown timer Today started (AlarmKit, iOS 26+): the Pomodoro card's Focus/break timer, and any number of
-/// timers started by voice ("Start a timer in Today for 10 minutes"), Siri, Shortcuts or the Clock schema.
-/// They ring full-screen through Silent and Focus, even with the app closed.
+/// Every countdown timer Today started (AlarmKit, iOS 26+): the ones set on the Timer tab (Apple-style picker and
+/// Recents, including the Focus / break presets) and the ones started by voice ("Start a timer in Today for 10 minutes"),
+/// Siri, Shortcuts or the Clock schema. Any number run at once, except that a Focus / break preset replaces the
+/// previous one. They ring full-screen through Silent and Focus, even with the app closed.
 ///
 /// AlarmKit has no fire date on `Alarm` and lists only this app's own alarms (never the Clock app's, never Siri's
 /// built-in timers), so the end times live in `TimerStore` (UserDefaults), keyed by the AlarmKit id.
@@ -20,23 +21,24 @@ final class TimerController {
     private(set) var timers: [RunningTimer]
     /// Ids that are ringing right now.
     private(set) var ringing: Set<UUID> = []
-    /// Today's Pomodoro rounds and the next step the card offers (UserDefaults, starts over at midnight).
+    /// Today's Pomodoro rounds (UserDefaults, starts over at midnight).
     private(set) var log: PomodoroLog = TimerController.initialLog()
+    /// The Recents under the picker: what was started, newest first (UserDefaults; `TimerRecents`).
+    private(set) var recents: [RecentTimer]
+    /// The tone new timers ring with: a name from `AlarmSound.all`, empty for the system alarm sound.
+    var sound: String { didSet { if !Self.isUITesting { UserDefaults.standard.set(sound, forKey: Self.soundKey) } } }
     /// A short line under the controls, e.g. when alarms are not allowed.
     var message: String?
+
+    private static let soundKey = "timer.sound"
 
     init() {
         let (seeded, rings) = Self.seededTimers()
         timers = seeded ?? (Self.isUITesting ? [] : TimerStore.load())
         ringing = rings
+        recents = Self.seededRecents() ?? (Self.isUITesting ? [] : TimerRecentsStore.load())
+        sound = Self.isUITesting ? "" : (UserDefaults.standard.string(forKey: Self.soundKey) ?? "")
     }
-
-    /// The Pomodoro card's timer (Focus or a break); at most one.
-    var running: RunningTimer? { timers.first { $0.isCard } }
-    /// True while AlarmKit is ringing the card's timer.
-    var isRinging: Bool { running.map { ringing.contains($0.id) } ?? false }
-    /// Timers made by voice, Siri or Shortcuts, for the list under the card.
-    var voiceTimers: [RunningTimer] { timers.filter { !$0.isCard } }
 
     // MARK: Test seams (debug builds)
 
@@ -65,6 +67,22 @@ final class TimerController {
         #endif
     }
 
+    /// UI tests only: `-uiTestingRecents 420,1200,1200:go to lion market,3600:have a rest` seeds the Recents
+    /// (seconds[:label], newest first).
+    private static func seededRecents() -> [RecentTimer]? {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-uiTestingRecents"), i + 1 < args.count else { return nil }
+        return args[i + 1].split(separator: ",").compactMap { part in
+            let fields = part.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+            guard let seconds = Int(fields[0]) else { return nil }
+            return RecentTimer(seconds: seconds, label: fields.count > 1 ? fields[1] : nil)
+        }
+        #else
+        return nil
+        #endif
+    }
+
     /// True when a test replaced AlarmKit with the fake (see `seededTimers`).
     private static let usesFakeAlarms: Bool = {
         #if DEBUG
@@ -76,17 +94,25 @@ final class TimerController {
 
     // MARK: Start, pause, resume, stop
 
-    /// Starts a countdown. A card timer replaces the card's previous one; timers made by voice run next to whatever runs.
+    /// Starts a countdown and adds it to the Recents. Timers run next to each other, except that a Focus / break preset
+    /// (25:00 "Focus", 5:00 "Short break", 15:00 "Long break": the only ones that count Pomodoro rounds) replaces the
+    /// previous one. `byHand`: the user set it on the Timer tab, which teaches Siri the phrase.
     @discardableResult
-    func start(seconds: Int, phase: PomodoroPhase = .focus, label: String? = nil, source: TimerSource = .card) async -> RunningTimer? {
+    func start(seconds: Int, label: String? = nil, byHand: Bool = false) async -> RunningTimer? {
         message = nil
         guard seconds > 0 else { return nil }
-        if source == .card { setLog { $0.pending = nil } }
+        let seconds = min(seconds, TimerDial.maxSeconds)
+        let label = IntentTimer.label(label)
+        let phase = Pomodoro.preset(seconds: seconds, label: label)
+        if phase != nil { setLog { $0.pending = nil } }
         let id = UUID()
-        let timer = RunningTimer.start(id: id, seconds: seconds, now: .now, phase: phase, label: IntentTimer.label(label), source: source)
+        let timer = RunningTimer.start(id: id, seconds: seconds, now: .now, phase: phase ?? .focus, label: label,
+                                       source: phase == nil ? .voice : .card)
+        let previous = phase == nil ? nil : timers.first { $0.isCard }
         if Self.usesFakeAlarms {
-            if source == .card, let old = running { ringing.remove(old.id) }
+            if let previous { ringing.remove(previous.id) }
             set(TimerList.adding(timer, to: timers))
+            remember(seconds, label)
             return timer
         }
         #if canImport(AlarmKit)
@@ -97,15 +123,16 @@ final class TimerController {
             message = "Timers need alarm access. Allow alarms for Today in Settings."
             return nil
         }
-        if source == .card, let old = running { try? manager.cancel(id: old.id) }
+        if let previous { try? manager.cancel(id: previous.id) }
         // Saved before scheduling so a sync that runs on the AlarmKit update keeps it.
         let before = timers
         set(TimerList.adding(timer, to: timers))
         do {
-            _ = try await manager.schedule(id: id, configuration: Self.configuration(for: timer))
+            _ = try await manager.schedule(id: id, configuration: Self.configuration(for: timer, sound: sound))
             AlarmScheduler.log.info("timer scheduled \(seconds)s")
+            remember(seconds, label)
             // Starting by hand teaches Siri the phrase: it can then suggest "Start a timer in Today" for this length.
-            if source == .card { TimerIntentSupport.donate(seconds: seconds) }
+            if byHand { TimerIntentSupport.donate(seconds: seconds) }
             return timer
         } catch {
             AlarmScheduler.log.error("timer failed \(error.localizedDescription, privacy: .public)")
@@ -157,10 +184,19 @@ final class TimerController {
         set(timers.filter { $0.id != id })
     }
 
-    // The Pomodoro card's own timer.
-    func pause() { if let timer = running { pause(timer.id) } }
-    func resume() { if let timer = running { resume(timer.id) } }
-    func cancel() { if let timer = running { cancel(timer.id) } }
+    // MARK: Recents
+
+    private func remember(_ seconds: Int, _ label: String?) {
+        setRecents(TimerRecents.recording(RecentTimer(seconds: seconds, label: label), in: recents))
+    }
+
+    /// Swipe to delete on a Recents row.
+    func deleteRecent(id: String) { setRecents(TimerRecents.removing(id: id, from: recents)) }
+
+    private func setRecents(_ list: [RecentTimer]) {
+        recents = list
+        if !Self.isUITesting { TimerRecentsStore.save(list) }
+    }
 
     /// Lines the list up with AlarmKit (`TimerList.reconcile`): a timer it no longer has (rang and was stopped, or
     /// cancelled from the Lock Screen) leaves; pause/resume done outside the app is followed; the list is read again
@@ -200,9 +236,6 @@ final class TimerController {
         for await _ in AlarmManager.shared.alarmUpdates { refresh() }
         #endif
     }
-
-    /// "Done for now": drop the offered next step.
-    func dismissNextStep() { setLog { $0.pending = nil } }
 
     private func complete(_ timer: RunningTimer) {
         setLog { $0 = $0.completing(timer.pomodoroPhase, id: timer.id, now: .now) }
@@ -245,7 +278,7 @@ final class TimerController {
 
     #if canImport(AlarmKit)
     @available(iOS 26, *)
-    private static func configuration(for timer: RunningTimer) -> AlarmManager.AlarmConfiguration<AlarmScheduler.Meta> {
+    private static func configuration(for timer: RunningTimer, sound: String) -> AlarmManager.AlarmConfiguration<AlarmScheduler.Meta> {
         // "Focus", "Break" or the user's name: the full-screen alert, the Lock Screen and the Dynamic Island show this.
         let title = LocalizedStringResource(stringLiteral: TimerList.title(timer))
         let alert: AlarmPresentation.Alert
@@ -264,7 +297,8 @@ final class TimerController {
         let attributes = AlarmAttributes<AlarmScheduler.Meta>(presentation: presentation, metadata: AlarmMeta(kind: .timer), tintColor: .orange)
         // The entity lets Siri act on this very timer ("pause the timer", "add 5 minutes"): iOS 27.
         return .timer(duration: TimeInterval(timer.total), attributes: attributes,
-                      appEntityIdentifier: EntityIdentifier(for: TimerEntity.self, identifier: timer.id))
+                      appEntityIdentifier: EntityIdentifier(for: TimerEntity.self, identifier: timer.id),
+                      sound: AlarmSound.named(sound)?.alertSound ?? .default)
     }
     #endif
 }

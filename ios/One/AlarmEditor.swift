@@ -336,7 +336,7 @@ private struct DayCircle: View {
 }
 
 /// Sound: the system alarm sound and the app's own tones, with a check mark on the chosen one. Tapping a tone plays it.
-private struct SoundScreen: View {
+struct SoundScreen: View {
     @Binding var sound: String
     @Environment(\.dismiss) private var dismiss
 

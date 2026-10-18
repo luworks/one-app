@@ -33,6 +33,45 @@ extension XCUIApplication {
         XCTAssertTrue(visible(target), "Reminder pill is on screen and hittable: \(target)", file: file, line: line)
     }
 
+    /// Scroll the Timer list at its edge, away from the picker wheels. Stop only when the whole control is clear of
+    /// the app's bottom bar; lazy Recents can exist before their play button is actually reachable.
+    func revealTimerControl(_ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        let section = buttons["clock.section.timer"].firstMatch
+        let composer = buttons["Ask AI or add anything"].firstMatch
+        let top = section.exists ? section.frame.maxY : frame.minY + frame.height * 0.15
+        let bottom = composer.exists ? composer.frame.minY - 8 : frame.maxY - 140
+        func visible() -> Bool {
+            target.isFullyVisible(in: CGRect(x: frame.minX, y: top, width: frame.width, height: max(0, bottom - top))) && target.isHittable
+        }
+        for searchUp in [true, false] {
+            for _ in 0..<12 {
+                if visible() { return }
+                if target.exists && !target.frame.isEmpty {
+                    scrollTimerList(up: target.frame.minY >= top)
+                } else {
+                    scrollTimerList(up: searchUp)
+                }
+            }
+        }
+        XCTAssertTrue(visible(), "Timer control is on screen and clear of the bottom bar: \(target)", file: file, line: line)
+    }
+
+    func scrollTimerList(up: Bool) {
+        let top = coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.4))
+        let bottom = coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.7))
+        (up ? bottom : top).press(forDuration: 0.05, thenDragTo: up ? top : bottom)
+    }
+
+    /// Return from Recents to the title without turning the picker or dragging a timer card.
+    func scrollTimerToTop(file: StaticString = #filePath, line: UInt = #line) {
+        let title = staticTexts["timer.title"].firstMatch
+        for _ in 0..<16 {
+            if title.isFullyVisible(in: frame) && title.isHittable { return }
+            scrollTimerList(up: false)
+        }
+        XCTAssertTrue(title.isFullyVisible(in: frame) && title.isHittable, "Timer title is visible after scrolling to the top", file: file, line: line)
+    }
+
     /// The Form can extend behind its navigation bar and home indicator. Only accept rows inside its usable viewport.
     var settingsRowViewport: CGRect {
         let screen = frame

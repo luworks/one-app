@@ -12,23 +12,23 @@ final class PomodoroTests: XCTestCase {
         calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
     }
 
-    func testChipsAndLabels() {
+    func testPresetsAndLabels() {
         XCTAssertEqual(Pomodoro.chips, [.focus, .shortBreak, .longBreak])
         XCTAssertEqual(Pomodoro.chips.map(\.minutes), [25, 5, 15])
-        XCTAssertEqual(Pomodoro.chips.map(\.chipLabel), ["Focus 25", "Short break 5", "Long break 15"])
+        XCTAssertEqual(Pomodoro.chips.map(\.presetLabel), ["Focus", "Short break", "Long break"])
         XCTAssertEqual(PomodoroPhase.focus.title, "Focus")
         XCTAssertEqual(PomodoroPhase.shortBreak.title, "Break")
         XCTAssertEqual(PomodoroPhase.longBreak.title, "Break")
     }
 
-    func testCustomDurationCountsAsFocus() {
-        XCTAssertEqual(Pomodoro.phase(seconds: 25 * 60, chosen: .focus), .focus)
-        XCTAssertEqual(Pomodoro.phase(seconds: 5 * 60, chosen: .shortBreak), .shortBreak)
-        XCTAssertEqual(Pomodoro.phase(seconds: 15 * 60, chosen: .longBreak), .longBreak)
-        XCTAssertEqual(Pomodoro.phase(seconds: 5 * 60 + 30, chosen: .shortBreak), .focus, "turning the dial off a break makes it Focus")
-        XCTAssertEqual(Pomodoro.phase(seconds: 40 * 60, chosen: .focus), .focus)
-        XCTAssertEqual(Pomodoro.phase(seconds: 5 * 60, chosen: nil), .focus, "5:00 from the dial alone is Focus")
-        XCTAssertEqual(Pomodoro.phase(seconds: 15 * 60, chosen: .shortBreak), .focus)
+    func testOnlyAnExactPresetIsAPomodoroTimer() {
+        XCTAssertEqual(Pomodoro.preset(seconds: 25 * 60, label: "Focus"), .focus)
+        XCTAssertEqual(Pomodoro.preset(seconds: 5 * 60, label: "Short break"), .shortBreak)
+        XCTAssertEqual(Pomodoro.preset(seconds: 15 * 60, label: " long BREAK "), .longBreak, "case and spaces do not matter")
+        XCTAssertNil(Pomodoro.preset(seconds: 25 * 60, label: nil), "an unnamed 25 minutes is just a timer")
+        XCTAssertNil(Pomodoro.preset(seconds: 25 * 60, label: "Pasta"))
+        XCTAssertNil(Pomodoro.preset(seconds: 40 * 60, label: "Focus"), "a custom length is not a round")
+        XCTAssertNil(Pomodoro.preset(seconds: 5 * 60, label: "Focus"))
     }
 
     func testNextStepEveryFourthIsLong() {
@@ -44,13 +44,7 @@ final class PomodoroTests: XCTestCase {
         XCTAssertEqual(Pomodoro.nextTitle(.focus), "Focus again")
     }
 
-    func testDots() {
-        XCTAssertEqual(Pomodoro.dots(0), ["○○○○"])
-        XCTAssertEqual(Pomodoro.dots(3), ["●●●○"])
-        XCTAssertEqual(Pomodoro.dots(4), ["●●●●"])
-        XCTAssertEqual(Pomodoro.dots(5), ["●●●●", "●○○○"])
-        XCTAssertEqual(Pomodoro.dots(8), ["●●●●", "●●●●"])
-        XCTAssertEqual(Pomodoro.dots(-2), ["○○○○"])
+    func testSpokenRounds() {
         XCTAssertEqual(Pomodoro.spokenRounds(0), "No focus rounds yet today")
         XCTAssertEqual(Pomodoro.spokenRounds(1), "1 focus round today")
         XCTAssertEqual(Pomodoro.spokenRounds(3), "3 focus rounds today")

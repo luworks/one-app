@@ -58,6 +58,19 @@ final class TimerListTests: XCTestCase {
         XCTAssertEqual(TimerList.spoken(pasta, ringing: true, now: t0), "Pasta, ringing")
     }
 
+    func testSpokenRemainingForTheTimerTabCards() {
+        let plain = timer(420)
+        XCTAssertEqual(TimerList.spokenRemaining(plain, ringing: false, now: t0), "Timer 7 minutes, 0 seconds remaining")
+        let pasta = timer(65, label: "Pasta")
+        XCTAssertEqual(TimerList.spokenRemaining(pasta, ringing: false, now: t0), "Pasta 1 minute, 5 seconds remaining")
+        XCTAssertEqual(TimerList.spokenRemaining(pasta.paused(now: t0.addingTimeInterval(5)), ringing: false, now: t0),
+                       "Pasta, paused, 1 minute, 0 seconds remaining")
+        XCTAssertEqual(TimerList.spokenRemaining(timer(45), ringing: false, now: t0), "Timer 45 seconds remaining")
+        XCTAssertEqual(TimerList.spokenRemaining(timer(3725), ringing: false, now: t0), "Timer 1 hour, 2 minutes, 5 seconds remaining")
+        XCTAssertEqual(TimerList.spokenRemaining(timer(3600), ringing: false, now: t0), "Timer 1 hour, 0 minutes, 0 seconds remaining")
+        XCTAssertEqual(TimerList.spokenRemaining(pasta, ringing: true, now: t0), "Pasta, ringing")
+    }
+
     // MARK: Adding
 
     func testCardTimerReplacesCardTimerButNotVoiceTimers() {
@@ -249,7 +262,11 @@ final class TimerPhraseTests: XCTestCase {
         XCTAssertEqual(IntentTimer.seconds(seconds: 600), 600)
         XCTAssertEqual(IntentTimer.seconds(seconds: 90 * 60), 5400)
         XCTAssertNil(IntentTimer.seconds(seconds: 0))
-        XCTAssertNil(IntentTimer.seconds(seconds: 90 * 60 + 1), "longer than the dial's 90 minutes")
+        XCTAssertEqual(IntentTimer.seconds(seconds: 90 * 60 + 1), 5401, "timers can exceed the former 90-minute limit")
+        let maximum = 23 * 3600 + 59 * 60
+        XCTAssertEqual(TimerDial.maxSeconds, maximum, "the product limit is 23 hours 59 minutes")
+        XCTAssertEqual(IntentTimer.seconds(seconds: maximum), 86340, "the maximum duration is accepted")
+        XCTAssertNil(IntentTimer.seconds(seconds: maximum + 1), "one second beyond 23 hours 59 minutes is rejected")
         XCTAssertEqual(IntentTimer.spoken(seconds: 600), "10 minutes")
         XCTAssertEqual(IntentTimer.spoken(seconds: 5400), "1 hour 30 minutes")
         XCTAssertEqual(IntentTimer.spoken(seconds: 1), "1 second")
