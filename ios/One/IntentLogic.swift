@@ -28,7 +28,7 @@ enum IntentReminder {
 }
 
 enum IntentTimer {
-    /// Whole minutes Siri can start, the same range as the dial on the Clock tab.
+    /// Whole minutes Siri can start, the same timer limit as the picker on the Clock tab.
     static let maxMinutes = TimerDial.maxSeconds / 60
 
     /// Seconds for a "Start Timer" request, or nil when the minutes are out of range.
@@ -42,7 +42,7 @@ enum IntentTimer {
     }
 
     /// Seconds for a timer asked for in `seconds` (a Duration from Siri, or `TimerPhrase`), or nil when it is out of
-    /// range: at least 1 second, at most the dial's 90 minutes.
+    /// range: at least 1 second, at most 23 hours 59 minutes.
     static func seconds(seconds: Int) -> Int? {
         (1...TimerDial.maxSeconds).contains(seconds) ? seconds : nil
     }

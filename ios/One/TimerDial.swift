@@ -1,7 +1,7 @@
 import Foundation
 
 /// The limits and spoken form of a timer length. The picker on the Timer tab is Apple's three-wheel hours / min / sec
-/// picker, up to 23:59:59. Foundation only, so it runs under `swift test`.
+/// picker; timers can start up to 23 h 59 min. Foundation only, so it runs under `swift test`.
 enum TimerDial {
     /// The longest timer: 23 h 59 min, like the Clock app (whole minutes, so Siri can ask for "1439 minutes").
     static let maxSeconds = 24 * 3600 - 60
