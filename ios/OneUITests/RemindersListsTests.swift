@@ -263,8 +263,9 @@ final class RemindersListsTests: XCTestCase {
         reveal(work)
         XCTAssertTrue(home.exists)
         XCTAssertLessThan(home.frame.minY, work.frame.minY, "starts with Home above Work")
-        // Hold until the row's menu is up, then drag without lifting: the menu gives way to the drag, as in Apple
-        // Reminders. Drop on the top part of Home so Work lands above it.
+        XCTAssertTrue(work.isFullyVisible(in: app.frame) && home.isFullyVisible(in: app.frame), "both drag cards are on screen")
+        print("Reorder card frames: Home=\(home.frame), Work=\(work.frame), viewport=\(app.frame)")
+        // Hold, then drag without lifting. The List owns insertion targets around the destination row.
         let start = work.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let end = home.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
         start.press(forDuration: 1.5, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 1.0)
