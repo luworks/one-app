@@ -97,13 +97,31 @@ enum Recurrence {
         guard let rule else { return overlaps(start) ? [start] : [] }
         var result: [Date] = []
         var d = start
-        var n = 0
-        while d < interval.end && n < limit {
+        // Limit query results, not the age of the series. Historical occurrences must not exhaust the budget.
+        // Advance with the repeat rule to preserve its calendar and DST semantics.
+        while d < interval.end && result.count < limit {
             if overlaps(d) { result.append(d) }
-            d = rule.next(after: d, calendar: calendar)
-            n += 1
+            let next = rule.next(after: d, calendar: calendar)
+            guard next > d else { break }
+            d = next
         }
         return result
+    }
+}
+
+/// Calendar entry date boundaries shared by the Week, Month and Year projections.
+enum CalendarEntryDates {
+    static func systemEnd(_ end: Date, isAllDay: Bool, forYearMarks: Bool,
+                          calendar: Calendar = .current) -> Date {
+        // EventKit already supplies the exclusive end, including 23/25-hour all-day dates.
+        // Every view preserves it instead of extending the event into another day.
+        return end
+    }
+
+    static func overlaps(start: Date, end: Date, day: Date, calendar: Calendar = .current) -> Bool {
+        guard let interval = calendar.dateInterval(of: .day, for: day) else { return false }
+        if start == end { return start >= interval.start && start < interval.end }
+        return start < interval.end && end > interval.start
     }
 }
 
