@@ -168,6 +168,17 @@ final class CalendarTabTests: XCTestCase {
             let other = offset == 0 ? 400 : 0
             XCTAssertFalse(agenda.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Year event \(other)")).firstMatch.exists)
         }
+        let chosen = cal.date(byAdding: .day, value: 400, to: cal.startOfDay(for: .now))!
+        modeButton("Year").tap()
+        let scroll = element("calendar.year.scroll")
+        let january = element(String(format: "miniMonth.%04d-01", cal.component(.year, from: chosen)))
+        let positioned = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            january.exists && january.isFullyVisible(in: scroll.frame) && january.isHittable
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [positioned], timeout: 5), .completed,
+                       "reentering Year starts at the selected year without corrective scrolling")
+        modeButton("Month").tap()
+        XCTAssertTrue(element(dayID(chosen)).isSelected, "reentering Year preserves the chosen date")
     }
 
     func testYearReadsTripDaysButLeavesLocalBirthdayInMonth() {
