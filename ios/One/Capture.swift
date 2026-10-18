@@ -935,7 +935,7 @@ enum CaptureTitleRefinement {
     static func fallback(_ capture: Capture, source: String) -> Capture {
         var result = capture
         let title = CaptureParser.cleanRequestTitle(capture.title)
-        let motive = #"[，,。;；]\s*(?:因为|我需要|我想|这样|以便|(?i:because\b|so that\b|I need to\b|I want to\b))"#
+        let motive = #"[，,。;；]\s*(?:因为|我需要|我想|这样|以便|(?i:because\b|so that\b|I need to\b|I want to\b|I am allergic\b))"#
         if let range = title.range(of: motive, options: .regularExpression) {
             let action = String(title[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !action.isEmpty {
@@ -943,6 +943,7 @@ enum CaptureTitleRefinement {
                 result.notes = retainedNotes(capture.notes, source: source)
             }
         } else { result.title = title }
+        result.title = result.title.replacingOccurrences(of: #"^not to\s+"#, with: "Do not ", options: [.regularExpression, .caseInsensitive])
         // A narrow offline normalization for an explicit watch + sleep purpose, not a general semantic model.
         // We describe the requested action, never promise a score or a device capability.
         if source.localizedCaseInsensitiveContains("Apple Watch"),
