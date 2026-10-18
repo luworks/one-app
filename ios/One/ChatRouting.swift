@@ -115,7 +115,7 @@ enum ChatRouting {
     }
 
     static func isAgendaQuestion(_ text: String) -> Bool {
-        isQuestion(text) && has(text, #"^what(?:['’]s| is) left today\s*[?？]*$|\b(?:my (?:schedule|agenda|tasks|events|meetings)|what(?:'s| is) (?:on my|next)|free time)\b|(?:今天|今日).*(?:安排|日程|待办|任务|会议)|接下来.*(?:安排|什么)|空闲"#)
+        isQuestion(text) && has(text, #"^(?:(?:what(?:['’]s| is)|anything) left|what(?:['’]s| is) on) today\s*[?？]*$|\b(?:my (?:schedule|agenda|tasks|events|meetings)|what(?:'s| is) (?:on my|next)|free time)\b|(?:今天|今日).*(?:安排|日程|待办|任务|会议)|接下来.*(?:安排|什么)|空闲"#)
             && !has(text, #"activity|活动记录"#)
     }
 

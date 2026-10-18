@@ -236,6 +236,31 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testAnythingLeftTodayUsesReadOnlyAgendaRoute() {
+        let text = "Anything left today?"
+        XCTAssertEqual(ChatRouting.intent(text), .conversation)
+        XCTAssertTrue(ChatRouting.isAgendaQuestion(text))
+        XCTAssertEqual(ChatRouting.isAgendaQuestion(text), ChatRouting.isAgendaQuestion("What's left today?"))
+        XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true))
+
+        for question in ["Anything left today in my fridge?", "Anything left?", "Anything today?"] {
+            XCTAssertEqual(ChatRouting.intent(question), .conversation, question)
+            XCTAssertFalse(ChatRouting.isAgendaQuestion(question), question)
+        }
+    }
+
+    func testWhatsOnTodayUsesReadOnlyAgendaRoute() {
+        for text in ["What's on today?", "What’s on today?", "What is on today?"] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+            XCTAssertTrue(ChatRouting.isAgendaQuestion(text), text)
+            XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+        }
+        for text in ["What's on today's menu?", "What's on today on TV?", "What's on your mind today?"] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+            XCTAssertFalse(ChatRouting.isAgendaQuestion(text), text)
+        }
+    }
+
     func testPoliteContentGenerationStaysConversation() {
         for prefix in ["", "Please ", "Can you ", "Could you "] {
             for request in ["write a story?", "write me a poem?", "write me a cover letter?", "make a joke?"] {
