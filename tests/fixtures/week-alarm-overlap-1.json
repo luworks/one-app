@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "reminders": [],
+  "events": [
+    {
+      "title": "Lane overlap event 0",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    }
+  ],
+  "alarms": [
+    {
+      "time": "09:30",
+      "label": "Lane overlap alarm"
+    }
+  ],
+  "chats": []
+}

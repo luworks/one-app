@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "lists": [
+    {
+      "name": "Home",
+      "color": 1
+    }
+  ],
+  "reminders": [
+    {
+      "title": "Clean the drain filter",
+      "list": "Home",
+      "due": {
+        "day": 0,
+        "time": "07:00"
+      },
+      "planned": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "repeat": "daily"
+    }
+  ],
+  "events": [],
+  "alarms": [],
+  "chats": []
+}
