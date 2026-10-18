@@ -58,3 +58,11 @@ cohorts. n<3 cannot pass the 3x/10x gate, and p95 remains unknown. The reported 
 intervals are layout/display-link proxies, not compositor presentation, physical
 touch or full usability. Shipping Release size, optimized Debug phase timing and
 native host component benchmarks are three separate tracks.
+
+`with_owned_runner.py --simulator-name Today-Performance --derived-data <owned-DD>
+-- <command>` uses the E2E runner's named simulator/cache file locks for direct
+`xcodebuild` of the frozen source project. Direct builds are required to select
+that project and identical optimized Debug flags. The parent still obtains the
+global quiet-window handoff; these local locks do not grant a global slot.
+Capture output with `record_command.py`, and index the closed complete xcresult
+through the QA journal after the producer exits.
