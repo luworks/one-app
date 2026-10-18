@@ -12,7 +12,7 @@ struct ChatMessage: Identifiable, Equatable, Codable {
 }
 
 /// Full-screen AI page, modeled on ChatGPT / Claude mobile.
-/// No live model yet: statements become a capture preview; questions get a local summary.
+/// Conversation stays conversational; only requests to add items become capture previews.
 /// Nothing is created until the user taps Add on the preview card.
 struct AskView: View {
     @Environment(\.dismiss) private var dismiss
@@ -346,16 +346,35 @@ struct AskView: View {
         let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
         messages.append(ChatMessage(role: .user, text: text))
         turnStart = .now
-        closeOpenCards("ignored", plansOnly: true)
-        plan = []
-        tidy = []
-        undoRow = nil
-        // The message may answer what the last turn left open, or edit the preview that is showing.
-        if answerOpenTurn(text, history: history) {
+        let intent = ChatRouting.intent(text)
+        // A question-shaped answer to our time prompt may edit a preview; other conversation cannot.
+        let hasTimeContext: Bool
+        switch followup {
+        case .needTime, .alarmTime: hasTimeContext = true
+        case .chooseItem: hasTimeContext = false
+        case nil: hasTimeContext = pending != nil || (change != nil && change?.delete == false)
+        }
+        if let answer = ChatRouting.contextualTimeAnswer(text, hasTimeContext: hasTimeContext),
+           answerOpenTurn(answer, history: history) {
             recordTurn("answer", text)
             return
         }
-        followup = nil
+        // Clear conversation must not be mistaken for a follow-up that changes a pending card.
+        if intent == .conversation {
+            if ChatRouting.isAgendaQuestion(text) {
+                recordTurn("question", text)
+                messages.append(ChatMessage(role: .ai, text: todaySummary))
+            } else {
+                respond(text, history: history, intent: intent)
+            }
+            return
+        }
+        // Explicit supported operations go to their handlers, not broad preview/time refinement.
+        // Other messages may answer what the last turn left open, or edit the preview that is showing.
+        if !ChatRouting.isSupportedOperationRequest(text), answerOpenTurn(text, history: history) {
+            recordTurn("answer", text)
+            return
+        }
         if OverdueTidy.isRequest(text) {
             recordTurn("tidy", text)
             clearPreviews()
@@ -367,26 +386,49 @@ struct AskView: View {
         } else if SentenceRoute.isReviewRequest(text) {
             recordTurn("review", text)
             messages.append(ChatMessage(role: .ai, text: reviewSummary))
-        } else if isQuestion(text) {
-            // A question does not throw away the card the user is looking at.
-            recordTurn("question", text)
-            messages.append(ChatMessage(role: .ai, text: todaySummary))
         } else if Editing.looksLikeEdit(text, items: editCandidates().items) {
             recordTurn("edit", text)
             clearPreviews()
             proposeEdit(text, history: history)
         } else {
-            recordTurn("capture", text)
-            clearPreviews()
-            propose(text)
+            respond(text, history: history, intent: intent)
         }
     }
 
-    /// A new line moves on: cards still waiting for Add stay in the chat as Dropped, and a pending change goes.
+    /// Route before either extractor. Conversation leaves pending previews and follow-ups untouched.
+    private func respond(_ text: String, history: String, intent: ChatRouting.Intent) {
+        // Record the sent interaction before cancellation can discard its reply. The model has not resolved unsure input yet.
+        let initialIntent: String
+        switch intent {
+        case .capture: initialIntent = "capture"
+        case .conversation: initialIntent = "conversation"
+        case .unsure: initialIntent = "unsure"
+        }
+        recordTurn(initialIntent, text)
+        thinking = true
+        captureTask = Task { @MainActor in
+            let result = await ChatResponse.respond(text, history: history, intent: intent)
+            guard !Task.isCancelled else { return }
+            thinking = false
+            switch result {
+            case .capture:
+                clearPreviews()
+                propose(text)
+            case .reply(let reply):
+                messages.append(ChatMessage(role: .ai, text: reply))
+            }
+        }
+    }
+
+    /// Moving on drops pending cards in place, recording their resolution without removing chat history.
     private func clearPreviews() {
         closeOpenCards("ignored", plansOnly: false)
         dropOpenCards()
         change = nil
+        plan = []
+        tidy = []
+        undoRow = nil
+        followup = nil
     }
 
     // MARK: Activity data (tier 2)
@@ -394,7 +436,8 @@ struct AskView: View {
     /// The routing of one message: where it went, and how long and in what language it was. The text itself is not copied
     /// unless the user switched that on (Settings → Activity data).
     private func recordTurn(_ intent: String, _ text: String) {
-        let route = intent == "capture" && AICapture.isAvailable ? "model" : "rules"
+        // This describes the initial routing decision, before any model response or extraction.
+        let route = "rules"
         ActivityCenter.record(ActivityEvents.aiTurn(intent: intent, route: route, text: text,
                                                     keepText: ActivityCenter.shared.settings.keepChatText, thread: threadID))
     }
@@ -1013,11 +1056,6 @@ struct AskView: View {
             for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
             try? context.save()
         }
-    }
-
-    private func isQuestion(_ text: String) -> Bool {
-        text.hasSuffix("?") || text.hasSuffix("？") || ["什么", "怎么", "吗", "多少", "几"].contains { text.contains($0) }
-            || ["what", "how", "when", "which", "do ", "is ", "am ", "any"].contains { text.lowercased().hasPrefix($0) }
     }
 
     /// "Review today": what got done against what the day held, and what is left. Read only; moving or dropping what is

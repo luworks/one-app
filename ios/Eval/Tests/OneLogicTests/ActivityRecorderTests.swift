@@ -152,6 +152,41 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertEqual(ActivityProps.dictionary(on.props)["lang"] as? String, "en")
     }
 
+    func testSentChatTurnsRespectAIRecordingAndTextSettingsInStore() throws {
+        for mode in ["text", "noText", "paused", "aiOff"] {
+            let store = try ActivityStore(location: .memory)
+            var settings = ActivitySettings()
+            settings.keepChatText = mode != "noText"
+            settings.paused = mode == "paused"
+            if mode == "aiOff" { settings.tiers.remove(.ai) }
+            let r = recorder(store, settings: settings)
+            let thread = UUID()
+            for (intent, text) in [("conversation", "Hello"), ("unsure", "some thoughts")] {
+                r.record(ActivityEvents.aiTurn(intent: intent, route: "rules", text: text,
+                                              keepText: settings.keepChatText, thread: thread, at: now))
+            }
+            r.flush()
+            let turns = try store.page(ActivityQuery(kinds: ["ai.turn"]))
+            if mode == "paused" || mode == "aiOff" {
+                XCTAssertTrue(turns.isEmpty, mode)
+            } else {
+                XCTAssertEqual(turns.count, 2, "one event per sent interaction")
+                XCTAssertEqual(Set(turns.map { ActivityProps.dictionary($0.props)["intent"] as? String }), ["conversation", "unsure"])
+                for turn in turns {
+                    XCTAssertEqual(turn.thread, thread.uuidString)
+                    XCTAssertEqual(ActivityProps.dictionary(turn.props)["route"] as? String, "rules")
+                    let content = try store.content(uid: turn.uid)
+                    XCTAssertEqual(content.isEmpty, mode == "noText")
+                    if mode == "text" {
+                        XCTAssertEqual(content.map(\.field), ["input"])
+                        XCTAssertTrue(["Hello", "some thoughts"].contains(content.first?.after ?? ""))
+                    }
+                }
+            }
+            XCTAssertEqual(try store.count(ActivityQuery(tiers: [.changes])), 0, "chat does not enter the change ledger")
+        }
+    }
+
     func testResolvedCardNamesEditedFieldsInPropsAndKeepsWordsInContent() {
         var shown = Capture(title: "Call mom", day: now, hasDay: true)
         shown.hour = 15
