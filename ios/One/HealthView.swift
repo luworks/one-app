@@ -4,17 +4,20 @@ import SwiftUI
 /// Recovery, Body). Each row is the metric's name, its latest value with a quiet date label and a 7-day sparkline;
 /// tapping opens the detail. Read-only: Today only reads Apple Health.
 /// Editing has no Edit button, like everywhere in the app: swipe a row for Hide, long-press for Hide / Move Up /
-/// Move Down, press, hold and drag to reorder inside a group, and Add Metric (a quiet row, also in the ··· menu)
-/// offers the metrics not shown yet.
+/// Move Down, press, hold and drag to reorder inside a group, and Manage Metrics (also in the ··· menu)
+/// offers visibility switches for every supported metric.
 struct HealthView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     private let model = HealthModel.shared
     @State private var detail: HealthMetric?
     @State private var adding = false
-    /// What the picker chose. It is added only after the picker is gone, so Apple's permission sheet has a free
-    /// screen to appear on (presenting it over a sheet that is still closing is what left the request unanswered).
-    @State private var pendingBatch: [HealthMetric] = []
+    @State private var visibleMetrics: Set<HealthMetric> = []
+
+    private func manageMetrics() {
+        visibleMetrics = Set(model.selection.shown)
+        adding = true
+    }
 
     var body: some View {
         List {
@@ -33,8 +36,8 @@ struct HealthView: View {
                     if model.selection.shown.isEmpty {
                         Text("No metrics shown.").font(.subheadline).foregroundStyle(.secondary)
                     }
-                    Button { adding = true } label: {
-                        Label("Add Metric", systemImage: "plus")
+                    Button { manageMetrics() } label: {
+                        Label("Manage Metrics", systemImage: "slider.horizontal.3")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .frame(minHeight: 44, alignment: .leading)
@@ -52,7 +55,7 @@ struct HealthView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
-                    Button { adding = true } label: { Label("Add Metric", systemImage: "plus") }
+                    Button { manageMetrics() } label: { Label("Manage Metrics", systemImage: "slider.horizontal.3") }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -69,12 +72,13 @@ struct HealthView: View {
             HealthMetricDetail(metric: metric, series: model.series[metric] ?? .empty, now: TodayClock.now, units: model.units)
         }
         .sheet(isPresented: $adding, onDismiss: {
-            let batch = pendingBatch
-            pendingBatch = []
-            guard !batch.isEmpty else { return }
-            Task { await model.add(batch) }
+            // Keep the order of existing rows; newly shown metrics append in catalog order.
+            for metric in model.selection.shown where !visibleMetrics.contains(metric) { model.hide(metric) }
+            let additions = HealthMetric.allCases.filter { visibleMetrics.contains($0) && !model.selection.shown.contains($0) }
+            guard !additions.isEmpty else { return }
+            Task { await model.add(additions) }
         }) {
-            HealthMetricPicker(hidden: model.selection.hidden) { pendingBatch = $0 }
+            HealthMetricPicker(shown: $visibleMetrics)
         }
     }
 

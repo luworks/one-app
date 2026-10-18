@@ -23,9 +23,11 @@ final class HealthStallTests: XCTestCase {
 
     private func add(_ app: XCUIApplication, _ id: String) {
         app.buttons["health.add"].tap()
-        XCTAssertTrue(app.buttons["health.pick.\(id)"].waitForExistence(timeout: 3), "the picker appears")
-        XCTAssertFalse(app.activityIndicators.firstMatch.exists && !app.buttons["health.pick.\(id)"].exists, "no sheet-wide spinner")
-        app.buttons["health.pick.\(id)"].tap()
+        let toggle = app.switches["health.pick.\(id)"]
+        for _ in 0..<4 where !toggle.isHittable { app.swipeUp() }
+        XCTAssertTrue(app.switches["health.pick.\(id)"].waitForExistence(timeout: 3), "the picker appears")
+        XCTAssertFalse(app.activityIndicators.firstMatch.exists && !app.switches["health.pick.\(id)"].exists, "no sheet-wide spinner")
+        app.switches["health.pick.\(id)"].tap()
         app.buttons["health.pick.add"].tap()
     }
 
