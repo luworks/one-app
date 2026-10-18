@@ -50,8 +50,8 @@ struct TimerSection: View {
             }
             .listStyle(.plain)
             .accessibilityIdentifier("timer.list")
-            // Runtime List bounds extend 32 pt behind the floating composer; leave another 8 pt of clearance.
-            .contentMargins(.bottom, 40, for: .scrollContent)
+            // Clear the composer's 32 pt overlap and the footer row's 24 pt accessible bottom inset.
+            .contentMargins(.bottom, 64, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showsSound) {
