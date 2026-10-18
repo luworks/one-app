@@ -1063,5 +1063,194 @@
       }
     ],
     "fine_ai_stages": "pending: app stdout unavailable; post-endpoint stage export source-only eee949a"
+  },
+  "secondary_page_and_ai_stage_cohort": {
+    "production_sha": "b1fc12b62e796ac6c232da5e524235a59edba945",
+    "measurement_sha": "eee949a",
+    "context": "Debug-O; same fixture/device; AI fresh process; pages ordered first-cycle/two-revisits; drafts cancel only",
+    "evidence": "round4-summary.json / round4-stages.json",
+    "metrics": [
+      {
+        "name": "ai_ready_to_response_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          70.354041,
+          115.908417,
+          108.751083
+        ],
+        "median_ms": 108.751083,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 36.250361,
+        "proposed_stretch_ms": 10.875108299999999
+      },
+      {
+        "name": "ai_send_to_feedback_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          356.239458,
+          526.244666,
+          444.116125
+        ],
+        "median_ms": 444.116125,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 148.03870833333335,
+        "proposed_stretch_ms": 44.411612500000004
+      },
+      {
+        "name": "ai_send_to_first_response_ready",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          285.991292,
+          438.115416,
+          335.444917
+        ],
+        "median_ms": 335.444917,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 111.81497233333333,
+        "proposed_stretch_ms": 33.544491699999995
+      },
+      {
+        "name": "ai_send_to_full_response_ready",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          285.991292,
+          438.115416,
+          335.444917
+        ],
+        "median_ms": 335.444917,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 111.81497233333333,
+        "proposed_stretch_ms": 33.544491699999995
+      },
+      {
+        "name": "ai_turn_to_response_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          356.345333,
+          554.023833,
+          444.196
+        ],
+        "median_ms": 444.196,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 148.06533333333334,
+        "proposed_stretch_ms": 44.4196
+      },
+      {
+        "name": "page.ai",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          2371.249583,
+          2137.986417,
+          2188.069208
+        ],
+        "median_ms": 2188.069208,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 729.3564026666667,
+        "proposed_stretch_ms": 218.8069208
+      },
+      {
+        "name": "page.alarm.editor",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          398.109917,
+          182.913041,
+          199.302292
+        ],
+        "median_ms": 199.302292,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 66.43409733333333,
+        "proposed_stretch_ms": 19.9302292
+      },
+      {
+        "name": "page.event.editor",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          1540.471667,
+          634.067458,
+          533.707875
+        ],
+        "median_ms": 634.067458,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 211.35581933333333,
+        "proposed_stretch_ms": 63.406745799999996
+      },
+      {
+        "name": "page.settings",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          766.372667,
+          182.901125,
+          250.186417
+        ],
+        "median_ms": 250.186417,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 83.39547233333333,
+        "proposed_stretch_ms": 25.0186417
+      },
+      {
+        "name": "page.settings.automaticChanges",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          193.236458,
+          131.366917,
+          147.670917
+        ],
+        "median_ms": 147.670917,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 49.223639,
+        "proposed_stretch_ms": 14.7670917
+      },
+      {
+        "name": "page.settings.calendars",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          167.510708,
+          132.647083,
+          282.701542
+        ],
+        "median_ms": 167.510708,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 55.83690266666667,
+        "proposed_stretch_ms": 16.7510708
+      },
+      {
+        "name": "page.settings.holidays",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          253.745875,
+          181.432083,
+          173.330292
+        ],
+        "median_ms": 181.432083,
+        "p95_ms": null,
+        "baseline_usable": true,
+        "proposed_required_ms": 60.477361,
+        "proposed_stretch_ms": 18.1432083
+      }
+    ],
+    "internal_stage_status": "three complete tokens captured; diagnostic elapsed only"
   }
 }

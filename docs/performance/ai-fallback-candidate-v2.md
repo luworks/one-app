@@ -8,7 +8,7 @@ files were changed for this diagnosis; no build, Swift test, UI run or profile w
 ## Evidence and limit
 
 Canonical log: primary checkout `tests/results/runs/performance-pages-ai-20261018/baseline-v2-round4-54c0dcf2.log`.
-SHA-256: `b5de64edb44dbbe31378bbbf62e89ef2d4639bad4f9d3afc3b45748994d25243`.
+SHA-256: `9c378dffd610fa8f89de424dbec2eb78db6ae790fffb00df1c794cd1535c7789`.
 `AIResponsePerformanceTests.testConversationFreshLaunchN3` passed in 66.386 s (automation duration,
 not reply latency). Three fresh-process, fixed-fixture `Hello` turns used simulator fallback.
 Monotonic stage differences have medians: record-turn-after → task-enter 162.062 ms;

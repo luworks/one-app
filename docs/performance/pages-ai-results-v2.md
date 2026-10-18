@@ -129,3 +129,41 @@ The standalone n1 init samples in Settings/navigation are excluded from accepted
 Fine AI stages were printed only by the app and absent from the runner log. One closed xcresult console extraction failed exit1 with `Error: No console log available`; stdout0B. Therefore internal stage timings remain unmeasured. Source-only eee949a exports one token-keyed stage line via the existing final history publication after both layout endpoints are frozen; a focused subsequent run must verify capture before using it. No bottleneck is attributed from missing data.
 
 Evidence: `baseline-v2-round3-f735cb88.log`, `round3-command.json`, `staged-source-v2-round3/manifest.json`, `round3-summary.json`, `round3-console.{stdout,stderr}` and full closed `baseline-v2-round3/ui.xcresult`. Three-method run exit0; owned simulator/panel shut down, live heavy/booted empty12:47:20 PDT.
+
+
+## Secondary pages and complete AI stage export
+
+Productionb1fc12b plus measurementeee949a, same Debug-O cache/device/fixture. Three selected methods passed: AI conversation66.386s, local event/alarm drafts65.456s, Settings subpages167.930s. Drafts are opened/cancelled without saving or permission prompts; settings switches/grants are not changed. The stage-export repair is now runtime verified: each of three conversation tokens has exactly five endpoints plus one complete stage line, exported after both layouts are frozen. No source model/production optimization is included.
+
+| Endpoint | Raw ms | Median ms | Required /3 | Stretch /10 |
+| --- | --- | ---: | ---: | ---: |
+| ai_ready_to_response_layout | 70.354, 115.908, 108.751 | 108.751 | 36.250 | 10.875 |
+| ai_send_to_feedback_layout | 356.239, 526.245, 444.116 | 444.116 | 148.039 | 44.412 |
+| ai_send_to_first_response_ready | 285.991, 438.115, 335.445 | 335.445 | 111.815 | 33.544 |
+| ai_send_to_full_response_ready | 285.991, 438.115, 335.445 | 335.445 | 111.815 | 33.544 |
+| ai_turn_to_response_layout | 356.345, 554.024, 444.196 | 444.196 | 148.065 | 44.420 |
+| page.ai | 2371.250, 2137.986, 2188.069 | 2188.069 | 729.356 | 218.807 |
+| page.alarm.editor | 398.110, 182.913, 199.302 | 199.302 | 66.434 | 19.930 |
+| page.event.editor | 1540.472, 634.067, 533.708 | 634.067 | 211.356 | 63.407 |
+| page.settings | 766.373, 182.901, 250.186 | 250.186 | 83.395 | 25.019 |
+| page.settings.automaticChanges | 193.236, 131.367, 147.671 | 147.671 | 49.224 | 14.767 |
+| page.settings.calendars | 167.511, 132.647, 282.702 | 167.511 | 55.837 | 16.751 |
+| page.settings.holidays | 253.746, 181.432, 173.330 | 181.432 | 60.477 | 18.143 |
+
+AI stage elapsed spans, n3 same fresh-process Hello turns (not CPU, executor contention or inference measurements):
+
+| Span | Raw ms | Median ms |
+| --- | --- | ---: |
+| await_to_emission | 0.037, 0.039, 0.054 | 0.039 |
+| context_to_respond | 14.002, 14.847, 17.195 | 14.847 |
+| emission_to_observation | 19.783, 15.210, 17.623 | 17.623 |
+| observation_to_ready | 0.007, 0.009, 0.010 | 0.009 |
+| ready_to_layout | 70.354, 115.908, 108.751 | 108.751 |
+| record_call | 0.142, 1.529, 1.405 | 1.405 |
+| response_await | 40.100, 239.786, 144.624 | 144.624 |
+| send_to_context | 1.691, 4.417, 1.678 | 1.691 |
+| task_queue | 209.946, 162.062, 152.654 | 162.062 |
+
+Do not add/subtract independent medians to predict a total. Async scheduling and await elapsed time motivate one bounded deterministic-local-reply experiment, not a CPU attribution or verified gain. Its full-layout target is444.196/3=148.065ms for this cohort, but final candidate acceptance must use matching diagnostic schema/configuration and correctness gates. Model-available paths remain outside simulator inference evidence.
+
+Evidence: `baseline-v2-round4-54c0dcf2.log`, `round4-command.json`, `staged-source-v2-round4/manifest.json`, `round4-summary.json`, `round4-stages.json`, full closed `baseline-v2-round4/ui.xcresult`; archived QA session `performance-pages-v2-round4-20261018`. Exit0; all owned simulator/panel closed, live heavy/booted empty12:54:18 PDT. Remaining tertiary pages, per-page memory/hitches, persistence outcomes and model internals remain explicitly pending.
