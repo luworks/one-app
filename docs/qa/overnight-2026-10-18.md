@@ -53,6 +53,11 @@ the label is visibly present in the exact PNG. That finding was withdrawn; no pr
 
 ## Durable test inputs and action history
 
+Infrastructure delivery: #41 merged to remote main at `bc4fcaca5f000c10fd20fc5b521876f3668a58a9`;
+#52 was then retargeted and merged at `bf969dbbaa37cec5a6aca970007c32895e7ceba4`.
+The local baseline checkout stays at `55e73d5` until its full run exits.
+These merges contain QA tooling and documentation; app-fix acceptance remains pending.
+
 [PR #51](https://github.com/luworks/one-app/pull/51) replaces temporary UI dataset generators with
 versioned overlap and repeating-reminder files under `tests/fixtures/`. The fixture catalog maps each
 file to its consumers and records relative-date/default behavior. Existing package-bound capture
