@@ -508,13 +508,11 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     private static func event(_ r: Row) -> ActivityEvent {
-        var e = ActivityEvent(kind: r.text(7) ?? "", tier: ActivityTier(rawValue: Int(r.int(6) ?? 4)), actor: r.text(8) ?? "")
+        var e = ActivityEvent(persistedUID: r.text(1) ?? "", ts: r.int(3) ?? 0,
+                              tz: Int(r.int(4) ?? 0), day: Int(r.int(5) ?? 0),
+                              tier: ActivityTier(rawValue: Int(r.int(6) ?? 4)), kind: r.text(7) ?? "", actor: r.text(8) ?? "")
         e.rowID = r.int(0)
-        e.uid = r.text(1) ?? ""
         e.device = r.text(2) ?? ""
-        e.ts = r.int(3) ?? 0
-        e.tz = Int(r.int(4) ?? 0)
-        e.day = Int(r.int(5) ?? 0)
         e.channel = r.text(9)
         e.session = r.text(10)
         e.thread = r.text(11)
