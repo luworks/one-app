@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import threading
@@ -27,7 +28,6 @@ LANE = hashlib.sha256(str(ROOT / 'ios/One.xcodeproj').encode()).hexdigest()[:16]
 TOOLS = ROOT / '.preview-tools'
 DD = Path.home() / 'Library/Caches/axe' / ('preview-' + LANE) / 'build'
 PROCESSES = []
-STOP = threading.Event()
 
 
 def download(url, path, sha):
@@ -66,16 +66,17 @@ def main():
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, interrupted)
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--watch', choices=SCREENS, default='reminders')
+    p.add_argument('--watch', choices=SCREENS, default='health')
     p.add_argument('--port', type=int, default=0, help='Loopback port; 0 chooses a free port')
     p.add_argument('--budget', type=int, default=600, help='Hard lifetime including installation/build; seconds')
+    p.add_argument('--verify-release', action='store_true', help='Also build ordinary Release and inspect preview exclusion')
     p.add_argument('--once', action='store_true', help='Capture gallery and shut down without watch/server')
     p.add_argument('--plan', action='store_true', help='Print ownership and commands; no installation or simulator operation')
     args = p.parse_args()
     sim_name = 'Today-Preview-POC-' + LANE[:8]
     common = ['--project', str(ROOT / 'ios/One.xcodeproj'), '--scheme', 'One', '--configuration', 'Debug', '--device', '<owned UDID>']
     report = [str(TOOLS / 'axe'), 'preview', 'report', *[str(ROOT / 'ios/One' / f) for f in SCREENS.values()], '--format', 'html', '--concurrency', '1', '--wait', '2s', '-o', '<run>/gallery', *common]
-    watch = [str(TOOLS / 'axe'), 'preview', 'watch', str(ROOT / 'ios/One' / SCREENS[args.watch]), '--reuse-build', '--headless', *common]
+    watch = [str(TOOLS / 'axe'), 'preview', 'watch', str(ROOT / 'ios/One' / SCREENS[args.watch]), '--reuse-build', '--headless', '--strict', *common]
     if args.plan:
         print(json.dumps({'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'simulator': sim_name, 'derivedData': str(DD), 'report': report, 'watch': watch, 'budget': args.budget}, indent=2))
         return
@@ -137,6 +138,29 @@ def main():
         if len(assets) < 3:
             raise RuntimeError('Gallery must contain all three real captures')
         live = gallery / 'live.png'
+        initial = next(asset for asset in assets if asset.name.startswith(Path(SCREENS[args.watch]).stem + '--'))
+        shutil.copy2(initial, live)
+        if args.verify_release:
+            command = ['/usr/bin/xcodebuild', 'build', '-project', str(ROOT / 'ios/One.xcodeproj'),
+                       '-scheme', 'One', '-configuration', 'Release', '-destination', 'id=' + udid,
+                       '-derivedDataPath', str(DD), '-jobs', '2', 'ONLY_ACTIVE_ARCH=YES']
+            run(command, 'ordinary-release')
+            binary = DD / 'Build/Products/Release-iphonesimulator/One.app/One'
+            symbols = subprocess.check_output(['nm', '-a', str(binary)], text=True)
+            (out / 'release-symbols.txt').write_text(symbols)
+            forbidden = ['PreviewFixtures', 'previewFixture', 'AXE_PREVIEW_SOCKET_PATH']
+            binary_data = binary.read_bytes()
+            if any(name in symbols or name.encode() in binary_data for name in forbidden):
+                raise RuntimeError('Preview-only code found in ordinary Release binary')
+            file_lists = list((DD / 'Build/Intermediates.noindex/One.build/Release-iphonesimulator/One.build').rglob('*.SwiftFileList'))
+            for path in file_lists:
+                shutil.copy2(path, out / ('release-inputs-' + path.parent.name + '-' + path.name))
+                if 'PreviewFixtures.swift' in path.read_text():
+                    raise RuntimeError('PreviewFixtures is a Release compile input')
+            if not file_lists:
+                raise RuntimeError('Cannot verify Release compile input list')
+            (out / 'release-exclusion.json').write_text(json.dumps({'binary': str(binary), 'sha256': hashlib.sha256(binary_data).hexdigest(), 'fileLists': [str(f) for f in file_lists], 'excluded': forbidden}, indent=2))
+            event('ordinary-release.exclusion-verified')
         html = '''<!doctype html><meta charset="utf-8"><title>Today SwiftUI previews</title>
 <style>body{font:16px system-ui;background:#eee;color:#222;margin:24px}main{display:flex;gap:20px;flex-wrap:wrap}figure{margin:0;width:300px}img{width:100%;border-radius:24px}figcaption{padding:12px}a{color:#1465b0}</style>
 <h1>Today · SwiftUI previews</h1><p>Real simulator captures · static gallery plus one watched screen · <a href="axe_swiftui_preview_report.html">axe report</a></p><main>'''
@@ -160,6 +184,8 @@ def main():
             for line in proc.stdout:
                 log.write(f'{time.monotonic()-start:.3f} {line}')
                 log.flush()
+                if 'Preview launched in degraded mode' in line:
+                    raise RuntimeError('Hot reload unavailable; retain failure rather than silently degrading')
                 if 'Watching ' in line or 'Preview hot-reloaded.' in line or 'Preview incrementally reloaded.' in line:
                     event('watch.rendered', message=line.strip())
                     time.sleep(0.5)

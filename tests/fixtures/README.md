@@ -136,3 +136,15 @@ are retained as XCTest attachments inside the eventual xcresult bundle.
   Add/editor Save/reopen, English add-repeat/time-correction. These use production
   simulator fallback, not an injected model. XCTest attachments belong in the
   complete retained xcresult bundle.
+
+## SwiftUI development previews
+
+The small inline fixtures in `ios/One/PreviewFixtures.swift` (DEBUG only) seed
+three reminder lists and three reminders in an in-memory SwiftData container.
+`WorldClockStore.previewFixture()` in `ios/One/WorldClockView.swift` provides
+London, Shanghai and Tokyo with Los Angeles as home in a separate store instance.
+`HealthMetricDetail.swift`'s `Weight trend` preview reuses the versioned
+`HealthSampleSeries.swift` algorithm and `PreviewFixtures.healthNow` fixed date.
+The three corresponding `#Preview` declarations render production views.
+No required input lives in a temporary directory; screenshots and timing outputs
+belong in the persistent QA results directory, not this fixture catalog.
