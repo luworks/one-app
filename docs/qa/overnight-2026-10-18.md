@@ -24,9 +24,10 @@ Reusable commands, source inventory and platform boundaries are in [the coverage
 | [#38](https://github.com/luworks/one-app/issues/38) | Share inbox is consumed before SwiftData save succeeds | [#45](https://github.com/luworks/one-app/pull/45), [#46](https://github.com/luworks/one-app/pull/46) | Old ordering loses a real file-backed draft with an injected persistence throw; six durability cases pass against a transaction stand-in. Real SwiftData UI journeys are prepared, not yet executed |
 | [#39](https://github.com/luworks/one-app/issues/39) | A 90-day Health comparison has only 13 days of previous-period history | [#44](https://github.com/luworks/one-app/pull/44) | Uneven 180-day readings reproduced incorrect comparison; corrected history and fixture bounds pass |
 | [#47](https://github.com/luworks/one-app/issues/47) | A leading relative time hides the imperative from chat routing, so “30分钟后关烤箱” produces no reminder preview | [#48](https://github.com/luworks/one-app/pull/48) | Full UI reproduced missing Add; four route assertions failed before fix, 44 focused routing/dialogue tests passed after fix. UI acceptance pending |
+| [#49](https://github.com/luworks/one-app/issues/49) | “Anything left today?” fails to select the read-only agenda summary selected by “What's left today?” | [#50](https://github.com/luworks/one-app/pull/50) | Existing CRUD UI failed; two agenda-route assertions failed before fix, 31 focused tests passed afterward. UI acceptance pending |
 
 The Share stack must merge in order: #42, then retarget #45 to main, then retarget #46 to main after #45 merges.
-The AI stack must merge #40 before retargeting #48 to main.
+The AI stack must merge #40, retarget #48 to main and merge it, then retarget #50 to main.
 No existing model is removed. The import receipt is additive; `Habit` and `LedgerEntry` stay in the schema.
 The Share persistence injection throws before save and is not evidence of a spontaneous SwiftData storage error.
 
