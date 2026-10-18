@@ -1,6 +1,6 @@
 import Foundation
 
-/// Realistic made-up Health data for UI tests and the simulator: 103 days per metric, relative to `now`, identical on
+/// Realistic made-up Health data for UI tests and the simulator: 180 days per metric, relative to `now`, identical on
 /// every run (seeded per metric). Two metrics show the edge states on purpose: Body Fat was last measured 12 days
 /// ago (a stale date label) and Mindful Minutes has nothing at all (the "—" row).
 enum HealthSampleSeries {
@@ -36,7 +36,7 @@ enum HealthSampleSeries {
             case .weight:
                 let r = rng.next(in: 0...1), jitter = rng.next(in: -0.35...0.35)
                 guard r < 0.7 || back == 0, let at = morning(back, &rng) else { continue }
-                points.append(HealthPoint(date: at, value: ((70.3 + 1.5 * Double(back) / 90 + jitter) * 10).rounded() / 10))
+                points.append(HealthPoint(date: at, value: ((70.3 + 1.5 * Double(back) / Double(days - 1) + jitter) * 10).rounded() / 10))
             case .restingHeartRate:
                 let r = rng.next(in: 0...1), v = rng.next(in: 55...63)
                 guard r < 0.85, let at = morning(back, &rng) else { continue }
