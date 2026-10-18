@@ -28,8 +28,41 @@ byte-identical to the previous final branch (executed production `48d2d81`);
 Main's Drawer, ReminderListScreen and RemindersView are also unchanged, and
 experimental header commit `9435048` is not an ancestor. Thus previous focused
 host evidence is inherited by unchanged source; no Swift/build/UI ran during the
-performance window. Centralized same-source build and the three UI methods remain
-pending. No main merge is performed by this implementation lane.
+performance window. Centralized same-source acceptance subsequently completed; see the execution
+record below. Main delivery was performed by the compatibility owner.
+
+## Centralized simulator acceptance
+
+PR #74 source `9a8cf4b` was tested in frozen integration `2bd85cf`, on iPhone 16
+(`Today-Compatibility-Standard`, `0B5AF982-6B76-43E9-B5BF-F56C2D16E529`), iOS 27.0,
+light/Large. All PR74 changed paths are byte-identical between these trees.
+The first shared build failed only at three unavailable DEBUG geometry formatters
+in the unrelated header candidate. Their minimal SDK API replacement built
+successfully using the existing cache; recurrence behavior and assertions did not
+change. Both logs remain in canonical storage.
+
+Three selected UI methods passed, without repeating host green checks:
+
+- Chinese direct Sunday request: preview title, 17:00, Every Sun, one Add and no
+  planner writes, 32.596 s.
+- English recurrence follow-up/time correction: subject plus Thu/Sun retained,
+  16:00 → 18:00 and no writes, 45.168 s.
+- Actual Fri/Sun Add, editor Save and reopening: title and both weekdays persisted,
+  35.408 s.
+
+These establish the real simulator confirmation gate and local stored-model/editor
+persistence. They do not establish actual Foundation Models, EventKit runtime sync
+or physical notification delivery. Prior fallback development observations remain
+partial; do not generalize UI evidence to every fixture/model path.
+
+PR #74 merged to main `91c1298cde0fbf14a0f54daab48d13c4aaa72c4f`; primary main was
+fast-forwarded cleanly. Header B/probe/formatter and reorder experiments were
+excluded from that delivery. Issue #70 was closed with this verified scope.
+Complete `ui.xcresult`, logs and Product/source identity remain in primary
+`tests/results/runs/recurrence-header-B-integrated-20261018/recurrence`; build logs
+are in `recurrence-header-B-build{-repaired}-20261018`. Runner shutdown exit 0,
+no journal errors. At 11:36:36 PDT the compatibility owner released all heavy work
+to the performance package window. No additional suite or phone work followed.
 
 ## Production path
 
