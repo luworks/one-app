@@ -14,9 +14,9 @@ support; it does not establish real hardware's OS eligibility or capabilities.
 
 | Lane | Simulator model | Logical portrait size | Display | Evidence |
 | --- | --- | --- | --- | --- |
-| small | iPhone SE (3rd generation) | 375 × 667 | light, Large | Pending batch completion |
-| standard | iPhone 16 | 393 × 852 | light, Large | Pending batch completion |
-| mini | iPhone 13 mini | 375 × 812 | dark, XXXL | Planned after initial pair |
+| small | iPhone SE (3rd generation) | 375 × 667 | light, Large | 4 passed / 1 reorder failure |
+| standard | iPhone 16 | 393 × 852 | light, Large | 4 passed / 1 reorder failure |
+| mini | iPhone 13 mini | 375 × 812 | dark, XXXL | 5 passed; 0.5 s pickup variant |
 | baseline | iPhone 18 Pro Max, Today-Codex | 440 × 956 | baseline settings | Inherited same-code evidence from issue #32 |
 
 Pro Max evidence is inherited from the owner's previous integration batches on
@@ -49,7 +49,35 @@ commands are in `tests/qa/README.md`.
 One focused infrastructure review identified and resolved parent signal
 forwarding, actual model/runtime validation and relative-path relocation issues.
 Host checks: 12 runner contracts and 3 product-relocation/command checks pass.
-No app logic changed, so no duplicate pure Swift run was required.
+No package logic changed, so no duplicate pure Swift run was required.
+The list-drop product candidate below is awaiting simulator regression.
+
+## Reorder diagnosis and handoff checkpoint
+
+The initial two devices each ran five methods: 4 passed, 1 failed (My Lists drag).
+The exact original method failed again alone on SE 3, excluding parallelism as a
+necessary cause. Frame/event evidence places both points inside the visible
+cards and clear of the sidebar edge. Original 1.5 s pickup leaves a menu covering
+the target and incurs the XCTest 60 s animation-idle wait. A NavigationLink
+candidate failed and was reverted. A 0.5 s pickup removed that idle wait but still
+failed on SE 3; it passed on Mini. This is not a proven cross-screen harness fix.
+The original 1.5 s real drag and strict final order assertion are restored in source,
+with added full-visibility/frame diagnostics. No assertion was weakened.
+
+Issue #62 tracks the reproduced failure. The next candidate (`7de52de`) moves
+String drops from individual View rows to the native ForEach insertion-index
+API, keeping native onMove, card styling and existing persistence/Activity paths.
+Local SDK confirms DynamicViewContent's `([String], Int) -> Void` overload. This
+candidate is **not built or runtime-accepted at this checkpoint**. It must pass
+the original regression before being called a fix.
+
+At 10:23:53 PDT, Mini's 5/5 batch was complete, all compatibility simulators were
+Shutdown and host checks found no xcodebuild/Swift-test/UI runner. The performance
+thread received the quiet window, so no new heavy work starts until it returns it.
+PR #63's inline reminder header will then integrate on this same source path and
+incremental cache. The small-screen batch will select reorder plus smart-list
+back/count/scroll and tab-memory/More/native-edge-back journeys (three methods).
+No hardware-matrix expansion or repeated Pro Max baseline is planned.
 
 ## Durable evidence
 
@@ -62,6 +90,13 @@ in the separate QA `activity.sqlite`, never the app's user Activity database.
   devices, Xcode version and project settings.
 - `runs/compatibility-pair-20261018/`: per-device logs, summary/progress and complete
   `ui.xcresult`; separate `*-cache` directories hold copied build products.
+- `runs/compatibility-reorder-isolated-20261018/`: unchanged isolated failure.
+- `runs/compatibility-reorder-{build,fixed}-20261018/`: rejected NavigationLink candidate.
+- `runs/compatibility-gesture-build-20261018/` and `runs/compatibility-gesture-20261018/`:
+  pickup timing diagnostic.
+- `runs/compatibility-mini-20261018/`: complete dark/XXXL 5/5 batch on `ed3a2da`.
+- Exported failure movies, accessibility snapshots, synthesized event coordinates
+  and filmstrips are retained beside their completed bundles and indexed separately.
 
 No live xcresult was archived or moved. Completed bundles remain in canonical
 storage indexed by path/hash. Display settings are explicit in lane summaries.

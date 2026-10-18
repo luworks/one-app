@@ -1,0 +1,155 @@
+{
+  "status": "checkpoint_pending_reorder_acceptance",
+  "base_app_source": "c42b88e6712882f1d627d68d5769913d959bc72c",
+  "supported_device_family": [
+    1
+  ],
+  "deployment_os": "27.0",
+  "installed_runtime": "iOS 27.0 (24A434)",
+  "sdk": "iphonesimulator27.1",
+  "max_executed_parallel_ui_runners": 2,
+  "matrix_expansion_closed": true,
+  "host_checks": {
+    "runner": 12,
+    "compatibility": 3,
+    "failed": 0
+  },
+  "simulator_limitations": [
+    "physical RAM/GPU/thermal/radio/sensors",
+    "real HealthKit permission/data/performance",
+    "physical AlarmKit ringing"
+  ],
+  "runs": [
+    {
+      "run": "compatibility-pair-20261018/small",
+      "head": "c42b88e6712882f1d627d68d5769913d959bc72c",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "passed": 4,
+          "failed": 1
+        }
+      },
+      "elapsed_seconds": 541.791,
+      "simulator_id": "04269E85-F517-4360-B08B-7F1BE4DE608B",
+      "simulator_name": "Today-Compatibility-Small",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "shutdown_exit": 0,
+      "journal_errors": [],
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-pair-20261018/small/ui.xcresult"
+    },
+    {
+      "run": "compatibility-pair-20261018/standard",
+      "head": "c42b88e6712882f1d627d68d5769913d959bc72c",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "passed": 4,
+          "failed": 1
+        }
+      },
+      "elapsed_seconds": 543.32,
+      "simulator_id": "0B5AF982-6B76-43E9-B5BF-F56C2D16E529",
+      "simulator_name": "Today-Compatibility-Standard",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "shutdown_exit": 0,
+      "journal_errors": [],
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-pair-20261018/standard/ui.xcresult"
+    },
+    {
+      "run": "compatibility-reorder-isolated-20261018",
+      "head": "f47172763f641d646ea13ba62b69e71f42925a71",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "failed": 1
+        }
+      },
+      "elapsed_seconds": 113.311,
+      "simulator_id": "04269E85-F517-4360-B08B-7F1BE4DE608B",
+      "simulator_name": "Today-Compatibility-Small",
+      "display_settings": {
+        "appearance": null,
+        "content_size": null
+      },
+      "shutdown_exit": 0,
+      "journal_errors": [],
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-reorder-isolated-20261018/ui.xcresult"
+    },
+    {
+      "run": "compatibility-reorder-fixed-20261018",
+      "head": "f87f24fa834e522bad15c492b573caa5d12d0139",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "failed": 1
+        }
+      },
+      "elapsed_seconds": 123.72,
+      "simulator_id": "04269E85-F517-4360-B08B-7F1BE4DE608B",
+      "simulator_name": "Today-Compatibility-Small",
+      "display_settings": {
+        "appearance": null,
+        "content_size": null
+      },
+      "shutdown_exit": 0,
+      "journal_errors": [],
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-reorder-fixed-20261018/ui.xcresult"
+    },
+    {
+      "run": "compatibility-gesture-20261018",
+      "head": "ed3a2dabffcfd164b4df182203fdf04336e04f5e",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "failed": 1
+        }
+      },
+      "elapsed_seconds": 67.095,
+      "simulator_id": "04269E85-F517-4360-B08B-7F1BE4DE608B",
+      "simulator_name": "Today-Compatibility-Small",
+      "display_settings": {
+        "appearance": null,
+        "content_size": null
+      },
+      "shutdown_exit": 0,
+      "journal_errors": [],
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-gesture-20261018/ui.xcresult"
+    },
+    {
+      "run": "compatibility-mini-20261018/mini",
+      "head": "ed3a2dabffcfd164b4df182203fdf04336e04f5e",
+      "status": "passed",
+      "counts": {
+        "ui": {
+          "passed": 5
+        }
+      },
+      "elapsed_seconds": 389.216,
+      "simulator_id": "67F7846C-D93E-4694-8141-1366E1B4D940",
+      "simulator_name": "Today-Compatibility-Mini",
+      "display_settings": {
+        "appearance": "dark",
+        "content_size": "extra-extra-extra-large"
+      },
+      "shutdown_exit": 0,
+      "journal_errors": [],
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/compatibility-mini-20261018/mini/ui.xcresult"
+    }
+  ],
+  "raw_ui_attempts": {
+    "passed": 13,
+    "failed": 5
+  },
+  "pending_candidate": "7de52de",
+  "header_pr": 63,
+  "delivery_pr": 61,
+  "issue": 62,
+  "quiet_window_handoff": "2026-10-18T10:23:53-07:00"
+}
