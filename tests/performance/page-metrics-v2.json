@@ -737,5 +737,49 @@
     "physical AlarmKit delivery and real battery energy",
     "actual App Store thinned download/install size"
   ],
-  "coverage_rule": "Initial instrumented metrics are a subset; inventory rows without valid baseline remain pending. Do not mark every page measured from a successful batch."
+  "coverage_rule": "Initial instrumented metrics are a subset; inventory rows without valid baseline remain pending. Do not mark every page measured from a successful batch.",
+  "root_launch_resume_measured_cohort": {
+    "production_sha": "b1fc12b62e796ac6c232da5e524235a59edba945",
+    "measurement_sha": "83b4fb8af1b72d80fc344ecd78f313e2ccec9149",
+    "configuration": "Debug -O",
+    "simulator": "Today-Performance / iPhone18ProMax / iOS27.0",
+    "context": "three process launches OS-warm, fixture today-dataset, in-memory, 09:41; init excludes pre-init",
+    "method": "testLaunchAndResumeEndpoints",
+    "evidence": "root-navigation-summary.json",
+    "metrics": [
+      {
+        "name": "app_init_to_content_layout",
+        "n": 3,
+        "raw_ms": [
+          2624.285542,
+          1633.695125,
+          1450.896666
+        ],
+        "median_ms": 1633.695125,
+        "min_ms": 1450.896666,
+        "max_ms": 2624.285542,
+        "p95_ms": null,
+        "functional_pass": true,
+        "proposed_required_ms": 544.5650416666666,
+        "proposed_stretch_ms": 163.36951249999998
+      },
+      {
+        "name": "resume_to_content_layout",
+        "n": 3,
+        "raw_ms": [
+          81.8095,
+          49.768375,
+          31.78175
+        ],
+        "median_ms": 49.768375,
+        "min_ms": 31.78175,
+        "max_ms": 81.8095,
+        "p95_ms": null,
+        "functional_pass": true,
+        "proposed_required_ms": 16.589458333333333,
+        "proposed_stretch_ms": 4.9768375
+      }
+    ],
+    "root_navigation_status": "invalid: duplicate identical accessibility mirrors stopped method before kept-state checks; reader repair source-only"
+  }
 }
