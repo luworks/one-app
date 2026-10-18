@@ -331,6 +331,46 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testRelativeTimeImperativesReachCaptureWithTheirOwnAction() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 18, hour: 23, minute: 45))!
+        for (text, title) in [
+            ("30分钟后关烤箱", "关烤箱"),
+            ("半小时后关烤箱", "关烤箱"),
+            ("In 30 minutes turn off the oven", "turn off the oven"),
+            ("After thirty minutes call Alex", "call Alex"),
+        ] {
+            XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+            let parsed = CaptureParser.parse(text, now: now, calendar: cal)
+            XCTAssertEqual(parsed.title, title, text)
+            XCTAssertEqual(parsed.kind, .task, text)
+            XCTAssertFalse(parsed.ringsAsAlarm, text)
+            XCTAssertTrue(parsed.hasDay, text)
+            XCTAssertEqual(parsed.day, cal.startOfDay(for: now.addingTimeInterval(1800)), text)
+            XCTAssertEqual(parsed.hour, 0, text)
+            XCTAssertEqual(parsed.minute, 15, text)
+            XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true, now: now, calendar: cal), text)
+            XCTAssertNil(Dialogue.answerTime(text, keeping: now, now: now, calendar: cal), text)
+            let pending = Capture(title: "Call Mom", day: now, hasDay: true, hour: 9)
+            XCTAssertEqual(Dialogue.refine(pending, with: text, now: now, calendar: cal), .notARefinement, text)
+        }
+    }
+
+    func testRelativeTimeNarrativesAndQuestionsStayConversation() {
+        for text in [
+            "In 30 minutes I am turning off the oven", "30分钟后我在关烤箱",
+            "Should I turn off the oven in 30 minutes?", "30分钟后关烤箱可以吗？",
+            "What happens if I turn off the oven in 30 minutes?", "30分钟后关烤箱是什么意思？",
+            "I already turned off the oven", "我已经关烤箱了",
+        ] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+        }
+        for text in ["in 30 minutes", "30分钟后", "30分钟后的天气"] {
+            XCTAssertNotEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
     func testOnlyAgendaQuestionsGetTodaySummary() {
         XCTAssertTrue(ChatRouting.isAgendaQuestion("What's on my schedule today?"))
         XCTAssertTrue(ChatRouting.isAgendaQuestion("今天有什么安排？"))
