@@ -20,15 +20,30 @@ final class HealthLineModel {
 
     deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
 
+    /// Answers that arrived during the current load (a stalled metric simply has none).
+    private var arrived: [HealthMetric: HealthSeries] = [:]
+    private func note(_ metric: HealthMetric, _ series: HealthSeries) { arrived[metric] = series }
+
+    /// Never hangs and never blanks the line on a stall: the access request and each metric's query are bounded
+    /// (`HealthLoader`), and a load where nothing answered leaves the line as it was.
     func load() async {
         guard source.isAvailable else { return }
         let selection = HealthSelectionStore.shared.selection
         let metrics = HealthLine.metrics(for: selection)
         guard !metrics.isEmpty else { line = nil; return }
-        await source.requestAccess(for: metrics)
         let now = TodayClock.now
-        let series = await source.series(for: metrics, days: HealthSpark.days, now: now)
-        line = HealthLine.text(selection: selection, series: series, now: now, units: await source.preferredUnits() ?? HealthUnits())
+        arrived = [:]
+        await HealthLoader.load(
+            metrics, source: source, days: HealthSpark.days, now: now,
+            onLateAccess: { [weak self] in Task { @MainActor in await self?.load() } },
+            onResult: { [weak self] metric, result, _ in
+                if case .series(let series) = result { await self?.note(metric, series) }
+            })
+        guard !arrived.isEmpty else { return }
+        let source = source
+        let units: HealthUnits?
+        if case .value(let preferred) = await HealthTimeout.race({ await source.preferredUnits() }) { units = preferred } else { units = nil }
+        line = HealthLine.text(selection: selection, series: arrived, now: now, units: units ?? HealthUnits())
     }
 }
 

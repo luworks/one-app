@@ -6,7 +6,7 @@ import HealthKit
 /// samples themselves; sleep is category samples grouped into nights; mindful minutes are session durations per day.
 /// Values come back in the canonical units of `HealthMetric` (kg, meters, kcal, minutes, percent); display units
 /// follow the region in `HealthUnits`.
-final class HealthKitSource: HealthSource {
+final class HealthKitSource: HealthSource, @unchecked Sendable {
     private let store = HKHealthStore()
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
@@ -46,7 +46,11 @@ final class HealthKitSource: HealthSource {
     func requestAccess(for metrics: [HealthMetric]) async {
         guard isAvailable, !metrics.isEmpty else { return }
         // HealthKit shows its sheet only for types it has not asked about yet, so asking again is free.
-        try? await store.requestAuthorization(toShare: [], read: Set(metrics.map(objectType)))
+        do {
+            try await store.requestAuthorization(toShare: [], read: Set(metrics.map(objectType)))
+        } catch {
+            healthLog.error("requestAuthorization failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Health lets people pick kg or lb (and km or mi) independent of the region; this reads that choice.
@@ -66,7 +70,12 @@ final class HealthKitSource: HealthSource {
             for metric in metrics {
                 group.addTask { [self] in
                     // A type with no permission or no data comes back empty; one failing query doesn't blank the others.
-                    (metric, (try? await load(metric, days: days, now: now)) ?? .empty)
+                    do {
+                        return (metric, try await load(metric, days: days, now: now))
+                    } catch {
+                        healthLog.error("query failed for \(metric.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        return (metric, .empty)
+                    }
                 }
             }
             var out: [HealthMetric: HealthSeries] = [:]
