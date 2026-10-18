@@ -374,7 +374,8 @@ final class CalendarSync {
         guard isOn else { return }
         storeReady = true
         let predicate = store.predicateForEvents(withStart: .now.addingTimeInterval(-30 * 86_400), end: .now.addingTimeInterval(30 * 86_400), calendars: nil)
-        for e in store.events(matching: predicate).filter({ $0.title == title }).sorted(by: { $0.startDate < $1.startDate }) {
+        let cleanupPair = ProcessInfo.processInfo.arguments.contains("-uiTestingCleanupEventSave")
+        for e in store.events(matching: predicate).filter({ $0.title == title || (cleanupPair && $0.title == title + " updated") }).sorted(by: { $0.startDate < $1.startDate }) {
             try? store.remove(e, span: .futureEvents)
         }
         version += 1
@@ -395,9 +396,9 @@ final class CalendarSync {
         e.startDate = repeating ? cal.date(byAdding: .day, value: -1, to: hour) ?? hour : hour
         e.endDate = e.startDate.addingTimeInterval(1800)
         if ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSaveAllDay") {
+            // Convert the existing same-day timed interval using EventKit. Setting
+            // the end again after allDay rounded the fixture into a second day.
             e.isAllDay = true
-            e.startDate = cal.startOfDay(for: hour)
-            e.endDate = cal.date(byAdding: .day, value: 1, to: e.startDate)!
         }
         if ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSaveMetadata") {
             e.notes = "Preserve event notes"

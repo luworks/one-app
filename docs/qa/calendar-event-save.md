@@ -1,6 +1,7 @@
 # Existing event save investigation — issue #79
 
-Status: iOS 27 compatibility fallback implemented; focused simulator verification in progress.
+Status: iOS 27 compatibility fallback implemented; unchanged and failure regressions
+passed. Final changed/all-day harness repair is queued for simulator verification.
 A build alone is not completion of the owner-reported bug.
 
 - Clean inherited base: `edb7d737710cfae5603dd3ec462c4f04da8ac842`.
@@ -112,3 +113,18 @@ recurrence UI and More Options completion remain unverified unless recorded belo
   inclusive date range in the fallback, with a one-day completion regression.
 - `fallback-focused-repair/` runs the two failed metadata checks using an explicit
   accessible Alerts value, plus the distinct all-day journey. Result pending.
+
+- Source `bf31d0e`, `fallback-focused-repair/`: build succeeded. Unchanged
+  completion, Calendar return, persisted reopen, notes, URL and two alerts all
+  passed (50.739 s). Changed test stopped before editing: the recording shows its
+  row's center behind the Ask AI footer; tapping opened Ask AI. The final helper
+  checks actual frames and scrolls the named day list before tapping.
+- The all-day test failed its fixture expectation. Read-only inspection of the
+  owned simulator's synthetic CalendarItem found floating start Oct 18 00:00 and
+  inclusive stored end Oct 19 23:59:59: the seed created two days. The fallback
+  correctly displayed two days. The fixture now converts the original same-day
+  timed event with isAllDay, without resetting its end after conversion.
+- Failed synthetic events previously survived early test exits. Teardown now
+  deletes only each journey's unique title and its exact updated-title variant.
+  Final validation is limited to changed save and the corrected all-day input;
+  the passing unchanged/failure behavior is not rerun.

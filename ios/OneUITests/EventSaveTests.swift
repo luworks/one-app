@@ -13,6 +13,30 @@ final class EventSaveTests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'agenda.row' AND label BEGINSWITH %@", title)).firstMatch
     }
 
+    private func openRow(_ app: XCUIApplication, _ title: String) {
+        let event = row(app, title)
+        XCTAssertTrue(event.waitForExistence(timeout: 10))
+        let list = app.descendants(matching: .any)["calendar.dayList"].firstMatch
+        // AX can report a row as hittable while its center is behind Ask AI.
+        // Use the actual list/row frames to reveal it before tapping.
+        let visible = list.frame.intersection(CGRect(x: 0, y: 0, width: app.frame.width,
+                                                     height: app.frame.height - 110))
+        for _ in 0..<6 {
+            if visible.contains(CGPoint(x: event.frame.midX, y: event.frame.midY)) { break }
+            let upwards = event.frame.midY > visible.maxY
+            let x = visible.midX / app.frame.width
+            let low = (visible.maxY - 25) / app.frame.height
+            let high = (visible.minY + 25) / app.frame.height
+            app.coordinate(withNormalizedOffset: CGVector(dx: x, dy: upwards ? low : high))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: x, dy: upwards ? high : low)))
+        }
+        guard visible.contains(CGPoint(x: event.frame.midX, y: event.frame.midY)), event.isHittable else {
+            XCTFail("Event row is outside the unobscured list: \(event.frame), visible \(visible). \(app.debugDescription)")
+            return
+        }
+        event.tap()
+    }
+
     func testExistingNativeEventUnchangedSaveCloses() {
         nativeSave(changed: false)
     }
@@ -39,12 +63,16 @@ final class EventSaveTests: XCTestCase {
         app.launch()
         enableCalendarSync(app)
         app.terminate()
+        addTeardownBlock {
+            app.terminate()
+            app.launchArguments = base + ["-debugDeleteSystemEvent", title, "-uiTestingCleanupEventSave"]
+            app.launch()
+            XCTAssertTrue(app.buttons["Calendar"].firstMatch.waitForExistence(timeout: 5))
+        }
         app.launchArguments = base + ["-debugCreateSystemEvent", title]
         app.launch()
         calendar(app)
-        let event = row(app, title)
-        XCTAssertTrue(event.waitForExistence(timeout: 10))
-        event.tap()
+        openRow(app, title)
         let editor = app.staticTexts["Edit Event"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         if allDay {
@@ -67,9 +95,6 @@ final class EventSaveTests: XCTestCase {
             XCTAssertTrue(editor.exists, "a failed save keeps the editor and draft open")
             XCTAssertEqual(app.textFields["title-field"].value as? String, savedTitle)
             app.buttons["Cancel"].tap()
-            app.terminate()
-            app.launchArguments = base + ["-debugDeleteSystemEvent", title]
-            app.launch()
             return
         }
         XCTAssertTrue(editor.waitForNonExistence(timeout: 5), "successful checkmark save returns to Calendar")
@@ -79,7 +104,7 @@ final class EventSaveTests: XCTestCase {
         app.launch()
         calendar(app)
         XCTAssertTrue(row(app, savedTitle).waitForExistence(timeout: 10), "saved event survives a fresh local store")
-        row(app, savedTitle).tap()
+        openRow(app, savedTitle)
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["https://example.com/calendar-save"].exists, "unedited URL survives saving")
         XCTAssertEqual(app.descendants(matching: .any)["event.alerts"].firstMatch.value as? String, "2 alerts",
@@ -91,10 +116,6 @@ final class EventSaveTests: XCTestCase {
         shot.lifetime = .keepAlways
         add(shot)
         app.buttons["Cancel"].tap()
-        app.terminate()
-        app.launchArguments = base + ["-debugDeleteSystemEvent", savedTitle]
-        app.launch()
-        XCTAssertTrue(app.buttons["Calendar"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testExistingLocalEventUnchangedSaveCloses() {
