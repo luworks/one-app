@@ -469,7 +469,14 @@ struct RemindersView: View {
             RowAction.info { editing = list }
             RowAction.pin(list.pinned) { ListActions.togglePinned(list, in: context) }
         }
-        .contextMenu { listMenu(list) }
+        .contextMenu {
+            listMenu(list)
+        } preview: {
+            // Keep the presented card a drag source after the context menu opens.
+            ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol,
+                    count: stats.open[list.name] ?? 0, pinned: list.pinned)
+                .draggable(list.name)
+        }
         // Press, hold and drag: the menu gives way to the system drag (as in Files or Apple Reminders); dropping the
         // row on another row puts it just before that row.
         .draggable(list.name) {

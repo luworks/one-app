@@ -5,11 +5,17 @@ import XCTest
 /// swipe from the right for Delete / Info / Pin. Runs against the test dataset (lists: Reminders, Home, Work).
 final class RemindersListsTests: XCTestCase {
     var app: XCUIApplication!
+    private var reorderStore: String?
 
     override func setUp() {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = TestData.launchArguments
+        if name.contains("testLongPressDragReordersLists") {
+            let store = "list-reorder-\(UUID().uuidString)"
+            reorderStore = store
+            app.launchArguments += ["-uiTestingStore", store]
+        }
         app.launch()
         app.buttons["Reminders"].firstMatch.tap()
     }
@@ -258,7 +264,7 @@ final class RemindersListsTests: XCTestCase {
         XCTAssertEqual(XCTWaiter().wait(for: [moved], timeout: 5), .completed, "Today now follows Scheduled")
     }
 
-    func testLongPressDragReordersLists() {
+    func testLongPressDragReordersLists() throws {
         let home = element("list.Home"), work = element("list.Work")
         reveal(work)
         XCTAssertTrue(home.exists)
@@ -271,6 +277,26 @@ final class RemindersListsTests: XCTestCase {
         start.press(forDuration: 1.5, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 1.0)
         let expectation = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in work.frame.minY < home.frame.minY }, object: nil)
-        XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 5), .completed, "Work now sits above Home")
+        let moved = XCTWaiter().wait(for: [expectation], timeout: 5)
+        if moved != .completed {
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Native reorder final screen"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            print(app.debugDescription)
+        }
+        XCTAssertEqual(moved, .completed, "Work now sits above Home")
+        XCTAssertFalse(app.buttons["Rename"].exists, "the context menu closes after dropping")
+        XCTAssertFalse(element("pinned.Work").exists, "dragging must not execute the menu's Pin action")
+        // Reopen the same on-disk store without importing the canonical data a second time.
+        let store = try XCTUnwrap(reorderStore)
+        app.terminate()
+        app.launchArguments = TestData.fixtureArguments("empty-relaunch.json")
+            + ["-uiTestingStore", store, "-uiTestingKeepReminderPills"]
+        app.launch()
+        app.buttons["Reminders"].firstMatch.tap()
+        reveal(work)
+        XCTAssertTrue(home.exists)
+        XCTAssertLessThan(work.frame.minY, home.frame.minY, "the saved list order survives relaunch")
     }
 }
