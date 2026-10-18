@@ -71,3 +71,8 @@ For a committed-state accessibility probe also pass `-uiTestingShareInbox`,
 `-uiTestingShareID <fresh UUID>` and `-uiTestingShareProbeTitle 'Upgrade baseline 20261018'`;
 expect `acknowledged;tasks=1;receipts=0;pending=0`. Do not reseed the reminder.
 The fixture is intentionally frozen; future schema changes should keep opening it.
+
+`week-alarm-afternoon.json` is the minimal issue53 reproduction: a single13:00
+Take medicine alarm, no events/reminders/chats. Consumer:
+`CalendarAlarmTests/testWeekLateAlarmOpensItsEditorWithoutOtherEntries`.
+It distinguishes late-grid touch delivery from event density or task gestures.

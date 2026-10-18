@@ -1229,8 +1229,9 @@ private struct SlotPressView: UIViewRepresentable {
     var changed: (CGPoint) -> Void
     var ended: (CGPoint?) -> Void
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
+    func makeUIView(context: Context) -> HitView {
+        let view = HitView()
+        view.isFree = isFree
         view.backgroundColor = .clear
         let press = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handle(_:)))
         press.minimumPressDuration = 0.5
@@ -1239,9 +1240,21 @@ private struct SlotPressView: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ view: UIView, context: Context) { context.coordinator.parent = self }
+    func updateUIView(_ view: HitView, context: Context) {
+        view.isFree = isFree
+        context.coordinator.parent = self
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    // Reject occupied points before choosing the UIKit touch target, not only when the long press begins.
+    final class HitView: UIView {
+        var isFree: (CGPoint) -> Bool = { _ in true }
+
+        override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+            super.point(inside: point, with: event) && isFree(point)
+        }
+    }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var parent: SlotPressView

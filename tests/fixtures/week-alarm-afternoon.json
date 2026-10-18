@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "reminders": [],
+  "events": [],
+  "alarms": [
+    {
+      "time": "13:00",
+      "label": "Take medicine"
+    }
+  ],
+  "chats": []
+}
