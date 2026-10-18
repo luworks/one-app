@@ -52,7 +52,11 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--base', required=True)
     p.add_argument('--revision', required=True)
-    p.add_argument('--measurement-path', action='append', required=True)
+    p.add_argument('--measurement-path', action='append', default=[])
+    p.add_argument('--paths-file', type=Path)
     p.add_argument('--output', type=Path, required=True)
     a = p.parse_args()
-    print(json.dumps(freeze(a.base, a.revision, a.measurement_path, a.output), indent=2))
+    paths = a.measurement_path + (json.loads(a.paths_file.read_text()) if a.paths_file else [])
+    if not paths or any(not isinstance(path, str) for path in paths):
+        p.error('provide explicit measurement paths')
+    print(json.dumps(freeze(a.base, a.revision, paths, a.output), indent=2))
