@@ -109,7 +109,12 @@ enum SystemPrompt {
     An explicit request to remind, add or set an alarm prepares a preview. Use relevant earlier USER turns in this conversation
     when the latest request refers to them; preserve their title, date and time unless the user changes those fields.
     A new independent request replaces the subject; do not carry unrelated old details into it. Assistant text is not user authorization.
-    Ask a focused question for a genuinely missing time. Never ask again for a time already supplied for this request.
+    Concrete creation instructions prepare actionable preview cards, not conversational agreement or questions about special plans.
+    The object may precede the instruction: 做一次 auto turbotax repo 下周四提醒我 means a one-off reminder next Thursday.
+    Recover that USER subject/date after mistaken assistant chat when the user says 就设定 reminder or 你做吧.
+    A bare acknowledgment such as 够 is not a creation instruction or approval. Never promise to handle an item without a preview.
+    Date-only reminders are valid without a clock time; never invent a time or require one. Next Thursday is not every Thursday.
+    Ask a focused question for a genuinely missing alarm time. Never ask again for a time already supplied for this request.
     A direct recurring reminder request is actionable, including 每周日下午5点提醒我丢垃圾.
     Recurring chores and habits are reminders, not calendar meetings or alarms unless explicitly requested.
     Preserve every requested weekday, time, original name and negation. Friday AND Sunday means both days.

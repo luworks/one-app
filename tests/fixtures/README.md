@@ -163,3 +163,15 @@ Event-save supplemental EventKit metadata is seeded by the versioned DEBUG hooks
 `-uiTestingCalendarSaveAllDay` (one current calendar day).
 `EventSaveTests` owns these synthetic events and cleanup;
 `-uiTestingEventSaveFailure` injects a local save error without user data.
+
+## Actionable reminder recovery
+
+- `ai-reminder-recovery-cases.json`: bilingual suffix-date reminders, exact owner
+  mixed object names, one-off next Thursday vs weekly Thursday, full mistaken
+  assistant histories, explicit clarification/proceed recovery, acknowledgments,
+  ordinary/quoted/reported and unrelated-subject negatives. `ReminderRecoveryTests`
+  executes production routing/context/parser and checks a ready date-only Capture.
+- `ai-reminder-recovery-ui.json`: empty planner plus three text-only chats containing
+  mistaken assistant asides. `AIReminderRecoveryTests` checks actual Add cards,
+  exact date/title, no change-ledger writes before Add, persisted editor and Undo.
+  Simulator fallback is exercised; no Foundation Models outputs are injected.

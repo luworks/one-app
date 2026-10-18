@@ -430,6 +430,7 @@ enum CaptureParser {
     private static let trailingFillers = [
         #"\s*(?:谢谢|多谢|thanks?|thank you|please|pls|吧|啦|哈|呀|哦|呢|啊|i think|i guess|or something)[\s!！.。~]*$"#,
         #"\s*提醒我$"#,
+        #"[,，\s]+remind me[.!]*$"#,
     ]
 
     /// Clean request syntax without rewriting the requested action or its modality.
