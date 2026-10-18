@@ -18,7 +18,9 @@ import tempfile
 import time
 
 
-SIMULATOR = '3243BEDB-4F6A-4807-AE9E-30115C528377'
+from simulator_policy import ACTIVE_NAME, ACTIVE_UDID
+
+SIMULATOR = ACTIVE_UDID
 ROOT = Path('/Users/yuanlu/code/one-app/tests/results/runs')
 PAGES = ROOT / 'performance-pages-ai-20261018'
 DD = ROOT / 'performance-climb-20261018/derived-optimized'
@@ -49,9 +51,9 @@ def owned_booted_device(inventory):
         raise RuntimeError('Exactly one owned simulator required')
     runtime, dev = matches[0]
     if (not runtime.startswith('com.apple.CoreSimulator.SimRuntime.iOS-')
-            or dev.get('name') != 'Today-Performance'
+            or dev.get('name') != ACTIVE_NAME
             or dev.get('state') != 'Booted' or dev.get('isAvailable') is not True):
-        raise RuntimeError('Available Booted Today-Performance required; caller must show it')
+        raise RuntimeError('Available Booted active performance simulator required; caller must show it')
     return dev
 
 
@@ -143,7 +145,7 @@ def main(argv=None):
 
     save()
     try:
-        for key in sorted(['name:Today-Performance', 'cache:' + str(DD.resolve(strict=True))]):
+        for key in sorted(['name:' + ACTIVE_NAME, 'cache:' + str(DD.resolve(strict=True))]):
             lock = (Path(tempfile.gettempdir()) / ('today-qa-lock-' + hashlib.sha256(key.encode()).hexdigest())).open('a')
             locks.append(lock)
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
