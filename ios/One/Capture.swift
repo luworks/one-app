@@ -946,7 +946,8 @@ enum CaptureTitleRefinement {
         // A narrow offline normalization for an explicit watch + sleep purpose, not a general semantic model.
         // We describe the requested action, never promise a score or a device capability.
         if source.localizedCaseInsensitiveContains("Apple Watch"),
-           source.range(of: "睡眠|sleep", options: [.regularExpression, .caseInsensitive]) != nil,
+           source.range(of: "(?:测量|记录|监测|追踪).{0,12}睡眠", options: .regularExpression) != nil,
+           source.range(of: "不|别|禁止|关闭|停止", options: .regularExpression) == nil,
            result.title.range(of: #"^(?:带上|戴上|佩戴)\s*Apple\s*Watch$"#, options: [.regularExpression, .caseInsensitive]) != nil {
             result.title = "佩戴Apple Watch记录睡眠"
             result.notes = retainedNotes(capture.notes, source: source)

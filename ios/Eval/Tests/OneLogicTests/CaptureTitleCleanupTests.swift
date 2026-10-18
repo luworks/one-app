@@ -40,6 +40,10 @@ final class CaptureTitleCleanupTests: XCTestCase {
         }
         XCTAssertEqual(unavailable.title, "佩戴Apple Watch记录睡眠")
         XCTAssertEqual(unavailable.notes, source)
+        let opposite = "提醒我带上Apple Watch，我需要关闭睡眠记录"
+        let oppositeCapture = CaptureParser.parse(opposite, now: now, calendar: calendar)
+        XCTAssertEqual(oppositeCapture.title, "带上Apple Watch", "offline normalization must not reverse a stated purpose")
+        XCTAssertEqual(oppositeCapture.notes, opposite)
         let timedOut = await CaptureTitleRefinement.refine(parsed, source: source, available: true, timeout: 0.001) { _ in
             try? await Task.sleep(nanoseconds: 100_000_000)
             return "Late output must be ignored"
