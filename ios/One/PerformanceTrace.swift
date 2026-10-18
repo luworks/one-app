@@ -54,6 +54,9 @@ final class PerformanceTrace {
         pending = Pending(name: name, destination: destination, start: DispatchTime.now().uptimeNanoseconds)
         generation += 1
         mark("begin.\(name)")
+        if PageResourceTrace.enabled, let pending {
+            PageResourceTrace.shared.begin(generation: generation, start: pending.start)
+        }
     }
 
     func wantsLayout(_ route: String) -> Bool {
@@ -84,6 +87,14 @@ final class PerformanceTrace {
         }
         os_signpost(.event, log: log, name: "PerformanceSample", "%{public}@", report as NSString)
         print("PERF_SAMPLE_APP \(report)")
+        if PageResourceTrace.enabled {
+            let finishedSequence = sequence
+            PageResourceTrace.shared.layout(generation: expected, sequence: finishedSequence, name: pending.name, route: route, visit: pageVisits[route] ?? 0, end: end) { [weak self] encoded in
+                guard let self, self.sequence == finishedSequence, self.generation == expected else { return }
+                // Publish only after the original endpoint and fixed resource window are frozen.
+                self.report += ";resource_b64=\(encoded)"
+            }
+        }
     }
 }
 
