@@ -96,7 +96,31 @@ final class PagePerformanceTests: XCTestCase {
 
     private func tap(_ target: XCUIElement, route: String, ready: XCUIElement) {
         XCTAssertTrue(target.waitForExistence(timeout: 5))
-        XCTAssertTrue(target.isHittable, "Action is reachable: \(route)")
+        let hittable = target.isHittable
+        if !hittable {
+            // Diagnose the original failed observation without retrying or changing the action.
+            let identifier = target.identifier
+            let label = target.label
+            let sameType = app.descendants(matching: target.elementType)
+            let identifierCount: Any = identifier.isEmpty ? NSNull()
+                : sameType.matching(NSPredicate(format: "identifier == %@", identifier)).count
+            let labelCount: Any = label.isEmpty ? NSNull()
+                : sameType.matching(NSPredicate(format: "label == %@", label)).count
+            let context: [String: Any] = ["route": route, "identifier": identifier, "label": label,
+                "element_type": target.elementType.rawValue, "frame": String(describing: target.frame),
+                "exists": target.exists, "enabled": target.isEnabled, "hittable": hittable,
+                "same_type_identifier_count": identifierCount, "same_type_label_count": labelCount]
+            if let data = try? JSONSerialization.data(withJSONObject: context, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                print("PERF_REACHABILITY_FAILURE \(json)")
+            }
+            print("PERF_REACHABILITY_HIERARCHY_BEGIN route=\(route)\n\(app.debugDescription)\nPERF_REACHABILITY_HIERARCHY_END route=\(route)")
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "unreachable.\(route)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertTrue(hittable, "Action is reachable: \(route)")
         target.tap()
         readSample(name: "page.\(route)", route: route)
         XCTAssertTrue(ready.waitForExistence(timeout: 5), "Destination content: \(route)")
