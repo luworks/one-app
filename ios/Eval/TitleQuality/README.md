@@ -108,3 +108,61 @@ user's chosen words earns 2, even when the chosen title is verbose.
 Review scores are human/agent judgments with attribution, **separate from** exact
 field failures. A model judge could assist review in future, but must not be
 reported as deterministic truth. Publish both lists and partial-score denominator.
+
+## Recurring planner goal fixture
+
+`tests/fixtures/ai-title-rewrite-recurring-cases.json` is an additional schema-v1
+fixture: 16 cases / 19 user turns (7 Chinese, 7 English, 2 mixed cases), with
+9 development and 7 reserved validation cases. Its inputs and case IDs do not
+duplicate the original 38 cases. The author read the parser, recurrence, dialogue,
+routing and scorer source: validation is **reserved, not blind**. Freeze these
+expectations before execution, record first validation results unchanged, and
+retire/re-author validation if its results inform tuning. These are planner goal
+expectations, not current parser behavior or actual app/model observations.
+
+The frozen clock is `2026-10-18T09:00:00` in `America/Los_Angeles` (Sunday).
+`day` is the local calendar-day offset to the earliest requested occurrence at or
+after that clock: Sunday afternoon is 0, Monday 1, Tuesday 2, Friday 5. A Friday
+and Sunday request therefore starts today, while still retaining BOTH weekdays.
+Times are local wall-clock `HH:mm`, not UTC. Normalized repeats list unique days
+in Monday-to-Sunday order: `weekly:fri,sun`, `weekly:mon,tue,wed,thu,fri` for
+weekdays, and `weekly:sat,sun` for weekends. One multi-weekday request expects
+one task with the full repeat set, not separate tasks or only the first weekday.
+
+The exact regressions `每周日下午5点提醒我丢垃圾` and
+`添加一个reminder：每周五、每周日下午5点提醒我丢垃圾` expect task title
+`丢垃圾`, 17:00, and respectively `weekly:sun` and `weekly:fri,sun`. Title
+examples remain semantic review references under the existing schema, rather
+than new exact-string assertions. Route/intent, kind, day/time, repeat and gate
+are separate deterministic fields; title fidelity and notes retention need the
+attributed semantic review described above. Reasons and explicit notes belong
+in notes without becoming extra tasks. Follow-ups retain the target and untouched
+fields; preview revisions still use Add, while the saved-item edit uses Apply
+after its explicit `before` action. Topic questions, quoted-command discussion,
+reported actions and declined creation expect conversation/chat with no items
+or gate. Negated task actions still produce a preview and preserve the negation.
+
+Coverage includes single/multiple weekdays, weekdays/weekends, colloquial
+rephrasing, adding recurrence to a pending preview, mixed language, correcting
+time while keeping both days, notes and negation, and discussion boundaries.
+The normalized weekday sets are a goal contract, not proof that the app can store
+or execute every set; verify support against the actual executed revision.
+An adapter must preserve actual semantics and report a
+mismatch/unmeasured field rather than synthesize weekdays from the expected label.
+Every-other-week success is excluded because the current representation cannot
+express its interval. This fixture does not verify completion rollover, DST,
+EventKit synchronization, delivery of notifications, or physical-device behavior.
+
+The existing evaluator accepts `--cases`; no scorer modification is needed.
+From the repository root, this coverage-only invocation loads the fixture without
+observations and reports all 19 turns as **unmeasured**, not passed:
+
+```sh
+python3 ios/Eval/TitleQuality/score.py --cases tests/fixtures/ai-title-rewrite-recurring-cases.json --split all
+```
+
+For a later execution, use the same `--cases` path with `--observations` and the
+chosen `--split`. Keep genuine raw artifacts, hashes, per-turn execution paths
+and reports under the primary checkout's persistent `tests/results/`, indexed by
+the QA journal. Do not copy expected fields into observations or treat this
+offline schema/coverage check as Swift, build, simulator UI or model evidence.

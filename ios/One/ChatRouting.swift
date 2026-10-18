@@ -25,8 +25,8 @@ enum ChatRouting {
     }
 
     // Match CaptureParser's weekday vocabulary as complete tokens, including Sunday 日/天.
-    private static let chineseWeekday = #"(?:下下|下|这个?|本)?(?:周|星期|礼拜)[一二三四五六日天]"#
-    private static let chineseTimeToken = #"(?:"# + chineseWeekday + #"|[明天早上下晚今后午晨点分半零一二三四五六七八九十两0-9:：\s])"#
+    private static let chineseWeekday = #"(?:下下|下|这个?|本|每(?:个)?)?(?:周|星期|礼拜)[一二三四五六日天]"#
+    private static let chineseTimeToken = #"(?:"# + #"每(?:个)?工作日|每(?:个)?周末|"# + CaptureParser.chineseWeeklyDays + "|" + chineseWeekday + #"|[明天早上下晚今后午晨点分半零一二三四五六七八九十两0-9:：\s])"#
 
     /// Inspect the leading action, not action words inside the object of an explicit request.
     private static func isChineseReportedActionQuestion(_ text: String) -> Bool {
@@ -58,6 +58,14 @@ enum ChatRouting {
                                                      with: "", options: [.regularExpression, .caseInsensitive])
         if withoutClock != text, has(requestBody(withoutClock), #"^(?:remind me|set (?:an? |that )?alarm)\b"#),
            intent(withoutClock) == .capture { return .capture }
+        if let prefix = text.range(of: #"^(?:today|tonight|tomorrow)\s+(?:(?:at\s+)?[0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)\s*)?[, ]*"#,
+                                   options: [.regularExpression, .caseInsensitive]),
+           intent(String(text[prefix.upperBound...])) == .capture { return .capture }
+        // Recurrence can lead a direct request, just as "at 5pm" can. Re-route only
+        // the remaining imperative; quoted, reported and declined statements keep their guards.
+        if let prefix = text.range(of: "^(?:" + CaptureParser.englishWeeklyDays + #"|every\s+weekday|weekdays|every\s+weekend|weekends)\s+(?:(?:at\s+)?[0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)\s*)?[, ]*"#,
+                                   options: [.regularExpression, .caseInsensitive]),
+           intent(String(text[prefix.upperBound...])) == .capture { return .capture }
         // Talking ABOUT reminders, or explicitly declining one, is not asking for one.
         if has(text, #"don['’]t (?:add|create|set|remind|wake)|do not (?:add|create|set|remind|wake)|不要(?:创建|添加|提醒|设)|不用(?:创建|添加|提醒|设)|(?:不要|不用|别).*(?:叫醒|叫我起床)|只是聊|just (?:chatting|talking)|\bhow (?:do|can) (?:i|you)\b|怎么(?:创建|添加|设)|如何"#) { return .conversation }
         if has(text, #"^(?:i (?:already|just|have)|i've) (?:set|added|created|finished|completed)|我(?:已经|刚刚|刚才).*(?:了|过)|我记得|^i (?:remember|asked)\b|^(?:what (?:does|is)|can you explain)|是什么意思|怎么用"#) { return .conversation }

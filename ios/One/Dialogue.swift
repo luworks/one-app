@@ -70,7 +70,7 @@ enum Dialogue {
     }
 
     /// Words that only carry an instruction about the preview ("make it", "改成", "instead").
-    private static let filler = #"actually|make it|change (?:it )?to|set (?:it )?to|move (?:it )?to|should be|instead|please|rather|no,?|oh,?|and|as|for|it|the|to|at|on|改成|改到|改为|换成|设为|设成|还是|不是|应该是|应该|是|要|吧|啊|呢|的|,|，|。|\.|!"#
+    private static let filler = #"make (?:it|that) repeat|keeping|\brepeat\b|\bthat\b|actually|make it|change (?:it )?to|set (?:it )?to|move (?:it )?to|should be|instead|please|rather|no,?|oh,?|and|as|for|it|the|to|at|on|改成|改到|改为|换成|设为|设成|还是|不是|应该是|应该|是|要|吧|啊|呢|的|,|，|。|\.|!"#
 
     /// Reads a follow-up as an edit of the preview: "make it an alarm", "改成下午4点", "tomorrow instead", "call it Quarterly report".
     /// A message that has its own action text ("Call Mia at 5pm") is not a refinement, even though it has a time.
