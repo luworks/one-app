@@ -39,6 +39,12 @@ enum PillStyle {
         static let height: CGFloat = 34
     }
 
+    /// Extras for `PillChip` only: a small tinted mark (icon or date) sits a little closer to the edge than text does.
+    enum Chip {
+        static let markSize: CGFloat = 18
+        static let leadingPadding: CGFloat = 10
+    }
+
     /// The selection animation every pill row uses.
     static let selectionAnimation = Animation.snappy
 }
@@ -105,5 +111,70 @@ struct PillSwitcher<Item: Hashable>: View {
             }
             if fixedWidth && distribution == .leading { Spacer(minLength: 0) }
         }
+    }
+}
+
+/// A navigation chip: the same capsule as `PillButton` (always the unselected look, because it opens something rather
+/// than choosing), with a small tinted leading mark and an optional trailing count, e.g. [17 Today 10] in Reminders.
+/// Tap runs `action`; add `.contextMenu` outside for a long-press menu (the preview lifts just the capsule).
+struct PillChip<Leading: View>: View {
+    let title: String
+    var count: Int? = nil
+    var accessibilityText: String? = nil
+    var identifier: String? = nil
+    @ViewBuilder var leading: () -> Leading
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: PillStyle.Control.iconLabelSpacing) {
+                leading()
+                    .frame(width: PillStyle.Chip.markSize, height: PillStyle.Chip.markSize)
+                Text(title).lineLimit(1).fixedSize()
+                if let count {
+                    Text("\(count)")
+                        .monospacedDigit()
+                        .foregroundStyle(Color(.secondaryLabel))
+                        .contentTransition(.numericText())
+                }
+            }
+            .font(PillStyle.Control.font)
+            .padding(.leading, PillStyle.Chip.leadingPadding)
+            .padding(.trailing, PillStyle.Control.padding)
+            .frame(minHeight: PillStyle.Control.height)
+            .background(PillStyle.fill(selected: false), in: Capsule())
+            .foregroundStyle(PillStyle.text(selected: false))
+            .contentShape(.contextMenuPreview, Capsule())
+            .frame(minHeight: PillStyle.tapHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText ?? title)
+        .accessibilityIdentifier(identifier ?? "")
+    }
+}
+
+/// A row of chips (or any pills): left-aligned with the shared gap, one line only, and it scrolls sideways when they
+/// do not fit (large text, many pinned lists). While they fit there is no scroll view, so a sideways swipe on the row
+/// still switches tabs like on the other rows. `inset` is the page's side gutter: when the row scrolls, the chips
+/// slide under the screen edge instead of being cut at the gutter.
+struct PillChipRow<Content: View>: View {
+    var inset: CGFloat = 20
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: PillStyle.spacing) {
+                content()
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, inset)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: PillStyle.spacing) { content() }
+            }
+            .contentMargins(.horizontal, inset, for: .scrollContent)
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 }

@@ -49,6 +49,38 @@ final class RemindersListsTests: XCTestCase {
         XCTAssertLessThan(element("list.Home").frame.minY - completed.frame.maxY, 160, "My Lists follows the pills closely")
     }
 
+    /// The smart lists use the shared pill look (like Week / Month / Year and Alarms / World Clock): one row, never
+    /// wrapped, the same 44pt tap height, left-aligned at the page gutter, and the row scrolls when it is too wide.
+    func testSmartListPillsAreOneRowAndTappable() {
+        let ids = ["smart.today", "smart.scheduled", "smart.all", "smart.flagged", "smart.completed"]
+        let pills = ids.map { element($0) }
+        XCTAssertTrue(pills[0].waitForExistence(timeout: 5))
+        for pill in pills {
+            XCTAssertTrue(pill.exists, "\(pill) is in the row")
+            XCTAssertEqual(pill.frame.midY, pills[0].frame.midY, accuracy: 3, "all smart lists share one row")
+            XCTAssertEqual(pill.frame.height, 44, accuracy: 1, "the shared 44pt tap height")
+        }
+        XCTAssertEqual(pills[0].frame.minX, 20, accuracy: 2, "left-aligned at the page gutter, like Calendar and Alarms")
+        for (a, b) in zip(pills, pills.dropFirst()) {
+            XCTAssertEqual(b.frame.minX - a.frame.maxX, 8, accuracy: 2, "the shared 8pt gap")
+        }
+        // Like the Alarms switcher it sits right under the tab pills, and My Lists follows without a gap.
+        XCTAssertLessThan(abs(element("list.Home").frame.minY - pills[0].frame.maxY), 200)
+
+        // Tappable: the first opens its list; the last one is reached by scrolling the row sideways.
+        XCTAssertTrue(pills[0].isHittable)
+        pills[0].tap()
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.waitForExistence(timeout: 5), "a smart list screen is open")
+        back.tap()
+        XCTAssertTrue(pills[0].waitForExistence(timeout: 5))
+        let completed = pills[4]
+        for _ in 0..<3 where !completed.isHittable { pills[0].swipeLeft() }
+        XCTAssertTrue(completed.isHittable, "scrolling the row sideways reaches Completed")
+        completed.tap()
+        XCTAssertTrue(app.navigationBars.buttons.element(boundBy: 0).waitForExistence(timeout: 5), "Completed opened")
+    }
+
     func testAddListIsVisibleAndCreatesAList() {
         let add = app.buttons["addList"]
         reveal(add)
@@ -142,6 +174,65 @@ final class RemindersListsTests: XCTestCase {
         app.buttons["Done"].firstMatch.tap()
         app.closeSidebar()
         XCTAssertTrue(flagged.waitForExistence(timeout: 5), "turned back on in Settings, the pill returns")
+    }
+
+    /// A smart-list pill moves with its menu (Move Left / Move Right, also the VoiceOver and keyboard way), and the
+    /// order is the one Settings uses and is kept after a relaunch. Pills at the ends only offer the move that fits.
+    func testMoveSmartListPillsWithTheMenuAndKeepTheOrder() {
+        let today = element("smart.today"), scheduled = element("smart.scheduled")
+        XCTAssertTrue(today.waitForExistence(timeout: 5))
+        XCTAssertLessThan(today.frame.minX, scheduled.frame.minX, "starts with Today before Scheduled")
+        today.press(forDuration: 1.0)
+        XCTAssertTrue(app.buttons["Move Right"].firstMatch.waitForExistence(timeout: 5), "the pill's menu has Move Right")
+        XCTAssertFalse(app.buttons["Move Left"].exists, "Today is first: nothing to move left")
+        app.buttons["Move Right"].firstMatch.tap()
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in today.frame.minX > scheduled.frame.minX }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [moved], timeout: 5), .completed, "Today now follows Scheduled")
+
+        // Settings lists the smart lists in the same order.
+        app.openSidebar()
+        app.buttons["Settings"].firstMatch.tap()
+        let toggles = ["smartToggle.scheduled", "smartToggle.today"].map { app.switches[$0] }
+        for _ in 0..<4 where !toggles[0].isHittable { app.swipeUp() }
+        XCTAssertTrue(toggles[0].waitForExistence(timeout: 5))
+        XCTAssertLessThan(toggles[0].frame.minY, toggles[1].frame.minY, "Settings shows Scheduled before Today too")
+        app.buttons["Done"].firstMatch.tap()
+        app.closeSidebar()
+
+        app.terminate()
+        app.launchArguments = TestData.launchArguments + ["-uiTestingKeepReminderPills"]
+        app.launch()
+        app.buttons["Reminders"].firstMatch.tap()
+        XCTAssertTrue(scheduled.waitForExistence(timeout: 5))
+        XCTAssertLessThan(scheduled.frame.minX, today.frame.minX, "the order is kept after a relaunch")
+        XCTAssertEqual(scheduled.frame.midY, today.frame.midY, accuracy: 3, "still one row")
+    }
+
+    func testMovePinnedListPillsWithTheMenu() {
+        for name in ["Home", "Work"] {
+            let row = element("list.\(name)")
+            reveal(row)
+            menu(row, "Pin")
+            XCTAssertTrue(element("pinned.\(name)").waitForExistence(timeout: 5))
+            sleep(1)
+        }
+        let home = element("pinned.Home"), work = element("pinned.Work")
+        XCTAssertLessThan(home.frame.minX, work.frame.minX, "pinned lists follow My Lists order")
+        menu(work, "Move Left")
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in work.frame.minX < home.frame.minX }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [moved], timeout: 5), .completed, "Work now sits before Home")
+    }
+
+    /// Press, hold, drag a smart-list pill onto another (the same gesture as My Lists rows).
+    func testLongPressDragReordersSmartListPills() {
+        let today = element("smart.today"), scheduled = element("smart.scheduled")
+        XCTAssertTrue(today.waitForExistence(timeout: 5))
+        XCTAssertLessThan(today.frame.minX, scheduled.frame.minX)
+        let start = today.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = scheduled.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+        start.press(forDuration: 1.5, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 1.0)
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in today.frame.minX > scheduled.frame.minX }, object: nil)
+        XCTAssertEqual(XCTWaiter().wait(for: [moved], timeout: 5), .completed, "Today now follows Scheduled")
     }
 
     func testLongPressDragReordersLists() {
