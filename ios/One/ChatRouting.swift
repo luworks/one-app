@@ -62,6 +62,12 @@ enum ChatRouting {
         // Alarm verbs must be the request itself, not words embedded in a question or report.
         let alarmRequest = has(text, #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#)
         if alarmRequest { return .capture }
+        // A leading relative time may precede the imperative. Reuse capture's time grammar and
+        // the ordinary request boundary, rather than treating any dated statement as a request.
+        if !isQuestion(text), let action = CaptureParser.actionAfterLeadingRelativeTime(requestBody(text)),
+           intent(action) == .capture || has(action, #"^(?:turn (?:off|on)\b|关(?:闭)?|打开)"#) {
+            return .capture
+        }
         if Dialogue.startsNewItem(text) {
             // Dialogue's unanchored matcher also protects editing follow-ups. At this NEW-message
             // boundary require the request itself, rather than a report/question quoting its words.
