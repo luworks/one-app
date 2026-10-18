@@ -91,6 +91,20 @@ final class PerformanceClimbTests: XCTestCase {
         testNavigationEndpointsAndKeptState()
     }
 
+    /// One profiled entry with a fixed idle observation; never use its elapsed time as a speed sample.
+    func testYearEntryAllocationDiagnostic() {
+        app.launch()
+        sample("app_init_to_content_layout")
+        tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+        tap("calendar.mode.month", sample: "calendar.week_to_calendar.month", ready: element("calendar.monthPager"))
+        tap("calendar.mode.year", sample: "calendar.month_to_calendar.year", ready: element("calendar.year.scroll"))
+        print("YEAR_ALLOCATION_IDLE_BEGIN ns=\(DispatchTime.now().uptimeNanoseconds)")
+        Thread.sleep(forTimeInterval: 8)
+        print("YEAR_ALLOCATION_IDLE_END ns=\(DispatchTime.now().uptimeNanoseconds)")
+        XCTAssertTrue(element("calendar.year.scroll").exists)
+        XCTAssertTrue(app.buttons["New"].isHittable)
+    }
+
     func testNavigationEndpointsAndKeptState() {
         app.launch()
         sample("app_init_to_content_layout")
