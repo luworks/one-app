@@ -33,7 +33,7 @@ Native XCTest metrics target the app, not the runner. Three measured fast-upward
 |absolute_physical|218991.280, 208767.664, 215108.272|215108.272|205.143|105403.053|
 |peak_physical|249744.048, 221334.192, 237783.728|237783.728|226.768|116514.027|
 
-`XCTHitchMetric(application:app)` was requested, but **no hitch metric was returned** in either the raw log or closed xcresult metrics export. Actual returned IDs were only physical delta, absolute physical and peak physical. Hitch count/time/ratio and frame rate remain **missing, not zero**. SDK API availability does not identify why this provider omitted metrics. No equivalent rerun was made and no scroll duration or display-link spacing is substituted for hitch data.
+`XCTHitchMetric(application:app)` was requested, but **no hitch metric was returned** in either the raw log or closed xcresult metrics export. Actual returned IDs were only physical delta, absolute physical and peak physical. Hitch count/time/ratio and frame rate remain **missing, not zero**. SDK API availability does not identify why this provider omitted metrics. No equivalent rerun was made and no scroll duration or display-link spacing is substituted for hitch data. Apple’s [render-loop guidance](https://developer.apple.com/videos/play/tech-talks/10855/) treats below5 hitch ms/s as good,5–10 as needing investigation and above10 as materially disruptive. This is a platform reference, not a measured top-app competitor; the missing provider means the current gap to that target cannot be quantified.
 
 ## Gaps and next actions
 
