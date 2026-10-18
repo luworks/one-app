@@ -84,8 +84,10 @@ final class JourneyTests: XCTestCase {
     /// J5: add a reminder to a list, inline.
     func testJ5_addReminderToList() {
         tab("Reminders")
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Today, '")).firstMatch.waitForExistence(timeout: 5),
-                      "smart-list cards show live counts")
+        let today = app.descendants(matching: .any)["smart.today"].firstMatch
+        XCTAssertTrue(today.waitForExistence(timeout: 5), "the Today smart-list pill is present")
+        XCTAssertNotNil(today.label.range(of: #"^Today, [0-9]+ reminders?$"#, options: .regularExpression),
+                        "the smart-list pill exposes its reminder count")
         tap(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Home, '")).firstMatch)
         XCTAssertTrue(app.staticTexts["Buy milk"].waitForExistence(timeout: 5), "the list shows its reminders")
         tap(app.textFields["New Reminder"])
