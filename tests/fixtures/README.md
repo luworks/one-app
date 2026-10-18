@@ -102,3 +102,18 @@ they do not inject model output or verify Apple Intelligence. Chinese screenshot
 are retained as XCTest attachments inside the eventual xcresult bundle.
 
 - `ios/Eval/Tests/OneLogicTests/conversation-journeys.json` is a copied Swift package resource: thirteen bilingual multi-turn journeys with expected route, title, time/date, preview action and zero writes before Add/Apply. `ConversationJourneyTests` exercises the production context resolver, routing and parser; UI journeys additionally check the real confirmation gate.
+
+## Bilingual semantic title and conversation evaluation
+
+- [`ai-title-rewrite-cases.json`](ai-title-rewrite-cases.json): 38 authored cases,
+  46 turns, 25 development / 13 reserved validation (not blind). Consumed by the
+  offline [`TitleQuality/score.py`](../../ios/Eval/TitleQuality/score.py); this is
+  an evaluation resource, not an app `TestDataset` JSON. Frozen clock, thread
+  transitions, route/type/time, semantic facts, note retention and Add/Apply
+  expectations are explained in the [rubric/interface](../../ios/Eval/TitleQuality/README.md).
+- [`ai-title-rewrite-observed.json`](ai-title-rewrite-observed.json): sparse
+  historical owner-screenshot transcription and attributed review. Unknown notes,
+  gates and model path are intentionally omitted, not marked passing. The raw
+  screenshot and scorer logs stay in canonical `tests/results/`, indexed by QA
+  journal session `ai-title-quality-20261018`. This fixture is evidence for the
+  scorer and baseline only, not a fresh app/model execution.
