@@ -43,6 +43,7 @@ final class PageResourceTrace: @unchecked Sendable {
         let generation: Int
         let start: UInt64
         var layout: UInt64?
+        var yearCache: YearCacheTrace.Snapshot?
         var sequence: Int?
         var route: String?
         var name: String?
@@ -78,6 +79,7 @@ final class PageResourceTrace: @unchecked Sendable {
         let sampled_max_phys_footprint_bytes: UInt64?
         let postlayout_phys_footprint_bytes: Summary?
         let postlayout_resident_size_bytes: Summary?
+        let year_cache: YearCacheTrace.Snapshot?
     }
     private var window: Window?
     private var operationVisits: [String: Int] = [:]
@@ -99,6 +101,8 @@ final class PageResourceTrace: @unchecked Sendable {
         queue.async { [self] in
             guard window?.generation == generation else { return }
             window?.layout = end
+            // Queue observation may follow end; consumers must filter events at layout_ns.
+            window?.yearCache = YearCacheTrace.snapshot()
             window?.sequence = sequence
             window?.route = route
             window?.name = name
@@ -172,7 +176,8 @@ final class PageResourceTrace: @unchecked Sendable {
                               error_count: errors, postlayout_valid_count: postlayout.count,
                               sampled_max_phys_footprint_bytes: valid.compactMap(\.phys_footprint_bytes).max(),
                               postlayout_phys_footprint_bytes: summary(postlayout.compactMap(\.phys_footprint_bytes)),
-                              postlayout_resident_size_bytes: summary(postlayout.compactMap(\.resident_size_bytes)))
+                              postlayout_resident_size_bytes: summary(postlayout.compactMap(\.resident_size_bytes)),
+                              year_cache: current.yearCache)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         guard let data = try? encoder.encode(payload) else {

@@ -79,6 +79,12 @@ final class PerformanceClimbTests: XCTestCase {
         }
     }
 
+    /// Separate opt-in diagnostic cohort; retain the resource journey and all kept-state assertions.
+    func testRootYearCacheDiagnosticWindows() {
+        app.launchArguments.append("-performanceYearCacheCounts")
+        testRootNavigationResourceWindows()
+    }
+
     /// Resource-only wrapper: preserve the original navigation and kept-state journey unchanged.
     func testRootNavigationResourceWindows() {
         app.launchArguments.append("-performanceResources")
