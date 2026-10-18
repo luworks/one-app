@@ -36,11 +36,15 @@ The Share persistence injection throws before save and is not evidence of a spon
 | Integration `1d843b0`, PRs #40–45 plus runner #41 | 613 executed, 0 skipped, 0 failures; capture train 46/46, test 22/22 | `/tmp/today-overnight-integrated-swift.log` |
 | Runner host contracts | 6 passed; no simulator/build invoked | `python3 -m unittest discover -s ios/Eval -p test_e2e_runner.py` |
 | Share persistence UI additions in #46 | DEBUG/non-DEBUG syntax parsing and diff check passed; runtime pending | `/tmp/today-overnight-share-platform-report.md` |
+| Rendered screenshots | 38 existing light/dark screenshots inspected; no verified visual defect in this subset | `/tmp/today-overnight-rendered-audit.md` |
 
 The integrated 100k Activity benchmark ran on the Mac: 2.67 seconds insertion, 47 MB file,
 2.16 ms newest page, 1.54 ms deep page, 0.11 ms one-day count and 49.6 ms search.
 These numbers do not establish iPhone performance. The three new #46 UI methods do not change package logic;
 the 613-test evidence precedes that UI/hook commit and must be interpreted accordingly.
+The visual pass covers the available Today, Calendar, Reminders, Clock, Timer, Settings and Alarm images,
+not every interaction or system surface. A reported missing World Clock NOW label was independently rechecked:
+the label is visibly present in the exact PNG. That finding was withdrawn; no product change or new test is justified by it.
 
 ## Full UI run and remaining work
 
