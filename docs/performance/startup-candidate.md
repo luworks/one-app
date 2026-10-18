@@ -523,3 +523,127 @@ symbol names are absent, the next possible command is a separately bounded
 symbolication, guessed load bias or new recording is part of this export plan.
 Until those requirements are met, keep address-only results as address-only
 results and do not select a production startup candidate.
+
+
+## Round 1 modeled union: phases and sampled hotspots
+
+The new modeled export supersedes the earlier **raw-table diagnostic limit**:
+there are now resolved frames and all six app endpoint signposts, so this
+recording did reach init, store, bootstrap completion and the layout proxy.
+Empty stdout did not mean those operations were absent. This remains a profiled
+simulator diagnosis, not shipping usable-content timing or a 3x comparison.
+
+Source (read-only): `startup-profile-round1-export-710a864cb0864d88a45154845aef93d0/startup-union.xml`,
+7,487,241 bytes, SHA-256
+`8305050a9087956fa997fac82b8cddc7484479abbce70d747dfec02d66ec334d`.
+Independent reducer/results are in canonical
+`tests/results/runs/performance-climb-20261018/startup-profile-round1-analysis-20261018-v1/`:
+`reduce_union.py`, `analysis.json`, `reduction.log`, and
+`main-conformance-stacks.json`. Original trace/export files were not modified.
+Only local Python XML parsing and source/document reads ran in this lane.
+
+The document has 39,730 unique ids and 220,234 refs, all resolved globally across
+nodes (later nodes reference ids defined in earlier nodes). The actual TOC
+binds the six node XPaths to lifecycle/signpost/process/thread/signpost-arg/
+time-profile tables with respectively 0/201/1125/8800/192/3182 rows. Only the
+empty lifecycle table repeats inline schema; typed row tags plus the actual
+TOC establish the other table identities. Process/thread metadata also includes
+other host processes; modeled CPU rows are filtered/validated as PID 6261.
+All 3,182 modeled rows are Running with explicit weight `1000000`, formatted
+`1.00 ms`; they exclude the raw table's duplicate initial Blocked stackshots.
+Two modeled rows have sentinel backtraces, retained as missing (2 ms), not
+invented zero-cost samples. The main thread is TID 13129958.
+
+There are 83 actual frame-associated image records. One is arm64,
+UUID `B9F46924-D104-30AB-90CA-4CA5A4B47A0E`, load address `0x100e0c000`;
+its path ends in installed `One.app/One`, matching the parent's verified product
+identity. No One.debug.dylib is present, consistent with the parent's product
+inspection. dyld_sim is UUID `6FAE6738-0877-3F55-80B9-6AE42FCB8606`,
+load `0x102338000`; dyld is UUID `DF42DD9D-AD11-33A7-8849-9AD5DF30A274`,
+load `0x1021e0000`. These are exported mappings, not guessed load biases.
+Raw address and `<deduplicated_symbol>` frames remain unresolved/ambiguous;
+placeholder frames are keyed by actual image UUID **and address**, never merged
+as if they named one function. No atos or symbolication was needed or run.
+
+### Real phase alignment
+
+PerformanceTrace events occur at trace-relative seconds:
+`4.083156500` begin launch; `4.094018125` store_start;
+`4.644169958` store_ready; `5.984589541` bootstrap_start;
+`6.073906166` bootstrap_complete; `6.479088666` PerformanceSample.
+The final signpost contains the app's monotonic report:
+`ms=2396.860334; init_to_store_ms=11.024792; store_ms=550.936833;
+bootstrap_ms=89.308917; post_bootstrap_layout_ms=405.16475`.
+These are **profiled diagnostic values only**; retain the unprofiled baseline.
+
+The reducer bins samples using the captured trace-event boundaries, not an
+assumed shared zero between app uptime and trace time. Signpost event times
+and embedded app-clock values differ slightly because timestamp capture,
+logging and scheduling are separate operations; no sub-millisecond phase
+precision is claimed. Before-launch-marker is not strictly before OneApp.init:
+probe singleton/metadata initialization can precede its begin event.
+
+Main-thread sampled weights by captured phase are 1,589 ms before launch
+marker, 3 ms init-overrides, 90 ms store, 287 ms store→bootstrap, 31 ms bootstrap,
+210 ms post-bootstrap, and 142 ms after endpoint. App-init→endpoint totals
+621 ms on the main thread / 805 ms over all target threads. Sample weights
+are statistical CPU attribution, **not** wall durations, continuous occupancy,
+call counts or proof of why the rest of a wall interval was unsampled.
+
+### Top 10 in the target interval
+
+Scope is main thread, begin-launch signpost through PerformanceSample. Self is
+the first modeled leaf frame; inclusive weights de-duplicate recursive visits
+to the same image+symbol within each sample. Inclusive rows overlap and must not
+be summed. Ties are ordered deterministically by image UUID and symbol key.
+Full symbol signatures, per-phase/all-thread lists and addresses are in JSON.
+`swift_conforms…` below denotes the complete exported
+`swift_conformsToProtocolMaybeInstantiateSuperclasses` signature there.
+
+| Rank | Self symbol (image), sampled ms | Inclusive symbol (image), sampled ms |
+| --- | --- | --- |
+| 1 | swift_conforms… (libswiftCore), 214 | static App.main() (SwiftUI), 558 |
+| 2 | __open (libsystem_kernel), 15 | start_sim (dyld_sim), 558 |
+| 3 | __openat (libsystem_kernel), 12 | main (One), 558 |
+| 4 | pthread_setspecific (libsystem_pthread), 6 | static OneApp.$main() (One), 558 |
+| 5 | madvise (libsystem_kernel), 6 | start (dyld), 558 |
+| 6 | getMethodFromRelativeList (libobjc), 6 | runApp (SwiftUI), 465 |
+| 7 | unresolved deduplicated symbol at 0x102230a89 (dyld), 6 | closure #1 in KitRendererCommon (SwiftUI), 457 |
+| 8 | _xzm_malloc_tc (libsystem_malloc), 5 | UIApplicationMain (UIKitCore), 457 |
+| 9 | objc_msgSend (libobjcMsgSend), 5 | GSEventRunModal (GraphicsServices), 443 |
+| 10 | _swift_class_getSuperclass (libswiftCore), 5 | _CFRunLoopRunSpecificWithOptions (CoreFoundation), 443 |
+
+The target interval's main-thread unresolved/ambiguous leaf weight is 54/621 ms
+(8.70%); none of its main-thread backtraces is missing. Whole-recording main
+weight is 2,352 ms, including 1,349 ms unresolved/ambiguous leaves and 1 ms missing
+backtrace, mostly before the launch marker. That earlier segment is dominated
+by dyld/dyld_sim stacks; it is **outside this app-init denominator** and cannot
+be credited as an improvement to it.
+
+### Decision: no app-owned candidate justified yet
+
+The conformance leaf accounts for 214/621 ms (34.46%) sampled self weight in the
+target interval: 63 ms store, 105 ms store→bootstrap, 12 ms bootstrap, 34 ms
+post-bootstrap. Exact main-thread stacks show 63 ms via SwiftData setup in
+`OneStore.container`; 131 ms have no One frame beyond entry points. Among first
+non-swiftCore callers are SwiftUICore DynamicPropertyCache.fields (63 ms) and
+BodyAccessor.makeBody (17 ms). These are concrete runtime/framework costs, but
+the export does not identify one safely removable app model/property/view.
+Removing schema models or postponing required store initialization would break
+migration/first-content constraints and is not an accepted candidate.
+
+The earlier cancellation hypothesis is now **deprioritized as a dominant startup
+candidate**, not proven false: post-bootstrap Ringer.sync/AlarmScheduler.reconcile
+has 9 ms inclusive main-thread weight; DayAgenda.items has 7 ms. Neither sample
+count reveals repeated cancelled invocations. The data does not support a
+credible >5% startup wall-time gain from changing that debounce. Do not infer a
+speedup from avoiding those sampled milliseconds, or treat async waiting as CPU.
+
+No production startup optimization is selected. This is an attribution limit,
+**not a plateau conclusion**. The next evidence needed is concrete ownership of
+the dominant metadata/graph cost (which app view/property causes repeated cold
+metadata/conformance work), or scheduler/wait attribution for the residual wall
+intervals, under a separately granted host window. Until that maps to a narrow
+behavior-preserving change, keep required work and endpoint semantics intact.
+The new package ZIP-only increment and dense-Year component speedup are separate
+tracks; the overall app-level 3x startup target remains unmet.
