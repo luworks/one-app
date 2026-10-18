@@ -781,5 +781,796 @@
       }
     ],
     "root_navigation_status": "invalid: duplicate identical accessibility mirrors stopped method before kept-state checks; reader repair source-only"
+  },
+  "repaired_page_root_and_ai_open_cohort": {
+    "production_sha": "b1fc12b62e796ac6c232da5e524235a59edba945",
+    "measurement_sha": "fc1355f",
+    "configuration": "Debug -O",
+    "context": "same small fixture/simulator; page first-cycle-plus-two-revisits; AI fresh process, waits modal page.ai before send; distinct from83 AI cohort",
+    "evidence": "round3-summary.json",
+    "metrics": [
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_ready_to_response_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          76.480042,
+          85.888292,
+          96.426917
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "name": "ai_ready_to_response_layout",
+            "seq": "4",
+            "turn": "65AAAB27-47E3-4D8D-94E8-40DD9E9082DA",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          },
+          {
+            "v": "1",
+            "name": "ai_ready_to_response_layout",
+            "seq": "4",
+            "turn": "0C001910-671F-4654-BDD6-E098196336D2",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          },
+          {
+            "v": "1",
+            "name": "ai_ready_to_response_layout",
+            "seq": "4",
+            "turn": "52DCC3E8-FAA2-468A-9251-9C1FAE2EBE74",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          }
+        ],
+        "median_ms": 85.888292,
+        "min_ms": 76.480042,
+        "max_ms": 96.426917,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 28.629430666666668,
+        "proposed_stretch_ms": 8.588829200000001
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_send_to_feedback_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          532.187709,
+          631.581375,
+          353.79875
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "name": "ai_send_to_feedback_layout",
+            "seq": "3",
+            "turn": "65AAAB27-47E3-4D8D-94E8-40DD9E9082DA",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          },
+          {
+            "v": "1",
+            "name": "ai_send_to_feedback_layout",
+            "seq": "3",
+            "turn": "0C001910-671F-4654-BDD6-E098196336D2",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          },
+          {
+            "v": "1",
+            "name": "ai_send_to_feedback_layout",
+            "seq": "3",
+            "turn": "52DCC3E8-FAA2-468A-9251-9C1FAE2EBE74",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          }
+        ],
+        "median_ms": 532.187709,
+        "min_ms": 353.79875,
+        "max_ms": 631.581375,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 177.395903,
+        "proposed_stretch_ms": 53.2187709
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_send_to_first_response_ready",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          455.786292,
+          545.769916,
+          274.8655
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "name": "ai_send_to_first_response_ready",
+            "seq": "1",
+            "turn": "65AAAB27-47E3-4D8D-94E8-40DD9E9082DA",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "response_state_observation"
+          },
+          {
+            "v": "1",
+            "name": "ai_send_to_first_response_ready",
+            "seq": "1",
+            "turn": "0C001910-671F-4654-BDD6-E098196336D2",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "response_state_observation"
+          },
+          {
+            "v": "1",
+            "name": "ai_send_to_first_response_ready",
+            "seq": "1",
+            "turn": "52DCC3E8-FAA2-468A-9251-9C1FAE2EBE74",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "response_state_observation"
+          }
+        ],
+        "median_ms": 455.786292,
+        "min_ms": 274.8655,
+        "max_ms": 545.769916,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 151.928764,
+        "proposed_stretch_ms": 45.5786292
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_send_to_full_response_ready",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          455.786292,
+          545.769916,
+          274.8655
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "name": "ai_send_to_full_response_ready",
+            "seq": "2",
+            "turn": "65AAAB27-47E3-4D8D-94E8-40DD9E9082DA",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "response_state_observation"
+          },
+          {
+            "v": "1",
+            "name": "ai_send_to_full_response_ready",
+            "seq": "2",
+            "turn": "0C001910-671F-4654-BDD6-E098196336D2",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "response_state_observation"
+          },
+          {
+            "v": "1",
+            "name": "ai_send_to_full_response_ready",
+            "seq": "2",
+            "turn": "52DCC3E8-FAA2-468A-9251-9C1FAE2EBE74",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "response_state_observation"
+          }
+        ],
+        "median_ms": 455.786292,
+        "min_ms": 274.8655,
+        "max_ms": 545.769916,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 151.928764,
+        "proposed_stretch_ms": 45.5786292
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "ai_turn_to_response_layout",
+        "backend": "fallback_model_unavailable",
+        "n": 3,
+        "raw_ms": [
+          532.266334,
+          631.658208,
+          371.292417
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "name": "ai_turn_to_response_layout",
+            "seq": "5",
+            "turn": "65AAAB27-47E3-4D8D-94E8-40DD9E9082DA",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          },
+          {
+            "v": "1",
+            "name": "ai_turn_to_response_layout",
+            "seq": "5",
+            "turn": "0C001910-671F-4654-BDD6-E098196336D2",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          },
+          {
+            "v": "1",
+            "name": "ai_turn_to_response_layout",
+            "seq": "5",
+            "turn": "52DCC3E8-FAA2-468A-9251-9C1FAE2EBE74",
+            "backend": "fallback_model_unavailable",
+            "model_available": "0",
+            "streaming": "0",
+            "first_full_same_emission": "1",
+            "endpoint": "layout_displaylink_proxy"
+          }
+        ],
+        "median_ms": 532.266334,
+        "min_ms": 371.292417,
+        "max_ms": 631.658208,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 177.42211133333333,
+        "proposed_stretch_ms": 53.226633400000004
+      },
+      {
+        "method": "testConversationFreshLaunchN3",
+        "name": "page.ai",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          1515.489667,
+          1455.5765,
+          1389.850166
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "2",
+            "name": "page.ai",
+            "route": "ai",
+            "page_context": "unclassified",
+            "route_visit": "1"
+          },
+          {
+            "v": "1",
+            "seq": "2",
+            "name": "page.ai",
+            "route": "ai",
+            "page_context": "unclassified",
+            "route_visit": "1"
+          },
+          {
+            "v": "1",
+            "seq": "2",
+            "name": "page.ai",
+            "route": "ai",
+            "page_context": "unclassified",
+            "route_visit": "1"
+          }
+        ],
+        "median_ms": 1455.5765,
+        "min_ms": 1389.850166,
+        "max_ms": 1515.489667,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 485.19216666666665,
+        "proposed_stretch_ms": 145.55765
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "app_init_to_content_layout",
+        "backend": "not_applicable",
+        "n": 1,
+        "raw_ms": [
+          2824.526709
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "1",
+            "name": "app_init_to_content_layout",
+            "route": "today",
+            "init_to_store_ms": "8.9775",
+            "store_ms": "161.222042",
+            "bootstrap_ms": "84.344333",
+            "post_bootstrap_layout_ms": "844.256292"
+          }
+        ],
+        "median_ms": 2824.526709,
+        "min_ms": 2824.526709,
+        "max_ms": 2824.526709,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": false,
+        "proposed_required_ms": 941.508903,
+        "proposed_stretch_ms": 282.45267090000004
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "calendar.month_to_calendar.year",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          767.39575,
+          650.138542,
+          734.033084
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "4",
+            "name": "calendar.month_to_calendar.year",
+            "route": "calendar.year"
+          },
+          {
+            "v": "1",
+            "seq": "11",
+            "name": "calendar.month_to_calendar.year",
+            "route": "calendar.year"
+          },
+          {
+            "v": "1",
+            "seq": "18",
+            "name": "calendar.month_to_calendar.year",
+            "route": "calendar.year"
+          }
+        ],
+        "median_ms": 734.033084,
+        "min_ms": 650.138542,
+        "max_ms": 767.39575,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 244.67769466666667,
+        "proposed_stretch_ms": 73.4033084
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "calendar.week_to_calendar.month",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          286.481917,
+          235.769708,
+          235.404166
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "3",
+            "name": "calendar.week_to_calendar.month",
+            "route": "calendar.month"
+          },
+          {
+            "v": "1",
+            "seq": "10",
+            "name": "calendar.week_to_calendar.month",
+            "route": "calendar.month"
+          },
+          {
+            "v": "1",
+            "seq": "17",
+            "name": "calendar.week_to_calendar.month",
+            "route": "calendar.month"
+          }
+        ],
+        "median_ms": 235.769708,
+        "min_ms": 235.404166,
+        "max_ms": 286.481917,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 78.58990266666667,
+        "proposed_stretch_ms": 23.5769708
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "calendar.week_to_tasks",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          568.53725,
+          166.492,
+          168.37525
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "6",
+            "name": "calendar.week_to_tasks",
+            "route": "tasks"
+          },
+          {
+            "v": "1",
+            "seq": "13",
+            "name": "calendar.week_to_tasks",
+            "route": "tasks"
+          },
+          {
+            "v": "1",
+            "seq": "20",
+            "name": "calendar.week_to_tasks",
+            "route": "tasks"
+          }
+        ],
+        "median_ms": 168.37525,
+        "min_ms": 166.492,
+        "max_ms": 568.53725,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 56.12508333333333,
+        "proposed_stretch_ms": 16.837525
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "calendar.year_to_calendar.week",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          250.017333,
+          266.398917,
+          250.188375
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "5",
+            "name": "calendar.year_to_calendar.week",
+            "route": "calendar.week"
+          },
+          {
+            "v": "1",
+            "seq": "12",
+            "name": "calendar.year_to_calendar.week",
+            "route": "calendar.week"
+          },
+          {
+            "v": "1",
+            "seq": "19",
+            "name": "calendar.year_to_calendar.week",
+            "route": "calendar.week"
+          }
+        ],
+        "median_ms": 250.188375,
+        "min_ms": 250.017333,
+        "max_ms": 266.398917,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 83.396125,
+        "proposed_stretch_ms": 25.0188375
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "clock_to_today",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          116.057458,
+          99.382375,
+          316.299375
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "8",
+            "name": "clock_to_today",
+            "route": "today"
+          },
+          {
+            "v": "1",
+            "seq": "15",
+            "name": "clock_to_today",
+            "route": "today"
+          },
+          {
+            "v": "1",
+            "seq": "22",
+            "name": "clock_to_today",
+            "route": "today"
+          }
+        ],
+        "median_ms": 116.057458,
+        "min_ms": 99.382375,
+        "max_ms": 316.299375,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 38.685819333333335,
+        "proposed_stretch_ms": 11.6057458
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "tasks_to_clock",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          233.461042,
+          115.837625,
+          184.148333
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "7",
+            "name": "tasks_to_clock",
+            "route": "clock"
+          },
+          {
+            "v": "1",
+            "seq": "14",
+            "name": "tasks_to_clock",
+            "route": "clock"
+          },
+          {
+            "v": "1",
+            "seq": "21",
+            "name": "tasks_to_clock",
+            "route": "clock"
+          }
+        ],
+        "median_ms": 184.148333,
+        "min_ms": 115.837625,
+        "max_ms": 233.461042,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 61.38277766666667,
+        "proposed_stretch_ms": 18.4148333
+      },
+      {
+        "method": "testNavigationEndpointsAndKeptState",
+        "name": "today_to_calendar.week",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          334.134,
+          166.574167,
+          199.574416
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "2",
+            "name": "today_to_calendar.week",
+            "route": "calendar.week"
+          },
+          {
+            "v": "1",
+            "seq": "9",
+            "name": "today_to_calendar.week",
+            "route": "calendar.week"
+          },
+          {
+            "v": "1",
+            "seq": "16",
+            "name": "today_to_calendar.week",
+            "route": "calendar.week"
+          }
+        ],
+        "median_ms": 199.574416,
+        "min_ms": 166.574167,
+        "max_ms": 334.134,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 66.52480533333333,
+        "proposed_stretch_ms": 19.957441600000003
+      },
+      {
+        "method": "testSettingsSubpageAndActivityEndpoints",
+        "name": "app_init_to_content_layout",
+        "backend": "not_applicable",
+        "n": 1,
+        "raw_ms": [
+          1995.139667
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "1",
+            "name": "app_init_to_content_layout",
+            "route": "today",
+            "init_to_store_ms": "7.881875",
+            "store_ms": "91.262209",
+            "bootstrap_ms": "68.109958",
+            "post_bootstrap_layout_ms": "889.168875"
+          }
+        ],
+        "median_ms": 1995.139667,
+        "min_ms": 1995.139667,
+        "max_ms": 1995.139667,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": false,
+        "proposed_required_ms": 665.0465556666667,
+        "proposed_stretch_ms": 199.5139667
+      },
+      {
+        "method": "testSettingsSubpageAndActivityEndpoints",
+        "name": "page.activity",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          167.815042,
+          116.99675,
+          183.848667
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "4",
+            "name": "page.activity",
+            "route": "activity",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "1"
+          },
+          {
+            "v": "1",
+            "seq": "7",
+            "name": "page.activity",
+            "route": "activity",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "2"
+          },
+          {
+            "v": "1",
+            "seq": "10",
+            "name": "page.activity",
+            "route": "activity",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "3"
+          }
+        ],
+        "median_ms": 167.815042,
+        "min_ms": 116.99675,
+        "max_ms": 183.848667,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 55.93834733333333,
+        "proposed_stretch_ms": 16.7815042
+      },
+      {
+        "method": "testSettingsSubpageAndActivityEndpoints",
+        "name": "page.settings",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          833.049375,
+          167.619542,
+          299.683708
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "2",
+            "name": "page.settings",
+            "route": "settings",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "1"
+          },
+          {
+            "v": "1",
+            "seq": "5",
+            "name": "page.settings",
+            "route": "settings",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "2"
+          },
+          {
+            "v": "1",
+            "seq": "8",
+            "name": "page.settings",
+            "route": "settings",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "3"
+          }
+        ],
+        "median_ms": 299.683708,
+        "min_ms": 167.619542,
+        "max_ms": 833.049375,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 99.89456933333334,
+        "proposed_stretch_ms": 29.968370800000002
+      },
+      {
+        "method": "testSettingsSubpageAndActivityEndpoints",
+        "name": "page.settings.activityData",
+        "backend": "not_applicable",
+        "n": 3,
+        "raw_ms": [
+          358.128833,
+          164.454792,
+          301.262541
+        ],
+        "sample_metadata": [
+          {
+            "v": "1",
+            "seq": "3",
+            "name": "page.settings.activityData",
+            "route": "settings.activityData",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "1"
+          },
+          {
+            "v": "1",
+            "seq": "6",
+            "name": "page.settings.activityData",
+            "route": "settings.activityData",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "2"
+          },
+          {
+            "v": "1",
+            "seq": "9",
+            "name": "page.settings.activityData",
+            "route": "settings.activityData",
+            "page_context": "first_cycle_plus_two_revisits",
+            "route_visit": "3"
+          }
+        ],
+        "median_ms": 301.262541,
+        "min_ms": 164.454792,
+        "max_ms": 358.128833,
+        "p95_ms": null,
+        "functional_pass": true,
+        "baseline_usable": true,
+        "proposed_required_ms": 100.420847,
+        "proposed_stretch_ms": 30.1262541
+      }
+    ],
+    "fine_ai_stages": "pending: app stdout unavailable; post-endpoint stage export source-only eee949a"
   }
 }

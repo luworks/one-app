@@ -97,3 +97,35 @@ Same frozen83b4fb8 products, productionb1fc12b, Debug-O and fixture/context abov
 No p95 or speedup is claimed. `testNavigationEndpointsAndKeptState` failed28.553s at Clock because XCTest found two `performance.trace` StaticTexts carrying the identical interval. Its preceding n1 transitions are retained as diagnostics, not accepted navigation baselines; state-retention assertions were not reached. A measurement-reader repair deduplicates identical interval strings, requires exactly one distinct matching report, and rejects disagreeing mirrors before navigation. Endpoint definitions and all destination/state assertions are unchanged. The repair is source-only until the next incremental build and focused navigation run.
 
 Evidence: `baseline-root-navigation-c334b127.log`, `root-navigation-command.json`, `root-navigation-summary.json`, full closed `baseline-root-navigation/ui.xcresult`; QA archive `performance-pages-root-navigation-20261018`. Simulator shutdown/panel closed and live heavy/booted empty before12:36 resource handoff.
+
+
+## Repaired page/root coverage and AI-open diagnostic cohort
+
+Productionb1fc12b plus measurementfc1355f; stable `build-source`, same derived-optimized cache, Debug-O and fixture/simulator above. One build plus three selected methods passed: conversation62.716s, Settings/Activity144.546s, root navigation84.083s. The root journey reached all retained-list/calendar-mode assertions. The Settings controlled-link/Form-probe and duplicate-identical-interval reader repairs are now simulator verified. These are measurement repairs, not production speed candidates.
+
+AI now waits for its own modal page.ai endpoint and hittable input before sending; its open-to-send delay and instrumentation differ from83b4fb8. Keep this as a new diagnostic cohort, not a causal speed comparison. AI ready is state observation; other listed rows are geometry/two-display-link proxies. Page/root n3 remains first cycle plus two revisits; AI n3 fresh-process/OS-warm. No p95.
+
+| Method / endpoint | Raw ms | Median ms | Required /3 | Stretch /10 |
+| --- | --- | ---: | ---: | ---: |
+| ConversationFreshLaunchN3 / ai_ready_to_response_layout | 76.480, 85.888, 96.427 | 85.888 | 28.629 | 8.589 |
+| ConversationFreshLaunchN3 / ai_send_to_feedback_layout | 532.188, 631.581, 353.799 | 532.188 | 177.396 | 53.219 |
+| ConversationFreshLaunchN3 / ai_send_to_first_response_ready | 455.786, 545.770, 274.865 | 455.786 | 151.929 | 45.579 |
+| ConversationFreshLaunchN3 / ai_send_to_full_response_ready | 455.786, 545.770, 274.865 | 455.786 | 151.929 | 45.579 |
+| ConversationFreshLaunchN3 / ai_turn_to_response_layout | 532.266, 631.658, 371.292 | 532.266 | 177.422 | 53.227 |
+| ConversationFreshLaunchN3 / page.ai | 1515.490, 1455.576, 1389.850 | 1455.576 | 485.192 | 145.558 |
+| NavigationEndpointsAndKeptState / calendar.month_to_calendar.year | 767.396, 650.139, 734.033 | 734.033 | 244.678 | 73.403 |
+| NavigationEndpointsAndKeptState / calendar.week_to_calendar.month | 286.482, 235.770, 235.404 | 235.770 | 78.590 | 23.577 |
+| NavigationEndpointsAndKeptState / calendar.week_to_tasks | 568.537, 166.492, 168.375 | 168.375 | 56.125 | 16.838 |
+| NavigationEndpointsAndKeptState / calendar.year_to_calendar.week | 250.017, 266.399, 250.188 | 250.188 | 83.396 | 25.019 |
+| NavigationEndpointsAndKeptState / clock_to_today | 116.057, 99.382, 316.299 | 116.057 | 38.686 | 11.606 |
+| NavigationEndpointsAndKeptState / tasks_to_clock | 233.461, 115.838, 184.148 | 184.148 | 61.383 | 18.415 |
+| NavigationEndpointsAndKeptState / today_to_calendar.week | 334.134, 166.574, 199.574 | 199.574 | 66.525 | 19.957 |
+| SettingsSubpageAndActivityEndpoints / page.activity | 167.815, 116.997, 183.849 | 167.815 | 55.938 | 16.782 |
+| SettingsSubpageAndActivityEndpoints / page.settings | 833.049, 167.620, 299.684 | 299.684 | 99.895 | 29.968 |
+| SettingsSubpageAndActivityEndpoints / page.settings.activityData | 358.129, 164.455, 301.263 | 301.263 | 100.421 | 30.126 |
+
+The standalone n1 init samples in Settings/navigation are excluded from accepted launch data. The three page.ai first-open samples are deliberately retained; they include SwiftUI/modal work and the probe boundary, not model generation.
+
+Fine AI stages were printed only by the app and absent from the runner log. One closed xcresult console extraction failed exit1 with `Error: No console log available`; stdout0B. Therefore internal stage timings remain unmeasured. Source-only eee949a exports one token-keyed stage line via the existing final history publication after both layout endpoints are frozen; a focused subsequent run must verify capture before using it. No bottleneck is attributed from missing data.
+
+Evidence: `baseline-v2-round3-f735cb88.log`, `round3-command.json`, `staged-source-v2-round3/manifest.json`, `round3-summary.json`, `round3-console.{stdout,stderr}` and full closed `baseline-v2-round3/ui.xcresult`. Three-method run exit0; owned simulator/panel shut down, live heavy/booted empty12:47:20 PDT.
