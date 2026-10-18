@@ -353,6 +353,48 @@ final class CalendarMathTests: XCTestCase {
 }
 
 final class CalendarLayoutTests: XCTestCase {
+    func testAlarmLaneKeepsSimultaneousBlocksSeparateAtWeekAndThreeDayWidths() {
+        // Narrow seven-day columns through roomy three-day columns; dense clusters must not spill into the alarm lane.
+        for columnWidth in [40.0, 50, 56, 120, 160] {
+            let lanes = CalendarLayout.timedLanes(columnWidth: columnWidth, hasAlarms: true)
+            XCTAssertGreaterThanOrEqual(lanes.alarmWidth, 15)
+            XCTAssertLessThanOrEqual(lanes.alarmWidth, 28)
+            XCTAssertEqual(lanes.alarmX + lanes.alarmWidth, columnWidth - 1, accuracy: 0.0001)
+            for count in [1, 2, 3, 8] {
+                for column in 0..<count {
+                    let span = lanes.block(column: column, count: count)
+                    let event = CGRect(x: span.x, y: 13 * 48, width: span.width, height: 48)
+                    let alarm = CGRect(x: lanes.alarmX, y: 13 * 48, width: lanes.alarmWidth, height: 14)
+                    XCTAssertFalse(event.intersects(alarm), "an alarm during an event has its own lane")
+                    XCTAssertLessThanOrEqual(event.maxX, alarm.minX - 2 + 0.0001)
+                    XCTAssertFalse(event.contains(CGPoint(x: alarm.midX, y: alarm.midY)),
+                                   "the alarm tap must not hit an event block")
+                    XCTAssertGreaterThan(span.width, 0)
+                }
+            }
+        }
+    }
+
+    func testDaysWithoutAlarmsKeepTheirFullTimedWidthAndEmptySlots() {
+        let lanes = CalendarLayout.timedLanes(columnWidth: 50, hasAlarms: false)
+        let block = lanes.block(column: 0, count: 1)
+        XCTAssertEqual(lanes.alarmWidth, 0)
+        XCTAssertEqual(block.x, 1)
+        XCTAssertEqual(block.width, 47, "a day without alarms keeps its original block width")
+
+        let alarmDay = CalendarLayout.timedLanes(columnWidth: 50, hasAlarms: true)
+        let span = alarmDay.block(column: 0, count: 1)
+        let event = CGRect(x: span.x, y: 13 * 48, width: span.width, height: 48)
+        let alarm = CGRect(x: alarmDay.alarmX, y: 13 * 48, width: alarmDay.alarmWidth, height: 14)
+        let emptyLane = CGPoint(x: alarm.midX, y: 14 * 48 + 24)
+        XCTAssertFalse(event.contains(emptyLane))
+        XCTAssertFalse(alarm.contains(emptyLane), "unused alarm-lane space remains available for a long-press")
+        let slot = CalendarLayout.slot(x: 44 + emptyLane.x, y: emptyLane.y, gutter: 44,
+                                       columnWidth: 50, hourHeight: 48, dayCount: 7)
+        XCTAssertEqual(slot.day, 0)
+        XCTAssertEqual(slot.minute, 14 * 60 + 30, "reserving a lane does not change the day/time mapping")
+    }
+
     func testAllDayLanesStackOverlappingBanners() {
         // Mon-Wed, Tue-Thu overlap; Fri does not.
         let lanes = CalendarLayout.lanes(for: [(1, 3), (2, 4), (5, 5)])

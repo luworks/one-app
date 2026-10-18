@@ -821,7 +821,7 @@ private struct WeekPage: View {
             header(days)
             allDayStrip(days, entries.filter(\.isAllDay))
             Rectangle().fill(Color(.separator)).frame(height: 0.5)
-            // Alarms are markers on the grid, not blocks: they take no column and never move.
+            // Alarms have no duration and never move; timed blocks yield to their narrow lane.
             grid(days, entries.filter { !$0.isAllDay && !$0.isAlarm }, entries.filter(\.isAlarm))
         }
         .entryDeleteDialog($pendingDelete)
@@ -951,20 +951,22 @@ private struct WeekPage: View {
                     ForEach(Array(days.enumerated()), id: \.offset) { index, d in
                         let x = gutter + CGFloat(index) * colW
                         let placed = place(timed, on: d)
+                        let markers = placeAlarms(alarms, on: d)
+                        let lanes = CalendarLayout.timedLanes(columnWidth: Double(colW), hasAlarms: !markers.isEmpty)
                         let past = dimsPast && d < cal.startOfDay(for: .now)
                         ForEach(placed, id: \.entry.id) { p in
-                            let w = (colW - 2) / CGFloat(p.count)
+                            let span = lanes.block(column: p.column, count: p.count)
                             block(p.entry, colW: colW, lines: p.titleLines)
                                 .opacity(past ? DayTint.past : 1)
-                                .frame(width: max(8, w - 1), height: max(18, p.height(hourHeight)))
-                                .offset(x: x + 1 + w * CGFloat(p.column), y: p.y(hourHeight))
+                                .frame(width: CGFloat(span.width), height: max(18, p.height(hourHeight)))
+                                .offset(x: x + CGFloat(span.x), y: p.y(hourHeight))
                         }
-                        // Above the blocks: a thin marker at the alarm's time (no duration).
-                        ForEach(placeAlarms(alarms, on: d), id: \.entry.id) { m in
+                        // Beside the blocks: a thin marker at the alarm's time (no duration).
+                        ForEach(markers, id: \.entry.id) { m in
                             alarmMarker(m.entry)
                                 .opacity(past ? DayTint.past : 1)
-                                .frame(width: max(8, colW - 2), height: Self.markerHeight)
-                                .offset(x: x + 1, y: m.y)
+                                .frame(width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
+                                .offset(x: x + CGFloat(lanes.alarmX), y: m.y)
                         }
                     }
                     if days.contains(where: cal.isDateInToday) {
@@ -1064,17 +1066,20 @@ private struct WeekPage: View {
         }
     }
 
-    /// An alarm on the grid: a thin accent line at its time with a small bell and its label. Tap opens the alarm editor;
+    /// An alarm on the grid: a thin accent line and bell, with a label when it fits. Tap opens the alarm editor;
     /// it has no duration and no drag (only flexible tasks move).
     private func alarmMarker(_ e: CalEntry) -> some View {
-        HStack(spacing: 2) {
-            Image(systemName: "alarm").font(.system(size: 8, weight: .bold))
-            Text(e.title).font(.system(size: 9, weight: .semibold)).lineLimit(1)
-            Spacer(minLength: 0)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 2) {
+                Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
+                Text(e.title).font(.system(size: 9, weight: .semibold)).lineLimit(1)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
         }
         .foregroundStyle(EventTint.text(e.color))
         .padding(.horizontal, 3)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(EventTint.fill(e.color))
         .overlay(alignment: .top) { Rectangle().fill(e.color).frame(height: 1.5) }
         .clipShape(RoundedRectangle(cornerRadius: 3))
@@ -1135,12 +1140,15 @@ private struct WeekPage: View {
     /// Where the timed blocks are drawn (the same layout as the grid's `ForEach`).
     private func blockRects(_ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry], colW: CGFloat) -> [CGRect] {
         days.enumerated().flatMap { index, d in
-            place(timed, on: d).map { p in
-                let w = (colW - 2) / CGFloat(p.count)
-                return CGRect(x: gutter + CGFloat(index) * colW + 1 + w * CGFloat(p.column), y: p.y(hourHeight),
-                              width: max(8, w - 1), height: max(18, p.height(hourHeight)))
-            } + placeAlarms(alarms, on: d).map { m in
-                CGRect(x: gutter + CGFloat(index) * colW + 1, y: m.y, width: max(8, colW - 2), height: Self.markerHeight)
+            let markers = placeAlarms(alarms, on: d)
+            let lanes = CalendarLayout.timedLanes(columnWidth: Double(colW), hasAlarms: !markers.isEmpty)
+            return place(timed, on: d).map { p in
+                let span = lanes.block(column: p.column, count: p.count)
+                return CGRect(x: gutter + CGFloat(index) * colW + CGFloat(span.x), y: p.y(hourHeight),
+                              width: CGFloat(span.width), height: max(18, p.height(hourHeight)))
+            } + markers.map { m in
+                CGRect(x: gutter + CGFloat(index) * colW + CGFloat(lanes.alarmX), y: m.y,
+                       width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
             }
         }
     }
