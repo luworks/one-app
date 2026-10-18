@@ -46,10 +46,27 @@ final class AskConversationTests: XCTestCase {
         XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
         send("Thanks for explaining the alarm")
         XCTAssertTrue(reply("You're welcome").waitForExistence(timeout: 10))
-        XCTAssertTrue(reply("New task").exists)
+        XCTAssertTrue(reply("New reminder").exists)
         XCTAssertFalse(reply("New alarm").exists)
         send("make it 4pm")
         XCTAssertTrue(reply("16:00").waitForExistence(timeout: 10))
+        app.buttons["Add"].tap()
+        XCTAssertTrue(reply("Added “Call Alex”").waitForExistence(timeout: 5))
+    }
+
+    func testExistingAlarmQuestionPreservesPendingReminder() {
+        send("Call Alex tomorrow at 3pm")
+        XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
+        send("Did I set an alarm for 7am?")
+        XCTAssertTrue(reply("We can just chat").waitForExistence(timeout: 10))
+        XCTAssertTrue(reply("New reminder").exists)
+        XCTAssertFalse(reply("New alarm").exists)
+        XCTAssertTrue(reply("15:00").exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1)
+        send("How about 5pm?")
+        XCTAssertTrue(reply("17:00").waitForExistence(timeout: 10))
+        XCTAssertTrue(reply("New reminder").exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1)
         app.buttons["Add"].tap()
         XCTAssertTrue(reply("Added “Call Alex”").waitForExistence(timeout: 5))
     }

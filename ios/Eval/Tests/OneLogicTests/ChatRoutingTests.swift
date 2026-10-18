@@ -29,9 +29,22 @@ final class ChatRoutingTests: XCTestCase {
         }
     }
 
+    func testAlarmQuestionsAndRefusalsAreConversation() {
+        for text in [
+            "Did I set an alarm for 7am?", "Have I set an alarm for 7am?",
+            "Can you show me how to set an alarm?", "Could you show me how to add a timer?",
+            "Don't wake me at 7am, okay?", "Don’t wake me at 7am, okay?",
+            "Do not wake me at 7am", "我设置了早上7点的闹钟吗？",
+            "我是不是设了7点的闹钟？", "你能教我怎么设一个闹钟吗？",
+            "不要早上7点叫醒我，好吗？", "不用7点叫我起床",
+        ] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+        }
+    }
+
     func testExplicitAndTerseRequestsStillReachCapture() {
         for text in [
-            "Can you buy milk?", "买几个苹果", "Buy milk", "Call Alex tomorrow at 3pm", "Pay studio invoice",
+            "Could you add a timer for 10 minutes?", "可以帮我设一个早上7点的闹钟吗？", "能明天7点叫醒我吗？", "Can you buy milk?", "买几个苹果", "Buy milk", "Call Alex tomorrow at 3pm", "Pay studio invoice",
             "明天下午3点开会", "Dentist tomorrow at 3pm", "Set an alarm for 7am", "Can you set an alarm for 7am?",
             "When I get home remind me to buy milk", "明天提醒我设置闹钟",
             "提醒我明天买牛奶", "明天早上7点叫醒我", "Can you remind me to call Mom?",
@@ -40,6 +53,38 @@ final class ChatRoutingTests: XCTestCase {
             "哦，我想卖家里的一些东西，然后去 Marketplace。今天下午 3 点提醒我吧",
         ] {
             XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+        }
+    }
+
+    func testContextualTimeAnswersRequireOpenTimeContext() throws {
+        let now = Date(timeIntervalSince1970: 1_792_000_000)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        for text in ["How about 5pm?", "What about tomorrow at 5pm?", "下午5点，可以吗？", "明天下午5点好吗？", "5pm", "改成下午4点"] {
+            XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: false, now: now, calendar: cal), text)
+            let answer = try XCTUnwrap(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true, now: now, calendar: cal), text)
+            XCTAssertNotNil(Dialogue.answerTime(answer, keeping: now, now: now, calendar: cal), text)
+            let preview = Capture(title: "Call Alex", day: now, hasDay: true, hour: 15)
+            guard case .updated(let edited) = Dialogue.refine(preview, with: answer, now: now, calendar: cal) else {
+                return XCTFail("Time answer must reuse preview refinement: \(text)")
+            }
+            XCTAssertEqual(edited.title, preview.title)
+            XCTAssertEqual(edited.hour, text.contains("4") ? 16 : 17)
+        }
+    }
+
+    func testConversationWithTimeDoesNotQualifyAsContextualAnswer() {
+        for text in [
+            "Did I set an alarm for 7am?", "Can you show me how to set an alarm for 7am?",
+            "Don't wake me at 7am, okay?", "我是不是设了7点的闹钟？",
+            "不要早上7点叫醒我，好吗？", "I am meeting friends at 5pm",
+            "我今天下午5点很累，想聊聊", "Thanks for explaining the alarm at 7am",
+            "How about telling me a story at 5pm?", "下午5点的会议是什么？",
+            "Did the Dentist appointment end at 5pm?", "Is 5pm free?",
+        ] {
+            XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+            let answer = ChatRouting.contextualTimeAnswer(text, hasTimeContext: true)
+            XCTAssertNil(answer, text)
         }
     }
 

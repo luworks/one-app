@@ -74,6 +74,35 @@ final class AskMultiTurnTests: XCTestCase {
         XCTAssertTrue(label(containing: "→ Today 17:00").exists)
     }
 
+    func testEnglishQuestionTimeAnswerPreservesConversationAndRequiresApply() {
+        assertQuestionTimeAnswer("How about 5pm?", conversation: "Did I set an alarm for 7am?")
+    }
+
+    func testChineseQuestionTimeAnswerPreservesConversationAndRequiresApply() {
+        assertQuestionTimeAnswer("下午5点，可以吗？", conversation: "我是不是设了7点的闹钟？")
+    }
+
+    private func assertQuestionTimeAnswer(_ answer: String, conversation: String) {
+        send("Move Dentist")
+        XCTAssertTrue(label(containing: "When should I move “Dentist” to?").waitForExistence(timeout: 90))
+        send(conversation)
+        let expectedReply = conversation.contains("我") ? "我们可以直接聊聊" : "We can just chat"
+        XCTAssertTrue(label(containing: expectedReply).waitForExistence(timeout: 10))
+        XCTAssertFalse(app.otherElements["change-card"].exists)
+        XCTAssertFalse(app.buttons["Add"].exists)
+        send(answer)
+        XCTAssertTrue(app.otherElements["change-card"].waitForExistence(timeout: 10))
+        XCTAssertTrue(label(containing: "Today 15:00 → Today 17:00").exists)
+        XCTAssertTrue(app.buttons["Apply"].exists)
+        XCTAssertFalse(label(containing: "Moved “Dentist”").exists)
+        // A later question with another time must leave the proposed move intact.
+        send(conversation)
+        XCTAssertTrue(label(containing: "Today 15:00 → Today 17:00").exists)
+        XCTAssertTrue(app.buttons["Apply"].exists)
+        app.buttons["Apply"].tap()
+        XCTAssertTrue(label(containing: "Moved “Dentist”").waitForExistence(timeout: 5))
+    }
+
     /// The sample data has "Dentist" at 15:00 today. A new request that merely mentions 3pm must not be read as an edit of it,
     /// and a clarification that describes a new thing must not become a ChangeCard either.
     func testNewRequestMentioningAnItemsTimeIsACaptureNotAnEdit() {

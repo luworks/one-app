@@ -346,8 +346,20 @@ struct AskView: View {
         let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
         messages.append(ChatMessage(role: .user, text: text))
         turnStart = .now
-        // Clear conversation must not be mistaken for a follow-up that changes a pending card.
         let intent = ChatRouting.intent(text)
+        // A question-shaped answer to our time prompt may edit a preview; other conversation cannot.
+        let hasTimeContext: Bool
+        switch followup {
+        case .needTime, .alarmTime: hasTimeContext = true
+        case .chooseItem: hasTimeContext = false
+        case nil: hasTimeContext = pending != nil || (change != nil && change?.delete == false)
+        }
+        if let answer = ChatRouting.contextualTimeAnswer(text, hasTimeContext: hasTimeContext),
+           answerOpenTurn(answer, history: history) {
+            recordTurn("answer", text)
+            return
+        }
+        // Clear conversation must not be mistaken for a follow-up that changes a pending card.
         if intent == .conversation {
             if ChatRouting.isAgendaQuestion(text) {
                 recordTurn("question", text)
@@ -384,6 +396,14 @@ struct AskView: View {
 
     /// Route before either extractor. Conversation leaves pending previews and follow-ups untouched.
     private func respond(_ text: String, history: String, intent: ChatRouting.Intent) {
+        // Record the sent interaction before cancellation can discard its reply. The model has not resolved unsure input yet.
+        let initialIntent: String
+        switch intent {
+        case .capture: initialIntent = "capture"
+        case .conversation: initialIntent = "conversation"
+        case .unsure: initialIntent = "unsure"
+        }
+        recordTurn(initialIntent, text)
         thinking = true
         captureTask = Task { @MainActor in
             let result = await ChatResponse.respond(text, history: history, intent: intent)
@@ -391,11 +411,9 @@ struct AskView: View {
             thinking = false
             switch result {
             case .capture:
-                recordTurn("capture", text)
                 clearPreviews()
                 propose(text)
             case .reply(let reply):
-                recordTurn("conversation", text)
                 messages.append(ChatMessage(role: .ai, text: reply))
             }
         }
@@ -417,7 +435,8 @@ struct AskView: View {
     /// The routing of one message: where it went, and how long and in what language it was. The text itself is not copied
     /// unless the user switched that on (Settings → Activity data).
     private func recordTurn(_ intent: String, _ text: String) {
-        let route = intent == "capture" && AICapture.isAvailable ? "model" : "rules"
+        // This describes the initial routing decision, before any model response or extraction.
+        let route = "rules"
         ActivityCenter.record(ActivityEvents.aiTurn(intent: intent, route: route, text: text,
                                                     keepText: ActivityCenter.shared.settings.keepChatText, thread: threadID))
     }

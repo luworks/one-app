@@ -12,11 +12,13 @@ enum ChatRouting {
     static func intent(_ raw: String) -> Intent {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         // Talking ABOUT reminders, or explicitly declining one, is not asking for one.
-        if has(text, #"don['’]t (?:add|create|set|remind)|do not (?:add|create|set|remind)|不要(?:创建|添加|提醒|设)|不用(?:创建|添加|提醒|设)|只是聊|just (?:chatting|talking)|\bhow (?:do|can) (?:i|you)\b|怎么(?:创建|添加|设)|如何"#) { return .conversation }
+        if has(text, #"don['’]t (?:add|create|set|remind|wake)|do not (?:add|create|set|remind|wake)|不要(?:创建|添加|提醒|设)|不用(?:创建|添加|提醒|设)|(?:不要|不用|别).*(?:叫醒|叫我起床)|只是聊|just (?:chatting|talking)|\bhow (?:do|can) (?:i|you)\b|怎么(?:创建|添加|设)|如何"#) { return .conversation }
         if has(text, #"^(?:i (?:already|just|have)|i've) (?:set|added|created|finished|completed)|我(?:已经|刚刚|刚才).*(?:了|过)|我记得|^i (?:remember|asked)\b|^(?:what (?:does|is)|can you explain)|是什么意思|怎么用"#) { return .conversation }
         // Embedded command words in an explanation question or a past report are not a new request.
-        if has(text, #"^(?:what happens\b|why (?:did|does|do|would)\b|how (?:does|would)\b|(?:can|could) you (?:explain|tell me)\b)|^(?:为什么|怎么(?:才能|会|设置|添加|创建)|如何)|^(?:yesterday|last night|this morning)[, ]+i (?:set|added|created)\b|^我(?:昨天|昨晚|今天早上)(?:设置了|设了|添加了|创建了)"#) { return .conversation }
-        if Dialogue.startsNewItem(text) || has(text, #"(?:set|create|add) (?:me )?(?:an? )?(?:alarm|timer)\b|(?:设|定|加|创建).{0,6}(?:闹钟|计时器)|wake me|叫醒我|叫我起床"#) { return .capture }
+        if has(text, #"^(?:what happens\b|why (?:did|does|do|would)\b|how (?:does|would)\b|(?:can|could) you (?:explain|tell me|show me)\b)|^(?:为什么|怎么(?:才能|会|设置|添加|创建)|如何)|^(?:yesterday|last night|this morning)[, ]+i (?:set|added|created)\b|^我(?:昨天|昨晚|今天早上)(?:设置了|设了|添加了|创建了)"#) { return .conversation }
+        // Alarm verbs must be the request itself, not words embedded in a question or report.
+        let alarmRequest = has(text, #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#)
+        if Dialogue.startsNewItem(text) || alarmRequest { return .capture }
         if has(text, #"^(?:hi|hello|hey|thanks|thank you|good morning|good night)\b|^(?:你好|嗨|谢谢|早上好|晚安)|\bi(?: am| was|'m| have| already| just)\b|我(?:正在|在|刚|已经|进行|只是)|(?:感觉|心情|很累|累了|难过|聊聊)|\b(?:feel|feeling)\b|activity|活动记录"#) { return .conversation }
         if has(text, #"^(?:write|draft|compose|make) (?:me|us)\b|^(?:帮我写|给我写|给我讲)|^(?:write|tell|make).*(?:poem|story|joke|诗|故事|笑话)|\b(?:already|finished|completed|yesterday)\b|已经|昨天"#) { return .conversation }
         // Keep terse planner input working, including no-date errands. Dates alone are not an intent.
@@ -27,6 +29,20 @@ enum ChatRouting {
         let parsed = CaptureParser.parse(text)
         if (parsed.hasDay || parsed.hour != nil), has(text, #"\b(?:meeting|appointment|lunch|dinner|dentist|flight|class|interview)\b|会议|开会|面试|上课|聚餐|航班|看牙|体检"#) { return .capture }
         return .unsure
+    }
+
+    /// Only a time-only answer may precede the conversation guard, and only with an open time context.
+    /// Strip a few complete answer wrappers, never arbitrary question/story words that happen to contain a time.
+    static func contextualTimeAnswer(_ raw: String, hasTimeContext: Bool,
+                                     now: Date = .now, calendar: Calendar = .current) -> String? {
+        guard hasTimeContext else { return nil }
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = text.replacingOccurrences(of: #"[?？]+$"#, with: "", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"^(?:how about|what about)\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
+        text = text.replacingOccurrences(of: #"(?:[,，]\s*)?(?:可以吗|行吗|好吗)$"#, with: "", options: .regularExpression)
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Dialogue.isOnlyWhen(text, now: now, calendar: calendar) else { return nil }
+        return text
     }
 
     static func isQuestion(_ text: String) -> Bool {
