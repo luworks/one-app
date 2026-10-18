@@ -108,8 +108,10 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertTrue(steps.waitForExistence(timeout: 5))
         XCTAssertEqual(steps.value as? String, "1", "shown metrics start enabled")
         XCTAssertEqual(energy.value as? String, "0", "hidden metrics start disabled")
-        steps.tap()
-        energy.tap()
+        steps.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(steps.value as? String, "0")
+        energy.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(energy.value as? String, "1")
         app.buttons["health.pick.add"].tap()
         XCTAssertTrue(row(app, "steps").waitForNonExistence(timeout: 5))
         XCTAssertTrue(row(app, "activeEnergy").waitForExistence(timeout: 5))
@@ -142,9 +144,10 @@ final class HealthMetricsTests: XCTestCase {
 
         app.buttons["health.add"].tap()
         let weightToggle = app.switches["health.pick.weight"]
-        for _ in 0..<4 where !weightToggle.isHittable { app.swipeUp() }
+        for _ in 0..<4 where !weightToggle.isHittable || weightToggle.frame.maxY > app.frame.maxY - 60 { app.swipeUp() }
         XCTAssertTrue(app.switches["health.pick.weight"].waitForExistence(timeout: 5), "hidden, not deleted: it can be added again")
-        app.switches["health.pick.weight"].tap()
+        weightToggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertEqual(weightToggle.value as? String, "1")
         app.buttons["health.pick.add"].tap()
         XCTAssertTrue(row(app, "weight").waitForExistence(timeout: 5))
     }
