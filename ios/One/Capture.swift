@@ -355,7 +355,7 @@ enum CaptureParser {
     // MARK: Helpers
 
     /// Shared complete list grammar for parsing and leading temporal request routing.
-    static let chineseWeeklyDays = #"每(?:个)?(?:周|星期|礼拜)[一二三四五六日天](?:\s*[、，,和及与]\s*(?:(?:每(?:个)?)?(?:周|星期|礼拜))?[一二三四五六日天])*"#
+    static let chineseWeeklyDays = #"每(?:个|逢)?(?:周|星期|礼拜)[一二三四五六日天](?:\s*[、，,和及与]\s*(?:(?:每(?:个)?)?(?:周|星期|礼拜))?[一二三四五六日天])*"#
     private static let englishDay = #"(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tues|tue|wed|thurs|thur|thu|fri|sat)s?\b"#
     static let englishWeeklyDays = #"\bevery\s+"# + englishDay + #"(?:\s*(?:,\s*(?:and\s+)?|and\s+|&\s*)(?:every\s+)?"# + englishDay + #")*"#
 
@@ -983,13 +983,30 @@ enum CaptureDraftMapper {
 enum CaptureTitleRefinement {
     static func fallback(_ capture: Capture, source: String) -> Capture {
         var result = capture
-        let title = CaptureParser.cleanRequestTitle(capture.title)
+        var title = CaptureParser.cleanRequestTitle(capture.title)
+        // Explicit notes use the same content path as motivation, preserving existing notes.
+        // Read the note from the original request so scheduling extraction cannot alter its text.
+        let noteLabel = #"[，,;；]\s*(?:备注(?:写|为|是)?\s*[:：]?|(?i:notes?)\s*[:：])\s*"#
+        if let marker = source.range(of: noteLabel, options: .regularExpression),
+           !insideQuotedText(source, at: marker.lowerBound) {
+            let note = String(source[marker.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "。"))
+            if !note.isEmpty {
+                if let label = title.range(of: noteLabel, options: .regularExpression) {
+                    let action = String(title[..<label.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !action.isEmpty { title = action }
+                }
+                if let existing = result.notes, !existing.isEmpty {
+                    if !existing.contains(note) { result.notes = existing + "\n" + note }
+                } else { result.notes = note }
+            }
+        }
         let motive = #"[，,。;；]\s*(?:因为|我需要|我想|这样|以便|(?i:because\b|so that\b|I need to\b|I want to\b|I am allergic\b))"#
         if let range = title.range(of: motive, options: .regularExpression) {
             let action = String(title[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !action.isEmpty {
                 result.title = action
-                result.notes = retainedNotes(capture.notes, source: source)
+                result.notes = retainedNotes(result.notes, source: source)
             }
         } else { result.title = title }
         result.title = result.title.replacingOccurrences(of: #"^not to\s+"#, with: "Do not ", options: [.regularExpression, .caseInsensitive])
@@ -1000,7 +1017,7 @@ enum CaptureTitleRefinement {
            source.range(of: "不|别|禁止|关闭|停止", options: .regularExpression) == nil,
            result.title.range(of: #"^(?:带上|戴上|佩戴)\s*Apple\s*Watch$"#, options: [.regularExpression, .caseInsensitive]) != nil {
             result.title = "佩戴Apple Watch记录睡眠"
-            result.notes = retainedNotes(capture.notes, source: source)
+            result.notes = retainedNotes(result.notes, source: source)
         }
         return result
     }
@@ -1021,6 +1038,14 @@ enum CaptureTitleRefinement {
         // Keep all original facts, motivation, numbers and modality even when the model paraphrases the action.
         result.notes = retainedNotes(backup.notes, source: source)
         return result
+    }
+
+    private static func insideQuotedText(_ text: String, at index: String.Index) -> Bool {
+        let prefix = text[..<index]
+        // A note label inside an explicitly quoted name belongs to that name.
+        return prefix.filter { $0 == "\"" }.count % 2 == 1
+            || prefix.filter { $0 == "“" }.count > prefix.filter { $0 == "”" }.count
+            || prefix.filter { $0 == "「" }.count > prefix.filter { $0 == "」" }.count
     }
 
     private static func retainedNotes(_ notes: String?, source: String) -> String {

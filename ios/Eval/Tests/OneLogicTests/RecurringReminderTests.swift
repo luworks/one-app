@@ -79,6 +79,66 @@ final class RecurringReminderTests: XCTestCase {
         XCTAssertEqual(c.repeatRule, "weekly:1,6")
     }
 
+    private func developmentInputs(_ id: String) throws -> [String] {
+        var root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        for _ in 0..<4 { root.deleteLastPathComponent() }
+        let data = try Data(contentsOf: root.appendingPathComponent("tests/fixtures/ai-title-rewrite-recurring-cases.json"))
+        let suite = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let cases = try XCTUnwrap(suite["cases"] as? [[String: Any]])
+        let entry = try XCTUnwrap(cases.first { $0["id"] as? String == id && $0["split"] as? String == "development" })
+        let turns = try XCTUnwrap(entry["turns"] as? [[String: Any]])
+        return try turns.map { try XCTUnwrap($0["input"] as? String) }
+    }
+
+    func testObservedColloquialRecurringRequest() throws {
+        let input = try XCTUnwrap(developmentInputs("recurring-rephrase-recycling-zh").first)
+        XCTAssertEqual(ChatRouting.intent(input), .capture)
+        let c = CaptureConversation.parse(input, now: now, calendar: cal)
+        XCTAssertTrue(c.title.contains("把回收桶推到路边"))
+        XCTAssertFalse(c.title.contains("的提醒"))
+        XCTAssertTrue(c.notes?.contains("周六清晨会来收") == true)
+        XCTAssertEqual(c.repeatRule, "weekly:6")
+        XCTAssertEqual(c.kind, .task)
+        XCTAssertEqual(c.hour, 18)
+        XCTAssertEqual(cal.component(.weekday, from: c.day), 6)
+        XCTAssertEqual(ChatRouting.intent("不要" + input), .conversation)
+    }
+
+    func testObservedChineseCorrectionRetainsBothWeekdays() throws {
+        let inputs = try developmentInputs("recurring-time-correction-zh")
+        let initial = CaptureConversation.parse(inputs[0], now: now, calendar: cal)
+        guard case .updated(let c) = Dialogue.refine(initial, with: inputs[1], now: now, calendar: cal) else {
+            return XCTFail("The replacement clock must win over the rejected clock")
+        }
+        XCTAssertEqual(c.title, initial.title)
+        XCTAssertEqual(c.notes, initial.notes)
+        XCTAssertEqual(c.day, initial.day)
+        XCTAssertEqual(c.repeatRule, "weekly:1,6")
+        XCTAssertEqual(c.hour, 18)
+        XCTAssertEqual(c.kind, .task)
+        XCTAssertEqual(Dialogue.refine(initial, with: "改成下午六点，周二和周四都保留。", now: now, calendar: cal), .notARefinement,
+                       "A mismatched keep-days constraint must not silently drop the user's specified days")
+    }
+
+    func testObservedExplicitNoteUsesExistingContentSeam() throws {
+        let input = try XCTUnwrap(developmentInputs("recurring-mixed-backup").first)
+        let c = CaptureConversation.parse(input, now: now, calendar: cal)
+        XCTAssertEqual(c.title, "备份 NAS")
+        XCTAssertEqual(c.notes, "run before firmware update")
+        XCTAssertEqual(c.repeatRule, "weekly:3,6")
+        XCTAssertEqual(c.hour, 20)
+        XCTAssertEqual(c.kind, .task)
+        XCTAssertEqual(CaptureTitleRefinement.fallback(c, source: input), c, "Repeated fallback must be idempotent")
+        var existing = c
+        existing.notes = "Keep the original server name"
+        let merged = CaptureTitleRefinement.fallback(existing, source: input)
+        XCTAssertEqual(merged.notes, "Keep the original server name\nrun before firmware update")
+        XCTAssertEqual(CaptureTitleRefinement.fallback(merged, source: input), merged)
+        let quoted = Capture(title: "Archive, note: Mercury", day: now, hasDay: false)
+        XCTAssertEqual(CaptureTitleRefinement.fallback(quoted, source: "Use the exact title \"Archive, note: Mercury\""), quoted,
+                       "A note label inside an explicitly quoted name belongs to that name")
+    }
+
     func testOneOffWeekendDoesNotGainRecurrence() {
         for text in ["Pick up dry cleaning this weekend", "Pick up dry cleaning next weekend"] {
             XCTAssertNil(CaptureParser.parse(text, now: now, calendar: cal).repeatRule, text)
