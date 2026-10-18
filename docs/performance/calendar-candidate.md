@@ -87,3 +87,46 @@ Year scroll physical footprint and main-thread frame work. Attribute
 denominator. Verify both empty-trip and overlapping-trip data without removing
 baseline events. Record raw artifacts/hashes through the QA journal. Acceptance
 and all numerical gains remain pending these checks.
+
+## Opt-in same-process component comparison (not run)
+
+The independent `ios/Eval/Tests/OneLogicTests/YearBandPerformanceTests.swift`
+test keeps a callable frozen copy of the **old** `segments` implementation;
+it does not call the production compatibility wrapper, which delegates to the
+new algorithm. The legacy path repeats the whole-month scan for every trip and
+each of six rows, then filters the row. The candidate calls `segmentsByWeek`
+once per month. Both receive the same twelve-month, 52-annual-trip input from
+the versioned generator cataloged in `tests/fixtures/README.md`.
+
+After acquiring the host lane, from `ios/`:
+
+```sh
+YEAR_BAND_BENCH=1 swift test -c release --jobs 2 \
+  --filter YearBandPerformanceTests/testComparativeTripBandCalculation
+```
+
+Without the environment flag the test skips. Fixture generation is untimed.
+Complete ordered placements are asserted equal before timing; both paths are
+warmed by that comparison and one excluded calibration batch. Five retained
+pairs alternate legacy/candidate order in the same process. Timing uses
+`DispatchTime.uptimeNanoseconds`; every result field is consumed by a shared
+checksum, whose cost is included on both sides. No performance threshold is
+asserted. The JSON output includes raw batch milliseconds, median/range,
+normalized milliseconds per twelve months, sample order, batch/fixture/placement
+counts, source-level day-addition counts and component median ratio.
+
+Calibration targets at least 50 ms for legacy batches and 5 ms for candidate
+batches, using identical iteration counts capped at 16. Projected retained work
+is capped at four seconds; an eight-second calculation deadline skips incomplete
+runs rather than reporting fewer than five pairs. Deadline checks occur between
+whole-year calculations and cannot preempt a stalled call. Expected benchmark
+calculation time is under ten seconds; compilation/runner startup are excluded.
+If the cap prevents adequate timing resolution, the output flags any candidate
+batch below 1 ms; those timings need reassessment, not a speedup claim.
+
+This is a **trip-band calculation component benchmark only**. It omits SwiftUI
+layout/drawing, calendar merge/query, accessibility formatting and user actions.
+Its ratio cannot establish wholeRender, Month-to-Year, scrolling, footprint or
+package acceptance. No benchmark/build/Swift/UI command was run for this addition;
+all gains remain unmeasured. Retain raw output through the QA journal when the
+parent executes it.

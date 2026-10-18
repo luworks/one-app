@@ -59,6 +59,21 @@ The UI-test input inventory found only the two temporary JSON generators replace
 above. Screenshot writes are run outputs, not dataset inputs. QA/development action
 recording and its SQLite storage are a separate concern from these fixtures.
 
+## Year trip-band component benchmark generator
+
+[`YearBandPerformanceTests.swift`](../../ios/Eval/Tests/OneLogicTests/YearBandPerformanceTests.swift)
+contains the deterministic `year-band-v1-2028-LA-sunday-52-trips` generator.
+It uses twelve six-row Gregorian months in leap year 2028, America/Los_Angeles,
+Sunday-first; four 2–9-day trips per month and four 14-day quarter-end trips.
+Every month receives all 52 annual trips, including overlaps, exclusive ends,
+DST transitions and month/year crossings. No random seed, temporary input file
+or user data is required. Keep this small generator in versioned test code.
+The opt-in `YEAR_BAND_BENCH=1` test first compares every ordered placement, then
+reports five alternating same-process legacy/candidate timing pairs. It measures
+only trip-band computation, not SwiftUI rendering or user-operation latency.
+See [`calendar-candidate.md`](../../docs/performance/calendar-candidate.md) for
+commands, batch limits and the pending measurement status.
+
 ## Pre-receipt SwiftData migration fixture
 
 `migrations/today-55e73d5.store` is a standalone SQLite backup of a fresh synthetic
