@@ -12,15 +12,9 @@ final class RepeatingReminderTests: XCTestCase {
 
     override func setUp() {
         continueAfterFailure = false
-        let json = """
-        {"version":1,"lists":[{"name":"Home","color":1}],
-         "reminders":[{"title":"\(title)","list":"Home","due":{"day":0,"time":"07:00"},"planned":{"day":0,"time":"09:00"},"repeat":"daily"}],
-         "events":[],"alarms":[],"chats":[]}
-        """
-        let path = NSTemporaryDirectory() + "repeating-reminder-dataset.json"
-        try? json.write(toFile: path, atomically: true, encoding: .utf8)
         app = XCUIApplication()
-        app.launchArguments = ["-uiTesting", "-dataset", path, "-uiTestingNow", "09:41"]
+        app.launchArguments = TestData.fixtureArguments("repeating-reminder-daily-home.json")
+            + ["-uiTestingNow", "09:41"]
         app.launch()
         XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     }

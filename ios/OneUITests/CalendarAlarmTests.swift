@@ -80,19 +80,9 @@ final class CalendarAlarmTests: XCTestCase {
 
     private func assertWeekOverlap(eventCount: Int) throws {
         // Keep the one-event regression and also exercise columns narrower than the block's stripe and padding.
-        let events = (0..<eventCount).map { index in
-            "{\"title\":\"Lane overlap event \(index)\",\"start\":{\"day\":0,\"time\":\"09:00\"},\"minutes\":60}"
-        }.joined(separator: ",")
-        let fixture = """
-        {"version":1,"reminders":[],
-         "events":[\(events)],
-         "alarms":[{"time":"09:30","label":"Lane overlap alarm"}],"chats":[]}
-        """
-        let url = FileManager.default.temporaryDirectory.appending(path: "week-alarm-overlap-\(UUID().uuidString).json")
-        try fixture.write(to: url, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: url) }
         app.terminate()
-        app.launchArguments = ["-uiTesting", "-dataset", url.path, "-uiTestingNow", "09:00"] + Self.pinAlarmsOn
+        app.launchArguments = TestData.fixtureArguments("week-alarm-overlap-\(eventCount).json")
+            + ["-uiTestingNow", "09:00"] + Self.pinAlarmsOn
         app.launch()
         app.buttons["Calendar"].firstMatch.tap()
         mode("Week").tap()

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "reminders": [],
+  "events": [
+    {
+      "title": "Lane overlap event 0",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    },
+    {
+      "title": "Lane overlap event 1",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    },
+    {
+      "title": "Lane overlap event 2",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    },
+    {
+      "title": "Lane overlap event 3",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    },
+    {
+      "title": "Lane overlap event 4",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    },
+    {
+      "title": "Lane overlap event 5",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    },
+    {
+      "title": "Lane overlap event 6",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    },
+    {
+      "title": "Lane overlap event 7",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "minutes": 60
+    }
+  ],
+  "alarms": [
+    {
+      "time": "09:30",
+      "label": "Lane overlap alarm"
+    }
+  ],
+  "chats": []
+}
