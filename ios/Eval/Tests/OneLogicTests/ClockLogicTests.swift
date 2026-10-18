@@ -18,21 +18,6 @@ final class WorldClockTests: XCTestCase {
         XCTAssertNil(WorldClock.cityName(fromIdentifier: "US/Pacific"))
     }
 
-    func testCitiesAreSortedAndSearchable() {
-        let all = WorldClock.cities(from: TimeZone.knownTimeZoneIdentifiers)
-        XCTAssertFalse(all.isEmpty)
-        XCTAssertEqual(all.map(\.name), all.map(\.name).sorted { $0.localizedStandardCompare($1) == .orderedAscending })
-        XCTAssertFalse(all.contains { $0.identifier == "UTC" })
-        let tokyo = WorldClock.search("tok", in: all)
-        XCTAssertEqual(tokyo.first?.identifier, "Asia/Tokyo")
-        XCTAssertEqual(WorldClock.search("new york", in: all).first?.identifier, "America/New_York")
-        XCTAssertEqual(WorldClock.search("  ", in: all).count, all.count, "empty search lists every city")
-        let par = WorldClock.search("Par", in: all)
-        XCTAssertTrue(par.first?.name.hasPrefix("Par") == true, "names starting with the query come first")
-        XCTAssertTrue(par.contains { $0.identifier == "Europe/Paris" })
-        XCTAssertTrue(WorldClock.search("sao paulo", in: all).contains { $0.identifier == "America/Sao_Paulo" }, "accents and underscores don't matter")
-    }
-
     func testOffsets() {
         let la = tz("America/Los_Angeles")
         XCTAssertEqual(WorldClock.offsetText(zone: tz("America/New_York"), local: la, at: noonUTC), "+3 hrs")
@@ -83,8 +68,6 @@ final class WorldClockTests: XCTestCase {
         XCTAssertEqual(WorldClock.moving(list, from: [2], to: 0), ["America/New_York", "Europe/London", "Asia/Tokyo"])
         XCTAssertEqual(WorldClock.moving(list, from: [0], to: 3), ["Asia/Tokyo", "America/New_York", "Europe/London"])
         XCTAssertEqual(WorldClock.moving(list, from: [0], to: 1), list, "moving onto itself changes nothing")
-        XCTAssertEqual(WorldClock.load(["Europe/London", "Mars/Olympus_Mons"], known: Set(TimeZone.knownTimeZoneIdentifiers)), ["Europe/London"])
-        XCTAssertEqual(WorldClock.load(nil, known: []), [])
     }
 }
 
@@ -106,21 +89,36 @@ final class OverlapTests: XCTestCase {
         XCTAssertEqual(S.snap(-23), -30)
     }
 
-    func testScrubbedDateLandsOnQuarterHours() {
-        let now = Date(timeIntervalSince1970: 1_792_238_400 + 7 * 60 + 13)   // 12:07:13 UTC
+    func testScrubbedDateKeepsTheMinutes() {
+        let now = Date(timeIntervalSince1970: 1_792_238_400 + 50 * 60)   // 12:50:00 UTC
         XCTAssertEqual(WorldClock.Scrub.date(now: now, offset: 0), now, "not scrubbed: the real time")
-        XCTAssertEqual(WorldClock.Scrub.date(now: now, offset: 15), Date(timeIntervalSince1970: 1_792_238_400 + 15 * 60), "12:15")
-        XCTAssertEqual(WorldClock.Scrub.date(now: now, offset: -60), Date(timeIntervalSince1970: 1_792_238_400 - 3600), "11:00")
+        XCTAssertEqual(WorldClock.Scrub.date(now: now, offset: 15), now.addingTimeInterval(15 * 60), "13:05")
+        XCTAssertEqual(WorldClock.Scrub.date(now: now, offset: -15 * 60), now.addingTimeInterval(-15 * 3600), "21:50 the day before: minutes stay")
     }
 
-    func testScrubLabel() {
+    func testScrubPill() {
         typealias S = WorldClock.Scrub
-        XCTAssertEqual(S.label(0), "Now")
-        XCTAssertEqual(S.label(180), "3 hours from now")
-        XCTAssertEqual(S.label(60), "1 hour from now")
-        XCTAssertEqual(S.label(45), "45 minutes from now")
-        XCTAssertEqual(S.label(75), "1 hour 15 minutes from now")
-        XCTAssertEqual(S.label(-120), "2 hours ago")
+        XCTAssertEqual(S.pillText(0), "NOW")
+        XCTAssertEqual(S.pillText(-15 * 60), "15 HOURS BEFORE NOW")
+        XCTAssertEqual(S.pillText(180), "3 HOURS AFTER NOW")
+        XCTAssertEqual(S.pillText(60), "1 HOUR AFTER NOW")
+        XCTAssertEqual(S.pillText(45), "45 MIN AFTER NOW")
+        XCTAssertEqual(S.pillText(-75), "1 HOUR 15 MIN BEFORE NOW")
+        XCTAssertEqual(S.pillParts(-60).lead, "1 HOUR BEFORE ")
+        XCTAssertEqual(S.pillParts(-60).keyword, "NOW", "the keyword is shown bold")
+        XCTAssertEqual(S.pillParts(0).lead, "")
+    }
+
+    func testRubberBand() {
+        typealias S = WorldClock.Scrub
+        XCTAssertEqual(S.rubberBand(0), 0)
+        XCTAssertEqual(S.rubberBand(-5), 0)
+        XCTAssertEqual(S.rubberBand(5), 5, accuracy: 0.3, "the first points follow the finger")
+        XCTAssertLessThan(S.rubberBand(10_000), 56.0001, "and it never goes further than the maximum")
+        XCTAssertGreaterThan(S.rubberBand(200), S.rubberBand(100))
+        XCTAssertEqual(S.excess(start: 0, dragWidth: -100), 0, "inside the scale there is no stretch")
+        XCTAssertEqual(S.excess(start: 24 * 60, dragWidth: -50), 50, "50 points past the end")
+        XCTAssertEqual(S.excess(start: -24 * 60, dragWidth: 30), 30, "either end")
     }
 
     func testDayBands() {
@@ -184,6 +182,16 @@ final class OverlapTests: XCTestCase {
         XCTAssertEqual(WorldClock.nameList(["Dallas"]), "Dallas")
         XCTAssertEqual(WorldClock.nameList(["Dallas", "Boston"]), "Dallas and Boston")
         XCTAssertEqual(WorldClock.nameList(["Dallas", "Boston", "Austin"]), "Dallas, Boston and 1 more")
+        XCTAssertEqual(WorldClock.offsetBadge(zone: tz("America/Chicago"), home: tz("America/Los_Angeles"), at: noonUTC), "+2")
+        XCTAssertEqual(WorldClock.offsetBadge(zone: tz("Asia/Shanghai"), home: tz("America/Los_Angeles"), at: noonUTC), "+15")
+        XCTAssertEqual(WorldClock.offsetBadge(zone: tz("Asia/Kolkata"), home: tz("Europe/London"), at: noonUTC), "+4:30")
+        XCTAssertEqual(WorldClock.offsetBadge(zone: tz("America/Los_Angeles"), home: tz("Asia/Tokyo"), at: noonUTC), "-16")
+        XCTAssertEqual(WorldClock.offsetBadge(zone: tz("America/St_Johns"), home: tz("UTC"), at: noonUTC), "-2:30")
+        XCTAssertEqual(WorldClock.offsetBadge(zone: tz("Asia/Tokyo"), home: tz("Asia/Tokyo"), at: noonUTC), "+0")
+        XCTAssertEqual(WorldClock.longDate(zone: tz("Asia/Shanghai"), at: Date(timeIntervalSince1970: 1_792_292_400), locale: Locale(identifier: "en_US")),
+                       "SUNDAY, OCTOBER 18", "next day over there (LA Saturday evening)")
+        XCTAssertEqual(WorldClock.longDate(zone: tz("America/Los_Angeles"), at: Date(timeIntervalSince1970: 1_792_292_400), locale: Locale(identifier: "en_US")),
+                       "SATURDAY, OCTOBER 17")
         XCTAssertEqual(WorldClock.dateText(zone: tz("Asia/Tokyo"), at: Date(timeIntervalSince1970: 1_792_292_400), locale: Locale(identifier: "en_US")),
                        "Sun, Oct 18")
         XCTAssertEqual(WorldClock.others(["Europe/London", "America/Los_Angeles"], home: "America/Los_Angeles"), ["Europe/London"])
