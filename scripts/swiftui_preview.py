@@ -69,6 +69,7 @@ def main():
     p.add_argument('--watch', choices=SCREENS, default='health')
     p.add_argument('--port', type=int, default=0, help='Loopback port; 0 chooses a free port')
     p.add_argument('--budget', type=int, default=600, help='Hard lifetime including installation/build; seconds')
+    p.add_argument('--reuse-report', type=Path, help='Reuse a retained successful report only if all Swift source hashes still match')
     p.add_argument('--verify-release', action='store_true', help='Also build ordinary Release and inspect preview exclusion')
     p.add_argument('--once', action='store_true', help='Capture gallery and shut down without watch/server')
     p.add_argument('--plan', action='store_true', help='Print ownership and commands; no installation or simulator operation')
@@ -133,7 +134,15 @@ def main():
         sources = {str(f.relative_to(ROOT)): hashlib.sha256(f.read_bytes()).hexdigest() for f in (ROOT / 'ios/One').glob('*.swift')}
         (out / 'ownership.json').write_text(json.dumps({'pid': os.getpid(), 'worktree': str(ROOT), 'simulator': sim_name, 'udid': udid, 'derivedData': str(DD), 'sourceHashes': sources}, indent=2))
         event('simulator.ready', udid=udid)
-        run(report, 'report')
+        if args.reuse_report:
+            previous = args.reuse_report.resolve()
+            previous_owner = json.loads((previous / 'ownership.json').read_text())
+            if previous_owner['worktree'] != str(ROOT) or previous_owner['sourceHashes'] != sources:
+                raise RuntimeError('Retained report does not match this worktree and Swift sources')
+            shutil.copytree(previous / 'gallery', gallery)
+            event('report.reused', source=str(previous))
+        else:
+            run(report, 'report')
         assets = sorted((gallery / 'axe_swiftui_preview_report_assets').glob('*.png'))
         if len(assets) < 3:
             raise RuntimeError('Gallery must contain all three real captures')
