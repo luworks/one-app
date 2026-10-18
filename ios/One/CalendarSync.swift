@@ -394,6 +394,11 @@ final class CalendarSync {
         e.title = title
         e.startDate = repeating ? cal.date(byAdding: .day, value: -1, to: hour) ?? hour : hour
         e.endDate = e.startDate.addingTimeInterval(1800)
+        if ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSaveAllDay") {
+            e.isAllDay = true
+            e.startDate = cal.startOfDay(for: hour)
+            e.endDate = cal.date(byAdding: .day, value: 1, to: e.startDate)!
+        }
         if ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSaveMetadata") {
             e.notes = "Preserve event notes"
             e.url = URL(string: "https://example.com/calendar-save")
@@ -585,7 +590,6 @@ private struct ExistingCalendarEventEditor: View {
     @State private var title: String
     @State private var start: Date
     @State private var end: Date
-    @State private var allDay: Bool
     @State private var location: String
     @State private var notes: String
     @State private var error: String?
@@ -617,16 +621,21 @@ private struct ExistingCalendarEventEditor: View {
         _title = State(initialValue: draft.title)
         _start = State(initialValue: draft.start)
         _end = State(initialValue: draft.end)
-        _allDay = State(initialValue: draft.allDay)
         _location = State(initialValue: draft.location)
         _notes = State(initialValue: draft.notes)
     }
 
     private var changed: Bool {
         title != original.title || start != original.start || end != original.end ||
-        allDay != original.allDay || location != original.location || notes != original.notes
+        location != original.location || notes != original.notes
     }
     private var writable: Bool { event.calendar.allowsContentModifications }
+    private var allDayDates: String {
+        let first = start.formatted(date: .abbreviated, time: .omitted)
+        // EventKit's end is exclusive; a one-day event ends at tomorrow's midnight.
+        let last = end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted)
+        return (first == last ? first : "\(first) – \(last)") + " · All day"
+    }
 
     var body: some View {
         NavigationStack {
@@ -634,18 +643,27 @@ private struct ExistingCalendarEventEditor: View {
                 Section {
                     TextField("Title", text: $title)
                         .accessibilityIdentifier("title-field")
-                    Toggle("All-day", isOn: $allDay)
+                    if original.allDay {
+                        LabeledContent("When", value: allDayDates)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("When").accessibilityValue(allDayDates)
+                            .accessibilityIdentifier("event.allDayDates")
+                    } else {
                     DatePicker("Starts", selection: Binding(get: { start }, set: { value in
                         end = value.addingTimeInterval(end.timeIntervalSince(start))
                         start = value
-                    }), displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
-                    DatePicker("Ends", selection: $end, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute])
+                    }), displayedComponents: [.date, .hourAndMinute])
+                    DatePicker("Ends", selection: $end, displayedComponents: [.date, .hourAndMinute])
+                    }
                 }.disabled(!writable)
                 Section("Location") { TextField("Location", text: $location) }.disabled(!writable)
                 Section("Notes") { TextField("Notes", text: $notes, axis: .vertical) }.disabled(!writable)
                 Section {
                     LabeledContent("Calendar", value: event.calendar.title)
                     LabeledContent("Alerts", value: "\(event.alarms?.count ?? 0) alerts")
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Alerts").accessibilityValue("\(event.alarms?.count ?? 0) alerts")
+                        .accessibilityIdentifier("event.alerts")
                     if let url = event.url { Text(url.absoluteString) }
                     Button("More Options…") {
                         NativeEvents.edit(identifier: event.eventIdentifier, start: event.startDate, fullOptions: true) { action in
@@ -655,7 +673,7 @@ private struct ExistingCalendarEventEditor: View {
                         .disabled(changed)
                 } footer: {
                     Text(changed ? "Save or cancel these changes before opening all event options."
-                         : "All event options, including alerts, repeat, invitees and deletion, are available in the system editor.")
+                         : "All event options, including all-day dates, alerts, repeat, invitees and deletion, are available in the system editor.")
                 }
                 if !writable {
                     Section { Text("This calendar is read-only. You can view this event, but cannot save changes.") }
@@ -698,7 +716,6 @@ private struct ExistingCalendarEventEditor: View {
         if title != original.title { event.title = title }
         if start != original.start { event.startDate = start }
         if end != original.end { event.endDate = end }
-        if allDay != original.allDay { event.isAllDay = allDay }
         if location != original.location { event.location = location }
         if notes != original.notes { event.notes = notes }
         do {

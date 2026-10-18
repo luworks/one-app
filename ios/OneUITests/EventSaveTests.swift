@@ -25,11 +25,16 @@ final class EventSaveTests: XCTestCase {
         nativeSave(changed: true, failing: true)
     }
 
-    private func nativeSave(changed: Bool, failing: Bool = false) {
+    func testExistingAllDayNativeEventUnchangedSaveCloses() {
+        nativeSave(changed: false, allDay: true)
+    }
+
+    private func nativeSave(changed: Bool, failing: Bool = false, allDay: Bool = false) {
         let title = "Save check \(UUID().uuidString.prefix(8))"
         let app = XCUIApplication()
         let base = TestData.fixtureArguments("event-save.json") + ["-uiTestingCalendarSync", "-uiTestingCalendarSaveMetadata", "-appearance", "dark"]
             + (failing ? ["-uiTestingEventSaveFailure"] : [])
+            + (allDay ? ["-uiTestingCalendarSaveAllDay"] : [])
         app.launchArguments = base
         app.launch()
         enableCalendarSync(app)
@@ -42,6 +47,11 @@ final class EventSaveTests: XCTestCase {
         event.tap()
         let editor = app.staticTexts["Edit Event"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        if allDay {
+            let dates = app.descendants(matching: .any)["event.allDayDates"].firstMatch
+            XCTAssertEqual(dates.value as? String, Date.now.formatted(date: .abbreviated, time: .omitted) + " · All day",
+                           "a single all-day event shows only its actual calendar day")
+        }
         let savedTitle = changed ? title + " updated" : title
         if changed {
             let field = app.textFields["title-field"]
@@ -72,7 +82,8 @@ final class EventSaveTests: XCTestCase {
         row(app, savedTitle).tap()
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["https://example.com/calendar-save"].exists, "unedited URL survives saving")
-        XCTAssertTrue(app.staticTexts["2 alerts"].exists, "all original alerts survive saving")
+        XCTAssertEqual(app.descendants(matching: .any)["event.alerts"].firstMatch.value as? String, "2 alerts",
+                       "all original alerts survive saving")
         XCTAssertTrue(app.textViews.matching(NSPredicate(format: "value == %@", "Preserve event notes")).firstMatch.exists
                       || app.textFields.matching(NSPredicate(format: "value == %@", "Preserve event notes")).firstMatch.exists,
                       "unedited notes survive saving")

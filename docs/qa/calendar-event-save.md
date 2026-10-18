@@ -68,9 +68,11 @@ Rather than fabricate a change, existing events on iOS 27 now open a small
 EventKit-backed form. New events retain the native editor. Earlier iOS versions
 retain their existing path.
 
-Done without edits closes without a write. Edited title, dates, all-day, location
+Done without edits closes without a write. Edited title, timed dates, location
 and notes are applied only when changed, to the exact original EKEvent and store;
-all other properties are retained. Recurring changes ask this occurrence or all
+all other properties are retained. All-day dates show their inclusive calendar
+range and remain editable through More Options, avoiding a second implementation
+of EventKit all-day conversion. Recurring changes ask this occurrence or all
 future events. An event that disappeared is not recreated. Read-only calendars
 explain their restriction. EventKit save errors stay in the form with the draft;
 failed pending changes on the EKEvent are reset, without dropping the draft.
@@ -94,3 +96,19 @@ A DEBUG-only save failure injection tests error/draft retention; it does not
 represent an observed real server failure. Local unchanged save/reopen was already
 green and is intentionally not rerun. Physical iCloud/Family behavior, invitations,
 recurrence UI and More Options completion remain unverified unless recorded below.
+
+### Focused candidate results
+
+- Source `79df2a7`, `fallback-core/`: build succeeded. Both changed and unchanged
+  system-event journeys closed the form, returned to Calendar and reopened the
+  persisted event after relaunch. Their added alert assertion then failed because
+  SwiftUI combined the LabeledContent accessibility children. The retained screen
+  recording/frame visibly shows both alerts, notes and URL intact. This was a
+  locator failure after the original completion assertions, not lost event data.
+- Save failure/draft retention passed (41.294 s). This is an injected local error,
+  not evidence of a real iCloud failure. It is not rerun without a related change.
+- A single focused review found the all-day end-date presentation issue. The
+  repair keeps all-day date editing in the full native options and shows the
+  inclusive date range in the fallback, with a one-day completion regression.
+- `fallback-focused-repair/` runs the two failed metadata checks using an explicit
+  accessible Alerts value, plus the distinct all-day journey. Result pending.

@@ -156,3 +156,9 @@ for `EventSaveTests`. Native tests reuse the existing simulator-only
 `-debugCreateSystemEvent` hook with a unique title, then reopen after a fresh
 in-memory launch to verify persistence. Inputs remain versioned here and inline
 in that suite; EventKit writes affect only its named simulator calendar.
+
+Event-save supplemental EventKit metadata is seeded by the versioned DEBUG hooks
+`-uiTestingCalendarSaveMetadata` (notes, URL, two alerts) and
+`-uiTestingCalendarSaveAllDay` (one current calendar day).
+`EventSaveTests` owns these synthetic events and cleanup;
+`-uiTestingEventSaveFailure` injects a local save error without user data.
