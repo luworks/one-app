@@ -31,24 +31,69 @@
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          632.202542,
+          134.55,
+          134.697458
+        ],
+        "median_ms": 134.697458,
+        "backend": "not_applicable",
+        "method": "testHealthListDetailAndPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 44.89915266666667,
+      "stretch_ms": 13.469745800000002
     },
     {
       "id": "page.health.detail",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          982.617541,
+          115.994625,
+          115.913209
+        ],
+        "median_ms": 115.994625,
+        "backend": "not_applicable",
+        "method": "testHealthListDetailAndPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 38.664875,
+      "stretch_ms": 11.5994625
     },
     {
       "id": "page.health.picker",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          233.471625,
+          132.978667,
+          149.102916
+        ],
+        "median_ms": 149.102916,
+        "backend": "not_applicable",
+        "method": "testHealthListDetailAndPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 49.700972,
+      "stretch_ms": 14.910291599999999
     },
     {
       "id": "page.settings",
@@ -79,40 +124,115 @@
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          251.053708,
+          49.386125,
+          49.854125
+        ],
+        "median_ms": 49.854125,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 16.618041666666667,
+      "stretch_ms": 4.985412500000001
     },
     {
       "id": "page.clock.cityPicker",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          449.486041,
+          132.681083,
+          132.887667
+        ],
+        "median_ms": 132.887667,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 44.295888999999995,
+      "stretch_ms": 13.2887667
     },
     {
       "id": "page.clock.stopwatch",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          566.980916,
+          67.004792,
+          50.355375
+        ],
+        "median_ms": 67.004792,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 22.334930666666665,
+      "stretch_ms": 6.700479199999999
     },
     {
       "id": "page.clock.timer",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          250.683875,
+          100.484209,
+          83.245041
+        ],
+        "median_ms": 100.484209,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 33.494736333333336,
+      "stretch_ms": 10.0484209
     },
     {
       "id": "page.clock.alarms",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          99.401834,
+          84.452625,
+          84.225667
+        ],
+        "median_ms": 84.452625,
+        "backend": "not_applicable",
+        "method": "testClockModesAndCityPickerEndpoints",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 28.150875,
+      "stretch_ms": 8.4452625
     },
     {
       "id": "page.search",
@@ -159,65 +279,140 @@
       "kind": "latency",
       "unit": "ms",
       "endpoint": "geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          249.067584,
+          354.559875,
+          290.390375
+        ],
+        "median_ms": 290.390375,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
       "separate_by": [
         "journey",
         "turn_context",
         "backend"
-      ]
+      ],
+      "required_ms": 96.79679166666666,
+      "stretch_ms": 29.0390375
     },
     {
       "id": "ai_send_to_first_response_ready",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "ready_state",
-      "baseline": null,
-      "state": "not_executed",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          203.518084,
+          276.445334,
+          214.122792
+        ],
+        "median_ms": 214.122792,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
       "separate_by": [
         "journey",
         "turn_context",
         "backend"
-      ]
+      ],
+      "required_ms": 71.374264,
+      "stretch_ms": 21.4122792
     },
     {
       "id": "ai_send_to_full_response_ready",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "ready_state",
-      "baseline": null,
-      "state": "not_executed",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          203.518084,
+          276.445334,
+          214.122792
+        ],
+        "median_ms": 214.122792,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
       "separate_by": [
         "journey",
         "turn_context",
         "backend"
-      ]
+      ],
+      "required_ms": 71.374264,
+      "stretch_ms": 21.4122792
     },
     {
       "id": "ai_ready_to_response_layout",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          78.347458,
+          78.173833,
+          107.560958
+        ],
+        "median_ms": 78.347458,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
       "separate_by": [
         "journey",
         "turn_context",
         "backend"
-      ]
+      ],
+      "required_ms": 26.115819333333334,
+      "stretch_ms": 7.8347458
     },
     {
       "id": "ai_turn_to_response_layout",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed",
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          281.865542,
+          354.619167,
+          321.68375
+        ],
+        "median_ms": 321.68375,
+        "backend": "fallback_model_unavailable",
+        "method": "testConversationFreshLaunchN3",
+        "source": "83b4fb8",
+        "context_file": "first-context.json",
+        "evidence": "first-summary.json"
+      },
+      "state": "baseline_measured",
       "separate_by": [
         "journey",
         "turn_context",
         "backend"
-      ]
+      ],
+      "required_ms": 107.22791666666666,
+      "stretch_ms": 32.168375
     }
   ],
   "pending_measurement_classes": [
