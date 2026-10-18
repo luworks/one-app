@@ -59,7 +59,7 @@ enum OneStore {
                 configuration = ModelConfiguration(isStoredInMemoryOnly: inMemory)
             }
             return try ModelContainer(for: OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self,
-                                      LedgerEntry.self, AIGrant.self,
+                                      LedgerEntry.self, AIGrant.self, ShareImportReceipt.self,
                                       configurations: configuration)
         } catch {
             fatalError("Could not open the data store: \(error)")

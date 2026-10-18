@@ -320,6 +320,12 @@ enum DataReset {
         try? context.delete(model: Habit.self)
         try? context.delete(model: ChatThread.self)
         try? context.delete(model: AIGrant.self)
+        // Clear pending shares before forgetting receipts, or an ack failure could resurrect deleted reminders.
+        // If the inbox is unreadable, retain only the opaque receipts until it can be safely cleared.
+        if let pending = try? ShareInbox.read(),
+           pending.isEmpty || ShareInbox.acknowledge(Set(pending.map(\.id))) {
+            try? context.delete(model: ShareImportReceipt.self)
+        }
         Ledger.clearAll(context)
         try? context.save()
     }

@@ -11,7 +11,7 @@ struct SharedReminder: Codable, Equatable, Identifiable {
 }
 
 /// Hands reminders from the Share extension to the app: the extension appends to a JSON file in the App Group, and
-/// the app takes them all when it becomes active and adds them as reminders. The extension never opens SwiftData.
+/// the app reads them when active and acknowledges committed IDs after saving reminders. The extension never opens SwiftData.
 /// Shared by the app and the ShareExtension (and the widget, which ignores it). Foundation only, so `swift test` covers it.
 enum ShareInbox {
     static let fileName = "share-inbox.json"
@@ -95,6 +95,54 @@ enum ShareInbox {
         return true
     }
 
+    /// Reads a snapshot without consuming it. A corrupt or unreadable file throws and remains untouched.
+    static func read(at url: URL? = fileURL) throws -> [SharedReminder] {
+        guard let url else { return [] }
+        var result: Result<[SharedReminder], Error> = .success([])
+        try coordinateChecked(url) { url in
+            result = Result {
+                let data: Data
+                do { data = try Data(contentsOf: url) }
+                catch CocoaError.fileReadNoSuchFile { return [] }
+                guard let items = decode(data) else { throw InboxError.undecodable }
+                return items.sorted { $0.sharedAt < $1.sharedAt }
+            }
+        }
+        return try result.get()
+    }
+
+    /// Removes only committed IDs, rereading under the same coordination used by append.
+    /// An extension append between read and acknowledgment survives. Any failure keeps the inbox retryable.
+    @discardableResult
+    static func acknowledge(_ ids: Set<UUID>, at url: URL? = fileURL) -> Bool {
+        guard let url else { return false }
+        do {
+            var result: Result<Void, Error> = .success(())
+            try coordinateChecked(url) { url in
+                result = Result {
+                    let data: Data
+                    do { data = try Data(contentsOf: url) }
+                    catch CocoaError.fileReadNoSuchFile { return }
+                    guard let items = decode(data) else { throw InboxError.undecodable }
+                    let remaining = items.filter { !ids.contains($0.id) }
+                    guard remaining.count != items.count else { return }
+                    guard let encoded = encode(remaining) else { throw InboxError.undecodable }
+                    try encoded.write(to: url, options: .atomic)
+                }
+            }
+            try result.get()
+            return true
+        } catch { return false }
+    }
+
+    private enum InboxError: Error { case undecodable }
+
+    private static func coordinateChecked(_ url: URL, _ body: (URL) -> Void) throws {
+        var error: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error, byAccessor: body)
+        if let error { throw error }
+    }
+
     /// Everything waiting, oldest first; the inbox is empty afterwards. Undecodable data stays untouched for recovery.
     static func drain(at url: URL? = fileURL) -> [SharedReminder] {
         guard let url else { return [] }
@@ -115,5 +163,29 @@ enum ShareInbox {
     private static func coordinate(_ url: URL, _ body: (URL) -> Void) {
         var error: NSError?
         NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging, error: &error, byAccessor: body)
+    }
+}
+
+/// The app's persistence boundary. The caller commits tasks and receipts in one transaction.
+/// After a crash between commit and ack, receipts filter the replay even if the task was subsequently undone.
+enum ShareImport {
+    struct Result<Value> {
+        var added: [Value]
+        var acknowledged: Bool
+    }
+
+    static func run<Value>(at url: URL? = ShareInbox.fileURL,
+                           committedIDs: () throws -> Set<UUID>,
+                           persist: ([SharedReminder]) throws -> [Value],
+                           acknowledge: ((Set<UUID>) -> Bool)? = nil) throws -> Result<Value> {
+        let pending = try ShareInbox.read(at: url)
+        guard !pending.isEmpty else { return Result(added: [], acknowledged: true) }
+        var seen = try committedIDs()
+        let fresh = pending.filter { seen.insert($0.id).inserted }
+        // No acknowledgment or success result is possible if persistence throws.
+        let added: [Value] = fresh.isEmpty ? [] : try persist(fresh)
+        let ids = Set(pending.map(\.id))
+        let acknowledged = acknowledge?(ids) ?? ShareInbox.acknowledge(ids, at: url)
+        return Result(added: added, acknowledged: acknowledged)
     }
 }
