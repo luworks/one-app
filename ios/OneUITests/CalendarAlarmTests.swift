@@ -97,7 +97,7 @@ final class CalendarAlarmTests: XCTestCase {
         app.buttons["Calendar"].firstMatch.tap()
         mode("Week").tap()
 
-        let grids = element("calendar.weekGrid")
+        let grids = app.descendants(matching: .any).matching(identifier: "calendar.weekGrid")
         XCTAssertTrue(grids.firstMatch.waitForExistence(timeout: 5))
         guard let grid = grids.allElementsBoundByIndex.first(where: {
             $0.isFullyVisible(in: app.frame) && $0.isHittable
