@@ -59,7 +59,7 @@ final class TodayReminderCompletionTests: XCTestCase {
         circle.tap()
         assertState(app, done: true)
         XCTAssertFalse(app.buttons["Complete \(title)"].exists)
-        // Foreground refresh followed by a full process restart, with the same file-backed store.
+        // After post-completion reconciliation, return to the foreground and restart the same file-backed store.
         XCUIDevice.shared.press(.home)
         app.activate()
         assertState(app, done: true)
