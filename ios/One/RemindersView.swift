@@ -452,11 +452,12 @@ struct RemindersView: View {
     }
 
     private func listRow(_ list: OneList, stats: Stats) -> some View {
-        Button { path.append(.list(list.persistentModelID)) } label: {
+        NavigationLink(value: ReminderTarget.list(list.persistentModelID)) {
             ListRow(name: ListName.display(list.name), color: list.color, symbol: list.symbol,
                     count: stats.open[list.name] ?? 0, pinned: list.pinned)
         }
-        .buttonStyle(.plain)
+        // Keep native List drag/navigation ownership; the shared card already draws its chevron.
+        .navigationLinkIndicatorVisibility(.hidden)
         .stackedCardRow()
         .accessibilityIdentifier("list.\(list.name)")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
