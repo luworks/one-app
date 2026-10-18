@@ -23,6 +23,11 @@ final class CaptureTitleCleanupTests: XCTestCase {
         XCTAssertEqual(capture.kind, .task)
         XCTAssertFalse(capture.ringsAsAlarm)
         XCTAssertFalse(capture.isWorkBlock)
+        let eating = CaptureParser.parse("今天晚上6点的时候吧，就提醒我一定不能再吃饭了", now: now, calendar: calendar)
+        XCTAssertEqual(eating.title, "一定不能再吃饭了")
+        XCTAssertEqual(eating.hour, 18)
+        XCTAssertEqual(eating.minute, 0)
+        XCTAssertEqual(eating.day, calendar.startOfDay(for: now))
     }
 
     func testReminderCleanupPreservesConditionsNegationAndLanguage() {
@@ -58,6 +63,7 @@ final class CaptureTitleCleanupTests: XCTestCase {
     func testModelTitlesDoNotLoseActionContent() throws {
         for (input, expected) in [
             ("的时候，必须要睡觉", "必须要睡觉"),
+            ("的时候吧，就提醒我一定不能再吃饭了", "一定不能再吃饭了"),
             ("提醒我不要忘记带药", "不要忘记带药"),
             ("remind me to never skip medication!", "never skip medication"),
             ("下雨的时候带伞", "下雨的时候带伞"),
