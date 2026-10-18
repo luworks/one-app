@@ -96,6 +96,8 @@ private struct ProposedItem {
     var durationMinutes: Int?
     @Guide(description: "How often it repeats; never if the text does not say")
     var repeats: ProposedRepeat
+    @Guide(description: "All explicitly requested weekly weekdays: Sunday=1 through Saturday=7. Friday AND Sunday is [6,1]. Empty for non-weekly recurrence")
+    var repeatWeekdays: [Int]?
     @Guide(description: "True only for an event that lasts the whole day and has no time")
     var allDay: Bool
 }
@@ -157,7 +159,8 @@ private enum OnDeviceCapture {
                      time: item.time,
                      durationMinutes: item.durationMinutes,
                      repeatRule: String(describing: item.repeats),
-                     isAllDay: item.allDay)
+                     isAllDay: item.allDay,
+                     repeatWeekdays: item.repeatWeekdays)
     }
 }
 

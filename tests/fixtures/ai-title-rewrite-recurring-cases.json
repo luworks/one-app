@@ -1,0 +1,605 @@
+{
+  "schemaVersion": 1,
+  "now": "2026-10-18T09:00:00",
+  "timeZone": "America/Los_Angeles",
+  "provenance": "Authored goal expectations before execution after reading Capture.swift, Logic.swift, Dialogue.swift, ChatRouting.swift and the existing TitleQuality fixture/scorer. Validation is reserved, not blind. Freeze before execution; retire the split if used for tuning. No app/model observations or pass claims are included.",
+  "cases": [
+    {
+      "id": "recurring-sunday-trash-zh",
+      "lang": "zh",
+      "group": "single_weekday",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "每周日下午5点提醒我丢垃圾",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "17:00",
+                "repeat": "weekly:sun",
+                "titleExamples": [
+                  "丢垃圾"
+                ],
+                "requiredFacts": [
+                  "Take out the trash; every Sunday at 17:00; not an alarm or event"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-fri-sun-trash-mixed",
+      "lang": "mixed",
+      "group": "multiple_weekdays",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "添加一个reminder：每周五、每周日下午5点提醒我丢垃圾",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "17:00",
+                "repeat": "weekly:fri,sun",
+                "titleExamples": [
+                  "丢垃圾"
+                ],
+                "requiredFacts": [
+                  "One trash task repeating on BOTH Friday and Sunday at 17:00; neither weekday may be dropped"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-monday-filter-en",
+      "lang": "en",
+      "group": "single_weekday",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "Remind me every Monday at 6pm to clean the dryer filter.",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 1,
+                "time": "18:00",
+                "repeat": "weekly:mon",
+                "titleExamples": [
+                  "Clean dryer filter"
+                ],
+                "requiredFacts": [
+                  "Clean the dryer filter every Monday at 18:00"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-tue-thu-walk-en",
+      "lang": "en",
+      "group": "multiple_weekdays",
+      "split": "validation",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "Add one reminder to walk the dog every Tuesday and Thursday at 7am.",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 2,
+                "time": "07:00",
+                "repeat": "weekly:tue,thu",
+                "titleExamples": [
+                  "Walk the dog"
+                ],
+                "requiredFacts": [
+                  "One dog-walking task on BOTH Tuesday and Thursday at 07:00"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-weekdays-lunch-zh",
+      "lang": "zh",
+      "group": "weekdays",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "每个工作日中午12点提醒我带午饭",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 1,
+                "time": "12:00",
+                "repeat": "weekly:mon,tue,wed,thu,fri",
+                "titleExamples": [
+                  "带午饭"
+                ],
+                "requiredFacts": [
+                  "Bring lunch Monday through Friday at 12:00; exclude Saturday and Sunday"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-weekends-plants-en",
+      "lang": "en",
+      "group": "weekends",
+      "split": "validation",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "Remind me every weekend, both Saturday and Sunday, at 10am to check the balcony plants.",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "10:00",
+                "repeat": "weekly:sat,sun",
+                "titleExamples": [
+                  "Check balcony plants"
+                ],
+                "requiredFacts": [
+                  "Check balcony plants on BOTH Saturday and Sunday at 10:00; do not infer watering"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-rephrase-recycling-zh",
+      "lang": "zh",
+      "group": "rephrasing_notes",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "麻烦帮我加个每逢周五下午六点的提醒，记得把回收桶推到路边，因为周六清晨会来收。",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 5,
+                "time": "18:00",
+                "repeat": "weekly:fri",
+                "titleExamples": [
+                  "把回收桶推到路边"
+                ],
+                "requiredFacts": [
+                  "Move the recycling bin to the curb every Friday at 18:00; collection time is context, not a second task"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [
+                  "Collection is early Saturday morning"
+                ],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-add-repeat-followup-en",
+      "lang": "en",
+      "group": "add_recurrence_followup",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "Today at 4pm remind me to brush the dog.",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "16:00",
+                "repeat": null,
+                "titleExamples": [
+                  "Brush the dog"
+                ],
+                "requiredFacts": [
+                  "Brush the dog today at 16:00; no recurrence yet"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        },
+        {
+          "thread": "A",
+          "input": "Make that repeat every Thursday and Sunday, keeping 4pm.",
+          "expected": {
+            "route": "capture",
+            "intent": "revise_preview",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "16:00",
+                "repeat": "weekly:thu,sun",
+                "titleExamples": [
+                  "Brush the dog"
+                ],
+                "requiredFacts": [
+                  "Same dog-brushing preview, now on BOTH Thursday and Sunday at 16:00; no duplicate task"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-mixed-backup",
+      "lang": "mixed",
+      "group": "mixed",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "帮我添加一个reminder：every Tuesday and Friday at 8pm 备份 NAS，备注写 run before firmware update。",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 2,
+                "time": "20:00",
+                "repeat": "weekly:tue,fri",
+                "titleExamples": [
+                  "备份 NAS"
+                ],
+                "requiredFacts": [
+                  "Back up NAS on BOTH Tuesday and Friday at 20:00; preserve NAS and do not replace backup with update"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [
+                  "Run before firmware update"
+                ],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-time-correction-zh",
+      "lang": "zh",
+      "group": "time_correction",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "每周五和周日下午五点提醒我检查门锁",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "17:00",
+                "repeat": "weekly:fri,sun",
+                "titleExamples": [
+                  "检查门锁"
+                ],
+                "requiredFacts": [
+                  "Check the door lock on BOTH Friday and Sunday at 17:00"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        },
+        {
+          "thread": "A",
+          "input": "不是下午五点，改成下午六点，周五和周日都保留。",
+          "expected": {
+            "route": "capture",
+            "intent": "revise_preview",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "18:00",
+                "repeat": "weekly:fri,sun",
+                "titleExamples": [
+                  "检查门锁"
+                ],
+                "requiredFacts": [
+                  "Same door-lock preview at 18:00 on BOTH Friday and Sunday; replace 17:00 without changing title or adding tasks"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-negated-action-en",
+      "lang": "en",
+      "group": "negation",
+      "split": "validation",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "Every weekday at 9pm, remind me not to drink coffee because it keeps me awake.",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 1,
+                "time": "21:00",
+                "repeat": "weekly:mon,tue,wed,thu,fri",
+                "titleExamples": [
+                  "Do not drink coffee"
+                ],
+                "requiredFacts": [
+                  "Do NOT drink coffee Monday through Friday at 21:00; preserve the prohibition"
+                ],
+                "forbiddenFacts": [
+                  "Drink coffee"
+                ],
+                "notesRetention": [
+                  "Coffee keeps me awake"
+                ],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-topic-question-zh",
+      "lang": "zh",
+      "group": "topic_discussion",
+      "split": "development",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "为什么每周日下午五点倒垃圾比每天倒一次更合适？我只是想聊聊这个安排。",
+          "expected": {
+            "route": "conversation",
+            "intent": "chat",
+            "gate": null,
+            "items": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-quoted-discussion-en",
+      "lang": "en",
+      "group": "quoted_discussion",
+      "split": "validation",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "Can you explain the sentence \"Remind me every Friday and Sunday at 5pm to take out the trash\"? I am asking about its wording.",
+          "expected": {
+            "route": "conversation",
+            "intent": "chat",
+            "gate": null,
+            "items": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-reported-action-zh",
+      "lang": "zh",
+      "group": "reported_discussion",
+      "split": "validation",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "我昨天已经设置了每周五和周日下午五点丢垃圾的提醒，今天只是告诉你这个安排。",
+          "expected": {
+            "route": "conversation",
+            "intent": "chat",
+            "gate": null,
+            "items": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "recurring-saved-add-repeat-en",
+      "lang": "en",
+      "group": "saved_recurrence_edit",
+      "split": "validation",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "Today at 3pm remind me to sort the mail.",
+          "expected": {
+            "route": "capture",
+            "intent": "create",
+            "gate": "Add",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "15:00",
+                "repeat": null,
+                "titleExamples": [
+                  "Sort the mail"
+                ],
+                "requiredFacts": [
+                  "Sort the mail today at 15:00; no recurrence yet"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          }
+        },
+        {
+          "thread": "A",
+          "input": "Change the saved mail reminder to repeat every Friday and Sunday at 3pm.",
+          "expected": {
+            "route": "edit",
+            "intent": "edit_existing",
+            "gate": "Apply",
+            "items": [
+              {
+                "kind": "task",
+                "day": 0,
+                "time": "15:00",
+                "repeat": "weekly:fri,sun",
+                "titleExamples": [
+                  "Sort the mail"
+                ],
+                "requiredFacts": [
+                  "Edit the sole saved mail reminder to BOTH Friday and Sunday at 15:00; do not create a second reminder"
+                ],
+                "forbiddenFacts": [],
+                "notesRetention": [],
+                "quotedTitle": null,
+                "noExtraFacts": true,
+                "noNegationFlip": true
+              }
+            ]
+          },
+          "before": "Tap Add on the first preview; the saved item is the sole mail reminder."
+        }
+      ]
+    },
+    {
+      "id": "recurring-declined-creation-zh",
+      "lang": "zh",
+      "group": "negated_creation",
+      "split": "validation",
+      "turns": [
+        {
+          "thread": "A",
+          "input": "不要创建每周六上午十点洗车的提醒，我只是拿这个当例子。",
+          "expected": {
+            "route": "conversation",
+            "intent": "chat",
+            "gate": null,
+            "items": []
+          }
+        }
+      ]
+    }
+  ]
+}

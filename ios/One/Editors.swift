@@ -103,7 +103,7 @@ struct TaskEditor: View {
                     }
                     Picker(selection: $repeatRule) {
                         Text("Never").tag(RepeatRule?.none)
-                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                        ForEach(RepeatRule.choices(including: repeatRule), id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
                     } label: {
                         Label("Repeat", systemImage: "repeat")
                     }
@@ -266,7 +266,7 @@ struct EventEditor: View {
                     DatePicker("Ends", selection: $end, in: start..., displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
                     Picker(selection: $repeatRule) {
                         Text("Never").tag(RepeatRule?.none)
-                        ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
+                        ForEach(RepeatRule.choices(including: repeatRule), id: \.self) { Text($0.label).tag(RepeatRule?.some($0)) }
                     } label: {
                         Text("Repeat")
                     }
