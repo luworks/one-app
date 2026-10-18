@@ -101,7 +101,8 @@
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
       "baseline": null,
-      "state": "not_executed"
+      "state": "measurement_failed",
+      "evidence": "settings-repro-6ab29add.log"
     },
     {
       "id": "page.settings.activityData",
@@ -109,7 +110,8 @@
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
       "baseline": null,
-      "state": "not_executed"
+      "state": "measurement_failed",
+      "evidence": "settings-repro-6ab29add.log"
     },
     {
       "id": "page.activity",
@@ -117,7 +119,8 @@
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
       "baseline": null,
-      "state": "not_executed"
+      "state": "measurement_failed",
+      "evidence": "settings-repro-6ab29add.log"
     },
     {
       "id": "page.clock.worldClock",
@@ -239,40 +242,110 @@
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          1719.681,
+          366.392708,
+          282.896125
+        ],
+        "median_ms": 366.392708,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 122.13090266666667,
+      "stretch_ms": 36.639270800000006
     },
     {
       "id": "page.search.results",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          179.060708,
+          109.438167,
+          76.373792
+        ],
+        "median_ms": 109.438167,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 36.479389000000005,
+      "stretch_ms": 10.943816700000001
     },
     {
       "id": "page.reminder.quick",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          397.956209,
+          249.227333,
+          232.644417
+        ],
+        "median_ms": 249.227333,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 83.07577766666667,
+      "stretch_ms": 24.922733299999997
     },
     {
       "id": "page.reminders.list",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          315.8705,
+          132.573334,
+          148.902959
+        ],
+        "median_ms": 148.902959,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 49.63431966666667,
+      "stretch_ms": 14.890295900000002
     },
     {
       "id": "page.reminder.editor",
       "kind": "latency",
       "unit": "ms",
       "endpoint": "action_to_geometry_two_displaylinks",
-      "baseline": null,
-      "state": "not_executed"
+      "baseline": {
+        "n": 3,
+        "raw_ms": [
+          505.290625,
+          217.885292,
+          251.275542
+        ],
+        "median_ms": 251.275542,
+        "backend": "not_applicable",
+        "method": "testSearchQuickReminderAndReminderDetailEndpoints",
+        "source": "83b4fb8",
+        "evidence": "settings-search-summary.json"
+      },
+      "state": "baseline_measured",
+      "required_ms": 83.758514,
+      "stretch_ms": 25.1275542
     },
     {
       "id": "ai_send_to_feedback_layout",

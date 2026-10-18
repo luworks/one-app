@@ -38,7 +38,7 @@ Canonical root: `/Users/yuanlu/code/one-app/tests/results/runs/performance-pages
 
 ## Remaining work
 
-Capture/follow-up/confirmation and plan/Apply baseline is now measured below on the same compiled products. Settings/Activity and Search/Quick Reminder/detail methods remain unexecuted. Additional Settings subpages and event/alarm draft tests are source-ready only and require a subsequent bounded incremental build. Complete [coverage inventory](page-coverage-v2.md) remains the scope: no claim that every page has been measured yet. Per-page memory/retention, hitch/frame work, persistence success/latency, internal AI kind/title stages and actual usable/presented endpoints remain pending. Physical model/HealthKit/AlarmKit/battery and App Store thinning remain outside this simulator-only lane.
+Capture/follow-up/confirmation and plan/Apply baseline is now measured below on the same compiled products. Search/Quick Reminder/detail is measured below; Settings/Activity remains invalid after a reproduced instrumentation failure. Additional Settings subpages and event/alarm draft tests are source-ready only and require a subsequent bounded incremental build. Complete [coverage inventory](page-coverage-v2.md) remains the scope: no claim that every page has been measured yet. Per-page memory/retention, hitch/frame work, persistence success/latency, internal AI kind/title stages and actual usable/presented endpoints remain pending. Physical model/HealthKit/AlarmKit/battery and App Store thinning remain outside this simulator-only lane.
 
 No authorized same-protocol competitor measurements exist. Numeric top-app gap is unknown. Platform responsiveness budgets are linked in [protocol v2](pages-ai-protocol-v2.md), separately from owner relative3x/10x goals. No optimization plateau is claimed.
 
@@ -67,3 +67,19 @@ Same83b4fb8 compiled products and endpoint definitions, no compilation; two meth
 The independent medians above cannot be added to reconstruct a turn. Current plan result-layout wait is larger than response-ready wait, but these proxy durations do not identify chart/card CPU or rendering. Attribute stages before selecting an optimization.
 
 Raw evidence: `baseline-ai-confirmation-9faa0bd0.log`, command/context, `ai-confirmation-summary.json`, complete closed `baseline-ai-confirmation/ui.xcresult`; archived QA session `performance-pages-ai-confirmation-20261018`. No p95 or overall3x/10x gain is claimed.
+
+## Search and reminder screens; Settings instrumentation failure
+
+Search/Quick Reminder/list/detail method passed107.627s, same83b4fb8 products. Each path has n3 ordered first-cycle/two-revisit samples. Settings method failed54.682s at activityData endpoint; unchanged isolated repetition failed59.058s at the same point. The exported final video frame visibly shows the Activity data Form: this is evidence that navigation occurred, not a passing measurement endpoint. The failed method provides no accepted baseline for Settings/Activity. No product navigation or assertion was weakened.
+
+| Metric | Raw ms | Median ms | Required /3 | Stretch /10 |
+| --- | --- | ---: | ---: | ---: |
+| page.reminder.editor | 505.291, 217.885, 251.276 | 251.276 | 83.759 | 25.128 |
+| page.reminder.quick | 397.956, 249.227, 232.644 | 249.227 | 83.076 | 24.923 |
+| page.reminders.list | 315.870, 132.573, 148.903 | 148.903 | 49.634 | 14.890 |
+| page.search | 1719.681, 366.393, 282.896 | 366.393 | 122.131 | 36.639 |
+| page.search.results | 179.061, 109.438, 76.374 | 109.438 | 36.479 | 10.944 |
+
+Evidence: `baseline-settings-search-9f7a18ad.log`, full closed `baseline-settings-search/ui.xcresult`; `settings-repro-6ab29add.log` and full closed `settings-repro/ui.xcresult`; `settings-failure-analysis/` contains exported activity tree, original video, metadata and `failure-last-frame.png`. Both failed runs remain failed in the QA journal. Shutdown/release12:27:12 PDT; no further attempt in that window.
+
+Next measurement-only repair: ensure the trace-enabled navigation timer begins in its state-binding action, and attach the destination probe to the actual Activity data Form. Keep original trace-disabled links and all test assertions. Revalidate the one representative failure with new source before accepting these page metrics.
