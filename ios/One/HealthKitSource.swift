@@ -49,6 +49,17 @@ final class HealthKitSource: HealthSource {
         try? await store.requestAuthorization(toShare: [], read: Set(metrics.map(objectType)))
     }
 
+    /// Health lets people pick kg or lb (and km or mi) independent of the region; this reads that choice.
+    func preferredUnits() async -> HealthUnits? {
+        guard isAvailable else { return nil }
+        let weight = HKQuantityType(.bodyMass), distance = HKQuantityType(.distanceWalkingRunning)
+        guard let units = try? await store.preferredUnits(for: [weight, distance]) else { return nil }
+        let base = HealthUnits()
+        return HealthUnits(
+            poundsForWeight: units[weight].map { $0 == .pound() || $0 == .stone() } ?? base.poundsForWeight,
+            milesForDistance: units[distance].map { $0 == .mile() } ?? base.milesForDistance)
+    }
+
     func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric: HealthSeries] {
         guard isAvailable else { return [:] }
         return await withTaskGroup(of: (HealthMetric, HealthSeries).self) { group in

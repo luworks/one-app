@@ -7,10 +7,10 @@ struct HealthMetricDetail: View {
     let metric: HealthMetric
     let series: HealthSeries
     let now: Date
+    var units = HealthUnits()
 
     @Environment(\.dismiss) private var dismiss
     @State private var days = 30
-    private let units = HealthUnits()
 
     private var latest: HealthPoint? { series.latest }
     private var points: [HealthPoint] { HealthStats.points(series, days: days, now: now) }

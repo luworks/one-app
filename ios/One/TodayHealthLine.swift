@@ -8,6 +8,17 @@ import SwiftUI
 final class HealthLineModel {
     private let source: HealthSource = HealthSources.current()
     private(set) var line: String?
+    @ObservationIgnored nonisolated(unsafe) private var observer: NSObjectProtocol?
+
+    init() {
+        // The line follows a changed choice of metrics (from the sheet or Settings), unless the line is switched off.
+        observer = NotificationCenter.default.addObserver(forName: HealthSelectionStore.didChange, object: nil, queue: .main) { [weak self] _ in
+            guard UserDefaults.standard.object(forKey: SettingsKey.healthSummary) as? Bool ?? true else { return }
+            Task { @MainActor in await self?.load() }
+        }
+    }
+
+    deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
 
     func load() async {
         guard source.isAvailable else { return }
@@ -17,16 +28,14 @@ final class HealthLineModel {
         await source.requestAccess(for: metrics)
         let now = TodayClock.now
         let series = await source.series(for: metrics, days: HealthSpark.days, now: now)
-        line = HealthLine.text(selection: selection, series: series, now: now)
+        line = HealthLine.text(selection: selection, series: series, now: now, units: await source.preferredUnits() ?? HealthUnits())
     }
 }
 
 /// One quiet line at the top of Today (today only): "6,240 steps · slept 7 hr 12 min". Tap opens the Health sheet (the
 /// compact list of the metrics you chose). Read-only. Off with Settings → Today → Health summary.
-/// `onClose` runs when the sheet goes away, so the line follows a changed choice of metrics.
 struct TodayHealthLine: View {
     let line: String
-    var onClose: () -> Void = {}
     @State private var showsDetail = false
 
     var body: some View {
@@ -48,7 +57,7 @@ struct TodayHealthLine: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Shows your Health metrics")
         .accessibilityIdentifier("health.summary")
-        .sheet(isPresented: $showsDetail, onDismiss: onClose) { HealthDetailSheet() }
+        .sheet(isPresented: $showsDetail) { HealthDetailSheet() }
     }
 }
 

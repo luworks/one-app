@@ -65,7 +65,7 @@ struct HealthView: View {
         }
         .refreshable { await model.load() }
         .sheet(item: $detail) { metric in
-            HealthMetricDetail(metric: metric, series: model.series[metric] ?? .empty, now: TodayClock.now)
+            HealthMetricDetail(metric: metric, series: model.series[metric] ?? .empty, now: TodayClock.now, units: model.units)
         }
         .sheet(isPresented: $adding) {
             HealthMetricPicker(hidden: model.selection.hidden) { chosen in

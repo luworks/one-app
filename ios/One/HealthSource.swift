@@ -10,6 +10,12 @@ protocol HealthSource {
     func requestAccess(for metrics: [HealthMetric]) async
     /// The last `days` days of each metric. A metric with no data (or no permission) maps to an empty series.
     func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric: HealthSeries]
+    /// The units the user chose in Apple Health (lb or kg, mi or km); nil to follow the region (`HealthUnits()`).
+    func preferredUnits() async -> HealthUnits?
+}
+
+extension HealthSource {
+    func preferredUnits() async -> HealthUnits? { nil }
 }
 
 enum HealthSources {

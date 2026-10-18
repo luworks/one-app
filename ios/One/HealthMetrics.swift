@@ -208,6 +208,8 @@ struct HealthSelection: Equatable {
 /// a second launch that must see what the first one saved passes `-uiTestingKeepHealthMetrics`.
 final class HealthSelectionStore {
     static let defaultsKey = "today.health.metrics"
+    /// Posted after every save, so the Today line follows a change made from Settings or the sheet.
+    static let didChange = Notification.Name("today.health.metrics.didChange")
     static let shared = HealthSelectionStore()
 
     private let defaults: UserDefaults
@@ -228,6 +230,7 @@ final class HealthSelectionStore {
     func save(_ selection: HealthSelection) {
         self.selection = selection
         defaults.set(selection.encoded(), forKey: Self.defaultsKey)
+        NotificationCenter.default.post(name: Self.didChange, object: nil)
     }
 }
 

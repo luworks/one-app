@@ -14,6 +14,8 @@ final class HealthModel {
     private(set) var series: [HealthMetric: HealthSeries] = [:]
     /// False until the first load has answered, so the list does not flash "No data".
     private(set) var hasLoaded = false
+    /// lb or kg, mi or km: what Apple Health is set to (the region until it has answered).
+    private(set) var units = HealthUnits()
 
     init() { selection = HealthSelectionStore.shared.selection }
 
@@ -25,6 +27,7 @@ final class HealthModel {
         guard source.isAvailable else { hasLoaded = true; return }
         await source.requestAccess(for: selection.shown)
         series = await source.series(for: selection.shown, days: Self.days, now: TodayClock.now)
+        if let preferred = await source.preferredUnits() { units = preferred }
         hasLoaded = true
     }
 
@@ -54,6 +57,6 @@ final class HealthModel {
     }
 
     func row(for metric: HealthMetric) -> HealthRowModel {
-        HealthRowModel(metric: metric, series: series[metric], now: TodayClock.now)
+        HealthRowModel(metric: metric, series: series[metric], now: TodayClock.now, units: units)
     }
 }
