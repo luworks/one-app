@@ -92,15 +92,21 @@ final class ActivityStoreTests: XCTestCase {
         defer { sqlite3_close(handle) }
         // A deliberately damaged fixture can contain NULL in otherwise required columns.
         // Production migrations and constraints remain unchanged.
-        let schema = ActivityStore.migrations[0].replacingOccurrences(of: " NOT NULL", with: "")
-        let sql = schema + """
-        PRAGMA user_version = 1;
+        let schema = ActivityStore.migrations.map { migration in
+            ["TEXT", "INTEGER", "BLOB"].reduce(migration) { sql, type in
+                sql.replacingOccurrences(of: "\(type) NOT NULL", with: type)
+            }
+        }.joined(separator: "\n")
+        // Preserve partial-index predicates such as `WHERE subject_ref IS NOT NULL`.
+        let sql = schema + "\n" + """
+        PRAGMA user_version = \(ActivityStore.migrations.count);
         INSERT INTO event (id, uid, props, v, sync) VALUES (1, NULL, NULL, NULL, NULL);
         INSERT INTO event (id, uid, ts, tier, kind, actor) VALUES (2, 'invalid-tier', 'bad-number', 999, 'ai.turn', 'you');
         INSERT INTO event (id, uid, tier, kind, actor) VALUES (3, 'null-tier', NULL, 'ai.turn', 'you');
         INSERT INTO event (id, uid, tier, kind, actor) VALUES (4, 'unknown-kind', -1, 'future.kind', 'system');
         """
-        XCTAssertEqual(sqlite3_exec(handle, sql, nil, nil, nil), SQLITE_OK)
+        let result = sqlite3_exec(handle, sql, nil, nil, nil)
+        XCTAssertEqual(result, SQLITE_OK, String(cString: sqlite3_errmsg(handle)))
         let s = try ActivityStore(location: .file(url))
         let rows = try s.page(ActivityQuery())
         var expected = ActivityEvent(kind: "", tier: .system, actor: "", at: now, calendar: cal)
