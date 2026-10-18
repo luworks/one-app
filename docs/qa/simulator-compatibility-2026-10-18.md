@@ -143,6 +143,31 @@ selected checks. At 11:18:58 PDT all compatibility simulators and heavy runners
 were stopped. A coordinated narrow recurrence Swift slot then handed directly
 back to the performance thread; compatibility did not start another batch.
 
+## Recurrence and Header B final short batch
+
+Frozen integration `2bd85cf` reused the same source path/build cache. PR #74's
+recurrence source `9a8cf4b` passed all three selected UI methods on iPhone 16
+(32.596 / 45.168 / 35.408 s): direct Chinese recurring preview/no writes, English
+weekday/time corrections, and actual Add/editor Save/reopen retaining both days.
+Its changed paths exactly match the tested tree. It merged independently to main
+`91c1298`; no header or reorder candidate was included. Host green checks were
+inherited by unchanged source, not repeated.
+
+The unrelated Header B first shared build failed at three DEBUG geometry logging
+APIs. Commit `2bd85cf` replaced them with current SDK formatting; the repaired build
+passed. PR63 source `a855fa3` carries only that repair atop B. The original SE 3
+TabMemory assertion still failed (44.577 s); no retry followed and PR63 stays draft.
+New B JSONL shows its AccessController attached, native recognizer enabled/depth2,
+and window frame `{{0,80},{375,587}}`, but only `possible` samples. The decision log
+has two `attached` entries and no observed receiveTouch/shouldBegin. This does not
+establish a shouldBegin/delegate-veto root cause. Older retained probe JSONLs are
+explicitly distinguished by original timestamp in `probe-attribution.json`.
+
+At 11:36:36 all own simulators were shutdown and UI/Swift/trace runners stopped;
+the performance thread received the next 3–4 minute package window. No further
+compatibility build/UI batch is queued. Remaining product risks are Issue62
+reorder and PR63 native edge-back; neither is presented as a shipped fix.
+
 ## Durable evidence
 
 Canonical root: `/Users/yuanlu/code/one-app/tests/results/`.
@@ -167,6 +192,9 @@ in the separate QA `activity.sqlite`, never the app's user Activity database.
   and AI-core logs, summaries, attachments and complete xcresult bundles.
 - `runs/context-header-probe-{build,integrated}-20261018/`: repaired-context
   acceptance, observation-only native-pop JSONL and production-equivalence report.
+- `runs/recurrence-header-B-build{-repaired}-20261018/` and
+  `runs/recurrence-header-B-integrated-20261018/`: initial compile failure,
+  repaired build, recurrence 3/3, Header B failure and attributed actual JSONL.
 - Exported failure movies, accessibility snapshots, synthesized event coordinates
   and filmstrips are retained beside their completed bundles and indexed separately.
 
