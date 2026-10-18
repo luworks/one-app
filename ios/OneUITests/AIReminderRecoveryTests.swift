@@ -106,7 +106,7 @@ final class AIReminderRecoveryTests: XCTestCase {
         app.buttons["Close"].firstMatch.tap()
         app.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["No activity yet"].waitForExistence(timeout: 5), "No planner changes before Add")
-        app.buttons["Close"].firstMatch.tap()
+        app.buttons["Done"].firstMatch.tap()
         open(thread)
     }
     private func keepScreenshot(_ name: String) {
