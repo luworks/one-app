@@ -1,6 +1,6 @@
 # Reminder reorder diagnosis
 
-Issue #62 remains open until the original SE 3 gesture passes. No historical candidate is accepted merely because it builds or passes on the larger screen.
+Historical rejected candidates are preserved below. The explicit draggable menu-preview candidate passed the original SE 3 gesture at `52102fb`; delivery acceptance and related checks are recorded at the end. Larger-screen success alone was never accepted.
 
 ## Preserved reproduction
 
@@ -69,3 +69,17 @@ Prepared on refreshed origin/main `bf0d784` in `t3-f86c1e46`. No rejected native
 Primary references checked: [Apple context menus](https://developer.apple.com/design/human-interface-guidelines/context-menus), [WWDC19 native menu/drag integration](https://developer.apple.com/videos/play/wwdc2019/224/), and installed public UIKit interaction headers. Preview content shapes only affect drawing, not admission, so changing their masks is not used as a fix. The public simultaneous-recognition setting defaults to false and explicitly treats long-press recognizers specially; no global gesture override or threshold change is justified.
 
 Adopted the v4 strengthened original strict journey and versioned empty-relaunch fixture; removed its native-host-only DEBUG launch flag. Runtime acceptance remains pending.
+
+### Original SE 3 acceptance
+
+At exact source revision `52102fb6a5664ce50eb84ae51523054125d77bc9`, the unchanged original method passed in **28.485 seconds** on Today-Compatibility-Small / iPhone SE (3rd generation), iOS 27.0. All order, menu-closed, no-Pin and persisted-order relaunch assertions were reached and passed. The test used the original canonical dataset, center-to-upper-interior normalized points, 1.5-second hold, slow velocity and 1-second destination hold. The activity tree independently records that complete gesture and both app launches.
+
+Raw root: `/Users/yuanlu/code/one-app/tests/results/runs/issue62-v5-menu-preview/`. `summary.json` records source SHA, clean tree, exact command, simulator/runtime/cache, exit 0, shutdown 0 and `journal_errors: []`; complete `ui.xcresult`, `ui.log` and exported `activities.json` remain durable. This is simulator XCTest evidence; no physical device, normal-user manual interaction, native callback trace or full-suite result is claimed. The result supports the explicit draggable preview change; it does not establish a general UIKit platform limitation or the internals of Apple's gesture arbitration.
+
+Focused source review checks: the menu still calls the same listMenu actions; preview uses the same list.name payload as the original row; only the original row carries list.Work/list.Home accessibility identifiers; persisted-store relaunch uses an empty versioned dataset instead of reseeding. No menu action, drag threshold, destination, order assertion or persistence behavior was weakened. Related runtime checks are tracked separately.
+
+### Related batch interrupted for environment priority
+
+The three-method expansion started only after the original strict test passed: Rename, swipe Pin and TabMemory. A harness turn interruption terminated the outer Python recorder, leaving owned Xcode PID 74947 running without its original stdout consumer. No duplicate runner was started. When the owner prioritized the separate Today-Performance PosterBoard environment fault, SIGINT was sent only to that owned Xcode process. It exited and finalized the bundle normally; the closed xcresult says `Testing was canceled` for Rename, with no passed related tests. This is an interrupted acceptance batch, not a product assertion failure and not a green result.
+
+Raw root `/Users/yuanlu/code/one-app/tests/results/runs/issue62-v5-related/` includes the partial raw log, closed complete xcresult, exported summary, read-only menu screenshot and bounded Xcode wait sample. Imported as `issue62-v5-related-interrupted` with explicit interrupted status and coherent archive in QA SQLite. The exact SE3 was shut down after closing the bundle; fresh exact process inventory, simctl and device panel readback showed no heavy producer, no booted device and no open panel. Resource ownership returned directly to the performance owner. No more builds or simulator work will start until that environment observation returns capacity.
