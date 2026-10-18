@@ -154,6 +154,7 @@ struct TaskEditor: View {
                     }
                 }
             }
+            .performanceDestination("reminder.editor")
             .navigationTitle(task == nil ? "New reminder" : "Reminder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -304,6 +305,7 @@ struct EventEditor: View {
                 }
             }
             .onAppear { if event == nil { titleFocused = true } }
+            .performanceDestination("event.editor")
             .navigationTitle(event == nil ? "New event" : "Event")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -44,7 +44,7 @@ struct SettingsView: View {
                 Section {
                     Toggle(isOn: $calendarOn) { Label("Apple Calendar", systemImage: "calendar") }
                     Toggle(isOn: $remindersOn) { Label("Apple Reminders", systemImage: "checklist") }
-                    Button { showsCalendars = true } label: {
+                    Button { PerformanceTrace.shared.beginPage("settings.calendars"); showsCalendars = true } label: {
                         HStack {
                             Label("Calendars", systemImage: "calendar.badge.checkmark")
                             Spacer()
@@ -97,11 +97,12 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        YearHolidaysSettingsView()
+                        YearHolidaysSettingsView().performanceDestination("settings.holidays")
                     } label: {
                         Label("Holidays in Year", systemImage: "flag")
                     }
                     .accessibilityIdentifier("settings.yearHolidays")
+                    .performanceNavigationAction("settings.holidays")
                 } header: {
                     Text("Calendar")
                 } footer: {
@@ -111,9 +112,10 @@ struct SettingsView: View {
                 Section {
                     AutomaticChangesToggle()
                     NavigationLink("Scope and duration") {
-                        AutomaticChangesView()
+                        AutomaticChangesView().performanceDestination("settings.automaticChanges")
                     }
                     .accessibilityIdentifier("settings.automaticChanges")
+                    .performanceNavigationAction("settings.automaticChanges")
                     AskSuggestionsSettingRow()
                     explainedToggle("Archive finished chats", isOn: $autoArchiveChats,
                                     caption: "A chat moves to Archived a week after its last message, or an hour after everything it added is done. Archived chats stay in the sidebar under Archived.")
@@ -125,7 +127,7 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
-                        ActivityDataView()
+                        ActivityDataView().performanceDestination("settings.activityData")
                     } label: {
                         HStack {
                             Label("Activity data", systemImage: "clock.arrow.circlepath")
@@ -134,6 +136,7 @@ struct SettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("settings.activityData")
+                    .performanceNavigationAction("settings.activityData")
                 } header: {
                     Text("Activity")
                 } footer: {
@@ -157,6 +160,7 @@ struct SettingsView: View {
                     Text("Clears what Today stores on this device. Your Apple Calendar and Apple Reminders are not changed.")
                 }
             }
+            .performanceDestination("settings")
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -187,7 +191,7 @@ struct SettingsView: View {
             } message: {
                 Text("This deletes the reminders, events, alarms, lists and Activity Today keeps on this device. It can't be undone.")
             }
-            .sheet(isPresented: $showsCalendars) { CalendarsSheet() }
+            .sheet(isPresented: $showsCalendars) { CalendarsSheet().performanceDestination("settings.calendars") }
             .sheet(isPresented: $askingSecond) {
                 DeleteDataConfirmation {
                     DataReset.run(context)

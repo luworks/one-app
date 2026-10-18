@@ -39,6 +39,7 @@ struct HealthMetricDetail: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
+            .performanceDestination("health.detail")
             .navigationTitle(metric.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("health.detail.done") } }

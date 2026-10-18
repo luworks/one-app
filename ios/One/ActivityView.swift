@@ -26,6 +26,7 @@ struct ActivityView: View {
                 chips
                 content
             }
+            .performanceDestination("activity")
             .navigationTitle("Activity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

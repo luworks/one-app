@@ -89,9 +89,9 @@ struct HomeView: View {
                     Sidebar(drawer: drawer, width: width,
                             onNewChat: { openAsk(nil, fromSidebar: true) },
                             onOpen: { openAsk($0, fromSidebar: true) },
-                            onSearch: { showsSearch = true },
-                            onSettings: { showsSettings = true },
-                            onActivity: { showsActivity = true },
+                            onSearch: { PerformanceTrace.shared.beginPage("search"); showsSearch = true },
+                            onSettings: { PerformanceTrace.shared.beginPage("settings"); showsSettings = true },
+                            onActivity: { PerformanceTrace.shared.beginPage("activity"); showsActivity = true },
                             close: { drawer.set(open: false) })
                         .frame(width: width)
                         .modifier(DrawerSidebarSlide(model: drawer, width: width))
@@ -162,8 +162,29 @@ struct HomeView: View {
         guard let i = all.firstIndex(of: tab) else { return }
         let next = i + step
         guard all.indices.contains(next) else { return }
+        traceTabAction(to: all[next])
         withAnimation(.snappy) { tab = all[next] }
         tabSwipes += 1
+    }
+
+    private var traceRoute: String {
+        tab == .calendar ? "calendar.\(calendarMode.rawValue.lowercased())" : tab.rawValue
+    }
+
+    private func traceTabAction(to destination: HomeTab) {
+        guard PerformanceTrace.enabled, destination != tab else { return }
+        let target = destination == .calendar ? "calendar.\(calendarMode.rawValue.lowercased())" : destination.rawValue
+        PerformanceTrace.shared.begin("\(traceRoute)_to_\(target)", destination: target)
+    }
+
+    private var tracedCalendarMode: Binding<CalendarView.Mode> {
+        Binding(get: { calendarMode }, set: { mode in
+            if mode != calendarMode {
+                let target = "calendar.\(mode.rawValue.lowercased())"
+                PerformanceTrace.shared.begin("\(traceRoute)_to_\(target)", destination: target)
+            }
+            calendarMode = mode
+        })
     }
 
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
@@ -277,15 +298,21 @@ struct HomeView: View {
                         withAnimation(.snappy) { tab = .clock }
                     }
                 case .calendar:
-                    CalendarView(day: $calendarDay, mode: $calendarMode) { picked in
+                    CalendarView(day: $calendarDay, mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode) { picked in
                         todayDay = picked
                         withAnimation(.snappy) { tab = .today }
                     }
-                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath)
+                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath.performanceAction { $0.isEmpty ? nil : "reminders.list" })
                 case .clock: AlarmsView(section: $clockSection)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                if PerformanceTrace.enabled {
+                    PerformanceContentProbe(route: traceRoute, generation: PerformanceTrace.shared.generation,
+                                            bootstrapComplete: PerformanceTrace.shared.bootstrapComplete)
+                }
+            }
         }
         .safeAreaInset(edge: .bottom) { if !keyboardUp { bottomBar } }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
@@ -301,10 +328,11 @@ struct HomeView: View {
             switch item {
             case .task: QuickReminderSheet()   // Due-style quick add; editing a reminder opens TaskEditor
             case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
-            case .alarm: AlarmEditor()
+            case .alarm: AlarmEditor().performanceDestination("alarm.editor")
             }
         }
         .task {
+            if PerformanceTrace.enabled { PerformanceTrace.shared.mark("bootstrap_start") }
             #if DEBUG
             if let path = DevImport.requestedPath {
                 do {
@@ -357,9 +385,16 @@ struct HomeView: View {
             #endif
             autoPlan()
             await FirstRun.calendar()
+            if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
         }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {
+            if PerformanceTrace.enabled {
+                Text(PerformanceTrace.shared.report).font(.system(size: 1)).opacity(0.01)
+                    .accessibilityIdentifier("performance.trace")
+                    .accessibilityLabel(PerformanceTrace.shared.report)
+                    .allowsHitTesting(false)
+            }
             // UI tests read the cold start time from this invisible label.
             if ProcessInfo.processInfo.arguments.contains("-uiTesting"), let ms = LaunchTimer.milliseconds {
                 Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier("coldStartMs").accessibilityLabel(String(ms))
@@ -388,7 +423,7 @@ struct HomeView: View {
             QuickAction.shared.pending = nil
             switch type {
             case "com.luworks.one.ask": openAsk(nil)
-            case "com.luworks.one.newTask": newItem = .task
+            case "com.luworks.one.newTask": presentNewItem(.task)
             case "com.luworks.one.newEvent": newEvent()
             default: break
             }
@@ -401,6 +436,9 @@ struct HomeView: View {
         .onChange(of: clockSection) { _, s in UserDefaults.standard.set(s.rawValue, forKey: Self.clockSectionKey) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
+                    PerformanceTrace.shared.begin("resume_to_content_layout", destination: traceRoute)
+                }
                 dropDeletedMirrors()
                 importShared()
                 ActivityCenter.importOutbox()
@@ -490,6 +528,7 @@ struct HomeView: View {
         HStack(spacing: PillStyle.spacing) {
             ForEach(HomeTab.allCases) { item in
                 TabPill(tab: item, isSelected: item == tab) {
+                    traceTabAction(to: item)
                     withAnimation(.snappy) { tab = item }
                 }
             }
@@ -519,7 +558,7 @@ struct HomeView: View {
 
     /// A new event: Apple's own editor when Calendar access is on (presented by UIKit, see `NativeEvents`), else ours.
     private func newEvent() {
-        guard CalendarSync.shared.usesNativeEditor else { newItem = .event; return }
+        guard CalendarSync.shared.usesNativeEditor else { presentNewItem(.event); return }
         NativeEvents.edit(start: EventEditor.defaultStart(for: tab == .calendar ? calendarDay : .now))
     }
 
@@ -562,14 +601,25 @@ struct HomeView: View {
         .padding(.bottom, 4)
     }
 
+    private func presentNewItem(_ item: NewItem) {
+        let route: String
+        switch item {
+        case .task: route = "reminder.quick"
+        case .event: route = "event.editor"
+        case .alarm: route = "alarm.editor"
+        }
+        PerformanceTrace.shared.beginPage(route)
+        newItem = item
+    }
+
     private var plusButton: some View {
         Menu {
             if plusAddsCity {
-                Button { addingCity = true } label: { Label("Add city", systemImage: "globe") }
+                Button { PerformanceTrace.shared.beginPage("clock.cityPicker"); addingCity = true } label: { Label("Add city", systemImage: "globe") }
             }
-            Button { newItem = .task } label: { Label("New reminder", systemImage: "checklist") }
+            Button { presentNewItem(.task) } label: { Label("New reminder", systemImage: "checklist") }
             Button { newEvent() } label: { Label("New event", systemImage: "calendar") }
-            Button { newItem = .alarm } label: { Label("New alarm", systemImage: "alarm") }
+            Button { presentNewItem(.alarm) } label: { Label("New alarm", systemImage: "alarm") }
         } label: {
             Image(systemName: "plus")
                 .font(.title3.weight(.semibold))
@@ -577,8 +627,8 @@ struct HomeView: View {
                 .frame(width: 50, height: 50)
                 .glassCircle()
         } primaryAction: {
-            if plusAddsCity { addingCity = true }
-            else if smartNewItem == .event { newEvent() } else { newItem = smartNewItem }
+            if plusAddsCity { PerformanceTrace.shared.beginPage("clock.cityPicker"); addingCity = true }
+            else if smartNewItem == .event { newEvent() } else { presentNewItem(smartNewItem) }
         }
         .tint(.primary)
         .accessibilityLabel("New")

@@ -32,6 +32,7 @@ struct HealthMetricPicker: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .performanceDestination("health.picker")
             .navigationTitle("Health Metrics")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
