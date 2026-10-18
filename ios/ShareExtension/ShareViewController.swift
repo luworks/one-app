@@ -15,11 +15,12 @@ final class ShareViewController: UIViewController {
             let sheet = ShareSheet(title: draft.title, note: draft.note,
                                    onCancel: { [weak self] in self?.finish(added: false) },
                                    onAdd: { [weak self] reminder in
-                                       ShareInbox.append(reminder)
-                                       // Never the SQLite file: a small JSONL file in the App Group outbox (imported by the app).
-                                       ActivityOutbox.append(kind: "sys.share.add", actor: "share", channel: "share",
-                                                             props: ["has_note": !reminder.note.isEmpty, "has_due": reminder.due != nil])
-                                       self?.finish(added: true)
+                                       ShareInbox.submit(reminder) {
+                                           // Never the SQLite file: a small JSONL file in the App Group outbox (imported by the app).
+                                           ActivityOutbox.append(kind: "sys.share.add", actor: "share", channel: "share",
+                                                                 props: ["has_note": !reminder.note.isEmpty, "has_due": reminder.due != nil])
+                                           self?.finish(added: true)
+                                       }
                                    })
             let host = UIHostingController(rootView: sheet)
             addChild(host)
@@ -68,8 +69,9 @@ struct ShareSheet: View {
     @State var title: String
     @State var note: String
     var onCancel: () -> Void
-    var onAdd: (SharedReminder) -> Void
+    var onAdd: (SharedReminder) -> Bool
     @State private var day: ShareInbox.Day = .none
+    @State private var saveFailed = false
 
     var body: some View {
         NavigationStack {
@@ -88,6 +90,13 @@ struct ShareSheet: View {
                 } footer: {
                     Text("Adds a reminder to Today. It appears the next time you open the app.")
                 }
+                if saveFailed {
+                    Section {
+                        Text("Couldn't save the reminder. Your text is still here. Try Add again, or cancel.")
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("share.saveError")
+                    }
+                }
             }
             .navigationTitle("New Reminder")
             .navigationBarTitleDisplayMode(.inline)
@@ -95,9 +104,9 @@ struct ShareSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onCancel) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
-                        onAdd(SharedReminder(title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                                             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-                                             due: ShareInbox.due(for: day)))
+                        saveFailed = !onAdd(SharedReminder(title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                         note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                         due: ShareInbox.due(for: day)))
                     }
                     .fontWeight(.semibold)
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

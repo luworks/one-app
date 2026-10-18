@@ -144,6 +144,45 @@ final class TimerListTests: XCTestCase {
 
     // MARK: Storage
 
+    func testFocusLifecycleSurvivesRelaunchAndCountsRingingThenStoppedOnce() throws {
+        let suite = "TimerLifecycle-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let focus = timer(1500, label: "Focus", source: .card)
+        let tea = timer(300, label: "Tea")
+        TimerStore.save(TimerList.adding(focus, to: [tea]), defaults)
+
+        let pausedAt = t0.addingTimeInterval(120)
+        let paused = TimerList.reconcile(local: TimerStore.load(defaults),
+                                         live: [focus.id: .paused, tea.id: .running], now: pausedAt)
+        TimerStore.save(paused.timers, defaults)
+        let reloaded = try XCTUnwrap(TimerStore.load(defaults).first { $0.id == focus.id })
+        XCTAssertEqual(reloaded.remaining(now: t0.addingTimeInterval(2000)), 1380, "relaunch must not run down paused time")
+        XCTAssertTrue(paused.finished.isEmpty)
+
+        let resumedAt = t0.addingTimeInterval(2000)
+        let resumed = TimerList.reconcile(local: TimerStore.load(defaults), live: [focus.id: .running], now: resumedAt)
+        XCTAssertEqual(resumed.timers.map(\.id), [focus.id], "the unrelated expired timer leaves the list")
+        XCTAssertEqual(resumed.finished.map(\.id), [tea.id])
+        TimerStore.save(resumed.timers, defaults)
+        let end = resumedAt.addingTimeInterval(1380)
+        XCTAssertEqual(TimerStore.load(defaults).first?.endsAt, end)
+
+        var log = PomodoroLog.empty(end)
+        for live: [UUID: LiveTimerState] in [[focus.id: .ringing], [focus.id: .ringing], [:]] {
+            let result = TimerList.reconcile(local: TimerStore.load(defaults), live: live, now: end)
+            for completed in result.finished where completed.isCard {
+                log = log.completing(completed.pomodoroPhase, id: completed.id, now: end)
+            }
+            PomodoroLog.save(log, defaults)
+            log = PomodoroLog.load(defaults, now: end)
+            TimerStore.save(result.timers, defaults)
+            XCTAssertEqual(log.rounds, 1, "repeated ring updates and a later Stop must count one Focus round")
+        }
+        XCTAssertTrue(TimerStore.load(defaults).isEmpty)
+        XCTAssertEqual(log.nextStep, .shortBreak)
+    }
+
     func testStoreRoundTripAndMigration() {
         let defaults = UserDefaults(suiteName: "TimerListTests")!
         defaults.removePersistentDomain(forName: "TimerListTests")
