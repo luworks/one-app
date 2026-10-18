@@ -633,7 +633,7 @@ private struct ReminderNativePopAccess: UIViewControllerRepresentable {
             if let navigation = owningNavigation {
                 let point = touch.location(in: navigation.view)
                 trace(["event": "receiveTouch", "original": String(result),
-                       "pointInNavigation": NSStringFromCGPoint(point),
+                       "pointInNavigation": NSCoder.string(for: point),
                        "insideNavigation": String(navigation.view.bounds.contains(point))])
             }
             return result
@@ -756,8 +756,8 @@ private struct ReminderNativePopProbe: UIViewControllerRepresentable {
                 "visible": identity(navigation?.visibleViewController),
                 "barHidden": navigation.map { String($0.isNavigationBarHidden) } ?? "nil",
                 "probeInWindow": String(viewIfLoaded?.window != nil),
-                "navigationFrameInWindow": navigation.map { NSStringFromCGRect($0.view.convert($0.view.bounds, to: nil)) } ?? "nil",
-                "gestureFrameInWindow": gesture?.view.map { NSStringFromCGRect($0.convert($0.bounds, to: nil)) } ?? "nil"
+                "navigationFrameInWindow": navigation.map { NSCoder.string(for: $0.view.convert($0.view.bounds, to: nil)) } ?? "nil",
+                "gestureFrameInWindow": gesture?.view.map { NSCoder.string(for: $0.convert($0.bounds, to: nil)) } ?? "nil"
             ]
             guard let data = try? JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys]),
                   let sample = String(data: data, encoding: .utf8) else { return }
