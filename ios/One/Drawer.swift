@@ -88,8 +88,9 @@ struct DrawerDrag: ViewModifier {
     func body(content: Content) -> some View {
         Group {
             switch kind {
-            case .edgeStrip: content.highPriorityGesture(gesture)
-            case .edgeOnly, .close: content.simultaneousGesture(gesture)
+            // Disable recognition itself when the native navigation stack owns the edge.
+            case .edgeStrip: content.highPriorityGesture(gesture, isEnabled: enabled)
+            case .edgeOnly, .close: content.simultaneousGesture(gesture, isEnabled: enabled)
             }
         }
         // `onEnded` is skipped when the system cancels a drag. One turn after the gesture state resets,
