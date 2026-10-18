@@ -1,0 +1,238 @@
+{
+  "version": 2,
+  "production_baseline": "b1fc12b62e796ac6c232da5e524235a59edba945",
+  "historical_results_not_current": true,
+  "scope_inventory": "docs/performance/page-coverage-v2.md",
+  "goals": {
+    "latency_required": "baseline/3",
+    "latency_stretch": "baseline/10",
+    "bytes_memory_required": "baseline*0.49",
+    "targets_are_results": false
+  },
+  "context_required": [
+    "source_manifest",
+    "instrumentation_hash",
+    "configuration",
+    "optimization",
+    "simulator_id",
+    "runtime",
+    "fixture_hash",
+    "clock_timezone_locale",
+    "backend",
+    "cache_sequence",
+    "host_load",
+    "method",
+    "n",
+    "functional_outcome"
+  ],
+  "initial_instrumented_metrics": [
+    {
+      "id": "page.health",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.health.detail",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.health.picker",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.settings",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.settings.activityData",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.activity",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.clock.worldClock",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.clock.cityPicker",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.clock.stopwatch",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.clock.timer",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.clock.alarms",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.search",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.search.results",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.reminder.quick",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.reminders.list",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "page.reminder.editor",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "action_to_geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed"
+    },
+    {
+      "id": "ai_send_to_feedback_layout",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ]
+    },
+    {
+      "id": "ai_send_to_first_response_ready",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "ready_state",
+      "baseline": null,
+      "state": "not_executed",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ]
+    },
+    {
+      "id": "ai_send_to_full_response_ready",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "ready_state",
+      "baseline": null,
+      "state": "not_executed",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ]
+    },
+    {
+      "id": "ai_ready_to_response_layout",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ]
+    },
+    {
+      "id": "ai_turn_to_response_layout",
+      "kind": "latency",
+      "unit": "ms",
+      "endpoint": "geometry_two_displaylinks",
+      "baseline": null,
+      "state": "not_executed",
+      "separate_by": [
+        "journey",
+        "turn_context",
+        "backend"
+      ]
+    }
+  ],
+  "pending_measurement_classes": [
+    "per-page actual presented/usable endpoint",
+    "per-page steady/peak/retained memory",
+    "hitch/frame budget",
+    "local planner and Activity save success/latency",
+    "internal AI context/rules/kind/title stages",
+    "AI Add/Apply acknowledgement and save/relaunch intervals"
+  ],
+  "unsupported_in_simulator_claims": [
+    "physical Apple Intelligence inference latency",
+    "real HealthKit query latency from sample Health data",
+    "physical AlarmKit delivery and real battery energy",
+    "actual App Store thinned download/install size"
+  ],
+  "coverage_rule": "Initial instrumented metrics are a subset; inventory rows without valid baseline remain pending. Do not mark every page measured from a successful batch."
+}
