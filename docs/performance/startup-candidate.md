@@ -378,3 +378,148 @@ Read-only console export from the completed baseline xcresult returned exit 1:
 `Error: No console log available`. The command status and raw installed-help
 outputs are retained under canonical `startup-profile-plan-20261018/`; this is
 an evidence-availability failure, not a finding of zero reconciliation passes.
+
+## Round 1 raw trace: read-only coverage audit
+
+Source artifacts (unchanged) are under canonical
+`tests/results/runs/performance-climb-20261018/startup-profile-round1/`.
+`status.json` says passed for capture and TOC export; this is **not diagnostic
+proof** of complete app initialization or a usable-content boundary. The parent
+verified the installed One executable identity against its product. The trace
+records iOS Simulator / Today-Performance, the expected fixture/pinned-clock/
+performanceTrace arguments, Today PID 6261, and a nominal 10 s recording.
+
+Read-only XML source identity:
+
+- `time-sample.xml`: 2,228,193 bytes, SHA-256
+  `622bf2017730ca8ea18a47dad9d7f5d19ad77d84557a952c42e1b9dadf5dcb69`.
+- `toc.xml`: 7,770 bytes, SHA-256
+  `4f2ccafa712a04e82b3bf4d69cd0cacf547379738110a589f0b46862e0a03067`.
+- `app-stdout.log`: zero bytes. No stage endpoint can be recovered from it.
+- Recorder warning: `This configuration of instruments creates 1 table without
+  a known input source.` The warning does not identify that table; neither
+  successful export nor this warning establishes which diagnostic data is absent.
+
+The actual `time-sample` schema has seven columns, in order: `time`, `thread`,
+`core-index`, `thread-state`, `cp-kernel-callstack`, `cp-user-callstack`,
+`sample-type`. The parser indexed every XML element carrying `id`, recursively
+resolved `ref`, and read nested thread → process → pid and thread → tid values.
+There are 8,365 ids and 22,551 references, with zero unresolved references.
+Sentinel fields remain missing data, not numeric zero or named symbols.
+
+All 3,184 rows belong to PID 6261, across 11 distinct thread IDs. The first
+sample is at trace-relative 0.534067041 s and the last at 10.600763500 s. The
+TOC reports duration 10.685856 s; the last sample is about 85.093 ms before its
+end. Main thread TID 13129958 (`0xc858e6`) has 2,354 rows: 2,352 Running and 2
+Blocked. Those two Blocked rows resolve to the **same** initial timestamp and
+stackshot; they are not evidence of two distinct waits. The remaining ten
+threads have 830 Running rows. Overall sample kinds are 3,182 Timer Fired and
+2 Stackshot. Do not treat these row counts as call counts, CPU percentages or
+measured durations, and do not sum stackshot and timer samples as equal weights.
+
+Raw rows by integer trace second, retaining duplicates: second 0 has 280 Running
+plus 2 Blocked; seconds 1/2/3/4/5/6/7 have 801/480/14/168/329/789/318 Running
+rows respectively. Seconds 8 and 9 have no rows. The final three Running samples
+are on the main thread at 10.598766291, 10.599764625 and 10.600763500 s. This
+shows the target was sampled near recording end; a sparse interval alone is
+not proof of app death. The TOC end reason is `Time limit reached`; its launched
+process reports `return-exit-status=0`, `termination-reason=exit(0)` without an
+exit timestamp. It cannot establish an early app exit or natural lifetime.
+
+The exported `kperf-bt` records contain raw PCs, numeric address sequences and
+register values, not resolved function/image names. No address is assigned to
+SwiftUI, dyld, One, Ringer or any other image in this audit. There is **no standalone
+binary-image/load-address table in the actual TOC**. The raw table does not
+certify `OneApp.init`, bootstrap completion, first usable content or the layout
+proxy endpoint; empty stdout could have several causes and is not proof the
+flag was ignored or initialization failed. No app-stage durations, cancelled
+reconciliation counts, named hotspots or startup optimization are justified yet.
+The dense-Year component result and UI-level result remain separate evidence;
+neither supplies the missing startup attribution.
+
+### Next parent-only bounded union export (prepared, not executed)
+
+The actual TOC lists `time-profile`, `process-info`, `thread-info`,
+`life-cycle-period`, and an unfiltered SINGLE-target `os-signpost` table plus
+its unfiltered `os-signpost-arg` table. Other signpost tables filter categories
+such as PointsOfInterest; this app uses category PerformanceTrace. The query
+below therefore includes only the signpost tables without category/subsystem
+filters, along with the four relevant tables. `time-profile` may contain modeled
+frames/image metadata; inspect its actual schema/rows before claiming symbols
+or image mappings. Empty tables remain explicit evidence gaps.
+
+Run only after the parent's global handoff. This command **only exports** the
+existing immutable trace and writes to a new sibling results directory, outside
+`startup-profile-round1`. It does not record, boot, build, install or modify
+source/probe settings. Each attempt gets a new directory; never overwrite a
+partial export or place new artifacts inside the raw profile directory.
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+import json, os, signal, subprocess, time, uuid
+root = Path('/Users/yuanlu/code/one-app/tests/results/runs/performance-climb-20261018')
+trace = root / 'startup-profile-round1/startup.trace'
+out = root / ('startup-profile-round1-export-' + uuid.uuid4().hex)
+out.mkdir(exist_ok=False)
+xpath = ("/trace-toc/run[@number='1']/data/table["
+         "@schema='time-profile' or @schema='process-info' or "
+         "@schema='thread-info' or @schema='life-cycle-period' or "
+         "((@schema='os-signpost' or @schema='os-signpost-arg') "
+         "and not(@category) and not(@subsystem))]")
+command = ['xcrun', 'xctrace', 'export', '--input', str(trace),
+           '--xpath', xpath, '--output', str(out / 'startup-union.xml')]
+(out / 'command.json').write_text(json.dumps(command, indent=2) + '\n')
+status = {'status': 'running', 'export_timeout_seconds': 15,
+          'classification': 'read-only diagnostic export; not a timing sample',
+          'source_trace': str(trace)}
+started = time.monotonic()
+with (out / 'export.stdout.log').open('x') as stdout, \
+        (out / 'export.stderr.log').open('x') as stderr:
+    p = subprocess.Popen(command, stdout=stdout, stderr=stderr, start_new_session=True)
+    try:
+        status['exit_code'] = p.wait(timeout=15)
+        status['status'] = 'passed' if p.returncode == 0 else 'failed'
+    except (subprocess.TimeoutExpired, KeyboardInterrupt):
+        status['status'] = 'interrupted-or-timeout'
+        for sig, grace in [(signal.SIGTERM, 3), (signal.SIGKILL, 2)]:
+            if p.poll() is not None:
+                break
+            try:
+                os.killpg(p.pid, sig)
+            except ProcessLookupError:
+                break
+            try:
+                p.wait(timeout=grace)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+        status['exit_code'] = p.poll()
+        if p.poll() is None:
+            status['unreaped_pid'] = p.pid
+status['elapsed_seconds'] = time.monotonic() - started
+(out / 'status.json').write_text(json.dumps(status, indent=2) + '\n')
+print(json.dumps({'output': str(out), **status}))
+raise SystemExit(0 if status['status'] == 'passed' else 1)
+PY
+```
+
+This bounds exporter wait plus termination grace to 20 s; a partial XML on
+failure is retained and not parsed as complete. No retry or fallback schema
+export runs automatically. Parent records the command/host window through the
+QA journal and indexes the new export directory only after writers exit, while
+preserving the original trace. A zero exit establishes export success only;
+the reducer must next validate table identity, PID/thread attribution, id/ref
+scope and interval coverage against actual rows.
+
+If the union includes usable frame/binary-image records, require image UUID,
+architecture, runtime load address/slide and correct image path before an
+`atos` lookup. One launcher UUID alone does not identify a separate
+`One.debug.dylib`, if present. Never assume the raw `0x102...` addresses belong
+to the main image or reuse a slide from another process. If image metadata or
+symbol names are absent, the next possible command is a separately bounded
+`xctrace symbolicate --input <original.trace> --output <NEW-symbolicated.trace>
+--dsym <matching-symbol-directory>` using verified matching UUIDs; no in-place
+symbolication, guessed load bias or new recording is part of this export plan.
+Until those requirements are met, keep address-only results as address-only
+results and do not select a production startup candidate.
