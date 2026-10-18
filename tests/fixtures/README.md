@@ -55,3 +55,19 @@ values were added to replace these defaults.
 The UI-test input inventory found only the two temporary JSON generators replaced
 above. Screenshot writes are run outputs, not dataset inputs. QA/development action
 recording and its SQLite storage are a separate concern from these fixtures.
+
+## Pre-receipt SwiftData migration fixture
+
+`migrations/today-55e73d5.store` is a standalone SQLite backup of a fresh synthetic
+file store created by baseline `55e73d5`. Its adjacent JSON records the seed, hash
+and expected contents. It contains one `Upgrade baseline 20261018` reminder,
+Habit/LedgerEntry tables and no ShareImportReceipt table. It contains no user data.
+
+To repeat the migration check, copy this fixture to a **new, named test store** in
+the simulator app's temporary directory while the app is closed; never overwrite
+a default/user store. Launch the current app with `-uiTesting -uiTestingStore <name>`.
+Verify the original reminder remains and the additive receipt table is available.
+For a committed-state accessibility probe also pass `-uiTestingShareInbox`,
+`-uiTestingShareID <fresh UUID>` and `-uiTestingShareProbeTitle 'Upgrade baseline 20261018'`;
+expect `acknowledged;tasks=1;receipts=0;pending=0`. Do not reseed the reminder.
+The fixture is intentionally frozen; future schema changes should keep opening it.
