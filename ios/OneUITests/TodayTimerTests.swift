@@ -73,14 +73,9 @@ final class TodayTimerTests: XCTestCase {
         section.tap()
         // Nothing is on the wheel yet: play the Focus preset at the top of Recents.
         let play = app.buttons["timer.recent.start"].firstMatch
-        let edge = { (up: Bool) in
-            let a = self.app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: up ? 0.75 : 0.3))
-            a.press(forDuration: 0.05, thenDragTo: self.app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: up ? 0.3 : 0.75)))
-        }
-        for _ in 0..<6 where !play.isHittable { edge(true) }
-        XCTAssertTrue(play.isHittable)
+        app.revealTimerControl(play)
         play.tap()
-        for _ in 0..<4 { edge(false) }
+        app.scrollTimerToTop()
         XCTAssertTrue(app.descendants(matching: .any)["timer.remaining"].firstMatch.waitForExistence(timeout: 5), "the card counts down")
 
         app.buttons["Today"].firstMatch.tap()
