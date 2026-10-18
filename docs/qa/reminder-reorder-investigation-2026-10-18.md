@@ -87,3 +87,13 @@ Raw root `/Users/yuanlu/code/one-app/tests/results/runs/issue62-v5-related/` inc
 ### Focused review
 
 One completed independent read-only review (`issue62-v5-focused-preview-review`) found no concrete blocking issues. It verified matching preview/row drag payloads, preserved menu actions and persistence paths, absence of duplicate row identifiers in the preview, and unchanged original gesture/order assertions. It did not independently run UI or inspect runtime artifacts; it explicitly kept the canceled related batch pending. No additional review round is planned.
+
+### Final related acceptance and release
+
+After the environment owner returned capacity, the exact canceled three-method batch ran at clean `49a47fbc65b905039c2f5023c655745884cc00a4`, whose production/test sources are identical to strict-passed `52102fb`. Rename passed **152.826 s** (including two existing XCTest menu-animation idle waits); swipe Pin passed **18.125 s**. TabMemory failed its native edge-back assertion in **36.183 s** after its ordinary back-button and sidebar checks passed. The failure hierarchy shows a partially exposed sidebar; the changed context-menu preview was never invoked in that journey. The complete failure remains retained; no navigation source or assertion was changed.
+
+Following the repository's isolated-repro rule, only that same unchanged TabMemory method was run once alone. It passed **43.074 s**, including native edge back, sidebar, list position and tab memory. This is an intermittent navigation result, not an assertion of universal reliability. No repeated passing check, broad suite, different device or source workaround followed.
+
+Raw roots: `/Users/yuanlu/code/one-app/tests/results/runs/issue62-v5-related-recovery/` and `issue62-v5-navigation-isolated/`. Complete closed bundles/logs and summaries are archived coherently by the runner in the primary QA SQLite journal. Exported first-failure video, hierarchy and events are retained alongside the original failed run. Recovery runner exit 65 (two pass, one fail); isolated runner exit 0; both shutdown 0 and `journal_errors: []`. Finite driver logs are retained in the same primary results parent.
+
+Final device_close/shutdown and fresh exact process, simctl and device-panel readback show no heavy producer, no booted device and no open panel; the original SE3/cache were returned directly to the performance owner. The separate quarantined Today-Performance device and its derived-data directory were not accessed. No physical device, signing, full UI suite or independent normal-user gesture claim is made. Logic tests were not run because this change only adds a SwiftUI menu-preview drag source.
