@@ -23,6 +23,7 @@ final class AIResponseTrace {
     @ObservationIgnored private var stageTimes: [String: UInt64] = [:]
     @ObservationIgnored private var stageToken: UUID?
     @ObservationIgnored private var conversationStageToken: UUID?
+    @ObservationIgnored private var completedStageLine: String?
     private(set) var history: [String] = []
 
     func begin(_ token: UUID, modelAvailable: Bool) {
@@ -48,13 +49,15 @@ final class AIResponseTrace {
         stageTimes[name + "_last"] = now
     }
 
-    private func emitConversationStages(_ current: Turn) {
-        guard conversationStageToken == current.token, current.pending.isEmpty else { return }
+    private func freezeConversationStages(_ current: Turn) -> String? {
+        guard conversationStageToken == current.token, current.pending.isEmpty else { return nil }
         let fields = stageTimes.keys.sorted().map { "\($0)_ns=\(stageTimes[$0]!)" }.joined(separator: ";")
-        print("PERF_STAGE_AI v=1;turn=\(current.token.uuidString);backend=\(current.backend);\(fields)")
+        // Retain one complete line only after both layout timestamps are frozen.
+        completedStageLine = "PERF_STAGE_AI v=1;turn=\(current.token.uuidString);backend=\(current.backend);\(fields)"
         stageTimes.removeAll(keepingCapacity: true)
         stageToken = nil
         conversationStageToken = nil
+        return completedStageLine
     }
 
     func backend(_ backend: String, token: UUID) {
@@ -85,15 +88,16 @@ final class AIResponseTrace {
         current.pending.remove(phase)
         turn = current
         stage(phase.rawValue + "_layout", token: token, at: end)
+        let diagnostic = freezeConversationStages(current)
         switch phase {
         case .feedback:
-            emit("ai_send_to_feedback_layout", start: current.start, end: end, turn: current)
+            emit("ai_send_to_feedback_layout", start: current.start, end: end, turn: current, diagnostic: diagnostic)
         case .response:
             guard let ready = current.ready else { return }
             emit("ai_ready_to_response_layout", start: ready, end: end, turn: current)
-            emit("ai_turn_to_response_layout", start: current.start, end: end, turn: current)
+            emit("ai_turn_to_response_layout", start: current.start, end: end, turn: current, diagnostic: diagnostic)
         }
-        emitConversationStages(current)
+        if let diagnostic { print(diagnostic) }
     }
 
     func cancel(_ token: UUID? = nil) {
@@ -105,15 +109,21 @@ final class AIResponseTrace {
         stageTimes.removeAll(keepingCapacity: true)
         stageToken = nil
         conversationStageToken = nil
+        completedStageLine = nil
     }
 
-    private func emit(_ name: String, start: UInt64, end: UInt64, turn: Turn) {
+    private func emit(_ name: String, start: UInt64, end: UInt64, turn: Turn, diagnostic: String? = nil) {
         sequence += 1
         let endpoint = name.hasSuffix("_ready") ? "response_state_observation" : "layout_displaylink_proxy"
         let sample = "v=1;name=\(name);seq=\(sequence);turn=\(turn.token.uuidString);start_ns=\(start);end_ns=\(end);ms=\(Double(end - start) / 1_000_000);backend=\(turn.backend);model_available=\(turn.modelAvailable ? 1 : 0);streaming=0;first_full_same_emission=1;endpoint=\(endpoint)"
         print("PERF_SAMPLE_APP \(sample)")
         // Bounded raw history lets XCTest collect every stage instead of racing a single latest value.
-        history.append(sample)
+        // Reuse the final endpoint's publication; diagnostics never add a measured-interval update.
+        if Self.showsHistory, let diagnostic {
+            history.append(contentsOf: [sample, diagnostic])
+        } else {
+            history.append(sample)
+        }
         if history.count > 128 { history.removeFirst(history.count - 128) }
     }
 }

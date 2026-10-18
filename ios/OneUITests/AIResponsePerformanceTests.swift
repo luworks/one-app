@@ -73,18 +73,24 @@ final class AIResponsePerformanceTests: XCTestCase {
 
     /// Wait for all reports from the one new turn, including feedback that may arrive after ready.
     @discardableResult
-    private func sendAndSample(_ text: String, context: String, backend: String) -> [String] {
+    private func sendAndSample(_ text: String, context: String, backend: String, diagnoseConversation: Bool = false) -> [String] {
         let previous = Set(rows(history).compactMap { fields($0)["turn"] })
         let field = app.textFields["Ask AI or add anything"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText(text + "\n")
         var samples: [String] = []
+        var diagnostics: [String] = []
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate { [self] _, _ in
-            let fresh = rows(history).filter { !previous.contains(fields($0)["turn"] ?? "") }
+            let snapshot = history
+            let fresh = rows(snapshot).filter { !previous.contains(fields($0)["turn"] ?? "") }
             guard let token = fresh.last.flatMap({ fields($0)["turn"] }) else { return false }
             samples = fresh.filter { fields($0)["turn"] == token }
+            diagnostics = snapshot.components(separatedBy: "\n").filter {
+                $0.hasPrefix("PERF_STAGE_AI v=1;") && fields($0)["turn"] == token
+            }
             return Set(samples.compactMap { fields($0)["name"] }) == stages
+                && (!diagnoseConversation || diagnostics.count == 1)
         }, object: nil)
         XCTAssertEqual(XCTWaiter().wait(for: [ready], timeout: 15), .completed, "Missing app-side turn endpoint: \(context)")
         XCTAssertEqual(samples.count, stages.count, "Exactly one raw sample per keyed stage")
@@ -112,7 +118,27 @@ final class AIResponsePerformanceTests: XCTestCase {
         XCTAssertEqual(ends["ai_send_to_first_response_ready"], ends["ai_send_to_full_response_ready"], "No streaming: one emitted result")
         XCTAssertEqual(starts["ai_ready_to_response_layout"], ends["ai_send_to_full_response_ready"])
         XCTAssertEqual(ends["ai_ready_to_response_layout"], ends["ai_turn_to_response_layout"])
-        let attachment = XCTAttachment(string: "context=\(context)\n" + samples.joined(separator: "\n"))
+        if diagnoseConversation {
+            XCTAssertEqual(diagnostics.count, 1, "One complete conversation diagnostic after both layout endpoints")
+            if let diagnostic = diagnostics.first {
+                let values = fields(diagnostic)
+                XCTAssertEqual(values["turn"], samples.first.flatMap { fields($0)["turn"] })
+                XCTAssertEqual(values["backend"], backend)
+                XCTAssertFalse(diagnostic.contains(text), "Stage metadata must not contain the input")
+                for key in ["context_complete", "respond_enter", "record_turn_before", "record_turn_after",
+                            "task_enter", "chat_response_await_before", "chat_response_await_after",
+                            "finish_emission_enter", "finish_emission_assigned", "on_change_enter"] {
+                    XCTAssertNotNil(UInt64(values[key + "_ns"] ?? ""), "Missing conversation stage: \(key)")
+                }
+                XCTAssertEqual(UInt64(values["send_ns"] ?? ""), starts["ai_send_to_feedback_layout"])
+                XCTAssertEqual(UInt64(values["ready_ns"] ?? ""), ends["ai_send_to_full_response_ready"])
+                XCTAssertEqual(UInt64(values["feedback_layout_ns"] ?? ""), ends["ai_send_to_feedback_layout"])
+                XCTAssertEqual(UInt64(values["response_layout_ns"] ?? ""), ends["ai_turn_to_response_layout"])
+                // Export from XCTest so the complete app-side line survives in the runner log.
+                print(diagnostic)
+            }
+        }
+        let attachment = XCTAttachment(string: "context=\(context)\n" + (samples + diagnostics).joined(separator: "\n"))
         attachment.name = "AI raw app endpoints - " + context
         attachment.lifetime = .keepAlways
         add(attachment)
@@ -129,7 +155,7 @@ final class AIResponsePerformanceTests: XCTestCase {
     func testConversationFreshLaunchN3() {
         for repetition in 1...3 {
             freshAsk(journey: "conversation", repetition: repetition)
-            sendAndSample("Hello", context: "conversation.fresh.\(repetition).turn1", backend: "fallback_model_unavailable")
+            sendAndSample("Hello", context: "conversation.fresh.\(repetition).turn1", backend: "fallback_model_unavailable", diagnoseConversation: true)
             XCTAssertTrue(text("What's on your mind?").exists)
             XCTAssertFalse(app.buttons["Add"].exists)
             XCTAssertFalse(app.buttons["capture-add-all"].exists)
