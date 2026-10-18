@@ -369,40 +369,4 @@ final class SettingsChoicesTests: XCTestCase {
         XCTAssertTrue(duration.label.contains("15") || (duration.value as? String)?.contains("15") == true,
                       "snooze duration starts at 15 min: \(duration.label) / \(String(describing: duration.value))")
     }
-    // MARK: Screenshots (for design review)
-
-    /// `TEST_RUNNER_SETTINGS_SHOTS=<folder>`: Calendar Month / Week / Year and the new Settings sections, light and dark.
-    func testScreenshotsInBothModes() throws {
-        guard let dir = ProcessInfo.processInfo.environment["SETTINGS_SHOTS"] else { throw XCTSkip("set TEST_RUNNER_SETTINGS_SHOTS") }
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        func shot(_ name: String) {
-            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir + "/" + name + ".png"))
-        }
-        for mode in ["light", "dark"] {
-            continueAfterFailure = false
-            app = XCUIApplication()
-            app.launchArguments = TestData.launchArguments + ["-appearance", mode, "-uiTestingPrefs", "weekNumbers=1"]
-            app.launch()
-            app.buttons["Calendar"].firstMatch.tap()
-            XCTAssertTrue(app.buttons["calendar.mode.month"].waitForExistence(timeout: 5))
-            sleep(1)
-            shot("\(mode)-week")
-            app.buttons["calendar.mode.month"].tap()
-            sleep(1)
-            shot("\(mode)-month")
-            app.buttons["calendar.mode.year"].tap()
-            sleep(1)
-            shot("\(mode)-year")
-            openSettings()
-            // Top of Settings first, then one screen at a time.
-            sleep(1)
-            for page in 0..<9 {
-                shot("\(mode)-settings-\(page)")
-                app.swipeUp()
-                usleep(600_000)
-            }
-            closeSettings()
-            app.terminate()
-        }
-    }
 }
