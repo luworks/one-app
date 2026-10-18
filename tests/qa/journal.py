@@ -122,11 +122,19 @@ class Journal:
             raise ValueError('Import session must be a safe directory name')
         if not source.is_dir():
             raise ValueError(f'Missing source directory: {source}')
-        if archive and (source == self.path.parent or source in self.path.parent.parents):
-            raise ValueError('Archive source must not contain the journal directory')
+        destination = (self.path.parent / 'archives' / session).resolve()
+        if archive and (destination == source or source in destination.parents):
+            raise ValueError('Archive destination must not be nested inside source')
+        # Fix the input set before any copying; never discover newly created archives.
+        files = sorted(path for path in source.rglob('*') if path.is_file() and not path.is_symlink())
+        self.record(session, 'qa.import.provenance',
+                    'Imported event ts/tz/day describe import time, not historical execution time. '
+                    'Original timing remains in verbatim raw logs; no historical clock accuracy is claimed.',
+                    uid=f'import-provenance:{session}:{source}',
+                    props={'timestamp_basis': 'import_time', 'raw_log_timing': 'unparsed'})
         self.record(session, 'qa.run', str(source), status='running', uid=f'import:{session}:{source}')
-        for path in sorted(source.rglob('*')):
-            if path.is_symlink() or not path.is_file() or any(p.endswith('.xcresult') for p in path.relative_to(source).parts):
+        for path in files:
+            if any(p.endswith('.xcresult') for p in path.relative_to(source).parts):
                 continue
             if path.suffix == '.log':
                 # Ignore an incomplete final line; no success inference from markers.
@@ -149,13 +157,15 @@ class Journal:
                 self.record(session, 'qa.command.imported', data.decode(), status='running',
                             uid=f'command:{session}:{hashlib.sha256(data).hexdigest()}')
         if archive:
-            # Every revision has its own content-addressed file; originals stay untouched.
-            destination = self.path.parent / 'runs' / session / 'archive'
-            for path in sorted(source.rglob('*')):
-                if path.is_symlink() or not path.is_file():
-                    continue
-                sha = digest(path)
-                target = destination / sha / path.relative_to(source)
+            # One manifest identifies the entire immutable tree, keeping bundles openable.
+            manifest = [{'path': path.relative_to(source).as_posix(),
+                         'sha256': digest(path), 'bytes': path.stat().st_size} for path in files]
+            manifest_bytes = json.dumps(manifest, sort_keys=True, separators=(',', ':')).encode()
+            revision = hashlib.sha256(manifest_bytes).hexdigest()
+            retained = destination / revision
+            for path, entry in zip(files, manifest):
+                sha = entry['sha256']
+                target = retained / entry['path']
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if target.exists():
                     if digest(target) != sha:
@@ -170,6 +180,8 @@ class Journal:
                     finally:
                         temporary.unlink(missing_ok=True)
                 self.artifact(session, target, path)
+            self.record(session, 'qa.archive', str(retained), uid=f'archive:{session}:{revision}',
+                        props={'manifest_sha256': revision, 'files': len(manifest)}, snapshot=manifest)
         self.record(session, 'qa.run.checkpoint' if status == 'running' else 'qa.run.result', str(source),
                     status=status, uid=f'result:{session}:{status}')
         return self.query(session)

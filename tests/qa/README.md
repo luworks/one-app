@@ -31,12 +31,21 @@ Completion status is always explicit; neither success markers nor a partial
 newline-terminated test/UI records and command metadata, and never reads/copies
 an active xcresult. Repeated identical lines at different byte offsets remain
 separate attempts; the same source/offset/bytes import is idempotent. Changed bytes
-produce another immutable record. Reusing a manual UID with different data fails.
+produce another immutable record.
+Imported events' `ts`, `tz` and `day` are the time of import, not historical
+execution timestamps. A session-scoped `qa.import.provenance` event explicitly tags
+`timestamp_basis=import_time` and `raw_log_timing=unparsed` (including previously
+checkpointed events). Original timing is retained in verbatim raw logs; no
+historical clock accuracy is claimed. This implementation does not parse log times. Reusing a manual UID with different data fails.
 
 Final `--archive` copies every regular file (including files inside xcresult,
 screenshots, raw logs and reports), checks SHA-256, indexes its path/hash/size,
-and keeps prior revisions under `tests/results/runs/<session>/archive/<hash>/...`.
-It never moves or deletes the live source. The caller must stop writers before
+and keeps prior revisions under `tests/results/archives/<session>/<manifest-hash>/<relative-path>`.
+Every revision retains one coherent source tree, so an xcresult bundle stays together.
+The manifest hashes relative paths, sizes and per-file SHA-256 values; the
+`qa.archive` snapshot stores this manifest and its content identifies the revision
+root. Files are enumerated before copying, archives live outside `runs/`, and
+nested destinations are rejected. It never moves or deletes the live source. The caller must stop writers before
 archiving. Symlinks are excluded. Large bytes stay outside SQLite; artifact metadata
 is in `snapshot` and the file path is in `content`. Existing retained files are
 hash-checked, never silently overwritten with changed bytes.
