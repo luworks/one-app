@@ -197,3 +197,27 @@ Evidence: `baseline-v2-round5-reference-f326dd61.log`, `round5-reference-{summar
 ## Delivery integration
 
 The baseline/tooling branch merges main `edb7d73` (adopted preview workflow). The sole source conflict was `OneApp.init`: keep the performance start as its first explicit statement and retain the DEBUG/axe-only early fixture return and blank preview scene. Preview-only guards/previews auto-merged with opt-in page probes. No endpoint was moved; no production local-response candidate is in PR76. Merge validation is manual conflict/diff inspection, reusing the13 targeted method results at their explicitly frozen revisions above; it is not a new runtime measurement of merged main. This keeps baseline delivery independent of PR80's pending speed acceptance.
+
+
+## Local conversation candidate: matched result
+
+Referenceed92fc7 versus candidate09f9860, both productionb1fc12b plus identical common measurement files (hash in `ai-local-{reference,candidate}-context.json`). Same Debug-O, fixed DD/device/runtime/fixture09:41, fresh process/empty history, unavailable-model Hello, n3, serial/no competing heavy. Candidate only returns the exact deterministic reply synchronously for `.conversation && !AICapture.isAvailable`; model-available, capture and unsure async bodies remain unchanged. Endpoints are unchanged.
+
+Four candidate methods passed: n3 conversation61.735s; trace-disabled chat/capture/card-preservation/Add/Undo28.293s; Activity conversation/no capture19.116s; user/reply after thread reopen21.562s. Reopen is within the fixture process and does not establish durable persistence.
+
+| Endpoint | Reference raw ms | Candidate raw ms | Reference median | Candidate median | Ratio |
+| --- | --- | --- | ---: | ---: | ---: |
+| ai_ready_to_response_layout | 125.491, 127.000, 154.741 | 204.692, 385.162, 261.668 | 127.000 | 261.668 | 0.485x |
+| ai_send_to_feedback_layout | 609.474, 662.173, 426.765 | 271.999, 459.615, 309.284 | 609.474 | 309.284 | 1.971x |
+| ai_send_to_first_response_ready | 500.658, 552.623, 272.098 | 67.377, 74.512, 47.664 | 500.658 | 67.377 | 7.431x |
+| ai_send_to_full_response_ready | 500.658, 552.623, 272.098 | 67.377, 74.512, 47.664 | 500.658 | 67.377 | 7.431x |
+| ai_turn_to_response_layout | 626.149, 679.623, 426.839 | 272.069, 459.674, 309.332 | 626.149 | 309.332 | 2.024x |
+| page.ai | 1421.343, 4171.340, 1265.850 | 2302.464, 1750.478, 1294.439 | 1421.343 | 1750.478 | 0.812x |
+
+Decision: retain as a partial improvement, pending final integrated-source check. Full turn→layout improved2.024x (50.60% less elapsed), below required3x and stretch10x; its208.716ms target still needs100.616ms off current309.332ms. First/full response-ready improved7.431x, exceeding3x but not10x. This is deterministic fallback/state observation, **not model inference or all-AI speed**.
+
+The ready→layout subinterval increased127.000→261.668ms; removing the task/await shifted where waiting occurs, so do not claim all stage durations improved. Ask-open median is also higher (with broad overlapping ranges); there is no claimed opening or full user-journey speedup. Primary full-layout n3 ranges overlap slightly: reference426.839–679.623ms, candidate272.069–459.674ms. Confidence is limited/moderate for this simulator proxy and small sample; no p95, statistical significance or device generalization. No endpoint was moved and no required output work was removed.
+
+Candidate stage lines explicitly say local_sync, with real local-reply boundaries and no fabricated async timestamps. The model-available path and physical availability transitions remain unverified. Next attribution priority is Ask-open and actual reply-layout work; elapsed intervals alone do not prove animation/CPU cost. No plateau is claimed.
+
+Evidence: `candidate-local-response-cdf0c437.log`, `local-response-candidate-{summary,stages}.json`, `local-response-comparison.json`, paired context JSON, candidate manifest, full closed `candidate-local-response/ui.xcresult`. Exit0, owned device/panel shutdown and live heavy/booted empty13:22:15 PDT before Calendar v2 handoff.
