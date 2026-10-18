@@ -344,10 +344,26 @@ struct AskView: View {
         draft = ""
         captureTask?.cancel()
         thinking = false
-        let history = Dialogue.recap(messages.map { ($0.role == .user, $0.text) })
+        let turnContext = ConversationContext(messages.map { ($0.role == .user, $0.text) })
+        let history = turnContext.prompt
         messages.append(ChatMessage(role: .user, text: text))
         turnStart = .now
         let intent = ChatRouting.intent(text)
+        if let resolved = CaptureConversation.resolve(text, context: turnContext, pending: pending) {
+            recordTurn("answer", text)
+            if pending != nil { pending = resolved }
+            else { clearPreviews(); show([resolved]) }
+            if resolved.hour == nil && resolved.ringsAsAlarm {
+                followup = .alarmTime
+                messages.append(ChatMessage(role: .ai, text: text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                    ? "闹钟要设在几点？确认添加后才会生效。" : "What time should the alarm ring? Nothing is added until you confirm."))
+            } else {
+                followup = nil
+                messages.append(ChatMessage(role: .ai, text: text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                    ? "预览已更新，点 Add 后才会添加。" : "The preview is ready. Tap Add to create it."))
+            }
+            return
+        }
         // A question-shaped answer to our time prompt may edit a preview; other conversation cannot.
         let hasTimeContext: Bool
         switch followup {
@@ -414,7 +430,7 @@ struct AskView: View {
             switch result {
             case .capture:
                 clearPreviews()
-                propose(text)
+                propose(text, history: history)
             case .reply(let reply):
                 messages.append(ChatMessage(role: .ai, text: reply))
             }
@@ -586,10 +602,10 @@ struct AskView: View {
     }
 
     /// On-device model when available, scripted parser otherwise. Only produces the preview card.
-    private func understand(_ text: String) {
+    private func understand(_ text: String, history: String = "") {
         thinking = true
         captureTask = Task { @MainActor in
-            let capture = await Understander.parse(text)
+            let capture = await Understander.parse(text, history: history)
             guard !Task.isCancelled else { return }
             thinking = false
             show([capture])
@@ -777,9 +793,9 @@ struct AskView: View {
         })
     }
 
-    /// One item per line: the rule parser reads the day / time / title and the on-device model only says task / event / alarm.
+    /// One item per line: rules own scheduling, followed by kind classification and title-only refinement.
     /// A line that lists several things goes to the multi-item model path when it is available.
-    private func propose(_ text: String) {
+    private func propose(_ text: String, history: String = "") {
         // UI tests only (`-uiTesting -uiTestingMultiCapture`): the simulator has no on-device model, so a line with ";"
         // is split by the rule parser into several proposals, to exercise the multi-item card.
         if ProcessInfo.processInfo.arguments.contains("-uiTestingMultiCapture"), text.contains(";") {
@@ -789,7 +805,7 @@ struct AskView: View {
         if AICapture.isAvailable, text.range(of: #"[；;\n]|然后|另外还|\band then\b"#, options: [.regularExpression, .caseInsensitive]) != nil {
             proposeList(text)
         } else {
-            understand(text)
+            understand(text, history: history)
         }
     }
 

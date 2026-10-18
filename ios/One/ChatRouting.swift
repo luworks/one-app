@@ -53,6 +53,11 @@ enum ChatRouting {
 
     static func intent(_ raw: String) -> Intent {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A complete leading clock phrase may introduce an explicit imperative.
+        let withoutClock = text.replacingOccurrences(of: #"^(?:at\s+)?[0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)\s*(?:today|tonight|tomorrow)?[, ]+"#,
+                                                     with: "", options: [.regularExpression, .caseInsensitive])
+        if withoutClock != text, has(requestBody(withoutClock), #"^(?:remind me|set (?:an? |that )?alarm)\b"#),
+           intent(withoutClock) == .capture { return .capture }
         // Talking ABOUT reminders, or explicitly declining one, is not asking for one.
         if has(text, #"don['’]t (?:add|create|set|remind|wake)|do not (?:add|create|set|remind|wake)|不要(?:创建|添加|提醒|设)|不用(?:创建|添加|提醒|设)|(?:不要|不用|别).*(?:叫醒|叫我起床)|只是聊|just (?:chatting|talking)|\bhow (?:do|can) (?:i|you)\b|怎么(?:创建|添加|设)|如何"#) { return .conversation }
         if has(text, #"^(?:i (?:already|just|have)|i've) (?:set|added|created|finished|completed)|我(?:已经|刚刚|刚才).*(?:了|过)|我记得|^i (?:remember|asked)\b|^(?:what (?:does|is)|can you explain)|是什么意思|怎么用"#) { return .conversation }
@@ -74,7 +79,7 @@ enum ChatRouting {
             if has(requestBody(text), #"^[\p{Han}0-9]"#) {
                 let when = chineseTimeToken
                 let direct = #"^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?"#
-                    + when + #"*(?:的时候)?(?:提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
+                    + when + #"*(?:的时候)?(?:吧)?[，,]?\s*(?:就)?(?:提醒我|提醒一下|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
                 // A narrative can end in an explicit timed reminder clause. Its earlier words
                 // need not be a command, but the reminder clause itself must start at a boundary.
                 let timedClause = #"(?:^|[，,。；;]|然后)\s*"# + when + #"+(?:的时候)?提醒我"#
