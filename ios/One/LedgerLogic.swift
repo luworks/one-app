@@ -74,7 +74,7 @@ enum ActivityFilter: String, CaseIterable, Identifiable {
 }
 
 /// The way a change came in.
-enum LedgerChannel: String {
+enum LedgerChannel: String, CaseIterable {
     case app = "Today app"
     case ask = "Ask AI"
     case automatic = "Automatic"
@@ -82,6 +82,24 @@ enum LedgerChannel: String {
     case share = "Share"
     case notification = "Notification"
     case sync = "Sync"
+
+    /// What the Activity store keeps in its `channel` column (lowercase, no spaces; the raw value above is for people).
+    var slug: String {
+        switch self {
+        case .app: "app"
+        case .ask: "ask"
+        case .automatic: "automatic"
+        case .intent: "intent"
+        case .share: "share"
+        case .notification: "notification"
+        case .sync: "sync"
+        }
+    }
+
+    init?(slug: String) {
+        guard let match = Self.allCases.first(where: { $0.slug == slug }) else { return nil }
+        self = match
+    }
 }
 
 /// What happened.

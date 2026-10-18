@@ -25,7 +25,7 @@ struct EntryActions: ViewModifier {
         switch entry.source {
         case .system(let id): CalendarSync.shared.isRepeating(externalID: id)
         case .local(let e): e.repeats != nil
-        case .task: false
+        case .task, .alarm: false
         }
     }
 
@@ -107,6 +107,8 @@ enum EntryDeletion {
             }
         case .task(let task):
             TaskActions.delete(task, context: context, toast: toast)
+        case .alarm(let alarm):
+            AlarmActions.delete(alarm, context: context, toast: toast)
         }
     }
 }

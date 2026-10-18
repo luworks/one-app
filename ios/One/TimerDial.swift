@@ -74,9 +74,16 @@ enum TimerDial {
     }
 }
 
-/// The one running countdown, as the app remembers it between launches. AlarmKit's `Alarm` has no fire date,
+/// Who started a timer. The Pomodoro card owns one timer at a time (`card`); timers made by voice, Siri or Shortcuts
+/// (`voice`) run alongside it, as many as the user likes.
+enum TimerSource: String, Codable, Equatable, Sendable {
+    case card, voice
+}
+
+/// A running countdown, as the app remembers it between launches. AlarmKit's `Alarm` has no fire date,
 /// so the end time (or what is left while paused) is kept here, keyed by the AlarmKit id.
-struct RunningTimer: Codable, Equatable {
+/// The list of them is `TimerList` / `TimerStore` (TimerList.swift).
+struct RunningTimer: Codable, Equatable, Identifiable {
     let id: UUID
     /// What the user set, in seconds.
     let total: Int
@@ -86,13 +93,21 @@ struct RunningTimer: Codable, Equatable {
     var pausedRemaining: TimeInterval?
     /// Focus or a break (nil in timers saved before Pomodoro: Focus).
     var phase: PomodoroPhase?
+    /// What the user called it ("Pasta"); nil for an unnamed one.
+    var label: String?
+    /// nil in timers saved before voice timers: the card's.
+    var source: TimerSource?
 
-    static func start(id: UUID, seconds: Int, now: Date, phase: PomodoroPhase = .focus) -> RunningTimer {
-        RunningTimer(id: id, total: seconds, endsAt: now.addingTimeInterval(TimeInterval(seconds)), pausedRemaining: nil, phase: phase)
+    static func start(id: UUID, seconds: Int, now: Date, phase: PomodoroPhase = .focus,
+                      label: String? = nil, source: TimerSource = .card) -> RunningTimer {
+        RunningTimer(id: id, total: seconds, endsAt: now.addingTimeInterval(TimeInterval(seconds)), pausedRemaining: nil,
+                     phase: source == .card ? phase : nil, label: label, source: source)
     }
 
     var isPaused: Bool { pausedRemaining != nil }
     var pomodoroPhase: PomodoroPhase { phase ?? .focus }
+    /// The Pomodoro card's timer (a Focus or break countdown), as opposed to one started by voice.
+    var isCard: Bool { source != .voice }
 
     /// True when the countdown reached its end (so it rang), as opposed to being cancelled early.
     /// Used when AlarmKit no longer has the timer: gone at or after its end means it ran out; gone early means cancelled.
@@ -109,15 +124,21 @@ struct RunningTimer: Codable, Equatable {
 
     func paused(now: Date) -> RunningTimer {
         guard !isPaused else { return self }
-        return RunningTimer(id: id, total: total, endsAt: nil, pausedRemaining: remaining(now: now), phase: phase)
+        var copy = self
+        copy.pausedRemaining = remaining(now: now)
+        copy.endsAt = nil
+        return copy
     }
 
     func resumed(now: Date) -> RunningTimer {
         guard let pausedRemaining else { return self }
-        return RunningTimer(id: id, total: total, endsAt: now.addingTimeInterval(pausedRemaining), pausedRemaining: nil, phase: phase)
+        var copy = self
+        copy.endsAt = now.addingTimeInterval(pausedRemaining)
+        copy.pausedRemaining = nil
+        return copy
     }
 
-    // MARK: Storage
+    // MARK: The single timer older versions kept (migrated by `TimerStore`)
 
     static let defaultsKey = "timer.running"
 

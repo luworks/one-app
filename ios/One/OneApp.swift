@@ -8,13 +8,14 @@ struct OneApp: App {
 
     init() {
         LaunchTimer.mark("app init")
+        Appearance.applyLaunchOverride()
         container = OneStore.start()
         LaunchTimer.mark("store ready")
     }
 
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            HomeView().appearanceRoot()
         }
         .modelContainer(container)
     }

@@ -54,7 +54,9 @@ struct NextUpProvider: TimelineProvider {
         let items = Self.currentItems(now: now)
         // One entry at each start and end, so the list advances by itself, through tomorrow in case iOS delays the reload.
         // Reload hourly (and at midnight) to re-read Apple Calendar.
-        let entries = NextItems.timelineDates(for: items, now: now, days: 2).map { NextUpEntry(date: $0, items: items) }
+        let entries = NextItems.timelineDates(for: items, now: now, days: 2, countdownLead: LockScreenNext.countdownWindow).map { NextUpEntry(date: $0, items: items) }
+        // The widget never opens the Activity database: it leaves one small file in the App Group outbox for the app to import.
+        ActivityOutbox.append(kind: "sys.widget.refresh", actor: "system", channel: "widget", props: ["count": items.count], at: now)
         completion(Timeline(entries: entries, policy: .after(NextItems.reloadDate(now: now))))
     }
 
@@ -151,39 +153,12 @@ extension WidgetItem.Kind {
     }
 }
 
-/// Under the clock: up to three lines "15:00 Dentist".
+/// Under the clock: the next item only, "15:00 · in 25 min" and its title on up to two lines (half-width safe).
 struct RectangularView: View {
     let entry: NextUpEntry
 
     var body: some View {
-        let next = entry.next
-        VStack(alignment: .leading, spacing: 0) {
-            if next.today.isEmpty {
-                Text("Nothing else today")
-                    .font(.headline)
-                    .widgetAccentable()
-                if let t = next.tomorrow {
-                    Text("Tomorrow")
-                        .foregroundStyle(.secondary)
-                    row(t)
-                }
-            } else {
-                ForEach(next.today) { row($0) }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func row(_ item: WidgetItem) -> some View {
-        HStack(spacing: 4) {
-            TimeText(item: item)
-                .fontWeight(.semibold)
-                .monospacedDigit()
-                .widgetAccentable()
-            Text(item.title)
-        }
-        .lineLimit(1)
+        LockScreenNextView(model: LockScreenNext.make(items: entry.items, now: entry.date, time: shortTime))
     }
 }
 

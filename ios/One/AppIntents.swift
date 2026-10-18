@@ -30,39 +30,10 @@ struct AddReminderIntent: AppIntent {
         let context = OneStore.start().mainContext
         // A task without an alarm request always becomes a `OneTask`; the save also queues the Apple Reminders sync.
         capture.insert(into: context, actor: .siri, channel: .intent)
+        ActivityCenter.record(ActivityEvents.intentRun(name: "add_reminder", outcome: "ok"))
         await Reminders.shared.resync()
         IntentSupport.refreshWidgets(context)
         return .result(dialog: "Added “\(capture.title)”. \(capture.summary).")
-    }
-}
-
-/// "Start a timer in Today": the one countdown on the Alarms tab (AlarmKit), same as its Start button.
-struct StartTimerIntent: AppIntent {
-    static let title: LocalizedStringResource = "Start Timer"
-    static let description = IntentDescription("Starts the countdown timer. It rings like an alarm, even on Silent.")
-    static let openAppWhenRun = false
-
-    @Parameter(title: "Minutes", inclusiveRange: (1, 90), requestValueDialog: "How many minutes?")
-    var minutes: Int
-
-    static var parameterSummary: some ParameterSummary {
-        Summary("Start a \(\.$minutes) minute timer")
-    }
-
-    @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard let seconds = IntentTimer.seconds(minutes: minutes) else {
-            throw IntentMessage("Timers can run from 1 to \(IntentTimer.maxMinutes) minutes.")
-        }
-        let controller = TimerController.shared
-        controller.refresh()
-        // There is one timer; replacing a running one is the user's call.
-        if controller.running != nil {
-            try await requestConfirmation(actionName: .start, dialog: "A timer is already running. Replace it?")
-        }
-        await controller.start(seconds: seconds)
-        if let message = controller.message { throw IntentMessage(message) }
-        return .result(dialog: "Timer started for \(IntentTimer.spoken(minutes: minutes)).")
     }
 }
 
@@ -77,6 +48,7 @@ struct WhatsNextIntent: AppIntent {
         let context = OneStore.start().mainContext
         let now = Date.now
         let next = NextItems.select(from: IntentSupport.widgetItems(context, now: now), now: now)
+        ActivityCenter.record(ActivityEvents.intentRun(name: "whats_next", outcome: "ok"))
         return .result(dialog: "\(NextUpSpeech.line(next, now: now))", view: NextUpSnippet(next: next, now: now))
     }
 }
@@ -100,9 +72,16 @@ struct TodayShortcuts: AppShortcutsProvider {
             "Remind me with \(.applicationName)",
             "New \(.applicationName) reminder",
         ], shortTitle: "Add Reminder", systemImageName: "checklist")
+        // "Start a timer in Today for 10 minutes": the length is one of a few presets, so Siri hears it in one breath.
+        AppShortcut(intent: StartTimerForIntent(), phrases: [
+            "Start a timer in \(.applicationName) for \(\.$length)",
+            "Set a \(.applicationName) timer for \(\.$length)",
+        ], shortTitle: "Timer for…", systemImageName: "timer")
+        // Any other length: Siri asks "How long?" and reads the answer ("an hour and a half", "十分钟").
         AppShortcut(intent: StartTimerIntent(), phrases: [
             "Start a timer in \(.applicationName)",
             "Start a \(.applicationName) timer",
+            "Set a \(.applicationName) timer",
         ], shortTitle: "Start Timer", systemImageName: "timer")
         AppShortcut(intent: WhatsNextIntent(), phrases: [
             "What’s next in \(.applicationName)",

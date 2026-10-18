@@ -47,6 +47,7 @@ struct CalendarView: View {
             case .editSystem(let id): NativeEventEditor(identifier: id).ignoresSafeArea()
             case .local(let event): EventEditor(event: event)
             case .task(let task): TaskEditor(task: task)
+            case .alarm(let alarm): AlarmEditor(alarm: alarm)
             case .new(let start, let end): EventEditor(start: start, end: end)
             }
         }
@@ -166,6 +167,8 @@ private struct MonthView: View {
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query private var tasks: [OneTask]
+    @Query private var allAlarms: [OneAlarm]
+    @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     /// Months from the current one, the id of each page in the pager.
     @State private var pos: Int? = 0
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 51
@@ -175,13 +178,15 @@ private struct MonthView: View {
 
     private func month(_ offset: Int) -> Date { CalendarMath.monthStart(offset: offset, from: base) }
     private var current: Int { pos ?? 0 }
+    /// Alarms follow Settings → "Show alarms in the day", like the Today timeline.
+    private var alarms: [OneAlarm] { showsAlarms ? allAlarms : [] }
 
     var body: some View {
         VStack(spacing: 0) {
             weekdayHeader
             Rectangle().fill(Color(.separator)).frame(height: 0.5)
             pager
-            DayAgendaList(day: day, events: events, tasks: tasks, open: open, edit: edit)
+            DayAgendaList(day: day, events: events, tasks: tasks, alarms: alarms, open: open, edit: edit)
         }
         .onChange(of: day) { _, new in
             let target = CalendarMath.monthOffset(of: new, from: base)
@@ -216,7 +221,7 @@ private struct MonthView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 0) {
                 ForEach(range, id: \.self) { offset in
-                    MonthPage(month: month(offset), selected: day, rowHeight: rowHeight, events: events, tasks: tasks) { picked in
+                    MonthPage(month: month(offset), selected: day, rowHeight: rowHeight, events: events, tasks: tasks, alarms: alarms) { picked in
                         if cal.isDate(picked, inSameDayAs: day) {
                             openDay(picked)
                         } else {
@@ -246,6 +251,7 @@ private struct MonthPage: View {
     let rowHeight: CGFloat
     let events: [OneEvent]
     let tasks: [OneTask]
+    let alarms: [OneAlarm]
     var onTap: (Date) -> Void
     private let cal = Calendar.current
 
@@ -253,7 +259,7 @@ private struct MonthPage: View {
         let weeks = CalendarMath.monthWeeks(of: month)
         let all = weeks.flatMap { $0 }.compactMap { $0 }
         let interval = DateInterval(start: all.first ?? month, end: cal.date(byAdding: .day, value: 1, to: all.last ?? month) ?? month)
-        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks)
+        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms)
         VStack(spacing: 0) {
             ForEach(weeks.indices, id: \.self) { w in
                 HStack(spacing: 0) {
@@ -287,7 +293,8 @@ private struct MonthPage: View {
                     .foregroundStyle(text)
                     .frame(width: 29, height: 29)
                     .background(fill, in: Circle())
-                DayDots(colors: items.prefix(3).map(\.color))
+                // Alarms come after events and reminders, so a busy day keeps its calendar colors.
+                DayDots(colors: (items.filter { !$0.isAlarm } + items.filter(\.isAlarm)).prefix(3).map(\.color))
                     .frame(height: 5)
                     .opacity(past ? DayTint.past : 1)
             }
@@ -298,9 +305,22 @@ private struct MonthPage: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(d.formatted(date: .complete, time: .omitted)), \(items.isEmpty ? "no events" : "\(items.count) event\(items.count == 1 ? "" : "s")")")
+        .accessibilityLabel("\(d.formatted(date: .complete, time: .omitted)), \(Self.summary(items))")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier(CalendarIDs.day(d))
+    }
+}
+
+extension MonthPage {
+    /// "no events", "2 events", "1 event, 1 alarm", "1 alarm".
+    static func summary(_ items: [CalEntry]) -> String {
+        let alarms = items.filter(\.isAlarm).count
+        let events = items.count - alarms
+        if items.isEmpty { return "no events" }
+        var parts: [String] = []
+        if events > 0 { parts.append("\(events) event\(events == 1 ? "" : "s")") }
+        if alarms > 0 { parts.append("\(alarms) alarm\(alarms == 1 ? "" : "s")") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -325,6 +345,7 @@ private struct DayAgendaList: View {
     let day: Date
     let events: [OneEvent]
     let tasks: [OneTask]
+    let alarms: [OneAlarm]
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void
     @State private var pendingDelete: CalEntry?
@@ -332,7 +353,7 @@ private struct DayAgendaList: View {
 
     var body: some View {
         let interval = cal.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 86400)
-        let items = CalendarEntries.on(day, in: CalendarEntries.make(in: interval, events: events, tasks: tasks))
+        let items = CalendarEntries.on(day, in: CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms))
         List {
             ForEach(items) { entry in
                 AgendaRow(entry: entry, day: day)
@@ -375,7 +396,10 @@ struct AgendaRow: View {
         let over = span.allDay ? cal.startOfDay(for: day) < cal.startOfDay(for: .now) : span.end <= .now
         let titleColor: Color = over ? Color(.secondaryLabel) : Color(.label)
         HStack(alignment: .top, spacing: 12) {
-            if entry.isTask {
+            if entry.isAlarm {
+                // The bell Today's timeline uses for an alarm, in the accent color.
+                Image(systemName: "alarm").font(.system(size: 17)).foregroundStyle(entry.color).frame(width: 22, height: 22)
+            } else if entry.isTask {
                 Image(systemName: "circle").font(.title3).foregroundStyle(entry.color).frame(width: 22, height: 22)
             } else if span.allDay {
                 Image(systemName: "calendar")
@@ -404,7 +428,7 @@ struct AgendaRow: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(span.start.formatted(date: .omitted, time: .shortened))
                         .foregroundStyle(over ? Color(.secondaryLabel) : Color(.label))
-                    if !entry.isTask {
+                    if !entry.isTask, !entry.isAlarm {
                         Text(span.end.formatted(date: .omitted, time: .shortened)).foregroundStyle(Color(.tertiaryLabel))
                     }
                 }
@@ -412,8 +436,8 @@ struct AgendaRow: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, span.allDay || entry.isTask ? 10 : 9)
-        .frame(minHeight: span.allDay || entry.isTask ? 48 : 60, alignment: .top)
+        .padding(.vertical, span.allDay || entry.isTask || entry.isAlarm ? 10 : 9)
+        .frame(minHeight: span.allDay || entry.isTask || entry.isAlarm ? 48 : 60, alignment: .top)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color(.separator)).frame(height: 1 / scale).padding(.horizontal, 12)
         }
@@ -421,7 +445,7 @@ struct AgendaRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(entry.speech)
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("agenda.row")
+        .accessibilityIdentifier(entry.isAlarm ? "agenda.alarmRow" : "agenda.row")
     }
 }
 
@@ -432,6 +456,8 @@ private struct YearView: View {
     var pickMonth: (Date) -> Void
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query private var tasks: [OneTask]
+    @Query private var allAlarms: [OneAlarm]
+    @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     @State private var cache = BusyCache()
     private let cal = Calendar.current
     private let baseYear = Calendar.current.dateInterval(of: .year, for: .now)?.start ?? .now
@@ -467,8 +493,14 @@ private struct YearView: View {
         h.combine(CalendarSync.shared.version)
         for e in events { h.combine(e.start); h.combine(e.durationMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay) }
         for t in tasks { h.combine(t.plannedStart); h.combine(t.isDone) }
+        // A one-time alarm rings on the day of its next occurrence, so the day itself is part of the signature.
+        h.combine(alarms.count); h.combine(cal.startOfDay(for: TodayClock.now))
+        for a in alarms { h.combine(a.hour); h.combine(a.minute); h.combine(a.weekdays); h.combine(a.isOn) }
         return h.finalize()
     }
+
+    /// Alarms follow Settings → "Show alarms in the day", like the Today timeline.
+    private var alarms: [OneAlarm] { showsAlarms ? allAlarms : [] }
 
     /// How many items each day of the year has (start of day → count); a multi-day event counts on each of its days.
     private func counts(in start: Date) -> [Date: Int] {
@@ -483,7 +515,9 @@ private struct YearView: View {
     private func countDays(in start: Date) -> [Date: Int] {
         guard let end = cal.date(byAdding: .year, value: 1, to: start) else { return [:] }
         var result: [Date: Int] = [:]
-        for e in CalendarEntries.make(in: DateInterval(start: start, end: end), events: events, tasks: tasks) {
+        for e in CalendarEntries.make(in: DateInterval(start: start, end: end), events: events, tasks: tasks, alarms: alarms) {
+            // A repeating alarm (a daily "Wake up") would light every day and hide the busy ones: only one-time alarms count.
+            if case .alarm = e.source, e.repeats { continue }
             let last = cal.startOfDay(for: max(e.start, e.end.addingTimeInterval(-1)))
             var d = cal.startOfDay(for: max(e.start, start))
             while d <= last, d < end {
@@ -591,6 +625,8 @@ private struct WeekView: View {
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query private var tasks: [OneTask]
+    @Query private var allAlarms: [OneAlarm]
+    @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     @State private var pos: Int? = 0
     /// The hour at the top of the grid, shared by all pages so paging keeps your place.
     @State private var topHour: Int? = 7
@@ -613,7 +649,7 @@ private struct WeekView: View {
                 LazyHStack(spacing: 0) {
                     ForEach(range, id: \.self) { o in
                         WeekPage(weekStart: weekStart(o), dayCount: dayCount, selected: day, events: events, tasks: tasks,
-                                 topHour: $topHour, hourHeight: $hourHeight, open: open, edit: edit, create: create, openDay: openDay)
+                                 alarms: showsAlarms ? allAlarms : [], topHour: $topHour, hourHeight: $hourHeight, open: open, edit: edit, create: create, openDay: openDay)
                             .containerRelativeFrame([.horizontal, .vertical])
                             .id(o)
                     }
@@ -638,7 +674,7 @@ private struct WeekView: View {
     }
 
     private var weekTitle: String {
-        weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).formatted(.dateTime.month(.wide).year())
+        weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).formatted(.dateTime.month(.wide))
     }
 }
 
@@ -648,6 +684,7 @@ private struct WeekPage: View {
     let selected: Date
     let events: [OneEvent]
     let tasks: [OneTask]
+    let alarms: [OneAlarm]
     @Binding var topHour: Int?
     @Binding var hourHeight: CGFloat
     var open: (CalEntry) -> Void
@@ -665,12 +702,13 @@ private struct WeekPage: View {
     var body: some View {
         let days = (0..<dayCount).compactMap { cal.date(byAdding: .day, value: $0, to: weekStart) }
         let interval = DateInterval(start: weekStart, end: cal.date(byAdding: .day, value: dayCount, to: weekStart) ?? weekStart)
-        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks)
+        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms)
         VStack(spacing: 0) {
             header(days)
             allDayStrip(days, entries.filter(\.isAllDay))
             Rectangle().fill(Color(.separator)).frame(height: 0.5)
-            grid(days, entries.filter { !$0.isAllDay })
+            // Alarms are markers on the grid, not blocks: they take no column and never move.
+            grid(days, entries.filter { !$0.isAllDay && !$0.isAlarm }, entries.filter(\.isAlarm))
         }
         .entryDeleteDialog($pendingDelete)
     }
@@ -759,14 +797,14 @@ private struct WeekPage: View {
 
     // MARK: Time grid
 
-    private func grid(_ days: [Date], _ timed: [CalEntry]) -> some View {
+    private func grid(_ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry]) -> some View {
         ScrollViewReader { proxy in
-            gridContent(days, timed)
+            gridContent(days, timed, alarms)
                 .onAppear { proxy.scrollTo(topHour ?? 7, anchor: .top) }
         }
     }
 
-    private func gridContent(_ days: [Date], _ timed: [CalEntry]) -> some View {
+    private func gridContent(_ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry]) -> some View {
         ScrollView {
             ZStack(alignment: .topLeading) {
                 VStack(spacing: 0) {
@@ -790,7 +828,7 @@ private struct WeekPage: View {
                     let colW = (geo.size.width - gutter - 8) / CGFloat(dayCount)
                     weekendColumns(days, colW: colW)
                     // Bottom layer: long-press an empty slot to make an event there. Blocks above keep their own taps and menus.
-                    pressLayer(days, timed, colW: colW)
+                    pressLayer(days, timed, alarms, colW: colW)
                     ForEach(Array(days.enumerated()), id: \.offset) { index, d in
                         let x = gutter + CGFloat(index) * colW
                         let placed = place(timed, on: d)
@@ -801,6 +839,13 @@ private struct WeekPage: View {
                                 .opacity(past ? DayTint.past : 1)
                                 .frame(width: max(8, w - 1), height: max(18, p.height(hourHeight)))
                                 .offset(x: x + 1 + w * CGFloat(p.column), y: p.y(hourHeight))
+                        }
+                        // Above the blocks: a thin marker at the alarm's time (no duration).
+                        ForEach(placeAlarms(alarms, on: d), id: \.entry.id) { m in
+                            alarmMarker(m.entry)
+                                .opacity(past ? DayTint.past : 1)
+                                .frame(width: max(8, colW - 2), height: Self.markerHeight)
+                                .offset(x: x + 1, y: m.y)
                         }
                     }
                     if days.contains(where: cal.isDateInToday) {
@@ -882,6 +927,47 @@ private struct WeekPage: View {
         }
     }
 
+    static let markerHeight: CGFloat = 14
+
+    struct Marker {
+        let entry: CalEntry
+        let y: CGFloat
+    }
+
+    /// The alarms ringing on `d`, each at its time; a marker that would cover the one above it moves down just enough to stay readable.
+    private func placeAlarms(_ alarms: [CalEntry], on d: Date) -> [Marker] {
+        guard let interval = cal.dateInterval(of: .day, for: d) else { return [] }
+        var lastY = -CGFloat.infinity
+        return alarms.filter { interval.contains($0.start) }.sorted { $0.start < $1.start }.map { e in
+            let y = max(CGFloat(e.start.timeIntervalSince(interval.start) / 3600) * hourHeight, lastY + Self.markerHeight + 1)
+            lastY = y
+            return Marker(entry: e, y: y)
+        }
+    }
+
+    /// An alarm on the grid: a thin accent line at its time with a small bell and its label. Tap opens the alarm editor;
+    /// it has no duration and no drag (only flexible tasks move).
+    private func alarmMarker(_ e: CalEntry) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: "alarm").font(.system(size: 8, weight: .bold))
+            Text(e.title).font(.system(size: 9, weight: .semibold)).lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(EventTint.text(e.color))
+        .padding(.horizontal, 3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(EventTint.fill(e.color))
+        .overlay(alignment: .top) { Rectangle().fill(e.color).frame(height: 1.5) }
+        .clipShape(RoundedRectangle(cornerRadius: 3))
+        .contentShape(Rectangle())
+        .onTapGesture { open(e) }
+        .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(e.speech)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("calendar.alarmMarker")
+    }
+
     @ViewBuilder
     private func block(_ e: CalEntry, colW: CGFloat, lines: Int) -> some View {
         if case .task(let task) = e.source {
@@ -928,12 +1014,14 @@ private struct WeekPage: View {
     }
 
     /// Where the timed blocks are drawn (the same layout as the grid's `ForEach`).
-    private func blockRects(_ days: [Date], _ timed: [CalEntry], colW: CGFloat) -> [CGRect] {
+    private func blockRects(_ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry], colW: CGFloat) -> [CGRect] {
         days.enumerated().flatMap { index, d in
             place(timed, on: d).map { p in
                 let w = (colW - 2) / CGFloat(p.count)
                 return CGRect(x: gutter + CGFloat(index) * colW + 1 + w * CGFloat(p.column), y: p.y(hourHeight),
                               width: max(8, w - 1), height: max(18, p.height(hourHeight)))
+            } + placeAlarms(alarms, on: d).map { m in
+                CGRect(x: gutter + CGFloat(index) * colW + 1, y: m.y, width: max(8, colW - 2), height: Self.markerHeight)
             }
         }
     }
@@ -955,8 +1043,8 @@ private struct WeekPage: View {
     /// releasing opens the new-event editor for that time. Like Apple Calendar's Week and Day views. The same gesture shape
     /// A UIKit long-press (see `SlotPressView`): moving before it is recognized fails it, so scrolling and week paging are
     /// untouched; once it is recognized, the scroll views don't take the finger.
-    private func pressLayer(_ days: [Date], _ timed: [CalEntry], colW: CGFloat) -> some View {
-        let blocks = blockRects(days, timed, colW: colW)
+    private func pressLayer(_ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry], colW: CGFloat) -> some View {
+        let blocks = blockRects(days, timed, alarms, colW: colW)
         return SlotPressView { point in
             // A press on an event or task is theirs (menu, or drag the task); only empty space makes an event.
             !blocks.contains { $0.contains(point) }

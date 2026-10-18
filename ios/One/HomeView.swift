@@ -127,6 +127,12 @@ struct HomeView: View {
                 if route.fromSidebar { drawer.set(open: show, animated: false) }
             }, onAdded: { capture in
                 if capture.hasDay { calendarDay = capture.day }
+            }, onOpenDay: { day in
+                // "Open" on an added event: leave the AI screen and show that day in Today.
+                ask = nil
+                drawer.set(open: false, animated: false)
+                tab = .today
+                todayDay = Calendar.current.startOfDay(for: day)
             })
         }
         .environment(toast)
@@ -178,6 +184,7 @@ struct HomeView: View {
         }
         let shared = ShareInbox.drain()
         guard !shared.isEmpty else { return }
+        ActivityCenter.record(ActivityEvents.shareImport(count: shared.count))
         let added = shared.map { s in
             let t = OneTask(title: s.title, note: s.note, due: s.due)
             context.insert(t)
@@ -208,7 +215,11 @@ struct HomeView: View {
                 .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
             Group {
                 switch tab {
-                case .today: DayAgenda(day: $todayDay, showsWeekStrip: false)
+                case .today:
+                    DayAgenda(day: $todayDay, showsWeekStrip: false) {
+                        clockSection = .timer
+                        withAnimation(.snappy) { tab = .alarms }
+                    }
                 case .calendar:
                     CalendarView(day: $calendarDay, mode: $calendarMode) { picked in
                         todayDay = picked
@@ -275,6 +286,12 @@ struct HomeView: View {
             #endif
             Self.seedUITestReminder(context)
             importShared()
+            // The old SwiftData ledger is copied into the Activity store once; then expired activity is dropped.
+            #if DEBUG
+            LedgerMigration.seedLegacyForTests(context: context)
+            #endif
+            LedgerMigration.run(context: context)
+            ActivityCenter.importOutbox()
             Ledger.prune(context)
             #if DEBUG
             // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
@@ -295,6 +312,8 @@ struct HomeView: View {
             if ProcessInfo.processInfo.arguments.contains("-uiTestingSyncDump") { SyncDumpProbe() }
             #endif
         }
+        // Timers follow AlarmKit on every tab, so the Today row appears the moment one starts (also from Siri).
+        .task { await TimerController.shared.watch() }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
             allAlarms.forEach { $0.retireIfRung() }
@@ -312,18 +331,24 @@ struct HomeView: View {
             default: break
             }
         }
-        .onChange(of: tab) { _, t in UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey) }
+        .onChange(of: tab) { _, t in
+            UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey)
+            ActivityCenter.record(ActivityEvents.screenOpen(t.rawValue))
+        }
         .onChange(of: calendarMode) { _, m in UserDefaults.standard.set(m.rawValue, forKey: Self.calendarModeKey) }
         .onChange(of: clockSection) { _, s in UserDefaults.standard.set(s.rawValue, forKey: Self.clockSectionKey) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 dropDeletedMirrors()
                 importShared()
+                ActivityCenter.importOutbox()
+                TimerController.shared.refresh()
                 autoPlan()
                 Task { await Reminders.shared.resync() }
             }
             if phase == .background {
                 Ledger.flush(context)
+                ActivityCenter.flushInBackground()
                 updateWidgets()
                 WidgetFeed.scheduleBackgroundRefresh()
             }

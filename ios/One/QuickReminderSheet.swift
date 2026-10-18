@@ -18,6 +18,8 @@ struct QuickReminderSheet: View {
     @State private var repeatRule: RepeatRule?
     @State private var ringsAsAlarm = false
     @State private var showsPicker = false
+    /// When the sheet opened: how long a quick add takes (Activity data, usage).
+    @State private var openedAt = Date.now
     /// What you are likely adding, from your own past reminders (`ReminderSuggest`). Worked out once when the sheet opens.
     @State private var suggestions: [ReminderSuggest.Suggestion] = []
     @FocusState private var focused: Bool
@@ -286,6 +288,7 @@ struct QuickReminderSheet: View {
         context.insert(t)
         try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
         Ledger.record(.created, task: t, title: t.title, after: LedgerFormat.time(t.due, none: ""), context: context)
+        ActivityCenter.record(ActivityEvents.quickAddCommit(ms: Int(Date.now.timeIntervalSince(openedAt) * 1000)))
         dismiss()
     }
 }

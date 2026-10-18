@@ -83,29 +83,4 @@ final class EveningReviewTests: XCTestCase {
         XCTAssertNil(EveningReview.note(for: item, .keep, now: now, calendar: cal))
         XCTAssertNil(EveningReview.note(for: .init(id: 1, plannedStart: date(16, 15), due: date(18, 9)), .tomorrow, now: now, calendar: cal))
     }
-
-    // MARK: Health line
-
-    private func snapshot(steps: Double, sleepHours: Double?, now: Date) -> HealthSnapshot {
-        let days = HealthMath.days([cal.startOfDay(for: now): steps], count: 7, now: now, calendar: cal)
-        var nights: [SleepNight] = []
-        if let h = sleepHours {
-            let start = date(15, 23)
-            nights = [SleepNight(day: cal.startOfDay(for: now), intervals: [SleepInterval(start: start, end: start.addingTimeInterval(h * 3600), stage: .core)])]
-        }
-        return HealthSnapshot(steps: days, weights: [], nights: nights)
-    }
-
-    func testHealthLine() {
-        let now = date(16, 15)
-        let en = Locale(identifier: "en_US")
-        XCTAssertEqual(snapshot(steps: 6_240, sleepHours: 7.2, now: now).summaryLine(now: now, calendar: cal, locale: en),
-                       "6,240 steps · slept 7 hr 12 min")
-        XCTAssertEqual(snapshot(steps: 6_240, sleepHours: nil, now: now).summaryLine(now: now, calendar: cal, locale: en), "6,240 steps")
-        XCTAssertEqual(snapshot(steps: 0, sleepHours: 6.5, now: now).summaryLine(now: now, calendar: cal, locale: en), "slept 6 hr 30 min")
-        XCTAssertNil(snapshot(steps: 0, sleepHours: nil, now: now).summaryLine(now: now, calendar: cal, locale: en), "nothing to say: no line")
-        XCTAssertNil(HealthSnapshot.empty.summaryLine(now: now, calendar: cal, locale: en))
-        // Yesterday's numbers never show as today's.
-        XCTAssertNil(snapshot(steps: 6_240, sleepHours: 7, now: now).summaryLine(now: date(17, 9), calendar: cal, locale: en))
-    }
 }

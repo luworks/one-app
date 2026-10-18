@@ -34,13 +34,14 @@ struct SettingsView: View {
     @State private var showsCalendars = false
     @State private var askingFirst = false
     @State private var askingSecond = false
-    @State private var activityCount = 0
-    @State private var askingClearActivity = false
+    @AppStorage(ActivitySettings.pausedKey) private var activityPaused = false
     @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
 
     var body: some View {
         NavigationStack {
             Form {
+                AppearanceSection()
+
                 Section {
                     Toggle(isOn: $calendarOn) { Label("Apple Calendar", systemImage: "calendar") }
                     Toggle(isOn: $remindersOn) { Label("Apple Reminders", systemImage: "checklist") }
@@ -75,12 +76,13 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Show overdue reminders", isOn: $showOverdue)
-                    Toggle("Show alarms in the day", isOn: $showAlarms)
+                    Toggle("Show alarms in Today and Calendar", isOn: $showAlarms)
                     Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
                     explainedToggle("Travel time", isOn: $travelTime,
                                     caption: "Shows the drive time and when to leave for events with a location today and tomorrow. Your location and the event's address go to Apple Maps only; nothing else leaves your iPhone.")
                     explainedToggle("Health summary", isOn: $healthSummary,
-                                    caption: "Shows today's steps and last night's sleep from Apple Health in one line. Today only reads them.")
+                                    caption: "Shows one line from Apple Health on Today: your steps and last night's sleep, or the first metrics you chose. Today only reads them.")
+                    HealthMetricsLink()
                 } header: {
                     Text("Today")
                 }
@@ -105,14 +107,20 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    LabeledContent("Entries", value: "\(activityCount)")
-                        .accessibilityIdentifier("settings.activityCount")
-                    Button(role: .destructive) { askingClearActivity = true } label: { Text("Clear Activity…") }
-                        .disabled(activityCount == 0)
+                    NavigationLink {
+                        ActivityDataView()
+                    } label: {
+                        HStack {
+                            Label("Activity data", systemImage: "clock.arrow.circlepath")
+                            Spacer()
+                            Text(activityPaused ? "Paused" : "On").foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityIdentifier("settings.activityData")
                 } header: {
                     Text("Activity")
                 } footer: {
-                    Text("Activity keeps 90 days of changes on this device. Clearing it does not change any reminder, event or alarm.")
+                    Text("Today keeps a record of changes and AI decisions, only on this iPhone. See what is recorded, pause it, export it or clear it.")
                 }
 
                 Section {
@@ -145,17 +153,7 @@ struct SettingsView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task {
                 Ledger.flush(context)
-                activityCount = Ledger.count(context)
                 notificationStatus = await Reminders.shared.authorizationStatus()
-            }
-            .confirmationDialog("Clear Activity?", isPresented: $askingClearActivity, titleVisibility: .visible) {
-                Button("Clear \(activityCount) Entries", role: .destructive) {
-                    Ledger.clear(context)
-                    activityCount = 0
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("The record of past changes is deleted from this device. Your reminders, events and alarms stay as they are.")
             }
             .onChange(of: calendarOn) { _, on in
                 guard on != CalendarSync.shared.isOn else { return }
@@ -307,7 +305,7 @@ enum DataReset {
         try? context.delete(model: Habit.self)
         try? context.delete(model: ChatThread.self)
         try? context.delete(model: AIGrant.self)
-        Ledger.clear(context)
+        Ledger.clearAll(context)
         try? context.save()
     }
 }

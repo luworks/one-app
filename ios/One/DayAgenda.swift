@@ -8,6 +8,8 @@ import SwiftData
 struct DayAgenda: View {
     @Binding var day: Date
     var showsWeekStrip: Bool
+    /// Opens the Timer tab (a tap on a running timer's row).
+    var openTimer: () -> Void = {}
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
@@ -65,6 +67,8 @@ struct DayAgenda: View {
         let items = items(on: day, now: now)
         return List {
             if !showsWeekStrip { DateTitle(day: day) }
+            // Running timers: a live countdown at the top of today.
+            if isTodayTab { TodayTimerRows(open: openTimer) }
             if isTodayTab, showsHealth, let line = health.line {
                 TodayHealthLine(line: line)
             }
@@ -308,7 +312,9 @@ struct DayAgenda: View {
         }
         // What is still free after the suggestions, as quiet "Free 1 h 30 min" rows.
         timeline += DaySchedule.freeGaps(busy: busy, day: day, now: now).map(TimelineItem.gap)
-        if showsAlarms { timeline += alarms.compactMap { a in a.fires(on: day).map { TimelineItem.alarm(a, $0) } } }
+        if showsAlarms {
+            timeline += CalendarAlarms.occurrences(of: alarms.map(\.spec), on: day, now: now).map { TimelineItem.alarm(alarms[$0.index], $0.date) }
+        }
         if cal.isDateInToday(day), !timeline.isEmpty {
             timeline.append(.nowMarker(now))
         }

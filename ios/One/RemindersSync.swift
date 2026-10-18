@@ -166,6 +166,8 @@ final class RemindersSync {
         let listTitle: String
         let flagged: Bool
         let repeatRule: String?
+        /// Repeats in Apple Reminders, also with a rule the app has no name for (every 2 weeks): it rolls forward when completed.
+        let repeats: Bool
 
         init(_ r: EKReminder) {
             id = r.calendarItemIdentifier
@@ -178,6 +180,7 @@ final class RemindersSync {
             listTitle = r.calendar.title
             flagged = r.priority == 1
             repeatRule = RemindersSync.repeatRule(from: r.recurrenceRules)?.rawValue
+            repeats = !(r.recurrenceRules ?? []).isEmpty
         }
 
         var fingerprint: String {
@@ -433,6 +436,7 @@ final class RemindersSync {
                 let local = Self.fingerprint(of: t)
                 if agreed == nil || r.fingerprint != agreed {
                     // Apple changed (or Apple and the app both did: Apple wins).
+                    if let agreed, local != agreed { ActivityCenter.record(ActivityEvents.syncConflict(source: "reminders")) }
                     apply(r, to: t)
                     fp[r.id] = r.fingerprint
                 } else if local != agreed {
@@ -519,7 +523,8 @@ final class RemindersSync {
         tasks.forEach { $0.listName = new }
     }
 
-    /// Apple -> app. Planned time, duration, tags, checklist and reminder offsets stay as they are.
+    /// Apple -> app. Planned time, duration, tags, checklist and reminder offsets stay as they are (a plan only goes when a
+    /// repeating reminder rolls to its next occurrence).
     /// Only changed fields are written: SwiftData counts a same-value write as a change, which would loop the sync.
     private func apply(_ r: Remote, to t: OneTask) {
         if t.title != r.title { t.title = r.title }
@@ -528,7 +533,12 @@ final class RemindersSync {
             t.isDone = r.isDone
             t.doneAt = r.isDone ? (r.doneAt ?? .now) : nil
         }
-        if t.due != r.due { t.due = r.due }
+        if t.due != r.due {
+            // Apple rolled a repeating reminder to its next occurrence: the finished one's plan does not follow (see RepeatAdvance).
+            let plan = RepeatAdvance.plannedStart(t.plannedStart, dueMovedFrom: t.due, to: r.due, repeats: r.repeats, isDone: r.isDone)
+            if t.plannedStart != plan { t.plannedStart = plan }
+            t.due = r.due
+        }
         if t.listName != r.listTitle { t.listName = r.listTitle }
         if t.flagged != r.flagged { t.flagged = r.flagged }
         if t.repeatRule != r.repeatRule { t.repeatRule = r.repeatRule }
