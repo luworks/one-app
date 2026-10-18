@@ -99,12 +99,49 @@ Chinese failure AX proves `capture-stack` exists, with a `capture-title` **Butto
 labelled `一定不能再吃饭了`, `New reminder`, `Today 18:00` and Add. The helper
 queried StaticText. This is a shared harness mismatch, not evidence of missing
 capture/title content; later context/time/confirmation assertions did not execute.
-The author owns the narrow selector correction. No equivalent UI retries followed.
-PRs #65/#69 are not jointly accepted on this evidence.
+The author corrected only the title locators and the English expected title to
+its actual full semantic form (`cd9876d`). Subsequent targeted acceptance is below;
+no passing title journey or equivalent Chinese selector run was repeated.
 
 At approximately 11:02 PDT, both final runners had shutdown exit 0 and no journal
 errors; live booted devices and heavy runner checks were empty. The performance
 thread received the next quiet window. No further matrix or Pro Max run is planned.
+
+## Focused repair acceptance and main delivery
+
+Integration `8f5f2da` contains main plus context locator `cd9876d` and the opt-in
+header diagnostic `6add9f77`. One incremental build passed. On iPhone 16:
+
+- English five-turn title/type/day/time/one-Add/no-write journey passed, 82.868 s.
+- New/stored thread isolation, missing-time disabled Add and restored context
+  journey passed, 65.880 s. These are distinct behavior risks, not duplicate retries.
+
+The original SE 3 TabMemory method ran once with the observation-only probe and
+failed at the unchanged edge-back assertion, 43.961 s. Its two JSONL files are
+exported and hash-indexed. The second detail's native recognizer was enabled,
+with UIKit's delegate, depth 2 and hidden bar. Samples remained `possible`; no
+began/changed/ended/cancelled/failed or targetAction was observed. This does **not**
+prove delegate veto: transient states can escape sampling. No behavior candidate B
+was part of this execution. PR #63 remains draft and unresolved.
+
+Production equivalence excludes the two header app files (Drawer and
+ReminderListScreen) and their three header test files. All AI app code, logic,
+fixtures and title/context tests match the accepted integration. RemindersView
+has no product diff from pre-AI main; recurrence is absent. The only delivery
+conflict was fixture-catalog text, resolved by retaining both sections.
+
+Merged delivery:
+
+- PR #61 infrastructure: main `c161a5d`.
+- PR #65 title: merge `6a78805`; final behavior `9b6ea3c`, tested head `3881c77`.
+- PR #69 context: tested `cd9876d`, dependency/catalog merge `924f5c1`, main `e5fc7ab`.
+- PR #67 offline evaluation only: scorer/fixtures unchanged from its existing
+  7-check green revision; catalog/dependency merge `bc4ae0f`, main `d4bfe26`.
+
+No full suite, real Foundation Models or physical-device claim follows from these
+selected checks. At 11:18:58 PDT all compatibility simulators and heavy runners
+were stopped. A coordinated narrow recurrence Swift slot then handed directly
+back to the performance thread; compatibility did not start another batch.
 
 ## Durable evidence
 
@@ -128,6 +165,8 @@ in the separate QA `activity.sqlite`, never the app's user Activity database.
   final targeted logic and incremental build logs.
 - `runs/ai-final-integrated-20261018/`: final frozen Products identity, Header A
   and AI-core logs, summaries, attachments and complete xcresult bundles.
+- `runs/context-header-probe-{build,integrated}-20261018/`: repaired-context
+  acceptance, observation-only native-pop JSONL and production-equivalence report.
 - Exported failure movies, accessibility snapshots, synthesized event coordinates
   and filmstrips are retained beside their completed bundles and indexed separately.
 

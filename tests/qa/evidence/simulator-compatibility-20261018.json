@@ -243,6 +243,66 @@
       "journal_errors": [],
       "shutdown_exit": 0,
       "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/ai-final-integrated-20261018/ai-core/ui.xcresult"
+    },
+    {
+      "run": "context-header-probe-integrated-20261018/context-representative",
+      "head": "8f5f2daf477f1d076f81b3bed3ac864140317eb9",
+      "status": "passed",
+      "counts": {
+        "ui": {
+          "passed": 1
+        }
+      },
+      "elapsed_seconds": 119.808,
+      "simulator_id": "0B5AF982-6B76-43E9-B5BF-F56C2D16E529",
+      "simulator_name": "Today-Compatibility-Standard",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "journal_errors": [],
+      "shutdown_exit": 0,
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/context-header-probe-integrated-20261018/context-representative/ui.xcresult"
+    },
+    {
+      "run": "context-header-probe-integrated-20261018/context-thread-gate",
+      "head": "8f5f2daf477f1d076f81b3bed3ac864140317eb9",
+      "status": "passed",
+      "counts": {
+        "ui": {
+          "passed": 1
+        }
+      },
+      "elapsed_seconds": 106.662,
+      "simulator_id": "0B5AF982-6B76-43E9-B5BF-F56C2D16E529",
+      "simulator_name": "Today-Compatibility-Standard",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "journal_errors": [],
+      "shutdown_exit": 0,
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/context-header-probe-integrated-20261018/context-thread-gate/ui.xcresult"
+    },
+    {
+      "run": "context-header-probe-integrated-20261018/header-probe",
+      "head": "8f5f2daf477f1d076f81b3bed3ac864140317eb9",
+      "status": "failed",
+      "counts": {
+        "ui": {
+          "failed": 1
+        }
+      },
+      "elapsed_seconds": 77.17,
+      "simulator_id": "04269E85-F517-4360-B08B-7F1BE4DE608B",
+      "simulator_name": "Today-Compatibility-Small",
+      "display_settings": {
+        "appearance": "light",
+        "content_size": "large"
+      },
+      "journal_errors": [],
+      "shutdown_exit": 0,
+      "result_bundle": "/Users/yuanlu/code/one-app/tests/results/runs/context-header-probe-integrated-20261018/header-probe/ui.xcresult"
     }
   ],
   "raw_ui_attempts": {
@@ -261,6 +321,27 @@
     "observed_title_identifier": "capture-title",
     "observed_title": "一定不能再吃饭了",
     "observed_time": "Today 18:00",
-    "later_context_assertions_executed": false
+    "later_context_assertions_executed": true,
+    "repair": "cd9876d",
+    "repaired_ui_passed": 2,
+    "chinese_repeated": false
+  },
+  "merged_delivery": {
+    "61": "c161a5d3ebb95d8c87309c863ff8fb2a4cf2709e",
+    "65": "6a78805fcc60a6a76d73d3fd88724704a0381e46",
+    "69": "e5fc7ab7cdd94ab536f8fe7c7dc368900261c8b2",
+    "67": "d4bfe26eaf06fdb9f829126df1262a527223e412"
+  },
+  "native_pop_probe": {
+    "result": "original_assertion_failed",
+    "runtime_fix_established": false,
+    "state_observed": [
+      "possible"
+    ],
+    "enabled": true,
+    "delegate": "_UINavigationInteractiveTransition",
+    "depth": 2,
+    "delegate_veto_proven": false,
+    "artifacts": "context-header-probe-integrated-20261018/header-probe/attachments"
   }
 }
