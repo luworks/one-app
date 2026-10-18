@@ -35,13 +35,20 @@ final class TimerTests: XCTestCase {
     private var playButtons: XCUIElementQuery { app.buttons.matching(identifier: "timer.recent.start") }
     private var cards: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "timer.card") }
 
+    /// Drags the list from its right edge: a swipe in the middle of the screen would turn the picker wheels.
+    private func drag(up: Bool) {
+        let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.3))
+        let bottom = app.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.75))
+        (up ? bottom : top).press(forDuration: 0.05, thenDragTo: up ? top : bottom)
+    }
+
     /// The list is lazy: scroll until the element is on screen.
     private func reveal(_ target: XCUIElement) {
-        for _ in 0..<5 where !target.isHittable { app.swipeUp() }
+        for _ in 0..<6 where !target.isHittable { drag(up: true) }
         XCTAssertTrue(target.isHittable, "\(target) is on screen")
     }
 
-    private func scrollToTop() { for _ in 0..<3 { app.swipeDown() } }
+    private func scrollToTop() { for _ in 0..<4 { drag(up: false) } }
 
     // MARK: The screen
 
