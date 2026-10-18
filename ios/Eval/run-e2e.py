@@ -77,7 +77,7 @@ def selectors(args, source):
 
 def ui_command(selected, simulator, derived, output):
     # Preserve project signing, including simulated App Group entitlements for Share.
-    return ["xcodebuild", "test", "-project", "One.xcodeproj", "-scheme", "One",
+    return ["xcodebuild", "test", "-jobs", "2", "-project", "One.xcodeproj", "-scheme", "One",
             "-destination", f"platform=iOS Simulator,id={simulator}",
             "-derivedDataPath", str(derived), "-resultBundlePath", str(output / "ui.xcresult"),
             "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",

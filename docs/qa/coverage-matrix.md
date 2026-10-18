@@ -44,7 +44,7 @@ only its owner may use them, after the current full runner finishes. The new ent
 
 The runner locks the simulator name and absolute derived-data path across checkouts. These locks coordinate
 this entry point only: manually launched Xcode runners must still be coordinated by the owner. It uses one
-`xcodebuild test` (incremental build plus execution), serial tests, one destination, no automatic retry,
+`xcodebuild test -jobs 2` (incremental build plus execution), serial tests, one destination, no automatic retry,
 and no signing overrides. In particular, do not disable signing: Share needs simulated App Group entitlements.
 It does not change sources, signing, schema, simulator privacy, device locale or host time zone;
 it does not erase/delete simulators or derived data. The owned simulator is shut down in `finally`, including

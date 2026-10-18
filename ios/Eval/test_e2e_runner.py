@@ -30,6 +30,7 @@ class RunnerContracts(unittest.TestCase):
             self.assertEqual(plan["commands"][0], ["swift", "test", "--jobs", "2"])
             command = plan["commands"][1]
             self.assertIn("-only-testing:OneUITests", command)
+            self.assertEqual(command[command.index("-jobs") + 1], "2")
             self.assertEqual(command[command.index("-parallel-testing-enabled") + 1], "NO")
             self.assertFalse(any("CODE_SIGN" in arg or "Provisioning" in arg for arg in command))
 
