@@ -148,3 +148,11 @@ London, Shanghai and Tokyo with Los Angeles as home in a separate store instance
 The three corresponding `#Preview` declarations render production views.
 No required input lives in a temporary directory; screenshots and timing outputs
 belong in the persistent QA results directory, not this fixture catalog.
+
+## Existing event save
+
+`event-save.json` supplies one local timed daily event at 13:45 for 60 minutes
+for `EventSaveTests`. Native tests reuse the existing simulator-only
+`-debugCreateSystemEvent` hook with a unique title, then reopen after a fresh
+in-memory launch to verify persistence. Inputs remain versioned here and inline
+in that suite; EventKit writes affect only its named simulator calendar.
