@@ -24,6 +24,7 @@ struct WorkbenchApp: App {
 #if DEBUG
 import SwiftUI
 import TodayScenes
+import UIKit
 
 @MainActor
 struct WorkbenchRoot: View {
@@ -37,10 +38,25 @@ struct WorkbenchRoot: View {
     @State private var result: Result<SceneSession, any Error>?
     @State private var controls = false
     @State private var started = false
+    @State private var receiptWritten = false
+    private let launchOptions: Result<WorkbenchLaunchOptions, any Error>
+    private let receipt: UUID?
+    private let requestedScene: String
+    private let requestedScenario: String
 
     init(launch: Result<SceneConfiguration, any Error>, runtime: SceneCatalogRuntime = .isolatedFeatures) {
         self.launch = launch
         self.runtime = runtime
+        let arguments = ProcessInfo.processInfo.arguments
+        let optionsResult = Result { try WorkbenchLaunchOptions(arguments: arguments) }
+        launchOptions = optionsResult
+        receipt = WorkbenchLaunchOptions.value("-sceneReceipt", in: arguments).flatMap(UUID.init(uuidString:))
+        requestedScene = WorkbenchLaunchOptions.value("-scene", in: arguments) ?? "today"
+        requestedScenario = WorkbenchLaunchOptions.value("-scenario", in: arguments) ?? "normal"
+        if let options = try? optionsResult.get() {
+            _appearance = State(initialValue: options.appearance)
+            _typeSize = State(initialValue: options.typeSize)
+        }
         let config = try? launch.get()
         _selected = State(initialValue: config?.scene ?? .today)
         _scenario = State(initialValue: config?.scenario ?? .normal)
@@ -51,7 +67,10 @@ struct WorkbenchRoot: View {
         Group {
             if let result {
                 switch result {
-                case .success(let session): SceneCatalog(session: session).id(session.identity)
+                case .success(let session):
+                    SceneCatalog(session: session)
+                        .id(session.identity)
+                        .background(WorkbenchReceiptFrame { writeReceipt(status: "ready") })
                 case .failure(let error): SceneFailure(error: error)
                 }
             } else { ProgressView("Preparing scene") }
@@ -67,9 +86,13 @@ struct WorkbenchRoot: View {
         .onAppear {
             guard !started else { return }
             started = true
-            switch launch {
-            case .success: rebuild()
-            case .failure(let error): result = .failure(error)
+            do {
+                _ = try launchOptions.get()
+                _ = try launch.get()
+                rebuild()
+            } catch {
+                result = .failure(error)
+                writeReceipt(status: "failed")
             }
         }
         .onDisappear { dispose() }
@@ -114,6 +137,24 @@ struct WorkbenchRoot: View {
         }
     }
 
+    private func writeReceipt(status: String) {
+        guard !receiptWritten, let receipt else { return }
+        do {
+            let caches = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask,
+                                                    appropriateFor: nil, create: true)
+            let directory = caches.appendingPathComponent("TodayWorkbench", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let data = try JSONSerialization.data(withJSONObject: [
+                "scene": requestedScene, "scenario": requestedScenario, "status": status,
+            ], options: [.sortedKeys])
+            try data.write(to: directory.appendingPathComponent(receipt.uuidString + ".json"), options: .atomic)
+            receiptWritten = true
+        } catch {
+            // No receipt means capture fails closed; never report a successful error screen.
+            print("Workbench receipt write failed: \(error)")
+        }
+    }
+
     private func dispose() {
         if case .success(let session) = result { session.dispose() }
     }
@@ -127,6 +168,72 @@ struct WorkbenchRoot: View {
                 timeZoneIdentifier: original?.timeZoneIdentifier ?? "America/Los_Angeles", localeIdentifier: locale)
             return try SceneSession(configuration: configuration, runtime: runtime)
         }
+        if case .failure = result { writeReceipt(status: "failed") }
+    }
+}
+
+private struct WorkbenchLaunchOptions {
+    let appearance: String
+    let typeSize: DynamicTypeSize
+
+    static func value(_ flag: String, in arguments: [String]) -> String? {
+        guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return nil }
+        return arguments[index + 1]
+    }
+
+    init(arguments: [String]) throws {
+        appearance = Self.value("-sceneAppearance", in: arguments) ?? "system"
+        let sizes: [String: DynamicTypeSize] = [
+            "xSmall": .xSmall, "small": .small, "medium": .medium, "large": .large,
+            "xLarge": .xLarge, "xxLarge": .xxLarge, "xxxLarge": .xxxLarge,
+            "accessibility1": .accessibility1, "accessibility2": .accessibility2,
+            "accessibility3": .accessibility3, "accessibility4": .accessibility4,
+            "accessibility5": .accessibility5,
+        ]
+        guard ["system", "light", "dark"].contains(appearance),
+              let size = sizes[Self.value("-sceneTypeSize", in: arguments) ?? "large"] else {
+            throw SceneConfigurationError.missingValue("valid scene appearance/type size")
+        }
+        typeSize = size
+    }
+}
+
+/// Receipts follow a real SceneCatalog layout and the next display frame.
+@MainActor
+private struct WorkbenchReceiptFrame: UIViewRepresentable {
+    let ready: () -> Void
+    func makeUIView(context: Context) -> FrameView { FrameView(ready: ready) }
+    func updateUIView(_ uiView: FrameView, context: Context) {}
+    static func dismantleUIView(_ uiView: FrameView, coordinator: ()) { uiView.stop() }
+
+    final class FrameView: UIView {
+        private var ready: (() -> Void)?
+        private var displayLink: CADisplayLink?
+        private var frames = 0
+
+        init(ready: @escaping () -> Void) {
+            self.ready = ready
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+        }
+        required init?(coder: NSCoder) { return nil }
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard window != nil, ready != nil, displayLink == nil, bounds.width > 0, bounds.height > 0 else { return }
+            let link = CADisplayLink(target: self, selector: #selector(frameDisplayed))
+            displayLink = link
+            link.add(to: .main, forMode: .common)
+        }
+        @objc private func frameDisplayed() {
+            guard window != nil else { stop(); return }
+            frames += 1
+            guard frames >= 2 else { return }
+            let completion = ready
+            ready = nil
+            stop()
+            completion?()
+        }
+        func stop() { displayLink?.invalidate(); displayLink = nil }
     }
 }
 
