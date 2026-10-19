@@ -428,9 +428,11 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(tests[0].count('-only-testing:' + METHOD + '()'), 1)
         self.assertIn('-xctestrun', tests[0])
         build_index = next(i for i, c in enumerate(self.calls) if c[:2] == ['xcodebuild', 'build-for-testing'])
+        boot_index = next(i for i, c in enumerate(self.calls) if c[:3] == ['xcrun', 'simctl', 'boot'])
         ready_index = next(i for i, c in enumerate(self.calls) if c[:3] == ['xcrun', 'simctl', 'bootstatus'])
         test_index = next(i for i, c in enumerate(self.calls) if c[:2] == ['xcodebuild', 'test-without-building'])
-        self.assertLess(build_index, ready_index)
+        self.assertLess(build_index, boot_index)
+        self.assertLess(boot_index, ready_index)
         self.assertLess(ready_index, test_index)
         self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
 
@@ -450,7 +452,8 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(reports[0]['executed_count'], 0)
         self.assertIn('native_build_exit:130', reports[0]['errors'])
         self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in self.calls))
-        self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+        self.assertFalse(any(c[:3] in (['xcrun', 'simctl', 'boot'],
+                                      ['xcrun', 'simctl', 'shutdown']) for c in self.calls))
 
     def test_adapter_build_timeout_retains_failure_receipt_without_test_or_ready_wait(self):
         code, reports, _ = self.run_adapter(build_code=124)
@@ -460,7 +463,8 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertIn('log=', reports[0]['build_error'])
         self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'bootstatus'] for c in self.calls))
         self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in self.calls))
-        self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+        self.assertFalse(any(c[:3] in (['xcrun', 'simctl', 'boot'],
+                                      ['xcrun', 'simctl', 'shutdown']) for c in self.calls))
 
 
 if __name__ == '__main__':

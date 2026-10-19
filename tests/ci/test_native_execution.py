@@ -67,7 +67,7 @@ class BuildDiagnosticsTests(unittest.TestCase):
 
 
 class CoreUIExecutionTests(unittest.TestCase):
-    def test_boot_overlaps_one_provenance_build_then_executes_fresh_leaves(self):
+    def test_cold_boot_follows_provenance_build_then_executes_fresh_leaves(self):
         self.run_ci_ui()
 
     def test_failed_build_preserves_logs_and_shutdown_without_dispatching_tests(self):
@@ -147,8 +147,11 @@ class CoreUIExecutionTests(unittest.TestCase):
                 code = runner.main(['--only', selected[0], '--derived-data', str(base / 'dd'),
                                     '--output', str(base / 'output'), '--simulator-name', 'Today-CI-Unit'])
             build.assert_called_once()
-            if not inventory_error:
+            if not (inventory_error or process_error or build_code):
                 self.assertEqual(calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+            else:
+                self.assertFalse(any(c[:3] in (['xcrun', 'simctl', 'boot'],
+                                              ['xcrun', 'simctl', 'shutdown']) for c in calls))
             if inventory_error:
                 self.assertEqual(code, 1)
                 summary = (base / 'output/summary.json').read_text()
@@ -181,9 +184,9 @@ class CoreUIExecutionTests(unittest.TestCase):
                 self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in calls))
                 return
             self.assertEqual(code, 0)
-            self.assertLess(next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']),
-                            next(i for i, c in enumerate(calls) if c[:2] == ['xcodebuild', 'build-for-testing']))
             self.assertLess(next(i for i, c in enumerate(calls) if c[:2] == ['xcodebuild', 'build-for-testing']),
+                            next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']))
+            self.assertLess(next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']),
                             next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'bootstatus']))
             test = next(c for c in calls if c[:2] == ['xcodebuild', 'test-without-building'])
             self.assertEqual(test[test.index('-xctestrun') + 1], str(products))

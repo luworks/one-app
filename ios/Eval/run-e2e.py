@@ -320,7 +320,7 @@ def main(argv=None):
         if (os.environ.get("TODAY_CI_SYNTHETIC") == "1"
                 and os.environ.get("TODAY_LANE") == "core-ui" and not args.test_products):
             # One trusted build, using the same product/provenance authority as
-            # native tests. The owned simulator boots while compilation runs.
+            # native tests. Keep cold simulator startup out of native compilation.
             if derived != derived_data(ROOT).resolve():
                 raise ValueError("CI build reuse requires the canonical owned derived data")
             from scripts.devtools.resolve import locked_arguments
@@ -328,12 +328,8 @@ def main(argv=None):
             validation_started = time.monotonic()
 
             def build(command):
-                nonlocal boot_started
-                # Inventory/cache validation happens before boot loads the host.
-                # A cache miss still overlaps the actual native build and boot.
+                # Inventory and compilation finish before boot loads the host.
                 summary["prebuild_validation_seconds"] = round(time.monotonic() - validation_started, 3)
-                boot_started = True
-                journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)
                 command = list(command)
                 command[command.index("-project") + 1] = str(IOS / "Today.xcodeproj")
                 summary["commands"].append(command)
