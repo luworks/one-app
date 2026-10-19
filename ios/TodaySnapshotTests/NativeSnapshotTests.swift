@@ -172,7 +172,7 @@ final class NativeSnapshotTests: XCTestCase {
     container.view.addSubview(controller.view)
     container.setOverrideTraitCollection(traits, forChild: controller)
     controller.view.frame = CGRect(origin: .zero, size: size)
-    controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    controller.view.autoresizingMask = []
     controller.didMove(toParent: container)
     let scene = try XCTUnwrap(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -188,6 +188,7 @@ final class NativeSnapshotTests: XCTestCase {
       previousKeyWindow?.makeKey()
     }
     window.layoutIfNeeded()
+    controller.view.frame = CGRect(origin: .zero, size: size)
     // Normalize the host's safe area without replacing its real SwiftUI layout.
     let actualInsets = controller.view.safeAreaInsets
     controller.additionalSafeAreaInsets = UIEdgeInsets(
@@ -203,8 +204,9 @@ final class NativeSnapshotTests: XCTestCase {
     format.scale = 3
     format.opaque = true
     var drawn = false
-    let image = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
-      drawn = window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+    XCTAssertEqual(controller.view.bounds.size, size)
+    let image = UIGraphicsImageRenderer(bounds: controller.view.bounds, format: format).image { _ in
+      drawn = controller.view.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
     }
     XCTAssertTrue(drawn, "The mounted window hierarchy must render successfully.")
     XCTAssertEqual(image.size, size)
