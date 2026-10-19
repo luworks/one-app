@@ -6,6 +6,7 @@ import TodayDesignSystem
 import FeatureClock
 import FeatureHealth
 import Foundation
+import TodayCore
 import FoundationModels
 
 /// Turns a line of text into a `Capture` preview.
@@ -39,25 +40,7 @@ enum Understander {
 /// Whichever finishes first: the work, or nil when the time is up (a late result is dropped).
 enum ModelTimeout {
     static func run<T: Sendable>(seconds: Double, _ work: @escaping @Sendable () async -> T?) async -> T? {
-        await withCheckedContinuation { (cont: CheckedContinuation<T?, Never>) in
-            let once = Once<T>(cont)
-            let job = Task { once.resume(await work()) }
-            Task {
-                try? await Task.sleep(for: .seconds(seconds))
-                once.resume(nil)
-                job.cancel()
-            }
-        }
-    }
-
-    private final class Once<T: Sendable>: @unchecked Sendable {
-        private let lock = NSLock()
-        private var cont: CheckedContinuation<T?, Never>?
-        init(_ cont: CheckedContinuation<T?, Never>) { self.cont = cont }
-        func resume(_ value: T?) {
-            lock.lock(); let c = cont; cont = nil; lock.unlock()
-            c?.resume(returning: value)
-        }
+        try? await AsyncDeadline.run(for: .seconds(seconds), operation: work)
     }
 }
 

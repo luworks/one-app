@@ -6,6 +6,7 @@ import TodayDesignSystem
 import FeatureClock
 import FeatureHealth
 import Foundation
+import TodayCore
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -55,21 +56,7 @@ enum AICapture {
 
     /// Whichever finishes first: the work, or nil when the time is up (the late result is dropped).
     private static func withTimeout(_ limit: Duration, _ work: @escaping @Sendable () async -> [Capture]?) async -> [Capture]? {
-        await withCheckedContinuation { (cont: CheckedContinuation<[Capture]?, Never>) in
-            let once = Once(cont)
-            Task { once.resume(await work()) }
-            Task { try? await Task.sleep(for: limit); once.resume(nil) }
-        }
-    }
-
-    private final class Once: @unchecked Sendable {
-        private let lock = NSLock()
-        private var cont: CheckedContinuation<[Capture]?, Never>?
-        init(_ cont: CheckedContinuation<[Capture]?, Never>) { self.cont = cont }
-        func resume(_ value: [Capture]?) {
-            lock.lock(); let c = cont; cont = nil; lock.unlock()
-            c?.resume(returning: value)
-        }
+        try? await AsyncDeadline.run(for: limit, operation: work)
     }
 }
 
