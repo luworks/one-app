@@ -1,6 +1,6 @@
 import XCTest
 
-/// Opening an event from the system calendar goes straight to Apple's editor: no "Edit" to tap first, one Delete Event, and
+/// Full system options for an existing event expose one Delete Event and
 /// the start / end / all-day / alert rows are there to change. Uses the simulator's own calendar (never a real one).
 /// Set TEST_RUNNER_EVENT_SHOTS=<folder> to save screenshots.
 @MainActor
@@ -74,8 +74,11 @@ final class SystemEventEditorTests: XCTestCase {
     let navTitle = app.staticTexts["Edit Event"]
     XCTAssertTrue(navTitle.waitForExistence(timeout: 10), "Apple's Edit Event opens straight away")
     sleep(1)
+    let fullOptions = app.buttons["More Options…"]
+    let hadQuickEditor = fullOptions.exists
+    if hadQuickEditor { fullOptions.tap() }
     shot("1-opened")
-    XCTAssertFalse(app.buttons["Edit"].exists, "no Edit to tap first")
+    XCTAssertFalse(app.buttons["Edit"].exists, "no Edit to tap before changing full system options")
     XCTAssertTrue(
       app.textFields[title].exists || app.textViews[title].exists || app.staticTexts[title].exists,
       "the title is editable here")
@@ -95,7 +98,15 @@ final class SystemEventEditorTests: XCTestCase {
       deletes.count, 1,
       "exactly one Delete Event: \(deletes.allElementsBoundByIndex.map({ $0.label }))")
     // Close without changing anything. (The event stays in the simulator's own calendar, never a real one.)
-    app.buttons["Cancel"].firstMatch.tap()
+    let nativeCancel = app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex
+      .last(where: { $0.isHittable })
+    XCTAssertNotNil(nativeCancel)
+    nativeCancel?.tap()
+    if hadQuickEditor {
+      XCTAssertTrue(
+        fullOptions.waitForExistence(timeout: 5), "Cancel returns to the unchanged quick editor")
+      app.buttons["Cancel"].firstMatch.tap()
+    }
     XCTAssertTrue(navTitle.waitForNonExistence(timeout: 8))
   }
 }
