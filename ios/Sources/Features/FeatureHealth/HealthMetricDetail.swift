@@ -15,6 +15,7 @@ public struct HealthMetricDetail: View {
     var calendar = Calendar.current
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var days = 30
 
     public init(metric: HealthMetric, series: HealthSeries, now: Date, units: HealthUnits = HealthUnits(), calendar: Calendar = .current) {
@@ -183,9 +184,15 @@ public struct HealthMetricDetail: View {
 
     // MARK: Facts
 
+    private var factsLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+    }
+
     private var facts: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
+            factsLayout {
                 fact("Average", stats?.average)
                 fact("Low", stats?.low)
                 fact("High", stats?.high)
