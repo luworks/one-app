@@ -11,7 +11,8 @@ final class TodayAlarmActionsTests: XCTestCase {
     app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments(dataset) + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "jumpToNow=0,healthSummary=0,showTomorrow=0",
+        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ] + extra
     app.launch()
     XCTAssertTrue(app.staticTexts["Keep reminder deadline"].waitForExistence(timeout: 8))
