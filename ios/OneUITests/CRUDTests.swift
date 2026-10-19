@@ -136,7 +136,8 @@ final class CRUDTests: XCTestCase {
     // Update: title and due date in the editor (opened right away: a just-created reminder must keep its editor open).
     created.tap()
     XCTAssertTrue(
-      app.navigationBars["Reminder"].waitForExistence(timeout: 5), "the reminder's editor opens")
+      app.textFields["task.title"].waitForExistence(timeout: 5), "the reminder's editor opens")
+    app.buttons["task.more"].tap()
     replaceText(in: app.textFields["task.title"], with: "Buy printer ink and paper")
     let deadline = app.switches["Deadline"]
     XCTAssertTrue(deadline.exists)
@@ -150,7 +151,7 @@ final class CRUDTests: XCTestCase {
       ? tomorrow : cal.date(byAdding: .day, value: -1, to: .now)!
     // Due, the only date picker while Plan a time is off
     pickDate(app.datePickers.element(boundBy: 0), day: dueDay)
-    app.navigationBars["Reminder"].buttons["Done"].tap()
+    app.buttons["task.save"].tap()
 
     let renamed = app.staticTexts["Buy printer ink and paper"]
     XCTAssertTrue(renamed.waitForExistence(timeout: 5), "the new title is saved")

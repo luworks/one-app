@@ -54,6 +54,12 @@
       onComplete: ((EKEventEditViewAction) -> Void)?)
   }
 
+  package enum ReminderDeletionReceipt {
+    case localOnly
+    case confirmed(RemindersSync.Remote, token: UUID)
+    case alreadyAbsent(String)
+  }
+
   @MainActor
   package protocol ReminderService: AnyObject {
     var hasAccess: Bool { get }
@@ -72,6 +78,9 @@
     func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
       -> RemindersSync.Remote?
     func didPersistEdit(_ task: OneTask, accepted: RemindersSync.Remote?)
+    func commitDeletion(_ task: OneTask, expected: TaskSnapshot) throws -> ReminderDeletionReceipt
+    func restoreDeletion(_ task: OneTask, receipt: ReminderDeletionReceipt) throws -> RemindersSync
+      .Remote?
     func commitCompletion(
       _ task: OneTask, done: Bool, restoringDue: Date?, restoresDue: Bool,
       expected: RemindersSync.Remote?

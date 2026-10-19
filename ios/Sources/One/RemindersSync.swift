@@ -59,6 +59,69 @@
     @ObservationIgnored private var again = false
     @ObservationIgnored private var completionFence = ReminderCompletionFence()
 
+    /// Session-only Undo payload; no app model or persistence schema is extended.
+    private struct DeletedReminderPayload {
+      let title: String?
+      let notes: String?
+      let location: String?
+      let url: URL?
+      let timeZone: TimeZone?
+      let start: DateComponents?
+      let due: DateComponents?
+      let priority: Int
+      let done: Bool
+      let doneAt: Date?
+      let alarms: [EKAlarm]
+      let recurrence: [EKRecurrenceRule]
+
+      init(_ reminder: EKReminder) throws {
+        title = reminder.title
+        notes = reminder.notes
+        location = reminder.location
+        url = reminder.url
+        timeZone = reminder.timeZone
+        start = reminder.startDateComponents
+        due = reminder.dueDateComponents
+        priority = reminder.priority
+        done = reminder.isCompleted
+        doneAt = reminder.completionDate
+        alarms = try (reminder.alarms ?? []).map {
+          guard let copy = $0.copy() as? EKAlarm else { throw CompletionError.changedOutside }
+          return copy
+        }
+        recurrence = try (reminder.recurrenceRules ?? []).map {
+          guard let copy = $0.copy() as? EKRecurrenceRule else {
+            throw CompletionError.changedOutside
+          }
+          return copy
+        }
+      }
+
+      func apply(to reminder: EKReminder) throws {
+        reminder.title = title
+        reminder.notes = notes
+        reminder.location = location
+        reminder.url = url
+        reminder.timeZone = timeZone
+        reminder.startDateComponents = start
+        reminder.dueDateComponents = due
+        reminder.priority = priority
+        reminder.isCompleted = done
+        if let doneAt { reminder.completionDate = doneAt }
+        reminder.alarms = try alarms.map {
+          guard let copy = $0.copy() as? EKAlarm else { throw CompletionError.changedOutside }
+          return copy
+        }
+        reminder.recurrenceRules = try recurrence.map {
+          guard let copy = $0.copy() as? EKRecurrenceRule else {
+            throw CompletionError.changedOutside
+          }
+          return copy
+        }
+      }
+    }
+    @ObservationIgnored private var deletedReminderPayloads: [UUID: DeletedReminderPayload] = [:]
+
     /// Bumped after each finished pass so views that care can refresh.
     package private(set) var version = 0
     package private(set) var lastError: String?
@@ -70,6 +133,7 @@
       package private(set) var debugPersistedDump = ""
       @ObservationIgnored private var debugOpsDone = false
       @ObservationIgnored private var debugEditFailedOnce = false
+      @ObservationIgnored private var debugDeleteFailedOnce = false
       @ObservationIgnored private var debugConcurrentNoteWritten = false
       package private(set) var debugFetchInFlight = false
       package private(set) var debugRejectedFetches = 0
@@ -110,6 +174,7 @@
       debounce?.cancel()
       debounce = nil
       container = nil
+      deletedReminderPayloads.removeAll()
     }
 
     /// Titles are personal: they are only logged in debug builds.
@@ -139,6 +204,20 @@
             self.scheduleReconcile()
           }
         })
+      #if DEBUG
+        if arguments.contains("-uiTestingDelayReminderFetchAfterFirst") {
+          // A deterministic UI-test trigger for the actual reconcile pipeline while an editor is open.
+          observers.append(
+            NotificationCenter.default.addObserver(
+              forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+              Task { @MainActor in
+                guard let self, self.debugOpsDone, !self.disposed else { return }
+                self.scheduleReconcile(after: .milliseconds(50))
+              }
+            })
+        }
+      #endif
       if isConnected { scheduleReconcile(after: .seconds(2)) }
     }
 
@@ -317,6 +396,75 @@
         saveSet(loadSet(Self.baseKey).union([accepted.id]), Self.baseKey)
       }
       scheduleReconcile(after: .milliseconds(50))
+    }
+
+    package func commitDeletion(_ task: OneTask, expected: TaskSnapshot) throws
+      -> ReminderDeletionReceipt
+    {
+      guard let id = task.externalID else { return .localOnly }
+      guard isConnected else { throw CompletionError.disconnected }
+      var receipt = ReminderDeletionReceipt.alreadyAbsent(id)
+      try completionFence.commit {
+        guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else { return }
+        let current = Remote(reminder, calendar: runtime.calendar)
+        guard current.fingerprint == Self.fingerprint(of: expected),
+          current.doneAt == expected.doneAt
+        else {
+          throw CompletionError.changedOutside
+        }
+        guard reminder.calendar.allowsContentModifications else { throw CompletionError.readOnly }
+        #if DEBUG
+          if arguments.contains("-uiTestingFailReminderDelete")
+            || (arguments.contains("-uiTestingFailReminderDeleteOnce") && !debugDeleteFailedOnce)
+          {
+            debugDeleteFailedOnce = true
+            throw CompletionError.injected
+          }
+        #endif
+        let payload = try DeletedReminderPayload(reminder)
+        try store.remove(reminder, commit: true)
+        let token = runtime.nextID()
+        // Toast/shake compensation is session-scoped. Expired receipts fail closed.
+        if deletedReminderPayloads.count >= 64, let expired = deletedReminderPayloads.keys.first {
+          deletedReminderPayloads.removeValue(forKey: expired)
+        }
+        deletedReminderPayloads[token] = payload
+        receipt = .confirmed(current, token: token)
+      }
+      return receipt
+    }
+
+    /// Explicit Undo compensates only a deletion this app actually committed.
+    package func restoreDeletion(_ task: OneTask, receipt: ReminderDeletionReceipt) throws
+      -> Remote?
+    {
+      switch receipt {
+      case .localOnly: return nil
+      case .alreadyAbsent: throw CompletionError.changedOutside
+      case .confirmed(let deleted, let token):
+        guard isConnected else { throw CompletionError.disconnected }
+        guard store.calendarItem(withIdentifier: deleted.id) == nil else {
+          throw CompletionError.changedOutside
+        }
+        guard let list = store.calendar(withIdentifier: deleted.listID),
+          list.allowsContentModifications
+        else {
+          throw CompletionError.readOnly
+        }
+        guard let payload = deletedReminderPayloads[token] else {
+          throw CompletionError.changedOutside
+        }
+        var accepted: Remote?
+        try completionFence.commit {
+          let reminder = EKReminder(eventStore: store)
+          reminder.calendar = list
+          try payload.apply(to: reminder)
+          try store.save(reminder, commit: true)
+          accepted = Remote(reminder, calendar: runtime.calendar)
+          deletedReminderPayloads.removeValue(forKey: token)
+        }
+        return accepted
+      }
     }
 
     /// A completion is an explicit user write, not a whole-reminder fingerprint edit. Commit it before
@@ -642,7 +790,7 @@
           // Retain an actual old EventKit snapshot while the UI submits a newer explicit edit.
           debugFetchInFlight = true
           defer { debugFetchInFlight = false }
-          try? await Task.sleep(for: .seconds(4))
+          try? await Task.sleep(for: .seconds(8))
         }
       #endif
       return incomplete + completed
