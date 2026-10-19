@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "status": "research-proposal-not-installed",
+  "accessed_on": "2026-10-18",
+  "access_timezone": "America/Los_Angeles",
+  "baseline_commit": "395376bb126fd7415ac6b44eee91b796eb8ca60c",
+  "host_observation": {
+    "xcode": "27.1",
+    "xcode_build": "27A9275",
+    "swift": "6.4",
+    "swift_build": "swiftlang-6.4.0.34.1",
+    "macos": "26.6",
+    "macos_build": "25G72",
+    "architecture": "arm64",
+    "swift_format_version_output": "main",
+    "swift_format_selection": "xcrun --find swift-format",
+    "compatibility_validation": "Not built or tested; version probes only."
+  },
+  "checksum_policy": "Digests below are upstream GitHub release asset metadata, cross-checked with upstream checksum text where stated. Payload bytes were not downloaded or hashed. Null means no checksum established; never treat a Git revision as an archive SHA-256.",
+  "tools": {
+    "xcodegen": {
+      "version": "2.46.0",
+      "tag": "2.46.0",
+      "repository": "https://github.com/yonaskolb/XcodeGen",
+      "release_url": "https://github.com/yonaskolb/XcodeGen/releases/tag/2.46.0",
+      "published_at": "2026-07-16T06:43:31Z",
+      "license": "MIT",
+      "license_url": "https://github.com/yonaskolb/XcodeGen/blob/2.46.0/LICENSE",
+      "accessed_on": "2026-10-18",
+      "compatibility": "candidate-unverified-on-host",
+      "integration_note": "Candidate only. Inspect archive architecture and compare generated target/build settings against the original project on Xcode 27.1; 2.46.0 changes static-framework embedding.",
+      "artifact": {
+        "name": "xcodegen.zip",
+        "url": "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip",
+        "sha256": "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806",
+        "checksum_source": "https://api.github.com/repos/yonaskolb/XcodeGen/releases/354907817",
+        "payload_verified": false
+      }
+    },
+    "swift-format": {
+      "version": "604.0.0",
+      "tag": "604.0.0",
+      "repository": "https://github.com/swiftlang/swift-format",
+      "release_url": "https://github.com/swiftlang/swift-format/releases/tag/604.0.0",
+      "published_at": "2026-09-16T20:43:40Z",
+      "license": "Apache-2.0 WITH Swift-exception",
+      "license_url": "https://github.com/swiftlang/swift-format/blob/604.0.0/LICENSE.txt",
+      "accessed_on": "2026-10-18",
+      "compatibility": "candidate-unverified-on-host",
+      "integration_note": "Prefer the formatter bundled with exact Xcode build 27A9275. Its observed version is main, not evidence of tag 604.0.0. The tagged source is an optional reproducible alternative requiring a separate build/syntax check; never substitute nicklockwood/SwiftFormat.",
+      "git_revision": "15d7877c6b32926948f6520f0156657945955ea3",
+      "source_archive_url": "https://github.com/swiftlang/swift-format/archive/refs/tags/604.0.0.tar.gz",
+      "archive_sha256": null,
+      "checksum_note": "No publisher release asset checksum observed; use exact Git revision and lockfile, not an invented archive digest.",
+      "preferred_pin": {
+        "kind": "xcode-bundled",
+        "xcode": "27.1",
+        "xcode_build": "27A9275",
+        "upstream_tag_mapping": "unverified"
+      }
+    },
+    "swiftlint": {
+      "version": "0.65.1",
+      "tag": "0.65.1",
+      "repository": "https://github.com/realm/SwiftLint",
+      "release_url": "https://github.com/realm/SwiftLint/releases/tag/0.65.1",
+      "published_at": "2026-08-21T20:29:47Z",
+      "license": "MIT",
+      "license_url": "https://github.com/realm/SwiftLint/blob/0.65.1/LICENSE",
+      "accessed_on": "2026-10-18",
+      "compatibility": "candidate-unverified-on-host",
+      "integration_note": "Candidate standalone CLI; validate arm64 archive and SourceKit loading with DEVELOPER_DIR for Xcode 27.1. Package.swift pins SwiftSyntax 605.0.0-prerelease-2026-06-26; avoid putting its package into the app dependency graph.",
+      "artifact": {
+        "name": "portable_swiftlint.zip",
+        "url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip",
+        "sha256": "c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0",
+        "checksum_source": "https://api.github.com/repos/realm/SwiftLint/releases/374641596",
+        "payload_verified": false
+      }
+    },
+    "snapshot-testing": {
+      "version": "1.19.6",
+      "tag": "1.19.6",
+      "repository": "https://github.com/pointfreeco/swift-snapshot-testing",
+      "release_url": "https://github.com/pointfreeco/swift-snapshot-testing/releases/tag/1.19.6",
+      "published_at": "2026-09-21T21:20:00Z",
+      "license": "MIT",
+      "license_url": "https://github.com/pointfreeco/swift-snapshot-testing/blob/1.19.6/LICENSE",
+      "accessed_on": "2026-10-18",
+      "compatibility": "candidate-unverified-on-host",
+      "integration_note": "Test-only exact SPM dependency. Commit Package.resolved when integrated. Use SnapshotTesting product first; InlineSnapshotTesting pulls SwiftSyntax. No image baselines generated or accepted in this lane.",
+      "git_revision": "28e5de025e3fd98991791bfbf83023ab3708da03",
+      "source_archive_url": "https://github.com/pointfreeco/swift-snapshot-testing/archive/refs/tags/1.19.6.tar.gz",
+      "archive_sha256": null,
+      "checksum_note": "No publisher release asset checksum observed; use exact Git revision and lockfile, not an invented archive digest."
+    },
+    "fastlane": {
+      "version": "2.241.1",
+      "tag": "2.241.1",
+      "repository": "https://github.com/fastlane/fastlane",
+      "release_url": "https://github.com/fastlane/fastlane/releases/tag/2.241.1",
+      "published_at": "2026-10-15T13:07:51Z",
+      "license": "MIT",
+      "license_url": "https://github.com/fastlane/fastlane/blob/2.241.1/LICENSE",
+      "accessed_on": "2026-10-18",
+      "compatibility": "candidate-unverified-on-host",
+      "integration_note": "Optional later automation. Gem requires Ruby >=3.2.0. Pin in Gemfile and lock transitive gems and Ruby separately; gem digest does not authenticate a RubyGems download. No signing/distribution lane authorized.",
+      "artifact": {
+        "name": "fastlane-2.241.1.gem",
+        "url": "https://github.com/fastlane/fastlane/releases/download/2.241.1/fastlane-2.241.1.gem",
+        "sha256": "e8e97f3274d678c74d9e473b98d202621262c40dfce2b43b7a05afde7caa2ea5",
+        "checksum_source": "https://api.github.com/repos/fastlane/fastlane/releases/413823762",
+        "payload_verified": false
+      }
+    },
+    "mise": {
+      "version": "2026.10.14",
+      "tag": "v2026.10.14",
+      "repository": "https://github.com/jdx/mise",
+      "release_url": "https://github.com/jdx/mise/releases/tag/v2026.10.14",
+      "published_at": "2026-10-18T18:37:28Z",
+      "license": "MIT",
+      "license_url": "https://github.com/jdx/mise/blob/v2026.10.14/LICENSE",
+      "accessed_on": "2026-10-18",
+      "compatibility": "candidate-unverified-on-host",
+      "integration_note": "Optional developer environment manager. Explicit arm64 artifact exists; examine effective global override config before relying on project pins.",
+      "artifact": {
+        "name": "mise-v2026.10.14-macos-arm64.tar.gz",
+        "url": "https://github.com/jdx/mise/releases/download/v2026.10.14/mise-v2026.10.14-macos-arm64.tar.gz",
+        "sha256": "eb68c824e16af90f61e70e0d785179f335b1b95466606a5e0d8b9da504bb7bb2",
+        "checksum_source": "https://api.github.com/repos/jdx/mise/releases/416625872",
+        "payload_verified": false,
+        "checksum_manifest_url": "https://github.com/jdx/mise/releases/download/v2026.10.14/SHASUMS256.txt",
+        "checksum_manifest_cross_checked": true
+      }
+    },
+    "ruff": {
+      "version": "0.17.1",
+      "tag": "0.17.1",
+      "repository": "https://github.com/astral-sh/ruff",
+      "release_url": "https://github.com/astral-sh/ruff/releases/tag/0.17.1",
+      "published_at": "2026-10-15T15:24:28Z",
+      "license": "MIT",
+      "license_url": "https://github.com/astral-sh/ruff/blob/0.17.1/LICENSE",
+      "accessed_on": "2026-10-18",
+      "compatibility": "candidate-unverified-on-host",
+      "integration_note": "Standalone arm64 Python lint CLI. Choose target Python version from actual scripts; do not enable preview rules or apply fixes as part of bootstrap.",
+      "artifact": {
+        "name": "ruff-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-aarch64-apple-darwin.tar.gz",
+        "sha256": "1c8e6e36538eaa0b996378a20c226403c4ca6369ac24884751b024d3a9530b86",
+        "checksum_source": "https://api.github.com/repos/astral-sh/ruff/releases/413968565",
+        "payload_verified": false,
+        "checksum_manifest_url": "https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-aarch64-apple-darwin.tar.gz.sha256",
+        "checksum_manifest_cross_checked": true
+      }
+    },
+    "actionlint": {
+      "version": "1.7.12",
+      "tag": "v1.7.12",
+      "repository": "https://github.com/rhysd/actionlint",
+      "release_url": "https://github.com/rhysd/actionlint/releases/tag/v1.7.12",
+      "published_at": "2026-03-30T17:49:21Z",
+      "license": "MIT",
+      "license_url": "https://github.com/rhysd/actionlint/blob/v1.7.12/LICENSE.txt",
+      "accessed_on": "2026-10-18",
+      "compatibility": "candidate-unverified-on-host",
+      "integration_note": "Standalone arm64 workflow checker. ShellCheck and Python checker integrations require separately managed executables; this artifact does not provide them.",
+      "artifact": {
+        "name": "actionlint_1.7.12_darwin_arm64.tar.gz",
+        "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz",
+        "sha256": "aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f",
+        "checksum_source": "https://api.github.com/repos/rhysd/actionlint/releases/303326868",
+        "payload_verified": false,
+        "checksum_manifest_url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_checksums.txt",
+        "checksum_manifest_cross_checked": true
+      }
+    }
+  }
+}
