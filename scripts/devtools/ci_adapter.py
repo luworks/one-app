@@ -1,4 +1,7 @@
 """Bounded CI execution using the dev process and shared test-result authority."""
+import contextlib
+import io
+import shutil
 import hashlib
 import json
 import os
@@ -10,14 +13,12 @@ import sys
 from scripts.ci.policy import LANES, MANUAL, validate_report
 from scripts.testing import contract
 from . import commands
-from .core import atomic_json, derived_data, fingerprint, probe
+from .core import atomic_json, canonical_root, derived_data, fingerprint, probe
 from .process import Redactor
 
 # These lanes lack an executable acceptance authority in the current dev contract.
 # Do not substitute screenshot attachments, a Debug build, or discovery for them.
 UNSUPPORTED = {
-    'snapshots': 'Reviewed scene baselines and image-comparison authority are not implemented',
-    'release': 'Unsigned Release graph, link-map and resource acceptance authority is not implemented',
     'sanitizer': 'Supported sanitizer execution and result authority is not implemented',
     'performance': 'Stable benchmark and budget acceptance authority is not implemented',
     'protected-release': 'Guarded unsigned archive acceptance authority is not implemented',
@@ -73,12 +74,13 @@ def safe_artifacts(source, destination, *, sha, lane):
     redact = Redactor()
     for path in paths:
         rel = path.relative_to(source)
-        if not path.is_file() or any(p.startswith('.') for p in rel.parts):
+        in_bundle = any(p.endswith('.xcresult') for p in rel.parts)
+        if not path.is_file() or (not in_bundle and any(p.startswith('.') for p in rel.parts)):
             continue
         if path.suffix not in TEXT_ARTIFACTS | {'.png'} and not any(p.endswith('.xcresult') for p in rel.parts):
             continue
         data = path.read_bytes()
-        if path.suffix in TEXT_ARTIFACTS:
+        if path.suffix in TEXT_ARTIFACTS and not in_bundle:
             data = redact(data.decode('utf-8')).encode()
             data = re.sub(rb'/Users/[^/\s]+', b'/Users/REDACTED', data)
         target = destination / rel
@@ -90,18 +92,67 @@ def safe_artifacts(source, destination, *, sha, lane):
 
 def test_plan(root, lane):
     source = contract.inventory(root)
-    group = {'business': 'unit', 'integration': 'integration', 'core-ui': 'core', 'extended': 'ui'}[lane]
+    group = {'business': 'unit', 'integration': 'integration', 'snapshots': 'snapshot', 'core-ui': 'core', 'extended': 'ui'}[lane]
     plan = contract.plan([group], source=source)
     if lane == 'core-ui':
         plan['selectors']['ui'] += contract.expand(CORE_EXTRA, source, 'ui')
         plan['selectors']['ui'] = list(dict.fromkeys(plan['selectors']['ui']))
     if plan['pending']:
         raise ValueError('Test authority has pending coverage: ' + '; '.join(plan['pending']))
-    kind = 'logic' if lane == 'business' else 'ui'
+    kind = {'business': 'logic', 'integration': 'integration', 'snapshots': 'snapshot'}.get(lane, 'ui')
     expected = plan['selectors'][kind]
     if not expected:
         raise ValueError('Selected test authority contains zero tests')
     return kind, expected
+
+
+def _native_results(root, lane, output, report):
+    """Consume the same completed authority as ./dev, never console-only counts."""
+    from . import xcode_tests
+    kind, expected = test_plan(root, lane)
+    report['missing'] = len(expected)
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
+        code = commands.test(root, kind, timeout=600)
+    receipts = [json.loads(line) for line in captured.getvalue().splitlines() if line.startswith('{')]
+    if len(receipts) != 1 or set(receipts[0]) != {'report', 'status'}:
+        raise ValueError('Missing or ambiguous native test receipt')
+    scheme = xcode_tests.SCHEMES[kind]
+    path = Path(receipts[0]['report'])
+    evidence_root = canonical_root(root) / 'tests/results/devtools/logs'
+    if (not path.is_absolute() or not path.resolve().is_relative_to(evidence_root.resolve())
+            or path.parent.parent.resolve() != evidence_root.resolve()
+            or path.name != scheme + '.report.json' or not path.parent.name.endswith('-xcode')):
+        raise ValueError('Native evidence outside owned result directory')
+    paths = [path.parent, *path.parent.rglob('*')]
+    if any(p.is_symlink() for p in paths):
+        raise ValueError('Symlink native evidence rejected')
+    bundle = path.parent / (scheme + '.xcresult')
+    if not bundle.is_dir() or not any(p.is_file() for p in bundle.rglob('*')):
+        raise ValueError('Missing completed native xcresult bundle')
+    native = json.loads(path.read_text())
+    # The dev adapter parsed the full completed tree with process/log/summary
+    # diagnostics. Revalidate every retained attempt, including earlier failures.
+    authority = contract.report(expected, native['attempts'], exit_code=native['exit_code'])
+    if native.get('expected_count') != len(expected):
+        report['errors'].append('native_selection_mismatch')
+    report['errors'].extend(native['errors'])
+    report['errors'].extend(authority['errors'])
+    if (native.get('status') != 'passed' or native.get('coverage_status') != 'complete'
+            or receipts[0]['status'] != native.get('status')):
+        report['errors'].append('native_incomplete')
+    if any(a.get('source') != 'xcresult' for a in native['attempts']):
+        report['errors'].append('native_non_leaf_authority')
+    if code:
+        report['errors'].append('native_command_exit:' + str(code))
+        report['cancelled'] += int(code in (130, -2, -15))
+    report['executed'] = authority['executed_count']
+    report['failed'] = sum(a['status'] == 'failed' for a in authority['attempts'])
+    report['missing'] = len(authority['missing']) + len(authority['unexpected_skips'])
+    # Adapter returns only after shutdown and evidence closure. Preserve the whole
+    # result directory, including binary xcresult store files, without rewriting it.
+    shutil.copytree(path.parent, output / 'native')
+    atomic_json(output / 'test-report.json', authority)
 
 
 def _test_results(root, lane, output, run, report):
@@ -156,10 +207,10 @@ def _test_results(root, lane, output, run, report):
 
 
 def _checks(root, lane, output, run, report):
-    if lane == 'build':
+    if lane in ('build', 'release'):
         # Extend the shared dev build recipe only with explicit no-signing flags.
         argv = ['xcodebuild', 'build', '-project', 'ios/Today.xcodeproj', '-scheme', 'Today',
-                '-configuration', 'Debug', '-destination', 'generic/platform=iOS Simulator',
+                '-configuration', 'Release' if lane == 'release' else 'Debug', '-destination', 'generic/platform=iOS Simulator',
                 '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64',
                 'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO']
         result = run(root, argv, timeout=600, heavy=True)
@@ -168,7 +219,8 @@ def _checks(root, lane, output, run, report):
         if result.returncode or result.reason != 'exited':
             report['errors'].append('command_exit:' + str(result.returncode))
             return
-        products = derived_data(root) / 'Build/Products/Debug-iphonesimulator/One.app'
+        configuration = 'Release' if lane == 'release' else 'Debug'
+        products = derived_data(root) / ('Build/Products/' + configuration + '-iphonesimulator/One.app')
         for relative in ('One', 'PlugIns/TodayWidgets.appex/TodayWidgets', 'PlugIns/ShareExtension.appex/ShareExtension'):
             path = products / relative
             if not path.is_file() or path.is_symlink() or not path.stat().st_size:
@@ -176,6 +228,8 @@ def _checks(root, lane, output, run, report):
                 report['errors'].append('missing_product:' + relative)
             else:
                 report['executed'] += 1
+        if lane == 'release':
+            report['errors'].append('release_exclusion_authority_unavailable: actual Release graph, resources and artifact inspection API required')
         return
     # Keep pinned tool resolution, exact flags and path scope in commands.py.
     # Its execute() prints JSON receipts carrying the real retained log paths.
@@ -245,7 +299,9 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
         if lane in UNSUPPORTED:
             raise ValueError(UNSUPPORTED[lane])
         run = runner or commands.execute
-        if lane in ('business', 'integration', 'core-ui', 'extended'):
+        if lane in ('integration', 'snapshots'):
+            _native_results(root, lane, output, report)
+        elif lane in ('business', 'core-ui', 'extended'):
             _test_results(root, lane, output, run, report)
         else:
             _checks(root, lane, output, run, report)

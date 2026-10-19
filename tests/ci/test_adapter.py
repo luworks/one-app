@@ -1,5 +1,6 @@
 """Host-only CI regressions. No Swift, Xcode, simulator or full test execution."""
 import json
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -28,6 +29,22 @@ class AdapterTests(unittest.TestCase):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('final class ' + suite + ': XCTestCase {\n    func testRoundTrip() {}\n}\n')
+        sources = {
+            'ios/SceneRegistryTests/SceneRegistryTests.swift': 'final class SceneRegistryTests: XCTestCase {\n func testRegistry() {}\n}',
+            'ios/TodayIntegrationTests/StoreUpgradeTests.swift': 'struct StoreUpgradeTests {\n @Test func baselineStorePreservesAllFieldsAcrossReopenAndMutation() {}\n}',
+            'ios/TodaySnapshotTests/NativeSnapshotTests.swift': 'final class NativeSnapshotTests: XCTestCase {\n func testImage() {}\n}',
+        }
+        for selector in adapter.CORE_EXTRA + (
+                'JourneyTests/testJ1_addTimedTaskFromOneLine', 'JourneyTests/testJ3_completeAndUndo',
+                'CalendarAlarmTests/testWeekLateAlarmOpensItsEditorWithoutOtherEntries',
+                'AskSuggestionTests/testPolitePlanRequestPreservesPreviewThroughOperationQuestionsUntilApply'):
+            suite, method = selector.split('/')
+            path = 'ios/OneUITests/' + suite + '.swift'
+            sources[path] = sources.get(path, 'final class ' + suite + ': XCTestCase {\n') + ' func ' + method + '() {}\n'
+        for name, text in sources.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text + ('}' if name.startswith('ios/OneUITests/') else ''))
         for args in (['init', '-q'], ['add', '.'],
                      ['-c', 'user.name=CI Tests', '-c', 'user.email=ci@example.invalid', 'commit', '-qm', 'Synthetic source']):
             subprocess.run(['git', *args], cwd=self.root, check=True, capture_output=True)
@@ -45,7 +62,7 @@ class AdapterTests(unittest.TestCase):
     def report(self):
         return json.loads((self.output / 'report.json').read_text())
 
-    def runner(self, raw="Test Case '-[DomainTests testRoundTrip]' passed\n", code=0, reason='exited', mutate=None):
+    def runner(self, raw="Test Case '-[DomainTests testRoundTrip]' passed\nTest Case 'SceneRegistryTests/SceneRegistryTests/testRegistry' passed\n", code=0, reason='exited', mutate=None):
         def run(root, argv, **options):
             self.calls.append((argv, options))
             if mutate:
@@ -58,7 +75,7 @@ class AdapterTests(unittest.TestCase):
     def test_real_finished_test_required_for_success(self):
         self.assertEqual(self.invoke(), 0)
         validate_report(self.report(), self.sha, 'business')
-        self.assertEqual(self.report()['executed'], 1)
+        self.assertEqual(self.report()['executed'], 2)
         self.assertEqual(self.calls[0][0], ['swift', 'test', '--package-path', 'ios', '--jobs', '2'])
         self.assertTrue(self.calls[0][1]['heavy'])
 
@@ -81,7 +98,7 @@ class AdapterTests(unittest.TestCase):
 
     def test_missing_selected_test_and_unexpected_test_rejected(self):
         self.assertEqual(self.invoke(runner=self.runner("Test Case '-[OtherTests testOther]' passed\n")), 1)
-        self.assertEqual(self.report()['missing'], 1)
+        self.assertEqual(self.report()['missing'], 2)
         self.assertIn('unexpected_test', self.report()['errors'])
 
     def test_process_failure_timeout_and_cancellation_cannot_pass(self):
@@ -120,14 +137,14 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_absent_authoritative_selector_rejected_before_runner(self):
-        path = self.root / 'ios/OneUITests/EventSaveTests.swift'
+        path = self.root / 'ios/TodayIntegrationTests/StoreUpgradeTests.swift'
         path.unlink()
         subprocess.run(['git', 'add', '-u'], cwd=self.root, check=True, capture_output=True)
         subprocess.run(['git', '-c', 'user.name=CI Tests', '-c', 'user.email=ci@example.invalid',
                         'commit', '-qm', 'Remove synthetic selector'], cwd=self.root, check=True, capture_output=True)
         self.sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.root, text=True).strip()
         self.assertEqual(self.invoke(lane='integration'), 1)
-        self.assertIn('Unknown selection', ' '.join(self.report()['errors']))
+        self.assertIn('Zero discovered tests', ' '.join(self.report()['errors']))
         self.assertEqual(self.calls, [])
 
     def test_ui_log_failure_survives_passing_tree(self):
@@ -140,9 +157,9 @@ class AdapterTests(unittest.TestCase):
             (output / 'xcresult-tests.json').write_text(json.dumps([
                 {'nodeType': 'Test Case', 'nodeIdentifier': test, 'result': 'Passed'} for test in expected]))
             return self.runner(raw="Test Case '-[CalendarSyncTests testRoundTrip]' failed\n")(root, argv, **options)
-        self.assertEqual(self.invoke(lane='integration', runner=run), 1)
+        self.assertEqual(self.invoke(lane='core-ui', runner=run), 1)
         self.assertEqual(self.report()['failed'], 1)
-        self.assertEqual(self.report()['executed'], 3)
+        self.assertEqual(self.report()['executed'], 7)
         self.assertEqual(len(self.calls), 1)
 
     def test_ui_uses_structured_leaf_results(self):
@@ -156,8 +173,8 @@ class AdapterTests(unittest.TestCase):
             (output / 'xcresult-tests.json').write_text(json.dumps([
                 {'nodeType': 'Test Case', 'nodeIdentifier': test, 'result': 'Passed'} for test in expected]))
             return self.runner(raw='UI session completed\n')(root, argv, **options)
-        self.assertEqual(self.invoke(lane='integration', runner=run), 0)
-        self.assertEqual(self.report()['executed'], 3)
+        self.assertEqual(self.invoke(lane='core-ui', runner=run), 0)
+        self.assertEqual(self.report()['executed'], 7)
         self.assertNotIn('--full', self.calls[0][0])
 
     def test_ui_rejects_runner_from_another_sha(self):
@@ -166,8 +183,126 @@ class AdapterTests(unittest.TestCase):
             output.mkdir()
             (output / 'summary.json').write_text(json.dumps({'head': 'f' * 40}))
             return self.runner(raw='completed another revision')(root, argv, **options)
-        self.assertEqual(self.invoke(lane='integration', runner=run), 1)
+        self.assertEqual(self.invoke(lane='core-ui', runner=run), 1)
         self.assertIn('Runner SHA mismatch', ' '.join(self.report()['errors']))
+
+    def native(self, lane='integration', *, statuses=('Passed',), code=0, diagnostic='', bundle=True, change=None):
+        from scripts.devtools import xcode_tests
+        kind, expected = adapter.test_plan(self.root, lane)
+        directory = self.root / ('tests/results/devtools/logs/' + lane + '-xcode')
+        directory.mkdir(parents=True)
+        scheme = xcode_tests.SCHEMES[kind]
+        if bundle:
+            store = directory / (scheme + '.xcresult') / 'Data'
+            store.mkdir(parents=True)
+            (store / 'binary').write_bytes(b'\x00opaque\xff')
+        tree = [{'nodeType': 'Test Case', 'nodeIdentifier': test, 'result': status}
+                for test in expected for status in statuses]
+        native = xcode_tests.completed_report(adapter.contract, expected, kind, tree, 0, diagnostic)
+        if change:
+            change(native, directory)
+        path = directory / (scheme + '.report.json')
+        path.write_text(json.dumps(native))
+
+        def test(root, group, **kwargs):
+            self.assertEqual(group, kind)
+            self.assertEqual(kwargs, {'timeout': 600})
+            print(json.dumps({'report': str(path), 'status': native['status']}))
+            return code
+        # Result storage is ignored by real repositories, including hosted CI.
+        with patch.object(adapter, 'source_state', return_value='fixed'), patch.object(
+                adapter.commands, 'test', side_effect=test) as called:
+            result = self.invoke(lane=lane)
+        called.assert_called_once()
+        self.assertEqual(self.calls, [])
+        return result
+
+    def test_native_integration_and_snapshot_completed_leaf_success(self):
+        for lane in ('integration', 'snapshots'):
+            with self.subTest(lane=lane):
+                self.output = Path(self.temporary.name) / lane
+                self.assertEqual(self.native(lane), 0)
+                validate_report(self.report(), self.sha, lane)
+                self.assertEqual(self.report()['executed'], 1)
+                copied = next((self.output / 'native').glob('*.xcresult/Data/binary'))
+                self.assertEqual(copied.read_bytes(), b'\x00opaque\xff')
+
+    def test_native_failure_skip_zero_unknown_and_first_failure_fail_closed(self):
+        for index, statuses in enumerate((('Failed', 'Passed'), ('Skipped',), (), ('Unknown',))):
+            with self.subTest(statuses=statuses):
+                self.output = Path(self.temporary.name) / str(index)
+                directory = self.root / 'tests/results/devtools/logs/integration-xcode'
+                shutil.rmtree(directory, ignore_errors=True)
+                self.assertEqual(self.native(statuses=statuses), 1)
+                self.assertEqual(self.report()['status'], 'failed')
+                self.assertTrue(self.report()['errors'])
+
+    def test_native_missing_extra_wrong_target_and_symlink_are_rejected(self):
+        def missing(native, directory):
+            native['attempts'] = []
+
+        def wrong_target(native, directory):
+            native['attempts'][0]['test'] = 'TodayUITests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation'
+
+        def extra(native, directory):
+            native['attempts'].append(dict(native['attempts'][0], test='TodayTests/Other/testOther'))
+
+        def symlink(native, directory):
+            (directory / 'leak.log').symlink_to(self.selection)
+
+        for index, change in enumerate((missing, wrong_target, extra, symlink)):
+            with self.subTest(change=change.__name__):
+                self.output = Path(self.temporary.name) / str(index)
+                shutil.rmtree(self.root / 'tests/results/devtools/logs/integration-xcode', ignore_errors=True)
+                self.assertEqual(self.native(change=change), 1)
+
+    def test_bundle_staging_preserves_bytes_and_indexes_hashes(self):
+        self.assertEqual(self.native(), 0)
+        bundle = next((self.output / 'native').glob('*.xcresult'))
+        (bundle / '.metadata.json').write_bytes(b'{"path":"/Users/example/synthetic"}')
+        target = Path(self.temporary.name) / 'staged'
+        adapter.safe_artifacts(self.output, target, sha=self.sha, lane='integration')
+        original = bundle / '.metadata.json'
+        relative = original.relative_to(self.output)
+        self.assertEqual((target / relative).read_bytes(), original.read_bytes())
+        manifest = json.loads((target / 'manifest.json').read_text())
+        self.assertIn(relative.as_posix(), [entry['path'] for entry in manifest['files']])
+
+    def test_native_passing_leaves_cannot_hide_exit_or_log_failure(self):
+        self.assertEqual(self.native(code=130, diagnostic='Test testImage failed after 0.1 seconds'), 1)
+        self.assertEqual(self.report()['cancelled'], 1)
+        self.assertIn('log_failure', self.report()['errors'])
+
+    def test_native_missing_bundle_and_receipt_fail_closed(self):
+        self.assertEqual(self.native(bundle=False), 1)
+        self.assertIn('Missing completed native xcresult', ' '.join(self.report()['errors']))
+        with patch.object(adapter.commands, 'test', return_value=0):
+            self.assertEqual(self.invoke(lane='integration', output=self.output.with_name('missing')), 1)
+
+    def test_release_does_not_accept_debug_products(self):
+        dd = Path(self.temporary.name) / 'dd'
+        products = dd / 'Build/Products/Debug-iphonesimulator/One.app'
+        for relative in ('One', 'PlugIns/TodayWidgets.appex/TodayWidgets', 'PlugIns/ShareExtension.appex/ShareExtension'):
+            path = products / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'debug executable')
+        with patch.object(adapter, 'derived_data', return_value=dd):
+            self.assertEqual(self.invoke(lane='release'), 1)
+        self.assertEqual(self.report()['missing'], 3)
+        self.assertEqual(self.report()['executed'], 0)
+
+    def test_release_builds_release_products_but_refuses_missing_inspector(self):
+        # Use a temporary DD, never the machine's shared build cache.
+        with patch.object(adapter, 'derived_data', return_value=Path(self.temporary.name) / 'dd'):
+            products = adapter.derived_data(self.root) / 'Build/Products/Release-iphonesimulator/One.app'
+            for relative in ('One', 'PlugIns/TodayWidgets.appex/TodayWidgets', 'PlugIns/ShareExtension.appex/ShareExtension'):
+                path = products / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'mocked executable')
+            self.assertEqual(self.invoke(lane='release'), 1)
+        self.assertEqual(self.report()['executed'], 3)
+        self.assertIn('Release', self.calls[0][0])
+        self.assertIn('release_exclusion_authority_unavailable', ' '.join(self.report()['errors']))
 
     def test_existing_report_never_overwritten(self):
         self.output.mkdir()
