@@ -56,23 +56,20 @@ extension View {
     func appearanceRoot() -> some View { modifier(AppearanceRoot()) }
 }
 
-/// Settings → Appearance: System / Light / Dark as pills (the app's shared `PillSwitcher`).
-struct AppearanceSection: View {
+/// Settings → Appearance uses the same compact native menu as other preference rows.
+struct AppearanceSettingsRow: View {
     @AppStorage(Appearance.storageKey) private var stored = Appearance.default.rawValue
 
     var body: some View {
-        Section {
-            PillSwitcher(items: Appearance.displayOrder,
-                         selection: Binding(get: { Appearance(stored: stored) }, set: { stored = $0.rawValue }),
-                         distribution: .equal,
-                         title: { $0.title },
-                         identifier: { "settings.appearance.\($0.rawValue)" })
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-        } header: {
-            Text("Appearance")
-        } footer: {
-            Text("System follows your iPhone's Light or Dark setting. Widgets and Lock Screen follow the system.")
+        MenuChoiceRow(title: "Appearance",
+                      selection: Binding(get: { Appearance(stored: stored) }, set: { stored = $0.rawValue }),
+                      identifier: "settings.appearance") {
+            ForEach(Appearance.displayOrder, id: \.self) { appearance in
+                Text(appearance.title)
+                    .tag(appearance)
+                    .accessibilityIdentifier("settings.appearance.\(appearance.rawValue)")
+            }
         }
+        .pickerStyle(.menu)
     }
 }

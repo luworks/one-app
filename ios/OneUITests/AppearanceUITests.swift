@@ -28,13 +28,17 @@ final class AppearanceUITests: XCTestCase {
         openSettings()
     }
 
+    private var appearanceRow: XCUIElement { app.buttons["settings.appearance"] }
+
     private func choose(_ name: String) {
-        let pill = app.buttons["settings.appearance.\(name)"]
-        XCTAssertTrue(pill.waitForExistence(timeout: 5), "Appearance has a \(name) pill")
-        pill.tap()
+        XCTAssertTrue(appearanceRow.waitForExistence(timeout: 5))
+        appearanceRow.tap()
+        let option = app.buttons["settings.appearance.\(name)"]
+        XCTAssertTrue(option.waitForExistence(timeout: 5), "Appearance offers \(name) in its native menu")
+        option.tap()
     }
 
-    /// Luminance (0 black ... 1 white) of a pixel at the left edge of the Settings sheet (inside its grouped background, left of the pills).
+    /// Luminance (0 black ... 1 white) of a pixel at the left edge of the Settings sheet (inside its grouped background, left of the row).
     private func backgroundLuminance() -> Double {
         let image = XCUIScreen.main.screenshot().image
         guard let cg = image.cgImage else { return -1 }
@@ -46,11 +50,28 @@ final class AppearanceUITests: XCTestCase {
         return (0.299 * Double(pixel[0]) + 0.587 * Double(pixel[1]) + 0.114 * Double(pixel[2])) / 255
     }
 
-    private func isSelected(_ name: String) -> Bool { app.buttons["settings.appearance.\(name)"].isSelected }
+    private func isSelected(_ name: String) -> Bool {
+        appearanceRow.label == "Appearance, \(name.capitalized)"
+    }
+
+    private func attachSettings(_ name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
 
     func testDarkAppliesAtOnceAndSticksAfterRelaunch() {
         openSettings()
         XCTAssertTrue(isSelected("system"), "System is the default")
+        let systemLuminance = backgroundLuminance()
+        choose("light")
+        XCTAssertTrue(isSelected("light"))
+        usleep(800_000)
+        XCTAssertGreaterThan(backgroundLuminance(), 0.8, "Light applies immediately")
+        relaunchKeepingTheChoice()
+        XCTAssertTrue(isSelected("light"), "Light persists after relaunch")
+        attachSettings("Compact Appearance row - Light")
         choose("dark")
         XCTAssertTrue(isSelected("dark"))
         usleep(800_000)
@@ -60,8 +81,22 @@ final class AppearanceUITests: XCTestCase {
         XCTAssertTrue(isSelected("dark"), "the choice is remembered after a relaunch")
         XCTAssertLessThan(backgroundLuminance(), 0.2, "and the app starts dark")
 
-        choose("system")   // leave the default for whatever runs next
+        attachSettings("Compact Appearance row - Dark")
+        choose("system")
         XCTAssertTrue(isSelected("system"))
+        usleep(800_000)
+        XCTAssertEqual(backgroundLuminance(), systemLuminance, accuracy: 0.05, "System applies immediately")
+        relaunchKeepingTheChoice()
+        XCTAssertTrue(isSelected("system"), "System is also remembered after relaunch")
+        XCTAssertEqual(backgroundLuminance(), systemLuminance, accuracy: 0.05, "System restores the device appearance")
+        app.terminate()
+        app.launchArguments = ["-uiTesting", "-uiTestingKeepAppearance",
+                               "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXS"]
+        app.launch()
+        openSettings()
+        XCTAssertTrue(isSelected("system"))
+        XCTAssertLessThan(appearanceRow.frame.height, 60, "Small text keeps Appearance in a compact row")
+        attachSettings("Compact Appearance row - Small text")
     }
 
     /// Design review: set TEST_RUNNER_APPEARANCE_SHOTS=<folder> to save every main screen in Light and Dark. Skipped otherwise.
@@ -138,6 +173,7 @@ final class AppearanceUITests: XCTestCase {
         XCTAssertTrue(isSelected("light"), "the choice is remembered after a relaunch")
         XCTAssertGreaterThan(backgroundLuminance(), 0.8)
 
+        attachSettings("Compact Appearance row - Light")
         choose("system")
         XCTAssertTrue(isSelected("system"))
     }

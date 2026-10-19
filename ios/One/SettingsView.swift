@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import UIKit
 
 /// Keys for the choices in Settings (read by the screens they affect).
 enum SettingsKey {
@@ -19,6 +20,7 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
 
+    @AppStorage(Appearance.storageKey) private var appearance = Appearance.default.rawValue
     @AppStorage(SettingsKey.showOverdue) private var showOverdue = true
     @AppStorage(SettingsKey.showAlarms) private var showAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpToNow = true
@@ -28,6 +30,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.travelTime) private var travelTime = true
     @AppStorage(SettingsKey.healthSummary) private var healthSummary = true
 
+    @State private var systemColorScheme: ColorScheme = .light
+    @State private var systemAppearanceObservation: (UIWindowScene, any UITraitChangeRegistration)?
     @State private var calendarOn = CalendarSync.shared.isOn
     @State private var remindersOn = RemindersSync.shared.isConnected
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
@@ -39,7 +43,9 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                AppearanceSection()
+                Section {
+                    AppearanceSettingsRow()
+                }
 
                 Section {
                     Toggle(isOn: $calendarOn) { Label("Apple Calendar", systemImage: "calendar") }
@@ -213,6 +219,22 @@ struct SettingsView: View {
                     DataReset.run(context)
                     dismiss()
                 }
+            }
+        }
+        // Update the open sheet without retaining a presentation-level override when returning to System.
+        .environment(\.colorScheme, Appearance(stored: appearance).colorScheme ?? systemColorScheme)
+        .onAppear {
+            guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+            systemColorScheme = scene.traitCollection.userInterfaceStyle == .dark ? .dark : .light
+            let registration = scene.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (scene: UIWindowScene, _: UITraitCollection) in
+                systemColorScheme = scene.traitCollection.userInterfaceStyle == .dark ? .dark : .light
+            }
+            systemAppearanceObservation = (scene, registration)
+        }
+        .onDisappear {
+            if let (scene, registration) = systemAppearanceObservation {
+                scene.unregisterForTraitChanges(registration)
+                systemAppearanceObservation = nil
             }
         }
     }
