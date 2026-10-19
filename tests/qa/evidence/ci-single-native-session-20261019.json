@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "pr117": {
+    "head": "c92ed470c2c1e96407885d7c20d0997140a7cd1e",
+    "integrated_sha": "902f2a468f67f69ac4a3a05f47d333f409fd6cfb",
+    "parents": [
+      "8e6728470d1791d1a2b664d2a946c9ff4f69eaab",
+      "c92ed470c2c1e96407885d7c20d0997140a7cd1e"
+    ],
+    "tree": "aa40fa066445467850a46bf89a3688e4a4620bec",
+    "merge": "c1fdd18271c8850901b6d2070428a2b888065531",
+    "creation_to_required_seconds": 1236,
+    "verified_reports": {
+      "lint": {
+        "executed": 3,
+        "files_verified": 5,
+        "sha": "902f2a468f67f69ac4a3a05f47d333f409fd6cfb"
+      },
+      "business": {
+        "executed": 691,
+        "files_verified": 6,
+        "sha": "902f2a468f67f69ac4a3a05f47d333f409fd6cfb",
+        "expected": 695,
+        "allowed_skips": [
+          {
+            "reason": "set ACTIVITY_READ_BENCH=1",
+            "source": "log",
+            "status": "skipped",
+            "test": "TodayTests/ActivityReadPerformanceTests/testWarmPageReads"
+          },
+          {
+            "reason": "set ACTIVITY_BENCH_ROWS",
+            "source": "log",
+            "status": "skipped",
+            "test": "TodayTests/ActivityStoreTests/testBenchmarkLarge"
+          },
+          {
+            "reason": "Set frozen TitleQuality fixture and canonical evidence output paths to export observations",
+            "source": "log",
+            "status": "skipped",
+            "test": "TodayTests/CaptureTitleQualityExportTests/testExportDevelopmentFallbackObservations"
+          },
+          {
+            "reason": "Set recurring fixture and canonical evidence directory to export actual observations",
+            "source": "log",
+            "status": "skipped",
+            "test": "TodayTests/RecurringReminderExportTests/testExportDevelopmentRecurringObservations"
+          }
+        ]
+      },
+      "format": {
+        "executed": 332,
+        "files_verified": 5,
+        "sha": "902f2a468f67f69ac4a3a05f47d333f409fd6cfb"
+      },
+      "core-ui": {
+        "executed": 7,
+        "files_verified": 59,
+        "sha": "902f2a468f67f69ac4a3a05f47d333f409fd6cfb",
+        "expected": 7,
+        "allowed_skips": []
+      },
+      "integration": {
+        "executed": 23,
+        "files_verified": 88,
+        "sha": "902f2a468f67f69ac4a3a05f47d333f409fd6cfb",
+        "expected": 23,
+        "allowed_skips": []
+      },
+      "build": {
+        "executed": 3,
+        "files_verified": 5,
+        "sha": "902f2a468f67f69ac4a3a05f47d333f409fd6cfb"
+      },
+      "snapshots": {
+        "executed": 6,
+        "files_verified": 53,
+        "sha": "902f2a468f67f69ac4a3a05f47d333f409fd6cfb",
+        "expected": 6,
+        "allowed_skips": []
+      }
+    },
+    "archive_integrity": [
+      {
+        "id": 12225488850,
+        "sha256": "0ef8dfc2a7fd0e8f86e847996abea60966681e9715e1bc377a3c7a8a1bf6ca45",
+        "crc_verified_members": 209
+      },
+      {
+        "id": 12225382059,
+        "sha256": "1537ca8dc57b74bd90816788610619318520fcea2c3d38fbedcb8936429a732a",
+        "crc_verified_members": 19
+      }
+    ]
+  },
+  "candidate": {
+    "purpose": "One fresh native XCTest dispatch replaces three sequential dispatches; no test/result cache or changed assertions/selection/product source",
+    "helper_tests": 151,
+    "helpers_seconds": 16.234199957999998,
+    "lint": "three checks passed",
+    "raw_mixed_tree_replay": "36 passing leaves; parser replay only, not fresh simulator execution",
+    "local_native_ui_or_phone": false,
+    "risk_selection": "Existing reverse module dependencies plus recognized feature-to-suite mapping and fixed smoke. Config/shared/schema/dependency/tooling remains wide. Candidate measures configuration profile.",
+    "review": "Focused source review repaired missing UI action/test QA journal import; completed runs import after shutdown. Source drift now fails after copying completed native evidence; positive and drift fixtures retain the full bundle.",
+    "target_seconds": 300,
+    "target_met": false,
+    "ordinary_useful_swift_warm_profile": "unmeasured",
+    "measurement": "v19-costs.json; independent queues and VM/cache profiles prevent causal attribution",
+    "release": "v19-main114-release-verified.json; three products and 31 file hashes; no whole-main or formal Release acceptance"
+  },
+  "raw_evidence_root": "/Users/yuanlu/code/one-app/tests/results/ci-hillclimb-20261019"
+}

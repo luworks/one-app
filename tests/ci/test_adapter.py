@@ -295,6 +295,54 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
         return result
 
+    def test_single_dispatch_partitions_complete_targets_and_rejects_union_gaps(self):
+        from scripts.devtools import xcode_tests
+        plans = {lane: adapter.test_plan(self.root, lane) for lane in ('integration', 'snapshots', 'core-ui')}
+        expected = [test for _, tests in plans.values() for test in tests]
+        directory = self.root / 'tests/results/devtools/logs/combined-xcode'
+        directory.mkdir(parents=True)
+        store = directory / 'TodayCI.xcresult/Data'
+        store.mkdir(parents=True)
+        (store / 'binary').write_bytes(b'opaque synthetic completed bundle')
+        path = directory / 'TodayCI.report.json'
+        for defect in ('none', 'missing', 'unexpected', 'skip', 'cancel', 'source-drift'):
+            with self.subTest(defect=defect):
+                self.output.mkdir()
+                selection = self.output / 'selection.json'
+                selection.write_bytes(self.selection.read_bytes())
+                ids = expected[:-1] if defect == 'missing' else list(expected)
+                if defect == 'unexpected':
+                    ids.append('TodayUITests/Unknown/testUnexpected')
+                tree = [{'nodeType': 'Test Case', 'nodeIdentifier': test,
+                         'result': 'Skipped' if defect == 'skip' and index == 0 else 'Passed'}
+                        for index, test in enumerate(ids)]
+                native = xcode_tests.completed_report(adapter.contract, expected, 'ui', tree, 0, '')
+                path.write_text(json.dumps(native))
+
+                def dispatch(root, authority, groups, **kwargs):
+                    self.assertEqual(groups, [])
+                    self.assertEqual(kwargs['ci_lanes'], {kind: ids for kind, ids in plans.values()})
+                    print(json.dumps({'report': str(path), 'status': native['status']}))
+                    return 130 if defect == 'cancel' else int(native['status'] != 'passed')
+
+                with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_CI_NATIVE_BATCH': '1'}), patch.object(
+                        adapter, 'source_state', side_effect=['fixed', *(['changed'] * 3 if defect == 'source-drift' else ['fixed'] * 3)]), patch.object(xcode_tests, 'run', side_effect=dispatch) as run:
+                    code = adapter.main(self.root, 'native-tests', selection=selection, output=self.output,
+                                        sha=self.sha, synthetic=True, no_distribute=True)
+                run.assert_called_once()
+                self.assertEqual(code == 0, defect == 'none')
+                for lane, (_, ids) in plans.items():
+                    child = self.output.parent / ('today-' + lane)
+                    report = json.loads((child / 'report.json').read_text())
+                    self.assertEqual(report['status'], 'passed' if defect == 'none' else 'failed')
+                    self.assertTrue((child / 'native/TodayCI.xcresult/Data/binary').is_file())
+                    if defect == 'none':
+                        self.assertEqual(report['executed'], len(ids))
+                        self.assertTrue((child / 'native/TodayCI.xcresult/Data/binary').is_file())
+                        self.assertTrue(report['artifact_provenance']['closed'])
+                    shutil.rmtree(child)
+                shutil.rmtree(self.output)
+
     def test_native_batch_reuses_product_authority_and_requires_fresh_leaves(self):
         with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_CI_NATIVE_BATCH': '1'}):
             for index, statuses in enumerate((('Passed',), ())):

@@ -306,6 +306,32 @@ class ProducerTests(unittest.TestCase):
         self.assertFalse((self.base / 'today-artifacts-business').exists())
         self.assertNotIn('artifact_provenance', json.loads((self.output / 'report.json').read_text()))
 
+    def test_native_transaction_publishes_three_independent_closed_reports(self):
+        def execute(argv, **kwargs):
+            self.assertEqual(argv[:3], ['./dev', 'ci', 'native-tests'])
+            for lane in ('integration', 'snapshots', 'core-ui'):
+                output = self.base / ('today-' + lane)
+                output.mkdir()
+                (output / 'command.log').write_text('fresh combined native dispatch finished')
+                producer.close_producer(output, dict(self.report, lane=lane), roots=('command.log',))
+            return SimpleNamespace(returncode=0, stdout='one fresh dispatch; owned simulator shutdown finished')
+
+        prepared = {'tools': {'xcodegen'}, 'native': True, 'selection': b'{}'}
+        with patch.object(producer.subprocess, 'check_output', return_value=SHA), patch.object(
+                producer, 'execute', side_effect=execute) as dispatch:
+            self.assertEqual(producer.run_lane('native-tests', prepared), 0)
+        dispatch.assert_called_once()
+        for lane in ('integration', 'snapshots', 'core-ui'):
+            output = self.base / ('today-artifacts-' + lane)
+            report = json.loads((output / 'report.json').read_text())
+            self.assertEqual(report['lane'], lane)
+            self.assertTrue((output / 'manifest.json').is_file())
+        with patch.dict(os.environ, {'TODAY_CI_NATIVE_BATCH': '1'}), patch.object(
+                sys, 'argv', ['run.py', 'build', 'integration', 'snapshots', 'core-ui']), patch.object(
+                producer, 'run_lane', return_value=0) as run:
+            self.assertEqual(producer.main(), 0)
+        self.assertEqual([call.args[0] for call in run.call_args_list], ['build', 'native-tests'])
+
     def test_wrapper_orders_setup_before_selection_and_adapter(self):
         self.output.rmdir()
         calls = []

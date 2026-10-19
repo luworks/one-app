@@ -300,13 +300,17 @@ def execute(argv, *, timeout=600, grace=30):
 
 def run_lane(lane, prepared):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    if lane not in LANES:
+    if lane not in LANES and lane != 'native-tests':
         raise ValueError('unknown lane')
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=5).strip()
     if sha != os.environ['GITHUB_SHA']:
         raise ValueError('checkout does not match integrated GITHUB_SHA')
     output = Path(os.environ['RUNNER_TEMP']) / ('today-' + lane)
-    producer_boundary(sha, lane, output)
+    if lane == 'native-tests':
+        for name in ('integration', 'snapshots', 'core-ui'):
+            producer_boundary(sha, name, output.parent / ('today-' + name))
+    else:
+        producer_boundary(sha, lane, output)
     output.mkdir(exist_ok=False)
     selection = output / 'selection.json'
     # Use the existing checksummed tool selector, not the full local environment:
@@ -357,19 +361,21 @@ def run_lane(lane, prepared):
                       'executed': 0, 'failed': 1, 'cancelled': 0, 'missing': 0,
                       'errors': ['setup_exit:' + str(completed.returncode)]}
             close_producer(output, report, roots=('selection.json',))
-        # Adapter receipts remain authoritative; never synthesize one for a
-        # missing, malformed or unsuccessful adapter report.
-        started = time.monotonic()
-        report = close_wrapper(output, sha, lane, text)
-        print(json.dumps({'close_wrapper_seconds': round(time.monotonic() - started, 3)}))
-        if secret_found:
-            raise ValueError('blocking secret candidate in wrapper output')
+        # A combined dispatch publishes three complete lane receipts. No later
+        # command reads or reuses test results from this transaction.
+        receipts = [(lane, output)] if lane != 'native-tests' else [
+            (name, output.parent / ('today-' + name)) for name in ('integration', 'snapshots', 'core-ui')]
+        for report_lane, report_output in receipts:
+            started = time.monotonic()
+            report = close_wrapper(report_output, sha, report_lane, text)
+            print(json.dumps({'lane': report_lane, 'close_wrapper_seconds': round(time.monotonic() - started, 3)}))
+            if secret_found:
+                raise ValueError('blocking secret candidate in wrapper output')
+            started = time.monotonic()
+            stage(report_output, Path(os.environ['RUNNER_TEMP']) / ('today-artifacts-' + report_lane), sha, report_lane)
+            print(json.dumps({'lane': report_lane, 'stage_seconds': round(time.monotonic() - started, 3)}))
+            validate_report(report, sha, report_lane)
         print(sanitize(text))
-        # A stopped failed run may still have useful synthetic diffs/crashes.
-        started = time.monotonic()
-        stage(output, Path(os.environ['RUNNER_TEMP']) / ('today-artifacts-' + lane), sha, lane)
-        print(json.dumps({'stage_seconds': round(time.monotonic() - started, 3)}))
-        validate_report(report, sha, lane)
     except (OSError, ValueError, KeyError, TypeError) as error:
         print('::error::CI adapter report rejected (' + type(error).__name__ +
               '); retained closed evidence requires a valid producer receipt. See docs/engineering/ci-artifact-producer.md.')
@@ -403,8 +409,11 @@ def main():
     if not lanes or len(lanes) != len(set(lanes)) or any(lane not in LANES for lane in lanes):
         raise ValueError('Expected unique known lanes')
     prepared = {'tools': set(), 'native': False, 'selection': None}
+    if (lanes == ['build', 'integration', 'snapshots', 'core-ui']
+            and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1'):
+        lanes = ['build', 'native-tests']
     for lane in lanes:
-        os.environ['TODAY_LANE'] = lane
+        os.environ['TODAY_LANE'] = 'integration' if lane == 'native-tests' else lane
         code = run_lane(lane, prepared)
         if code:
             # Do not manufacture successful receipts for unexecuted later lanes.

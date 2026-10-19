@@ -614,3 +614,57 @@ Local verification: `./dev test helpers` passed 145 host regressions;
 random double-underscore path bug and corrected missing import) and final logs
 are retained under the primary results directory. No local native build,
 simulator UI, full suite or phone validation was performed in this resume.
+
+### Single native dispatch candidate (2026-10-19)
+
+PR117 merged normally as `c1fdd18271c8850901b6d2070428a2b888065531`.
+Run `39332698864` tested integrated SHA
+`902f2a468f67f69ac4a3a05f47d333f409fd6cfb`, parents `8e672847` and
+`c92ed470`, with the same tree as its head. All seven reports passed:
+format 332, lint 3, business 691 plus four authorized skips, build three
+products, integration 23, snapshots six and core UI seven. Downloaded archive
+CRCs, every manifest size/hash and all three complete raw xcresult leaf trees
+were independently checked. Required completion took **1,236 seconds** including
+queue, versus PR114's 1,464 seconds. These heterogeneous hosted configuration
+samples do not establish a causal speedup or a 300-second result.
+
+Native queued 89 seconds after helpers and ran 1,118 seconds. Its cold build
+process took 167.846 seconds; integration test-without-building 260.376 seconds
+for a 44.711-second session and 9.106 seconds of test bodies; snapshots took
+77.642 seconds for a 26.581-second session and 5.629 seconds of bodies. UI had
+243.784 seconds of bodies in a 283.552-second session. Full lane adapter costs
+were build 169.789, integration 325.767, snapshots 137.180 and UI 416.274 seconds.
+Fresh provenance validations took 0.310 and 0.425 seconds: further hash tuning
+has no dominant-budget justification. Host queued 235 seconds in this sample;
+PR114's host queue alone was 502 seconds. Hosted capacity is outside our absolute
+control, and the total denominator continues to include it.
+
+The candidate dispatches the unchanged effective integration, snapshot and UI
+selections together through `TodayCI`, with one owned simulator lifecycle and one
+fresh test-without-building process. It checks the complete union before
+partitioning target-qualified leaves into three independent lane reports. Each
+report retains the complete shared xcresult, original process status, logs,
+provenance and manifest. Missing/ambiguous target identity, skipped/unexpected
+leaves, earlier failures, cancellation, parser errors or nonzero process/shutdown
+status still fail. No result survives for reuse by a later dispatch. Existing
+build/source/toolchain provenance and the 600-second build deadline remain;
+the combined test process uses the existing UI authority's 1,200-second deadline.
+Main, extended and Release coverage obligations are unchanged.
+
+The versioned feature-to-suite map in `scripts/ci/policy.py` already runs fixed
+Add and complete/Undo smoke plus full affected feature suites from the evaluated
+module reverse dependency closure. Only recognized feature Swift changes can
+narrow; configuration/schema/dependency/shared/tooling changes widen selection.
+This tooling candidate therefore deliberately measures a wide configuration
+profile. Neither an ordinary useful Swift-source profile nor a warm profile is
+qualified yet. Even the measured cold build plus seven UI bodies exceeds 300
+seconds before queue/startup; this candidate is a measured startup hypothesis,
+not a promise that the complete target has been achieved.
+
+Separately, main run `39332217914` at `8e672847` produced a passing Release report
+for three products: its archive CRC and 31 manifest file hashes were checked.
+The overall main aggregate was still open at the retained observation. This does
+not claim formal Release, accessibility, physical-device or product acceptance.
+Raw evidence and phase costs remain in primary
+`tests/results/ci-hillclimb-20261019/v19-*`; local synthetic helper and lint
+checks are distinct from the candidate's pending hosted native validation.

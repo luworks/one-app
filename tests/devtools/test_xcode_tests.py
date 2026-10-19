@@ -18,7 +18,9 @@ METHOD = 'TodayTests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReop
 
 
 def tree(ids, status='Passed'):
-    return {'testNodes': [{'nodeType': 'Test Case', 'nodeIdentifier': value, 'result': status} for value in ids]}
+    return {'testNodes': [{'nodeType': 'Test Case', 'nodeIdentifier': value, 'result': status,
+                           'nodeIdentifierURL': 'test://com.apple.xcode/Today/' + value} for value in ids]}
+
 
 
 class XcodeTests(unittest.TestCase):
@@ -69,8 +71,12 @@ class XcodeTests(unittest.TestCase):
         report = xcode_tests.completed_report(CONTRACT, [], 'integration', tree([METHOD]), 0, '')
         self.assertIn('zero_expected', report['errors'])
 
-    def run_mocked(self, directory, *, process_exit=0, parser_exit=0, active=False, missing_bundle=False, summary_fail=False, snapshot=False):
+    def run_mocked(self, directory, *, process_exit=0, parser_exit=0, active=False, missing_bundle=False, summary_fail=False, snapshot=False, combined=False):
         calls, locks = [], []
+        lanes = {'integration': [METHOD],
+                 'snapshot': ['TodaySnapshotTests/NativeSnapshotTests/testHealthStepsLight'],
+                 'ui': ['TodayUITests/JourneyTests/testJ1_addTimedTaskFromOneLine']}
+        ids = [test for values in lanes.values() for test in values] if combined else [METHOD]
         journal = Mock()
         evidence = SimpleNamespace(path=directory / 'initial.log', journal=journal, session='synthetic',
                                    record=Mock(), close=Mock())
@@ -99,7 +105,7 @@ class XcodeTests(unittest.TestCase):
                 code = process_exit
             elif argv[:3] == ['xcrun', 'xcresulttool', 'get']:
                 self.assertTrue(any(c[0] == 'xcodebuild' for c in calls[:-1]))
-                content = json.dumps({'failedTests': int(summary_fail)} if 'summary' in argv else tree([METHOD]))
+                content = json.dumps({'failedTests': int(summary_fail)} if 'summary' in argv else tree(ids))
                 code = parser_exit
             evidence.path.write_text(content)
             return SimpleNamespace(returncode=code, log=evidence.path)
@@ -108,12 +114,16 @@ class XcodeTests(unittest.TestCase):
                 patch.object(xcode_tests, 'Evidence', return_value=evidence), \
                 patch.object(xcode_tests, 'run_process', side_effect=process), \
                 patch('scripts.devtools.resolve.locked_arguments', return_value=['-disableAutomaticPackageResolution']), \
+                patch.object(xcode_tests, 'ensure_test_products', return_value=directory / 'TodayCI.xctestrun'), \
+                patch.object(xcode_tests, 'fingerprint', return_value={'sha256': 'synthetic'}), \
+                patch.object(xcode_tests, 'provenance', return_value={'valid': True}), \
                 patch.object(xcode_tests, 'selected', return_value=({'snapshot': [METHOD]} if snapshot else {'unit': [METHOD], 'integration': [METHOD]})):
             if active:
                 with self.assertRaisesRegex(ValueError, 'shutdown'):
                     xcode_tests.run(ROOT, CONTRACT, ['ios-unit', 'integration'])
                 return calls, journal, []
-            code = xcode_tests.run(ROOT, CONTRACT, ['ios-unit', 'integration'])
+            code = xcode_tests.run(ROOT, CONTRACT, ['ios-unit', 'integration'], reuse=combined,
+                                   ci_lanes=lanes if combined else None)
         reports = list(directory.rglob('*.report.json'))
         return calls, journal, (code, json.loads(reports[0].read_text()))
 
@@ -131,6 +141,32 @@ class XcodeTests(unittest.TestCase):
         self.assertEqual(calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
         self.assertEqual(report['status'], 'passed')
         self.assertGreaterEqual(journal.artifact.call_count, 2)
+
+    def test_combined_dispatch_uses_one_fresh_process_and_one_owned_lifecycle(self):
+        with patch.dict('os.environ', {'TODAY_CI_SYNTHETIC': '1', 'TODAY_CI_NATIVE_BATCH': '1',
+                                      'TODAY_LANE': 'integration'}), tempfile.TemporaryDirectory() as temporary:
+            calls, journal, (code, report) = self.run_mocked(Path(temporary), combined=True)
+        self.assertEqual(code, 0)
+        dispatches = [c for c in calls if c[0] == 'xcodebuild']
+        self.assertEqual(len(dispatches), 1)
+        self.assertEqual(dispatches[0][1], 'test-without-building')
+        self.assertEqual(sum(c[:3] == ['xcrun', 'simctl', 'boot'] for c in calls), 1)
+        self.assertEqual(sum(c[:3] == ['xcrun', 'simctl', 'shutdown'] for c in calls), 1)
+        self.assertEqual(report['executed_count'], 3)
+        self.assertEqual(report['status'], 'passed')
+        journal.import_run.assert_called_once()
+        self.assertEqual(journal.import_run.call_args.kwargs['status'], 'passed')
+
+    def test_combined_target_identity_is_required_and_consistent(self):
+        valid = tree([METHOD])
+        self.assertEqual(CONTRACT.xcresult_attempts(xcode_tests.ci_tree(valid, CONTRACT), 'ui')[0]['test'], METHOD)
+        for changes in ({'nodeIdentifierURL': ''},
+                        {'nodeIdentifierURL': 'test://com.apple.xcode/Today/TodayUITests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation'},
+                        {'nodeIdentifierURL': 'test://com.apple.xcode/Today/Unknown/StoreUpgradeTests/missing'}):
+            data = tree([METHOD])
+            data['testNodes'][0].update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                xcode_tests.ci_tree(data, CONTRACT)
 
     def test_nonzero_and_parser_exits_stay_failed_and_shutdown(self):
         for options in ({'process_exit': 65}, {'parser_exit': 1}, {'missing_bundle': True}, {'summary_fail': True}):

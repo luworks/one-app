@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import time
 import uuid
+from urllib.parse import urlparse
 
 from .core import (NativeBuildError, ResourceLock, atomic_json, ci_test_scheme, dd_lock, derived_data,
                    ensure_test_products, fingerprint, host_lock, native_test_options, provenance)
@@ -90,14 +91,56 @@ def completed_report(contract, expected, lane, data, exit_code, raw_log, parser_
     return report
 
 
-def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=False):
+def ci_tree(data, contract):
+    """Resolve mixed-target leaves from Xcode's target-qualified identifier URL.
+
+    Two-part identifiers are ambiguous across targets. Require both forms to
+    agree before partitioning a single fresh dispatch into lane reports.
+    """
+    targets = {'TodayTests': 'integration', 'TodaySnapshotTests': 'snapshot', 'TodayUITests': 'ui'}
+
+    def walk(node):
+        if isinstance(node, list):
+            return [walk(value) for value in node]
+        if not isinstance(node, dict):
+            return node
+        node = {key: walk(value) for key, value in node.items()}
+        if node.get('nodeType') in ('Test Case', 'Test Case Run') or 'testStatus' in node:
+            url = urlparse(node.get('nodeIdentifierURL', ''))
+            parts = url.path.strip('/').split('/')
+            if (url.scheme != 'test' or url.netloc != 'com.apple.xcode'
+                    or len(parts) != 4 or parts[1] not in targets):
+                raise ValueError('Missing or unsupported target-qualified native leaf')
+            lane = targets[parts[1]]
+            identifier = contract.canonical('/'.join(parts[1:]), lane)
+            short = node.get('testIdentifier', node.get('nodeIdentifier', node.get('identifier', '')))
+            if contract.canonical(short, lane) != identifier:
+                raise ValueError('Native leaf identifier and target URL disagree')
+            node['nodeIdentifier'] = identifier
+            node['testIdentifier'] = identifier
+        return node
+
+    return walk(data)
+
+
+def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=False, ci_lanes=None):
     """Caller may hold the shared host/DD locks across a final serial collection."""
-    lanes = selected(contract, root, groups, only)
+    if ci_lanes is not None:
+        if not native_test_options() or not reuse or set(ci_lanes) != {'integration', 'snapshot', 'ui'}:
+            raise ValueError('Combined dispatch requires the routine native CI boundary')
+        source = contract.inventory(root)
+        for lane, ids in ci_lanes.items():
+            if not ids or len(ids) != len(set(ids)) or set(ids) - set(contract.available(source, lane)):
+                raise ValueError('Invalid combined native selection: ' + lane)
+        lanes = ci_lanes
+    else:
+        lanes = selected(contract, root, groups, only)
     if not lanes or any(not ids for ids in lanes.values()):
         raise ValueError('At least one expected test per lane required')
     batches = {}
     for lane, ids in lanes.items():
-        batch = batches.setdefault(test_scheme(lane), {'lane': lane, 'expected': []})
+        scheme = 'TodayCI' if ci_lanes is not None else test_scheme(lane)
+        batch = batches.setdefault(scheme, {'lane': 'ui' if ci_lanes is not None else lane, 'expected': []})
         batch['expected'].extend(ids)
     first_failure = 0
     with ExitStack() as stack:
@@ -117,7 +160,8 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
             # Each process owns a unique raw log, indexed by the existing QA helper.
             evidence.path = output / (uuid.uuid4().hex + '.log')
             started = time.monotonic()
-            result = run_process(command, cwd=root, evidence=evidence, timeout=timeout)
+            limit = min(timeout, 600) if ci_lanes is not None and command[:2] != ['xcodebuild', 'test-without-building'] else timeout
+            result = run_process(command, cwd=root, evidence=evidence, timeout=limit)
             print(json.dumps({'native_command': command[:2], 'seconds': round(time.monotonic() - started, 3),
                               'exit': result.returncode, 'log': str(result.log)}))
             return result
@@ -211,6 +255,8 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                         raise ValueError('Malformed xcresult summary')
                     data = json.loads(capture(['xcrun', 'xcresulttool', 'get', 'test-results', 'tests',
                                                '--path', str(bundle), '--format', 'json']))
+                    if ci_lanes is not None:
+                        data = ci_tree(data, contract)
                 except (OSError, ValueError, TypeError) as exc:
                     error = str(exc)
                 report = completed_report(contract, expected, batch['lane'], data, result.returncode, raw, error)
@@ -239,4 +285,12 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
             if owned:
                 shutdown = invoke(['xcrun', 'simctl', 'shutdown', simulator])
                 first_failure = first_failure or shutdown.returncode
+        if ci_lanes is not None:
+            # Preserve the UI authority's action/test history after all writers
+            # and the owned simulator have closed. Raw timing stays in logs.
+            started = time.monotonic()
+            evidence.journal.import_run(output, evidence.session + '-native',
+                                        status='failed' if first_failure else 'passed')
+            print(json.dumps({'native_phase': 'journal_closed_run',
+                              'seconds': round(time.monotonic() - started, 3)}))
     return int(first_failure)

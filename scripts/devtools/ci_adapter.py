@@ -79,7 +79,7 @@ def test_plan(root, lane, selection=None):
     return kind, expected
 
 
-def _native_results(root, lane, output, report, selection=None):
+def _native_results(root, lane, output, report, selection=None, completed=None):
     """Consume the same completed authority as ./dev, never console-only counts."""
     from . import xcode_tests
     kind, expected = test_plan(root, lane, selection)
@@ -87,7 +87,10 @@ def _native_results(root, lane, output, report, selection=None):
     captured = io.StringIO()
     try:
         with contextlib.redirect_stdout(captured):
-            if os.environ.get('TODAY_CI_SYNTHETIC') == '1' and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1':
+            if completed is not None:
+                code, text = completed[:2]
+                print(text, end='')
+            elif os.environ.get('TODAY_CI_SYNTHETIC') == '1' and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1':
                 # The wrapper generated/resolved once before the shared producer.
                 # This authority still validates live source/products before each test.
                 code = xcode_tests.run(root, contract, [kind], only=expected, timeout=600, reuse=True)
@@ -99,7 +102,7 @@ def _native_results(root, lane, output, report, selection=None):
     receipts = [event for event in events if isinstance(event, dict) and 'report' in event]
     if len(receipts) != 1 or set(receipts[0]) != {'report', 'status'}:
         raise ValueError('Missing or ambiguous native test receipt')
-    scheme = xcode_tests.test_scheme(kind)
+    scheme = 'TodayCI' if completed is not None else xcode_tests.test_scheme(kind)
     path = Path(receipts[0]['report'])
     evidence_root = canonical_root(root) / 'tests/results/devtools/logs'
     if (not path.is_absolute() or not path.resolve().is_relative_to(evidence_root.resolve())
@@ -124,8 +127,19 @@ def _native_results(root, lane, output, report, selection=None):
         raise ValueError('Missing completed native xcresult bundle')
     # The dev adapter parsed the full completed tree with process/log/summary
     # diagnostics. Revalidate every retained attempt, including earlier failures.
-    authority = contract.report(expected, native['attempts'], exit_code=native['exit_code'])
-    if native.get('expected_count') != len(expected):
+    attempts = native['attempts']
+    if completed is not None:
+        union = [test for name in ('integration', 'snapshots', 'core-ui')
+                 for test in test_plan(root, name, selection)[1]]
+        combined = contract.report(union, attempts, exit_code=native['exit_code'])
+        report['errors'].extend(combined['errors'])
+        if native.get('expected_count') != len(union):
+            report['errors'].append('native_union_selection_mismatch')
+        target = contract.lane_settings(kind)['target']
+        attempts = [attempt for attempt in attempts if attempt['test'].split('/')[0] == target]
+        report['artifact_writers_closed'] = True
+    authority = contract.report(expected, attempts, exit_code=native['exit_code'])
+    if completed is None and native.get('expected_count') != len(expected):
         report['errors'].append('native_selection_mismatch')
     report['errors'].extend(authority['errors'])
     if (native.get('status') != 'passed' or native.get('coverage_status') != 'complete'
@@ -319,7 +333,7 @@ def format_inputs(root):
             for p in (root / folder).rglob('*.swift') if p.is_file()]
 
 
-def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runner=None):
+def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runner=None, completed=None):
     """Runner injection is for host regressions, never a CI simulation/success mode."""
     root, output = Path(root).resolve(), Path(output).absolute()
     report = {'sha': sha, 'lane': lane, 'status': 'failed', 'executed': 0, 'failed': 0,
@@ -353,7 +367,7 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
                                      'deferred_to': 'main broad core and explicit extended authority',
                                      'deferred': [test for test in broad if test not in effective]}
         atomic_json(output / 'accepted-selection.json', accepted)
-        before = source_state(root, sha)
+        before = source_state(root, sha) if completed is None else completed[2]
         report['source_sha256'] = before
         if lane in MANUAL and (os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch'
                                or os.environ.get('MANUAL_LANE') != lane):
@@ -361,8 +375,8 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
         if lane in UNSUPPORTED:
             raise ValueError(UNSUPPORTED[lane])
         run = runner or commands.execute
-        if lane in ('integration', 'snapshots'):
-            _native_results(root, lane, output, report, selected)
+        if lane in ('integration', 'snapshots') or (lane == 'core-ui' and completed is not None):
+            _native_results(root, lane, output, report, selected, completed)
         elif lane in ('business', 'core-ui', 'extended'):
             _test_results(root, lane, output, run, report, selected)
         else:
@@ -400,5 +414,57 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
 
 def main(root, lane, *, selection, output, sha, synthetic, no_distribute):
     """Run one CI lane. CLI wiring is owned by integration."""
+    if lane == 'native-tests':
+        return native_batch(root, selection=selection, output=output, sha=sha,
+                            synthetic=synthetic, no_distribute=no_distribute)
     return _main(root, lane, selection=selection, output=output, sha=sha,
                  synthetic=synthetic, no_distribute=no_distribute)
+
+
+def native_batch(root, *, selection, output, sha, synthetic, no_distribute):
+    """One synchronous dispatch, three independently checked and sealed reports.
+
+    Results never cross a dispatch or revision. Every selected leaf is checked
+    against the union before its target is partitioned into lane authorities.
+    """
+    from . import xcode_tests
+    root, output = Path(root).resolve(), Path(output).absolute()
+    if (synthetic is not True or no_distribute is not True
+            or os.environ.get('TODAY_CI_SYNTHETIC') != '1'
+            or os.environ.get('TODAY_CI_NATIVE_BATCH') != '1'):
+        raise ValueError('Combined tests require explicit routine native CI')
+    if output.resolve().is_relative_to(root) or any(
+            p.name != 'selection.json' or p.is_symlink() for p in output.iterdir()):
+        raise ValueError('Combined output must be fresh and outside source')
+    selected = selection_data(selection)
+    from scripts.ci.run import producer_boundary
+    outputs = {lane: output.parent / ('today-' + lane) for lane in ('integration', 'snapshots', 'core-ui')}
+    for name, path in outputs.items():
+        producer_boundary(sha, name, path)
+        if path.exists():
+            raise ValueError('Native lane output already exists')
+    before = source_state(root, sha)
+    plans = {lane: test_plan(root, lane, selected) for lane in ('integration', 'snapshots', 'core-ui')}
+    captured = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(captured):
+            code = xcode_tests.run(root, contract, [], timeout=1200, reuse=True,
+                                   ci_lanes={kind: ids for kind, ids in plans.values()})
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        # Close failed lane receipts with the original redacted preflight error
+        # even if the native authority could not create a completed receipt.
+        captured.write(json.dumps({'native_batch_error': Redactor()(str(error))}) + '\n')
+        code = 1
+    text = captured.getvalue()
+    # Each lane rechecks process status, the complete union receipt and all of
+    # its own expected leaves. A union failure cannot disappear in partitioning.
+    first = code
+    for lane in plans:
+        child = outputs[lane]
+        child.mkdir(exist_ok=False)
+        child_selection = child / 'selection.json'
+        child_selection.write_bytes(Path(selection).read_bytes())
+        result = _main(root, lane, selection=child_selection, output=child, sha=sha,
+                       synthetic=synthetic, no_distribute=no_distribute, completed=(code, text, before))
+        first = first or result
+    return int(first)
