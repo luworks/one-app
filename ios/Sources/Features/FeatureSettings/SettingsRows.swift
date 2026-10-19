@@ -3,21 +3,21 @@ import TodayShared
 import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
+import One
 
 // MARK: - Today
 
 /// Settings > Today: the timeline's extras. Rows only; they sit inside the Today section.
-struct TodayTimelineSettings: View {
+package struct TodayTimelineSettings: View {
+    package init() {}
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.eveningHourKey) private var eveningHour = Preferences.eveningHour
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
 
-    var body: some View {
+    package var body: some View {
         ExplainedToggle(title: "Show Tomorrow", isOn: $showsTomorrow,
                         caption: "A short look at tomorrow at the end of Today.")
         if showsTomorrow {
@@ -42,13 +42,14 @@ struct TodayTimelineSettings: View {
 // MARK: - Calendar
 
 /// Settings > Calendar: how Month, Week and Year look and where Calendar opens.
-struct CalendarSettingsSection: View {
+package struct CalendarSettingsSection: View {
+    package init() {}
     @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
     @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
     @AppStorage(Preferences.calendarStartKey) private var calendarStart = Preferences.calendarStart.rawValue
 
-    var body: some View {
+    package var body: some View {
         Section {
             ExplainedToggle(title: "Dim past days", isOn: $dimsPast,
                             caption: "Days that are over show in light grey in Month and Week, and so do their events.")
@@ -72,11 +73,12 @@ struct CalendarSettingsSection: View {
 // MARK: - Reminders
 
 /// Settings > Reminders: where a new reminder goes when nothing else decides.
-struct RemindersSettingsSection: View {
+package struct RemindersSettingsSection: View {
+    package init() {}
     @AppStorage(Preferences.newReminderListKey) private var chosen = Preferences.newReminderList
     @Query(sort: \OneList.order) private var lists: [OneList]
 
-    var body: some View {
+    package var body: some View {
         Section {
             MenuChoiceRow(title: "New reminders go to", selection: $chosen,
                           caption: "Auto files an Ask reminder in the list it clearly belongs to, else your Inbox, and a quick add in Reminders. A list you choose is used when nothing else decides. Reminders you already have stay where they are.",
@@ -93,11 +95,12 @@ struct RemindersSettingsSection: View {
 // MARK: - Alarms
 
 /// Settings > Alarms: what a new alarm starts with. Alarms you already have keep their own.
-struct AlarmsSettingsSection: View {
+package struct AlarmsSettingsSection: View {
+    package init() {}
     @AppStorage(Preferences.newAlarmSnoozeKey) private var snooze = Preferences.newAlarmSnooze
     @AppStorage(Preferences.newAlarmSoundKey) private var sound = Preferences.newAlarmSound
 
-    var body: some View {
+    package var body: some View {
         Section {
             MenuChoiceRow(title: "Snooze length", selection: Binding(get: { AlarmPlan.snoozeMinutes(nearest: snooze) }, set: { snooze = $0 }),
                           caption: nil, identifier: "settings.newAlarmSnooze") {
@@ -118,10 +121,11 @@ struct AlarmsSettingsSection: View {
 // MARK: - AI
 
 /// Settings > AI: the ideas on the Ask page.
-struct AskSuggestionsSettingRow: View {
+package struct AskSuggestionsSettingRow: View {
+    package init() {}
     @AppStorage(Preferences.askSuggestionsKey) private var shows = Preferences.askSuggestions
 
-    var body: some View {
+    package var body: some View {
         ExplainedToggle(title: "Suggestions on the Ask page", isOn: $shows,
                         caption: "The few ideas under “What do you want to plan?”. They are made on this iPhone from your own plans.")
     }

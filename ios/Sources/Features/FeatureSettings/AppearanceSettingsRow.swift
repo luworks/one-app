@@ -3,10 +3,11 @@ import TodayCore
 import TodayDesignSystem
 
 /// Settings → Appearance uses the same compact native menu as other preference rows.
-struct AppearanceSettingsRow: View {
+package struct AppearanceSettingsRow: View {
+    package init() {}
     @AppStorage(Appearance.storageKey) private var stored = Appearance.default.rawValue
 
-    var body: some View {
+    package var body: some View {
         MenuChoiceRow(title: "Appearance",
                       selection: Binding(get: { Appearance(stored: stored) }, set: { stored = $0.rawValue }),
                       identifier: "settings.appearance") {
