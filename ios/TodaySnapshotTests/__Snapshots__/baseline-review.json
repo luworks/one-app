@@ -1,0 +1,13 @@
+{
+  "source_commit": "9ad0662",
+  "harness_commit": "b6874c2e43812923e31313478c06bd7cdfcccc46",
+  "reviewer": "integration lead, direct image inspection",
+  "status": "reviewed; comparison pending",
+  "images": {
+    "testHealthEmptyDarkLargeType.empty-dark-accessibility3.png": "e0e3fcb0d59c221373363bb6fa80fabb8d3fc974b52a9b530fde902ed70a070f",
+    "testHealthStepsLight.steps-light.png": "24425ba5fb210cbcd4e7b5dd0d2776370e44b0b2f3eac1687fea6f5e66c477fd",
+    "testNativePillSwitcherLargeType.range-accessibility3.png": "86d1029f2f0c7bb519eba3a217694616fc80754ecbef80ad8f7089f16f7d11d7",
+    "testStopwatchRunningDigitalDark.digital-running-dark.png": "e952398bba4c14aeb6aaba94c45d691b67e61be3ea6579314571462c979c4438",
+    "testStopwatchStoppedAnalog.analog-stopped-laps.png": "a968051f78849809b90cc70f48716d790ba6dadd32499ecc2de0e52a8619ef3c"
+  }
+}
