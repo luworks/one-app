@@ -20,3 +20,9 @@ Generated developer targets use Today names while compatibility-sensitive module
 6. Freeze integrated source, run the one authorized complete test collection alone, then use targeted repairs. Report runtime, device and external-service blockers independently.
 
 Each phase records actual commands, outcomes and remaining gates through the existing QA journal and compact evidence documents. No timers, second mandatory ledger, production distribution or speculative feature changes.
+
+## Remaining feature integration ownership
+
+The integration writer owns the package/project, all persisted models, OneStore, shared rows/actions and Shell. Isolated lanes may move only their enumerated feature files; they import the identity-preserving One library and use constructor-supplied upward editor actions. All same-package implementation seams use package access; executable entry APIs alone are public. No feature owns model/config changes. CI adapter owns only its new adapter/tests, leaving command routing with integration.
+
+Activity lane: ActivityView.swift and ActivityDataView.swift only; ActivityFileSheet is moved by integration. Reminders lane: RemindersView.swift, ReminderListScreen.swift, QuickReminderSheet.swift, ListEditor.swift, TaskEditor.swift only. Calendar lane: CalendarView.swift, YearMarksView.swift, EventEditor.swift only. The integration writer retains remaining files until explicitly assigned.
