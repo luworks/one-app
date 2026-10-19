@@ -6,7 +6,7 @@ import shutil
 import sys
 import time
 
-from .bootstrap import bootstrap, BootstrapError
+from .bootstrap import bootstrap as bootstrap_tools, BootstrapError
 from .core import (atomic_json, dd_lock, derived_data, fingerprint, host_lock,
                    provenance, record_build, state_root)
 from .process import Evidence, Redactor, run_process
@@ -27,8 +27,18 @@ def execute(root, command, *, timeout=600, heavy=False, env=None):
         evidence.close()
 
 
+def bootstrap(root, *, tools=None, timeout=600):
+    result = bootstrap_tools(root, tools=tools, timeout=timeout)
+    if tools is None:
+        from .runtimes import install
+        code = install(root, timeout=timeout)
+        if code:
+            raise BootstrapError('Locked runtime bootstrap failed with exit ' + str(code))
+    return result
+
+
 def tool(root, name):
-    planned = bootstrap(root, tools=[name], plan=True)['tools'][0]
+    planned = bootstrap_tools(root, tools=[name], plan=True)['tools'][0]
     if planned.get('executable'):
         return planned['executable']
     if name == 'swift-format':
@@ -135,4 +145,5 @@ def release(root, action, options=(), timeout=600):
         return execute(root, [sys.executable, 'scripts/release/release.py', action, *options], timeout=timeout).returncode
     if action != 'archive':
         raise ValueError('Distribution requires separate explicit authorization and is not a default dev action')
-    return execute(root, ['bundle', 'exec', 'fastlane', 'archive', *options], timeout=timeout, heavy=True).returncode
+    from .runtimes import command, environment
+    return execute(root, command(root, ['bundle', '_4.0.16_', 'exec', 'fastlane', 'archive', *options]), env=environment(root), timeout=timeout, heavy=True).returncode

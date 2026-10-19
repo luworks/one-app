@@ -49,6 +49,16 @@ def main(argv=None, root=ROOT):
     release_parser = sub.add_parser('release', help='guarded release preflight/archive/validate')
     release_parser.add_argument('action', choices=['preflight', 'archive', 'validate'])
     release_parser.add_argument('options', nargs=argparse.REMAINDER)
+    ci_parser = sub.add_parser('ci', help='execute one fail-closed integrated-SHA CI lane')
+    ci_parser.add_argument('lane')
+    ci_parser.add_argument('--selection', type=Path, required=True)
+    ci_parser.add_argument('--output', type=Path, required=True)
+    ci_parser.add_argument('--sha', required=True)
+    ci_parser.add_argument('--synthetic', action='store_true')
+    ci_parser.add_argument('--no-distribute', action='store_true')
+    feature_parser = sub.add_parser('new-feature', help='create a linked native feature or verify a temporary one')
+    feature_parser.add_argument('name')
+    feature_parser.add_argument('--verify', action='store_true')
     args = parser.parse_args(argv)
     if args.command == 'help':
         parser.print_help()
@@ -57,6 +67,21 @@ def main(argv=None, root=ROOT):
         root = Path(root).resolve()
         if args.command not in ('doctor', 'inventory', 'plan'):
             from . import commands
+            if args.command == 'ci':
+                from .ci_adapter import main as ci_main
+                return ci_main(root, args.lane, selection=args.selection, output=args.output,
+                               sha=args.sha, synthetic=args.synthetic, no_distribute=args.no_distribute)
+            if args.command == 'new-feature':
+                from .new_feature import create, temporary
+                if args.verify:
+                    with temporary(root, args.name):
+                        code = commands.generate(root)
+                        if not code:
+                            code = commands.build(root, scheme='Today')
+                    restored = commands.generate(root)
+                    return code or restored
+                print(json.dumps(create(root, args.name).as_dict(), indent=2))
+                return 0
             if args.command == 'bootstrap':
                 print(json.dumps(commands.bootstrap(root, tools=args.tool), indent=2))
                 return 0

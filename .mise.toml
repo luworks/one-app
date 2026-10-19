@@ -1,7 +1,6 @@
 # Xcode supplies Swift and swift-format; doctor/bootstrap verifies its build identity.
 # Downloaded CLI pins and SHA-256 values are authoritative in docs/engineering/tool-pins.json.
 [env]
-DEVELOPER_DIR = "/Applications/Xcode.app/Contents/Developer"
 _.path = [
   "{{config_root}}/.dev-tools/xcodegen/2.46.0/bin",
   "{{config_root}}/.dev-tools/swiftlint/0.65.1/bin",
