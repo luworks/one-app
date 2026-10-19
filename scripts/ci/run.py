@@ -17,7 +17,7 @@ except ImportError:  # Direct workflow entry point.
 
 def sanitize(text):
     text = re.sub(r'(?i)(token|password|passwd|secret|authorization|api[_-]?key|credential)'
-                  r'(\s*[:=]\s*)("[^"]*"|\'[^\']*\'|[^\s,;]+)', r'\1\2[REDACTED]', text)
+                  r'([ \t]*[:=][ \t]*)("[^"]*"|\'[^\']*\'|[^\s,;]+)', r'\1\2[REDACTED]', text)
     text = re.sub(r'(?i)(Bearer\s+)\S+', r'\1[REDACTED]', text)
     text = re.sub(r'(https?://)[^\s/@]+:[^\s/@]+@', r'\1[REDACTED]@', text)
     text = re.sub(r'(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+)', '[REDACTED]', text)
@@ -44,10 +44,12 @@ def artifact_digest(data):
 
 def bundle_secret(data):
     """Blocking heuristic only; synthetic/no-secret runner provenance is mandatory."""
+    # Swift manglings can contain gHr_; Objective-C selectors end in Token: or
+    # Authorization:. Neither embeds a credential value on the same line.
     return re.search(
-        rb'(?i)(?:gh[pousr]_[a-z0-9_]+|github_pat_[a-z0-9_]+|'
+        rb'(?i)(?:\bgh[pousr]_[a-z0-9_]+|\bgithub_pat_[a-z0-9_]+|'
         rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|'
-        rb"(?:token|password|passwd|secret|authorization|api[_-]?key|credential)[\"']?\s*[:=]\s*[^\s]+|"
+        rb"(?:token|password|passwd|secret|authorization|api[_-]?key|credential)[\"']?[ \t]*[:=][ \t]*[^\s]+|"
         rb'Bearer\s+[^\s]+)', data) is not None
 
 
@@ -55,7 +57,7 @@ def secret_candidate(data):
     # Redacted logs are expected; placeholders carry no credential. Everything
     # else matching the blocking scanner rejects closure without showing bytes.
     data = re.sub(rb"(?i)(?:token|password|passwd|secret|authorization|api[_-]?key|credential)"
-                  rb"[\"']?\s*[:=]\s*[\"']?\[REDACTED\]", b'', data)
+                  rb"[\"']?[ \t]*[:=][ \t]*[\"']?\[REDACTED\]", b'', data)
     data = re.sub(rb'(?i)Bearer\s+\[REDACTED\]', b'', data)
     return bundle_secret(data)
 

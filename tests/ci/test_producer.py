@@ -99,6 +99,28 @@ class ProducerTests(unittest.TestCase):
         self.assertNotIn(value, json.dumps(report) + stderr.getvalue())
         self.assertIn('secret-bearing environment rejected', str(report['errors']))
 
+    def test_link_map_symbols_are_not_credentials_and_real_candidates_still_fail(self):
+        symbols = (b'0x100009C08 0x0 [ 0] _$sxIeAgHr_xs5Error_pIegHrzo_s8SendableRzlTRyt_Tg5TATQ0_\n'
+                   b'0x100631B0E 0x3E [ 10] literal string: application:didRegisterForRemoteNotificationsWithDeviceToken:\n'
+                   b'0x100631B4C 0x27 [ 11] literal string: locationManagerDidChangeAuthorization:\n'
+                   b'0x100631B73 0x24 [ 11] literal string: locationManager:didUpdateLocations:\n')
+        self.assertFalse(producer.secret_candidate(symbols))
+        self.assertEqual(producer.sanitize(symbols.decode()).encode(), symbols)
+        self.write('native/Today-One.map', symbols)
+        self.close()
+        producer.close_wrapper(self.output, SHA, 'business', 'completed link map\n')
+        producer.stage(self.output, self.base / 'published-map', SHA, 'business')
+        self.assertEqual((self.base / 'published-map/native/Today-One.map').read_bytes(), symbols)
+        for candidate in (b'ghp_fixturecredential', b'github_pat_fixturecredential',
+                          b'TOKEN = fixture-secret', b'access_token=fixture-secret',
+                          b'"authorization": "fixture-secret"',
+                          b'Bearer fixture-secret', b'-----BEGIN PRIVATE KEY-----'):
+            with self.subTest(candidate=candidate):
+                self.assertTrue(producer.secret_candidate(symbols + candidate))
+                self.write('native/Today-One.map', symbols + candidate)
+                with self.assertRaisesRegex(ValueError, 'blocking secret'):
+                    self.close()
+
     def test_candidate_secrets_reject_without_rewriting_bundle_or_receipt(self):
         for name in ('command.log', 'native/TodayTests.xcresult/.hidden'):
             with self.subTest(name=name):
