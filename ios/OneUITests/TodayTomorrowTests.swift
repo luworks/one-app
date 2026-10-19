@@ -1,81 +1,189 @@
 import XCTest
 
-/// Today ends with a short look at tomorrow: its first few items by day, all of it from 18:00.
-/// The clock is pinned with `-uiTestingNow`, so the tests behave the same at any time of day.
-/// Tomorrow's items come from tests/fixtures/today-dataset.json (Weekly review 10:00, Weekly sync 11:00,
-/// Design review 14:00, plus Standup and alarms on weekdays).
+/// Today keeps its four trailing sections collapsed; Tomorrow reveals every next-day entry on demand.
+/// Synthetic dates follow the device calendar; no Apple services or user data are used.
 @MainActor
 final class TodayTomorrowTests: XCTestCase {
   private func launch(at time: String) -> XCUIApplication {
     continueAfterFailure = false
     let app = XCUIApplication()
-    app.launchArguments = TestData.launchArguments + ["-uiTestingNow", time]
+    app.launchArguments =
+      TestData.fixtureArguments("today-disclosure-sections.json") + [
+        "-uiTestingNow", time, "-today.setting.jumpToNow", "NO",
+        "-uiTestingPrefs", "suggestTimes=0,showFreeTime=0",
+      ]
     app.launch()
+    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     return app
   }
 
-  private func text(_ app: XCUIApplication, _ label: String) -> XCUIElement {
-    app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", label))
-      .firstMatch
+  private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+    let list = app.collectionViews.firstMatch
+    for up in [true, false] {
+      for _ in 0..<6 {
+        var viewport = list.frame.intersection(app.frame).insetBy(dx: 0, dy: 8)
+        let chat = app.buttons["Ask AI or add anything"]
+        if chat.exists {
+          viewport.size.height = min(viewport.maxY, chat.frame.minY) - viewport.minY
+        }
+        if element.exists, element.isHittable, element.isFullyVisible(in: viewport) { return }
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let from = origin.withOffset(
+          CGVector(dx: viewport.midX, dy: viewport.minY + viewport.height * (up ? 0.8 : 0.2)))
+        let to = origin.withOffset(
+          CGVector(dx: viewport.midX, dy: viewport.minY + viewport.height * (up ? 0.2 : 0.8)))
+        from.press(forDuration: 0.05, thenDragTo: to)
+      }
+    }
+    XCTFail("Section control is outside the native List viewport: \(element)")
   }
 
-  /// The Tomorrow section sits at the end of the list; scroll until its header is on screen.
-  private func scrollToTomorrow(_ app: XCUIApplication) -> XCUIElement {
+  private func screenshot(_ name: String) {
+    let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+    attachment.name = name
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
+  private func tomorrow(_ app: XCUIApplication) -> XCUIElement {
     let header = app.buttons["tomorrowHeader"]
-    for _ in 0..<8 where !(header.exists && header.isHittable) {
-      app.swipeUp()
-    }
-    XCTAssertTrue(header.waitForExistence(timeout: 5), "Today ends with a Tomorrow section")
-    // Bring the rows under the header into view too.
-    app.swipeUp()
+    reveal(header, in: app)
     return header
   }
 
-  func testMorningShowsTheStartOfTomorrow() {
-    let app = launch(at: "09:41")
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    _ = scrollToTomorrow(app)
-    XCTAssertTrue(
-      text(app, "Weekly review").waitForExistence(timeout: 3), "tomorrow's first event shows")
-
-    let more = app.buttons.matching(NSPredicate(format: "label ENDSWITH ' more'")).firstMatch
-    // How many items tomorrow has depends on the weekday (Standup and alarms), so "more" may not be needed.
-    if more.exists {
-      XCTAssertFalse(app.buttons["Show less"].exists, "only the first few items show by day")
-      more.tap()
-      XCTAssertTrue(
-        app.buttons["Show less"].waitForExistence(timeout: 3), "more shows the rest of tomorrow")
-      XCTAssertFalse(more.exists)
-    }
-    XCTAssertTrue(text(app, "Design review").waitForExistence(timeout: 3))
+  private func viewport(in app: XCUIApplication) -> CGRect {
+    var frame = app.collectionViews.firstMatch.frame.intersection(app.frame)
+    let chat = app.buttons["Ask AI or add anything"]
+    if chat.exists { frame.size.height = min(frame.maxY, chat.frame.minY) - frame.minY }
+    return frame
   }
 
-  func testEveningShowsAllOfTomorrow() {
-    let app = launch(at: "19:30")
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    _ = scrollToTomorrow(app)
-    XCTAssertTrue(text(app, "Weekly review").waitForExistence(timeout: 3))
-    XCTAssertTrue(
-      text(app, "Design review").waitForExistence(timeout: 3), "from 18:00 all of tomorrow shows")
+  private func assertCompleteTomorrow(_ app: XCUIApplication) {
+    for (title, prefix, isButton) in [
+      ("Tomorrow all-day event", "Tomorrow all-day event,", true),
+      ("Daily section meeting", "Daily section meeting,", true),
+      ("Tomorrow timed task", "Tomorrow timed task", false),
+      ("Tomorrow anytime task", "Tomorrow anytime task", false),
+      ("Daily section alarm", "Alarm Daily section alarm at ", true),
+    ] {
+      let header = tomorrow(app)
+      let rows =
+        isButton
+        ? app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix))
+        : app.staticTexts.matching(NSPredicate(format: "label == %@", prefix))
+      var found = false
+      for _ in 0..<7 {
+        let viewport = viewport(in: app)
+        let lowerBound = header.exists ? max(viewport.minY, header.frame.maxY) : viewport.minY
+        if rows.allElementsBoundByIndex.contains(where: {
+          $0.isFullyVisible(in: viewport) && $0.isHittable && $0.frame.minY >= lowerBound
+        }) {
+          found = true
+          break
+        }
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        origin.withOffset(CGVector(dx: viewport.midX, dy: viewport.minY + viewport.height * 0.8))
+          .press(
+            forDuration: 0.05,
+            thenDragTo: origin.withOffset(
+              CGVector(dx: viewport.midX, dy: viewport.minY + viewport.height * 0.25)))
+      }
+      XCTAssertTrue(found, "Every next-day item is reachable below Tomorrow: \(title)")
+    }
+    XCTAssertFalse(app.buttons["Show less"].exists)
     XCTAssertFalse(
       app.buttons.matching(NSPredicate(format: "label ENDSWITH ' more'")).firstMatch.exists)
   }
 
+  func testMorningSectionsStartCollapsedAndExpandAllOfTomorrow() {
+    let app = launch(at: "09:41")
+    XCTAssertFalse(app.buttons["focus.active"].exists)
+    let headers = [
+      app.buttons["focus.overdue"], app.buttons["focus.snoozed"], app.buttons["focus.settled"],
+      tomorrow(app),
+    ]
+    for header in headers {
+      reveal(header, in: app)
+      XCTAssertEqual(header.value as? String, "Collapsed")
+    }
+    for (first, second) in zip(headers, headers.dropFirst()) {
+      XCTAssertLessThan(first.frame.minY, second.frame.minY, "Trailing section order")
+    }
+    XCTAssertTrue(headers[0].label.hasPrefix("Overdue (1)"))
+    XCTAssertTrue(headers[3].label.hasPrefix("Tomorrow (5)"))
+    XCTAssertFalse(app.staticTexts["Section overdue"].exists)
+    XCTAssertFalse(app.staticTexts["Tomorrow anytime task"].exists)
+    screenshot("today-sections-collapsed")
+    for button in [app.buttons["Today"], app.buttons["Ask AI or add anything"], app.buttons["New"]]
+    {
+      XCTAssertTrue(button.isHittable)
+      XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+      XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+    }
+    let shortcut = app.buttons["today.overdueShortcut"]
+    reveal(shortcut, in: app)
+    shortcut.tap()
+    XCTAssertEqual(headers[0].value as? String, "Expanded")
+    let overdue = app.staticTexts["Section overdue"].firstMatch
+    XCTAssertTrue(overdue.waitForExistence(timeout: 3))
+    XCTAssertEqual(
+      app.staticTexts.matching(NSPredicate(format: "label == 'Section overdue'")).count, 1)
+    reveal(overdue, in: app)
+    XCTAssertTrue(
+      app.buttons["Complete Section overdue"].exists, "Opening Overdue never completes it")
+    screenshot("today-overdue-shortcut-expanded")
+    reveal(headers[0], in: app)
+    headers[0].tap()
+    XCTAssertFalse(overdue.exists)
+    tomorrow(app).tap()
+    assertCompleteTomorrow(app)
+    screenshot("today-tomorrow-all-items")
+    tomorrow(app).tap()
+    XCTAssertFalse(app.staticTexts["Tomorrow anytime task"].exists)
+    reveal(app.staticTexts["Section today"].firstMatch, in: app)
+    XCTAssertTrue(
+      app.buttons["Complete Section today"].exists, "Active items remain visible without a wrapper")
+    // Match the original footer capture's device, dataset and app clock for the final visual comparison.
+    app.terminate()
+    app.launchArguments =
+      TestData.launchArguments + ["-uiTestingNow", "13:13", "-appearance", "light"]
+    app.launch()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 8))
+    Thread.sleep(forTimeInterval: 0.8)
+    screenshot("today-sections-canonical-after")
+  }
+
+  func testEveningKeepsTomorrowCollapsedUntilOpened() {
+    let app = launch(at: "19:30")
+    let header = tomorrow(app)
+    XCTAssertEqual(header.value as? String, "Collapsed")
+    XCTAssertFalse(app.buttons["reviewToday"].exists)
+    header.tap()
+    let review = app.buttons["reviewToday"]
+    reveal(review, in: app)
+    XCTAssertTrue(review.exists, "Review today remains available inside the disclosure")
+    assertCompleteTomorrow(app)
+  }
+
   func testHeaderOpensTomorrowAsItsOwnDay() {
     let app = launch(at: "09:41")
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    scrollToTomorrow(app).tap()
-    XCTAssertTrue(
-      app.buttons["Back to today"].waitForExistence(timeout: 5),
-      "tomorrow opens as a day of its own")
-    XCTAssertFalse(app.buttons["tomorrowHeader"].exists, "only today shows a Tomorrow section")
-    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
+    tomorrow(app).tap()
+    let open = app.buttons["tomorrow.openDay"]
+    reveal(open, in: app)
+    open.tap()
+    XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["tomorrowHeader"].exists)
+    let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
     XCTAssertEqual(
       app.staticTexts["todayDate"].label,
-      tomorrow.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()),
-      "the open day's date shows on top")
-    XCTAssertFalse(app.staticTexts["Due today"].exists)
+      nextDay.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+    let task = app.staticTexts["Tomorrow timed task"].firstMatch
+    reveal(task, in: app)
+    task.tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 3))
+    XCTAssertEqual(app.textFields["task.title"].value as? String, "Tomorrow timed task")
+    app.buttons["Cancel"].tap()
     app.buttons["Back to today"].tap()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertEqual(tomorrow(app).value as? String, "Collapsed")
   }
 }

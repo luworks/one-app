@@ -29,6 +29,7 @@
     package var edit: (CalEntry) -> Void
     /// Rows in a list get the swipe; blocks on the week grid only get the long-press menu.
     package var swipes = true
+    package var attention: TodayRowAttention? = nil
 
     /// Whether Delete needs a question first: any repeating event, local or in Apple's calendar.
     private var isRepeating: Bool {
@@ -45,7 +46,7 @@
         .modifier(
           SwipeIfRows(
             enabled: swipes, entry: entry, isRepeating: isRepeating, delete: requestDelete,
-            flag: toggleFlag))
+            flag: toggleFlag, attention: attention, canDelete: canDelete))
     }
 
     @ViewBuilder private var menu: some View {
@@ -96,10 +97,15 @@
           Label("Edit", systemImage: "pencil")
         }
       }
-      Button(role: .destructive) {
-        requestDelete()
-      } label: {
-        Label("Delete", systemImage: "trash")
+      if let attention { Section { attention.menu } }
+      if attention == nil || canDelete {
+        Section {
+          Button(role: .destructive) {
+            requestDelete()
+          } label: {
+            Label("Delete", systemImage: "trash")
+          }
+        }
       }
     }
 
@@ -107,8 +113,18 @@
       if case .task(let task) = entry.source { withAnimation { task.flagged.toggle() } }
     }
 
+    private var canDelete: Bool {
+      guard attention?.canDelete != false else { return false }
+      switch entry.source {
+      case .system(let id): return calendar.canDelete(externalID: id)
+      case .local(let event):
+        return event.externalID == nil || calendar.canDelete(externalID: event.externalID)
+      case .task, .alarm: return true
+      }
+    }
+
     private func requestDelete() {
-      if isRepeating {
+      if attention != nil || isRepeating {
         pendingDelete = entry
       } else {
         actions.delete(entry, span: .futureEvents, context: context, toast: toast)
@@ -130,7 +146,9 @@
         titleVisibility: .visible,
         presenting: pending
       ) { entry in
-        if case .system = entry.source {
+        if !entry.repeats {
+          Button("Delete Event", role: .destructive) { run(entry, .thisEvent) }
+        } else if case .system = entry.source {
           Button("Delete This Event Only", role: .destructive) { run(entry, .thisEvent) }
           Button("Delete All Future Events", role: .destructive) { run(entry, .futureEvents) }
         } else if case .local(let event) = entry.source, event.externalID != nil {
@@ -140,7 +158,9 @@
         }
         Button("Cancel", role: .cancel) {}
       } message: { entry in
-        Text("“\(entry.title)” repeats.")
+        Text(
+          entry.repeats
+            ? "“\(entry.title)” repeats." : "Delete “\(entry.title)”? This changes its source.")
       }
     }
 
@@ -157,13 +177,24 @@
     let isRepeating: Bool
     let delete: () -> Void
     let flag: () -> Void
+    let attention: TodayRowAttention?
+    let canDelete: Bool
 
     func body(content: Content) -> some View {
       if enabled {
-        content.swipeActions(edge: .trailing, allowsFullSwipe: !isRepeating) {
-          // Keep the row until the adapter confirms the write, including permission or network failures.
-          RowAction.delete(asksFirst: true, delete)
-          if case .task(let task) = entry.source { RowAction.flag(task.flagged, flag) }
+        content.swipeActions(edge: .trailing, allowsFullSwipe: attention == nil && !isRepeating) {
+          if let attention {
+            var commands: TodayRowAttention {
+              var value = attention
+              value.canDelete = canDelete
+              return value
+            }
+            commands.swipeButtons(delete: delete).labelStyle(.titleAndIcon)
+          } else {
+            // Keep the row until the adapter confirms the write, including permission or network failures.
+            RowAction.delete(asksFirst: true, delete)
+            if case .task(let task) = entry.source { RowAction.flag(task.flagged, flag) }
+          }
         }
       } else {
         content
@@ -175,12 +206,13 @@
     /// Swipe and long-press actions on a calendar entry (see `EntryActions`).
     package func entryActions(
       _ entry: CalEntry, pendingDelete: Binding<CalEntry?>, open: @escaping (CalEntry) -> Void,
-      edit: @escaping (CalEntry) -> Void, swipes: Bool = true, calendar: any CalendarService
+      edit: @escaping (CalEntry) -> Void, swipes: Bool = true, calendar: any CalendarService,
+      attention: TodayRowAttention? = nil
     ) -> some View {
       modifier(
         EntryActions(
           calendar: calendar, entry: entry, pendingDelete: pendingDelete, open: open, edit: edit,
-          swipes: swipes))
+          swipes: swipes, attention: attention))
     }
 
     /// The "this event or the series?" question for a repeating event's Delete (see `EntryActions`).

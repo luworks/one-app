@@ -49,6 +49,7 @@ final class RepeatingReminderTests: XCTestCase {
 
     // Its next occurrence is tomorrow's own day.
     header.tap()
+    app.buttons["tomorrow.openDay"].tap()
     XCTAssertTrue(
       app.buttons["Back to today"].waitForExistence(timeout: 5),
       "tomorrow opens as a day of its own")

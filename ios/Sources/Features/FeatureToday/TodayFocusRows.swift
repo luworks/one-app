@@ -1,6 +1,7 @@
 #if os(iOS)
   import SwiftUI
   import TodayData
+  import TodayPlannerUI
 
   struct FocusTarget: Identifiable {
     var identity: FocusIdentity?
@@ -16,16 +17,51 @@
     let enabled: Bool
     let settle: () -> Void
     let snooze: () -> Void
+    var open: (() -> Void)? = nil
+    var delete: (() -> Void)? = nil
+    var restore: (() -> Void)? = nil
+    var showSnooze = true
+    var restoreLabel = "Restore"
+
+    @ViewBuilder private var attentionButtons: some View {
+      if let restore {
+        Button(restoreLabel, systemImage: "arrow.uturn.backward", action: restore)
+      } else {
+        Button("Settle", systemImage: "checkmark", action: settle)
+      }
+      if showSnooze {
+        Button(restore == nil ? "Snooze" : "Change Snooze", systemImage: "clock", action: snooze)
+      }
+    }
 
     @ViewBuilder func body(content: Content) -> some View {
       if enabled {
         content
-          .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button(action: settle) { Label("Settle", systemImage: "checkmark") }.tint(.indigo)
-            Button(action: snooze) { Label("Snooze", systemImage: "clock") }.tint(.gray)
+          .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if let delete { Button("Delete", systemImage: "trash", action: delete).tint(.red) }
+            if showSnooze {
+              Button(
+                restore == nil ? "Snooze" : "Change Snooze", systemImage: "clock", action: snooze
+              ).tint(.gray)
+            }
+            if let restore {
+              Button(restoreLabel, systemImage: "arrow.uturn.backward", action: restore).tint(
+                .indigo)
+            } else {
+              Button("Settle", systemImage: "checkmark", action: settle).tint(.indigo)
+            }
           }
-          .accessibilityAction(named: "Settle", settle)
-          .accessibilityAction(named: "Snooze", snooze)
+          .contextMenu {
+            if let open { Section { Button("Open", systemImage: "pencil", action: open) } }
+            Section { attentionButtons }
+            if let delete {
+              Section { Button("Delete", systemImage: "trash", role: .destructive, action: delete) }
+            }
+          }
+          .accessibilityActions {
+            attentionButtons
+            if let delete { Button("Delete", action: delete) }
+          }
       } else {
         content
       }

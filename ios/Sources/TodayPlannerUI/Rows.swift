@@ -6,6 +6,59 @@
   import TodayPlatform
   import TodayDesignSystem
 
+  /// Optional Today-only attention commands; source deletion stays with the existing row owner.
+  package struct TodayRowAttention {
+    package var settle: (() -> Void)?
+    package var snooze: (() -> Void)?
+    package var canDelete = true
+
+    package init(settle: (() -> Void)?, snooze: (() -> Void)?, canDelete: Bool = true) {
+      self.settle = settle
+      self.snooze = snooze
+      self.canDelete = canDelete
+    }
+
+    @ViewBuilder package func swipeButtons(delete: @escaping () -> Void) -> some View {
+      // SwiftUI lays trailing actions out from the outside edge: Delete stays rightmost.
+      if canDelete {
+        Button(action: delete) { Label("Delete", systemImage: "trash") }.tint(.red)
+      }
+      if let snooze { Button(action: snooze) { Label("Snooze", systemImage: "clock") }.tint(.gray) }
+      if let settle {
+        Button(action: settle) { Label("Settle", systemImage: "checkmark") }.tint(.indigo)
+      }
+    }
+
+    @ViewBuilder package var menu: some View {
+      if let settle {
+        Button(action: settle) { Label("Settle", systemImage: "checkmark") }
+          .accessibilityHint("Hides this item in Today only. Alerts stay unchanged.")
+      }
+      if let snooze { Button(action: snooze) { Label("Snooze", systemImage: "clock") } }
+    }
+  }
+
+  package struct TodayItemSurface: ViewModifier {
+    package var enabled: Bool
+    package init(enabled: Bool) { self.enabled = enabled }
+    @ViewBuilder package func body(content: Content) -> some View {
+      if enabled {
+        content
+          .padding(.horizontal, 8).padding(.vertical, 6)
+          .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+          .overlay {
+            RoundedRectangle(cornerRadius: 12)
+              .strokeBorder(Color(.separator).opacity(0.18), lineWidth: 0.5)
+              .allowsHitTesting(false)
+          }
+          .contentShape(RoundedRectangle(cornerRadius: 12))
+          .listRowInsets(EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12))
+      } else {
+        content
+      }
+    }
+  }
+
   /// Events are fixed: no move actions here. `start` is the occurrence shown (repeating events).
   package struct EventRow: View {
     private let calendar: any CalendarService
@@ -18,15 +71,17 @@
     /// The list that holds this row asks "this event or the series?" for a repeating one (see `entryDeleteDialog`).
     @Binding package var pendingDelete: CalEntry?
     package let open: @MainActor (OneEvent) -> Void
+    package var attention: TodayRowAttention?
     @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
     package init(
       event: OneEvent, start: Date? = nil, pendingDelete: Binding<CalEntry?> = .constant(nil),
       open: @escaping @MainActor (OneEvent) -> Void, calendar: any CalendarService,
-      travel: any TravelTimeProviding
+      travel: any TravelTimeProviding, attention: TodayRowAttention? = nil
     ) {
       self.calendar = calendar
       self.travelProvider = travel
+      self.attention = attention
       self.open = open
       self.event = event
       self.start = start
@@ -48,7 +103,8 @@
     package var body: some View {
       HStack(spacing: 10) {
         if !event.isAllDay {
-          TimeColumn(date: start ?? event.start)
+          TimeColumn(date: start ?? event.start).dynamicTypeSize(
+            ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
         }
         CalendarBar(color: calendar.color(forExternalID: event.externalID) ?? Color.blue)
         VStack(alignment: .leading, spacing: 1) {
@@ -67,10 +123,15 @@
       .fixedSize(horizontal: false, vertical: true)
       .frame(minHeight: 44)
       .contentShape(Rectangle())
+      .modifier(TodayItemSurface(enabled: attention != nil))
       .onTapGesture { open(event) }
 
       .listRowSeparator(.hidden)
-      .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
+      .listRowInsets(
+        EdgeInsets(
+          top: attention == nil ? 1 : 3, leading: attention == nil ? 20 : 12,
+          bottom: attention == nil ? 1 : 3, trailing: attention == nil ? 20 : 12)
+      )
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(
         plannerEventSpeech(
@@ -83,7 +144,7 @@
       .accessibilityAddTraits(.isButton)
       .entryActions(
         entry, pendingDelete: $pendingDelete, open: { _ in open(event) },
-        edit: { _ in open(event) }, calendar: calendar)
+        edit: { _ in open(event) }, calendar: calendar, attention: attention)
     }
 
     /// "Drive 18 min · Leave by 14:20" when the event's Apple Calendar copy has a location (Today's own events keep none).
@@ -127,12 +188,14 @@
     /// Set on the Today tab: the day the row sits on. The detail line then keeps at most two facts (see `RowSubtitle`).
     package var agendaDay: Date? = nil
     package var onDelete: (() -> Void)? = nil
+    package var attention: TodayRowAttention?
     package let open: @MainActor (OneTask) -> Void
 
     package init(
       task: OneTask, showsTime: Bool = false, time: Date? = nil, showsList: Bool = true,
       compact: Bool = false, suggested: Date? = nil, agendaDay: Date? = nil,
-      onDelete: (() -> Void)? = nil, open: @escaping @MainActor (OneTask) -> Void
+      onDelete: (() -> Void)? = nil, open: @escaping @MainActor (OneTask) -> Void,
+      attention: TodayRowAttention? = nil
     ) {
       self.task = task
       self.showsTime = showsTime
@@ -142,15 +205,19 @@
       self.suggested = suggested
       self.agendaDay = agendaDay
       self.onDelete = onDelete
+      self.attention = attention
       self.open = open
     }
 
     package var body: some View {
       HStack(spacing: 10) {
         if let suggested {
-          TimeColumn(date: suggested).opacity(0.6)
+          TimeColumn(date: suggested).dynamicTypeSize(
+            ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge)
+          ).opacity(0.6)
         } else if showsTime, let start = time ?? task.plannedStart {
-          TimeColumn(date: start)
+          TimeColumn(date: start).dynamicTypeSize(
+            ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
         }
         Button {
           actions.toggleDone(task, context: context, toast: toast)
@@ -184,6 +251,7 @@
       }
       .frame(minHeight: 44)
       .contentShape(Rectangle())
+      .modifier(TodayItemSurface(enabled: attention != nil))
       .onTapGesture {
         PerformanceTrace.shared.beginPage("reminder.editor")
         open(task)
@@ -191,14 +259,20 @@
 
       .listRowSeparator(.hidden)
       .listRowInsets(
-        EdgeInsets(top: compact ? 1 : 4, leading: 20, bottom: compact ? 1 : 4, trailing: 20)
+        EdgeInsets(
+          top: attention != nil ? 3 : (compact ? 1 : 4), leading: attention == nil ? 20 : 12,
+          bottom: attention != nil ? 3 : (compact ? 1 : 4), trailing: attention == nil ? 20 : 12)
       )
       // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
       // long-press for the menu. (Delete has an Undo toast.)
-      .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-        // Confirmed Today deletion must not let SwiftUI remove a row before the source accepts it.
-        RowAction.delete(asksFirst: onDelete != nil) { deleteTask() }
-        RowAction.flag(task.flagged) { withAnimation { task.flagged.toggle() } }
+      .swipeActions(edge: .trailing, allowsFullSwipe: attention == nil) {
+        if let attention {
+          attention.swipeButtons(delete: deleteTask).labelStyle(.titleAndIcon)
+        } else {
+          // Confirmed Today deletion must not let SwiftUI remove a row before the source accepts it.
+          RowAction.delete(asksFirst: onDelete != nil) { deleteTask() }
+          RowAction.flag(task.flagged) { withAnimation { task.flagged.toggle() } }
+        }
       }
       .contextMenu {
         Button {
@@ -207,34 +281,46 @@
         } label: {
           Label("Show Details", systemImage: "info.circle")
         }
-        Button {
-          task.flagged.toggle()
-        } label: {
-          Label(
-            task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag"
-          )
-        }
-        Button {
-          plan(tomorrow: false)
-        } label: {
-          Label("Today", systemImage: "calendar")
-        }
-        Button {
-          plan(tomorrow: true)
-        } label: {
-          Label("Tomorrow", systemImage: "sunrise")
-        }
-        if task.plannedStart != nil {
-          Button {
-            actions.setPlanned(task, to: nil, context: context)
-          } label: {
-            Label("Unschedule", systemImage: "calendar.badge.minus")
+        if let attention {
+          Section { attention.menu }
+          if attention.canDelete {
+            Section {
+              Button(role: .destructive, action: deleteTask) {
+                Label("Delete", systemImage: "trash")
+              }
+            }
           }
-        }
-        Button(role: .destructive) {
-          deleteTask()
-        } label: {
-          Label("Delete", systemImage: "trash")
+        } else {
+          Button {
+            task.flagged.toggle()
+          } label: {
+            Label(
+              task.flagged ? "Remove Flag" : "Flag",
+              systemImage: task.flagged ? "flag.slash" : "flag"
+            )
+          }
+          Button {
+            plan(tomorrow: false)
+          } label: {
+            Label("Today", systemImage: "calendar")
+          }
+          Button {
+            plan(tomorrow: true)
+          } label: {
+            Label("Tomorrow", systemImage: "sunrise")
+          }
+          if task.plannedStart != nil {
+            Button {
+              actions.setPlanned(task, to: nil, context: context)
+            } label: {
+              Label("Unschedule", systemImage: "calendar.badge.minus")
+            }
+          }
+          Button(role: .destructive) {
+            deleteTask()
+          } label: {
+            Label("Delete", systemImage: "trash")
+          }
         }
       }
     }
@@ -328,10 +414,17 @@
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
     private let open: @MainActor (OneAlarm) -> Void
-    package init(alarm: OneAlarm, date: Date, open: @escaping @MainActor (OneAlarm) -> Void) {
+    private let attention: TodayRowAttention?
+    private let onDelete: (() -> Void)?
+    package init(
+      alarm: OneAlarm, date: Date, open: @escaping @MainActor (OneAlarm) -> Void,
+      attention: TodayRowAttention? = nil, onDelete: (() -> Void)? = nil
+    ) {
       self.open = open
       self.alarm = alarm
       self.date = date
+      self.attention = attention
+      self.onDelete = onDelete
     }
     package let alarm: OneAlarm
     package let date: Date
@@ -341,38 +434,52 @@
         if !alarm.isDeleted { open(alarm) }
       } label: {
         HStack(spacing: 10) {
-          TimeColumn(date: date)
+          TimeColumn(date: date).dynamicTypeSize(
+            ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
           Image(systemName: "alarm")
+            .font(attention == nil ? .body : .system(size: 20))
             .foregroundStyle(Color.accentColor)
-            .frame(width: 4 + 6)
+            .frame(width: attention == nil ? 4 + 6 : 24)
           Text(alarm.label.isEmpty ? "Alarm" : alarm.label)
             .foregroundStyle(alarm.isOn ? Color.primary : Color.secondary)
           Spacer(minLength: 0)
         }
         .frame(minHeight: 44)
+        .modifier(TodayItemSurface(enabled: attention != nil))
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .contextMenu {
         Button("Edit Alarm", systemImage: "pencil") { open(alarm) }
-        Button("Delete Alarm", systemImage: "trash", role: .destructive) {
-          actions.delete(alarm, context: context, toast: toast)
+        if let attention { Section { attention.menu } }
+        Section {
+          Button("Delete Alarm", systemImage: "trash", role: .destructive) { deleteAlarm() }
         }
       }
-      .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-        Button("Delete", systemImage: "trash", role: .destructive) {
-          actions.delete(alarm, context: context, toast: toast)
+      .swipeActions(edge: .trailing, allowsFullSwipe: attention == nil) {
+        if let attention {
+          attention.swipeButtons(delete: deleteAlarm).labelStyle(.titleAndIcon)
+        } else {
+          Button("Delete", systemImage: "trash", role: .destructive) { deleteAlarm() }
+          Button("Edit", systemImage: "pencil") { open(alarm) }.tint(.orange)
         }
-        Button("Edit", systemImage: "pencil") { open(alarm) }.tint(.orange)
       }
       .accessibilityIdentifier("today.alarm.row")
       .accessibilityHint("Opens the alarm editor")
       .listRowSeparator(.hidden)
-      .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
+      .listRowInsets(
+        EdgeInsets(
+          top: attention == nil ? 1 : 3, leading: attention == nil ? 20 : 12,
+          bottom: attention == nil ? 1 : 3, trailing: attention == nil ? 20 : 12)
+      )
       .accessibilityElement(children: .combine)
       .accessibilityLabel(
         "Alarm \(alarm.label) at \(date.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))"
       )
+    }
+
+    private func deleteAlarm() {
+      if let onDelete { onDelete() } else { actions.delete(alarm, context: context, toast: toast) }
     }
   }
 #endif
