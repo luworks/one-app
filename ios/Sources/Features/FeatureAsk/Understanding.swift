@@ -333,6 +333,7 @@
     static func ruleKind(_ text: String, parsed: Capture) -> SimpleKind? {
       if asksForAlarmStrict(text), parsed.hour != nil { return .alarm }
       if matches(text, #"提醒我|\bremind me\b"#) { return .task }
+      if CaptureParser.isBookingAction(text) { return .task }
       if matches(text, eventCue) { return nil }
       let title = parsed.title.lowercased().trimmingCharacters(in: .whitespaces)
       if matches(title, taskLead) { return .task }
