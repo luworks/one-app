@@ -92,6 +92,40 @@
     }
 
     @Test
+    func askMoveUndoPreservesDeadlineAndSubsequentEdits() throws {
+      for editsAfterApply in [false, true] {
+        let a = try Session(seed: editsAfterApply ? 1802 : 1801)
+        defer { a.dispose() }
+        let task = try a.add("Move and restore")
+        let original = a.clock.now().addingTimeInterval(900)
+        let moved = original.addingTimeInterval(1800)
+        let later = moved.addingTimeInterval(600)
+        task.plannedStart = original
+        try a.context.save()
+        let deadline = task.due
+        let identity = task.persistentModelID
+        let change = PendingChange(
+          subject: .task(task), delete: false, title: task.title, oldText: "",
+          newStart: moved, notes: [], attendees: 0)
+        let feedback = AskNativeActions.applyChange(
+          change, context: a.context, calendar: a.services.calendar,
+          actions: a.services.actions, ledger: a.services.ledger, runtime: a.runtime)
+        #expect(task.plannedStart == moved && task.due == deadline)
+        let undo = try #require(feedback.undo)
+        if editsAfterApply {
+          task.plannedStart = later
+          try a.context.save()
+        }
+        undo.action()
+        undo.action()
+        #expect(task.plannedStart == (editsAfterApply ? later : original))
+        #expect(task.due == deadline && task.persistentModelID == identity)
+        #expect(
+          try a.rows().filter { $0.actionValue == .undone }.count == (editsAfterApply ? 0 : 1))
+      }
+    }
+
+    @Test
     func localCalendarDeleteAndUndoKeepExternalWritesRefused() throws {
       let a = try Session(seed: 1700)
       defer { a.dispose() }

@@ -1940,7 +1940,15 @@
           {
             feedback.messages.append(reply("Moved “\(task.title)” to \(ledger.timeLabel(new))."))
             feedback.undo = UndoRow(
-              label: "Moved “\(task.title)”.", action: { _ = actions.undo(entry, context: context) }
+              label: "Moved “\(task.title)”.",
+              action: {
+                guard !task.isDeleted, task.modelContext != nil,
+                  !task.isDone, task.plannedStart == new
+                else { return }
+                var recorded = entry
+                recorded.itemRef = Ledger.ref(task.persistentModelID)
+                _ = actions.undo(recorded, context: context)
+              }
             )
           }
         }

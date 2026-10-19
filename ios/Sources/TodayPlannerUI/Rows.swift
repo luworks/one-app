@@ -256,7 +256,11 @@
       return Button("Plan") {
         let entry = actions.setPlanned(task, to: start, context: context)
         toast?.show("Planned “\(task.title)” at \(time)") {
-          if let entry { _ = actions.undo(entry, context: context) }
+          guard var entry, !task.isDeleted, task.modelContext != nil,
+            !task.isDone, task.plannedStart == start
+          else { return }
+          entry.itemRef = Ledger.ref(task.persistentModelID)
+          _ = actions.undo(entry, context: context)
         }
       }
       .font(.subheadline.weight(.semibold))

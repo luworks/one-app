@@ -68,6 +68,8 @@ final class TodayTimelineTests: XCTestCase {
       element("Planned “Buy milk”").waitForExistence(timeout: 3), "Plan shows an Undo toast")
     XCTAssertFalse(plan.exists, "once planned it is a normal row")
     XCTAssertTrue(element("Buy milk").exists)
+    app.buttons["Undo"].firstMatch.tap()
+    XCTAssertTrue(plan.waitForExistence(timeout: 5), "Undo restores the same unplanned suggestion")
   }
 
   func testFreeTimeShowsAfterTheSuggestions() {
