@@ -35,6 +35,13 @@
     @State private var repeatRule: RepeatRule?
     @State private var checklist: [ChecklistItem]
     @State private var ringsAsAlarm: Bool
+    @State private var saving = false
+    @State private var saveError: String?
+    @State private var baseline: TaskSnapshot?
+    @State private var baselineExternalID: String?
+    @State private var savedTask: OneTask?
+    @State private var pendingEditReceipt: RemindersSync.Remote?
+    @State private var pendingSync = false
     @State private var newItem = ""
     @State private var addingList = false
     @FocusState private var titleFocused: Bool
@@ -52,6 +59,8 @@
         presentation.calendar.nextDate(
           after: presentation.now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime)
         ?? presentation.now
+      _baseline = State(initialValue: task.map { Ledger.snapshot(of: $0) })
+      _baselineExternalID = State(initialValue: task?.externalID)
       _title = State(initialValue: task?.title ?? "")
       _note = State(initialValue: task?.note ?? "")
       _hasStart = State(initialValue: task?.plannedStart != nil)
@@ -206,7 +215,35 @@
       }
       .environment(actions)
       .defaultAppStorage(presentation.defaults)
+      .alert(
+        "Couldn’t Update Reminder",
+        isPresented: Binding(
+          get: { saveError != nil }, set: { if !$0 { saveError = nil } })
+      ) {
+        Button("OK", role: .cancel) {}
+      } message: {
+        Text(saveError ?? "")
+      }
     }
+
+    private var cleanedTags: [String] {
+      tagsText.split(separator: ",").map {
+        $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(
+          in: CharacterSet(charactersIn: "#"))
+      }.filter { !$0.isEmpty }
+    }
+
+    private var draft: TaskSnapshot {
+      TaskSnapshot(
+        title: title.trimmingCharacters(in: .whitespacesAndNewlines), note: note,
+        isDone: baseline?.isDone ?? false, doneAt: baseline?.doneAt,
+        plannedStart: hasStart ? start : nil, durationMinutes: duration, due: hasDue ? due : nil,
+        createdAt: baseline?.createdAt ?? presentation.now, reminderOffsetMinutes: reminder,
+        listName: listName, tags: cleanedTags, flagged: flagged, repeatRule: repeatRule?.rawValue,
+        checklist: checklist, ringsAsAlarm: ringsAsAlarm)
+    }
+
+    private var workingTask: OneTask? { task ?? savedTask }
 
     private func addItem() {
       let t = newItem.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -216,8 +253,38 @@
     }
 
     private func save() {
+      guard !saving else { return }
+      if workingTask != nil, draft == baseline,
+        newItem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !pendingSync
+      {
+        dismiss()
+        return
+      }
+      if let task = workingTask {
+        guard !task.isDeleted, task.modelContext != nil, task.externalID == baselineExternalID,
+          Ledger.snapshot(of: task) == baseline
+        else {
+          saveError =
+            "This reminder changed outside the editor. Close and reopen it to see the latest version. Your changes have not been applied."
+          return
+        }
+      }
       addItem()
-      let t = task ?? OneTask(title: "")
+      let creating = workingTask == nil
+      let t = workingTask ?? OneTask(title: "")
+      let previous = baseline
+      var accepted = pendingEditReceipt
+      if let previous, !creating,
+        RemindersSync.fingerprint(of: draft) != RemindersSync.fingerprint(of: previous)
+          || pendingEditReceipt != nil
+      {
+        do { accepted = try reminders.commitEdit(t, draft: draft, expected: previous) } catch {
+          saveError =
+            "Apple Reminders was not updated. Your draft is still here. "
+            + error.localizedDescription
+          return
+        }
+      }
       t.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
       t.note = note
       t.plannedStart = hasStart ? start : nil
@@ -225,31 +292,55 @@
       t.due = hasDue ? due : nil
       t.reminderOffsetMinutes = reminder
       t.listName = listName
-      t.tags = tagsText.split(separator: ",")
-        .map {
-          $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(
-            in: CharacterSet(charactersIn: "#"))
-        }
-        .filter { !$0.isEmpty }
+      t.tags = cleanedTags
       t.flagged = flagged
       t.repeatRule = repeatRule?.rawValue
       t.checklist = checklist.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
-      t.ringsAsAlarm = ringsAsAlarm && reminder != nil
-      if task == nil {
+      t.ringsAsAlarm = ringsAsAlarm
+      if creating {
         t.createdAt = presentation.now
         context.insert(t)
       }
       do { try context.save() } catch {
-        if task == nil { context.delete(t) }
-        toast?.showNotice("Couldn’t save the reminder. " + error.localizedDescription)
+        if creating { context.delete(t) }
+        if let accepted {
+          baseline = Ledger.snapshot(of: t)
+          pendingEditReceipt = accepted
+          pendingSync = true
+          saveError =
+            "Apple Reminders accepted the change, but Today couldn’t save its copy. Tap Save to retry the local save. "
+            + error.localizedDescription
+        } else {
+          if let previous { restore(previous, to: t) }
+          saveError = "Your draft was not saved. Please try again. " + error.localizedDescription
+        }
         return
       }
-      if task == nil {
+      if creating {
+        savedTask = t
         ledger.record(
           .created, task: t, title: t.title,
           after: ledger.timeLabel(t.plannedStart ?? t.due, none: ""), context: context)
       }
+      baseline = Ledger.snapshot(of: t)
+      baselineExternalID = t.externalID
+      reminders.didPersistEdit(t, accepted: accepted)
       dismiss()
+    }
+
+    private func restore(_ value: TaskSnapshot, to task: OneTask) {
+      task.title = value.title
+      task.note = value.note
+      task.plannedStart = value.plannedStart
+      task.durationMinutes = value.durationMinutes
+      task.due = value.due
+      task.reminderOffsetMinutes = value.reminderOffsetMinutes
+      task.listName = value.listName
+      task.tags = value.tags
+      task.flagged = value.flagged
+      task.repeatRule = value.repeatRule
+      task.checklist = value.checklist
+      task.ringsAsAlarm = value.ringsAsAlarm
     }
   }
 

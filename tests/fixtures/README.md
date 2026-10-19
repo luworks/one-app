@@ -9,6 +9,7 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 | Dataset | Consumers and original generator |
 | [`today-reminder-completion.json`](today-reminder-completion.json) | `TodayReminderCompletionTests`: owner-reported Bring the water cup at 12:30, with notes and planned time. Tests namespace the title and seed the simulator EventKit store through `addToday`; no user reminder is used. |
 | --- | --- |
+| [`reminder-time-save.json`](reminder-time-save.json) | `ReminderTimeSaveTests`: real 14:00 -> 13:10 DatePicker save, concurrent independent Apple note edit, native metadata/identity, no planned time, reopen/refresh/relaunch. |
 | [`today-dataset.json`](today-dataset.json) | Shared UI journeys using `TestData.launchArguments` / `TestData.path`, including `DevDataTests.testDatasetFillsChatsAlarmsAndReminders` and the ordinary `CalendarAlarmTests.launch(pinned:)` setup. This is the canonical multi-screen dataset, not a generated per-run input. |
 | Same `today-dataset.json` | `PerformanceBaselineTests` and `tests/performance/launch_probe.py`: small feature-variety performance baseline (17 reminders, 13 events, 4 alarms, 3 lists, 7 chats), application clock pinned to 09:41. Not a large-history fixture. |
 | [`year-day-month-agenda.json`](year-day-month-agenda.json) | `CalendarTabTests.testYearDayOpensMonthWithChosenDateAndItsItems`: an all-day event and a planned reminder on today and 400 days later. Verifies Year day taps select the exact date in Month and list only its items, including across years. |

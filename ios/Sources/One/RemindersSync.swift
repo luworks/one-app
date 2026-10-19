@@ -65,9 +65,14 @@
     #if DEBUG
       /// UI tests only (`-uiTestingSyncDump <prefix>`): what Apple Reminders and the app hold after the last pass.
       package private(set) var debugAppleDump = ""
+      package private(set) var debugAppleMetadata = ""
       package private(set) var debugAppDump = ""
       package private(set) var debugPersistedDump = ""
       @ObservationIgnored private var debugOpsDone = false
+      @ObservationIgnored private var debugEditFailedOnce = false
+      @ObservationIgnored private var debugConcurrentNoteWritten = false
+      package private(set) var debugFetchInFlight = false
+      package private(set) var debugRejectedFetches = 0
     #endif
     /// UI tests start with Apple Reminders off (a saved "on" from an earlier run would upload and pull test data);
     /// the test that needs it passes `-uiTestingRemindersSync`.
@@ -128,6 +133,9 @@
         ) { [weak self] _ in
           Task { @MainActor in
             guard let self, !self.disposed else { return }
+            #if DEBUG
+              self.debugWriteConcurrentNoteIfNeeded(container.mainContext)
+            #endif
             self.scheduleReconcile()
           }
         })
@@ -221,6 +229,94 @@
         guard !Task.isCancelled else { return }
         await reconcile()
       }
+    }
+
+    /// Explicit editor writes use EventKit's commit acknowledgement, never an old reconcile pass.
+    /// The same fence rejects any in-flight fetch that predates this accepted write.
+    package func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot)
+      throws -> Remote?
+    {
+      guard let id = task.externalID else { return nil }
+      guard isConnected else { throw CompletionError.disconnected }
+      var accepted: Remote?
+      try completionFence.commit {
+        guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else {
+          throw CompletionError.missing
+        }
+        let current = Remote(reminder, calendar: runtime.calendar)
+        guard current.fingerprint == Self.fingerprint(of: expected),
+          current.doneAt == expected.doneAt
+        else {
+          throw CompletionError.changedOutside
+        }
+        guard reminder.calendar.allowsContentModifications else { throw CompletionError.readOnly }
+        #if DEBUG
+          if arguments.contains("-uiTestingFailReminderEdit")
+            || (arguments.contains("-uiTestingFailReminderEditOnce") && !debugEditFailedOnce)
+          {
+            debugEditFailedOnce = true
+            throw CompletionError.injected
+          }
+        #endif
+        if draft.title != expected.title { reminder.title = draft.title }
+        if draft.note != expected.note { reminder.notes = draft.note.isEmpty ? nil : draft.note }
+        if draft.listName != expected.listName {
+          guard
+            let list = draft.listName.isEmpty
+              ? store.defaultCalendarForNewReminders()
+              : store.calendars(for: .reminder).first(where: { $0.title == draft.listName }),
+            list.allowsContentModifications
+          else {
+            reminder.reset()
+            throw CompletionError.readOnly
+          }
+          reminder.calendar = list
+        }
+        if draft.due != expected.due {
+          let oldDue = reminder.dueDateComponents
+          var calendar = oldDue?.calendar ?? runtime.calendar
+          if let zone = oldDue?.timeZone { calendar.timeZone = zone }
+          var components = draft.due.map { Self.components(for: $0, calendar: calendar) }
+          components?.calendar = oldDue?.calendar
+          components?.timeZone = oldDue?.timeZone
+          reminder.dueDateComponents = components
+          // Move only the existing deadline alarm. Other Apple alarms remain intact;
+          // choosing a date never silently enables an alarm that was off in Apple.
+          if let previous = expected.due {
+            for alarm in reminder.alarms ?? [] where alarm.absoluteDate == previous {
+              reminder.removeAlarm(alarm)
+              if let due = draft.due { reminder.addAlarm(EKAlarm(absoluteDate: due)) }
+            }
+          }
+        }
+        if draft.flagged != expected.flagged {
+          reminder.priority = draft.flagged ? 1 : (reminder.priority == 1 ? 0 : reminder.priority)
+        }
+        if draft.repeatRule != expected.repeatRule {
+          reminder.recurrenceRules?.forEach { reminder.removeRecurrenceRule($0) }
+          if let rule = draft.repeatRule.flatMap(RepeatRule.init(rawValue:)) {
+            reminder.addRecurrenceRule(Self.recurrence(for: rule))
+          }
+        }
+        if Self.fingerprint(of: draft) != Self.fingerprint(of: expected) {
+          do { try store.save(reminder, commit: true) } catch {
+            reminder.reset()
+            throw error
+          }
+        }
+        accepted = Remote(reminder, calendar: runtime.calendar)
+      }
+      return accepted
+    }
+
+    package func didPersistEdit(_ task: OneTask, accepted: Remote?) {
+      if let accepted {
+        var fp = storedFP
+        fp[accepted.id] = accepted.fingerprint
+        storedFP = fp
+        saveSet(loadSet(Self.baseKey).union([accepted.id]), Self.baseKey)
+      }
+      scheduleReconcile(after: .milliseconds(50))
     }
 
     /// A completion is an explicit user write, not a whole-reminder fingerprint edit. Commit it before
@@ -363,6 +459,14 @@
         t.title, t.note, t.isDone ? "1" : "0",
         t.due.map { String(Int($0.timeIntervalSince1970)) } ?? "-", t.listName,
         t.flagged ? "1" : "0", t.repeatRule ?? "-",
+      ].joined(separator: "\u{1F}")
+    }
+
+    package static func fingerprint(of value: TaskSnapshot) -> String {
+      [
+        value.title, value.note, value.isDone ? "1" : "0",
+        value.due.map { String(Int($0.timeIntervalSince1970)) } ?? "-", value.listName,
+        value.flagged ? "1" : "0", value.repeatRule ?? "-",
       ].joined(separator: "\u{1F}")
     }
 
@@ -513,6 +617,14 @@
         withCompletionDateStarting: since, ending: runtime.now(), calendars: cals)
       let incomplete = await Self.fetch(store, open, calendar: runtime.calendar)
       let completed = await Self.fetch(store, done, calendar: runtime.calendar)
+      #if DEBUG
+        if debugOpsDone, arguments.contains("-uiTestingDelayReminderFetchAfterFirst") {
+          // Retain an actual old EventKit snapshot while the UI submits a newer explicit edit.
+          debugFetchInFlight = true
+          defer { debugFetchInFlight = false }
+          try? await Task.sleep(for: .seconds(4))
+        }
+      #endif
       return incomplete + completed
     }
 
@@ -646,6 +758,9 @@
       // A completion can commit while EventKit is fetching. This snapshot predates that write;
       // do not apply it or publish its old fingerprints as the next conflict baseline.
       guard completionFence.accepts(snapshot: completionRevision) else {
+        #if DEBUG
+          debugRejectedFetches += 1
+        #endif
         again = true
         return
       }
@@ -914,7 +1029,25 @@
               bySettingHour: op.op == "addToday" ? 12 : 9, minute: op.op == "addToday" ? 30 : 0,
               second: 0, of: tomorrow) ?? tomorrow
           ek.dueDateComponents = Self.components(for: due, calendar: runtime.calendar)
-          if op.op == "addToday" { ek.notes = "Keep the water cup and documents together." }
+          if arguments.contains("-uiTestingReminderEditMetadata") {
+            let at =
+              runtime.calendar.date(bySettingHour: 14, minute: 0, second: 0, of: runtime.now())
+              ?? due
+            var components = Self.components(for: at, calendar: runtime.calendar)
+            components.timeZone = runtime.calendar.timeZone
+            components.calendar = runtime.calendar
+            ek.startDateComponents = components
+            ek.dueDateComponents = components
+            ek.notes = "Preserve the native note."
+            ek.url = URL(string: "https://example.com/reminder-time-save")
+            ek.priority = 5
+            ek.addRecurrenceRule(EKRecurrenceRule(recurrenceWith: .weekly, interval: 2, end: nil))
+            ek.addAlarm(EKAlarm(absoluteDate: at))
+            ek.addAlarm(EKAlarm(relativeOffset: -600))
+          }
+          if op.op == "addToday", !arguments.contains("-uiTestingReminderEditMetadata") {
+            ek.notes = "Keep the water cup and documents together."
+          }
           if let rule = RepeatRule(rawValue: op.value) {
             ek.addRecurrenceRule(Self.recurrence(for: rule))
           }
@@ -932,6 +1065,36 @@
         case "delete": try? store.remove(ek, commit: true)
         default: break
         }
+      }
+
+      private func debugWriteConcurrentNoteIfNeeded(_ context: ModelContext) {
+        guard arguments.contains("-uiTestingExternalNoteAfterTimeSave"),
+          !debugConcurrentNoteWritten, let prefix = debugPrefix
+        else { return }
+        let tasks = (try? context.fetch(FetchDescriptor<OneTask>())) ?? []
+        guard
+          let task = tasks.first(where: {
+            $0.title.hasPrefix(prefix)
+              && $0.due.map {
+                runtime.calendar.component(.hour, from: $0) == 13
+                  && runtime.calendar.component(.minute, from: $0) == 10
+              } == true
+          }), let id = task.externalID
+        else { return }
+        // A separate real store acts as another Apple client, changing only notes
+        // after the app's local save. The legacy editor has not pushed its time yet.
+        let external = makeStore()
+        guard let reminder = external.calendarItem(withIdentifier: id) as? EKReminder else {
+          return
+        }
+        reminder.notes = (reminder.notes ?? "") + " External note edit."
+        do {
+          try external.save(reminder, commit: true)
+          debugConcurrentNoteWritten = true
+          debugLog(
+            "concurrent Apple note committed, due \(String(describing: reminder.dueDateComponents))"
+          )
+        } catch { debugLog("concurrent Apple note failed: \(error.localizedDescription)") }
       }
 
       fileprivate func debugRunAppOps(_ context: ModelContext) {
@@ -973,6 +1136,24 @@
           }
         }
         let apple = all.filter { $0.title.hasPrefix(prefix) }
+        debugAppleMetadata = apple.compactMap { remote -> String? in
+          guard let item = verifyingStore.calendarItem(withIdentifier: remote.id) as? EKReminder
+          else { return nil }
+          let start =
+            item.startDateComponents.flatMap { Self.date(from: $0, calendar: calendar) }.map(
+              f.string(from:)) ?? "-"
+          let due =
+            item.dueDateComponents.flatMap { Self.date(from: $0, calendar: calendar) }.map(
+              f.string(from:)) ?? "-"
+          let alarms = (item.alarms ?? []).map {
+            $0.absoluteDate.map(f.string(from:)) ?? "relative:\(Int($0.relativeOffset))"
+          }.sorted().joined(separator: ",")
+          let repeats = (item.recurrenceRules ?? []).map {
+            "\($0.frequency.rawValue):\($0.interval)"
+          }.joined(separator: ",")
+          return
+            "\(remote.id)|\(remote.listID)|start=\(start)|due=\(due)|tz=\(item.dueDateComponents?.timeZone?.identifier ?? "floating")|priority=\(item.priority)|url=\(item.url?.absoluteString ?? "-")|alarms=\(alarms)|repeat=\(repeats)|note=\(item.notes ?? "")"
+        }.sorted().joined(separator: ";")
         debugAppleDump = apple.map { line($0.title, $0.isDone, $0.due, $0.repeatRule) }.sorted()
           .joined(separator: ";")
         let tasks = ((try? context.fetch(FetchDescriptor<OneTask>())) ?? []).filter {
@@ -999,6 +1180,11 @@
 
       package var body: some View {
         VStack {
+          Text(sync.debugFetchInFlight ? "fetching" : "idle")
+            .accessibilityIdentifier("syncDump.fetch")
+          Text("\(sync.debugRejectedFetches)")
+            .accessibilityIdentifier("syncDump.rejected")
+          Text(sync.debugAppleMetadata).accessibilityIdentifier("syncDump.metadata")
           Text(sync.debugAppleDump).accessibilityIdentifier("syncDump.apple").accessibilityLabel(
             sync.debugAppleDump)
           Text(sync.debugAppDump).accessibilityIdentifier("syncDump.app").accessibilityLabel(
