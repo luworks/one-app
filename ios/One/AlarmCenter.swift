@@ -54,6 +54,22 @@ final class AlarmCenter {
             guard !Task.isCancelled else { return }
             await Ringer.sync(context)
         }
+        #if canImport(AlarmKit)
+        func watchAlarms(center: AlarmCenter) async {
+            for await _ in AlarmManager.shared.alarmUpdates {
+                guard !Task.isCancelled else { return }
+                center.refreshStates()
+                await synchronize()
+            }
+        }
+        func watchAuthorization(center: AlarmCenter) async {
+            for await _ in AlarmManager.shared.authorizationUpdates {
+                guard !Task.isCancelled else { return }
+                center.authorization = Ringer.authorization
+                await synchronize()
+            }
+        }
+        #endif
     }
 
     /// Follows AlarmKit until the calling task is cancelled (attach it to the view with `.task`).
@@ -65,18 +81,8 @@ final class AlarmCenter {
         refreshStates()
         let session = WatchSession(context: context)
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                for await _ in AlarmManager.shared.alarmUpdates {
-                    self.refreshStates()
-                    await session.synchronize()
-                }
-            }
-            group.addTask { @MainActor in
-                for await _ in AlarmManager.shared.authorizationUpdates {
-                    self.authorization = Ringer.authorization
-                    await session.synchronize()
-                }
-            }
+            group.addTask { await session.watchAlarms(center: self) }
+            group.addTask { await session.watchAuthorization(center: self) }
         }
         #endif
     }

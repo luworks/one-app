@@ -816,7 +816,8 @@ struct NativeCalendarChooser: UIViewControllerRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
 
-    final class Coordinator: NSObject, EKCalendarChooserDelegate {
+    @MainActor
+    final class Coordinator: NSObject, @MainActor EKCalendarChooserDelegate {
         let dismiss: () -> Void
         init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
 
