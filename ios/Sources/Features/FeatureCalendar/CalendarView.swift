@@ -855,6 +855,7 @@
             #endif
           Spacer()
           Button {
+            PerformanceTrace.shared.beginPage("calendar.year.key")
             showsKey = true
           } label: {
             Image(systemName: "info.circle").font(.title3).foregroundStyle(.secondary)

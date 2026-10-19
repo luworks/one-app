@@ -445,6 +445,7 @@
         // An inline row at the end of the list, not a floating button: the app's own bottom bar owns
         // the bottom of the screen, so this stays visible and tappable.
         Button {
+          PerformanceTrace.shared.beginPage("list.editor")
           addingList = true
         } label: {
           HStack(spacing: 12) {
