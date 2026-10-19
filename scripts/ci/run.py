@@ -373,9 +373,20 @@ def main():
         # Single-line redacted diagnostics remain useful even when report
         # validation fails after successfully publishing a failed receipt.
         print(sanitize(str(error)).replace('\n', ' ')[:1200])
+        # Receipt rejection must not hide the adapter's first diagnostic. Never
+        # stage or reseal rejected/live bytes; expose only bounded safe text.
+        if not secret_found and not secret_candidate(text.encode()):
+            print(sanitize(text)[-16000:])
+        if 'report' not in locals():
+            try:
+                report = json.loads(artifact_path(output, 'report.json').read_text())
+            except (OSError, ValueError):
+                report = None
         if 'report' in locals() and isinstance(report, dict):
-            print(sanitize(json.dumps({key: report.get(key) for key in (
-                'lane', 'status', 'executed', 'failed', 'cancelled', 'missing', 'errors')}))[:4000])
+            diagnostic = sanitize(json.dumps({key: report.get(key) for key in (
+                'lane', 'status', 'executed', 'failed', 'cancelled', 'missing', 'errors')}))
+            if not secret_candidate(diagnostic.encode()):
+                print(diagnostic[:4000])
         return completed.returncode or 1
     return completed.returncode
 

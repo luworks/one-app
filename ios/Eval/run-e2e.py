@@ -15,7 +15,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from types import SimpleNamespace
 import uuid
 
 IOS = Path(__file__).resolve().parents[1]
@@ -28,6 +27,7 @@ import contract
 
 sys.path.insert(0, str(ROOT))
 from scripts.devtools.core import (derived_data, ensure_test_products, native_test_options)
+from scripts.devtools.commands import execute
 
 CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
 
@@ -330,10 +330,14 @@ def main(argv=None):
                 command[command.index("-project") + 1] = str(IOS / "Today.xcodeproj")
                 summary["commands"].append(command)
                 before = time.monotonic()
-                code = run_logged(command, output / "build.log", output / "progress.jsonl", [], journal)
-                summary["stages"]["build"] = code
+                # Use the existing owned-process deadline, leaving time for the
+                # runner to close its logs and simulator before the outer limit.
+                result = execute(ROOT, command, timeout=600)
+                (output / "build.log").write_bytes(result.log.read_bytes())
+                summary["stages"]["build"] = result.returncode
+                summary["build_reason"] = result.reason
                 summary["build_seconds"] = round(time.monotonic() - before, 3)
-                return SimpleNamespace(returncode=code, reason="exited", log=output / "build.log")
+                return result
 
             args.test_products = ensure_test_products(ROOT, "TodayMock", build, flags=locked_arguments(ROOT))
         journal.action(["xcrun", "simctl", "bootstatus", simulator, "-b"], subprocess.run, check=True)

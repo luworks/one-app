@@ -15,6 +15,9 @@ class CoreUIExecutionTests(unittest.TestCase):
     def test_failed_build_preserves_logs_and_shutdown_without_dispatching_tests(self):
         self.run_ci_ui(build_code=65)
 
+    def test_build_timeout_closes_before_outer_deadline_without_dispatching_tests(self):
+        self.run_ci_ui(build_code=124)
+
     def run_ci_ui(self, build_code=0):
         path = Path(__file__).resolve().parents[2] / 'ios/Eval/run-e2e.py'
         spec = importlib.util.spec_from_file_location('ci_ui_runner', path)
@@ -48,11 +51,18 @@ class CoreUIExecutionTests(unittest.TestCase):
                     raise NativeBuildError(result)
                 return products
 
+            def execute(root, command, *, timeout):
+                self.assertEqual(timeout, 600)
+                log = base / 'owned-build.log'
+                logged(command, log)
+                return SimpleNamespace(returncode=build_code, reason='timeout' if build_code == 124 else 'exited', log=log)
+
             with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'core-ui'}), \
                     patch.object(runner, 'derived_data', return_value=base / 'dd'), \
                     patch.object(runner, 'RunJournal', return_value=journal), \
                     patch.object(runner, 'select_simulator', return_value='owned'), \
                     patch.object(runner, 'run_logged', side_effect=logged), \
+                    patch.object(runner, 'execute', side_effect=execute), \
                     patch.object(runner, 'ensure_test_products', side_effect=ensure) as build, \
                     patch.object(runner, 'read_xcresult', return_value=[{
                         'test': selected[0], 'status': 'passed', 'source': 'xcresult'}]), \
@@ -63,7 +73,10 @@ class CoreUIExecutionTests(unittest.TestCase):
             self.assertEqual(calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
             if build_code:
                 self.assertEqual(code, 1)
-                self.assertIn('exit=65', (base / 'output/summary.json').read_text())
+                summary = (base / 'output/summary.json').read_text()
+                self.assertIn('exit=' + str(build_code), summary)
+                if build_code == 124:
+                    self.assertIn('"build_reason": "timeout"', summary)
                 self.assertTrue((base / 'output/build.log').is_file())
                 self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in calls))
                 return

@@ -220,6 +220,58 @@ class ProducerTests(unittest.TestCase):
                 producer, 'execute', side_effect=execute), contextlib.redirect_stdout(io.StringIO()):
             return producer.main()
 
+    def test_closed_ui_build_timeout_retains_raw_log_and_missing_tests(self):
+        self.output.rmdir()
+        self.output = self.base / 'today-core-ui'
+        root = self.base / 'repo'
+        root.mkdir()
+        selection = self.base / 'selection.json'
+        selection.write_text(json.dumps({'version': 1, 'mode': 'wide', 'reason': 'fixture',
+            'changed': [], 'targets': [], 'all_targets': True, 'snapshots': True}))
+
+        def run(*args, **kwargs):
+            self.write('runner/build.log', b'xcodebuild build-for-testing\noriginal compiler output\n')
+            self.write('runner/summary.json', json.dumps({'head': SHA, 'selection': ['Tests/testA'],
+                'status': 'failed', 'stages': {'build': 124, 'shutdown': 0}, 'build_reason': 'timeout',
+                'error': 'Native build failed; exit=124'}).encode())
+            log = self.base / 'runner.log'
+            log.write_text('failed build; exit=124\n')
+            return SimpleNamespace(returncode=1, reason='exited', log=log)
+
+        with patch.object(adapter, 'source_state', return_value='fixed'), patch.object(
+                adapter, 'test_plan', return_value=('ui', ['Tests/testA'])):
+            self.assertEqual(adapter._main(root, 'core-ui', selection=selection,
+                output=self.output, sha=SHA, synthetic=True, no_distribute=True, runner=run), 1)
+        report = json.loads((self.output / 'report.json').read_text())
+        self.assertEqual((report['executed'], report['missing']), (0, 1))
+        self.assertIn('runner_build_timeout', report['errors'])
+        self.assertTrue(report['artifact_provenance']['closed'])
+        producer.close_wrapper(self.output, SHA, 'core-ui', 'failed build; exit=124\n')
+        target = self.base / 'failed-ui-artifacts'
+        producer.stage(self.output, target, SHA, 'core-ui')
+        self.assertIn('original compiler output', (target / 'runner/build.log').read_text())
+        self.assertFalse((target / 'runner/xcresult-tests.json').exists())
+
+    def test_wrapper_missing_receipt_exposes_first_failure_without_publishing(self):
+        self.output.rmdir()
+
+        def execute(argv, **kwargs):
+            if argv[:2] != ['./dev', 'ci']:
+                return SimpleNamespace(returncode=0, stdout='setup completed\n')
+            self.write('report.json', json.dumps(dict(self.report, status='failed', errors=[
+                'producer_close_rejected:runner writers or owned simulator shutdown not closed'])).encode())
+            return SimpleNamespace(returncode=1, stdout='failed command: xcodebuild build-for-testing; exit=124\n')
+
+        captured = io.StringIO()
+        with patch.object(sys, 'argv', ['run.py', 'business']), patch.object(
+                producer.subprocess, 'check_output', return_value=SHA), patch.object(
+                producer, 'execute', side_effect=execute), contextlib.redirect_stdout(captured):
+            self.assertEqual(producer.main(), 1)
+        self.assertIn('exit=124', captured.getvalue())
+        self.assertIn('producer_close_rejected', captured.getvalue())
+        self.assertFalse((self.base / 'today-artifacts-business').exists())
+        self.assertNotIn('artifact_provenance', json.loads((self.output / 'report.json').read_text()))
+
     def test_wrapper_orders_setup_before_selection_and_adapter(self):
         self.output.rmdir()
         calls = []

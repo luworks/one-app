@@ -171,6 +171,8 @@ def _test_results(root, lane, output, run, report):
             raise ValueError('Runner selection mismatch')
         if summary.get('status') != 'passed' or summary.get('journal_errors') or summary.get('shutdown_error'):
             report['errors'].append('runner_incomplete')
+        if summary.get('error'):
+            report['errors'].append('runner_error:' + Redactor()(str(summary['error'])))
         stages = summary.get('stages', {})
         report['artifact_writers_closed'] = (
             result.reason == 'exited' and isinstance(stages, dict)
@@ -179,8 +181,14 @@ def _test_results(root, lane, output, run, report):
                 value != 0 for value in stages.values()):
             report['errors'].append('runner_stage_failure')
         # Reparse the retained xcresult tree, rather than trusting copied counters.
-        tree = json.loads((output / 'runner/xcresult-tests.json').read_text())
-        attempts = contract.xcresult_attempts(tree, kind)
+        if stages.get('build', 0) != 0 and 'ui' not in stages:
+            # A closed failed build has no test tree. Preserve the original
+            # process reason and log, with all selected tests still missing.
+            report['errors'].append('runner_build_' + str(summary.get('build_reason', 'failed')))
+            attempts = []
+        else:
+            tree = json.loads((output / 'runner/xcresult-tests.json').read_text())
+            attempts = contract.xcresult_attempts(tree, kind)
     authority = contract.report(expected, attempts, result.returncode, raw_log=raw,
                                 allowed_skips=['benchmark', 'export'] if kind == 'logic' else [],
                                 skip_rules=contract.load_manifest()['skip_rules'])

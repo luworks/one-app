@@ -153,6 +153,28 @@ or device qualification. The failed earlier run remains retained.
 
 ### Iteration 3: cold native compiler experiment
 
+Iteration 4 failure-path repair: that run completed **failure**. The full core-ui
+job log and annotations (`118202044022`) show the adapter action took 1,254.268
+seconds, then rejected a missing closed producer receipt; upload found no files.
+They contain no original failed command, build duration or compiler diagnostic.
+The original core-ui failure cannot be classified as a build timeout from this
+evidence. Its raw runner phases are unavailable, unlike the retained snapshot
+timeout below. No unchanged rerun was dispatched.
+
+Source inspection found that the new core-ui prebuild used unbounded
+`run_logged` under the existing 1,200-second runner deadline. If that outer
+deadline interrupts execution, the adapter deliberately refuses to seal live or
+unconfirmed-shutdown evidence, and `close_wrapper` previously raised before
+printing the adapter transcript/report errors. This is a reproduced failure
+path, not proof of the old run's hidden trigger. The prebuild now uses the
+existing owned-process authority and 600-second native build limit, retaining
+exit/reason/log before normal runner shutdown. Closed failed builds publish
+their real logs with zero execution and every selected test missing. Rejected
+receipts now expose bounded scanner-checked/redacted diagnostics without
+inventing provenance or uploading rejected bytes. All outer deadlines remain
+unchanged. Host helpers passed 116 tests in 9.589 seconds; lint and diff checks
+passed. No local native/device execution or measured compiler speedup is claimed.
+
 Run [39294049533](https://github.com/luworks/one-app/actions/runs/39294049533)
 at head `8db19ea` tested integrated SHA `b3f4f613d0185049a194b92d7906e3fc04e12bea`.
 Snapshot job `118202044017` failed before executing any tests: its retained
