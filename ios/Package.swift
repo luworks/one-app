@@ -5,6 +5,7 @@ let package = Package(
     name: "TodayModules",
     platforms: [.macOS(.v14), .iOS("27.0")],
     products: [
+        .executable(name: "today-scenes", targets: ["TodaySceneInventory"]),
         .library(name: "TodayCore", targets: ["TodayCore"]),
         .library(name: "TodayShared", targets: ["TodayShared"]),
         .library(name: "TodayData", targets: ["TodayData"]),
@@ -26,6 +27,7 @@ let package = Package(
         .library(name: "TodayScenes", targets: ["TodayScenes"]),
     ],
     targets: [
+        .executableTarget(name: "TodaySceneInventory", dependencies: ["TodayScenes"]),
         .target(name: "TodayCore"),
         .target(name: "TodayShared"),
         .target(name: "TodayData", dependencies: ["TodayCore", "TodayShared"],

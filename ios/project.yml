@@ -355,6 +355,106 @@
           "product": "SnapshotTesting"
         }
       ]
+    },
+    "TodayWorkbench": {
+      "type": "application",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayWorkbench-Debug.xcconfig",
+        "Release": "Config/TodayWorkbench-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "Development/SceneCatalog.swift"
+        },
+        {
+          "path": "Development/WorkbenchApp.swift"
+        },
+        {
+          "path": "Development/Support/TestDataset.swift"
+        },
+        {
+          "path": "One"
+        },
+        {
+          "path": "../tests/fixtures/today-dataset.json",
+          "buildPhase": "resources"
+        }
+      ],
+      "dependencies": [
+        {
+          "package": "TodayModules",
+          "product": "One"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayData"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlatform"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayDesignSystem"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlannerUI"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayTestSupport"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayScenes"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureToday"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureCalendar"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureReminders"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureClock"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureAsk"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureSettings"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureActivity"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureSearch"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        }
+      ]
     }
   },
   "schemes": {
@@ -446,6 +546,22 @@
         "commandLineArguments": {
           "-AppleLocale en_US_POSIX": true,
           "-AppleLanguages (en)": true
+        },
+        "environmentVariables": {
+          "TZ": "UTC"
+        }
+      }
+    },
+    "TodayWorkbench": {
+      "build": {
+        "targets": {
+          "TodayWorkbench": "all"
+        }
+      },
+      "run": {
+        "config": "Debug",
+        "commandLineArguments": {
+          "-scene clock.stopwatch": true
         },
         "environmentVariables": {
           "TZ": "UTC"

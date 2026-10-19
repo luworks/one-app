@@ -52,10 +52,11 @@ package struct YearHolidaysSettingsView: View {
 }
 
 /// The key to the Year view: one line per mark, opened from the (i) next to the year.
-struct YearKeySheet: View {
+package struct YearKeySheet: View {
+    package init() {}
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             List {
                 row(AnyView(Text("26").font(.system(size: 13, weight: .bold).monospacedDigit()).foregroundStyle(DayTint.holiday)),
