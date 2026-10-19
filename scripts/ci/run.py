@@ -283,21 +283,51 @@ def main():
     lane = sys.argv[1]
     if lane not in LANES:
         raise ValueError('unknown lane')
-    sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+    sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=5).strip()
     if sha != os.environ['GITHUB_SHA']:
         raise ValueError('checkout does not match integrated GITHUB_SHA')
     output = Path(os.environ['RUNNER_TEMP']) / ('today-' + lane)
     producer_boundary(sha, lane, output)
     output.mkdir(exist_ok=False)
     selection = output / 'selection.json'
-    subprocess.run([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)], check=True)
-    # The adapter owns execution and its initial closed receipt.
+    # Re-enter ./dev for each step: bootstrap installs the pinned runtimes that
+    # subsequent invocations select. Never call the in-process CLI from here.
+    setup = [['./dev', step] for step in ('bootstrap', 'generate', 'resolve')]
+    setup.append([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)])
     command = ['./dev', 'ci', lane, '--selection', str(selection), '--output', str(output),
                '--sha', sha, '--synthetic', '--no-distribute']
-    completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    transcript = []
+    setup_failed = False
+    for argv in [*setup, command]:
+        transcript.append('$ ' + ' '.join(argv) + '\n')
+        try:
+            completed = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                       text=True, timeout=600)
+        except subprocess.TimeoutExpired as error:
+            captured = error.stdout or ''
+            if isinstance(captured, bytes):
+                captured = captured.decode('utf-8', errors='replace')
+            completed = subprocess.CompletedProcess(argv, 124, captured + '\ncommand timed out\n')
+        except OSError as error:
+            # Exception text may include private paths; retain only its type.
+            completed = subprocess.CompletedProcess(argv, 1, type(error).__name__ + '\n')
+        transcript.append(completed.stdout or '')
+        if completed.returncode:
+            setup_failed = argv != command
+            break
+    text = ''.join(transcript)
     try:
-        report = close_wrapper(output, sha, lane, completed.stdout)
-        print(sanitize(completed.stdout))
+        if setup_failed:
+            # No adapter ran, so the wrapper owns this failed producer receipt.
+            # Zero executed results can never satisfy the existing lane gate.
+            report = {'sha': sha, 'lane': lane, 'synthetic': True, 'status': 'failed',
+                      'executed': 0, 'failed': 1, 'cancelled': 0, 'missing': 0,
+                      'errors': ['setup_exit:' + str(completed.returncode)]}
+            close_producer(output, report, roots=('selection.json',))
+        # Adapter receipts remain authoritative; never synthesize one for a
+        # missing, malformed or unsuccessful adapter report.
+        report = close_wrapper(output, sha, lane, text)
+        print(sanitize(text))
         # A stopped failed run may still have useful synthetic diffs/crashes.
         stage(output, Path(os.environ['RUNNER_TEMP']) / ('today-artifacts-' + lane), sha, lane)
         validate_report(report, sha, lane)

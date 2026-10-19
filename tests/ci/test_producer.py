@@ -3,6 +3,8 @@ import contextlib
 import io
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -14,13 +16,16 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from scripts.ci import run as producer  # noqa: E402
 from scripts.devtools import ci_adapter as adapter  # noqa: E402
+from scripts.devtools.core import canonical_root  # noqa: E402
 
 SHA = 'c' * 40
 
 
 class ProducerTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
+        evidence = canonical_root(ROOT) / 'tests/results/reconstruction'
+        evidence.mkdir(parents=True, exist_ok=True)
+        temporary = tempfile.TemporaryDirectory(prefix='ci-wrapper-fixture-', dir=evidence)
         self.addCleanup(temporary.cleanup)
         self.base = Path(temporary.name).resolve()
         self.output = self.base / 'today-business'
@@ -186,34 +191,122 @@ class ProducerTests(unittest.TestCase):
         self.assertNotIn('artifact_provenance', report)
         self.assertTrue((self.output / 'runner/ui.xcresult/.live').is_file())
 
-    def test_wrapper_keeps_first_exit_and_missing_report_fails(self):
-        for code, missing in ((7, False), (130, False), (0, True), (7, 'malformed')):
-            with self.subTest(code=code, missing=missing):
-                # Each wrapper owns one fresh directory.
-                import shutil
+    def wrapper(self, execute):
+        with patch.object(sys, 'argv', ['run.py', 'business']), patch.object(
+                producer.subprocess, 'check_output', return_value=SHA), patch.object(
+                producer.subprocess, 'run', side_effect=execute), contextlib.redirect_stdout(io.StringIO()):
+            return producer.main()
+
+    def test_wrapper_orders_setup_before_selection_and_adapter(self):
+        self.output.rmdir()
+        calls = []
+
+        def execute(argv, **kwargs):
+            calls.append(argv)
+            self.assertEqual(kwargs['timeout'], 600)
+            self.assertEqual(kwargs['stderr'], subprocess.STDOUT)
+            if argv[0] == sys.executable:
+                self.write('selection.json', b'{}')
+            if argv[:2] == ['./dev', 'ci']:
+                # The adapter still gets a fresh directory, with no setup logs
+                # or setup receipt that could be mistaken for producer output.
+                self.assertEqual([p.name for p in self.output.iterdir()], ['selection.json'])
+                self.close()
+            return SimpleNamespace(returncode=0, stdout=argv[1] + ' finished\n')
+
+        self.assertEqual(self.wrapper(execute), 0)
+        self.assertEqual([argv[:2] for argv in calls[:3]],
+                         [['./dev', step] for step in ('bootstrap', 'generate', 'resolve')])
+        self.assertEqual(calls[3][:3], [sys.executable, 'scripts/ci/policy.py', 'select'])
+        self.assertEqual(calls[4][:3], ['./dev', 'ci', 'business'])
+        log = (self.base / 'today-artifacts-business/wrapper-command.log').read_text()
+        for step in ('bootstrap', 'generate', 'resolve', 'ci'):
+            self.assertIn(step + ' finished', log)
+
+    def test_wrapper_setup_first_failure_closes_evidence_and_never_dispatches(self):
+        steps = ('bootstrap', 'generate', 'resolve', 'select')
+        for failed_index in range(len(steps)):
+            with self.subTest(step=steps[failed_index]):
+                shutil.rmtree(self.output)
+                calls = []
+
+                def execute(argv, **kwargs):
+                    calls.append(argv)
+                    code = 23 if len(calls) - 1 == failed_index else 0
+                    return SimpleNamespace(returncode=code, stdout='setup /Users/synthetic/fixture\n')
+
+                self.assertEqual(self.wrapper(execute), 23)
+                self.assertEqual(len(calls), failed_index + 1)
+                self.assertFalse(any(argv[:2] == ['./dev', 'ci'] for argv in calls))
+                target = self.base / 'today-artifacts-business'
+                report = json.loads((target / 'report.json').read_text())
+                self.assertEqual((report['status'], report['executed'], report['failed']), ('failed', 0, 1))
+                self.assertEqual(report['errors'], ['setup_exit:23'])
+                self.assertTrue(report['artifact_provenance']['closed'])
+                log = (target / 'wrapper-command.log').read_bytes()
+                self.assertNotIn(b'/Users/synthetic', log)
+                receipt = report['artifact_provenance']['files']
+                entry = next(e for e in receipt if e['path'] == 'wrapper-command.log')
+                self.assertEqual(producer.artifact_digest(log), {k: entry[k] for k in ('bytes', 'sha256')})
+                with self.assertRaises(ValueError):
+                    producer.validate_report(report, SHA, 'business')
+                shutil.rmtree(target)
+
+    def test_wrapper_setup_timeout_or_spawn_failure_retains_failure(self):
+        for error, code in ((subprocess.TimeoutExpired(['./dev', 'bootstrap'], 600,
+                                                     output=b'partial /Users/synthetic/fixture'), 124),
+                            (FileNotFoundError('private fixture path'), 1)):
+            with self.subTest(error=type(error).__name__):
+                shutil.rmtree(self.output)
+                with patch.object(producer, 'close_wrapper', wraps=producer.close_wrapper) as close:
+                    self.assertEqual(self.wrapper(lambda *args, **kwargs: (_ for _ in ()).throw(error)), code)
+                close.assert_called_once()
+                target = self.base / 'today-artifacts-business'
+                report = json.loads((target / 'report.json').read_text())
+                self.assertEqual(report['errors'], ['setup_exit:' + str(code)])
+                self.assertNotIn('private fixture path', (target / 'wrapper-command.log').read_text())
+                shutil.rmtree(target)
+
+    def test_wrapper_setup_secret_candidate_never_publishes(self):
+        self.output.rmdir()
+        self.assertEqual(self.wrapper(lambda *args, **kwargs: SimpleNamespace(
+            returncode=31, stdout='token=fixture-credential')), 31)
+        self.assertFalse((self.base / 'today-artifacts-business').exists())
+        self.assertNotIn('fixture-credential', (self.output / 'wrapper-command.log').read_text())
+
+    def test_wrapper_keeps_first_exit_and_invalid_report_fails(self):
+        for code, invalid in ((7, False), (130, False), (0, 'missing'), (7, 'malformed'),
+                              (0, 'malformed'), (0, 'zero'), (0, 'bad'), (0, 'unknown')):
+            with self.subTest(code=code, invalid=invalid):
                 shutil.rmtree(self.output)
 
                 def execute(argv, **kwargs):
                     if argv[0] == sys.executable:
                         self.write('selection.json', b'{}')
-                    else:
-                        if not missing:
-                            self.report.update(status='failed', failed=int(code == 7), cancelled=int(code == 130))
-                            self.write('command.log', b'first failure retained\n')
-                            self.close()
-                        if missing == 'malformed':
-                            self.write('report.json', b'[]')
-                        return SimpleNamespace(returncode=code, stdout='adapter exited\n')
-                    return SimpleNamespace(returncode=0)
+                    if argv[:2] != ['./dev', 'ci']:
+                        return SimpleNamespace(returncode=0, stdout='setup finished\n')
+                    if invalid not in ('missing', 'malformed'):
+                        self.report.update(status='failed', executed=1,
+                                           failed=int(code == 7), cancelled=int(code == 130))
+                        if invalid:
+                            self.report.update(status='passed', failed=0, cancelled=0)
+                        if invalid == 'zero':
+                            self.report['executed'] = 0
+                        elif invalid == 'bad':
+                            self.report['executed'] = '1'
+                        elif invalid == 'unknown':
+                            self.report['status'] = 'unknown'
+                        self.write('command.log', b'first failure retained\n')
+                        self.close()
+                    if invalid == 'malformed':
+                        self.write('report.json', b'[]')
+                    return SimpleNamespace(returncode=code, stdout='adapter exited\n')
 
-                with patch.object(sys, 'argv', ['run.py', 'business']), patch.object(
-                        producer.subprocess, 'check_output', return_value=SHA), patch.object(
-                        producer.subprocess, 'run', side_effect=execute), contextlib.redirect_stdout(io.StringIO()):
-                    self.assertEqual(producer.main(), code or 1)
+                self.assertEqual(self.wrapper(execute), code or 1)
                 target = self.base / 'today-artifacts-business'
-                if missing:
+                if invalid in ('missing', 'malformed'):
                     self.assertFalse(target.exists())
-                    self.assertEqual((self.output / 'wrapper-command.log').read_text(), 'adapter exited\n')
+                    self.assertTrue((self.output / 'wrapper-command.log').read_text().endswith('adapter exited\n'))
                 else:
                     self.assertEqual((target / 'command.log').read_text(), 'first failure retained\n')
                     shutil.rmtree(target)
