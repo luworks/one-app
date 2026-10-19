@@ -24,8 +24,8 @@ final class HealthMetricsTests: XCTestCase {
   // MARK: Catalog
 
   func testCatalogCoversEveryMetricOnceInAGroup() {
-    XCTAssertEqual(HealthMetric.allCases.count, 10)
-    XCTAssertEqual(Set(HealthMetric.allCases.map(\.rawValue)).count, 10)
+    XCTAssertEqual(HealthMetric.allCases.count, 123)
+    XCTAssertEqual(Set(HealthMetric.allCases.map(\.rawValue)).count, 123)
     for g in HealthGroup.allCases {
       XCTAssertFalse(HealthMetric.allCases.filter { $0.group == g }.isEmpty, "\(g) has metrics")
     }
@@ -34,7 +34,7 @@ final class HealthMetricsTests: XCTestCase {
 
   func testDefaultSetIsThreeMetricsThatNeedNoWatch() {
     XCTAssertEqual(HealthSelection.default.shown, [.steps, .sleep, .weight])
-    XCTAssertEqual(HealthSelection.default.hidden.count, 7)
+    XCTAssertEqual(HealthSelection.default.hidden.count, 120)
     XCTAssertFalse(HealthSelection.default.shown.contains(.restingHeartRate))
   }
 

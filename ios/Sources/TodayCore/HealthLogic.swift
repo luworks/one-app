@@ -99,10 +99,14 @@ public enum HealthMath {
       let start = boundaries[index]
       for (stage, delta) in events[start] ?? [:] { active[stage, default: 0] += delta }
       let end = boundaries[index + 1]
-      guard let stage = SleepStage.allCases.first(where: { active[$0, default: 0] > 0 }), end > start else { continue }
+      guard let stage = SleepStage.allCases.first(where: { active[$0, default: 0] > 0 }),
+        end > start
+      else { continue }
       if let previous = result.last, previous.stage == stage, previous.end == start {
         result[result.count - 1] = SleepInterval(start: previous.start, end: end, stage: stage)
-      } else { result.append(SleepInterval(start: start, end: end, stage: stage)) }
+      } else {
+        result.append(SleepInterval(start: start, end: end, stage: stage))
+      }
     }
     return result
   }

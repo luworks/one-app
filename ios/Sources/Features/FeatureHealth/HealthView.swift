@@ -38,9 +38,13 @@
               Text(customizing ? "Your order" : "Your health")
                 .font(.headline.weight(.medium))
                 .foregroundStyle(.primary)
-              Text(customizing ? "Drag any metric to any position." : "Measurements from Apple Health, in your order.")
-                .font(.footnote)
-                .textCase(nil)
+              Text(
+                customizing
+                  ? "Drag any metric to any position."
+                  : "Measurements from Apple Health, in your order."
+              )
+              .font(.footnote)
+              .textCase(nil)
             }
             .padding(.bottom, 6)
           }
@@ -64,13 +68,19 @@
           }
           if model.recordSource != nil {
             Section {
-              Button { recordsPresented = true } label: {
+              Button {
+                recordsPresented = true
+              } label: {
                 Label("Browse Health Records", systemImage: "list.bullet.rectangle")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
                   .frame(minHeight: 44)
               }
               .accessibilityIdentifier("health.records")
             } footer: {
               Text("Workouts, events, paired readings and profile. Choose what to read.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
           }
           footer
@@ -81,10 +91,11 @@
       .performanceDestination("health")
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
-          Button(customizing ? "Done Customizing" : "Customize") {
+          Button(customizing ? "Finish" : "Customize") {
             withAnimation(.snappy) { customizing.toggle() }
           }
           .font(.subheadline.weight(.medium))
+          .accessibilityLabel(customizing ? "Done Customizing" : "Customize")
           .accessibilityIdentifier("health.customize")
         }
 
@@ -124,6 +135,7 @@
       if case .failed(let reason) = state { failure = reason }
       return VStack(alignment: .leading, spacing: 4) {
         Button {
+          guard !customizing else { return }
           PerformanceTrace.shared.beginPage("health.detail")
           detail = metric
         } label: {
@@ -140,7 +152,7 @@
         if let failure {
           // A failed row says so quietly, once, and offers the one action that can help.
           HStack(spacing: 8) {
-            Text(Self.cantRead)
+            Text(failure == .queryFailed ? "Couldn't refresh. Try again." : Self.cantRead)
               .font(.footnote)
               .foregroundStyle(.secondary)
               .accessibilityIdentifier("health.note.\(metric.rawValue)")
@@ -170,7 +182,9 @@
       .accessibilityAction(named: "Move Down") { model.nudge(metric, by: 1) }
       .accessibilityAction(named: "Move to Top") { model.moveToTop(metric) }
       .contextMenu {
-        Button { model.moveToTop(metric) } label: {
+        Button {
+          model.moveToTop(metric)
+        } label: {
           Label("Move to Top", systemImage: "arrow.up.to.line")
         }
         .disabled(model.selection.ordered.first == metric)

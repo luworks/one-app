@@ -1,0 +1,20 @@
+# Health dashboard validation — 2026-10-19
+
+Baseline: `43d28166333a833bcac1c641312951e959cfd990` from a normal `git fetch origin main` and fast-forward in isolated worktree `t3-31aa270b`. No generated project, source manifest, signing, data schema, SwiftData identity or store path changed. SwiftPM discovers new sources by target directory. Home/Shell/Chat, CI and devtools remain outside this change.
+
+## Evidence and verification
+
+Persistent evidence: `/Users/yuanlu/code/one-app/tests/results/health-dashboard-20261019/`. The QA SQLite journal indexes retained logs, screenshots, videos and complete xcresult files with SHA-256. Runtime evidence is not versioned in Git.
+
+- First native batch: `today-qa-20261019-143910-b03e2e8f`, 5 selected methods. Native Mock build compiled the HealthKit adapter. Actual main-dashboard Weight-to-Steps native drag, dismissal, relaunch and detail passed. Explicit record-family Read and no-readable detail passed. Picker drag geometry and large-type entry helper failures were retained.
+- Second native batch: `today-qa-20261019-144832-d20baaad`. Picker drag crossed categories; the later search-active native toolbar hid Done and exposed the system `close` control. Large-type navigation reached Health; XCTest's `isEnabled` attribute did not describe the disabled SwiftUI row's actual behavior.
+- Third native batch: `today-qa-20261019-145227-025466c3`. Actual row tap while customizing did not navigate; finishing customization restored detail access at accessibility XXXL. Picker synthetic drop was intermittent; its unchanged geometry/gesture failed at the actual order assertion. Video, native handle geometry and synthesized pointer events were retained. The event ended movement and lifted the pointer at exactly 1.206 seconds, with zero drop-settling time; video shows the lifted row return to its origin. The shared helper now uses a slow drag with a 0.5-second final hold, retaining the same native handle, endpoint and order assertion. No assertion was weakened to accept a wrong order.
+- `./dev test unit`: 700 executed; 697 passed, three test methods failed on obsolete ten-metric inventory counts and one exact display-precision expectation. Four opt-in Activity benchmark skips remained explicit. The exact inventory/precision expectations were updated for the new catalog.
+- Focused repair check: `./dev test unit --only TodayTests/HealthCatalogTests --only TodayTests/HealthMetricsTests --only TodayTests/HealthLoadingTests`: **48 passed, zero missing, zero skipped**. Includes global order, preference round trips, quantity aggregation/units, category codes, DST session splitting, actual maximum query occupancy after timeouts, error versus empty, cancellation settlement and rejection of late timed-out results. The full batch's sleep overlap regressions passed.
+- `./dev format` and `git diff --check` passed. One focused source/privacy review identified concurrency and sleep overlap issues; both were repaired with behavior regressions.
+
+## Acceptance boundaries
+
+These are simulator UI and synthetic/logic results, not physical-device HealthKit permission or data-read evidence. No phone installation, Health authorization, private sample extraction or upload was performed. The main-dashboard native before/after reorder captures use the same simulator viewport. The supplied user screenshot is the inspected original-design reference; a second native build of the old design was not performed solely to recreate it.
+
+No full UI suite, all-size accessibility sweep, physical-device measurement, 123-item UI drag/autoscroll journey, ECG/route/clinical reader or raw archive/export is claimed. Exact implemented and unsupported data families are in [public-read-coverage.md](public-read-coverage.md). The inherited numeric authorization request is still a void legacy API; request completion never means read permission granted. Numeric query and record-request failures now use the approved optional diagnostic capabilities.

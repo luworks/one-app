@@ -33,6 +33,11 @@ extension HealthSource {
   public func preferredUnits() async -> HealthUnits? { nil }
 }
 
+/// Optional diagnostic capability; existing sources keep the original read contract.
+public protocol HealthQuerySource: Sendable {
+  func query(_ metric: HealthMetric, days: Int, now: Date) async throws -> HealthSeries
+}
+
 // MARK: - Timeout
 
 public enum HealthTimeout {
@@ -69,7 +74,11 @@ public enum HealthTimeout {
 
     func setOperation(_ task: Task<Void, Never>) {
       lock.lock()
-      if continuation == nil { lock.unlock(); task.cancel(); return }
+      if continuation == nil {
+        lock.unlock()
+        task.cancel()
+        return
+      }
       operation = task
       lock.unlock()
     }
@@ -128,9 +137,12 @@ public enum HealthFailure: Equatable, Sendable {
   case stalled
   /// Apple's permission sheet did not answer in time (or could not be shown).
   case accessUnanswered
+  case queryFailed
 }
 
 public enum HealthMetricState: Equatable, Sendable {
+  /// A cancelled first read has no error and is no longer loading.
+  case idle
   /// Waiting for the first answer for this metric (only this row shows a spinner).
   case loading
   /// Answered (an empty series is fine: "No data", which also covers "not allowed").
@@ -141,6 +153,8 @@ public enum HealthMetricState: Equatable, Sendable {
 public enum HealthFetchResult: Sendable, Equatable {
   case series(HealthSeries)
   case stalled
+  case queryFailed
+  case cancelled
 }
 
 extension HealthMetricState {
@@ -153,6 +167,8 @@ extension HealthMetricState {
   ) -> HealthMetricState {
     switch result {
     case .stalled: return hadData ? .loaded : .failed(.stalled)
+    case .queryFailed: return .failed(.queryFailed)
+    case .cancelled: return hadData ? .loaded : .idle
     case .series(let series):
       if !series.points.isEmpty || access == .answered { return .loaded }
       return .failed(.accessUnanswered)
@@ -195,11 +211,20 @@ public enum HealthLoader {
       func enqueue(_ metric: HealthMetric) {
         group.addTask {
           let outcome = await HealthTimeout.race(seconds: timeout, cancelOnTimeout: true) {
-            await source.series(for: [metric], days: days, now: now)[metric] ?? .empty
+            if let diagnostic = source as? any HealthQuerySource {
+              do {
+                return HealthFetchResult.series(
+                  try await diagnostic.query(metric, days: days, now: now))
+              } catch is CancellationError { return HealthFetchResult.cancelled } catch {
+                return Task.isCancelled ? .cancelled : .queryFailed
+              }
+            }
+            return .series(
+              await source.series(for: [metric], days: days, now: now)[metric] ?? .empty)
           }
           guard !Task.isCancelled else { return }
           switch outcome {
-          case .value(let series): await onResult(metric, .series(series))
+          case .value(let result): await onResult(metric, result)
           case .timedOut:
             healthLog.error(
               "fetch stalled for \(metric.rawValue, privacy: .public) after \(timeout, privacy: .public) s"
@@ -214,7 +239,10 @@ public enum HealthLoader {
         next += 1
       }
       while await group.next() != nil {
-        guard !Task.isCancelled else { group.cancelAll(); return }
+        guard !Task.isCancelled else {
+          group.cancelAll()
+          return
+        }
         if next < requested.count {
           enqueue(requested[next])
           next += 1
@@ -315,10 +343,14 @@ public actor HealthQueryLimiter {
 
   private func acquire() async throws {
     try Task.checkCancellation()
-    if available > 0 { available -= 1; return }
+    if available > 0 {
+      available -= 1
+      return
+    }
     let id = UUID()
     try await withTaskCancellationHandler {
-      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
         waiting.append((id, continuation))
       }
     } onCancel: {
@@ -332,7 +364,6 @@ public actor HealthQueryLimiter {
   }
 
   private func release() {
-    if waiting.isEmpty { available += 1 }
-    else { waiting.removeFirst().1.resume() }
+    if waiting.isEmpty { available += 1 } else { waiting.removeFirst().1.resume() }
   }
 }

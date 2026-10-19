@@ -86,6 +86,14 @@
         tokens[metric] = generation[metric]
       }
       let tokenSnapshot = tokens
+      defer {
+        if Task.isCancelled {
+          for metric in metrics
+          where generation[metric] == tokenSnapshot[metric] && states[metric] == .loading {
+            states[metric] = series[metric]?.points.isEmpty == false ? .loaded : .idle
+          }
+        }
+      }
       await HealthLoader.load(
         metrics, source: source, gate: gate, days: Self.days, now: runtime.now(), timeout: timeout,
         onLateAccess: { [weak self] in

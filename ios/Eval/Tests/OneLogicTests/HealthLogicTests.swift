@@ -57,9 +57,11 @@ final class HealthLogicTests: XCTestCase {
       SleepInterval(start: date(16, 3), end: date(16, 7), stage: .unspecified),
     ]
     let nights = HealthMath.nights(intervals, count: 7, now: date(16, 9), calendar: cal)
-    XCTAssertEqual(nights.first?.asleep, 8 * 3600, "unstaged coverage must survive outside the staged interval")
+    XCTAssertEqual(
+      nights.first?.asleep, 8 * 3600, "unstaged coverage must survive outside the staged interval")
     let awake = SleepInterval(start: date(16, 2), end: date(16, 2, 30), stage: .awake)
-    let interrupted = HealthMath.nights(intervals + [awake], count: 7, now: date(16, 9), calendar: cal)
+    let interrupted = HealthMath.nights(
+      intervals + [awake], count: 7, now: date(16, 9), calendar: cal)
     XCTAssertEqual(interrupted.first?.asleep, 7.5 * 3600)
     XCTAssertEqual(interrupted.first?.total(.awake), 30 * 60)
   }

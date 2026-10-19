@@ -1,5 +1,6 @@
 #if os(iOS)
   import SwiftUI
+  import os
   import TodayCore
   import TodayDesignSystem
   import TodayPlatform
@@ -16,12 +17,15 @@
     /// Compatibility for existing development scenes that only edit visibility.
     public init(shown: Binding<Set<HealthMetric>>) {
       self._selection = Binding(
-        get: { HealthSelection(shown: HealthMetric.allCases.filter { shown.wrappedValue.contains($0) }) },
+        get: {
+          HealthSelection(shown: HealthMetric.allCases.filter { shown.wrappedValue.contains($0) })
+        },
         set: { shown.wrappedValue = Set($0.shown) })
     }
 
     private func matches(_ metric: HealthMetric) -> Bool {
-      search.isEmpty || "\(metric.title) \(metric.group.title)".localizedCaseInsensitiveContains(search)
+      search.isEmpty
+        || "\(metric.title) \(metric.group.title)".localizedCaseInsensitiveContains(search)
     }
 
     public var body: some View {
@@ -29,12 +33,20 @@
         List {
           Section {
             ForEach(selection.shown.filter(matches)) { metric in metricRow(metric) }
-              .onMove { selection.move(from: $0, to: $1) }
+              .onMove { from, to in
+                Logger(subsystem: "com.luworks.one", category: "health.reorder")
+                  .debug(
+                    "Picker move from \(from.description, privacy: .public) to \(to, privacy: .public)"
+                  )
+                selection.move(from: from, to: to)
+              }
               .moveDisabled(!search.isEmpty)
           } header: {
             Text("Shown · Your Order")
           } footer: {
-            Text("Drag across categories in Customize. Only the metrics you choose request read access.")
+            Text(
+              "Drag across categories in Customize. Only the metrics you choose request read access."
+            )
           }
           ForEach(HealthGroup.allCases, id: \.self) { group in
             let hidden = selection.hidden.filter { $0.group == group && matches($0) }
@@ -53,8 +65,9 @@
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
           ToolbarItem(placement: .topBarLeading) {
-            Button(customizing ? "Done Customizing" : "Customize") { customizing.toggle() }
+            Button(customizing ? "Finish" : "Customize") { customizing.toggle() }
               .disabled(!search.isEmpty)
+              .accessibilityLabel(customizing ? "Done Customizing" : "Customize")
               .accessibilityIdentifier("health.pick.customize")
           }
           ToolbarItem(placement: .confirmationAction) {
@@ -66,10 +79,12 @@
     }
 
     private func metricRow(_ metric: HealthMetric) -> some View {
-      Toggle(isOn: Binding(
-        get: { selection.shown.contains(metric) },
-        set: { if $0 { selection.add([metric]) } else { selection.hide(metric) } }
-      )) {
+      Toggle(
+        isOn: Binding(
+          get: { selection.shown.contains(metric) },
+          set: { if $0 { selection.add([metric]) } else { selection.hide(metric) } }
+        )
+      ) {
         VStack(alignment: .leading, spacing: 3) {
           Text(metric.title).font(.body)
           Text(metric.summary)

@@ -24,7 +24,9 @@
               .accessibilityIdentifier("health.records.\(family.rawValue)")
             }
           } footer: {
-            Text("Choose a family to request read access. Health values stay on this device. ECG waveforms, workout routes, heartbeat series, clinical records, medications, audiograms and vision prescriptions are not shown here.")
+            Text(
+              "Choose a family to request read access. Health values stay on this device. ECG waveforms, workout routes, heartbeat series, clinical records, medications, audiograms and vision prescriptions are not shown here."
+            )
           }
         }
         .navigationTitle("Health Records")
@@ -63,9 +65,11 @@
               .foregroundStyle(.secondary)
               .accessibilityIdentifier("health.records.error")
           } else if requested && !loading && records.isEmpty {
-            Text("No readable records. There may be no data, or access may be limited in Apple Health.")
-              .foregroundStyle(.secondary)
-              .accessibilityIdentifier("health.records.empty")
+            Text(
+              "No readable records. There may be no data, or access may be limited in Apple Health."
+            )
+            .foregroundStyle(.secondary)
+            .accessibilityIdentifier("health.records.empty")
           }
         }
         ForEach(Array(records.enumerated()), id: \.offset) { _, record in

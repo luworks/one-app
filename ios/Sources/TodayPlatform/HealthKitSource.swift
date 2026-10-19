@@ -10,7 +10,7 @@
   /// samples themselves; sleep is category samples grouped into nights; mindful minutes are session durations per day.
   /// Values come back in the canonical units of `HealthMetric` (kg, meters, kcal, minutes, percent); display units
   /// follow the region in `HealthUnits`.
-  public final class HealthKitSource: HealthSource, @unchecked Sendable {
+  public final class HealthKitSource: HealthSource, HealthQuerySource, @unchecked Sendable {
     private let store = HKHealthStore()
     private let queryLimiter = HealthQueryLimiter()
 
@@ -23,8 +23,9 @@
       let required = descriptor.minimumIOS
       let major = Int(required)
       let minor = Int((required - Double(major)) * 10 + 0.5)
-      guard ProcessInfo.processInfo.isOperatingSystemAtLeast(
-        OperatingSystemVersion(majorVersion: major, minorVersion: minor, patchVersion: 0)),
+      guard
+        ProcessInfo.processInfo.isOperatingSystemAtLeast(
+          OperatingSystemVersion(majorVersion: major, minorVersion: minor, patchVersion: 0)),
         let type = HKObjectType.quantityType(forIdentifier: .init(rawValue: descriptor.identifier))
       else { return nil }
       return (type, descriptor)
@@ -66,7 +67,8 @@
       case .decibels: .decibelAWeightedSoundPressureLevel()
       case .milliseconds: .secondUnit(with: .milli)
       case .oxygenUptake:
-        HKUnit.literUnit(with: .milli).unitDivided(by: .gramUnit(with: .kilo)).unitDivided(by: .minute())
+        HKUnit.literUnit(with: .milli).unitDivided(by: .gramUnit(with: .kilo)).unitDivided(
+          by: .minute())
       case .centimeters: .meterUnit(with: .centi)
       case .grams: .gram()
       case .milliliters: .literUnit(with: .milli)
@@ -98,9 +100,11 @@
       let requested = Array(Set(metrics)).sorted { $0.rawValue < $1.rawValue }
       var out: [HealthMetric: HealthSeries] = [:]
       // A large selected catalog must not enqueue hundreds of HealthKit queries simultaneously.
-      for offset in stride(from: 0, to: requested.count, by: HealthCatalog.maximumConcurrentQueries) {
+      for offset in stride(from: 0, to: requested.count, by: HealthCatalog.maximumConcurrentQueries)
+      {
         guard !Task.isCancelled else { return [:] }
-        let batch = requested[offset..<min(offset + HealthCatalog.maximumConcurrentQueries, requested.count)]
+        let batch = requested[
+          offset..<min(offset + HealthCatalog.maximumConcurrentQueries, requested.count)]
         let values = await withTaskGroup(of: (HealthMetric, HealthSeries).self) { group in
           for metric in batch {
             group.addTask { [self] in
@@ -109,9 +113,10 @@
                   try await load(metric, days: days, now: now)
                 }
                 return (metric, series)
-              }
-              catch {
-                healthLog.error("query failed for \(metric.rawValue, privacy: .public): \((error as NSError).code, privacy: .public)")
+              } catch {
+                healthLog.error(
+                  "query failed for \(metric.rawValue, privacy: .public): \((error as NSError).code, privacy: .public)"
+                )
                 return (metric, .empty)
               }
             }
@@ -123,6 +128,13 @@
         out.merge(values) { _, new in new }
       }
       return out
+    }
+
+    public func query(_ metric: HealthMetric, days: Int, now: Date) async throws -> HealthSeries {
+      guard isAvailable else { throw HealthRecordError.unavailable }
+      return try await queryLimiter.run { [self] in
+        try await load(metric, days: days, now: now)
+      }
     }
 
     private func load(_ metric: HealthMetric, days: Int, now: Date) async throws -> HealthSeries {
@@ -143,10 +155,11 @@
             sortDescriptors: [SortDescriptor(\.endDate, order: .reverse)], limit: 20_000)
           let samples = try await query.result(for: store)
           try Task.checkCancellation()
-          return HealthSeries(points: samples.compactMap {
-            let value = $0.quantity.doubleValue(for: canonicalUnit) * descriptor.scale
-            return value.isFinite ? HealthPoint(date: $0.endDate, value: value) : nil
-          })
+          return HealthSeries(
+            points: samples.compactMap {
+              let value = $0.quantity.doubleValue(for: canonicalUnit) * descriptor.scale
+              return value.isFinite ? HealthPoint(date: $0.endDate, value: value) : nil
+            })
         }
         let sum = descriptor.aggregation == .dailySum
         let query = HKStatisticsCollectionQueryDescriptor(
@@ -169,7 +182,8 @@
       switch metric {
       case .sleep:
         // From 18:00 the evening before the first day, so the oldest night is complete.
-        let from = start.addingTimeInterval(-6 * 3600)
+        let previousDay = cal.date(byAdding: .day, value: -1, to: start) ?? start
+        let from = cal.date(bySettingHour: 18, minute: 0, second: 0, of: previousDay) ?? previousDay
         let query = HKSampleQueryDescriptor(
           predicates: [
             .categorySample(
@@ -199,7 +213,8 @@
           guard sample.endDate > sample.startDate else { return nil }
           return DateInterval(start: sample.startDate, end: sample.endDate)
         }
-        return HealthSeries(points: HealthDurationMath.dailyMinutes(intervals, start: start, end: now, calendar: cal))
+        return HealthSeries(
+          points: HealthDurationMath.dailyMinutes(intervals, start: start, end: now, calendar: cal))
       default: return .empty
       }
     }
@@ -222,8 +237,12 @@
       HealthCatalog.categories.compactMap { descriptor in
         let major = Int(descriptor.minimumIOS)
         let minor = Int((descriptor.minimumIOS - Double(major)) * 10 + 0.5)
-        guard ProcessInfo.processInfo.isOperatingSystemAtLeast(.init(majorVersion: major, minorVersion: minor, patchVersion: 0)),
-          let type = HKObjectType.categoryType(forIdentifier: .init(rawValue: descriptor.identifier)) else { return nil }
+        guard
+          ProcessInfo.processInfo.isOperatingSystemAtLeast(
+            .init(majorVersion: major, minorVersion: minor, patchVersion: 0)),
+          let type = HKObjectType.categoryType(
+            forIdentifier: .init(rawValue: descriptor.identifier))
+        else { return nil }
         return (type, descriptor)
       }
     }
@@ -240,7 +259,10 @@
           types.insert(HKQuantityType(.bloodPressureSystolic))
           types.insert(HKQuantityType(.bloodPressureDiastolic))
         case .characteristics:
-          for id: HKCharacteristicTypeIdentifier in [.dateOfBirth, .biologicalSex, .bloodType, .wheelchairUse, .fitzpatrickSkinType, .activityMoveMode] {
+          for id: HKCharacteristicTypeIdentifier in [
+            .dateOfBirth, .biologicalSex, .bloodType, .wheelchairUse, .fitzpatrickSkinType,
+            .activityMoveMode,
+          ] {
             if let type = HKObjectType.characteristicType(forIdentifier: id) { types.insert(type) }
           }
         }
@@ -254,13 +276,17 @@
       try await store.requestAuthorization(toShare: [], read: recordReadTypes(families))
     }
 
-    public func records(for families: [HealthRecordFamily], days: Int, now: Date) async throws -> [HealthRecordFamily: [HealthRecord]] {
+    public func records(for families: [HealthRecordFamily], days: Int, now: Date) async throws
+      -> [HealthRecordFamily: [HealthRecord]]
+    {
       try await queryLimiter.run { [self] in
         try await loadRecords(for: families, days: days, now: now)
       }
     }
 
-    private func loadRecords(for families: [HealthRecordFamily], days: Int, now: Date) async throws -> [HealthRecordFamily: [HealthRecord]] {
+    private func loadRecords(for families: [HealthRecordFamily], days: Int, now: Date) async throws
+      -> [HealthRecordFamily: [HealthRecord]]
+    {
       guard isAvailable else { throw HealthRecordError.unavailable }
       let window = HealthWindow(days: min(max(days, 1), HealthCatalog.maximumHistoryDays), now: now)
       let predicate = HKQuery.predicateForSamples(withStart: window.start, end: now)
@@ -272,31 +298,53 @@
           var events: [(Date, HealthRecord)] = []
           for (type, descriptor) in availableCategoryTypes() {
             try Task.checkCancellation()
-            let query = HKSampleQueryDescriptor(predicates: [.categorySample(type: type, predicate: predicate)],
-              sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)], limit: HealthRecordLimits.maximumRecordsPerType)
+            let query = HKSampleQueryDescriptor(
+              predicates: [.categorySample(type: type, predicate: predicate)],
+              sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
+              limit: HealthRecordLimits.maximumRecordsPerType)
             for sample in try await query.result(for: store) {
               guard let value = descriptor.values[sample.value] else { continue }
               guard sample.endDate >= sample.startDate else { continue }
-              events.append((sample.startDate, .category(.init(identifier: descriptor.identifier, title: descriptor.title,
-                value: value, start: sample.startDate, end: sample.endDate))))
+              events.append(
+                (
+                  sample.startDate,
+                  .category(
+                    .init(
+                      identifier: descriptor.identifier, title: descriptor.title,
+                      value: value, start: sample.startDate, end: sample.endDate))
+                ))
             }
           }
-          result[family] = events.sorted { $0.0 > $1.0 }.prefix(HealthRecordLimits.maximumRecordsPerType).map(\.1)
+          result[family] = events.sorted { $0.0 > $1.0 }.prefix(
+            HealthRecordLimits.maximumRecordsPerType
+          ).map(\.1)
         case .workouts:
-          let query = HKSampleQueryDescriptor(predicates: [.workout(predicate)],
-            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)], limit: HealthRecordLimits.maximumRecordsPerType)
+          let query = HKSampleQueryDescriptor(
+            predicates: [.workout(predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
+            limit: HealthRecordLimits.maximumRecordsPerType)
           result[family] = try await query.result(for: store).compactMap { sample in
-            guard sample.duration.isFinite, sample.duration >= 0, sample.endDate >= sample.startDate else { return nil }
-            return .workout(.init(activityCode: sample.workoutActivityType.rawValue,
-              title: Self.workoutTitle(sample.workoutActivityType), start: sample.startDate,
-              end: sample.endDate, durationSeconds: sample.duration))
+            guard sample.duration.isFinite, sample.duration >= 0, sample.endDate >= sample.startDate
+            else { return nil }
+            return .workout(
+              .init(
+                activityCode: sample.workoutActivityType.rawValue,
+                title: Self.workoutTitle(sample.workoutActivityType), start: sample.startDate,
+                end: sample.endDate, durationSeconds: sample.duration))
           }
         case .bloodPressure:
-          let query = HKSampleQueryDescriptor(predicates: [.correlation(type: HKCorrelationType(.bloodPressure), predicate: predicate)],
-            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)], limit: HealthRecordLimits.maximumRecordsPerType)
+          let query = HKSampleQueryDescriptor(
+            predicates: [
+              .correlation(type: HKCorrelationType(.bloodPressure), predicate: predicate)
+            ],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
+            limit: HealthRecordLimits.maximumRecordsPerType)
           result[family] = try await query.result(for: store).compactMap { sample in
-            let systolic = sample.objects(for: HKQuantityType(.bloodPressureSystolic)).compactMap { $0 as? HKQuantitySample }
-            let diastolic = sample.objects(for: HKQuantityType(.bloodPressureDiastolic)).compactMap { $0 as? HKQuantitySample }
+            let systolic = sample.objects(for: HKQuantityType(.bloodPressureSystolic)).compactMap {
+              $0 as? HKQuantitySample
+            }
+            let diastolic = sample.objects(for: HKQuantityType(.bloodPressureDiastolic)).compactMap
+            { $0 as? HKQuantitySample }
             guard systolic.count == 1, diastolic.count == 1 else { return nil }
             let high = systolic[0].quantity.doubleValue(for: .millimeterOfMercury())
             let low = diastolic[0].quantity.doubleValue(for: .millimeterOfMercury())
@@ -314,8 +362,9 @@
     private func profileRecords() throws -> [HealthRecord] {
       var output: [HealthRecord] = []
       func readable<T>(_ read: () throws -> T) throws -> T? {
-        do { return try read() }
-        catch let error as HKError where error.code == .errorNoData || error.code == .errorAuthorizationDenied {
+        do { return try read() } catch let error as HKError
+          where error.code == .errorNoData || error.code == .errorAuthorizationDenied
+        {
           // Missing and unreadable characteristics deliberately have the same empty presentation.
           return nil
         }
@@ -324,18 +373,29 @@
         guard let code, let value = values[code] else { return }
         output.append(.characteristic(.init(field: field, value: value)))
       }
-      append("Biological Sex", try readable { try store.biologicalSex().biologicalSex.rawValue },
+      append(
+        "Biological Sex", try readable { try store.biologicalSex().biologicalSex.rawValue },
         [1: "Female", 2: "Male", 3: "Other"])
-      append("Blood Type", try readable { try store.bloodType().bloodType.rawValue },
+      append(
+        "Blood Type", try readable { try store.bloodType().bloodType.rawValue },
         [1: "A+", 2: "A−", 3: "B+", 4: "B−", 5: "AB+", 6: "AB−", 7: "O+", 8: "O−"])
-      append("Wheelchair Use", try readable { try store.wheelchairUse().wheelchairUse.rawValue }, [1: "No", 2: "Yes"])
-      append("Fitzpatrick Skin Type", try readable { try store.fitzpatrickSkinType().skinType.rawValue },
+      append(
+        "Wheelchair Use", try readable { try store.wheelchairUse().wheelchairUse.rawValue },
+        [1: "No", 2: "Yes"])
+      append(
+        "Fitzpatrick Skin Type", try readable { try store.fitzpatrickSkinType().skinType.rawValue },
         [1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI"])
-      append("Move Mode", try readable { try store.activityMoveMode().activityMoveMode.rawValue },
+      append(
+        "Move Mode", try readable { try store.activityMoveMode().activityMoveMode.rawValue },
         [1: "Active Energy", 2: "Move Time"])
-      if let components = try readable({ try store.dateOfBirthComponents() }), let year = components.year,
-        let month = components.month, let day = components.day {
-        output.append(.characteristic(.init(field: "Date of Birth", value: String(format: "%04d-%02d-%02d", year, month, day))))
+      if let components = try readable({ try store.dateOfBirthComponents() }),
+        let year = components.year,
+        let month = components.month, let day = components.day
+      {
+        output.append(
+          .characteristic(
+            .init(field: "Date of Birth", value: String(format: "%04d-%02d-%02d", year, month, day))
+          ))
       }
       return output
     }

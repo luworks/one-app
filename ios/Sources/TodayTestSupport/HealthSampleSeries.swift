@@ -96,7 +96,10 @@ public enum HealthSampleSeries {
         default: base = 12
         }
         let value = base * rng.next(in: 0.85...1.15)
-        points.append(HealthPoint(date: day(back), value: descriptor.aggregation == .dailySum ? partial(back, value) : value))
+        points.append(
+          HealthPoint(
+            date: day(back),
+            value: descriptor.aggregation == .dailySum ? partial(back, value) : value))
       }
     }
     return HealthSeries(points: points)

@@ -29,16 +29,26 @@ public struct MockHealthSource: HealthSource, HealthRecordSource {
           ("HKCategoryTypeIdentifierAppleStandHour", "Stand Hour", "Stood", 3_600, 0),
           ("HKCategoryTypeIdentifierHandwashingEvent", "Handwashing", "Completed", 5_400, 20),
           ("HKCategoryTypeIdentifierToothbrushingEvent", "Toothbrushing", "Completed", 7_200, 120),
-          ("HKCategoryTypeIdentifierHighHeartRateEvent", "High Heart Rate", "Recorded event", 10_800, 0),
-          ("HKCategoryTypeIdentifierLowHeartRateEvent", "Low Heart Rate", "Recorded event", 14_400, 0),
-          ("HKCategoryTypeIdentifierIrregularHeartRhythmEvent", "Irregular Rhythm", "Recorded event", 18_000, 0),
+          (
+            "HKCategoryTypeIdentifierHighHeartRateEvent", "High Heart Rate", "Recorded event",
+            10_800, 0
+          ),
+          (
+            "HKCategoryTypeIdentifierLowHeartRateEvent", "Low Heart Rate", "Recorded event", 14_400,
+            0
+          ),
+          (
+            "HKCategoryTypeIdentifierIrregularHeartRhythmEvent", "Irregular Rhythm",
+            "Recorded event", 18_000, 0
+          ),
         ]
         result[family] = events.compactMap { identifier, title, value, secondsAgo, duration in
           let start = date(secondsAgo)
           guard start >= cutoff else { return nil }
-          return .category(HealthCategoryRecord(
-            identifier: identifier, title: title, value: value, start: start,
-            end: start.addingTimeInterval(duration)))
+          return .category(
+            HealthCategoryRecord(
+              identifier: identifier, title: title, value: value, start: start,
+              end: start.addingTimeInterval(duration)))
         }
       case .workouts:
         let sessions: [(UInt, String, Double, Double)] = [
@@ -48,9 +58,10 @@ public struct MockHealthSource: HealthSource, HealthRecordSource {
         result[family] = sessions.compactMap { code, title, secondsAgo, duration in
           let start = date(secondsAgo)
           guard start >= cutoff else { return nil }
-          return .workout(HealthWorkoutRecord(
-            activityCode: code, title: title, start: start,
-            end: start.addingTimeInterval(duration), durationSeconds: duration))
+          return .workout(
+            HealthWorkoutRecord(
+              activityCode: code, title: title, start: start,
+              end: start.addingTimeInterval(duration), durationSeconds: duration))
         }
       case .bloodPressure:
         result[family] = [

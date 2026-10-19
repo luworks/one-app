@@ -29,7 +29,31 @@ public enum HealthMetric: String, CaseIterable, Codable, Identifiable, Sendable 
   case steps, sleep, weight
   case restingHeartRate, activeEnergy, exerciseMinutes, distance, bodyFat, mindfulMinutes, daylight
 
-  case appleSleepingWristTemperature, bodyMassIndex, electrodermalActivity, height, leanBodyMass, waistCircumference, appleMoveTime, appleStandTime, basalEnergyBurned, crossCountrySkiingSpeed, cyclingCadence, cyclingFunctionalThresholdPower, cyclingPower, cyclingSpeed, distanceCrossCountrySkiing, distanceCycling, distanceDownhillSnowSports, distancePaddleSports, distanceRowing, distanceSkatingSports, distanceSwimming, distanceWheelchair, estimatedWorkoutEffortScore, flightsClimbed, nikeFuel, paddleSportsSpeed, physicalEffort, pushCount, rowingSpeed, runningPower, runningSpeed, swimmingStrokeCount, underwaterDepth, workoutEffortScore, environmentalAudioExposure, environmentalSoundReduction, headphoneAudioExposure, atrialFibrillationBurden, heartRate, heartRateRecoveryOneMinute, heartRateVariabilityRMSSD, heartRateVariabilitySDNN, peripheralPerfusionIndex, vO2Max, walkingHeartRateAverage, appleWalkingSteadiness, runningGroundContactTime, runningStrideLength, runningVerticalOscillation, sixMinuteWalkTestDistance, stairAscentSpeed, stairDescentSpeed, walkingAsymmetryPercentage, walkingDoubleSupportPercentage, walkingSpeed, walkingStepLength, dietaryBiotin, dietaryCaffeine, dietaryCalcium, dietaryCarbohydrates, dietaryChloride, dietaryCholesterol, dietaryChromium, dietaryCopper, dietaryEnergyConsumed, dietaryFatMonounsaturated, dietaryFatPolyunsaturated, dietaryFatSaturated, dietaryFatTotal, dietaryFiber, dietaryFolate, dietaryIodine, dietaryIron, dietaryMagnesium, dietaryManganese, dietaryMolybdenum, dietaryNiacin, dietaryPantothenicAcid, dietaryPhosphorus, dietaryPotassium, dietaryProtein, dietaryRiboflavin, dietarySelenium, dietarySodium, dietarySugar, dietaryThiamin, dietaryVitaminA, dietaryVitaminB12, dietaryVitaminB6, dietaryVitaminC, dietaryVitaminD, dietaryVitaminE, dietaryVitaminK, dietaryWater, dietaryZinc, bloodAlcoholContent, bloodPressureDiastolic, bloodPressureSystolic, insulinDelivery, numberOfAlcoholicBeverages, numberOfTimesFallen, uVExposure, waterTemperature, basalBodyTemperature, appleSleepingBreathingDisturbances, forcedExpiratoryVolume1, forcedVitalCapacity, inhalerUsage, oxygenSaturation, peakExpiratoryFlowRate, respiratoryRate, bloodGlucose, bodyTemperature
+  case appleSleepingWristTemperature, bodyMassIndex, electrodermalActivity, height, leanBodyMass,
+    waistCircumference, appleMoveTime, appleStandTime, basalEnergyBurned, crossCountrySkiingSpeed,
+    cyclingCadence, cyclingFunctionalThresholdPower, cyclingPower, cyclingSpeed,
+    distanceCrossCountrySkiing, distanceCycling, distanceDownhillSnowSports, distancePaddleSports,
+    distanceRowing, distanceSkatingSports, distanceSwimming, distanceWheelchair,
+    estimatedWorkoutEffortScore, flightsClimbed, nikeFuel, paddleSportsSpeed, physicalEffort,
+    pushCount, rowingSpeed, runningPower, runningSpeed, swimmingStrokeCount, underwaterDepth,
+    workoutEffortScore, environmentalAudioExposure, environmentalSoundReduction,
+    headphoneAudioExposure, atrialFibrillationBurden, heartRate, heartRateRecoveryOneMinute,
+    heartRateVariabilityRMSSD, heartRateVariabilitySDNN, peripheralPerfusionIndex, vO2Max,
+    walkingHeartRateAverage, appleWalkingSteadiness, runningGroundContactTime, runningStrideLength,
+    runningVerticalOscillation, sixMinuteWalkTestDistance, stairAscentSpeed, stairDescentSpeed,
+    walkingAsymmetryPercentage, walkingDoubleSupportPercentage, walkingSpeed, walkingStepLength,
+    dietaryBiotin, dietaryCaffeine, dietaryCalcium, dietaryCarbohydrates, dietaryChloride,
+    dietaryCholesterol, dietaryChromium, dietaryCopper, dietaryEnergyConsumed,
+    dietaryFatMonounsaturated, dietaryFatPolyunsaturated, dietaryFatSaturated, dietaryFatTotal,
+    dietaryFiber, dietaryFolate, dietaryIodine, dietaryIron, dietaryMagnesium, dietaryManganese,
+    dietaryMolybdenum, dietaryNiacin, dietaryPantothenicAcid, dietaryPhosphorus, dietaryPotassium,
+    dietaryProtein, dietaryRiboflavin, dietarySelenium, dietarySodium, dietarySugar, dietaryThiamin,
+    dietaryVitaminA, dietaryVitaminB12, dietaryVitaminB6, dietaryVitaminC, dietaryVitaminD,
+    dietaryVitaminE, dietaryVitaminK, dietaryWater, dietaryZinc, bloodAlcoholContent,
+    bloodPressureDiastolic, bloodPressureSystolic, insulinDelivery, numberOfAlcoholicBeverages,
+    numberOfTimesFallen, uVExposure, waterTemperature, basalBodyTemperature,
+    appleSleepingBreathingDisturbances, forcedExpiratoryVolume1, forcedVitalCapacity, inhalerUsage,
+    oxygenSaturation, peakExpiratoryFlowRate, respiratoryRate, bloodGlucose, bodyTemperature
 
   public var id: String { rawValue }
 
@@ -253,7 +277,9 @@ public struct HealthSelection: Equatable, Sendable {
   }
 
   public mutating func nudge(_ metric: HealthMetric, by step: Int) {
-    guard let index = shown.firstIndex(of: metric), shown.indices.contains(index + step) else { return }
+    guard let index = shown.firstIndex(of: metric), shown.indices.contains(index + step) else {
+      return
+    }
     move(from: [index], to: step > 0 ? index + step + 1 : index + step)
   }
 
@@ -373,9 +399,13 @@ public enum HealthFormat {
     case .weight, .leanBodyMass: units.poundsForWeight ? canonical * poundsPerKilogram : canonical
     case .distance: units.milesForDistance ? canonical / metersPerMile : canonical / 1000
     default:
-      if let descriptor = HealthCatalog.quantities[metric], descriptor.unit == .meters, descriptor.aggregation == .dailySum {
+      if let descriptor = HealthCatalog.quantities[metric], descriptor.unit == .meters,
+        descriptor.aggregation == .dailySum
+      {
         units.milesForDistance ? canonical / metersPerMile : canonical / 1000
-      } else { canonical }
+      } else {
+        canonical
+      }
     }
   }
 
@@ -423,9 +453,14 @@ public enum HealthFormat {
       let descriptor = HealthCatalog.quantities[metric]
       if descriptor?.unit == .meters, descriptor?.aggregation == .dailySum {
         let shown = displayValue(metric, canonical, units: units)
-        return .init(parts: [.init(number: number(shown, shown < 1 ? 2 : 1), unit: units.milesForDistance ? "mi" : "km")])
+        return .init(parts: [
+          .init(
+            number: number(shown, shown < 1 ? 2 : 1), unit: units.milesForDistance ? "mi" : "km")
+        ])
       }
-      return .init(parts: [.init(number: number(canonical, descriptor?.digits ?? 1), unit: descriptor?.label ?? "")])
+      return .init(parts: [
+        .init(number: number(canonical, descriptor?.digits ?? 1), unit: descriptor?.label ?? "")
+      ])
     }
   }
 
