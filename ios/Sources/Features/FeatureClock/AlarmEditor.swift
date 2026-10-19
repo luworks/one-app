@@ -118,6 +118,9 @@
     @State private var weekdays: Set<Int>
     @State private var snooze: Bool
     @State private var sound: String
+    @State private var pendingAlarm: OneAlarm?
+    @State private var saving = false
+    @State private var errorMessage: String?
     @State private var snoozeMinutes: Int
 
     static let snoozeChoices = AlarmPlan.snoozeChoices
@@ -176,6 +179,17 @@
       .environment(\.locale, runtime.locale)
       .environment(\.timeZone, runtime.calendar.timeZone)
       .presentationDetents([.large])
+      .interactiveDismissDisabled(saving)
+      .alert(
+        "Couldn’t Update Alarm",
+        isPresented: Binding(
+          get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+        )
+      ) {
+        Button("OK", role: .cancel) { errorMessage = nil }
+      } message: {
+        Text(errorMessage ?? "")
+      }
     }
 
     // MARK: Header
@@ -196,6 +210,7 @@
               .background(Color(.tertiarySystemFill), in: Circle())
               .contentShape(Circle())
           }
+          .disabled(saving)
           .accessibilityLabel("Cancel")
           Spacer()
           Button(action: save) {
@@ -206,6 +221,7 @@
               .background(Color(.systemOrange), in: Circle())
               .contentShape(Circle())
           }
+          .disabled(saving)
           .accessibilityLabel("Save")
           .accessibilityIdentifier("alarm.save")
         }
@@ -302,8 +318,11 @@
 
     private func deleteButton(_ alarm: OneAlarm) -> some View {
       Button(role: .destructive) {
-        actions.delete(alarm, context: context, toast: toast)
-        dismiss()
+        if actions.delete(alarm, context: context, toast: toast) {
+          dismiss()
+        } else {
+          errorMessage = "The alarm was not deleted. Check alarm access and try again."
+        }
       } label: {
         Text("Delete Alarm")
           .frame(maxWidth: .infinity, minHeight: 47)
@@ -312,12 +331,20 @@
             in: RoundedRectangle(cornerRadius: 26, style: .continuous))
       }
       .padding(.horizontal, 19)
+      .disabled(saving)
       .accessibilityIdentifier("alarm.delete")
     }
 
     private func save() {
+      guard !saving else { return }
+      if let alarm, alarm.isDeleted || alarm.modelContext !== context {
+        errorMessage = AlarmActions.Failure.stale.localizedDescription
+        return
+      }
+      saving = true
       let c = runtime.calendar.dateComponents([.hour, .minute], from: time)
-      let target = alarm ?? OneAlarm(hour: 0, minute: 0)
+      let target = alarm ?? pendingAlarm ?? OneAlarm(hour: 0, minute: 0)
+      if alarm == nil { pendingAlarm = target }
       target.hour = c.hour ?? 7
       target.minute = c.minute ?? 0
       target.label = label.trimmingCharacters(in: .whitespaces)
@@ -328,18 +355,19 @@
       target.isOn = true
       target.createdAt = runtime.now()  // a one-time alarm counts from the last save
       target.alarmKitSignature = nil  // forces a reschedule of exactly this alarm
-      if alarm == nil {
-        context.insert(target)
+      Task { @MainActor in
+        defer { saving = false }
+        do {
+          try await alarms.commit(target, context: context)
+          if alarm == nil { onCreated(target, context) }
+          dismiss()
+        } catch {
+          // A new unsaved row may have been removed after a failed disk write.
+          // Retain its system identity, including when cancellation compensation failed.
+          if alarm == nil { pendingAlarm = target.snapshot() }
+          errorMessage = error.localizedDescription
+        }
       }
-      // Saved now so the new alarm's id is final: the list opens its editor by that id, and an autosave that
-      // changed it while the editor was open would close the editor and drop the edits.
-      do { try context.save() } catch {
-        if alarm == nil { context.delete(target) }
-        return
-      }
-      if alarm == nil { onCreated(target, context) }
-      Task { await alarms.sync(context) }
-      dismiss()
     }
   }
 

@@ -28,10 +28,12 @@
     let openTimer: @MainActor () -> Void
     let openTask: @MainActor (OneTask) -> Void
     let openEvent: @MainActor (OneEvent) -> Void
+    let openAlarm: @MainActor (OneAlarm) -> Void
 
     package init(
       day: Binding<Date>, showsWeekStrip: Bool, openTask: @escaping @MainActor (OneTask) -> Void,
       openEvent: @escaping @MainActor (OneEvent) -> Void,
+      openAlarm: @escaping @MainActor (OneAlarm) -> Void,
       openTimer: @escaping @MainActor () -> Void, actions: PlannerActions,
       calendar: any CalendarService, timers: any TimerService, reminders: any ReminderService,
       ledger: Ledger, travel: any TravelTimeProviding, presentation: PlannerPresentation
@@ -67,6 +69,7 @@
       self.showsWeekStrip = showsWeekStrip
       self.openTask = openTask
       self.openEvent = openEvent
+      self.openAlarm = openAlarm
       self.openTimer = openTimer
     }
 
@@ -261,7 +264,7 @@
           open: openTask)
       case .suggested(let task, let start):
         TaskRow(task: task, compact: true, suggested: start, agendaDay: rowDay, open: openTask)
-      case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
+      case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date, open: openAlarm)
       case .gap(let free): FreeRow(free: free)
       case .nowMarker(let date): NowRow(date: date).id("now-line")
       }

@@ -39,6 +39,14 @@
       await driver.sync(context)
       refreshStates()
     }
+    package func commit(_ alarm: OneAlarm, context: ModelContext) async throws {
+      try await driver.commit(alarm, context: context)
+      refreshStates()
+    }
+    package func cancel(_ alarm: OneAlarm) throws {
+      try driver.cancel(alarm)
+      refreshStates()
+    }
     package func stop(_ id: UUID) {
       driver.stop(id)
       refreshStates()

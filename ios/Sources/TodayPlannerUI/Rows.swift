@@ -317,7 +317,12 @@
   /// An alarm in the day's schedule, so the whole day reads in one list.
   package struct AlarmMarkRow: View {
     @Environment(PlannerPresentation.self) private var presentation
-    package init(alarm: OneAlarm, date: Date) {
+    @Environment(PlannerActions.self) private var actions
+    @Environment(\.modelContext) private var context
+    @Environment(UndoToast.self) private var toast: UndoToast?
+    private let open: @MainActor (OneAlarm) -> Void
+    package init(alarm: OneAlarm, date: Date, open: @escaping @MainActor (OneAlarm) -> Void) {
+      self.open = open
       self.alarm = alarm
       self.date = date
     }
@@ -325,16 +330,36 @@
     package let date: Date
 
     package var body: some View {
-      HStack(spacing: 10) {
-        TimeColumn(date: date)
-        Image(systemName: "alarm")
-          .foregroundStyle(Color.accentColor)
-          .frame(width: 4 + 6)
-        Text(alarm.label.isEmpty ? "Alarm" : alarm.label)
-          .foregroundStyle(alarm.isOn ? Color.primary : Color.secondary)
-        Spacer(minLength: 0)
+      Button {
+        if !alarm.isDeleted { open(alarm) }
+      } label: {
+        HStack(spacing: 10) {
+          TimeColumn(date: date)
+          Image(systemName: "alarm")
+            .foregroundStyle(Color.accentColor)
+            .frame(width: 4 + 6)
+          Text(alarm.label.isEmpty ? "Alarm" : alarm.label)
+            .foregroundStyle(alarm.isOn ? Color.primary : Color.secondary)
+          Spacer(minLength: 0)
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
       }
-      .frame(minHeight: 32)
+      .buttonStyle(.plain)
+      .contextMenu {
+        Button("Edit Alarm", systemImage: "pencil") { open(alarm) }
+        Button("Delete Alarm", systemImage: "trash", role: .destructive) {
+          actions.delete(alarm, context: context, toast: toast)
+        }
+      }
+      .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+        Button("Delete", systemImage: "trash", role: .destructive) {
+          actions.delete(alarm, context: context, toast: toast)
+        }
+        Button("Edit", systemImage: "pencil") { open(alarm) }.tint(.orange)
+      }
+      .accessibilityIdentifier("today.alarm.row")
+      .accessibilityHint("Opens the alarm editor")
       .listRowSeparator(.hidden)
       .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
       .accessibilityElement(children: .combine)

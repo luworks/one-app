@@ -46,7 +46,8 @@
         ledger: ledger, runtime: runtime, actor: actor, channel: channel)
     }
 
-    package func delete(_ alarm: OneAlarm, context: ModelContext, toast: UndoToast?) {
+    @discardableResult
+    package func delete(_ alarm: OneAlarm, context: ModelContext, toast: UndoToast?) -> Bool {
       AlarmActions.delete(
         alarm, context: context, toast: toast, alarms: alarms, ledger: ledger, runtime: runtime)
     }

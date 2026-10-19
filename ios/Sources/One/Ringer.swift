@@ -118,6 +118,89 @@
       #endif
     }
 
+    /// Explicit user writes share the reconciliation lock. A concurrent request
+    /// fails visibly instead of racing an old reconciliation snapshot.
+    package func commit(_ alarm: OneAlarm, context: ModelContext) async throws {
+      guard !isSyncing else {
+        if alarm.modelContext === context {
+          let reader = ModelContext(context.container)
+          if let saved = try reader.fetch(FetchDescriptor<OneAlarm>()).first(where: {
+            $0.persistentModelID == alarm.persistentModelID
+          }) {
+            alarm.restoreSettings(from: saved)
+          }
+        }
+        throw AlarmActions.Failure.busy
+      }
+      isSyncing = true
+      defer {
+        isSyncing = false
+        if syncAgain {
+          syncAgain = false
+          Task { @MainActor in await self.sync(context) }
+        }
+      }
+      try await AlarmActions.persist(
+        alarm, context: context,
+        schedule: { proposal in
+          try await self.write(proposal)
+        },
+        cancel: { proposal in
+          try self.cancelSystem(proposal)
+        })
+    }
+
+    package func cancel(_ alarm: OneAlarm) throws {
+      guard !isSyncing else { throw AlarmActions.Failure.busy }
+      guard !alarm.isDeleted, let context = alarm.modelContext else {
+        throw AlarmActions.Failure.stale
+      }
+      if let id = alarm.alarmKitID {
+        let matches = try context.fetch(FetchDescriptor<OneAlarm>()).filter { $0.alarmKitID == id }
+        guard matches.count == 1, matches.first === alarm else { throw AlarmActions.Failure.stale }
+      }
+      try cancelSystem(alarm)
+    }
+
+    private func cancelSystem(_ alarm: OneAlarm) throws {
+      guard let id = alarm.alarmKitID else { return }
+      #if canImport(AlarmKit)
+        guard #available(iOS 26, *), authorization == .authorized,
+          !timerIDs.contains(id)
+        else { throw AlarmActions.Failure.unavailable }
+        // AlarmManager exposes only the current client's namespace.
+        if try manager.alarms.contains(where: { $0.id == id }) { try manager.cancel(id: id) }
+      #else
+        throw AlarmActions.Failure.unavailable
+      #endif
+    }
+
+    private func write(_ alarm: OneAlarm) async throws {
+      #if canImport(AlarmKit)
+        guard #available(iOS 26, *) else { throw AlarmActions.Failure.unavailable }
+        if authorization == .notDetermined { await requestAuthorization() }
+        guard authorization == .authorized, let id = alarm.alarmKitID,
+          !timerIDs.contains(id)
+        else { throw AlarmActions.Failure.unavailable }
+        let existing = try manager.alarms.first { $0.id == id }
+        if let existing {
+          // Editing must not silently stop a ringing/snoozing alarm.
+          guard existing.state == .scheduled else { throw AlarmActions.Failure.busy }
+          try manager.cancel(id: id)
+        }
+        if alarm.isOn {
+          try await AlarmScheduler.scheduleThrowing(
+            driver: self, id: id,
+            title: alarm.label.isEmpty ? AlarmPlan.defaultLabel : alarm.label,
+            schedule: AlarmScheduler.schedule(
+              hour: alarm.hour, minute: alarm.minute, weekdays: alarm.weekdays),
+            snooze: alarm.snooze, sound: alarm.sound, snoozeMinutes: alarm.snoozeMinutes)
+        }
+      #else
+        throw AlarmActions.Failure.unavailable
+      #endif
+    }
+
     /// Stops a ringing alarm (the Stop button on the row). Never completes a task.
     package func stop(_ id: UUID) {
       #if canImport(AlarmKit)
@@ -267,6 +350,21 @@
         driver: Ringer, id: UUID, title: String, schedule: Alarm.Schedule, snooze: Bool,
         sound: String = "", snoozeMinutes: Int = 9
       ) async -> Bool {
+        do {
+          try await scheduleThrowing(
+            driver: driver, id: id, title: title, schedule: schedule,
+            snooze: snooze, sound: sound, snoozeMinutes: snoozeMinutes)
+          return true
+        } catch {
+          log.error("schedule failed \((error as NSError).code, privacy: .public)")
+          return false
+        }
+      }
+
+      package static func scheduleThrowing(
+        driver: Ringer, id: UUID, title: String, schedule: Alarm.Schedule, snooze: Bool,
+        sound: String = "", snoozeMinutes: Int = 9
+      ) async throws {
         let resource = LocalizedStringResource(stringLiteral: title)
         let snoozeButton = AlarmButton(text: "Snooze", textColor: .white, systemImageName: "zzz")
         let secondary = snooze ? snoozeButton : nil
@@ -296,14 +394,7 @@
           schedule: schedule,
           attributes: attributes,
           sound: AlarmSound.named(sound)?.alertSound ?? .default)
-        do {
-          _ = try await driver.manager.schedule(id: id, configuration: configuration)
-          log.info("alarm scheduled")
-          return true
-        } catch {
-          log.error("schedule failed \((error as NSError).code, privacy: .public)")
-          return false
-        }
+        _ = try await driver.manager.schedule(id: id, configuration: configuration)
       }
     }
   #endif

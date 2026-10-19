@@ -41,6 +41,8 @@
       calendar = TestCalendarService(runtime: runtime)
       reminders = TestReminderService(runtime: runtime, arguments: arguments)
       alarms = TestAlarmService()
+      alarms.failsSchedule = arguments.contains("-uiTestingAlarmScheduleError")
+      alarms.failsCancel = arguments.contains("-uiTestingAlarmCancelError")
       if arguments.contains("-uiTestingAlarmDenied") {
         alarms.authorization = .denied
         alarms.authorizationResponse = .denied
@@ -302,6 +304,11 @@
     package var isAvailable = true
     package private(set) var requestCount = 0
     package private(set) var syncCount = 0
+    package var failsSchedule = false
+    package var failsCancel = false
+    package private(set) var scheduledIDs: [UUID] = []
+    package private(set) var cancelledIDs: [UUID] = []
+    private var committing = false
     package private(set) var stoppedIDs: [UUID] = []
     package private(set) var isDisposed = false
     package init() {}
@@ -314,6 +321,31 @@
       authorization = authorizationResponse
     }
     package func sync(_ context: ModelContext) async { if !isDisposed { syncCount += 1 } }
+    package func commit(_ alarm: OneAlarm, context: ModelContext) async throws {
+      guard !committing, !isDisposed else { throw AlarmActions.Failure.busy }
+      committing = true
+      defer { committing = false }
+      try await AlarmActions.persist(
+        alarm, context: context,
+        schedule: { proposal in
+          guard self.authorization == .authorized, !self.failsSchedule else {
+            throw AlarmActions.Failure.unavailable
+          }
+          if let id = proposal.alarmKitID {
+            self.scheduledIDs.append(id)
+            self.states[id] = proposal.isOn ? .scheduled : nil
+          }
+        }, cancel: { proposal in try self.cancel(proposal) })
+    }
+    package func cancel(_ alarm: OneAlarm) throws {
+      guard !isDisposed, !failsCancel, authorization == .authorized else {
+        throw AlarmActions.Failure.unavailable
+      }
+      if let id = alarm.alarmKitID {
+        cancelledIDs.append(id)
+        states[id] = nil
+      }
+    }
     package func stop(_ id: UUID) {
       guard !isDisposed else { return }
       stoppedIDs.append(id)
