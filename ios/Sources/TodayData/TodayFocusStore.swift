@@ -17,9 +17,16 @@ public struct FocusIdentity: Hashable, Codable, Sendable {
     self.item = item
     self.occurrence = occurrence
   }
+  /// Source-item equality deliberately excludes the occurrence within a repeating series.
+  public func sameItem(as other: FocusIdentity) -> Bool {
+    provider == other.provider && account == other.account
+      && calendar == other.calendar && item == other.item
+  }
+
 }
 
 public enum TodayFocusState: Equatable, Codable, Sendable {
+  case active
   case settled
   case snoozed(until: Date)
 }
@@ -54,11 +61,6 @@ public final class TodayFocusStore {
   public enum Location: Equatable {
     case memory
     case file(URL)
-  }
-
-  public static var defaultURL: URL {
-    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("Today/focus-v1.json")
   }
 
   // All overlay instances in the app process share the commit lock.
@@ -101,6 +103,7 @@ public final class TodayFocusStore {
     lock.lock()
     defer { lock.unlock() }
     guard let record = storedRecords.first(where: { $0.identity == identity }) else { return nil }
+    if case .active = record.state { return nil }
     if case .snoozed(let until) = record.state, until <= now { return nil }
     return record.state
   }
@@ -129,6 +132,25 @@ public final class TodayFocusStore {
     lock.lock()
     defer { lock.unlock() }
     try commit([])
+  }
+
+  /// A newly resolved identity invalidates older fallback anchors without discarding their source decisions.
+  public func detachReference(_ reference: String, except identity: FocusIdentity) throws {
+    lock.lock()
+    defer { lock.unlock() }
+    guard
+      storedRecords.contains(where: {
+        $0.localReference == reference && !$0.identity.sameItem(as: identity)
+      })
+    else { return }
+    let next = storedRecords.map { record in
+      guard record.localReference == reference, !record.identity.sameItem(as: identity) else {
+        return record
+      }
+      return FocusRecord(
+        identity: record.identity, state: record.state, changedAt: record.changedAt)
+    }
+    try commit(next)
   }
 
   private func commit(_ next: [FocusRecord]) throws {

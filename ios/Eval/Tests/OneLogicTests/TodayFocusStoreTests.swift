@@ -50,6 +50,26 @@ final class TodayFocusStoreTests: XCTestCase {
     XCTAssertTrue(try disk().records.isEmpty)
   }
 
+  func testExplicitActiveRestoreSurvivesDiskAndActivityRecoveryWithoutMovingSourceIdentity() throws
+  {
+    let oldOccurrence = now.addingTimeInterval(-86400)
+    let source = identity(occurrence: oldOccurrence)
+    let focus = try disk()
+    try focus.set(state: .settled, for: source, now: now)
+    try focus.set(state: .active, for: source, now: now)
+    let reopened = try disk()
+    XCTAssertNil(reopened.state(for: source, now: now))
+    XCTAssertEqual(reopened.records.first?.state, .active)
+    XCTAssertEqual(reopened.records.first?.identity.occurrence, oldOccurrence)
+    let before = try Data(contentsOf: url)
+    let history = directory.appendingPathComponent("activity.sqlite")
+    try Data("damaged synthetic Activity".utf8).write(to: history)
+    let recovered = try ActivityStore.openOrRecover(at: history)
+    try recovered.clear()
+    XCTAssertEqual(try Data(contentsOf: url), before)
+    XCTAssertEqual(try disk().records.first?.state, .active)
+  }
+
   func testCorruptAndNewerPayloadsAreRejectedWithoutOverwrite() throws {
     for raw in ["not-json", "{\"version\":2,\"future\":true}", "{\"version\":1,\"records\":[{}]}"] {
       let bytes = Data(raw.utf8)
@@ -67,6 +87,30 @@ final class TodayFocusStoreTests: XCTestCase {
     try reopened.set(state: .snoozed(until: now.addingTimeInterval(60)), for: identity(), now: now)
     XCTAssertEqual(try disk().records.first?.localReference, "opaque-local-id")
     XCTAssertNil(reopened.state(for: identity(account: "different-source"), now: now))
+  }
+
+  func testResolvedIdentityDetachesOlderAnchorWithoutDiscardingSourceDecision() throws {
+    let focus = try disk()
+    let oldIdentity = identity(account: "old-source")
+    let resolvedIdentity = identity(account: "new-source")
+    let until = now.addingTimeInterval(60)
+    try focus.set(state: .settled, for: oldIdentity, now: now, localReference: "same-local-id")
+    try focus.set(
+      state: .snoozed(until: until), for: resolvedIdentity, now: now,
+      localReference: "same-local-id")
+    try focus.detachReference("same-local-id", except: resolvedIdentity)
+    let reopened = try disk()
+    XCTAssertEqual(
+      reopened.records.first(where: { $0.identity == oldIdentity }),
+      FocusRecord(identity: oldIdentity, state: .settled, changedAt: now))
+    XCTAssertEqual(
+      reopened.records.first(where: { $0.identity == resolvedIdentity }),
+      FocusRecord(
+        identity: resolvedIdentity, state: .snoozed(until: until), changedAt: now,
+        localReference: "same-local-id"))
+    let bytes = try Data(contentsOf: url)
+    try reopened.detachReference("same-local-id", except: resolvedIdentity)
+    XCTAssertEqual(try Data(contentsOf: url), bytes)
   }
 
   func testSnoozeExpiresAtAbsoluteTimeAcrossDSTAndMidnight() throws {
@@ -126,7 +170,7 @@ final class TodayFocusStoreTests: XCTestCase {
   func testStaleWriterCannotOverwriteChangedOrCorruptPayload() throws {
     let stale = try disk()
     let current = try disk()
-    try current.set(state: .settled, for: identity(), now: now)
+    try current.set(state: .settled, for: identity(), now: now, localReference: "local-id")
     XCTAssertThrowsError(try stale.set(state: .settled, for: identity(item: "other"), now: now)) {
       XCTAssertEqual($0 as? TodayFocusStoreError, .concurrentChange)
     }
@@ -134,7 +178,10 @@ final class TodayFocusStoreTests: XCTestCase {
     XCTAssertEqual(try disk().records, current.records)
     try Data("corrupt".utf8).write(to: url)
     XCTAssertThrowsError(try current.clear())
+    XCTAssertThrowsError(
+      try current.detachReference("local-id", except: identity(account: "new-source")))
     XCTAssertEqual(current.records.count, 1)
+    XCTAssertEqual(current.records.first?.localReference, "local-id")
     XCTAssertEqual(try Data(contentsOf: url), Data("corrupt".utf8))
   }
 

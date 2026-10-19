@@ -86,6 +86,8 @@
     package var queryEvents: [ExternalEvent] = []
     package var hiddenCalendarIDs: Set<String> = []
     package private(set) var refreshCount = 0
+    package private(set) var deletionRequests: [String?] = []
+    package var deletionResult: Bool?
     package private(set) var enableRequests: [Bool] = []
     private let runtime: PlannerRuntime
     package init(runtime: PlannerRuntime) { self.runtime = runtime }
@@ -146,10 +148,11 @@
     package func canDelete(externalID: String?) -> Bool { !isDisposed && externalID == nil }
     package func save(_ event: OneEvent, span: EKSpan) -> String? { nil }
     package func delete(_ event: OneEvent, span: EKSpan) -> Bool {
-      canDelete(externalID: event.externalID)
+      delete(externalID: event.externalID, occurrence: event.start, span: span)
     }
     package func delete(externalID: String?, occurrence: Date?, span: EKSpan) -> Bool {
-      canDelete(externalID: externalID)
+      deletionRequests.append(externalID)
+      return deletionResult ?? canDelete(externalID: externalID)
     }
     package func removedMirrors(_ events: [OneEvent]) -> [OneEvent] { [] }
     package func title(externalID: String, occurrence: Date?) -> String? {

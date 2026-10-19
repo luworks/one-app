@@ -126,12 +126,13 @@
     package var suggested: Date? = nil
     /// Set on the Today tab: the day the row sits on. The detail line then keeps at most two facts (see `RowSubtitle`).
     package var agendaDay: Date? = nil
+    package var onDelete: (() -> Void)? = nil
     package let open: @MainActor (OneTask) -> Void
 
     package init(
       task: OneTask, showsTime: Bool = false, time: Date? = nil, showsList: Bool = true,
       compact: Bool = false, suggested: Date? = nil, agendaDay: Date? = nil,
-      open: @escaping @MainActor (OneTask) -> Void
+      onDelete: (() -> Void)? = nil, open: @escaping @MainActor (OneTask) -> Void
     ) {
       self.task = task
       self.showsTime = showsTime
@@ -140,6 +141,7 @@
       self.compact = compact
       self.suggested = suggested
       self.agendaDay = agendaDay
+      self.onDelete = onDelete
       self.open = open
     }
 
@@ -194,7 +196,8 @@
       // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
       // long-press for the menu. (Delete has an Undo toast.)
       .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-        RowAction.delete { actions.delete(task, context: context, toast: toast) }
+        // Confirmed Today deletion must not let SwiftUI remove a row before the source accepts it.
+        RowAction.delete(asksFirst: onDelete != nil) { deleteTask() }
         RowAction.flag(task.flagged) { withAnimation { task.flagged.toggle() } }
       }
       .contextMenu {
@@ -229,11 +232,15 @@
           }
         }
         Button(role: .destructive) {
-          actions.delete(task, context: context, toast: toast)
+          deleteTask()
         } label: {
           Label("Delete", systemImage: "trash")
         }
       }
+    }
+
+    private func deleteTask() {
+      if let onDelete { onDelete() } else { actions.delete(task, context: context, toast: toast) }
     }
 
     /// Today / Tomorrow from the menu: works out the new planned time on the task, then records it like any other move.

@@ -96,6 +96,7 @@
     @State private var now: Date
     /// A repeating system event whose Delete is waiting for "this event or the series?".
     @State private var pendingDelete: CalEntry?
+    @State private var deleteTarget: OneTask?
     @State private var snoozeTarget: FocusTarget?
     @State private var activeExpanded = true
     @State private var snoozedExpanded = false
@@ -106,8 +107,14 @@
     package var body: some View {
       ScrollViewReader { proxy in
         list
-          .onAppear { scrollToNow(proxy) }
+          .onAppear {
+            now = presentation.now
+            scrollToNow(proxy)
+          }
           .onChange(of: day) { _, _ in scrollToNow(proxy) }
+      }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .active { now = presentation.now }
       }
       .environment(actions)
       .defaultAppStorage(presentation.defaults)
@@ -213,9 +220,12 @@
               .accessibilityHint(
                 showsAllOverdue ? "Hides the overdue tasks" : "Shows the overdue tasks")
               if showsAllOverdue {
-                ForEach(overdue) {
-                  TaskRow(task: $0, compact: true, agendaDay: day, open: openTask)
-                    .modifier(focusActions(target($0)))
+                ForEach(overdue) { task in
+                  TaskRow(
+                    task: task, compact: true, agendaDay: day, onDelete: { requestDelete(task) },
+                    open: openTask
+                  )
+                  .modifier(focusActions(target(task)))
                 }
               }
             }
@@ -248,6 +258,21 @@
       .listSectionSpacing(6)
       .scrollContentBackground(.hidden)
       .entryDeleteDialog($pendingDelete)
+      .confirmationDialog(
+        "Delete Repeating Reminder",
+        isPresented: Binding(
+          get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }),
+        titleVisibility: .visible
+      ) {
+        if let task = deleteTarget {
+          Button("Delete Reminder and Future Repeats", role: .destructive) { deleteConfirmed(task) }
+        }
+        Button("Cancel", role: .cancel) { deleteTarget = nil }
+      } message: {
+        Text(
+          "This deletes the repeating reminder from its source. Use Settle to hide only this occurrence in Today."
+        )
+      }
       .sheet(item: $snoozeTarget) { target in
         TodaySnoozeSheet(now: now, calendar: cal) { until in
           changeFocus(.snoozed(until: until), target: target)
@@ -272,9 +297,12 @@
       ForEach(items.timeline) { timelineRow($0, on: day) }
       if !items.anytime.isEmpty {
         AnytimeLabel(title: cal.isDate(day, inSameDayAs: now) ? "Anytime today" : "Anytime")
-        ForEach(items.anytime) {
-          TaskRow(task: $0, compact: true, agendaDay: day, open: openTask)
-            .modifier(focusActions(target($0)))
+        ForEach(items.anytime) { task in
+          TaskRow(
+            task: task, compact: true, agendaDay: day, onDelete: { requestDelete(task) },
+            open: openTask
+          )
+          .modifier(focusActions(target(task)))
         }
       }
     }
@@ -294,17 +322,23 @@
         )
         .modifier(focusActions(target(e)))
       case .task(let task):
-        TaskRow(task: task, showsTime: true, compact: true, agendaDay: rowDay, open: openTask)
-          .modifier(focusActions(target(task)))
+        TaskRow(
+          task: task, showsTime: true, compact: true, agendaDay: rowDay,
+          onDelete: { requestDelete(task) }, open: openTask
+        )
+        .modifier(focusActions(target(task)))
       case .due(let task):
         TaskRow(
           task: task, showsTime: true, time: task.due, compact: true, agendaDay: rowDay,
-          open: openTask
+          onDelete: { requestDelete(task) }, open: openTask
         )
         .modifier(focusActions(target(task)))
       case .suggested(let task, let start):
-        TaskRow(task: task, compact: true, suggested: start, agendaDay: rowDay, open: openTask)
-          .modifier(focusActions(target(task)))
+        TaskRow(
+          task: task, compact: true, suggested: start, agendaDay: rowDay,
+          onDelete: { requestDelete(task) }, open: openTask
+        )
+        .modifier(focusActions(target(task)))
       case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
       case .gap(let free): FreeRow(free: free)
       case .nowMarker(let date): NowRow(date: date).id("now-line")
@@ -515,6 +549,24 @@
         anytime: anytime.filter { !isHidden(target($0)) })
     }
 
+    private func requestDelete(_ task: OneTask) {
+      if task.repeats != nil || target(task).identity?.occurrence != nil {
+        deleteTarget = task
+      } else {
+        deleteConfirmed(task)
+      }
+    }
+
+    private func deleteConfirmed(_ task: OneTask) {
+      do {
+        try actions.deleteConfirmed(task, context: context, toast: toast)
+        deleteTarget = nil
+      } catch {
+        toast?.showNotice(
+          "Couldn't delete this reminder. " + error.localizedDescription + " Try again.")
+      }
+    }
+
     // MARK: Local attention overlay
 
     private func target(_ task: OneTask) -> FocusTarget {
@@ -591,6 +643,7 @@
       }
       .buttonStyle(.plain)
       .listRowSeparator(.hidden)
+      .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
       .accessibilityIdentifier("focus." + id)
       .accessibilityLabel("\(title) (\(count))")
       .accessibilityValue(expanded.wrappedValue ? "Expanded" : "Collapsed")
@@ -613,8 +666,9 @@
         id: snoozed ? "snoozed" : "settled", expanded: expanded)
       if expanded.wrappedValue {
         ForEach(records, id: \.identity) { record in
+          let source = resolved(record)
           let target =
-            resolved(record)
+            source
             ?? FocusTarget(
               identity: record.identity, reference: record.localReference, title: "Unavailable item"
             )
@@ -629,10 +683,13 @@
               }
             }
             Spacer()
-            Button("Restore") { changeFocus(nil, target: target) }
-              .buttonStyle(.borderless)
-              .frame(minHeight: 44)
-              .accessibilityLabel("Restore " + target.title)
+            Button(source == nil ? "Clear choice" : "Restore") {
+              changeFocus(source == nil ? nil : .active, target: target)
+            }
+            .buttonStyle(.borderless)
+            .frame(minHeight: 44)
+            .accessibilityLabel(
+              source == nil ? "Clear unavailable Focus choice" : "Restore " + target.title)
           }
           .listRowSeparator(.hidden)
         }
@@ -699,10 +756,12 @@
       guard isTodayTab else { return [] }
       let visible = visibleIdentities(items)
       return actions.focus.records.compactMap { record in
-        guard case .snoozed(let until) = record.state, until <= now,
-          !visible.contains(record.identity)
-        else { return nil }
-        return resolved(record)
+        guard !visible.contains(record.identity) else { return nil }
+        switch record.state {
+        case .active: return resolved(record)
+        case .snoozed(let until) where until <= now: return resolved(record)
+        default: return nil
+        }
       }
     }
 
@@ -712,9 +771,16 @@
         Section {
           ForEach(returned) { target in
             HStack {
-              Text(target.title)
+              Button {
+                openAttentionItem(target)
+              } label: {
+                Text(target.title).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+              }
+              .buttonStyle(.plain)
+              .accessibilityLabel("Show details for " + target.title)
               Spacer()
-              Button("Dismiss") { changeFocus(.settled, target: target) }
+              Button("Settle") { changeFocus(.settled, target: target) }
+                .accessibilityLabel("Settle " + target.title)
                 .buttonStyle(.borderless).frame(minHeight: 44)
             }
             .modifier(focusActions(target))
@@ -726,6 +792,32 @@
       }
     }
 
+    private func openAttentionItem(_ target: FocusTarget) {
+      if let task = tasks.first(where: { self.target($0).identity == target.identity }) {
+        openTask(task)
+        return
+      }
+      if let event = events.first(where: {
+        self.target($0, start: target.identity?.occurrence ?? $0.start).identity == target.identity
+      }) {
+        openEvent(event)
+        return
+      }
+      if let ref = target.reference, ref.hasPrefix("eventkit:"),
+        let native = calendar as? any NativeCalendarService,
+        case .available(let identity) = calendar.focusIdentity(
+          externalID: String(ref.dropFirst("eventkit:".count)),
+          occurrence: target.identity?.occurrence),
+        identity == target.identity
+      {
+        native.edit(
+          identifier: String(ref.dropFirst("eventkit:".count)),
+          start: identity.occurrence ?? now, end: nil, fullOptions: false, onComplete: nil)
+      } else {
+        toast?.showNotice("This source is unavailable. Reconnect and try again.")
+      }
+    }
+
     private func activeCount(_ items: DayItems) -> Int {
       let timeline = items.timeline.filter {
         switch $0 {
@@ -734,7 +826,8 @@
         }
       }.count
       return items.allDay.count + items.externalAllDay.count + items.anytime.count
-        + timeline + (cal.isDate(day, inSameDayAs: now) ? overdue.count : 0) + returned(items).count
+        + timeline + (cal.isDate(day, inSameDayAs: now) && showsOverdue ? overdue.count : 0)
+        + returned(items).count
     }
 
     /// Oldest deadline first.

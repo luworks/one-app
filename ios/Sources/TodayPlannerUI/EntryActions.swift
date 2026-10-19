@@ -133,6 +133,8 @@
         if case .system = entry.source {
           Button("Delete This Event Only", role: .destructive) { run(entry, .thisEvent) }
           Button("Delete All Future Events", role: .destructive) { run(entry, .futureEvents) }
+        } else if case .local(let event) = entry.source, event.externalID != nil {
+          Button("Delete All Future Events", role: .destructive) { run(entry, .futureEvents) }
         } else {
           Button("Delete All Occurrences", role: .destructive) { run(entry, .futureEvents) }
         }
@@ -159,7 +161,8 @@
     func body(content: Content) -> some View {
       if enabled {
         content.swipeActions(edge: .trailing, allowsFullSwipe: !isRepeating) {
-          RowAction.delete(asksFirst: isRepeating, delete)
+          // Keep the row until the adapter confirms the write, including permission or network failures.
+          RowAction.delete(asksFirst: true, delete)
           if case .task(let task) = entry.source { RowAction.flag(task.flagged, flag) }
         }
       } else {

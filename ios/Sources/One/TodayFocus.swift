@@ -11,6 +11,7 @@
     @ObservationIgnored private let store: TodayFocusStore?
     @ObservationIgnored private let ledger: Ledger
     @ObservationIgnored private let runtime: PlannerRuntime
+    @ObservationIgnored private var invalidatedReferences: Set<String> = []
     package private(set) var revision = 0
     package private(set) var errorMessage: String?
 
@@ -45,17 +46,45 @@
       occurrence: Date?
     ) -> FocusIdentity? {
       switch resolution {
-      case .available(let identity): return identity
+      case .available(let identity):
+        reconcileAnchor(localReference, with: identity)
+        return identity
       case .localOnly:
         guard let localReference else { return nil }
-        return FocusIdentity(
+        let identity = FocusIdentity(
           provider: "today.local", account: "local-store", calendar: kind,
           item: localReference, occurrence: occurrence)
+        reconcileAnchor(localReference, with: identity)
+        return identity
       case .unavailable, .permissionDenied:
         // An opaque local anchor only protects the same mirror during a permission interruption.
-        guard let localReference else { return nil }
-        return records.first { $0.localReference == localReference && $0.identity.occurrence == occurrence }?.identity
+        guard let localReference, !invalidatedReferences.contains(localReference) else {
+          return nil
+        }
+        return records.first {
+          $0.localReference == localReference && $0.identity.occurrence == occurrence
+        }?.identity
       case .notFound: return nil
+      }
+    }
+
+    /// Invalidate only an opaque association, preserving the user's decision as a recoverable orphan.
+    /// The store is not Observable: read-only source resolution does not mutate SwiftUI view state.
+    private func reconcileAnchor(_ reference: String?, with identity: FocusIdentity) {
+      guard let reference, let store,
+        store.records.contains(where: {
+          $0.localReference == reference && !$0.identity.sameItem(as: identity)
+        })
+      else { return }
+      do {
+        try store.detachReference(reference, except: identity)
+      } catch {
+        if invalidatedReferences.insert(reference).inserted {
+          Task { @MainActor [weak self] in
+            self?.errorMessage =
+              "Couldn't reconcile saved Focus identities. Saved choices were kept; reconnect and retry."
+          }
+        }
       }
     }
 
@@ -79,7 +108,7 @@
           errorMessage ?? "This source is unavailable. Refresh its connection and try again.")
         return false
       }
-      let old = store.state(for: identity, now: runtime.now())
+      let old = store.records.first { $0.identity == identity }?.state
       guard old != state else { return true }
       do {
         try store.set(
@@ -99,7 +128,7 @@
       case .snoozed:
         action = .snoozed
         message = "Snoozed “\(title)”"
-      case nil:
+      case .active, nil:
         action = .restored
         message = "Restored “\(title)”"
       }
@@ -115,7 +144,7 @@
         do {
           let restored: TodayFocusState?
           if case .snoozed(let until) = old, until <= self.runtime.now() {
-            restored = nil
+            restored = .active
           } else {
             restored = old
           }
@@ -140,7 +169,7 @@
       switch state {
       case .settled: "Settled in Today"
       case .snoozed(let until): "Snoozed until " + ledger.timeLabel(until)
-      case nil: "Active in Today"
+      case .active, nil: "Active in Today"
       }
     }
   }

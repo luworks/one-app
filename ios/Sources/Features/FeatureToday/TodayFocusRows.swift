@@ -7,7 +7,7 @@
     var reference: String?
     var title: String
     var id: String {
-      (reference ?? identity?.item ?? title)
+      (reference ?? identity?.item ?? "unavailable")
         + String(identity?.occurrence?.timeIntervalSince1970 ?? 0)
     }
   }
