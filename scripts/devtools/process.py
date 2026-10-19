@@ -1,6 +1,7 @@
 """Owned process groups with bounded cancellation and durable redacted evidence."""
 from dataclasses import dataclass
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -73,6 +74,31 @@ class ProcessResult:
     log: Path
 
 
+def build_activity(pid):
+    """Read only this build's process tree; a failed probe must not fail a build."""
+    result = {'cpu_count': os.cpu_count(), 'processes': []}
+    try:
+        result['load_average'] = os.getloadavg()
+        raw = subprocess.run(
+            ['ps', '-axo', 'pid=,ppid=,%cpu=,rss=,etime=,command='],
+            capture_output=True, text=True, timeout=2, check=True).stdout
+        rows = []
+        for line in raw.splitlines():
+            fields = line.split(None, 5)
+            if len(fields) == 6:
+                rows.append((int(fields[0]), int(fields[1]), line))
+        owned = {pid}
+        while True:
+            children = {child for child, parent, _ in rows if parent in owned}
+            if children <= owned:
+                break
+            owned.update(children)
+        result['processes'] = [line for child, _, line in rows if child in owned]
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        result['probe_error'] = type(error).__name__
+    return result
+
+
 def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grace=1, output_observer=None):
     """Execute argv without a shell; signal only the new session created here.
 
@@ -103,6 +129,8 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
     failure = None
     pending = b''
     start = time.monotonic()
+    profile_build = Path(str(argv[0])).name == 'xcodebuild' and len(argv) > 1 and argv[1] in ('build', 'build-for-testing')
+    next_profile = 0
     evidence.record(repr(evidence.redact.arguments(argv)), 'running')
     try:
         if threading.current_thread() is threading.main_thread():
@@ -119,6 +147,10 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
             eof = False
             while not eof or proc.poll() is None:
                 now = time.monotonic()
+                if profile_build and now - start >= next_profile:
+                    record = {'seconds': round(now - start, 3), **build_activity(proc.pid)}
+                    log.write('DEV_BUILD_ACTIVITY ' + evidence.redact(json.dumps(record)) + '\n')
+                    next_profile = now - start + 30
                 if stopped is None and (cancelled.is_set() or (cancel and cancel.is_set()) or now - start >= timeout):
                     reason = 'cancelled' if cancelled.is_set() or (cancel and cancel.is_set()) else 'timeout'
                     stopped = now
@@ -144,7 +176,13 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
                     pending += chunk
                     while b'\n' in pending:
                         line, pending = pending.split(b'\n', 1)
-                        log.write(evidence.redact(line.decode('utf-8', errors='replace')) + '\n')
+                        decoded = evidence.redact(line.decode('utf-8', errors='replace'))
+                        if profile_build and decoded.startswith((
+                                'SwiftDriver ', 'SwiftCompile normal ', 'SwiftEmitModule ',
+                                'Ld ', 'ComputeTargetDependencyGraph', 'Resolve Package Graph')):
+                            log.write('DEV_BUILD_PHASE ' + json.dumps({
+                                'seconds': round(time.monotonic() - start, 3), 'phase': decoded}) + '\n')
+                        log.write(decoded + '\n')
                 if len(pending) > 1024 * 1024:
                     log.write('[Overlong output line omitted]\n')
                     pending = b''
