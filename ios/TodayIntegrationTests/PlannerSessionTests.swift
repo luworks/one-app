@@ -43,6 +43,23 @@
     }
 
     @Test
+    func deterministicCaptureKeepsProductionAlarmAndReminderRules() throws {
+      let a = try Session(seed: 1600)
+      defer { a.dispose() }
+      let alarm = AskIntelligence.ruleCapture(
+        "明早7点叫我起床", now: a.clock.now(), calendar: a.runtime.calendar)
+      #expect(alarm.ringsAsAlarm && alarm.hour == 7 && alarm.minute == 0)
+      #expect(alarm.day == a.runtime.calendar.date(byAdding: .day, value: 1, to: a.day))
+      let reminder = AskIntelligence.ruleCapture(
+        "提醒我明天交报销单", now: a.clock.now(), calendar: a.runtime.calendar)
+      #expect(!reminder.ringsAsAlarm && reminder.kind == .task && reminder.title == "交报销单")
+      let event = AskIntelligence.ruleCapture(
+        "Meeting tomorrow at 3pm", now: a.clock.now(), calendar: a.runtime.calendar)
+      #expect(event.kind == .event && !event.ringsAsAlarm && event.hour == 15)
+      #expect(try a.tasks().isEmpty && a.rows().isEmpty)
+    }
+
+    @Test
     func askDeleteUndoOutlivesItsToastAndRunsOnce() async throws {
       let a = try Session(seed: 1500)
       defer { a.dispose() }

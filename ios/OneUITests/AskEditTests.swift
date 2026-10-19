@@ -45,7 +45,15 @@ final class AskEditTests: XCTestCase {
     let stack = stacks.element(boundBy: max(stacks.count - 1, 0))
     let title = stack.buttons["capture-title"]
     if title.exists && title.label.contains(s) { return title }
-    return stack.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
+    let text = stack.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
+    if !text.exists {
+      let diagnostic = XCTAttachment(string: stack.debugDescription)
+      diagnostic.name = "Newest capture hierarchy for missing text: \(s)"
+      diagnostic.lifetime = .keepAlways
+      add(diagnostic)
+      shot("missing-capture-text")
+    }
+    return text
   }
 
   // MARK: Capture

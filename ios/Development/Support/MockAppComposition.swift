@@ -124,7 +124,7 @@
       let intelligence = AskIntelligence(
         backend: { multiCapture ? .scripted : .rules },
         parse: { text, _, now, calendar in
-          CaptureConversation.parse(text, now: now, calendar: calendar)
+          AskIntelligence.ruleCapture(text, now: now, calendar: calendar)
         },
         propose: { text, now, calendar in
           guard multiCapture, text.contains(";") else { return nil }

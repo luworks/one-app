@@ -50,6 +50,15 @@
       self.unavailableReason = unavailableReason
     }
 
+    /// The existing production kind rules without model execution, for deterministic composition.
+    @MainActor package static func ruleCapture(
+      _ text: String, now: Date, calendar: Calendar
+    ) -> Capture {
+      let parsed = CaptureConversation.parse(text, now: now, calendar: calendar)
+      guard let kind = Understanding.ruleKind(text, parsed: parsed) else { return parsed }
+      return Understanding.combine(parser: parsed, kind: kind, text: text)
+    }
+
     /// Selected only by live composition. Existing model timeouts, guards and rule fallbacks remain authoritative.
     @MainActor package static func live(locale: Locale) -> Self {
       Self(
