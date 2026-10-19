@@ -268,6 +268,7 @@ def main(argv=None):
     # Locks cover separate checkouts using the same name or absolute cache path.
     locks = []
     simulator = None
+    boot_started = False
     evidence_created = False
     journal = None
     started = time.monotonic()
@@ -316,7 +317,6 @@ def main(argv=None):
         summary["simulator_id"] = simulator
         summary["device_type"] = args.device_type
         summary["runtime"] = args.runtime
-        journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)
         if (os.environ.get("TODAY_CI_SYNTHETIC") == "1"
                 and os.environ.get("TODAY_LANE") == "core-ui" and not args.test_products):
             # One trusted build, using the same product/provenance authority as
@@ -325,7 +325,15 @@ def main(argv=None):
                 raise ValueError("CI build reuse requires the canonical owned derived data")
             from scripts.devtools.resolve import locked_arguments
 
+            validation_started = time.monotonic()
+
             def build(command):
+                nonlocal boot_started
+                # Inventory/cache validation happens before boot loads the host.
+                # A cache miss still overlaps the actual native build and boot.
+                summary["prebuild_validation_seconds"] = round(time.monotonic() - validation_started, 3)
+                boot_started = True
+                journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)
                 command = list(command)
                 command[command.index("-project") + 1] = str(IOS / "Today.xcodeproj")
                 summary["commands"].append(command)
@@ -340,6 +348,9 @@ def main(argv=None):
                 return result
 
             args.test_products = ensure_test_products(ROOT, "TodayMock", build, flags=locked_arguments(ROOT))
+        if not boot_started:
+            boot_started = True
+            journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)
         journal.action(["xcrun", "simctl", "bootstatus", simulator, "-b"], subprocess.run, check=True)
         if args.test_products:
             summary["test_products"] = str(args.test_products.resolve())
@@ -376,11 +387,15 @@ def main(argv=None):
         summary["status"] = "interrupted"
         return 130
     finally:
-        if simulator:
+        if simulator and boot_started:
             try:
                 summary["stages"]["shutdown"] = journal.action(["xcrun", "simctl", "shutdown", simulator], subprocess.run).returncode
             except OSError as error:
                 summary["shutdown_error"] = str(error)
+        elif simulator:
+            # Inventory failed before this owned, initially shutdown device booted.
+            summary["stages"]["shutdown"] = 0
+            summary["shutdown_reason"] = "not_booted"
         summary["elapsed_seconds"] = round(time.monotonic() - started, 3)
         summary["counts"] = {lane: dict(Counter(a["status"] for a in attempts))
                              for lane, attempts in summary["attempts"].items()}

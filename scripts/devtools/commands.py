@@ -191,9 +191,8 @@ def test(root, group, *, only=(), timeout=600, full=False, allow_skips=(), _lock
 
 
 def format_sources(root, *, check=False, timeout=600):
-    from .core import probe
-    paths = sorted({name for name in probe(
-        ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], root).split('\0')
+    from .core import repository_files
+    paths = sorted({name for name in repository_files(root)
         if name.startswith('ios/') and name.endswith('.swift') and (root / name).is_file()})
     command = [tool(root, 'swift-format'), 'lint' if check else 'format', '--recursive']
     command += ['--strict'] if check else ['--in-place']

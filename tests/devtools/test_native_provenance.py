@@ -101,6 +101,65 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 3)
         self.assertNotIn('SWIFT_ENABLE_EXPLICIT_MODULES=NO', self.calls[-1])
 
+    def test_untracked_source_and_configuration_invalidate_reuse_without_stale_inventory(self):
+        self.ensure()
+        for name in ('ios/New.swift', 'ios/Config/Test.xcconfig', 'mise.lock', '.gitignore'):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            before = self.fp()
+            path.write_text('new input')
+            self.assertNotEqual(before, self.fp())
+            count = len(self.calls)
+            self.ensure()
+            self.assertEqual(len(self.calls), count + 1)
+            path.unlink()
+            self.assertFalse(core.provenance(self.root, self.fp(), kind='build-for-testing')['valid'])
+            self.ensure()
+
+    def test_generated_trees_are_pruned_before_git_reads_their_ignore_files(self):
+        # An unread .gitignore FIFO proves pruning, rather than filtering names
+        # after Git has already descended. No native tools or large trees needed.
+        before = self.fp()
+        for name in core.GENERATED_INPUT_DIRS:
+            directory = self.root / 'ios' / name / 'dependency'
+            directory.mkdir(parents=True)
+            os.mkfifo(directory / '.gitignore')
+            (directory / 'Generated.swift').write_text('not an input')
+        def bounded(command, root):
+            result = subprocess.check_output(command, cwd=root, timeout=2)
+            return result.decode().strip()
+        with patch.object(core, 'probe', side_effect=bounded):
+            self.assertEqual(before, self.fp())
+        # The normal implementation remains fresh too, without a cached manifest.
+        self.assertEqual(before, self.fp())
+
+    def test_tracked_deletion_and_tracked_ignored_file_still_invalidate(self):
+        subprocess.run(['git', '-C', str(self.root), 'add', 'ios/Input.swift'], check=True)
+        before = self.fp()
+        self.source.unlink()
+        after = self.fp()
+        self.assertNotEqual(before, after)
+        self.assertIsNone(after['inputs']['source_and_locks']['ios/Input.swift'])
+        self.source.write_text('source one')
+        (self.root / '.gitignore').write_text('ios/Input.swift\n')
+        before = self.fp()
+        self.source.write_text('tracked but ignored source edit')
+        self.assertNotEqual(before, self.fp())
+
+    def test_git_timeout_failure_and_empty_inventory_reject_provenance(self):
+        for error in (subprocess.TimeoutExpired(['git'], 30, stderr=b'busy'),
+                      subprocess.CalledProcessError(128, ['git'], stderr=b'fatal: unavailable token=fixture')):
+            with self.subTest(error=type(error).__name__), patch.object(core, 'probe', side_effect=error):
+                with self.assertRaisesRegex(RuntimeError, 'Git source inventory failed') as caught:
+                    self.ensure()
+                self.assertNotIn('token=fixture', str(caught.exception))
+                self.assertIn('stderr=', str(caught.exception))
+        self.assertEqual(self.calls, [])
+        with patch.object(core, 'probe', return_value=''):
+            with self.assertRaisesRegex(ValueError, 'No repository source inputs'):
+                self.ensure()
+        self.assertEqual(self.calls, [])
+
     def test_whole_host_bundle_and_xctestrun_are_guarded(self):
         path = self.ensure()
         current = self.fp()
@@ -191,12 +250,22 @@ class NativeProvenanceTests(unittest.TestCase):
                 self.assertEqual(caught.exception.returncode, code)
                 self.assertFalse(core.provenance(self.root, self.fp(), kind='build-for-testing')['valid'])
 
+    def test_toolchain_change_during_build_rejects_before_publication(self):
+        before = self.fp()
+        def invoke(command):
+            result = self.invoke(command)
+            core.toolchain.return_value = {'xcode': 'changed', 'sdk': '27.0'}
+            return result
+        with self.assertRaisesRegex(ValueError, 'Toolchain changed during build'):
+            core.ensure_test_products(self.root, 'TodayTests', invoke)
+        self.assertFalse(core._provenance_path(self.root, before, 'build-for-testing').exists())
+
     def test_source_change_during_build_rejects_products(self):
         def invoke(command):
             result = self.invoke(command)
             self.source.write_text('source changed in flight')
             return result
-        with self.assertRaisesRegex(ValueError, 'changed during build'):
+        with self.assertRaisesRegex(ValueError, 'Source changed before provenance publication'):
             core.ensure_test_products(self.root, 'TodayTests', invoke)
         self.assertFalse(core.provenance(self.root, self.fp(), kind='build-for-testing')['valid'])
 

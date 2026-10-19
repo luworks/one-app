@@ -213,3 +213,60 @@ simulator/build or physical-device validation ran. The previous run's core-ui
 job remained active at the handoff; publishing a new PR head would cancel it
 under the existing same-ref policy. Retain its first result before pushing the
 prepared compiler experiment. Do not merge PR104 or claim the total-time goal.
+
+### Iteration 5: source inventory before simulator boot
+
+Run [39298002981](https://github.com/luworks/one-app/actions/runs/39298002981)
+at published head `f53cdaa` tested integrated SHA
+`3cb1b104e37055356aafb04b0d29b66ab7e92718`. Its core UI artifact `12208362431`
+is a valid closed **failed** receipt: zero executed, seven missing, no xcresult.
+The original ZIP is 42,565 bytes, CRC-valid, SHA-256
+`dbea2f07a5612dbd262ac6f6fad4b2df7875ebe43d91bb690ccff35d74ef0e37`.
+The job lasted 249 seconds; its action lasted 240 seconds. This is not successful
+sub-five-minute acceptance. The runner's 181.496 seconds include Git inventory
+hitting its existing 30-second deadline after boot, then 134.415 seconds shutting
+down. No compiler command or UI test was dispatched. Pixel/native compiler
+regressions do not explain this particular failure. `ios/.build` was already
+Git-ignored; directory traversal or hosted CPU/filesystem contention is not a
+proven cause of the timeout.
+
+Core UI now checks the initial fresh source/product fingerprint before booting.
+On a cache miss its existing build callback starts boot, then compilation, keeping
+startup/build overlap. A preflight failure leaves the owned shutdown device alone
+and records that it was not booted; an attempted boot still requires shutdown.
+The runner retains prebuild-validation time. Failed preflight now produces the
+normal complete missing-test report without a secondary missing-tree exception;
+a UI stage that ran still requires its real xcresult leaves.
+
+The shared Git inventory explicitly prunes `.build`, `DerivedData` and
+`__pycache__` before untracked traversal. These were already excluded from source
+identity, so real untracked inputs and tracked deletions remain inputs. Format,
+Workbench discovery and the main fingerprint use this same enumeration. Ignore
+and attribute configuration join input identity. There is no reusable source
+manifest, timeout increase or provenance bypass. A redundant pre-publication Git
+walk in `ensure_test_products` is removed: `record_build` still freshly validates
+source/options before publication, the live toolchain is checked separately, and
+the final fingerprint/product check still runs before test dispatch. Git errors
+retain the command, original exit/deadline and bounded redacted stderr. The
+existing subprocess deadline kills and reaps the Git child.
+
+Host verification: `./dev test helpers` passed **124 tests** in 23.369 seconds;
+`./dev lint` and diff checks passed. Inline fixtures cover new untracked source,
+configuration/ignore/lock edits, tracked deletion, generated-tree pruning with
+unread FIFO ignore files, Git failure/timeout/empty inventory, source/toolchain
+mutation during build, preflight closure and cache-hit fresh test dispatch. The
+first helper failure was only the old error-message expectation after validation
+moved to `record_build`; the source-mutation rejection assertion remains intact.
+No local native build, simulator or physical-device validation ran.
+
+Other closed reports from this run pass: format, lint, business and ordinary
+Debug product build. The latter process took 136.068 seconds, with 37.059 seconds
+in dependency resolution; it is outside the routine native compiler experiment
+and cannot establish an implicit-modules speedup. Integration and snapshots were
+still active with no closed artifacts at inspection. Preserve their first native
+phase evidence before publishing this prepared batch, since a new PR push would
+cancel them under the existing workflow policy. The scoped index-store/implicit
+module candidate remains intact pending those results. No rerun, cancellation,
+merge or 300-second success is claimed. Raw ZIPs, manifests, helper first/final
+logs and this iteration's checkpoint remain under the primary checkout's
+`tests/results/ci-hillclimb-20261019/`, indexed in the QA journal.

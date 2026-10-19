@@ -252,6 +252,40 @@ class ProducerTests(unittest.TestCase):
         self.assertIn('original compiler output', (target / 'runner/build.log').read_text())
         self.assertFalse((target / 'runner/xcresult-tests.json').exists())
 
+    def test_closed_ui_preflight_failure_retains_original_error_and_all_missing(self):
+        self.output.rmdir()
+        self.output = self.base / 'today-core-ui'
+        root = self.base / 'repo'
+        root.mkdir()
+        selection = self.base / 'selection.json'
+        selection.write_text(json.dumps({'version': 1, 'mode': 'wide', 'reason': 'fixture',
+            'changed': [], 'targets': [], 'all_targets': True, 'snapshots': True}))
+
+        def run(*args, **kwargs):
+            self.write('runner/summary.json', json.dumps({'head': SHA, 'selection': ['Tests/testA'],
+                'status': 'failed', 'stages': {'shutdown': 0},
+                'error': 'Git source inventory failed: timeout after 30s; stderr=busy'}).encode())
+            log = self.base / 'runner.log'
+            log.write_text('QA failed: Git source inventory failed: timeout after 30s\n')
+            return SimpleNamespace(returncode=1, reason='exited', log=log)
+
+        with patch.object(adapter, 'source_state', return_value='fixed'), patch.object(
+                adapter, 'test_plan', return_value=('ui', ['Tests/testA'])):
+            self.assertEqual(adapter._main(root, 'core-ui', selection=selection,
+                output=self.output, sha=SHA, synthetic=True, no_distribute=True, runner=run), 1)
+        report = json.loads((self.output / 'report.json').read_text())
+        self.assertEqual((report['executed'], report['missing']), (0, 1))
+        self.assertIn('runner_preflight_failed', report['errors'])
+        self.assertTrue(any('timeout after 30s' in error for error in report['errors']))
+        self.assertFalse(any('FileNotFoundError' in error for error in report['errors']))
+        self.assertTrue((self.output / 'test-report.json').is_file())
+        self.assertTrue(report['artifact_provenance']['closed'])
+        producer.close_wrapper(self.output, SHA, 'core-ui', 'failed inventory\n')
+        target = self.base / 'failed-preflight-artifacts'
+        producer.stage(self.output, target, SHA, 'core-ui')
+        self.assertFalse((target / 'runner/xcresult-tests.json').exists())
+        self.assertIn('Git source inventory failed', (target / 'runner/summary.json').read_text())
+
     def test_wrapper_missing_receipt_exposes_first_failure_without_publishing(self):
         self.output.rmdir()
 

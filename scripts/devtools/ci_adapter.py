@@ -181,10 +181,11 @@ def _test_results(root, lane, output, run, report):
                 value != 0 for value in stages.values()):
             report['errors'].append('runner_stage_failure')
         # Reparse the retained xcresult tree, rather than trusting copied counters.
-        if stages.get('build', 0) != 0 and 'ui' not in stages:
-            # A closed failed build has no test tree. Preserve the original
+        if 'ui' not in stages:
+            # A closed preflight/build failure has no test tree. Preserve the original
             # process reason and log, with all selected tests still missing.
-            report['errors'].append('runner_build_' + str(summary.get('build_reason', 'failed')))
+            report['errors'].append('runner_build_' + str(summary.get('build_reason', 'failed'))
+                                    if 'build' in stages else 'runner_preflight_failed')
             attempts = []
         else:
             tree = json.loads((output / 'runner/xcresult-tests.json').read_text())

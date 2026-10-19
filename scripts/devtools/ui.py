@@ -12,7 +12,7 @@ import time
 import uuid
 
 from .core import (ResourceLock, atomic_json, dd_lock, derived_data, host_lock,
-                   probe, read_json, state_root, worktree_id, fingerprint, record_build)
+                   repository_files, read_json, state_root, worktree_id, fingerprint, record_build)
 from .process import Evidence, Redactor, run_process
 from .xcode_tests import DEVICE, RUNTIME, simulator_name
 from scripts.gallery.adapter import CaptureIdentity, Manifest, identifier, validate_png
@@ -80,7 +80,7 @@ class Native:
 
 def _inputs(root):
     # Enumerate actual repository files, including untracked inputs and tracked deletions.
-    names = probe(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], root).split('\0')
+    names = repository_files(root)
     sources, locks = [], []
     for name in sorted(set(names)):
         if not name or any(p in ('.build', 'DerivedData', '__pycache__') for p in Path(name).parts):

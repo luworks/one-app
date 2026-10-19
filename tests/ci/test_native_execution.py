@@ -18,7 +18,13 @@ class CoreUIExecutionTests(unittest.TestCase):
     def test_build_timeout_closes_before_outer_deadline_without_dispatching_tests(self):
         self.run_ci_ui(build_code=124)
 
-    def run_ci_ui(self, build_code=0):
+    def test_inventory_failure_precedes_boot_and_never_dispatches_tests(self):
+        self.run_ci_ui(inventory_error=True)
+
+    def test_cached_products_still_boot_once_and_execute_fresh_tests(self):
+        self.run_ci_ui(cached=True)
+
+    def run_ci_ui(self, build_code=0, inventory_error=False, cached=False):
         path = Path(__file__).resolve().parents[2] / 'ios/Eval/run-e2e.py'
         spec = importlib.util.spec_from_file_location('ci_ui_runner', path)
         runner = importlib.util.module_from_spec(spec)
@@ -45,6 +51,12 @@ class CoreUIExecutionTests(unittest.TestCase):
             def ensure(root, scheme, invoke, **kwargs):
                 self.assertEqual(scheme, 'TodayMock')
                 self.assertEqual(kwargs['flags'], ['-disableAutomaticPackageResolution'])
+                self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'boot'] for c in calls))
+                calls.append(['source-inventory'])
+                if inventory_error:
+                    raise RuntimeError('Git source inventory failed: timeout after 30s')
+                if cached:
+                    return products
                 result = invoke(['xcodebuild', 'build-for-testing', '-project', 'ios/Today.xcodeproj'])
                 if result.returncode:
                     from scripts.devtools.core import NativeBuildError
@@ -70,7 +82,22 @@ class CoreUIExecutionTests(unittest.TestCase):
                 code = runner.main(['--only', selected[0], '--derived-data', str(base / 'dd'),
                                     '--output', str(base / 'output'), '--simulator-name', 'Today-CI-Unit'])
             build.assert_called_once()
-            self.assertEqual(calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+            if not inventory_error:
+                self.assertEqual(calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+            if inventory_error:
+                self.assertEqual(code, 1)
+                summary = (base / 'output/summary.json').read_text()
+                self.assertIn('Git source inventory failed', summary)
+                self.assertIn('"shutdown_reason": "not_booted"', summary)
+                self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'shutdown'] for c in calls))
+                self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'boot'] for c in calls))
+                self.assertFalse(any(c[0] == 'xcodebuild' for c in calls))
+                return
+            if cached:
+                self.assertEqual(code, 0)
+                self.assertEqual(sum(c[:3] == ['xcrun', 'simctl', 'boot'] for c in calls), 1)
+                self.assertFalse(any(c[:2] == ['xcodebuild', 'build-for-testing'] for c in calls))
+                return
             if build_code:
                 self.assertEqual(code, 1)
                 summary = (base / 'output/summary.json').read_text()
