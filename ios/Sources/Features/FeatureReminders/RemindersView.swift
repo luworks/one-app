@@ -279,7 +279,7 @@
         }
         .contextMenu { menu() }
         .draggable(token) {
-          preview().onAppear {
+          preview().environment(presentation).onAppear {
             dragging = token
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
           }
