@@ -49,7 +49,7 @@ package final class Ringer {
 
     #if canImport(AlarmKit)
     @available(iOS 26, *)
-    package var manager: AlarmManager { AlarmManager.shared }
+    package nonisolated var manager: AlarmManager { AlarmManager.shared }
     #endif
     package var isAvailable: Bool {
         if #available(iOS 26, *) { return true }
@@ -249,7 +249,7 @@ package enum AlarmScheduler {
             attributes: attributes,
             sound: AlarmSound.named(sound)?.alertSound ?? .default)
         do {
-            _ = try await driver.manager.schedule(driver: driver, id: id, configuration: configuration)
+            _ = try await driver.manager.schedule(id: id, configuration: configuration)
             log.info("alarm scheduled")
             return true
         } catch {

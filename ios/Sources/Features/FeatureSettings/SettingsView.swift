@@ -31,6 +31,7 @@ package struct SettingsView: View {
     private let calendars: @MainActor () -> AnyView
     private let holidays: @MainActor () -> AnyView
     private let activityData: @MainActor () -> AnyView
+    private let exportDiagnostics: @MainActor () throws -> URL
     private let shareDiagnostics: @MainActor (URL) -> AnyView
     private let reset: @MainActor (ModelContext) -> Void
 
@@ -41,6 +42,7 @@ package struct SettingsView: View {
         openSettings: @escaping @MainActor () -> Void,
         rewriteWidgets: @escaping @MainActor () -> Void,
         diagnostics: LocalDiagnostics,
+        exportDiagnostics: @escaping @MainActor () throws -> URL,
         calendars: @escaping @MainActor () -> AnyView,
         holidays: @escaping @MainActor () -> AnyView,
         activityData: @escaping @MainActor () -> AnyView,
@@ -56,6 +58,7 @@ package struct SettingsView: View {
         self.reminders = reminders
         self.notifications = notifications
         self.diagnostics = diagnostics
+        self.exportDiagnostics = exportDiagnostics
         self.calendars = calendars
         self.holidays = holidays
         self.activityData = activityData
@@ -205,7 +208,7 @@ package struct SettingsView: View {
                       showsSettings: notificationStatus == .denied,
                       turnOn: notificationStatus == .notDetermined ? {
                           Task {
-                              await notifications.requestPermission()
+                              _ = await notifications.requestPermission()
                               notificationStatus = await notifications.authorizationStatus()
                           }
                       } : nil)
@@ -307,7 +310,7 @@ package struct SettingsView: View {
             LabeledContent("Version", value: Self.version)
             Button("Export diagnostics") {
                 do {
-                    diagnosticExport = DiagnosticExport(url: try diagnostics.exportURL())
+                    diagnosticExport = DiagnosticExport(url: try exportDiagnostics())
                 } catch {
                     diagnosticExportFailed = true
                 }

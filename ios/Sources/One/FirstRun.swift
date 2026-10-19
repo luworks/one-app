@@ -36,7 +36,7 @@ package enum FirstRun {
     package static func alarms(_ alarms: any AlarmService, notifications: any NotificationService, arguments: [String]) async {
         guard !arguments.contains("-uiTesting") else { return }
         if alarms.authorization == .notDetermined { await alarms.requestAuthorization() }
-        if await notifications.authorizationStatus() == .notDetermined { await notifications.requestPermission() }
+        if await notifications.authorizationStatus() == .notDetermined { _ = await notifications.requestPermission() }
     }
 }
 #endif

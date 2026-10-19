@@ -1,3 +1,4 @@
+import TodayTestSupport
 import XCTest
 @testable import TodayCore
 @testable import TodayData
@@ -85,14 +86,14 @@ final class HealthMetricsTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        let first = HealthSelectionStore(defaults: defaults, arguments: [])
+        let first = HealthTestSelection.make(defaults: defaults, arguments: [])
         XCTAssertEqual(first.selection, .default)
         first.save(HealthSelection(shown: [.weight, .steps]))
-        XCTAssertEqual(HealthSelectionStore(defaults: defaults, arguments: []).selection.shown, [.weight, .steps], "survives a relaunch")
-        XCTAssertEqual(HealthSelectionStore(defaults: defaults, arguments: ["-uiTesting", "-uiTestingKeepHealthMetrics"]).selection.shown,
+        XCTAssertEqual(HealthTestSelection.make(defaults: defaults, arguments: []).selection.shown, [.weight, .steps], "survives a relaunch")
+        XCTAssertEqual(HealthTestSelection.make(defaults: defaults, arguments: ["-uiTesting", "-uiTestingKeepHealthMetrics"]).selection.shown,
                        [.weight, .steps], "a test relaunch can keep it")
-        XCTAssertEqual(HealthSelectionStore(defaults: defaults, arguments: ["-uiTesting"]).selection, .default, "a test launch starts clean")
-        XCTAssertEqual(HealthSelectionStore(defaults: defaults, arguments: ["-uiTesting", "-uiTestingHealthMetrics", "weight,bogus,daylight"]).selection.shown,
+        XCTAssertEqual(HealthTestSelection.make(defaults: defaults, arguments: ["-uiTesting"]).selection, .default, "a test launch starts clean")
+        XCTAssertEqual(HealthTestSelection.make(defaults: defaults, arguments: ["-uiTesting", "-uiTestingHealthMetrics", "weight,bogus,daylight"]).selection.shown,
                        [.weight, .daylight], "or from a seeded list")
     }
 

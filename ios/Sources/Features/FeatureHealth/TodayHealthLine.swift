@@ -25,7 +25,7 @@ public final class HealthLineModel {
         self.runtime = runtime
         self.gate = gate
         // The line follows a changed choice of metrics (from the sheet or Settings), unless the line is switched off.
-        observer = NotificationCenter.default.addObserver(forName: HealthSelectionStore.didChange, object: nil, queue: .main) { [weak self] _ in
+        observer = NotificationCenter.default.addObserver(forName: HealthSelectionStore.didChange, object: store, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.defaults.object(forKey: SettingsKey.healthSummary) as? Bool ?? true else { return }
                 await self.load()

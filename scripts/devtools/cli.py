@@ -30,11 +30,23 @@ def main(argv=None, root=ROOT):
     sub.add_parser('doctor', help='read-only environment checks; no simulator boot')
     sub.add_parser('inventory', help='read-only worktree, locks and tools')
     plan = sub.add_parser('plan', help='read-only fingerprint and provenance; executes nothing')
+    plan.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench', 'TodayTests', 'TodaySnapshotTests'], default='Today')
     plan.add_argument('--sdk', default='iphonesimulator')
     plan.add_argument('--architecture')
     plan.add_argument('--configuration', choices=['Debug', 'Release'], default='Debug')
     bootstrap_parser = sub.add_parser('bootstrap', help='install exact checksummed worktree-local tools')
     bootstrap_parser.add_argument('--tool', action='append')
+    check_parser = sub.add_parser('check', help='run selected existing verification authorities')
+    check_parser.add_argument('--check', action='append')
+    check_parser.add_argument('--timeout', type=float, default=600)
+    benchmark_parser = sub.add_parser('benchmark', help='measure actual bounded command invocations')
+    benchmark_parser.add_argument('kind', choices=['cold', 'incremental', 'unit', 'ui', 'screenshot', 'gallery'])
+    benchmark_parser.add_argument('--n', type=int, default=1)
+    benchmark_parser.add_argument('--conditions', required=True)
+    benchmark_parser.add_argument('--timeout', type=float, default=600)
+    benchmark_parser.add_argument('--argument', dest='options', action='append', default=[])
+    report_parser = sub.add_parser('report', help='read retained run receipts without changing state')
+    report_parser.add_argument('paths', nargs='*', type=Path)
     sub.add_parser('generate', help='generate Today.xcodeproj from the sole specification')
     resolve_parser = sub.add_parser('resolve', help='resolve only versioned exact dependency pins')
     resolve_parser.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench', 'TodayTests', 'TodaySnapshotTests'], default='Today')
@@ -81,7 +93,22 @@ def main(argv=None, root=ROOT):
         return 0
     try:
         root = Path(root).resolve()
+        if args.command == 'report':
+            from .report import collect
+            result = collect(root, args.paths)
+            print(Redactor()(json.dumps(result, indent=2, sort_keys=True)))
+            return result['exit']
         if args.command not in ('doctor', 'inventory', 'plan'):
+            if args.command == 'check':
+                from .check import run, DEFAULT_CHECKS
+                result = run(root, args.check if args.check is not None else DEFAULT_CHECKS, timeout=args.timeout)
+                print(Redactor()(json.dumps(result, indent=2)))
+                return result['exit']
+            if args.command == 'benchmark':
+                from .benchmark import run
+                result = run(root, args.kind, n=args.n, arguments=args.options, conditions=args.conditions, timeout=args.timeout)
+                print(Redactor()(json.dumps(result, indent=2)))
+                return result['exit']
             from . import commands
             if args.command == 'ui':
                 from . import ui
@@ -137,7 +164,7 @@ def main(argv=None, root=ROOT):
             code = 0 if data['ok'] else 1
         elif args.command == 'plan':
             current = fingerprint(root, sdk=args.sdk, architecture=args.architecture,
-                                  configuration=args.configuration, tools=data['toolchain'])
+                                  configuration=args.configuration, tools=data['toolchain'], scheme=args.scheme)
             data.update({'fingerprint': current, 'provenance': provenance(root, current),
                          'execution_supported': True,
                          'next': './dev generate; ./dev resolve; ./dev build Debug'})

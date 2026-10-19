@@ -45,6 +45,7 @@ public enum OneStore {
                                     runtime: runtime, enabled: true,
                                     travel: { travel.widgetFields(eventID: $0, start: $1, isAllDay: $2, place: $3, now: $4) },
                                     save: { $0.save() }, reload: { WidgetCenter.shared.reloadAllTimelines() })
+            travel.didUpdateEstimate = { [weak widget] in widget?.rewriteFromStore() }
             reminders.configure(container, ledger: ledger)
             notifications.configure(container)
             widget.registerBackgroundRefresh()

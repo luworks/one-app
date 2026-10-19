@@ -20,9 +20,7 @@ def collect(root, paths=()):
         candidates = [Path(p) if Path(p).is_absolute() else root / p for p in paths]
     else:
         base = state_root(root)
-        candidates = sorted(set((base / 'runs').glob('*.json')) |
-                            set((base / 'logs').rglob('*.report.json')) |
-                            set((retained / 'runs').rglob('summary.json')))
+        candidates = sorted((base / 'runs').glob('*.json'))
     records, blockers = [], []
     for path in candidates:
         path = Path(path)
@@ -36,6 +34,8 @@ def collect(root, paths=()):
                 raise ValueError('Expected JSON object')
         except (OSError, ValueError) as error:
             blockers.append({'path': str(path), 'reason': str(error)})
+            continue
+        if not paths and data.get('worktree') != str(root):
             continue
         own = data.get('kind') in ('check', 'benchmark') and data.get('schema') == 1
         record = {'path': str(path), 'sha256': hashlib.sha256(raw).hexdigest(),

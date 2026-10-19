@@ -7,7 +7,7 @@ import sys
 sys.dont_write_bytecode = True
 root = Path(__file__).resolve().parent
 # Read-only entry points neither install tools nor ask mise to create runtime/cache state.
-readonly = len(sys.argv) < 2 or sys.argv[1] in ('help', 'doctor', 'inventory', 'plan', '-h', '--help')
+readonly = len(sys.argv) < 2 or sys.argv[1] in ('help', 'doctor', 'inventory', 'plan', 'report', '-h', '--help')
 if not readonly and not os.environ.get('TODAY_RUNTIME_ACTIVE'):
     from scripts.devtools.bootstrap import bootstrap
     plan = bootstrap(root, tools=['mise'], plan=True)

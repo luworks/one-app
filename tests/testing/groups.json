@@ -9,7 +9,8 @@
     },
     "integration": {
       "integration": [
-        "StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation"
+        "StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation",
+        "PlannerSessionTests"
       ]
     },
     "ui": {

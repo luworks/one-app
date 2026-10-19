@@ -7,6 +7,7 @@ import TodayPlatform
 import TodayDesignSystem
 import FeatureClock
 import FeatureHealth
+import FeatureAsk
 import SwiftUI
 import SwiftData
 #if TODAY_MOCK
@@ -14,51 +15,76 @@ import TodayTestSupport
 #endif
 
 @main
+@MainActor
 struct OneApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    let diagnostics = LocalDiagnostics()
-    let healthModel: HealthModel
-    let healthLineModel: HealthLineModel
-    let container: ModelContainer
+    private let diagnostics = LocalDiagnostics()
+    private let composition: ShellComposition
+    private let healthModel: HealthModel
+    private let healthLineModel: HealthLineModel
+    #if TODAY_MOCK
+    private let mock: MockAppComposition
+    #endif
 
     init() {
-        diagnostics.start()
         let source: any HealthSource
         #if TODAY_MOCK
+        do {
+            let mock = try MockAppComposition(arguments: ProcessInfo.processInfo.arguments)
+            self.mock = mock
+            composition = mock.shell
+        } catch { fatalError("Could not open the development store: \(error)") }
         source = HealthTestSources.scripted(base: MockHealthSource(), arguments: ProcessInfo.processInfo.arguments)
         #else
+        let liveSession = OneStore.session
+        do {
+            guard let url = Bundle.main.url(forResource: "cities", withExtension: "json") else {
+                throw CocoaError(.fileNoSuchFile)
+            }
+            let cities = try CityDatabase.decode(Data(contentsOf: url))
+            let world = WorldClockStore(database: cities, defaults: liveSession.defaults,
+                                        homeZoneIdentifier: liveSession.runtime.calendar.timeZone.identifier)
+            let stopwatch = StopwatchModel(defaults: liveSession.defaults, now: liveSession.runtime.now)
+            composition = ShellComposition(session: liveSession, world: world, stopwatch: stopwatch,
+                intelligence: .live(locale: liveSession.runtime.locale),
+                voice: VoiceInput(driver: LiveSpeechInputDriver(locale: liveSession.runtime.locale)), arguments: [],
+                openSettings: {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                })
+        } catch { fatalError("Could not load the city database: \(error)") }
         source = HealthKitSource()
         #endif
-        healthModel = HealthModel(source: source)
-        healthLineModel = HealthLineModel(source: source)
+        let session = composition.session
+        #if TODAY_MOCK
+        let selection = HealthTestSelection.make(defaults: session.defaults, arguments: composition.arguments)
+        #else
+        let selection = HealthSelectionStore(defaults: session.defaults)
+        #endif
+        let gate = HealthAccessGate()
+        healthModel = HealthModel(source: source, store: selection, runtime: session.runtime, gate: gate)
+        healthLineModel = HealthLineModel(source: source, store: selection, defaults: session.defaults,
+                                          runtime: session.runtime, gate: gate)
+        diagnostics.start()
         if PerformanceTrace.enabled { PerformanceTrace.shared.beginLaunch() }
-        #if TODAY_MOCK
-        if PreviewFixtures.isAxe {
-            container = PreviewFixtures.reminders
-            return
-        }
-        #endif
         LaunchTimer.mark("app init")
-        Appearance.applyLaunchOverride()
-        Preferences.applyLaunchOverride()
-        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("store_start") }
         #if TODAY_MOCK
-        if ProcessInfo.processInfo.arguments.contains("-uiTesting") { SampleData.resetFlags() }
-        #endif
-        container = OneStore.start()
-        #if TODAY_MOCK
+        if composition.arguments.contains("-uiTesting") { SampleData.resetFlags() }
         HealthDebugSeed.runIfRequested()
         #endif
-        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("store_ready") }
         LaunchTimer.mark("store ready")
     }
 
     #if TODAY_MOCK
     private func prepareMockData(_ context: ModelContext) async -> Bool {
-        if ProcessInfo.processInfo.arguments.contains("-seedCalendarDemo") { await CalendarSync.shared.seedDemo() }
+        if composition.arguments.contains("-seedCalendarDemo"), let calendar = composition.session.calendar as? CalendarSync {
+            await calendar.seedDemo()
+        }
         if let path = DevImport.requestedPath {
-            do { _ = try DevImport.run(path: path, into: context); ListActions.ensureLists(in: context) }
-            catch { print("IMPORT failed code: \((error as NSError).code)") }
+            do {
+                _ = try DevImport.run(path: path, into: context)
+                ListActions.ensureLists(in: context, runtime: composition.session.runtime)
+            } catch { print("IMPORT failed code: \((error as NSError).code)") }
             return false
         }
         if let path = TestDataset.requestedPath {
@@ -72,16 +98,19 @@ struct OneApp: App {
     var body: some Scene {
         WindowGroup {
             #if TODAY_MOCK
-            if PreviewFixtures.isAxe {
-                Color.clear
-            } else {
-                HomeView(diagnostics: diagnostics, prepareData: prepareMockData).appearanceRoot().environment(healthModel).environment(healthLineModel)
-            }
+            HomeView(composition: composition, diagnostics: diagnostics, prepareData: prepareMockData)
+                .environment(healthModel).environment(healthLineModel)
+                .appearanceRoot(defaults: composition.session.defaults, windows: appWindows)
             #else
-            HomeView(diagnostics: diagnostics).appearanceRoot().environment(healthModel).environment(healthLineModel)
+            HomeView(composition: composition, diagnostics: diagnostics)
+                .environment(healthModel).environment(healthLineModel)
+                .appearanceRoot(defaults: composition.session.defaults, windows: appWindows)
             #endif
         }
-        .modelContainer(container)
+        .modelContainer(composition.session.container)
+    }
+
+    private func appWindows() -> [UIWindow] {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
     }
 }
-

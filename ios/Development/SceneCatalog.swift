@@ -556,6 +556,9 @@ private struct SceneCatalogContent: View {
         SettingsView(selection: selection, calendar: session.services.calendar, reminders: session.services.reminders,
             notifications: session.services.notifications, alarms: session.services.alarms, ledger: session.services.ledger,
             openSettings: session.openSettings, rewriteWidgets: session.rewriteWidgets, diagnostics: session.diagnostics,
+            exportDiagnostics: {
+                try session.diagnostics.exportURL(to: session.exportDirectory.appendingPathComponent("diagnostics-\(session.runtime.nextID().uuidString).json"))
+            },
             calendars: { AnyView(session.host(CalendarsSheet(calendar: session.services.calendar))) },
             holidays: { AnyView(session.host(YearHolidaysSettingsView(presentation: session.presentation))) },
             activityData: { AnyView(session.host(activityData)) },

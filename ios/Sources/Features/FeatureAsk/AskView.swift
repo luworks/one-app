@@ -569,7 +569,7 @@ package struct AskView: View {
         recordTurn(initialIntent, text)
         if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("record_turn_after", token: generationToken) }
         if let reply = ChatRouting.contextReply(text, context: context) {
-            messages.append(reply( reply))
+            messages.append(self.reply(reply))
             return
         }
         thinking = true
@@ -595,7 +595,7 @@ package struct AskView: View {
                 clearPreviews()
                 propose(text, history: history)
             case .reply(let reply):
-                messages.append(reply( reply))
+                messages.append(self.reply(reply))
             }
         }
     }
@@ -1019,7 +1019,7 @@ package struct AskView: View {
     private func commit(_ id: UUID) -> Capture? {
         guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.add) else { return nil }
         let capture = proposals[i].capture
-        guard capture.isReadyToAdd else { return nil }
+        guard capture.isReadyToAdd(calendar: presentation.calendar) else { return nil }
         let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
         let written: (id: PersistentIdentifier, entry: LedgerItem)
         do {

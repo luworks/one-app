@@ -4,6 +4,7 @@ import TodayCore
 
 /// AI preview: what will be created. The user can switch reminder / event / alarm before tapping Add.
 package struct CaptureCard: View {
+    @Environment(PlannerPresentation.self) private var presentation
     package init(capture: Binding<Capture>, lists: [String] = [], status: CardStatus = .open, onAdd: @escaping () -> Void, onCancel: @escaping () -> Void, cancelTitle: String = "Cancel", onUndo: @escaping () -> Void = {}, onOpen: @escaping () -> Void = {}, onRename: @escaping (String) -> Bool = { _ in false }) {
         _capture = capture; self.lists = lists; self.status = status; self.onAdd = onAdd; self.onCancel = onCancel; self.cancelTitle = cancelTitle; self.onUndo = onUndo; self.onOpen = onOpen; self.onRename = onRename
     }
@@ -35,11 +36,11 @@ package struct CaptureCard: View {
                     capture.ringsAsAlarm = true
                     capture.isAllDay = false
                     if capture.hour == nil {
-                        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
-                        let c = Calendar.current.dateComponents([.hour], from: next)
+                        let next = presentation.calendar.date(byAdding: .hour, value: 1, to: presentation.now) ?? presentation.now
+                        let c = presentation.calendar.dateComponents([.hour], from: next)
                         capture.hour = c.hour ?? 9
                         capture.minute = 0
-                        if !Calendar.current.isDateInToday(next) { capture.day = Calendar.current.startOfDay(for: next); capture.hasDay = true }
+                        if !presentation.calendar.isDate(next, inSameDayAs: presentation.now) { capture.day = presentation.calendar.startOfDay(for: next); capture.hasDay = true }
                     }
                 }
             })
@@ -74,7 +75,7 @@ package struct CaptureCard: View {
                 if status == .open { capture.title = title; return true }
                 return onRename(title)
             }).font(.headline)
-            Text(capture.summary).font(.subheadline).foregroundStyle(.secondary)
+            Text(capture.summary(now: presentation.now, calendar: presentation.calendar, locale: presentation.locale)).font(.subheadline).foregroundStyle(.secondary)
             if let notes = capture.notes, !notes.isEmpty {
                 Text(notes).font(.callout).foregroundStyle(.secondary).accessibilityIdentifier("capture-notes")
             }
@@ -89,7 +90,7 @@ package struct CaptureCard: View {
                 HStack {
                     Button(cancelTitle, action: onCancel).buttonStyle(.bordered)
                     Spacer()
-                    Button("Add", action: onAdd).buttonStyle(.borderedProminent).disabled(!capture.isReadyToAdd)
+                    Button("Add", action: onAdd).buttonStyle(.borderedProminent).disabled(!capture.isReadyToAdd(calendar: presentation.calendar))
                 }
                 .padding(.top, 4)
             } else {
@@ -107,6 +108,7 @@ package struct CaptureCard: View {
 
 /// A decided card reads as one thing to VoiceOver ("Added: Call Alex, Tomorrow 15:00 · alerts you") with its buttons inside.
 private struct DecidedCardLabel: ViewModifier {
+    @Environment(PlannerPresentation.self) private var presentation
     let status: CardStatus
     let capture: Capture
 
@@ -116,7 +118,7 @@ private struct DecidedCardLabel: ViewModifier {
         } else {
             content
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel(status.accessibilityLabel(for: capture))
+                .accessibilityLabel(status.accessibilityLabel(for: capture, now: presentation.now, calendar: presentation.calendar, locale: presentation.locale))
         }
     }
 }

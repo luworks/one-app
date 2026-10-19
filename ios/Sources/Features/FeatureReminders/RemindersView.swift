@@ -446,7 +446,7 @@ package struct RemindersView: View {
     }
 
     /// Counts for the pills and rows, computed in one pass per body.
-    private struct Stats {
+    @MainActor private struct Stats {
         var smart: [SmartList: Int] = [:]
         var open: [String: Int] = [:]
         var total: [String: Int] = [:]
@@ -523,7 +523,7 @@ private struct ListRow: View {
 extension SmartList {
     /// Today: due today or planned today, plus overdue. Scheduled: has a deadline or a planned time.
     /// All: every open reminder. Flagged: open and flagged. Completed: done.
-    package func includes(_ task: OneTask, now: Date, calendar: Calendar) -> Bool {
+    @MainActor package func includes(_ task: OneTask, now: Date, calendar: Calendar) -> Bool {
         if self == .completed { return task.isDone }
         guard !task.isDone else { return false }
         switch self {

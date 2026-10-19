@@ -46,10 +46,22 @@ enum HomeTab: String, CaseIterable, Identifiable {
 /// and a bottom bar (search, Ask AI, new) that is always visible. A left drawer (like ChatGPT/Claude)
 /// opens from the avatar or a swipe from the left edge.
 public struct HomeView: View {
+    private let composition: ShellComposition
+    private var session: PlannerSession { composition.session }
+    private var presentation: PlannerPresentation { composition.presentation }
     private let diagnostics: LocalDiagnostics
     private let prepareData: (@MainActor (ModelContext) async -> Bool)?
-    public init(diagnostics: LocalDiagnostics, prepareData: (@MainActor (ModelContext) async -> Bool)? = nil) {
+    package init(composition: ShellComposition, diagnostics: LocalDiagnostics, prepareData: (@MainActor (ModelContext) async -> Bool)? = nil) {
+        self.composition = composition
         self.diagnostics = diagnostics; self.prepareData = prepareData
+        let defaults = composition.session.defaults
+        let args = composition.arguments
+        let today = composition.session.runtime.calendar.startOfDay(for: composition.session.runtime.now())
+        _calendarDay = State(initialValue: today); _todayDay = State(initialValue: today)
+        _tab = State(initialValue: Self.restored(HomeTab.self, key: Self.tabKey, defaults: defaults, arguments: args) ?? .today)
+        _clockSection = State(initialValue: Self.restored(ClockSection.self, key: Self.clockSectionKey, defaults: defaults, arguments: args) ?? .alarms)
+        let last = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey, defaults: defaults, arguments: args)?.rawValue
+        _calendarMode = State(initialValue: CalendarView.Mode(rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .week)
     }
     @State private var editor: OpenedEntry?
 
@@ -59,30 +71,25 @@ public struct HomeView: View {
     @Query private var allEvents: [OneEvent]
     @Query private var allAlarms: [OneAlarm]
 
-    @State private var tab: HomeTab = Self.restored(HomeTab.self, key: Self.tabKey) ?? .today
-    @State private var calendarDay = Calendar.current.startOfDay(for: .now)
+    @State private var tab: HomeTab
+    @State private var calendarDay: Date
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
     // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
-    @State private var calendarMode: CalendarView.Mode = Self.startingCalendarMode()
+    @State private var calendarMode: CalendarView.Mode
     /// Alarms · World Clock · Stopwatch · Timer inside the Clock tab.
-    @State private var clockSection: ClockSection = Self.restored(ClockSection.self, key: Self.clockSectionKey) ?? .alarms
+    @State private var clockSection: ClockSection
     @State private var addingCity = false
     // The tab and the Calendar view also survive a restart (not in UI tests, which always start the same way).
     private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode", clockSectionKey = "today.last.clockSection"
-    private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
-        guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
+    private static func restored<T: RawRepresentable>(_: T.Type, key: String, defaults: UserDefaults, arguments: [String]) -> T? where T.RawValue == String {
+        guard !arguments.contains("-uiTesting") else { return nil }
         // A tab saved under an old name (`alarms`, now `clock`) still opens on the same tab.
-        guard let raw = UserDefaults.standard.string(forKey: key) else { return nil }
+        guard let raw = defaults.string(forKey: key) else { return nil }
         return T(rawValue: key == tabKey ? TabMemory.migrated(raw) : raw)
-    }
-    /// Settings > Calendar > "Open Calendar on": a chosen view, or the one it was left in (Week the first time).
-    private static func startingCalendarMode() -> CalendarView.Mode {
-        let last = restored(CalendarView.Mode.self, key: calendarModeKey)?.rawValue
-        return CalendarView.Mode(rawValue: Preferences.calendarStartChoice().view(lastUsed: last)) ?? .week
     }
     @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
-    @State private var todayDay = Calendar.current.startOfDay(for: .now)
+    @State private var todayDay: Date
     /// The AI screen: a new chat, or a saved conversation to continue. nil = closed.
     @State private var ask: AskRoute?
     @State private var showsSearch = false
@@ -156,7 +163,7 @@ public struct HomeView: View {
         // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
         // open, and the sidebar is put back underneath this screen when it goes back.
         .fullScreenCover(item: $ask) { route in
-            AskScreen(thread: route.thread, toast: toast, onBack: { show in
+            AskScreen(thread: route.thread, toast: toast, composition: composition, onBack: { show in
                 // Put the sidebar back underneath, so closing or swiping right lands on it.
                 if route.fromSidebar { drawer.set(open: show, animated: false) }
             }, onAdded: { capture in
@@ -166,15 +173,21 @@ public struct HomeView: View {
                 ask = nil
                 drawer.set(open: false, animated: false)
                 tab = .today
-                todayDay = Calendar.current.startOfDay(for: day)
+                todayDay = session.runtime.calendar.startOfDay(for: day)
             })
         }
         .environment(toast)
+        .environment(session.actions)
+        .environment(presentation)
+        .defaultAppStorage(session.defaults)
+        .environment(\.calendar, session.runtime.calendar)
+        .environment(\.locale, session.runtime.locale)
+        .environment(\.timeZone, session.runtime.calendar.timeZone)
         .onAppear { toast.undoManager = undoManager }
         .onChange(of: undoManager) { _, new in toast.undoManager = new }
-        .sheet(item: $editor) { PlannerEditor(destination: $0, toast: toast) }
-        .sheet(isPresented: $showsSettings) { ShellSettings(diagnostics: diagnostics) }
-        .sheet(isPresented: $showsActivity) { ActivityView(activity: .shared, flush: { Ledger.flush(context) }, undo: { Ledger.undo($0, context: context) }) }
+        .sheet(item: $editor) { PlannerEditor(destination: $0, toast: toast, composition: composition) }
+        .sheet(isPresented: $showsSettings) { ShellSettings(diagnostics: diagnostics, composition: composition) }
+        .sheet(isPresented: $showsActivity) { ActivityView(activity: session.activity, flush: { session.ledger.flush(context) }, undo: { session.ledger.undo($0, context: context) }) }
         .task {
             // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.
             try? await Task.sleep(for: .seconds(1.5))
@@ -290,16 +303,16 @@ public struct HomeView: View {
             return
         }
         guard !added.isEmpty else { return }
-        ActivityCenter.record(ActivityEvents.shareImport(count: added.count))
+        session.activity.record(ActivityEvents.shareImport(count: added.count))
         let entries = added.map {
-            Ledger.record(.created, task: $0, title: $0.title, after: LedgerFormat.time($0.due, none: ""), actor: .share,
+            session.ledger.record(.created, task: $0, title: $0.title, after: LedgerFormat.time($0.due, none: ""), actor: .share,
                           channel: .share, context: context)
         }
         toast.show(added.count == 1 ? "Added “\(added[0].title)” from Share" : "Added \(added.count) reminders from Share") {
             // Receipts survive Undo, including when inbox acknowledgment failed.
             added.forEach { context.delete($0) }
             try? context.save()
-            entries.forEach { Ledger.recordUndo(of: $0, context: context) }
+            entries.forEach { session.ledger.recordUndo(of: $0, context: context) }
             #if DEBUG
             shareImportTestState = test?.state(in: context.container, outcome: "undone") ?? ""
             #endif
@@ -320,17 +333,17 @@ public struct HomeView: View {
             Group {
                 switch tab {
                 case .today:
-                    DayAgenda(day: $todayDay, showsWeekStrip: false, openTask: { editor = .task($0) }, openEvent: { editor = .local($0) }) {
+                    DayAgenda(day: $todayDay, showsWeekStrip: false, openTask: { editor = .task($0) }, openEvent: { editor = .local($0) }, openTimer: {
                         clockSection = .timer
                         withAnimation(.snappy) { tab = .clock }
-                    }
+                    }, actions: session.actions, calendar: session.calendar, timers: session.timers, reminders: session.reminders, ledger: session.ledger, travel: session.travel, presentation: presentation)
                 case .calendar:
-                    CalendarView(day: $calendarDay, mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode, calendar: .shared, onOpenTask: { editor = .task($0) }, onOpenAlarm: { editor = .alarm($0) }) { picked in
+                    CalendarView(day: $calendarDay, mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode, calendar: session.calendar, actions: session.actions, ledger: session.ledger, alarms: session.alarms, onOpenTask: { editor = .task($0) }, onOpenAlarm: { editor = .alarm($0) }) { picked in
                         todayDay = picked
                         withAnimation(.snappy) { tab = .today }
                     }
-                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath.performanceAction { $0.isEmpty ? nil : "reminders.list" }, sync: .shared, requestAccess: { await FirstRun.reminders() })
-                case .clock: AlarmsView(section: $clockSection, alarms: .shared, timers: .shared, showUndo: toast.show)
+                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath.performanceAction { $0.isEmpty ? nil : "reminders.list" }, sync: session.reminders, actions: session.actions, ledger: session.ledger, alarms: session.alarms, presentation: presentation, openSettings: composition.openSettings, requestAccess: { await FirstRun.reminders(session.reminders, defaults: session.defaults, arguments: composition.arguments) })
+                case .clock: AlarmsView(section: $clockSection, alarms: session.alarms, timers: session.timers, notifications: session.notifications, soundPreview: session.soundPreview, worldClock: composition.world, stopwatch: composition.stopwatch, now: session.runtime.now, defaults: session.defaults, arguments: composition.arguments, onAlarmCreated: composition.recordCreatedAlarm, showUndo: toast.show)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -349,13 +362,13 @@ public struct HomeView: View {
             keyboardUp = false
         }
         .sensoryFeedback(.selection, trigger: tabSwipes)
-        .sheet(isPresented: $showsSearch) { SearchView { destination in PlannerEditor(destination: destination, toast: toast) } }
-        .sheet(isPresented: $addingCity) { CityPicker(store: .shared) }
+        .sheet(isPresented: $showsSearch) { SearchView(calendar: session.calendar, defaults: session.defaults) { destination in PlannerEditor(destination: destination, toast: toast, composition: composition) } }
+        .sheet(isPresented: $addingCity) { CityPicker(store: composition.world, now: session.runtime.now) }
         .sheet(item: $newItem) { item in
             switch item {
-            case .task: QuickReminderSheet()   // Due-style quick add; editing a reminder opens TaskEditor
-            case .event: EventEditor(day: tab == .calendar ? calendarDay : .now, calendar: .shared)
-            case .alarm: AlarmEditor(showUndo: toast.show).performanceDestination("alarm.editor")
+            case .task: QuickReminderSheet(actions: session.actions, ledger: session.ledger, alarms: session.alarms, activity: session.activity, presentation: presentation)   // Due-style quick add; editing a reminder opens TaskEditor
+            case .event: EventEditor(day: tab == .calendar ? calendarDay : session.runtime.now(), calendar: session.calendar, actions: session.actions, ledger: session.ledger, alarms: session.alarms, presentation: presentation)
+            case .alarm: AlarmEditor(alarms: session.alarms, soundPreview: session.soundPreview, runtime: session.runtime, defaults: session.defaults, onCreated: composition.recordCreatedAlarm).performanceDestination("alarm.editor")
             }
         }
     }
@@ -376,7 +389,7 @@ public struct HomeView: View {
                 Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier("coldStartMs").accessibilityLabel(String(ms))
             }
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-uiTestingSyncDump") { SyncDumpProbe() }
+            if composition.arguments.contains("-uiTestingSyncDump"), let sync = session.reminders as? RemindersSync { SyncDumpProbe(sync: sync) }
             if !shareImportTestState.isEmpty {
                 Text(shareImportTestState).font(.system(size: 1)).opacity(0.01)
                     .accessibilityIdentifier("shareImport.testState")
@@ -386,12 +399,12 @@ public struct HomeView: View {
             #endif
         }
         // Timers follow AlarmKit on every tab, so the Today row appears the moment one starts (also from Siri).
-        .task { await TimerController.shared.watch() }
+        .task { await session.timers.watch() }
         .task(id: reminderSignature) {
             try? await Task.sleep(for: .milliseconds(300))
-            allAlarms.forEach { $0.retireIfRung() }
-            await Reminders.shared.resync()
-            await Ringer.sync(context)
+            allAlarms.forEach { $0.retireIfRung(now: session.runtime.now()) }
+            await session.notifications.resync()
+            await session.alarms.sync(context)
             updateWidgets()
         }
         .onChange(of: QuickAction.shared.pending, initial: true) { _, type in
@@ -405,11 +418,11 @@ public struct HomeView: View {
             }
         }
         .onChange(of: tab) { _, t in
-            UserDefaults.standard.set(t.rawValue, forKey: Self.tabKey)
-            ActivityCenter.record(ActivityEvents.screenOpen(t.rawValue))
+            session.defaults.set(t.rawValue, forKey: Self.tabKey)
+            session.activity.record(ActivityEvents.screenOpen(t.rawValue))
         }
-        .onChange(of: calendarMode) { _, m in UserDefaults.standard.set(m.rawValue, forKey: Self.calendarModeKey) }
-        .onChange(of: clockSection) { _, s in UserDefaults.standard.set(s.rawValue, forKey: Self.clockSectionKey) }
+        .onChange(of: calendarMode) { _, m in session.defaults.set(m.rawValue, forKey: Self.calendarModeKey) }
+        .onChange(of: clockSection) { _, s in session.defaults.set(s.rawValue, forKey: Self.clockSectionKey) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
@@ -423,20 +436,20 @@ public struct HomeView: View {
                 }
                 dropDeletedMirrors()
                 importShared()
-                ActivityCenter.importOutbox()
-                TimerController.shared.refresh()
+                session.activity.importOutbox()
+                session.timers.refresh()
                 autoPlan()
-                Task { await Reminders.shared.resync() }
+                Task { await session.notifications.resync() }
             }
             if phase == .background {
-                Ledger.flush(context)
-                ActivityCenter.flushInBackground()
+                session.ledger.flush(context)
+                session.activity.flushInBackground()
                 updateWidgets()
-                WidgetFeed.scheduleBackgroundRefresh()
+                session.widget.scheduleBackgroundRefresh()
             }
         }
         // An event deleted in Apple Calendar must not linger here: when the system calendar changes, drop the copies it lost.
-        .onChange(of: CalendarSync.shared.version) {
+        .onChange(of: session.calendar.version) {
             dropDeletedMirrors()
             updateWidgets()
         }
@@ -457,57 +470,57 @@ public struct HomeView: View {
             if let prepareData {
                 guard await prepareData(context) else { return }
             } else { SampleData.insertIfNeeded(context) }
-            ListActions.ensureLists(in: context)
+            ListActions.ensureLists(in: context, runtime: session.runtime)
             #if DEBUG
             // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
             let args = ProcessInfo.processInfo.arguments
             if let i = args.firstIndex(of: "-debugDeleteSystemEvent"), i + 1 < args.count {
-                CalendarSync.shared.debugDeleteSystemEvents(titled: args[i + 1])
+                (session.calendar as? CalendarSync)?.debugDeleteSystemEvents(titled: args[i + 1])
             }
             if let i = args.firstIndex(of: "-debugCreateSystemEvent"), i + 1 < args.count {
-                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: false)
+                (session.calendar as? CalendarSync)?.debugCreateSystemEvent(titled: args[i + 1], repeating: false)
             }
             if let i = args.firstIndex(of: "-debugCreateRepeatingEvent"), i + 1 < args.count {
-                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: true)
+                (session.calendar as? CalendarSync)?.debugCreateSystemEvent(titled: args[i + 1], repeating: true)
             }
             #endif
             Self.seedUITestReminder(context)
             importShared()
             // The old SwiftData ledger is copied into the Activity store once; then expired activity is dropped.
             #if DEBUG
-            LedgerMigration.seedLegacyForTests(context: context)
+            LedgerMigration.seedLegacyForTests(context: context, arguments: composition.arguments, runtime: session.runtime)
             #endif
-            LedgerMigration.run(context: context)
-            ActivityCenter.importOutbox()
-            Ledger.prune(context)
+            LedgerMigration.run(context: context, ledger: session.ledger)
+            session.activity.importOutbox()
+            session.ledger.prune(context, now: session.runtime.now())
             #if DEBUG
             // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
-            if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"), GrantStore.active(.planFreeTime, context: context) == nil {
-                GrantStore.grant(.planFreeTime, context: context)
+            if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"), GrantStore.active(.planFreeTime, context: context, now: session.runtime.now()) == nil {
+                GrantStore.grant(.planFreeTime, context: context, ledger: session.ledger, runtime: session.runtime)
             }
             #endif
             autoPlan()
-            await FirstRun.calendar()
+            await FirstRun.calendar(session.calendar, defaults: session.defaults, arguments: composition.arguments)
             if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
         
     }
 
     /// Rewrites the Lock Screen / Home Screen widget snapshot (skipped when nothing changed).
     private func updateWidgets() {
-        WidgetFeed.update(tasks: allTasks, events: allEvents, alarms: allAlarms)
+        session.widget.update(tasks: allTasks, events: allEvents, alarms: allAlarms, now: session.runtime.now(), calendar: session.runtime.calendar)
     }
 
     /// Under a "Plan reminders into free time" grant, today's untimed reminders take their suggested free time by
     /// themselves, with a toast and Undo (see `AutoPlan`). Without a grant this does nothing.
     private func autoPlan() {
-        AutoPlan.run(context: context, toast: toast)
+        AutoPlan.run(context: context, toast: toast, calendar: session.calendar, ledger: session.ledger, runtime: session.runtime)
     }
 
     private func dropDeletedMirrors() {
-        let gone = CalendarSync.shared.removedMirrors(allEvents)
+        let gone = session.calendar.removedMirrors(allEvents)
         guard !gone.isEmpty else { return }
         for event in gone {
-            Ledger.record(.deleted, kind: "event", title: event.title, before: DayLabel.withTime(event.start),
+            session.ledger.record(.deleted, kind: "event", title: event.title, before: DayLabel.withTime(event.start),
                           actor: .agent("Apple Calendar"), channel: .sync, approval: .observed, context: context)
             context.delete(event)
         }
@@ -581,8 +594,9 @@ public struct HomeView: View {
 
     /// A new event: Apple's own editor when Calendar access is on (presented by UIKit, see `NativeEvents`), else ours.
     private func newEvent() {
-        guard CalendarSync.shared.usesNativeEditor else { presentNewItem(.event); return }
-        NativeEvents.edit(start: EventEditor.defaultStart(for: tab == .calendar ? calendarDay : .now))
+        guard session.calendar.usesNativeEditor else { presentNewItem(.event); return }
+        guard let native = session.calendar as? any NativeCalendarService else { presentNewItem(.event); return }
+        native.edit(identifier: nil, start: EventEditor.defaultStart(for: tab == .calendar ? calendarDay : session.runtime.now(), now: session.runtime.now(), calendar: session.runtime.calendar), end: nil, fullOptions: false, onComplete: nil)
     }
 
     /// What + adds right now: the thing this page is about.

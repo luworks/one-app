@@ -18,4 +18,4 @@ runs:
         path: ${{ runner.temp }}/today-artifacts-${{ inputs.lane }}/
         if-no-files-found: warn
         retention-days: 7
-        include-hidden-files: false
+        include-hidden-files: true

@@ -32,7 +32,7 @@ package final class PlannerTestServices {
 
     /// A memory SQLite open can fail; surface it instead of silently dropping Activity recording.
     package init(container: ModelContainer, defaults: UserDefaults, runtime: PlannerRuntime,
-                 arguments: [String]) throws {
+                 arguments: [String], activityStore suppliedActivityStore: ActivityStore? = nil) throws {
         self.container = container; self.defaults = defaults; self.runtime = runtime
         calendar = TestCalendarService(runtime: runtime)
         reminders = TestReminderService(runtime: runtime, arguments: arguments)
@@ -41,7 +41,7 @@ package final class PlannerTestServices {
         notifications = TestNotificationService()
         travel = TestTravelTimes(runtime: runtime)
         soundPreview = TestSoundPreview()
-        activityStore = try ActivityStore(location: .memory)
+        activityStore = try suppliedActivityStore ?? ActivityStore(location: .memory)
         activity = ActivityCenter(store: activityStore, defaults: defaults, runtime: runtime)
         ledger = Ledger(activity: activity, reminders: reminders, runtime: runtime)
         actions = PlannerActions(calendar: calendar, reminders: reminders, alarms: alarms,

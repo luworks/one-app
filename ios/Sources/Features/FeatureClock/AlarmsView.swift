@@ -235,7 +235,7 @@ package struct AlarmsView: View {
         Task {
             if alarmsUndecided { await center.requestAuthorization() }
             if notificationsUndecided {
-                await notifications.requestPermission()
+                _ = await notifications.requestPermission()
                 notificationStatus = await notifications.authorizationStatus()
             }
         }

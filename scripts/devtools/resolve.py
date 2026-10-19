@@ -72,7 +72,7 @@ def run(root, scheme='Today', *, timeout=600):
         if _authority(root) != expected:
             raise ValueError('Dependency authority changed before ownership acquired')
         if not (root / 'ios/Today.xcodeproj/project.pbxproj').is_file():
-            code = commands.generate(root, timeout=timeout)
+            code = commands.generate(root, timeout=timeout, _locked=True)
             if code:
                 return code
         workspace = root / WORKSPACE

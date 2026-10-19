@@ -113,7 +113,7 @@ package struct CaptureStack: View {
                 Spacer()
                 if openCount > 1 {
                     Button("Add all", action: onAddAll)
-                        .disabled(!proposals.contains { $0.status == .open && $0.capture.isReadyToAdd })
+                        .disabled(!proposals.contains { $0.status == .open && $0.capture.isReadyToAdd(calendar: presentation.calendar) })
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .accessibilityIdentifier("capture-add-all")
@@ -156,6 +156,7 @@ package struct CaptureStack: View {
 /// A proposed item in a list of several: title, when, list, and its own Skip and Add. Tap the text to edit it.
 /// Once decided it keeps its place with the state it ended in (see `CardFooter`).
 struct CompactCaptureRow: View {
+    @Environment(PlannerPresentation.self) private var presentation
     @Binding var capture: Capture
     let lists: [String]
     var status: CardStatus = .open
@@ -174,7 +175,7 @@ struct CompactCaptureRow: View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(capture.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-                Text(capture.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(capture.summary(now: presentation.now, calendar: presentation.calendar, locale: presentation.locale)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 if capture.kind == .task, !capture.ringsAsAlarm, !lists.isEmpty {
                     ListMenu(capture: $capture, lists: lists).font(.caption)
                 }
@@ -198,7 +199,7 @@ struct CompactCaptureRow: View {
             .buttonBorderShape(.circle)
             .accessibilityLabel("Add")
             .accessibilityIdentifier("capture-row-add")
-            .disabled(!capture.isReadyToAdd)
+            .disabled(!capture.isReadyToAdd(calendar: presentation.calendar))
         }
         .padding(10)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
@@ -209,7 +210,7 @@ struct CompactCaptureRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 CaptureTitleButton(title: capture.title, editable: status == .added, onSave: onRename)
                     .font(.subheadline.weight(.semibold))
-                Text(capture.summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(capture.summary(now: presentation.now, calendar: presentation.calendar, locale: presentation.locale)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 if capture.kind == .task, !capture.ringsAsAlarm {
                     Label(capture.listLabel, systemImage: "list.bullet").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
@@ -221,7 +222,7 @@ struct CompactCaptureRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(status.accessibilityLabel(for: capture))
+        .accessibilityLabel(status.accessibilityLabel(for: capture, now: presentation.now, calendar: presentation.calendar, locale: presentation.locale))
     }
 }
 

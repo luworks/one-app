@@ -406,6 +406,9 @@
         {
           "path": "Resources/ThirdPartyNotices.txt",
           "buildPhase": "resources"
+        },
+        {
+          "path": "Development/SceneTestCapabilities.swift"
         }
       ],
       "dependencies": [

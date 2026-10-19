@@ -5,13 +5,13 @@ import TodayCore
 import TodayData
 
 extension Capture {
-    package func makeTask() -> OneTask {
-        let timing = taskTiming
+    package func makeTask(calendar: Calendar) -> OneTask {
+        let timing = taskTiming(calendar: calendar)
         let t = OneTask(title: title, plannedStart: timing.plannedStart, durationMinutes: durationMinutes ?? 25, due: timing.due)
         t.note = notes ?? ""
         if let minutes = timing.alertMinutesBefore { t.reminderOffsetMinutes = minutes }
         t.repeatRule = repeatRule
-        t.ringsAsAlarm = ringsAsAlarm && plannedStart != nil
+        t.ringsAsAlarm = ringsAsAlarm && plannedStart(calendar: calendar) != nil
         if let listName { t.listName = listName }
         return t
     }
@@ -19,7 +19,7 @@ extension Capture {
     /// An alarm request becomes a real alarm (Alarms tab) when it can be one: it rings within the next day, or repeats
     /// daily / on selected weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
     package func makeAlarm(now: Date, calendar cal: Calendar) -> OneAlarm? {
-        guard kind == .task, ringsAsAlarm, let start = plannedStart else { return nil }
+        guard kind == .task, ringsAsAlarm, let start = plannedStart(calendar: cal) else { return nil }
         let weekdays: [Int]
         switch repeatRule.flatMap(RepeatRule.init(rawValue:)) {
         case nil:
@@ -39,7 +39,7 @@ extension Capture {
     }
 
     package func makeEvent(calendar: Calendar) -> OneEvent {
-        let start = plannedStart ?? calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
+        let start = plannedStart(calendar: calendar) ?? calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
         let e = OneEvent(title: title, start: isAllDay ? day : start, durationMinutes: isAllDay ? 1440 : durationMinutes ?? 60)
         e.note = notes ?? ""
         e.isAllDay = isAllDay
@@ -63,7 +63,7 @@ extension Capture {
         let model: any PersistentModel
         switch kind {
         case .task:
-            if let alarm = makeAlarm(now: runtime.now(), calendar: runtime.calendar) { model = alarm } else { model = makeTask() }
+            if let alarm = makeAlarm(now: runtime.now(), calendar: runtime.calendar) { model = alarm } else { model = makeTask(calendar: runtime.calendar) }
         case .event: model = makeEvent(calendar: runtime.calendar)
         }
         if let task = model as? OneTask { task.createdAt = runtime.now() }

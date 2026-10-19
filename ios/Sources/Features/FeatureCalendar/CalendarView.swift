@@ -1423,7 +1423,7 @@ private struct DraggableTaskBlock<Content: View>: View {
                         let cal = presentation.calendar
                         let moved = cal.date(byAdding: .minute, value: minutes, to: start)
                             .flatMap { cal.date(byAdding: .day, value: days, to: $0) }
-                        withAnimation(.snappy) { actions.setPlanned(task, to: moved ?? start, context: context) }
+                        _ = withAnimation(.snappy) { actions.setPlanned(task, to: moved ?? start, context: context) }
                     }
             )
             .sensoryFeedback(.impact(weight: .medium), trigger: lifted) { _, up in up }

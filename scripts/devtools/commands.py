@@ -52,7 +52,10 @@ def tool(root, name):
     raise BootstrapError('Missing verified ' + name + '; run ./dev bootstrap')
 
 
-def generate(root, timeout=600):
+def generate(root, timeout=600, *, _locked=False):
+    if not _locked:
+        with host_lock(root), dd_lock(root):
+            return generate(root, timeout, _locked=True)
     result = execute(root, [tool(root, 'xcodegen'), 'generate', '--spec', 'ios/project.yml'], timeout=timeout)
     if result.returncode:
         return result.returncode
@@ -65,20 +68,23 @@ def generate(root, timeout=600):
 
 
 def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=False):
-    current = fingerprint(root, configuration=configuration)
     operation = 'build-for-testing' if testing else 'build'
     command = ['xcodebuild', operation, '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
                '-configuration', configuration, '-destination', 'generic/platform=iOS Simulator',
                '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64']
     with host_lock(root), dd_lock(root):
+        code = generate(root, timeout, _locked=True)
+        if code:
+            return code
+        current = fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64')
         from .resolve import locked_arguments
         command += locked_arguments(root)
         result = execute(root, command, timeout=timeout)
         if result.returncode:
             return result.returncode
         product = {'Today': 'One', 'TodayMock': 'TodayMock', 'TodayWorkbench': 'TodayWorkbench'}[scheme]
-        executable = derived_data(root) / f'Build/Products/{configuration}-iphonesimulator/{product}.app/{product}'
-        if not executable.is_file() or fingerprint(root, configuration=configuration) != current:
+        executable = derived_data(root) / f'Build/Products/{configuration}-iphonesimulator/{product}.app'
+        if not executable.is_dir() or fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64') != current:
             raise ValueError('Missing executable or source changed during build; provenance rejected')
         record_build(root, current, [executable], returncode=result.returncode)
     return 0
@@ -102,15 +108,24 @@ def test(root, group, *, only=(), timeout=600, full=False, _locked=False):
             raise ValueError('release collection requires explicit --full')
         # One host-heavy owner for the whole frozen final collection. Never retry.
         with host_lock(root), dd_lock(root):
+            generated = generate(root, timeout, _locked=True)
+            if generated:
+                return generated
             first = test(root, 'unit', timeout=timeout, _locked=True)
             code = xcode_tests.run(root, testing_contract(root), ['ios-unit', 'integration', 'snapshot'],
-                                   timeout=timeout, locked=True)
+                                   timeout=timeout, locked=True, reuse=True)
             first = first or code
             code = test(root, 'ui', timeout=timeout, full=True, _locked=True)
             return first or code
     contract = testing_contract(root)
     if group in ('ios-unit', 'integration', 'snapshot'):
-        return xcode_tests.run(root, contract, [group], only=only, timeout=timeout, locked=_locked)
+        if not _locked:
+            with host_lock(root), dd_lock(root):
+                return test(root, group, only=only, timeout=timeout, _locked=True)
+        generated = generate(root, timeout, _locked=True)
+        if generated:
+            return generated
+        return xcode_tests.run(root, contract, [group], only=only, timeout=timeout, locked=True, reuse=True)
     if group == 'unit':
         source = contract.inventory(root)
         plan = contract.plan(['unit'], source)

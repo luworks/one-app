@@ -7,16 +7,13 @@ import TodayScenes
 @MainActor
 struct WorkbenchApp: App {
     private let launch: Result<SceneConfiguration, any Error>
-    private let runtime: SceneCatalogRuntime
 
     init() {
         launch = Result { try SceneRegistry.configuration(arguments: ProcessInfo.processInfo.arguments) }
-        // Fail closed until root provides prepare/makeServices/dispose for the real sandbox.
-        runtime = .isolatedFeatures
     }
 
     var body: some Scene {
-        WindowGroup { WorkbenchRoot(launch: launch, runtime: runtime) }
+        WindowGroup { WorkbenchRoot(launch: launch) }
     }
 }
 #endif
@@ -29,7 +26,6 @@ import UIKit
 @MainActor
 struct WorkbenchRoot: View {
     let launch: Result<SceneConfiguration, any Error>
-    let runtime: SceneCatalogRuntime
     @State private var selected: TodaySceneID
     @State private var scenario: SceneScenario
     @State private var appearance = "system"
@@ -44,9 +40,8 @@ struct WorkbenchRoot: View {
     private let requestedScene: String
     private let requestedScenario: String
 
-    init(launch: Result<SceneConfiguration, any Error>, runtime: SceneCatalogRuntime = .isolatedFeatures) {
+    init(launch: Result<SceneConfiguration, any Error>) {
         self.launch = launch
-        self.runtime = runtime
         let arguments = ProcessInfo.processInfo.arguments
         let optionsResult = Result { try WorkbenchLaunchOptions(arguments: arguments) }
         launchOptions = optionsResult
@@ -166,7 +161,7 @@ struct WorkbenchRoot: View {
                 now: original?.now ?? Date(timeIntervalSince1970: 1_792_339_200),
                 uuidSeed: original?.uuidSeed ?? 42,
                 timeZoneIdentifier: original?.timeZoneIdentifier ?? "America/Los_Angeles", localeIdentifier: locale)
-            return try SceneSession(configuration: configuration, runtime: runtime)
+            return try SceneSession(configuration: configuration)
         }
         if case .failure = result { writeReceipt(status: "failed") }
     }

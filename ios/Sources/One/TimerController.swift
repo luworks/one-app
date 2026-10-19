@@ -73,21 +73,20 @@ package final class TimerController: TimerService {
         let previous = phase == nil ? nil : timers.first { $0.isCard }
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { message = "Timers need iOS 26 or later."; return nil }
-        let manager = driver.manager
-        if manager.authorizationState == .notDetermined { await driver.requestAuthorization() }
-        guard manager.authorizationState == .authorized else {
+        if driver.manager.authorizationState == .notDetermined { await driver.requestAuthorization() }
+        guard driver.manager.authorizationState == .authorized else {
             message = "Timers need alarm access. Allow alarms for Today in Settings."
             return nil
         }
-        if let previous { try? manager.cancel(id: previous.id) }
+        if let previous { try? driver.manager.cancel(id: previous.id) }
         // Saved before scheduling so a sync that runs on the AlarmKit update keeps it.
         driver.claimTimer(id)
         defer { driver.releaseTimer(id) }
         set(TimerList.adding(timer, to: timers))
         do {
-            _ = try await manager.schedule(id: id, configuration: Self.configuration(for: timer, sound: sound))
+            _ = try await driver.manager.schedule(id: id, configuration: Self.configuration(for: timer, sound: sound))
             guard !Task.isCancelled, timers.contains(where: { $0.id == id }) else {
-                try? manager.cancel(id: id)
+                try? driver.manager.cancel(id: id)
                 set(timers.filter { $0.id != id })
                 return nil
             }

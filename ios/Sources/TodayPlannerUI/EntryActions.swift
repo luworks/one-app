@@ -51,9 +51,9 @@ package struct EntryActions: ViewModifier {
             Button { withAnimation { task.flagged.toggle() } } label: {
                 Label(task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }
-            Button { withAnimation { actions.setPlanned(task, to: plannerMove(task, tomorrow: false, now: presentation.now, calendar: presentation.calendar), context: context) } } label: { Label("Today", systemImage: "calendar") }
-            Button { withAnimation { actions.setPlanned(task, to: plannerMove(task, tomorrow: true, now: presentation.now, calendar: presentation.calendar), context: context) } } label: { Label("Tomorrow", systemImage: "sunrise") }
-            Button { withAnimation { actions.setPlanned(task, to: nil, context: context) } } label: { Label("Unschedule", systemImage: "calendar.badge.minus") }
+            Button { _ = withAnimation { actions.setPlanned(task, to: plannerMove(task, tomorrow: false, now: presentation.now, calendar: presentation.calendar), context: context) } } label: { Label("Today", systemImage: "calendar") }
+            Button { _ = withAnimation { actions.setPlanned(task, to: plannerMove(task, tomorrow: true, now: presentation.now, calendar: presentation.calendar), context: context) } } label: { Label("Tomorrow", systemImage: "sunrise") }
+            Button { _ = withAnimation { actions.setPlanned(task, to: nil, context: context) } } label: { Label("Unschedule", systemImage: "calendar.badge.minus") }
         } else {
             Button { edit(entry) } label: { Label("Edit", systemImage: "pencil") }
         }

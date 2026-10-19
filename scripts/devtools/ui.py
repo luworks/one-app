@@ -12,7 +12,7 @@ import time
 import uuid
 
 from .core import (ResourceLock, atomic_json, dd_lock, derived_data, host_lock,
-                   probe, read_json, state_root, worktree_id)
+                   probe, read_json, state_root, worktree_id, fingerprint, record_build)
 from .process import Evidence, Redactor, run_process
 from .xcode_tests import DEVICE, RUNTIME, simulator_name
 from scripts.gallery.adapter import CaptureIdentity, Manifest, identifier, validate_png
@@ -216,6 +216,12 @@ def _perform(root, scene, scenario, output, appearance, type_size, locale, timeo
             raise ValueError('Capture output must be a new PNG with a new adjacent JSON receipt')
         output.parent.mkdir(parents=True, exist_ok=True)
     with _cancellation(native.cancel), _locks(root):
+        from . import commands
+        generated = commands.generate(root, timeout=native.check(), _locked=True)
+        if generated:
+            raise RuntimeError('Workbench project generation failed')
+        native.check()
+        identity = fingerprint(root, scheme='TodayWorkbench', architecture='arm64')
         manifest, inputs, before = _export(native)
         manifest.scene(scene, scenario)
         from .resolve import locked_arguments
@@ -226,6 +232,9 @@ def _perform(root, scene, scenario, output, appearance, type_size, locale, timeo
         app = derived_data(root) / 'Build/Products/Debug-iphonesimulator/TodayWorkbench.app'
         if not app.is_dir():
             raise ValueError('TodayWorkbench build product is missing')
+        if fingerprint(root, scheme='TodayWorkbench', architecture='arm64') != identity:
+            raise ValueError('Workbench source or toolchain changed during build')
+        record_build(root, identity, [app], returncode=0)
         udid, booted, lease_path = _device(native)
         success = False
         temporary = None

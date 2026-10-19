@@ -116,12 +116,8 @@ public final class LocalDiagnostics: NSObject, MXMetricManagerSubscriber {
     nonisolated public func didReceive(_ payloads: [MXDiagnosticPayload]) {}
 
     /// Creates/replaces one sanitized local file. No log archive or raw MetricKit payload is exported.
-    public func exportURL() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "TodayDiagnostics", isDirectory: true
-        )
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("today-diagnostics.json")
+    public func exportURL(to url: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try report.data()
         #if os(iOS)
         try data.write(to: url, options: [.atomic, .completeFileProtection])

@@ -130,7 +130,7 @@ package enum TaskActions {
             guard !task.isDeleted, task.modelContext != nil else { return }
             let undoDone = task.isDone
             let undoDoneAt = task.doneAt
-            do { try reminders.commitCompletion(task, done: false, restoringDue: oldDue, restoresDue: true, expected: accepted) }
+            do { _ = try reminders.commitCompletion(task, done: false, restoringDue: oldDue, restoresDue: true, expected: accepted) }
             catch {
                 toast?.showNotice("Couldn’t reopen in Apple Reminders. " + error.localizedDescription)
                 return

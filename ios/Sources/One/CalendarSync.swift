@@ -813,13 +813,15 @@ package struct NativeEventEditor: UIViewControllerRepresentable {
 
     package func makeCoordinator() -> Coordinator { Coordinator(calendar: calendar, dismiss: { dismiss() }) }
 
-    package final class Coordinator: NSObject, EKEventEditViewDelegate {
+    @MainActor
+    // EventKitUI invokes editor delegates on the UI thread; its SDK protocol lacks actor annotations.
+    package final class Coordinator: NSObject, @preconcurrency EKEventEditViewDelegate {
         let calendar: any CalendarService
         let dismiss: () -> Void
         init(calendar: any CalendarService, dismiss: @escaping () -> Void) { self.calendar = calendar; self.dismiss = dismiss }
         package func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
             Logger(subsystem: "com.luworks.one", category: "calendar").info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
-            Task { @MainActor in self.calendar.refresh() }
+            calendar.refresh()
             dismiss()
         }
     }
