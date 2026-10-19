@@ -1,4 +1,7 @@
 import SwiftUI
+import TodayCore
+import TodayDesignSystem
+import TodayPlatform
 
 /// The Health sheet's state: which metrics are shown (saved), and their chart history and trailing lookback from Apple Health (memory only).
 /// Today never writes to Apple Health; nothing here goes to SwiftData, the widget snapshot or disk, except the choice
@@ -9,39 +12,38 @@ import SwiftUI
 /// shows "—" with a quiet line and an action. The list itself is always on screen.
 @MainActor
 @Observable
-final class HealthModel {
-    static let days = MovingAverage.historyDays
-    /// One model for every Health sheet (Today line, Settings), so a reopened sheet starts from what was already read.
-    static let shared = HealthModel()
+public final class HealthModel {
+    public static let days = MovingAverage.historyDays
 
-    private let source: HealthSource
+    private let source: any HealthSource
     private let store: HealthSelectionStore
     private let timeout: Double
-    private(set) var selection: HealthSelection
-    private(set) var series: [HealthMetric: HealthSeries] = [:]
+    public private(set) var selection: HealthSelection
+    public private(set) var series: [HealthMetric: HealthSeries] = [:]
     /// Per metric: waiting, answered, or failed. A metric not listed has not started yet and counts as waiting.
-    private(set) var states: [HealthMetric: HealthMetricState] = [:]
+    public private(set) var states: [HealthMetric: HealthMetricState] = [:]
     /// lb or kg, mi or km: what Apple Health is set to (the region until it has answered).
-    private(set) var units = HealthUnits()
+    public private(set) var units = HealthUnits()
     /// The latest fetch started for each metric; an older fetch that answers late must not overwrite a newer answer.
     @ObservationIgnored private var generation: [HealthMetric: Int] = [:]
 
-    init(source: HealthSource = HealthSources.current(), store: HealthSelectionStore = .shared, timeout: Double = HealthTimeout.seconds) {
+    /// App assembly owns one model for the Today line and every Health sheet. Workbench supplies its own source.
+    public init(source: any HealthSource, store: HealthSelectionStore = .shared, timeout: Double = HealthTimeout.seconds) {
         self.source = source
         self.store = store
         self.timeout = timeout
         selection = store.selection
     }
 
-    var isAvailable: Bool { source.isAvailable }
+    public var isAvailable: Bool { source.isAvailable }
     /// The page shows made-up numbers (UI tests and the simulator).
-    var isSample: Bool { source.isSample }
+    public var isSample: Bool { source.isSample }
 
-    func state(for metric: HealthMetric) -> HealthMetricState { states[metric] ?? .loading }
+    public func state(for metric: HealthMetric) -> HealthMetricState { states[metric] ?? .loading }
 
     /// Opening the sheet, pull to refresh, and the app becoming active again (which also asks again for access that
     /// was never answered).
-    func load() async {
+    public func load() async {
         guard source.isAvailable else { return }
         async let preferred: Void = refreshUnits()
         await run(selection.shown)
@@ -50,7 +52,7 @@ final class HealthModel {
 
     /// Adds metrics at the end, then asks Apple Health for those types only (the caller has dismissed the picker, so
     /// Apple's sheet can show), then reads them. The new rows are on screen at once, each with its own spinner.
-    func add(_ metrics: [HealthMetric]) async {
+    public func add(_ metrics: [HealthMetric]) async {
         let fresh = metrics.filter { !selection.shown.contains($0) }
         guard !fresh.isEmpty else { return }
         update { $0.add(fresh) }
@@ -58,7 +60,7 @@ final class HealthModel {
     }
 
     /// "Allow" / "Try Again" on one row.
-    func retry(_ metric: HealthMetric) async {
+    public func retry(_ metric: HealthMetric) async {
         states[metric] = .loading
         await run([metric])
     }
@@ -99,13 +101,13 @@ final class HealthModel {
     }
 
     /// Hides the row only. Nothing is deleted from Apple Health.
-    func hide(_ metric: HealthMetric) { update { $0.hide(metric) } }
+    public func hide(_ metric: HealthMetric) { update { $0.hide(metric) } }
 
-    func move(in group: HealthGroup, from source: IndexSet, to destination: Int) {
+    public func move(in group: HealthGroup, from source: IndexSet, to destination: Int) {
         update { $0.move(in: group, from: source, to: destination) }
     }
 
-    func nudge(_ metric: HealthMetric, by step: Int) { update { $0.nudge(metric, by: step) } }
+    public func nudge(_ metric: HealthMetric, by step: Int) { update { $0.nudge(metric, by: step) } }
 
     private func update(_ change: (inout HealthSelection) -> Void) {
         var next = selection
@@ -114,7 +116,7 @@ final class HealthModel {
         store.save(next)
     }
 
-    func row(for metric: HealthMetric) -> HealthRowModel {
+    public func row(for metric: HealthMetric) -> HealthRowModel {
         HealthRowModel(metric: metric, series: series[metric], now: TodayClock.now, units: units)
     }
 }

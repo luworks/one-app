@@ -1,12 +1,19 @@
 import SwiftUI
+import TodayCore
+import TodayDesignSystem
+import TodayPlatform
 
 /// All supported metrics with their current visibility. Changes are saved when the sheet closes;
 /// new read-access requests wait until dismissal so Apple's permission sheet can appear safely.
-struct HealthMetricPicker: View {
+public struct HealthMetricPicker: View {
     @Binding var shown: Set<HealthMetric>
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
+    public init(shown: Binding<Set<HealthMetric>>) {
+        self._shown = shown
+    }
+
+    public var body: some View {
         NavigationStack {
             List {
                 ForEach(HealthGroup.allCases, id: \.self) { group in

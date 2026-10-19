@@ -1,9 +1,12 @@
 import SwiftUI
 import Charts
+import TodayCore
+import TodayDesignSystem
+import TodayPlatform
 
 /// One metric in detail: the latest value, a 7 / 30 / 90 day switch, a chart and plain range facts.
 /// Reading metrics also show a trailing average and its range change. No generated summary, goal or advice.
-struct HealthMetricDetail: View {
+public struct HealthMetricDetail: View {
     let metric: HealthMetric
     let series: HealthSeries
     let now: Date
@@ -12,6 +15,14 @@ struct HealthMetricDetail: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var days = 30
+
+    public init(metric: HealthMetric, series: HealthSeries, now: Date, units: HealthUnits = HealthUnits(), calendar: Calendar = .current) {
+        self.metric = metric
+        self.series = series
+        self.now = now
+        self.units = units
+        self.calendar = calendar
+    }
 
     private var latest: HealthPoint? { series.latest }
     private var points: [HealthPoint] { HealthStats.points(series, days: days, now: now, calendar: calendar) }
@@ -24,7 +35,7 @@ struct HealthMetricDetail: View {
                                     days: HealthWindow(days: days, now: now, calendar: calendar), calendar: calendar)
     }
 
-    var body: some View {
+    public var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -226,11 +237,3 @@ struct HealthMetricDetail: View {
         .accessibilityIdentifier("health.fact.\(title.lowercased())")
     }
 }
-
-#if DEBUG
-#Preview("Weight trend") {
-    HealthMetricDetail(metric: .weight,
-                       series: HealthSampleSeries.series(for: .weight, now: PreviewFixtures.healthNow),
-                       now: PreviewFixtures.healthNow)
-}
-#endif

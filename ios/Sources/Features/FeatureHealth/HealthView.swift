@@ -1,4 +1,7 @@
 import SwiftUI
+import TodayCore
+import TodayDesignSystem
+import TodayPlatform
 
 /// The Health sheet: a dense list of the metrics the user chose, one rounded container per group (Activity, Sleep &
 /// Recovery, Body). Each row is the metric's name, its latest value with a quiet date label and a 7-day sparkline;
@@ -6,13 +9,17 @@ import SwiftUI
 /// Editing has no Edit button, like everywhere in the app: swipe a row for Hide, long-press for Hide / Move Up /
 /// Move Down, press, hold and drag to reorder inside a group, and Manage Metrics (also in the ··· menu)
 /// offers visibility switches for every supported metric.
-struct HealthView: View {
+public struct HealthView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
-    private let model = HealthModel.shared
+    private let model: HealthModel
     @State private var detail: HealthMetric?
     @State private var adding = false
     @State private var visibleMetrics: Set<HealthMetric> = []
+
+    public init(model: HealthModel) {
+        self.model = model
+    }
 
     private func manageMetrics() {
         PerformanceTrace.shared.beginPage("health.picker")
@@ -20,7 +27,7 @@ struct HealthView: View {
         adding = true
     }
 
-    var body: some View {
+    public var body: some View {
         List {
             if !model.isAvailable {
                 unavailable
