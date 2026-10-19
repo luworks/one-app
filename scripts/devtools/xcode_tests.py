@@ -178,7 +178,11 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                 if not owned:
                     owned = True
                     capture(['xcrun', 'simctl', 'boot', simulator])
-                capture(['xcrun', 'simctl', 'bootstatus', simulator, '-b'])
+                # Routine CI's separate readiness process returned "already
+                # booted" after ~118s. XCTest owns destination readiness and
+                # must still produce every fresh selected leaf before passing.
+                if not native_test_options():
+                    capture(['xcrun', 'simctl', 'bootstatus', simulator, '-b'])
                 result = invoke([*command,
                                  '-destination', 'platform=iOS Simulator,id=' + simulator,
                                  '-derivedDataPath', str(derived_data(root)), '-resultBundlePath', str(bundle),

@@ -456,3 +456,77 @@ PR107 v8 run `39308893134` remains owned by the parent watch; this change must n
 cancel its first result. New integrated checks are required before merge and before
 PR108 adopts the common CI fix. The 300-second goal and warm-cache benefit remain
 unproven. Raw evidence stays in primary `tests/results/ci-hillclimb-20261019/`.
+
+### Iteration 12 closure and iteration 13 readiness experiment
+
+[PR107 run 39315917099](https://github.com/luworks/one-app/actions/runs/39315917099)
+completed success at source head `5c306a9`. Actual closed reports identify
+integrated SHA `5cd070d3d1c0b11b65303ebc8d759edadbfcad7a`, parents
+`324760c` and `5c306a9`. All ten required workflow jobs succeeded; five optional
+jobs were event-exempt skips. Seven closed reports retain business 680 passes
+plus four authorized skips (684 expected), integration 13/13, snapshots 6/6,
+core UI 7/7, format 324 inputs, lint three checks and build three products.
+Failed/cancelled/missing/unexpected skips/errors are zero. All 207 published file
+hashes/sizes and complete xcresult membership match the closed manifests.
+PR107 merged normally as `dc25cb08869fbdde4502d9e728bd7d375df6cb36` at
+20:20:31 UTC; its clean merge tree `1011a36edd636736c2a074ce2c040b04b0d1f42e`
+exactly matches that tested integrated tree. Main run **39318500418** is a
+separate acceptance run, pending at handoff; it also exercises the first main
+cache publication. PR-scoped caches do not establish a main warm hit.
+
+Creation 20:02:11 to required completion 20:17:35 is **924 seconds**, including
+queue. Core UI waited 50 seconds after prerequisites. Native build processes
+were integration 87.531s, snapshots 72.673s and core UI 101.767s; explicit
+resolve cost was 37.277/35.625/24.644s. Core build stdout arrived at resolve
+0.952s and first SwiftDriver 8.244s, versus prior failed run's 424.785/503.935s.
+On the same three-CPU runner class, current successful owned process samples
+show core one-minute load 5.38 to 14.47 and active compiler CPU samples around
+68–75%; prior early process probes timed out and load rose above 600. Those
+prior samples cannot attribute CPU wait or the load producer. Changed startup
+ordering and different host load coexist; this is not proof of sole causality.
+
+All three compiler module restores **missed**. Planning/restore took respectively
+0.850/0.534s, 0.638/0.342s and 0.438/0.289s. Successful cache saves took
+3.446/4.538/5.959s; snapshots/core compressed payloads were 152,203,608 and
+113,946,057 bytes. No warm compiler saving is established. A subsequent compatible
+main source change must measure restore cost and real rebuild/test phases;
+configuration/dependency changes intentionally invalidate the partition. Release
+never restores this routine cache. Remove transport if measured transfer and
+setup outweigh validated compiler savings; do not cache products or results.
+
+Current explicit simulator boot commands cost 6.716/39.368/6.794s; subsequent
+bootstatus calls cost 118.554/115.389/117.238s and each reported only
+`Device already booted, nothing to do.` Integration/snapshot test commands took
+185.410/94.554s, while their XCTest sessions were 32.771/30.745s. Core runner
+took 772.716s; seven bodies took 271.116s, session 307.388s. Per-method body
+seconds: Ask preview/Apply 80.157, Calendar alarm editor 38.239, add timed task
+32.873, complete/Undo 20.224, durable Share/replay 48.892, task drag 23.638,
+event menu 27.093. Session duration excludes additional startup/install/background
+work; existing timestamps do not isolate its individual causes. Even zero-cost
+build cannot currently satisfy the total 300-second budget with this session.
+
+Iteration 13 removes the separate bootstatus subprocess only for the existing
+routine synthetic native mode. Build-before-boot, owned boot/shutdown, all seven
+core journeys and fresh completed leaf reconciliation remain required. XCTest
+owns destination readiness; a failed session, missing leaves or zero execution
+still fails. Local/nonroutine commands retain explicit readiness. Hypothesis:
+avoid a redundant expensive CoreSimulator query; any wait may instead move into
+XCTest, so no time saving is claimed until the next actual integrated run.
+There is no new flag, service, job, selector or cache trust change. Existing helper
+coverage pairs successful fresh dispatch with zero-result rejection and retains
+local readiness ordering. Its first run also exposed a preexisting 300ms shell
+startup race in the diagnostic fixture; a bounded synthetic clock now triggers
+the same timeout after output instead of relying on scheduler speed. Production
+timeouts are unchanged. No local native/simulator or phone run occurred.
+
+Raw current success evidence is under primary
+`tests/results/ci-hillclimb-20261019/run39315917099-closure/`; older
+`iteration12-closed/` belongs to the prior failed integrated SHA `b94dbef` and
+remains untouched. The QA journal indexes the current closure and first/final
+helper logs. Formal Release, accessibility, signing and physical-device gaps
+remain open; green PR CI does not close them. **300 seconds remains unmet.**
+
+Verification: final `./dev test helpers` passed 138 host regressions;
+`./dev lint` and `git diff --check` passed. First diagnostic-fixture failure
+and both corrected runs are retained. This is helper evidence, not a native
+readiness or speed acceptance result; the next integrated CI run owns that gate.
