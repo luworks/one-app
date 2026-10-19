@@ -13,10 +13,45 @@ final class TabMemoryTests: XCTestCase {
   }
 
   private func capture(_ name: String) {
+    // Retain a still after the native tab transition, rather than its crossfade.
+    Thread.sleep(forTimeInterval: 0.8)
     let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
     image.name = name
     image.lifetime = .keepAlways
     add(image)
+  }
+
+  func testBottomBarAppearanceCaptures() {
+    var app = navigationApp(["-appearance", "light"])
+    capture("navigation-final-today")
+    app.buttons["New"].tap()
+    XCTAssertTrue(app.buttons["New alarm"].waitForExistence(timeout: 3))
+    capture("navigation-final-menu")
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
+    XCTAssertTrue(app.buttons["New alarm"].waitForNonExistence(timeout: 3))
+    app.terminate()
+
+    app = navigationApp(["-appearance", "dark"])
+    app.buttons["Calendar"].tap()
+    XCTAssertTrue(app.buttons["Calendar"].isSelected)
+    XCTAssertEqual(app.buttons["New"].label, "New event")
+    capture("navigation-final-calendar-dark")
+    app.terminate()
+
+    app = navigationApp([
+      "-appearance", "light", "-UIPreferredContentSizeCategoryName",
+      "UICTContentSizeCategoryAccessibilityXXXL",
+    ])
+    let controls = [
+      app.buttons["Today"], app.buttons["Ask AI or add anything"], app.buttons["New"],
+    ]
+    for button in controls {
+      XCTAssertTrue(button.isHittable)
+      XCTAssertTrue(app.frame.contains(button.frame))
+      XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+      XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+    }
+    capture("navigation-final-largest-type")
   }
 
   func testTodayBottomControlsAndCreationMenuCancel() {
@@ -34,6 +69,16 @@ final class TabMemoryTests: XCTestCase {
     }
     XCTAssertEqual(plus.label, "Add to Today")
     capture("navigation-after-today")
+    chat.tap()
+    let input = app.textFields["Ask AI or add anything"].firstMatch
+    XCTAssertTrue(
+      input.waitForExistence(timeout: 3) || app.textViews.firstMatch.waitForExistence(timeout: 3))
+    XCTAssertFalse(
+      today.isHittable, "full-screen Chat owns interaction instead of the selected tab")
+    capture("navigation-after-chat")
+    app.buttons["Close"].tap()
+    XCTAssertTrue(plus.waitForExistence(timeout: 5))
+    XCTAssertTrue(today.isSelected)
     for (choice, editor) in [
       ("New alarm", "Add Alarm"), ("New reminder", "quick.title"), ("New event", "Title"),
     ] {
@@ -58,6 +103,22 @@ final class TabMemoryTests: XCTestCase {
     app.buttons["Cancel"].firstMatch.tap()
     XCTAssertTrue(plus.waitForExistence(timeout: 5))
     XCTAssertEqual(app.buttons.matching(identifier: "alarm.row").count, before)
+
+    app.terminate()
+    app.launchArguments += [
+      "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+    ]
+    app.launch()
+    XCTAssertTrue(plus.waitForExistence(timeout: 10))
+    for button in [today, chat, plus] {
+      XCTAssertTrue(button.isHittable, "bottom controls remain reachable at largest Dynamic Type")
+      XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+      XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+      XCTAssertTrue(app.frame.contains(button.frame))
+    }
+    XCTAssertLessThanOrEqual(today.frame.maxX, chat.frame.minX)
+    XCTAssertLessThanOrEqual(chat.frame.maxX, plus.frame.minX)
+    capture("navigation-after-largest-type")
   }
 
   func testContextualCreationKeepsListAndTabSwipes() {
@@ -99,7 +160,14 @@ final class TabMemoryTests: XCTestCase {
     XCTAssertTrue(
       app.buttons["List, Reminders"].waitForExistence(timeout: 5),
       "explicit default list must not fall back to the Work preference")
-    app.buttons["Cancel"].tap()
+    app.descendants(matching: .any)["quick.title"].firstMatch.typeText(
+      "Explicit default list reminder")
+    app.buttons["quick.save"].tap()
+    XCTAssertTrue(app.buttons["quick.save"].waitForNonExistence(timeout: 5))
+    XCTAssertTrue(
+      app.staticTexts["Explicit default list reminder"].waitForExistence(timeout: 5),
+      "Save writes into the explicit default list instead of the Work preference")
+    XCTAssertTrue(plus.waitForExistence(timeout: 5))
     today.tap()
     XCTAssertTrue(today.isSelected)
     // The bottom bar still traverses all four logical tabs after Today moved out of the top row.

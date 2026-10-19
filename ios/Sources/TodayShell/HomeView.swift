@@ -734,14 +734,15 @@
           .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
       }
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-      .background(alignment: .bottom) {
-        // Fade the list out under the floating bar so text never collides with it.
+      // Scroll content can extend beneath the safe-area inset. Keep it out of the controls.
+      .background(Color(.systemBackground))
+      .overlay(alignment: .top) {
         LinearGradient(
           colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
-          startPoint: .top, endPoint: .center
+          startPoint: .top, endPoint: .bottom
         )
-        .frame(height: 110)
-        .offset(y: 40)
+        .frame(height: 24)
+        .offset(y: -24)
         .allowsHitTesting(false)
       }
     }
