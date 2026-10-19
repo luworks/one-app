@@ -20,9 +20,13 @@ package struct SettingsView: View {
     }
 
     private let selection: Selection
-    private let calendar: CalendarSync
-    private let reminders: RemindersSync
-    private let notifications: Reminders
+    private let calendar: any CalendarService
+    private let reminders: any ReminderService
+    private let notifications: any NotificationService
+    private let alarms: any AlarmService
+    private let ledger: Ledger
+    private let openSettings: @MainActor () -> Void
+    private let rewriteWidgets: @MainActor () -> Void
     private let diagnostics: LocalDiagnostics
     private let calendars: @MainActor () -> AnyView
     private let holidays: @MainActor () -> AnyView
@@ -32,7 +36,10 @@ package struct SettingsView: View {
 
     package init(
         selection: Selection = .all,
-        calendar: CalendarSync, reminders: RemindersSync, notifications: Reminders,
+        calendar: any CalendarService, reminders: any ReminderService, notifications: any NotificationService,
+        alarms: any AlarmService, ledger: Ledger,
+        openSettings: @escaping @MainActor () -> Void,
+        rewriteWidgets: @escaping @MainActor () -> Void,
         diagnostics: LocalDiagnostics,
         calendars: @escaping @MainActor () -> AnyView,
         holidays: @escaping @MainActor () -> AnyView,
@@ -40,6 +47,10 @@ package struct SettingsView: View {
         shareDiagnostics: @escaping @MainActor (URL) -> AnyView,
         reset: @escaping @MainActor (ModelContext) -> Void
     ) {
+        self.alarms = alarms
+        self.ledger = ledger
+        self.openSettings = openSettings
+        self.rewriteWidgets = rewriteWidgets
         self.selection = selection
         self.calendar = calendar
         self.reminders = reminders
@@ -55,7 +66,7 @@ package struct SettingsView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.modelContext) private var context
 
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.default.rawValue
@@ -101,7 +112,7 @@ package struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task {
-                Ledger.flush(context)
+                ledger.flush(context)
                 notificationStatus = await notifications.authorizationStatus()
             }
             .onChange(of: calendarOn) { _, on in
@@ -112,7 +123,7 @@ package struct SettingsView: View {
                 }
             }
             .onChange(of: travelTime) { _, _ in
-                WidgetFeed.rewriteFromStore()   // add or drop "Leave by" on the widget
+                rewriteWidgets()   // add or drop "Leave by" on the widget
             }
             .onChange(of: remindersOn) { _, on in
                 guard on != reminders.isConnected else { return }
@@ -186,8 +197,8 @@ package struct SettingsView: View {
             .buttonStyle(.plain)
             .accessibilityHint("Choose which calendars show in Today")
             statusRow(title: "Alarms", icon: "alarm",
-                      value: Ringer.isAvailable ? (Ringer.isDenied ? "Not allowed" : "Allowed") : "Needs iOS 26",
-                      showsSettings: Ringer.isDenied)
+                      value: alarms.isAvailable ? (alarms.authorization == .denied ? "Not allowed" : "Allowed") : "Needs iOS 26",
+                      showsSettings: alarms.authorization == .denied)
             statusRow(title: "Notifications", icon: "bell.badge",
                       value: notificationStatus == .authorized || notificationStatus == .provisional ? "Allowed"
                           : (notificationStatus == .denied ? "Not allowed" : "Off"),
@@ -243,12 +254,12 @@ package struct SettingsView: View {
 
     private var aiSection: some View {
         Section {
-            AutomaticChangesToggle()
+            AutomaticChangesToggle(ledger: ledger)
             NavigationLink("Scope and duration") {
-                AutomaticChangesView().performanceDestination("settings.automaticChanges")
+                AutomaticChangesView(ledger: ledger).performanceDestination("settings.automaticChanges")
             }
             .performanceControlledNavigation("settings.automaticChanges") {
-                AutomaticChangesView().performanceDestination("settings.automaticChanges")
+                AutomaticChangesView(ledger: ledger).performanceDestination("settings.automaticChanges")
             } label: {
                 Text("Scope and duration")
             }
@@ -372,7 +383,7 @@ package struct SettingsView: View {
                 Button("Turn On", action: turnOn).font(.subheadline)
             } else if showsSettings {
                 Button("Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                    openSettings()
                 }
                 .font(.subheadline)
             } else {
@@ -430,6 +441,8 @@ package struct DeleteDataConfirmation: View {
 
 /// Both Settings entry points edit the existing bounded grant, without a second preference.
 private struct AutomaticChangesToggle: View {
+    let ledger: Ledger
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.modelContext) private var context
     @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
     @AppStorage(ActivitySettings.pausedKey) private var paused = false
@@ -437,12 +450,12 @@ private struct AutomaticChangesToggle: View {
     @State private var saveFailed = false
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { _ in
-            let active = Grants.active(grants.compactMap(\.info), scope: .planFreeTime, now: .now)
+        TimelineView(.periodic(from: presentation.now, by: 60)) { _ in
+            let active = Grants.active(grants.compactMap(\.info), scope: .planFreeTime, now: presentation.now)
             VStack(alignment: .leading, spacing: 4) {
                 Toggle(isOn: Binding(get: { active != nil }, set: { enabled in
                     do {
-                        try GrantStore.setEnabled(enabled, scope: .planFreeTime, context: context)
+                        try GrantStore.setEnabled(enabled, scope: .planFreeTime, context: context, ledger: ledger, runtime: presentation.runtime)
                     } catch {
                         saveFailed = true
                     }
@@ -451,7 +464,7 @@ private struct AutomaticChangesToggle: View {
                 }
                 .accessibilityIdentifier("settings.automaticChanges.toggle")
                 if let active {
-                    Text("Until " + active.expires.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                    Text("Until " + active.expires.formatted(Date.FormatStyle(locale: presentation.locale, calendar: presentation.calendar, timeZone: presentation.calendar.timeZone).month(.abbreviated).day().hour().minute()))
                         .font(.footnote).foregroundStyle(.secondary)
                         .accessibilityIdentifier("grant.expiry")
                 } else {
@@ -475,16 +488,19 @@ private struct AutomaticChangesToggle: View {
 /// Settings → AI → Automatic changes: the same seven-day scope as the plan card, with its end date and Revoke.
 /// What no grant can ever cover is listed too (see `AutonomyPolicy`).
 package struct AutomaticChangesView: View {
-    package init() {}
+    private let ledger: Ledger
+    package init(ledger: Ledger) { self.ledger = ledger }
+    @Environment(PlannerPresentation.self) private var presentation
+    @State private var saveFailed = false
     @Environment(\.modelContext) private var context
     @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
 
-    private var active: [AIGrant] { grants.filter { $0.info?.isActive(at: .now) ?? false } }
+    private var active: [AIGrant] { grants.filter { $0.info?.isActive(at: presentation.now) ?? false } }
 
     package var body: some View {
         Form {
             Section {
-                AutomaticChangesToggle()
+                AutomaticChangesToggle(ledger: ledger)
             } footer: {
                 Text("Turn on for 7 days. Only Today’s own planned times change; every automatic change has Undo and an Activity entry.")
             }
@@ -496,13 +512,16 @@ package struct AutomaticChangesView: View {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(GrantScope(rawValue: g.scope)?.title ?? g.scope)
-                            Text("Until " + g.expires.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                            Text("Until " + g.expires.formatted(Date.FormatStyle(locale: presentation.locale, calendar: presentation.calendar, timeZone: presentation.calendar.timeZone).weekday(.abbreviated).month(.abbreviated).day()))
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button("Revoke", role: .destructive) {
-                            withAnimation { GrantStore.revoke(g, context: context) }
-                            try? context.save()
+                            guard let scope = GrantScope(rawValue: g.scope) else { return }
+                            do {
+                                try GrantStore.setEnabled(false, scope: scope, context: context,
+                                                          ledger: ledger, runtime: presentation.runtime)
+                            } catch { saveFailed = true }
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -524,6 +543,9 @@ package struct AutomaticChangesView: View {
                 Text("No grant covers these. Each one is a card you apply with a tap.")
             }
         }
+        .alert("Couldn’t save automatic changes", isPresented: $saveFailed) {
+            Button("OK", role: .cancel) { }
+        } message: { Text("Please try again.") }
         .navigationTitle("Automatic changes")
         .navigationBarTitleDisplayMode(.inline)
     }

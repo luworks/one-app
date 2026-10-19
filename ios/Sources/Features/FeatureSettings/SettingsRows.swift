@@ -12,6 +12,7 @@ import One
 
 /// Settings > Today: the timeline's extras. Rows only; they sit inside the Today section.
 package struct TodayTimelineSettings: View {
+    @Environment(PlannerPresentation.self) private var presentation
     package init() {}
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.eveningHourKey) private var eveningHour = Preferences.eveningHour
@@ -25,7 +26,7 @@ package struct TodayTimelineSettings: View {
             MenuChoiceRow(title: "Evening starts at", selection: $eveningHour,
                           caption: "From then Today shows all of tomorrow and offers Review today. Off keeps Tomorrow short.",
                           identifier: "settings.eveningHour") {
-                ForEach(Preferences.eveningChoices, id: \.self) { Text(Self.title(forHour: $0)).tag($0) }
+                ForEach(Preferences.eveningChoices, id: \.self) { Text(title(forHour: $0)).tag($0) }
             }
         }
         ExplainedToggle(title: "Show free time", isOn: $showsFreeTime,
@@ -34,9 +35,9 @@ package struct TodayTimelineSettings: View {
                         caption: "A reminder due today with no time gets a faint suggested time in a free gap. Off lists it under Anytime today. Nothing is scheduled either way.")
     }
 
-    static func title(forHour hour: Int) -> String {
-        guard hour != Preferences.off, let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: .now) else { return "Off" }
-        return date.formatted(date: .omitted, time: .shortened)
+    private func title(forHour hour: Int) -> String {
+        guard hour != Preferences.off, let date = presentation.calendar.date(bySettingHour: hour, minute: 0, second: 0, of: presentation.now) else { return "Off" }
+        return date.formatted(Date.FormatStyle(locale: presentation.locale, calendar: presentation.calendar, timeZone: presentation.calendar.timeZone).hour().minute())
     }
 }
 

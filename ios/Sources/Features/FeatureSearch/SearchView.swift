@@ -12,7 +12,16 @@ import SwiftData
 /// Native search field with scopes; results are grouped, and tapping one opens it in its own editor.
 package struct SearchView<Editor: View>: View {
     private let editor: @MainActor (OpenedEntry) -> Editor
-    package init(@ViewBuilder editor: @escaping @MainActor (OpenedEntry) -> Editor) { self.editor = editor }
+    private let calendar: any CalendarService
+    private let memory: SearchMemory
+    package init(calendar: any CalendarService, defaults: UserDefaults,
+                 @ViewBuilder editor: @escaping @MainActor (OpenedEntry) -> Editor) {
+        self.calendar = calendar
+        self.memory = SearchMemory(defaults: defaults)
+        self.editor = editor
+        _recents = State(initialValue: SearchMemory(defaults: defaults).load())
+    }
+    @Environment(PlannerPresentation.self) private var presentation
     enum Scope: String, CaseIterable, Identifiable {
         case all = "All", reminders = "Reminders", events = "Events", alarms = "Alarms"
         var id: Self { self }
@@ -38,7 +47,7 @@ package struct SearchView<Editor: View>: View {
     @FocusState private var focused: Bool
     @State private var scope: Scope = .all
     @State private var opened: Opened?
-    @State private var recents = Recents.load()
+    @State private var recents: [String]
     @State private var quick: Quick?
 
     private let limit = 25
@@ -99,7 +108,7 @@ package struct SearchView<Editor: View>: View {
                             HStack {
                                 Text("Recent")
                                 Spacer()
-                                Button("Clear") { Recents.clear(); recents = [] }.font(.footnote)
+                                Button("Clear") { memory.clear(); recents = [] }.font(.footnote)
                             }
                         }
                     }
@@ -126,9 +135,13 @@ package struct SearchView<Editor: View>: View {
                         Section(header: header("Events", r.events.count)) {
                             ForEach(r.events.prefix(limit)) { hit in
                                 Button {
-                                    if case .system(let id) = hit.opened { NativeEvents.edit(identifier: id, start: hit.start) } else { opened = hit.opened }
+                                    if case .system(let id) = hit.opened {
+                                        if let native = calendar as? any NativeCalendarService {
+                                            native.edit(identifier: id, start: hit.start, end: nil, fullOptions: false, onComplete: nil)
+                                        } else { opened = hit.opened }
+                                    } else { opened = hit.opened }
                                 } label: {
-                                    ResultRow(symbol: "calendar", tint: hit.color, title: hit.title, detail: hit.detail, dimmed: hit.start < .now)
+                                    ResultRow(symbol: "calendar", tint: hit.color, title: hit.title, detail: hit.detail, dimmed: hit.start < presentation.now)
                                 }
                                 .accessibilityIdentifier("search.result")
                             }
@@ -158,7 +171,7 @@ package struct SearchView<Editor: View>: View {
                 switch item {
                 case .task(let t): editor(.task(t))
                 case .event(let e): editor(.local(e))
-                case .system(let id): NativeEventSheet(identifier: id)
+                case .system(let id): editor(.system(id))
                 case .alarm(let a): editor(.alarm(a))
                 }
             }
@@ -174,7 +187,7 @@ package struct SearchView<Editor: View>: View {
                     .focused($focused)
                     .submitLabel(.search)
                     .autocorrectionDisabled()
-                    .onSubmit { Recents.add(query); recents = Recents.load() }
+                    .onSubmit { memory.add(query); recents = memory.load() }
                     .accessibilityIdentifier("search.field")
                 if !query.isEmpty {
                     Button { query = ""; focused = true } label: {
@@ -235,18 +248,18 @@ package struct SearchView<Editor: View>: View {
         if scope == .all || scope == .events {
             var hits: [EventHit] = events.filter { SearchMatch.matches(q, in: [$0.title, $0.calendarName]) }.map { e in
                 EventHit(id: "o\(e.persistentModelID.hashValue)", title: e.title,
-                         detail: DayLabel.withTime(e.start) + " · " + e.calendarName, start: e.start, color: .blue, opened: .event(e))
+                         detail: dateLabel(e.start) + " · " + e.calendarName, start: e.start, color: .blue, opened: .event(e))
             }
             // The whole system calendar, two years either side of today (events Today mirrored are not listed twice).
-            let window = DateInterval(start: Calendar.current.date(byAdding: .year, value: -2, to: .now) ?? .now,
-                                      end: Calendar.current.date(byAdding: .year, value: 2, to: .now) ?? .now)
-            for s in CalendarSync.shared.events(in: window, excluding: Set(events.compactMap(\.externalID)))
+            let window = DateInterval(start: presentation.calendar.date(byAdding: .year, value: -2, to: presentation.now) ?? presentation.now,
+                                      end: presentation.calendar.date(byAdding: .year, value: 2, to: presentation.now) ?? presentation.now)
+            for s in calendar.events(in: window, excluding: Set(events.compactMap(\.externalID)))
             where SearchMatch.matches(q, in: [s.title, s.location, s.calendarTitle]) {
-                hits.append(EventHit(id: "s\(s.id)", title: s.title, detail: DayLabel.withTime(s.start) + " · " + s.calendarTitle,
+                hits.append(EventHit(id: "s\(s.id)", title: s.title, detail: dateLabel(s.start) + " · " + s.calendarTitle,
                                      start: s.start, color: s.color, opened: .system(s.eventIdentifier)))
             }
             // Upcoming first (soonest first), then the past (most recent first).
-            let now = Date.now
+            let now = presentation.now
             out.events = hits.filter { $0.start >= now }.sorted { $0.start < $1.start }
                 + hits.filter { $0.start < now }.sorted { $0.start > $1.start }
         }
@@ -258,30 +271,33 @@ package struct SearchView<Editor: View>: View {
     }
 
     private func quickResults(_ q: Quick) -> Results {
-        let cal = Calendar.current
+        let cal = presentation.calendar
         var out = Results()
         switch q {
         case .overdue:
-            out.tasks = tasks.filter(\.isOverdue).sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
+            out.tasks = tasks.filter { task in
+                guard !task.isDone, let due = task.due else { return false }
+                return presentation.calendar.startOfDay(for: due) < presentation.calendar.startOfDay(for: presentation.now)
+            }.sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
         case .today:
             out.tasks = tasks.filter { t in
                 guard !t.isDone else { return false }
-                if let d = t.due, cal.isDateInToday(d) { return true }
-                if let p = t.plannedStart, cal.isDateInToday(p) { return true }
+                if let d = t.due, cal.isDate(d, inSameDayAs: presentation.now) { return true }
+                if let p = t.plannedStart, cal.isDate(p, inSameDayAs: presentation.now) { return true }
                 return false
             }
         case .flagged:
             out.tasks = tasks.filter { $0.flagged && !$0.isDone }
         case .events:
-            let end = cal.date(byAdding: .day, value: 7, to: .now) ?? .now
-            let window = DateInterval(start: .now, end: end)
+            let end = cal.date(byAdding: .day, value: 7, to: presentation.now) ?? presentation.now
+            let window = DateInterval(start: presentation.now, end: end)
             var hits: [EventHit] = events.compactMap { e in
-                guard let next = e.occurrences(in: window).first(where: { $0 >= .now }) else { return nil }
+                guard let next = Recurrence.occurrences(start: e.start, duration: e.duration, rule: e.repeats, in: window, calendar: cal).first(where: { $0 >= presentation.now }) else { return nil }
                 return EventHit(id: "o\(e.persistentModelID.hashValue)", title: e.title,
-                                detail: DayLabel.withTime(next) + " · " + e.calendarName, start: next, color: .blue, opened: .event(e))
+                                detail: dateLabel(next) + " · " + e.calendarName, start: next, color: .blue, opened: .event(e))
             }
-            for s in CalendarSync.shared.events(in: window, excluding: Set(events.compactMap(\.externalID))) where s.start >= .now {
-                hits.append(EventHit(id: "s\(s.id)", title: s.title, detail: DayLabel.withTime(s.start) + " · " + s.calendarTitle,
+            for s in calendar.events(in: window, excluding: Set(events.compactMap(\.externalID))) where s.start >= presentation.now {
+                hits.append(EventHit(id: "s\(s.id)", title: s.title, detail: dateLabel(s.start) + " · " + s.calendarTitle,
                                      start: s.start, color: s.color, opened: .system(s.eventIdentifier)))
             }
             out.events = hits.sorted { $0.start < $1.start }
@@ -291,10 +307,14 @@ package struct SearchView<Editor: View>: View {
         return out
     }
 
+    private func dateLabel(_ date: Date) -> String {
+        plannerDayLabel(date, runtime: presentation.runtime)
+    }
+
     private func detail(_ t: OneTask) -> String {
         var parts: [String] = []
-        if let due = t.due { parts.append("Due " + DayLabel.withTime(due)) }
-        else if let p = t.plannedStart { parts.append(DayLabel.withTime(p)) }
+        if let due = t.due { parts.append("Due " + dateLabel(due)) }
+        else if let p = t.plannedStart { parts.append(dateLabel(p)) }
         if !t.listName.isEmpty { parts.append(ListName.display(t.listName)) }
         return parts.joined(separator: " · ")
     }
@@ -306,7 +326,7 @@ package struct SearchView<Editor: View>: View {
     }
 
     private func alarmTime(_ a: OneAlarm) -> String {
-        let p = AlarmPlan.timeParts(hour: a.hour, minute: a.minute)
+        let p = AlarmPlan.timeParts(hour: a.hour, minute: a.minute, locale: presentation.locale)
         return p.time + (p.suffix.map { " " + $0 } ?? "")
     }
 }
@@ -338,15 +358,16 @@ private struct ResultRow: View {
 }
 
 /// The last few searches the user submitted, kept on the device.
-private enum Recents {
-    private static let key = "today.search.recents"
-    static func load() -> [String] { UserDefaults.standard.stringArray(forKey: key) ?? [] }
-    static func clear() { UserDefaults.standard.removeObject(forKey: key) }
-    static func add(_ term: String) {
+private struct SearchMemory {
+    let defaults: UserDefaults
+    private let key = "today.search.recents"
+    func load() -> [String] { defaults.stringArray(forKey: key) ?? [] }
+    func clear() { defaults.removeObject(forKey: key) }
+    func add(_ term: String) {
         let t = term.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty else { return }
         let list = ([t] + load().filter { $0.caseInsensitiveCompare(t) != .orderedSame }).prefix(6)
-        UserDefaults.standard.set(Array(list), forKey: key)
+        defaults.set(Array(list), forKey: key)
     }
 }
 

@@ -21,7 +21,8 @@ package struct ActivityView: View {
     @State private var canLoadMore = false
     @State private var loaded = false
     @State private var recording = true
-    @State private var now = Date.now
+    @State private var now = Date.distantPast
+    @Environment(PlannerPresentation.self) private var presentation
 
     private let pageSize = 150
     private let activity: ActivityCenter
@@ -48,8 +49,18 @@ package struct ActivityView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) { note }
             .task { reload() }
             .onChange(of: filter) { reload(keepCount: false) }
-            .onReceive(NotificationCenter.default.publisher(for: ActivityCenter.didChange)) { _ in reload() }
+            .onReceive(NotificationCenter.default.publisher(for: activity.didChange, object: activity)) { _ in reload() }
         }
+    }
+
+    private func dayTitle(_ day: Date) -> String {
+        let cal = presentation.calendar
+        if cal.isDate(day, inSameDayAs: now) { return "Today" }
+        if let yesterday = cal.date(byAdding: .day, value: -1, to: now), cal.isDate(day, inSameDayAs: yesterday) {
+            return "Yesterday"
+        }
+        return day.formatted(Date.FormatStyle(locale: presentation.locale, calendar: cal, timeZone: cal.timeZone)
+            .weekday(.abbreviated).month(.abbreviated).day())
     }
 
     private var chips: some View {
@@ -65,7 +76,7 @@ package struct ActivityView: View {
                                    description: Text("Changes made by you, Today AI, Siri, Share and other apps show here, with Undo where possible."))
         } else {
             List {
-                ForEach(LedgerFormat.groupByDay(items, date: \.date, now: now), id: \.day) { group in
+                ForEach(LedgerFormat.groupByDay(items, date: \.date, now: now, calendar: presentation.calendar), id: \.day) { group in
                     Section {
                         ForEach(group.items) { item in
                             ActivityRow(item: item, undone: undone.contains(item.id)) {
@@ -75,7 +86,7 @@ package struct ActivityView: View {
                             }
                         }
                     } header: {
-                        Text(group.title).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).textCase(nil)
+                        Text(dayTitle(group.day)).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).textCase(nil)
                     }
                 }
                 if canLoadMore {
@@ -110,7 +121,7 @@ package struct ActivityView: View {
         case .you: .you
         case .agents: .others
         }
-        let since = activity.settings.retention.cutoff(now: .now).map(ActivityClock.ms)
+        let since = activity.settings.retention.cutoff(now: presentation.now, calendar: presentation.calendar).map(ActivityClock.ms)
         return ActivityQuery(tiers: [.changes], actors: actors, sinceMs: since)
     }
 
@@ -131,7 +142,7 @@ package struct ActivityView: View {
     }
 
     private func show(_ events: [ActivityEvent], more: Bool, store: ActivityStore, replacing: Bool) {
-        now = .now
+        now = presentation.now
         let fresh = events.map { LedgerItem(event: $0) }
         let all = replacing ? fresh : items + fresh
         undone = Set(((try? store.undone(among: all.map { $0.id.uuidString })) ?? []).compactMap(UUID.init(uuidString:)))
@@ -143,6 +154,7 @@ package struct ActivityView: View {
 }
 
 private struct ActivityRow: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let item: LedgerItem
     let undone: Bool
     /// Runs Undo; false when it could not (the reminder is gone or changed again).
@@ -195,7 +207,7 @@ private struct ActivityRow: View {
 
     /// "09:41 · Today AI · Automatic".
     private var meta: String {
-        var parts = [item.date.formatted(date: .omitted, time: .shortened), actor.name]
+        var parts = [item.date.formatted(Date.FormatStyle(locale: presentation.locale, calendar: presentation.calendar, timeZone: presentation.calendar.timeZone).hour().minute()), actor.name]
         if let label = item.approvalValue.label { parts.append(label) }
         return parts.joined(separator: " · ")
     }

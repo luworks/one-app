@@ -25,15 +25,21 @@ package struct ActivityDataView: View {
     @State private var benchmarking = false
     @State private var legacyRows = 0
 
+    private let activity: ActivityCenter
+    private let exportDestination: @MainActor (ActivityExportFormat) throws -> URL
     private let readSummary: @MainActor () -> ActivityCenter.Summary
     private let clear: @MainActor () -> Void
-    private let exportFile: @MainActor (ActivityExportFormat) async throws -> URL
+    private let exportFile: @MainActor (ActivityExportFormat, URL) async throws -> URL
     private let legacyRowCount: @MainActor () -> Int
 
-    package init(summary: @escaping @MainActor () -> ActivityCenter.Summary,
+    package init(activity: ActivityCenter,
+                 exportDestination: @escaping @MainActor (ActivityExportFormat) throws -> URL,
+                 summary: @escaping @MainActor () -> ActivityCenter.Summary,
                  clear: @escaping @MainActor () -> Void,
-                 export: @escaping @MainActor (ActivityExportFormat) async throws -> URL,
+                 export: @escaping @MainActor (ActivityExportFormat, URL) async throws -> URL,
                  legacyRowCount: @escaping @MainActor () -> Int) {
+        self.activity = activity
+        self.exportDestination = exportDestination
         self.readSummary = summary
         self.clear = clear
         self.exportFile = export
@@ -146,7 +152,7 @@ package struct ActivityDataView: View {
         .navigationTitle("Activity data")
         .navigationBarTitleDisplayMode(.inline)
         .task { refresh() }
-        .onReceive(NotificationCenter.default.publisher(for: ActivityCenter.didChange)) { _ in refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: activity.didChange, object: activity)) { _ in refresh() }
         .confirmationDialog("Clear activity history?", isPresented: $askingClear, titleVisibility: .visible) {
             Button("Clear \(summary.total) Events", role: .destructive) {
                 clear()
@@ -182,7 +188,7 @@ package struct ActivityDataView: View {
         exporting = true
         exportFailed = false
         Task {
-            do { exported = ExportedFile(url: try await exportFile(format)) } catch { exportFailed = true }
+            do { exported = ExportedFile(url: try await exportFile(format, exportDestination(format))) } catch { exportFailed = true }
             exporting = false
         }
     }
