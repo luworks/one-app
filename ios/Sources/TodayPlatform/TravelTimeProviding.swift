@@ -1,4 +1,5 @@
 import Foundation
+import TodayShared
 
 /// Nonblocking travel read boundary. Live implementations may schedule their own location/network work.
 @MainActor
