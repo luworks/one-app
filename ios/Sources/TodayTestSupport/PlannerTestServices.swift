@@ -229,7 +229,9 @@
       reconcileCount += 1
     }
     package var editFailure: Failure?
+    package var deletionFailure: Failure?
     package private(set) var editCalls = 0
+    package private(set) var deletionCalls = 0
 
     package func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
       -> RemindersSync.Remote?
@@ -251,6 +253,38 @@
     }
     package func didPersistEdit(_ task: OneTask, accepted: RemindersSync.Remote?) {
       scheduleReconcile(after: .milliseconds(50))
+    }
+    package func commitDeletion(_ task: OneTask, expected: TaskSnapshot) throws
+      -> ReminderDeletionReceipt
+    {
+      guard let id = task.externalID else { return .localOnly }
+      guard isConnected else { throw Failure.disconnected }
+      deletionCalls += 1
+      if let deletionFailure { throw deletionFailure }
+      guard let currentRemote else { return .alreadyAbsent(id) }
+      guard currentRemote.fingerprint == RemindersSync.fingerprint(of: expected) else {
+        throw Failure.changedOutside
+      }
+      self.currentRemote = nil
+      return .confirmed(currentRemote, token: runtime.nextID())
+    }
+    package func restoreDeletion(_ task: OneTask, receipt: ReminderDeletionReceipt) throws
+      -> RemindersSync.Remote?
+    {
+      switch receipt {
+      case .localOnly: return nil
+      case .alreadyAbsent: throw Failure.changedOutside
+      case .confirmed:
+        guard isConnected else { throw Failure.disconnected }
+        guard currentRemote == nil else { throw Failure.changedOutside }
+        let restored = RemindersSync.Remote(
+          id: runtime.nextID().uuidString, title: task.title,
+          notes: task.note, isDone: task.isDone, doneAt: task.doneAt, due: task.due,
+          listID: "test-list", listTitle: task.listName, flagged: task.flagged,
+          repeatRule: task.repeatRule, repeats: task.repeatRule != nil)
+        currentRemote = restored
+        return restored
+      }
     }
     package func commitCompletion(
       _ task: OneTask, done: Bool, restoringDue: Date?, restoresDue: Bool,

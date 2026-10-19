@@ -46,6 +46,12 @@
         ledger: ledger, runtime: runtime, actor: actor, channel: channel)
     }
 
+    package func deleteConfirmed(_ task: OneTask, context: ModelContext, toast: UndoToast?) throws {
+      try TaskActions.deleteConfirmed(
+        task, context: context, toast: toast, reminders: reminders, ledger: ledger, runtime: runtime
+      )
+    }
+
     package func delete(_ alarm: OneAlarm, context: ModelContext, toast: UndoToast?) {
       AlarmActions.delete(
         alarm, context: context, toast: toast, alarms: alarms, ledger: ledger, runtime: runtime)

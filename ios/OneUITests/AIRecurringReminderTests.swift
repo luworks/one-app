@@ -35,7 +35,7 @@ final class AIRecurringReminderTests: XCTestCase {
     open.tap()
     assertSavedEditor()
     keepScreenshot("Saved Friday and Sunday repeat selection")
-    app.buttons["Done"].tap()
+    app.buttons["task.save"].tap()
     XCTAssertTrue(open.waitForExistence(timeout: 5))
     open.tap()
     assertSavedEditor()
@@ -87,6 +87,9 @@ final class AIRecurringReminderTests: XCTestCase {
     let title = app.textFields["task.title"]
     XCTAssertTrue(title.waitForExistence(timeout: 5))
     XCTAssertEqual(title.value as? String, "丢垃圾")
+    // Exercise a real edit so Save commits the preserved custom weekdays.
+    (app.buttons["Flag"].exists ? app.buttons["Flag"] : app.buttons["Unflag"]).tap()
+    app.buttons["task.more"].tap()
     let repeatSelection = app.buttons.containing(
       NSPredicate(format: "label CONTAINS %@", "Every Fri, Sun")
     ).firstMatch
