@@ -323,7 +323,7 @@
           dismiss()
         } else {
           errorMessage =
-            toast?.message ?? "The alarm could not be fully updated. Keep it open and retry."
+            toast.message ?? "The alarm could not be fully updated. Keep it open and retry."
         }
       } label: {
         Text("Delete Alarm")
