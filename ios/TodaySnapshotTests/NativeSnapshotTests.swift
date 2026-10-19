@@ -17,7 +17,8 @@ final class NativeSnapshotTests: XCTestCase {
     private var suite: String!
 
     override func setUp() async throws {
-        continueAfterFailure = false
+        // Preserve all image failures in one explicit recording/comparison batch.
+        continueAfterFailure = true
         // HealthFormat and StopwatchState also consult process Locale.current.
         XCTAssertEqual(Locale.current.identifier, locale.identifier,
                        "Launch the snapshot host with -AppleLocale en_US_POSIX -AppleLanguages (en).")
