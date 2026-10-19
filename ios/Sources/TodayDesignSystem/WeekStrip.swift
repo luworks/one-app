@@ -2,8 +2,8 @@
 import SwiftUI
 import TodayCore
 
-struct WeekStrip: View {
-    @Binding var selected: Date
+package struct WeekStrip: View {
+    package @Binding var selected: Date
 
     private var cal: Calendar {
         var c = Calendar.current
@@ -16,7 +16,7 @@ struct WeekStrip: View {
         return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 2) {
             Button { shift(-7) } label: { Image(systemName: "chevron.left").padding(6) }
             ForEach(days, id: \.self) { d in

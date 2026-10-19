@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -15,23 +16,23 @@ import SwiftUI
 // way for Siri to hand "set a timer" to a third-party clock app.
 
 /// "Start a timer in Today": asks "How long?" and reads the answer ("ten minutes", "an hour and a half", "十分钟").
-struct StartTimerIntent: AppIntent {
-    static let title: LocalizedStringResource = "Start Timer"
-    static let description = IntentDescription("Starts a countdown timer. Say how long, like “10 minutes” or “an hour and a half”. It rings like an alarm, even on Silent, and shows on the Today tab.")
-    static let openAppWhenRun = false
+package struct StartTimerIntent: AppIntent {
+    package static let title: LocalizedStringResource = "Start Timer"
+    package static let description = IntentDescription("Starts a countdown timer. Say how long, like “10 minutes” or “an hour and a half”. It rings like an alarm, even on Silent, and shows on the Today tab.")
+    package static let openAppWhenRun = false
 
     @Parameter(title: "Length", requestValueDialog: "How long?")
-    var length: String
+    package var length: String
 
     @Parameter(title: "Name")
-    var name: String?
+    package var name: String?
 
-    static var parameterSummary: some ParameterSummary {
+    package static var parameterSummary: some ParameterSummary {
         Summary("Start a \(\.$length) timer") { \.$name }
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    package func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let asked = TimerPhrase.seconds(from: length) else {
             throw $length.needsValueError("How long? For example, 10 minutes.")
         }
@@ -43,16 +44,16 @@ struct StartTimerIntent: AppIntent {
 }
 
 /// The lengths Siri can hear inside the phrase "Start a timer in Today for 10 minutes".
-enum TimerLength: String, AppEnum {
+package enum TimerLength: String, AppEnum {
     case m1, m2, m3, m5, m10, m15, m20, m25, m30, m45, m60, m90
 
-    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Length")
-    static let caseDisplayRepresentations: [TimerLength: DisplayRepresentation] = [
+    package static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Length")
+    package static let caseDisplayRepresentations: [TimerLength: DisplayRepresentation] = [
         .m1: "1 minute", .m2: "2 minutes", .m3: "3 minutes", .m5: "5 minutes", .m10: "10 minutes", .m15: "15 minutes",
         .m20: "20 minutes", .m25: "25 minutes", .m30: "30 minutes", .m45: "45 minutes", .m60: "1 hour", .m90: "90 minutes",
     ]
 
-    var seconds: Int {
+    package var seconds: Int {
         switch self {
         case .m1: 60
         case .m2: 120
@@ -70,38 +71,38 @@ enum TimerLength: String, AppEnum {
     }
 }
 
-struct StartTimerForIntent: AppIntent {
-    static let title: LocalizedStringResource = "Start Timer for…"
-    static let description = IntentDescription("Starts a countdown timer for one of the usual lengths.")
-    static let openAppWhenRun = false
+package struct StartTimerForIntent: AppIntent {
+    package static let title: LocalizedStringResource = "Start Timer for…"
+    package static let description = IntentDescription("Starts a countdown timer for one of the usual lengths.")
+    package static let openAppWhenRun = false
 
     @Parameter(title: "Length", requestValueDialog: "How long?")
-    var length: TimerLength
+    package var length: TimerLength
 
     @Parameter(title: "Name")
-    var name: String?
+    package var name: String?
 
-    static var parameterSummary: some ParameterSummary {
+    package static var parameterSummary: some ParameterSummary {
         Summary("Start a \(\.$length) timer") { \.$name }
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    package func perform() async throws -> some IntentResult & ProvidesDialog {
         .result(dialog: "\(try await TimerIntentSupport.start(seconds: length.seconds, name: name))")
     }
 }
 
 @MainActor
-enum TimerIntentSupport {
+package enum TimerIntentSupport {
     /// Tells Siri the user just did "start a timer" by hand, so it can suggest the phrase.
-    static func donate(seconds: Int) {
+    package static func donate(seconds: Int) {
         let intent = StartTimerIntent()
         intent.length = IntentTimer.spoken(seconds: seconds)
         Task { _ = try? await IntentDonationManager.shared.donate(intent: intent) }
     }
 
     /// Starts a voice timer and returns what Siri says. Throws what went wrong (alarms not allowed, ...).
-    static func start(seconds: Int, name: String?) async throws -> String {
+    package static func start(seconds: Int, name: String?) async throws -> String {
         let controller = TimerController.shared
         controller.refresh()
         guard let timer = await controller.start(seconds: seconds, label: name) else {
@@ -119,22 +120,22 @@ enum TimerIntentSupport {
 
 /// A timer as Siri sees it ("pause the timer", "add 5 minutes to the timer").
 @AppEntity(schema: .clock.timer)
-struct TimerEntity {
-    static let defaultQuery = TimerEntityQuery()
+package struct TimerEntity {
+    package static let defaultQuery = TimerEntityQuery()
 
-    let id: UUID
-    var label: String?
-    var duration: Duration
-    var durationRemaining: Duration
-    var isSleepTimer: Bool
-    var state: TimerStateEnum
+    package let id: UUID
+    package var label: String?
+    package var duration: Duration
+    package var durationRemaining: Duration
+    package var isSleepTimer: Bool
+    package var state: TimerStateEnum
 
-    var displayRepresentation: DisplayRepresentation {
+    package var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(label ?? "Timer")", subtitle: "\(TimerList.totalText(Int(duration.components.seconds)))")
     }
 
     @MainActor
-    init(_ timer: RunningTimer, ringing: Bool) {
+    package init(_ timer: RunningTimer, ringing: Bool) {
         id = timer.id
         label = IntentTimer.label(timer.label)
         duration = .seconds(timer.total)
@@ -145,17 +146,17 @@ struct TimerEntity {
 }
 
 @AppEnum(schema: .clock.timerState)
-enum TimerStateEnum: String {
+package enum TimerStateEnum: String {
     case running, paused, firing, undefined
 
-    static let caseDisplayRepresentations: [TimerStateEnum: DisplayRepresentation] = [
+    package static let caseDisplayRepresentations: [TimerStateEnum: DisplayRepresentation] = [
         .running: "Running", .paused: "Paused", .firing: "Ringing", .undefined: "Unknown",
     ]
 }
 
-struct TimerEntityQuery: EntityStringQuery {
+package struct TimerEntityQuery: EntityStringQuery {
     @MainActor
-    func entities(matching string: String) async throws -> [TimerEntity] {
+    package func entities(matching string: String) async throws -> [TimerEntity] {
         let controller = TimerController.shared
         controller.refresh()
         let needle = string.lowercased()
@@ -164,14 +165,14 @@ struct TimerEntityQuery: EntityStringQuery {
     }
 
     @MainActor
-    func entities(for identifiers: [UUID]) async throws -> [TimerEntity] {
+    package func entities(for identifiers: [UUID]) async throws -> [TimerEntity] {
         let controller = TimerController.shared
         controller.refresh()
         return controller.timers.filter { identifiers.contains($0.id) }.map { TimerEntity($0, ringing: controller.ringing.contains($0.id)) }
     }
 
     @MainActor
-    func suggestedEntities() async throws -> [TimerEntity] {
+    package func suggestedEntities() async throws -> [TimerEntity] {
         let controller = TimerController.shared
         controller.refresh()
         return controller.timers.map { TimerEntity($0, ringing: controller.ringing.contains($0.id)) }
@@ -179,13 +180,13 @@ struct TimerEntityQuery: EntityStringQuery {
 }
 
 @AppIntent(schema: .clock.createTimer)
-struct CreateTimerIntent {
-    var duration: Duration
-    var label: String?
-    var isSleepTimer: Bool
+package struct CreateTimerIntent {
+    package var duration: Duration
+    package var label: String?
+    package var isSleepTimer: Bool
 
     @MainActor
-    func perform() async throws -> some ReturnsValue<TimerEntity> {
+    package func perform() async throws -> some ReturnsValue<TimerEntity> {
         guard let seconds = IntentTimer.seconds(seconds: Int(duration.components.seconds)) else {
             throw IntentMessage("Timers can run from 1 second to \(IntentTimer.maxMinutes) minutes.")
         }
@@ -199,34 +200,35 @@ struct CreateTimerIntent {
 }
 
 @AppIntent(schema: .clock.pauseTimer)
-struct PauseTimerIntent {
-    var timer: TimerEntity
+package struct PauseTimerIntent {
+    package var timer: TimerEntity
 
     @MainActor
-    func perform() async throws -> some IntentResult {
+    package func perform() async throws -> some IntentResult {
         TimerController.shared.pause(timer.id)
         return .result()
     }
 }
 
 @AppIntent(schema: .clock.resumeTimer)
-struct ResumeTimerIntent {
-    var timer: TimerEntity
+package struct ResumeTimerIntent {
+    package var timer: TimerEntity
 
     @MainActor
-    func perform() async throws -> some IntentResult {
+    package func perform() async throws -> some IntentResult {
         TimerController.shared.resume(timer.id)
         return .result()
     }
 }
 
 @AppIntent(schema: .clock.cancelTimer)
-struct CancelTimerIntent {
-    var entities: [TimerEntity]
+package struct CancelTimerIntent {
+    package var entities: [TimerEntity]
 
     @MainActor
-    func perform() async throws -> some IntentResult {
+    package func perform() async throws -> some IntentResult {
         for id in entities.map(\.id) { TimerController.shared.cancel(id) }
         return .result()
     }
 }
+#endif

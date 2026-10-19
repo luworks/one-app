@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -7,8 +8,8 @@ import SwiftData
 
 /// One thing on the Calendar tab, whatever it came from: a system event (Apple Calendar, Google, …), an event
 /// Today created itself, or a task planned for a time. The views draw these; they never care where they came from.
-struct CalEntry: Identifiable {
-    enum Source {
+package struct CalEntry: Identifiable {
+    package enum Source {
         case system(String)       // EKEvent identifier
         case local(OneEvent)
         case task(OneTask)
@@ -16,39 +17,39 @@ struct CalEntry: Identifiable {
         case alarm(OneAlarm)
     }
 
-    let id: String
-    let source: Source
-    let title: String
-    var location = ""
-    let start: Date
+    package let id: String
+    package let source: Source
+    package let title: String
+    package var location = ""
+    package let start: Date
     /// Exclusive for all-day entries (the midnight after the last day).
-    let end: Date
-    let isAllDay: Bool
-    let color: Color
-    var calendarTitle = ""
-    var repeats = false
+    package let end: Date
+    package let isAllDay: Bool
+    package let color: Color
+    package var calendarTitle = ""
+    package var repeats = false
     /// From a subscribed, holiday or Birthdays calendar (see `YearLoad`).
-    var isBackground = false
-    var isBirthday = false
-    var isHoliday = false
+    package var isBackground = false
+    package var isBirthday = false
+    package var isHoliday = false
 
-    var isTask: Bool { if case .task = source { true } else { false } }
-    var isAlarm: Bool { if case .alarm = source { true } else { false } }
+    package var isTask: Bool { if case .task = source { true } else { false } }
+    package var isAlarm: Bool { if case .alarm = source { true } else { false } }
 
-    func overlaps(_ day: Date, calendar: Calendar = .current) -> Bool {
+    package func overlaps(_ day: Date, calendar: Calendar = .current) -> Bool {
         CalendarEntryDates.overlaps(start: start, end: end, day: day, calendar: calendar)
     }
 
     /// How the entry reads on `day`: all-day rows, or a start/end clipped to that day.
     /// A timed event that spans the whole day (the middle of a multi-day event) reads as all-day.
-    func span(on day: Date, calendar: Calendar = .current) -> (start: Date, end: Date, allDay: Bool) {
+    package func span(on day: Date, calendar: Calendar = .current) -> (start: Date, end: Date, allDay: Bool) {
         guard let interval = calendar.dateInterval(of: .day, for: day) else { return (start, end, isAllDay) }
         if isAllDay { return (interval.start, interval.end, true) }
         let s = max(start, interval.start), e = min(end, interval.end)
         return (s, e, start <= interval.start && end >= interval.end)
     }
 
-    var speech: String {
+    package var speech: String {
         if isAlarm {
             return "Alarm \(title) at \(start.formatted(date: .omitted, time: .shortened))"
         }
@@ -60,11 +61,11 @@ struct CalEntry: Identifiable {
 }
 
 @MainActor
-enum CalendarEntries {
+package enum CalendarEntries {
     /// Everything overlapping `interval`, merged from the system calendar, Today's own events and planned tasks.
     /// Events hidden in the Calendars list are left out. Pass `alarms` (already empty when "Show alarms in the day" is off)
     /// to add their rings by the same rule as the Today timeline (see `CalendarAlarms`); reminders that ring as alarms stay reminders.
-    static func make(in interval: DateInterval, events: [OneEvent], tasks: [OneTask], alarms: [OneAlarm] = [],
+    package static func make(in interval: DateInterval, events: [OneEvent], tasks: [OneTask], alarms: [OneAlarm] = [],
                      now: Date = TodayClock.now, calendar: Calendar = .current, forYearMarks: Bool = false) -> [CalEntry] {
         let sync = CalendarSync.shared
         var result: [CalEntry] = []
@@ -114,7 +115,7 @@ enum CalendarEntries {
     }
 
     /// The entries on one day, in Apple's order: all-day first, then by start time.
-    static func on(_ day: Date, in entries: [CalEntry], calendar: Calendar = .current) -> [CalEntry] {
+    package static func on(_ day: Date, in entries: [CalEntry], calendar: Calendar = .current) -> [CalEntry] {
         entries
             .filter { $0.overlaps(day, calendar: calendar) }
             .sorted {
@@ -127,7 +128,7 @@ enum CalendarEntries {
 }
 
 /// What the Calendar tab opened: Apple's viewer for system events, our editors for the rest.
-enum OpenedEntry: Identifiable {
+package enum OpenedEntry: Identifiable {
     case system(String)
     /// Apple's editor straight away (the context menu's Edit).
     case editSystem(String)
@@ -138,7 +139,7 @@ enum OpenedEntry: Identifiable {
     /// A new event at a slot picked on the Week grid (long-press), when our editor is used.
     case new(start: Date, end: Date)
 
-    var id: String {
+    package var id: String {
         switch self {
         case .new(let start, _): "n\(start.timeIntervalSince1970)"
         case .system(let id): "s" + id
@@ -149,7 +150,7 @@ enum OpenedEntry: Identifiable {
         }
     }
 
-    init(_ entry: CalEntry) {
+    package init(_ entry: CalEntry) {
         switch entry.source {
         case .system(let id): self = .system(id)
         case .local(let e): self = .local(e)
@@ -159,3 +160,4 @@ enum OpenedEntry: Identifiable {
     }
 }
 
+#endif

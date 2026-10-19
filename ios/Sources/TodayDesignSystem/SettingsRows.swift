@@ -7,9 +7,9 @@ import SwiftUI
 /// A switch with a short explanation right under it (a Section footer can only describe the whole group).
 @MainActor
 public struct ExplainedToggle: View {
-    let title: String
-    @Binding var isOn: Bool
-    var caption: String?
+    package let title: String
+    package @Binding var isOn: Bool
+    package var caption: String?
 
     public init(title: String, isOn: Binding<Bool>, caption: String? = nil) {
         self.title = title
@@ -34,12 +34,12 @@ public struct ExplainedToggle: View {
 /// 2-4 options as the shared pills, with the row's name above and an optional explanation below.
 @MainActor
 public struct PillChoiceRow<Item: Hashable>: View {
-    let title: String
-    let items: [Item]
-    @Binding var selection: Item
-    var caption: String?
-    let label: (Item) -> String
-    let identifier: (Item) -> String
+    package let title: String
+    package let items: [Item]
+    package @Binding var selection: Item
+    package var caption: String?
+    package let label: (Item) -> String
+    package let identifier: (Item) -> String
 
     public init(title: String, items: [Item], selection: Binding<Item>, caption: String? = nil,
                 label: @escaping (Item) -> String, identifier: @escaping (Item) -> String) {
@@ -70,11 +70,11 @@ public struct PillChoiceRow<Item: Hashable>: View {
 /// A menu choice (more than four options) with an optional explanation below.
 @MainActor
 public struct MenuChoiceRow<Value: Hashable, Options: View>: View {
-    let title: String
-    @Binding var selection: Value
-    var caption: String?
-    var identifier: String
-    @ViewBuilder var options: Options
+    package let title: String
+    package @Binding var selection: Value
+    package var caption: String?
+    package var identifier: String
+    package @ViewBuilder var options: Options
 
     public init(title: String, selection: Binding<Value>, caption: String? = nil,
                 identifier: String, @ViewBuilder options: () -> Options) {

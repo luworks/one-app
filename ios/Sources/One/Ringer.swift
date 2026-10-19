@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -12,7 +13,7 @@ import AlarmKit
 #endif
 
 /// Where the user stands on letting Today schedule alarms (AlarmKit, iOS 26+).
-enum AlarmAuthorization: Equatable {
+package enum AlarmAuthorization: Equatable {
     case unavailable, notDetermined, denied, authorized
 }
 
@@ -28,13 +29,13 @@ enum AlarmAuthorization: Equatable {
 /// - The alert sound is the system default or a sound file bundled in the app; Apple's ringtones are not available.
 /// - Snooze is a secondary button with `.countdown` behaviour and a post-alert duration.
 @MainActor
-enum Ringer {
-    static var isAvailable: Bool {
+package enum Ringer {
+    package static var isAvailable: Bool {
         if #available(iOS 26, *) { return true }
         return false
     }
 
-    static var authorization: AlarmAuthorization {
+    package static var authorization: AlarmAuthorization {
         #if canImport(AlarmKit)
         if #available(iOS 26, *) {
             switch AlarmManager.shared.authorizationState {
@@ -49,10 +50,10 @@ enum Ringer {
     }
 
     /// True when the user turned alarms off for Today in Settings.
-    static var isDenied: Bool { authorization == .denied }
+    package static var isDenied: Bool { authorization == .denied }
 
     /// Shows iOS's own "Would Like to Schedule Alarms" prompt (only the first time).
-    static func requestAuthorization() async {
+    package static func requestAuthorization() async {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
         do {
@@ -75,7 +76,7 @@ enum Ringer {
     /// - items marked "Ring as alarm" get an id derived from their title and time,
     /// - anything else this app scheduled earlier is cancelled, except an alarm that is ringing right now
     ///   and the countdown timers (`TimerStore`, see TimerController.swift).
-    static func sync(_ context: ModelContext) async {
+    package static func sync(_ context: ModelContext) async {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
         if isSyncing { syncAgain = true; return }
@@ -89,7 +90,7 @@ enum Ringer {
     }
 
     /// Stops a ringing alarm (the Stop button on the row). Never completes a task.
-    static func stop(_ id: UUID) {
+    package static func stop(_ id: UUID) {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
         try? AlarmManager.shared.stop(id: id)
@@ -100,10 +101,10 @@ enum Ringer {
 #if canImport(AlarmKit)
 @available(iOS 26, *)
 @MainActor
-enum AlarmScheduler {
+package enum AlarmScheduler {
     typealias Meta = AlarmMeta
 
-    static let log = Logger(subsystem: "com.luworks.one", category: "alarms")
+    package static let log = Logger(subsystem: "com.luworks.one", category: "alarms")
 
     /// A task or event that rings as an alarm.
     private struct ItemAlarm {
@@ -112,7 +113,7 @@ enum AlarmScheduler {
         let date: Date
     }
 
-    static func reconcile(_ context: ModelContext) async {
+    package static func reconcile(_ context: ModelContext) async {
         let now = Date.now
         let alarms = (try? context.fetch(FetchDescriptor<OneAlarm>())) ?? []
         let tasks = (try? context.fetch(FetchDescriptor<OneTask>(predicate: #Predicate { $0.ringsAsAlarm && !$0.isDone }))) ?? []
@@ -180,7 +181,7 @@ enum AlarmScheduler {
         }
     }
 
-    static func schedule(hour: Int, minute: Int, weekdays: [Int]) -> Alarm.Schedule {
+    package static func schedule(hour: Int, minute: Int, weekdays: [Int]) -> Alarm.Schedule {
         let days = weekdays.compactMap(weekday)
         let time = Alarm.Schedule.Relative.Time(hour: hour, minute: minute)
         return .relative(.init(time: time, repeats: days.isEmpty ? .never : .weekly(days)))
@@ -230,4 +231,5 @@ enum AlarmScheduler {
         }
     }
 }
+#endif
 #endif

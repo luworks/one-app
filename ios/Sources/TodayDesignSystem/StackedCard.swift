@@ -5,9 +5,9 @@ import SwiftUI
 /// Content and color belong to each screen; corners, inner padding and row gutters stay in one place.
 @MainActor
 public struct StackedCard<Fill: ShapeStyle, Content: View>: View {
-    let fill: Fill
-    let horizontalPadding: CGFloat
-    let flat: Bool
+    package let fill: Fill
+    package let horizontalPadding: CGFloat
+    package let flat: Bool
     private let content: Content
 
     public init(fill: Fill, horizontalPadding: CGFloat = 16, flat: Bool = false, @ViewBuilder content: () -> Content) {
@@ -29,7 +29,7 @@ public struct StackedCard<Fill: ShapeStyle, Content: View>: View {
     }
 }
 
-extension View {
+package extension View {
     /// Retains native List navigation, swipe actions and reordering around the shared card surface.
     @MainActor
     public func stackedCardRow() -> some View {

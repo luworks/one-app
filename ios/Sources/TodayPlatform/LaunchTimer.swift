@@ -7,23 +7,23 @@ import Darwin
 
 /// Cold start time: process start (from the kernel) to Today's first appearance.
 @MainActor
-enum LaunchTimer {
-    private(set) static var milliseconds: Int?
+package enum LaunchTimer {
+    package private(set) static var milliseconds: Int?
 
-    static func markFirstFrame() {
+    package static func markFirstFrame() {
         guard milliseconds == nil else { return }
         milliseconds = elapsedMs()
         mark("first frame")
     }
 
     /// Debug breadcrumbs for where launch time goes.
-    static func mark(_ label: String) {
+    package static func mark(_ label: String) {
         #if DEBUG
         print("LAUNCH \(label): \(elapsedMs() ?? -1)ms")
         #endif
     }
 
-    static func elapsedMs() -> Int? {
+    package static func elapsedMs() -> Int? {
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]

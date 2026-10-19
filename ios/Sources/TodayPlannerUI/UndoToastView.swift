@@ -1,10 +1,11 @@
+#if os(iOS)
 import One
 import SwiftUI
 
-struct UndoToastView: View {
+package struct UndoToastView: View {
     @Environment(UndoToast.self) private var toast
 
-    var body: some View {
+    package var body: some View {
         if let message = toast.message {
             HStack(spacing: 12) {
                 Text(message)
@@ -26,3 +27,4 @@ struct UndoToastView: View {
         }
     }
 }
+#endif

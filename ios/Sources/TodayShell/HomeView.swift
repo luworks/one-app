@@ -1,3 +1,12 @@
+import One
+import FeatureToday
+import FeatureCalendar
+import FeatureReminders
+import FeatureActivity
+import FeatureSearch
+import FeatureSettings
+import FeatureAsk
+import TodayPlannerUI
 import TodayCore
 import TodayShared
 import TodayData
@@ -35,7 +44,14 @@ enum HomeTab: String, CaseIterable, Identifiable {
 /// App shell, laid out like Notion mobile: avatar + tab pills on top, content in the middle,
 /// and a bottom bar (search, Ask AI, new) that is always visible. A left drawer (like ChatGPT/Claude)
 /// opens from the avatar or a swipe from the left edge.
-struct HomeView: View {
+public struct HomeView: View {
+    private let diagnostics: LocalDiagnostics
+    private let prepareData: (@MainActor (ModelContext) -> Bool)?
+    public init(diagnostics: LocalDiagnostics, prepareData: (@MainActor (ModelContext) -> Bool)? = nil) {
+        self.diagnostics = diagnostics; self.prepareData = prepareData
+    }
+    @State private var editor: OpenedEntry?
+
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Query private var allTasks: [OneTask]
@@ -87,7 +103,7 @@ struct HomeView: View {
     /// riding on top of the keyboard, where it would cover the row being edited and a tap would open Ask.
     @State private var keyboardUp = false
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geo in
             // The sidebar takes most of the width; the page slides aside and stays visible beside it.
             let full = geo.size.width
@@ -155,8 +171,9 @@ struct HomeView: View {
         .environment(toast)
         .onAppear { toast.undoManager = undoManager }
         .onChange(of: undoManager) { _, new in toast.undoManager = new }
-        .sheet(isPresented: $showsSettings) { SettingsView() }
-        .sheet(isPresented: $showsActivity) { ActivityView() }
+        .sheet(item: $editor) { PlannerEditor(destination: $0, toast: toast) }
+        .sheet(isPresented: $showsSettings) { ShellSettings(diagnostics: diagnostics) }
+        .sheet(isPresented: $showsActivity) { ActivityView(activity: .shared, flush: { Ledger.flush(context) }, undo: { Ledger.undo($0, context: context) }) }
         .task {
             // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.
             try? await Task.sleep(for: .seconds(1.5))
@@ -302,17 +319,17 @@ struct HomeView: View {
             Group {
                 switch tab {
                 case .today:
-                    DayAgenda(day: $todayDay, showsWeekStrip: false) {
+                    DayAgenda(day: $todayDay, showsWeekStrip: false, openTask: { editor = .task($0) }, openEvent: { editor = .local($0) }) {
                         clockSection = .timer
                         withAnimation(.snappy) { tab = .clock }
                     }
                 case .calendar:
-                    CalendarView(day: $calendarDay, mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode) { picked in
+                    CalendarView(day: $calendarDay, mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode, calendar: .shared, onOpenTask: { editor = .task($0) }, onOpenAlarm: { editor = .alarm($0) }) { picked in
                         todayDay = picked
                         withAnimation(.snappy) { tab = .today }
                     }
-                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath.performanceAction { $0.isEmpty ? nil : "reminders.list" })
-                case .clock: AlarmsView(section: $clockSection)
+                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath.performanceAction { $0.isEmpty ? nil : "reminders.list" }, sync: .shared, requestAccess: { await FirstRun.reminders() })
+                case .clock: AlarmsView(section: $clockSection, alarms: .shared, timers: .shared, showUndo: toast.show)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -331,38 +348,20 @@ struct HomeView: View {
             keyboardUp = false
         }
         .sensoryFeedback(.selection, trigger: tabSwipes)
-        .sheet(isPresented: $showsSearch) { SearchView() }
-        .sheet(isPresented: $addingCity) { CityPicker() }
+        .sheet(isPresented: $showsSearch) { SearchView { destination in PlannerEditor(destination: destination, toast: toast) } }
+        .sheet(isPresented: $addingCity) { CityPicker(store: .shared) }
         .sheet(item: $newItem) { item in
             switch item {
             case .task: QuickReminderSheet()   // Due-style quick add; editing a reminder opens TaskEditor
-            case .event: EventEditor(day: tab == .calendar ? calendarDay : .now)
-            case .alarm: AlarmEditor().performanceDestination("alarm.editor")
+            case .event: EventEditor(day: tab == .calendar ? calendarDay : .now, calendar: .shared)
+            case .alarm: AlarmEditor(showUndo: toast.show).performanceDestination("alarm.editor")
             }
         }
         .task {
             if PerformanceTrace.enabled { PerformanceTrace.shared.mark("bootstrap_start") }
-            #if DEBUG
-            if let path = DevImport.requestedPath {
-                do {
-                    let (e, t) = try DevImport.run(path: path, into: context)
-                    ListActions.ensureLists(in: context)
-                    print("IMPORT ok: \(e) events, \(t) reminders")
-                } catch {
-                    print("IMPORT failed: \(error)")
-                }
-                return
-            }
-            #endif
-            #if DEBUG
-            if let path = TestDataset.requestedPath {
-                do { try TestDataset.load(path: path, into: context) } catch { print("DATASET failed: \(error)") }
-            } else {
-                SampleData.insertIfNeeded(context)
-            }
-            #else
-            SampleData.insertIfNeeded(context)
-            #endif
+            if let prepareData {
+                guard prepareData(context) else { return }
+            } else { SampleData.insertIfNeeded(context) }
             ListActions.ensureLists(in: context)
             #if DEBUG
             // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
@@ -725,10 +724,6 @@ struct TabPill: View {
     }
 }
 
-#Preview {
-    HomeView()
-        .modelContainer(for: [OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self, LedgerEntry.self, AIGrant.self], inMemory: true)
-}
 
 #if DEBUG
 /// Isolates the inbox beside a named UI-test store. No real App Group data is read or cleared.

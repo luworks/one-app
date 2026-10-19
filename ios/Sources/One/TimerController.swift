@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -18,25 +19,25 @@ import AlarmKit
 /// `Ringer.sync` keeps those ids when it cancels leftovers. The pure parts are in TimerList.swift.
 @MainActor
 @Observable
-final class TimerController {
-    static let shared = TimerController()
+package final class TimerController {
+    package static let shared = TimerController()
 
     /// All running timers, in the order they were started.
-    private(set) var timers: [RunningTimer]
+    package private(set) var timers: [RunningTimer]
     /// Ids that are ringing right now.
-    private(set) var ringing: Set<UUID> = []
+    package private(set) var ringing: Set<UUID> = []
     /// Today's Pomodoro rounds (UserDefaults, starts over at midnight).
-    private(set) var log: PomodoroLog = TimerController.initialLog()
+    package private(set) var log: PomodoroLog = TimerController.initialLog()
     /// The Recents under the picker: what was started, newest first (UserDefaults; `TimerRecents`).
-    private(set) var recents: [RecentTimer]
+    package private(set) var recents: [RecentTimer]
     /// The tone new timers ring with: a name from `AlarmSound.all`, empty for the system alarm sound.
-    var sound: String { didSet { if !Self.isUITesting { UserDefaults.standard.set(sound, forKey: Self.soundKey) } } }
+    package var sound: String { didSet { if !Self.isUITesting { UserDefaults.standard.set(sound, forKey: Self.soundKey) } } }
     /// A short line under the controls, e.g. when alarms are not allowed.
-    var message: String?
+    package var message: String?
 
     private static let soundKey = "timer.sound"
 
-    init() {
+    package init() {
         let (seeded, rings) = Self.seededTimers()
         timers = seeded ?? (Self.isUITesting ? [] : TimerStore.load())
         ringing = rings
@@ -102,7 +103,7 @@ final class TimerController {
     /// (25:00 "Focus", 5:00 "Short break", 15:00 "Long break": the only ones that count Pomodoro rounds) replaces the
     /// previous one. `byHand`: the user set it on the Timer tab, which teaches Siri the phrase.
     @discardableResult
-    func start(seconds: Int, label: String? = nil, byHand: Bool = false) async -> RunningTimer? {
+    package func start(seconds: Int, label: String? = nil, byHand: Bool = false) async -> RunningTimer? {
         message = nil
         guard seconds > 0 else { return nil }
         let seconds = min(seconds, TimerDial.maxSeconds)
@@ -150,7 +151,7 @@ final class TimerController {
         #endif
     }
 
-    func pause(_ id: UUID) {
+    package func pause(_ id: UUID) {
         guard let timer = timers.first(where: { $0.id == id }), !timer.isPaused else { return }
         if !Self.usesFakeAlarms {
             #if canImport(AlarmKit)
@@ -161,7 +162,7 @@ final class TimerController {
         replace(timer.paused(now: .now))
     }
 
-    func resume(_ id: UUID) {
+    package func resume(_ id: UUID) {
         guard let timer = timers.first(where: { $0.id == id }), timer.isPaused else { return }
         if !Self.usesFakeAlarms {
             #if canImport(AlarmKit)
@@ -173,7 +174,7 @@ final class TimerController {
     }
 
     /// Cancel while counting down (no round), or Stop while ringing (the round already counted when it rang).
-    func cancel(_ id: UUID) {
+    package func cancel(_ id: UUID) {
         guard let timer = timers.first(where: { $0.id == id }) else { return }
         if ringing.contains(id), timer.isCard { complete(timer) }
         if !Self.usesFakeAlarms {
@@ -195,7 +196,7 @@ final class TimerController {
     }
 
     /// Swipe to delete on a Recents row.
-    func deleteRecent(id: String) { setRecents(TimerRecents.removing(id: id, from: recents)) }
+    package func deleteRecent(id: String) { setRecents(TimerRecents.removing(id: id, from: recents)) }
 
     private func setRecents(_ list: [RecentTimer]) {
         recents = list
@@ -207,7 +208,7 @@ final class TimerController {
     /// from storage first, so a timer started by an intent while the app was closed appears at once.
     /// A Focus round counts only when its countdown ran out: seen ringing, or gone at or after its end time
     /// (stopped from the Lock Screen while the app was closed). Gone early means cancelled: no round.
-    func refresh() {
+    package func refresh() {
         setLog { _ in }  // midnight reset
         if Self.usesFakeAlarms || Self.isUITesting { return }
         #if canImport(AlarmKit)
@@ -232,7 +233,7 @@ final class TimerController {
 
     /// Follows AlarmKit until the calling task is cancelled (attach it to a view with `.task`), so a timer that ends,
     /// or is paused on the Lock Screen, shows up on whatever tab is open.
-    func watch() async {
+    package func watch() async {
         refresh()
         if Self.usesFakeAlarms || Self.isUITesting { return }
         #if canImport(AlarmKit)
@@ -306,3 +307,4 @@ final class TimerController {
     }
     #endif
 }
+#endif

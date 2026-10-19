@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -11,21 +12,21 @@ import UserNotifications
 /// (AlarmKit) gets no notification from us. Snoozing only moves the reminder, never the task;
 /// stopping a reminder never completes the task (only Done does).
 @MainActor
-final class Reminders: NSObject, UNUserNotificationCenterDelegate {
-    static let shared = Reminders()
+package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
+    package static let shared = Reminders()
 
-    static let taskCategory = "ONE_TASK"
-    static let eventCategory = "ONE_EVENT"
-    enum Action: String { case done = "DONE", snooze10 = "SNOOZE_10", snooze60 = "SNOOZE_60", tomorrow = "TOMORROW" }
+    package static let taskCategory = "ONE_TASK"
+    package static let eventCategory = "ONE_EVENT"
+    package enum Action: String { case done = "DONE", snooze10 = "SNOOZE_10", snooze60 = "SNOOZE_60", tomorrow = "TOMORROW" }
 
     /// iOS keeps at most 64 pending requests per app.
-    static let maxPending = 60
+    package static let maxPending = 60
     private static let snoozePrefix = "snooze-"
 
     private let center = UNUserNotificationCenter.current()
     private var container: ModelContainer?
 
-    func configure(_ container: ModelContainer) {
+    package func configure(_ container: ModelContainer) {
         self.container = container
         center.delegate = self
         let done = UNNotificationAction(identifier: Action.done.rawValue, title: "Done", options: [])
@@ -40,12 +41,12 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: Permission
 
-    func authorizationStatus() async -> UNAuthorizationStatus {
+    package func authorizationStatus() async -> UNAuthorizationStatus {
         await center.notificationSettings().authorizationStatus
     }
 
     @discardableResult
-    func requestPermission() async -> Bool {
+    package func requestPermission() async -> Bool {
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         await resync()
         return granted
@@ -54,7 +55,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     // MARK: Scheduling
 
     /// Rebuilds all pending reminders from the current data. Cheap; call after any change.
-    func resync() async {
+    package func resync() async {
         guard let context = container?.mainContext else { return }
         let status = await authorizationStatus()
         guard status == .authorized || status == .provisional else { return }
@@ -117,12 +118,12 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
 
     // MARK: Notification delegate
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+    package nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .sound, .list]
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+    package nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             didReceive response: UNNotificationResponse) async {
         let action = response.actionIdentifier
         let content = response.notification.request.content
@@ -176,3 +177,4 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
+#endif

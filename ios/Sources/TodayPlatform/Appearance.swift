@@ -5,7 +5,7 @@ import TodayPlatform
 import SwiftUI
 import UIKit
 
-extension Appearance {
+public extension Appearance {
     /// nil = follow the system.
     var colorScheme: ColorScheme? {
         forcesDark.map { $0 ? .dark : .light }
@@ -55,7 +55,7 @@ private struct AppearanceRoot: ViewModifier {
     }
 }
 
-extension View {
+public extension View {
     /// Put once at the root of the app.
     func appearanceRoot() -> some View { modifier(AppearanceRoot()) }
 }

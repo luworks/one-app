@@ -2,13 +2,13 @@
 import SwiftUI
 import TodayCore
 
-struct CircleButton: View {
-    let systemImage: String
-    let label: String
-    var size: CGFloat = 50
-    var action: () -> Void
+package struct CircleButton: View {
+    package let systemImage: String
+    package let label: String
+    package var size: CGFloat = 50
+    package var action: () -> Void
 
-    var body: some View {
+    package var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.body.weight(.semibold))
@@ -24,10 +24,10 @@ struct CircleButton: View {
 /// 0.97 press scale with a light haptic.
 
 
-extension View {
+package extension View {
     /// Liquid Glass on iOS 26+, material on older systems.
     @ViewBuilder
-    func glassCapsule() -> some View {
+    package func glassCapsule() -> some View {
         if #available(iOS 26, *) {
             glassEffect(.regular.interactive(), in: Capsule())
         } else {
@@ -36,7 +36,7 @@ extension View {
     }
 
     @ViewBuilder
-    func glassCircle() -> some View {
+    package func glassCircle() -> some View {
         if #available(iOS 26, *) {
             glassEffect(.regular.interactive(), in: Circle())
         } else {

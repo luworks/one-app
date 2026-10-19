@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -8,15 +9,15 @@ import SwiftData
 /// A short-lived "Completed · Undo" toast, shared through the environment.
 @MainActor
 @Observable
-final class UndoToast {
-    private(set) var message: String?
+package final class UndoToast {
+    package private(set) var message: String?
     private var undo: (() -> Void)?
     private var token = UUID()
     /// The window's undo manager: every undoable change is registered there too, so shaking the iPhone offers
     /// the system's "Undo ..." prompt for it, like in any other app. Set by `HomeView`.
-    @ObservationIgnored var undoManager: UndoManager?
+    package @ObservationIgnored var undoManager: UndoManager?
 
-    func show(_ message: String, undo: @escaping () -> Void) {
+    package func show(_ message: String, undo: @escaping () -> Void) {
         let t = UUID()
         token = t
         if let undoManager {
@@ -37,7 +38,7 @@ final class UndoToast {
     }
 
     /// A message with no Undo, for something that did not happen ("can't delete a read-only calendar's event").
-    func showNotice(_ message: String) {
+    package func showNotice(_ message: String) {
         let t = UUID()
         token = t
         withAnimation(.snappy) {
@@ -50,9 +51,9 @@ final class UndoToast {
         }
     }
 
-    var canUndo: Bool { undo != nil }
+    package var canUndo: Bool { undo != nil }
 
-    func performUndo() {
+    package func performUndo() {
         // The toast's button and the shake prompt undo the same change; once it is undone, forget the shake entry.
         undoManager?.removeAllActions(withTarget: self)
         let previousToken = token
@@ -69,7 +70,7 @@ final class UndoToast {
         return message
     }
 
-    func dismiss() {
+    package func dismiss() {
         withAnimation(.snappy) {
             message = nil
             undo = nil
@@ -79,10 +80,10 @@ final class UndoToast {
 
 /// Task actions that need side effects (repeat, undo). Views call these instead of mutating directly.
 @MainActor
-enum TaskActions {
+package enum TaskActions {
     /// Complete or reopen. Completing a repeating task creates its next occurrence.
     /// Every change is also written to the Activity ledger (`Ledger`), as made by `actor` through `channel`.
-    static func toggleDone(_ task: OneTask, context: ModelContext, toast: UndoToast?,
+    package static func toggleDone(_ task: OneTask, context: ModelContext, toast: UndoToast?,
                            actor: LedgerActor = .you, channel: LedgerChannel = .app) {
         let oldDone = task.isDone
         let oldDoneAt = task.doneAt
@@ -157,7 +158,7 @@ enum TaskActions {
         }
     }
 
-    static func delete(_ task: OneTask, context: ModelContext, toast: UndoToast?,
+    package static func delete(_ task: OneTask, context: ModelContext, toast: UndoToast?,
                        actor: LedgerActor = .you, channel: LedgerChannel = .app) {
         RemindersSync.shared.noteDeleted(reminder: task.externalID)
         let backup = task.copy()
@@ -174,7 +175,7 @@ enum TaskActions {
 
     /// Sets or clears the planned time (never the deadline) and records it: Plan, Today, Tomorrow, Unschedule, drag.
     @discardableResult
-    static func setPlanned(_ task: OneTask, to start: Date?, context: ModelContext,
+    package static func setPlanned(_ task: OneTask, to start: Date?, context: ModelContext,
                            actor: LedgerActor = .you, channel: LedgerChannel = .app, approval: LedgerApproval = .userMade) -> LedgerItem? {
         let old = task.plannedStart
         guard old != start else { return nil }
@@ -191,3 +192,4 @@ enum TaskActions {
     }
 }
 
+#endif

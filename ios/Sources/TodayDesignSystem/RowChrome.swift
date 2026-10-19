@@ -2,9 +2,9 @@
 import SwiftUI
 import TodayCore
 
-struct TimeColumn: View {
-    let date: Date
-    var body: some View {
+package struct TimeColumn: View {
+    package let date: Date
+    package var body: some View {
         Text(date.formatted(date: .omitted, time: .shortened))
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
@@ -17,12 +17,12 @@ struct TimeColumn: View {
 
 /// A row's title with its detail caption. Both sit on one line when they fit; otherwise the detail drops below.
 /// Long titles stop at `titleLines` so one item can't fill the screen (the full title is in Show Details).
-struct TitleDetail<Detail: View>: View {
-    let title: Text
-    var titleLines: Int? = 2
-    @ViewBuilder var detail: Detail
+package struct TitleDetail<Detail: View>: View {
+    package let title: Text
+    package var titleLines: Int? = 2
+    package @ViewBuilder var detail: Detail
 
-    var body: some View {
+    package var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 title.lineLimit(1)
@@ -37,10 +37,10 @@ struct TitleDetail<Detail: View>: View {
 }
 
 /// The travel-time line under an event with a location: "Drive 18 min · Leave by 14:20".
-struct TravelLine: View {
+package struct TravelLine: View {
     @Environment(\.dynamicTypeSize) private var typeSize
-    let text: String
-    var body: some View {
+    package let text: String
+    package var body: some View {
         Label(text, systemImage: "car.fill")
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -51,9 +51,9 @@ struct TravelLine: View {
 }
 
 /// The calendar color bar beside an event; it stretches to the height of the row's text.
-struct CalendarBar: View {
-    let color: Color
-    var body: some View {
+package struct CalendarBar: View {
+    package let color: Color
+    package var body: some View {
         RoundedRectangle(cornerRadius: 2)
             .fill(color)
             .frame(width: 4)
@@ -61,9 +61,9 @@ struct CalendarBar: View {
     }
 }
 
-struct NowRow: View {
-    let date: Date
-    var body: some View {
+package struct NowRow: View {
+    package let date: Date
+    package var body: some View {
         HStack(spacing: 8) {
             Text("Now " + date.formatted(date: .omitted, time: .shortened))
                 .font(.caption.weight(.semibold).monospacedDigit())

@@ -1,3 +1,4 @@
+import One
 import TodayCore
 import TodayShared
 import TodayData
@@ -17,16 +18,13 @@ final class QuickAction {
     var pending: String?
 }
 
-final class AppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        #if TODAY_MOCK
-        if PreviewFixtures.isAxe { return true }
-        #endif
+public final class AppDelegate: NSObject, UIApplicationDelegate {
+    public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         WidgetFeed.registerBackgroundRefresh()
         return true
     }
 
-    func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
+    public func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
                      options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         if let item = options.shortcutItem {
             let type = item.type

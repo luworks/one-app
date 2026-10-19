@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -10,7 +11,7 @@ import AlarmKit
 #endif
 
 /// What AlarmKit says an alarm is doing right now.
-enum AlarmLiveState: Equatable {
+package enum AlarmLiveState: Equatable {
     /// Waiting for its time.
     case scheduled
     /// Rang and the user tapped Snooze; it rings again when the countdown ends.
@@ -27,18 +28,18 @@ enum AlarmLiveState: Equatable {
 /// made in Apple's Clock app.
 @MainActor
 @Observable
-final class AlarmCenter {
-    static let shared = AlarmCenter()
+package final class AlarmCenter {
+    package static let shared = AlarmCenter()
 
-    private(set) var authorization: AlarmAuthorization = Ringer.authorization
+    package private(set) var authorization: AlarmAuthorization = Ringer.authorization
     /// Keyed by `OneAlarm.alarmKitID` (and the ids of items that ring as alarms).
-    private(set) var states: [UUID: AlarmLiveState] = [:]
+    package private(set) var states: [UUID: AlarmLiveState] = [:]
 
-    func state(of alarm: OneAlarm) -> AlarmLiveState? {
+    package func state(of alarm: OneAlarm) -> AlarmLiveState? {
         alarm.alarmKitID.flatMap { states[$0] }
     }
 
-    func requestAuthorization() async {
+    package func requestAuthorization() async {
         await Ringer.requestAuthorization()
         authorization = Ringer.authorization
     }
@@ -71,7 +72,7 @@ final class AlarmCenter {
 
     /// Follows AlarmKit until the calling task is cancelled (attach it to the view with `.task`).
     /// Every update also runs a sync, so a one-time alarm that rang is switched off in the list.
-    func watch(context: ModelContext) async {
+    package func watch(context: ModelContext) async {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
         authorization = Ringer.authorization
@@ -101,3 +102,4 @@ final class AlarmCenter {
         #endif
     }
 }
+#endif

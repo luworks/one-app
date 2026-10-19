@@ -3,14 +3,14 @@ import SwiftUI
 import TodayCore
 
 /// Colors for event blocks: a tint of the calendar's color behind text in a darker (or, in dark mode, lighter) shade of it.
-enum EventTint {
-    static func fill(_ color: Color) -> Color {
+package enum EventTint {
+    package static func fill(_ color: Color) -> Color {
         Color(UIColor { trait in
             UIColor(color).withAlphaComponent(trait.userInterfaceStyle == .dark ? 0.32 : 0.20)
         })
     }
 
-    static func text(_ color: Color) -> Color {
+    package static func text(_ color: Color) -> Color {
         Color(UIColor { trait in
             var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             UIColor(color).resolvedColor(with: trait).getHue(&h, saturation: &s, brightness: &b, alpha: &a)

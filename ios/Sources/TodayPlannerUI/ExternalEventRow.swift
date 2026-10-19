@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import SwiftUI
 import TodayCore
@@ -5,11 +6,11 @@ import TodayPlatform
 import TodayDesignSystem
 
 /// Row for a system calendar event (read-only, opens nothing).
-struct ExternalEventRow: View {
+package struct ExternalEventRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
-    let event: ExternalEvent
+    package let event: ExternalEvent
     /// The list that holds this row asks "this event or the series?" (see `entryDeleteDialog`).
-    @Binding var pendingDelete: CalEntry?
+    package @Binding var pendingDelete: CalEntry?
     @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
     /// The same swipe and long-press actions as in the Calendar tab.
@@ -19,7 +20,7 @@ struct ExternalEventRow: View {
                  repeats: event.repeats)
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 10) {
             if !event.isAllDay {
                 TimeColumn(date: event.start)
@@ -59,3 +60,4 @@ struct ExternalEventRow: View {
         return TravelTimes.shared.label(eventID: event.eventIdentifier, start: event.start, isAllDay: event.isAllDay, place: event.place)
     }
 }
+#endif

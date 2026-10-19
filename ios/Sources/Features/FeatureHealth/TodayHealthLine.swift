@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayPlatform
 import TodayDesignSystem
@@ -8,12 +9,12 @@ import SwiftUI
 /// no data or no permission there is no line (Health never says which).
 @MainActor
 @Observable
-final class HealthLineModel {
+public final class HealthLineModel {
     private let source: any HealthSource
     private(set) var line: String?
     @ObservationIgnored nonisolated(unsafe) private var observer: NSObjectProtocol?
 
-    init(source: any HealthSource) {
+    public init(source: any HealthSource) {
         self.source = source
         // The line follows a changed choice of metrics (from the sheet or Settings), unless the line is switched off.
         observer = NotificationCenter.default.addObserver(forName: HealthSelectionStore.didChange, object: nil, queue: .main) { [weak self] _ in
@@ -53,11 +54,12 @@ final class HealthLineModel {
 
 /// One quiet line at the top of Today (today only): "6,240 steps · slept 7 hr 12 min". Tap opens the Health sheet (the
 /// compact list of the metrics you chose). Read-only. Off with Settings → Today → Health summary.
-struct TodayHealthLine: View {
+package struct TodayHealthLine: View {
     let line: String
+    package init(line: String) { self.line = line }
     @State private var showsDetail = false
 
-    var body: some View {
+    package var body: some View {
         Button { PerformanceTrace.shared.beginPage("health"); showsDetail = true } label: {
             HStack(spacing: 6) {
                 Image(systemName: "heart.fill").font(.caption2).foregroundStyle(HealthStyle.accent)
@@ -81,11 +83,12 @@ struct TodayHealthLine: View {
 }
 
 /// The Health list in a sheet, with Done.
-struct HealthDetailSheet: View {
+package struct HealthDetailSheet: View {
+    package init() {}
     @Environment(HealthModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             HealthView(model: model)
                 .navigationTitle("Health")
@@ -98,10 +101,11 @@ struct HealthDetailSheet: View {
 
 /// Settings → Today: "Health metrics" opens the same sheet, so the choice is reachable even on days the Today line has
 /// nothing to say (or when every metric is hidden).
-struct HealthMetricsLink: View {
+package struct HealthMetricsLink: View {
+    package init() {}
     @State private var showsSheet = false
 
-    var body: some View {
+    package var body: some View {
         Button { PerformanceTrace.shared.beginPage("health"); showsSheet = true } label: {
             HStack {
                 Text("Health metrics").foregroundStyle(.primary)
@@ -113,3 +117,5 @@ struct HealthMetricsLink: View {
         .sheet(isPresented: $showsSheet) { HealthDetailSheet() }
     }
 }
+
+#endif

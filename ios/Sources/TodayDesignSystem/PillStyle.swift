@@ -55,12 +55,12 @@ public enum PillStyle {
 /// Use it directly for a single on/off pill, or through `PillSwitcher` for a choice.
 @MainActor
 public struct PillButton: View {
-    let title: String
-    var icon: String? = nil
-    let isSelected: Bool
-    var identifier: String? = nil
-    var fillsWidth = false
-    var action: () -> Void
+    package let title: String
+    package var icon: String? = nil
+    package let isSelected: Bool
+    package var identifier: String? = nil
+    package var fillsWidth = false
+    package var action: () -> Void
 
     public init(title: String, icon: String? = nil, isSelected: Bool,
                 identifier: String? = nil, fillsWidth: Bool = false, action: @escaping () -> Void) {
@@ -99,12 +99,12 @@ public struct PillButton: View {
 public struct PillSwitcher<Item: Hashable>: View {
     public enum Distribution { case leading, equal }
 
-    let items: [Item]
-    @Binding var selection: Item
-    var distribution: Distribution = .leading
-    let title: (Item) -> String
-    var icon: ((Item) -> String?)? = nil
-    var identifier: ((Item) -> String)? = nil
+    package let items: [Item]
+    package @Binding var selection: Item
+    package var distribution: Distribution = .leading
+    package let title: (Item) -> String
+    package var icon: ((Item) -> String?)? = nil
+    package var identifier: ((Item) -> String)? = nil
 
     public init(items: [Item], selection: Binding<Item>, distribution: Distribution = .leading,
                 title: @escaping (Item) -> String, icon: ((Item) -> String?)? = nil,
@@ -144,12 +144,12 @@ public struct PillSwitcher<Item: Hashable>: View {
 /// Tap runs `action`; add `.contextMenu` outside for a long-press menu (the preview lifts just the capsule).
 @MainActor
 public struct PillChip<Leading: View>: View {
-    let title: String
-    var count: Int? = nil
-    var accessibilityText: String? = nil
-    var identifier: String? = nil
-    @ViewBuilder var leading: () -> Leading
-    var action: () -> Void
+    package let title: String
+    package var count: Int? = nil
+    package var accessibilityText: String? = nil
+    package var identifier: String? = nil
+    package @ViewBuilder var leading: () -> Leading
+    package var action: () -> Void
 
     public init(title: String, count: Int? = nil, accessibilityText: String? = nil,
                 identifier: String? = nil, @ViewBuilder leading: @escaping () -> Leading,
@@ -198,8 +198,8 @@ public struct PillChip<Leading: View>: View {
 /// slide under the screen edge instead of being cut at the gutter.
 @MainActor
 public struct PillChipRow<Content: View>: View {
-    var inset: CGFloat = 20
-    @ViewBuilder var content: () -> Content
+    package var inset: CGFloat = 20
+    package @ViewBuilder var content: () -> Content
 
     public init(inset: CGFloat = 20, @ViewBuilder content: @escaping () -> Content) {
         self.inset = inset

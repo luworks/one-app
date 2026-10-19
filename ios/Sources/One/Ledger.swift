@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -10,35 +11,35 @@ import SwiftData
 /// launch when the copy was verified. The model stays in the schema, unused, so existing installs migrate (like `Habit`).
 /// Pure parts (actors, formatting, undo rules) are in `LedgerLogic.swift`, the item type and the import in `ActivityLedger.swift`.
 @Model
-final class LedgerEntry {
+package final class LedgerEntry {
     #Index<LedgerEntry>([\.date], [\.actor, \.date])
 
-    var id: UUID
-    var date: Date
+    package var id: UUID
+    package var date: Date
     /// `LedgerActor.raw`: you / ai / siri / shortcut / share / agent:<name>.
-    var actor: String
+    package var actor: String
     /// `LedgerChannel.rawValue`.
-    var channel: String
+    package var channel: String
     /// `LedgerAction.rawValue`.
-    var action: String
+    package var action: String
     /// "task", "event", "alarm" or "grant".
-    var itemKind: String
+    package var itemKind: String
     /// The reminder's `PersistentIdentifier` (JSON), filled in once it is saved. nil for events, alarms and deletes.
-    var itemRef: String?
-    var title: String
-    var before: String
-    var after: String
+    package var itemRef: String?
+    package var title: String
+    package var before: String
+    package var after: String
     /// `LedgerApproval.rawValue`.
-    var approval: String
+    package var approval: String
     /// Planned time or deadline before and after, for Undo.
-    var beforeDate: Date?
-    var afterDate: Date?
+    package var beforeDate: Date?
+    package var afterDate: Date?
     /// A deleted reminder (`TaskSnapshot`, JSON), so Activity can put it back.
-    var snapshot: Data?
+    package var snapshot: Data?
     /// For an `undone` entry: the entry it undid.
-    var undoOf: UUID?
+    package var undoOf: UUID?
 
-    init(date: Date = .now, actor: LedgerActor, channel: LedgerChannel, action: LedgerAction, itemKind: String, title: String,
+    package init(date: Date = .now, actor: LedgerActor, channel: LedgerChannel, action: LedgerAction, itemKind: String, title: String,
          before: String = "", after: String = "", approval: LedgerApproval) {
         self.id = UUID()
         self.date = date
@@ -53,8 +54,8 @@ final class LedgerEntry {
     }
 }
 
-extension LedgerEntry {
-    var legacyRow: LegacyLedgerRow {
+package extension LedgerEntry {
+    package var legacyRow: LegacyLedgerRow {
         LegacyLedgerRow(id: id, date: date, actor: actor, channel: channel, action: action, itemKind: itemKind, itemRef: itemRef,
                         title: title, before: before, after: after, approval: approval, beforeDate: beforeDate, afterDate: afterDate,
                         snapshot: snapshot, undoOf: undoOf)
@@ -63,22 +64,22 @@ extension LedgerEntry {
 
 /// A grant the user gave with "Always for 7 days" (see `AutonomyPolicy`). Revoking keeps the row (with `revoked`) for the record.
 @Model
-final class AIGrant {
-    var id: UUID
+package final class AIGrant {
+    package var id: UUID
     /// `GrantScope.rawValue`.
-    var scope: String
-    var granted: Date
-    var expires: Date
-    var revoked: Date?
+    package var scope: String
+    package var granted: Date
+    package var expires: Date
+    package var revoked: Date?
 
-    init(scope: GrantScope, granted: Date = .now) {
+    package init(scope: GrantScope, granted: Date = .now) {
         self.id = UUID()
         self.scope = scope.rawValue
         self.granted = granted
         self.expires = Grants.expiry(from: granted)
     }
 
-    var info: GrantInfo? {
+    package var info: GrantInfo? {
         GrantScope(rawValue: scope).map { GrantInfo(scope: $0, granted: granted, expires: expires, revoked: revoked) }
     }
 }
@@ -87,7 +88,7 @@ final class AIGrant {
 /// Items are held a moment and written together, after the reminders they point at have their final ids. The ledger lives in the
 /// Activity store (`ActivityCenter.shared.store`); the reads (Activity screen, Undo, the policy's look-back) are SQL queries.
 @MainActor
-enum Ledger {
+package enum Ledger {
     private struct Pending {
         var item: LedgerItem
         var snapshot: Data?
@@ -98,7 +99,7 @@ enum Ledger {
     private static var flushScheduled = false
 
     @discardableResult
-    static func record(_ action: LedgerAction, task: OneTask? = nil, kind: String = "task", title: String,
+    package static func record(_ action: LedgerAction, task: OneTask? = nil, kind: String = "task", title: String,
                        before: String = "", after: String = "", beforeDate: Date? = nil, afterDate: Date? = nil,
                        actor: LedgerActor = .you, channel: LedgerChannel = .app, approval: LedgerApproval = .userMade,
                        snapshot: TaskSnapshot? = nil, undoOf: UUID? = nil, context: ModelContext) -> LedgerItem {
@@ -116,7 +117,7 @@ enum Ledger {
 
     /// Records that `entry` was undone (by you, unless said otherwise).
     @discardableResult
-    static func recordUndo(of entry: LedgerItem, task: OneTask? = nil, actor: LedgerActor = .you, channel: LedgerChannel = .app,
+    package static func recordUndo(of entry: LedgerItem, task: OneTask? = nil, actor: LedgerActor = .you, channel: LedgerChannel = .app,
                            context: ModelContext) -> LedgerItem {
         record(.undone, task: task, kind: entry.itemKind, title: entry.title, before: entry.after, after: entry.before,
                actor: actor, channel: channel, approval: .userMade, undoOf: entry.id, context: context)
@@ -133,7 +134,7 @@ enum Ledger {
 
     /// Saves what is waiting: the reminders first (a new one's id becomes final on save), then the items with their ids, into
     /// the store. After this the Activity screen and the policy queries see everything recorded so far.
-    static func flush(_ context: ModelContext) {
+    package static func flush(_ context: ModelContext) {
         flushScheduled = false
         if !pending.isEmpty {
             if pending.contains(where: { $0.task != nil }) { try? context.save() }
@@ -148,12 +149,12 @@ enum Ledger {
         try? context.save()
     }
 
-    static func ref(_ id: PersistentIdentifier) -> String? {
+    package static func ref(_ id: PersistentIdentifier) -> String? {
         (try? JSONEncoder().encode(id)).flatMap { String(data: $0, encoding: .utf8) }
     }
 
     /// The reminder an entry points at, if it still exists.
-    static func task(for entry: LedgerItem, in context: ModelContext) -> OneTask? {
+    package static func task(for entry: LedgerItem, in context: ModelContext) -> OneTask? {
         guard let ref = entry.itemRef, let data = ref.data(using: .utf8),
               let id = try? JSONDecoder().decode(PersistentIdentifier.self, from: data) else { return nil }
         var d = FetchDescriptor<OneTask>(predicate: #Predicate { $0.persistentModelID == id })
@@ -163,7 +164,7 @@ enum Ledger {
 
     /// Drops expired activity (the changes ledger by the Settings choice: 90 days, 1 year or forever) and, in a launch after the
     /// old ledger was copied and verified, the old SwiftData rows. Called at launch.
-    static func prune(_ context: ModelContext, now: Date = .now) {
+    package static func prune(_ context: ModelContext, now: Date = .now) {
         let center = ActivityCenter.shared
         guard let store = center.store else { return }
         _ = try? store.prune(retention: center.settings.retention, now: now)
@@ -175,19 +176,19 @@ enum Ledger {
     }
 
     /// Changes recorded (tier 1).
-    static func count() -> Int {
+    package static func count() -> Int {
         ActivityCenter.shared.recorder.flush()
         return (try? ActivityCenter.shared.store?.count(ActivityQuery(tiers: [.changes]))) ?? 0
     }
 
     /// Clears the changes ledger (the old SwiftData rows too). Everything else: `ActivityCenter.clear`.
-    static func clear(_ context: ModelContext) {
+    package static func clear(_ context: ModelContext) {
         pending = []
         ActivityCenter.clear(tiers: [.changes], context: context)
     }
 
     /// Clears every kind of activity and the old rows; used by Delete All Data.
-    static func clearAll(_ context: ModelContext) {
+    package static func clearAll(_ context: ModelContext) {
         pending = []
         ActivityCenter.clear(tiers: nil, context: context)
     }
@@ -195,7 +196,7 @@ enum Ledger {
     /// Reminders the AI changed within the last 24 hours (applied or undone), and reminders whose planned time the
     /// user set or cleared themselves (within `ActivityWindows.userChoseDays`, not the ledger's retention): the policy asks
     /// before changing them again. Two indexed queries on the store.
-    static func protectedRefs(_ context: ModelContext, now: Date = .now) -> (aiRecent: Set<String>, userChose: Set<String>) {
+    package static func protectedRefs(_ context: ModelContext, now: Date = .now) -> (aiRecent: Set<String>, userChose: Set<String>) {
         flush(context)
         guard let store = ActivityCenter.shared.store else { return ([], []) }
         let since = ActivityClock.ms(now.addingTimeInterval(-AutonomyPolicy.recentWindow))
@@ -206,14 +207,14 @@ enum Ledger {
         return (ai, mine)
     }
 
-    static func snapshot(of t: OneTask) -> TaskSnapshot {
+    package static func snapshot(of t: OneTask) -> TaskSnapshot {
         TaskSnapshot(title: t.title, note: t.note, isDone: t.isDone, doneAt: t.doneAt, plannedStart: t.plannedStart,
                      durationMinutes: t.durationMinutes, due: t.due, createdAt: t.createdAt,
                      reminderOffsetMinutes: t.reminderOffsetMinutes, listName: t.listName, tags: t.tags, flagged: t.flagged,
                      repeatRule: t.repeatRule, checklist: t.checklist, ringsAsAlarm: t.ringsAsAlarm)
     }
 
-    static func task(from s: TaskSnapshot) -> OneTask {
+    package static func task(from s: TaskSnapshot) -> OneTask {
         let t = OneTask(title: s.title, note: s.note, plannedStart: s.plannedStart, durationMinutes: s.durationMinutes, due: s.due)
         t.isDone = s.isDone
         t.doneAt = s.doneAt
@@ -232,7 +233,7 @@ enum Ledger {
     /// Undo from Activity: puts the reminder back as it was before this entry, and records the undo.
     /// False when it can't (the reminder is gone, or it changed again since).
     @discardableResult
-    static func undo(_ entry: LedgerItem, context: ModelContext) -> Bool {
+    package static func undo(_ entry: LedgerItem, context: ModelContext) -> Bool {
         flush(context)
         let action = entry.actionValue
         if action == .deleted {
@@ -277,8 +278,8 @@ enum Ledger {
 /// The one-time copy of the old SwiftData ledger into the Activity store, at launch (`LedgerImport` does the work and is tested).
 /// Nothing is deleted here; the old rows go in a later launch (`Ledger.prune`) once the copy was verified.
 @MainActor
-enum LedgerMigration {
-    static func run(context: ModelContext) {
+package enum LedgerMigration {
+    package static func run(context: ModelContext) {
         let center = ActivityCenter.shared
         guard let store = center.store, !LedgerImport.isMigrated(store) else { return }
         let total = (try? context.fetchCount(FetchDescriptor<LedgerEntry>())) ?? 0
@@ -294,7 +295,7 @@ enum LedgerMigration {
     #if DEBUG
     /// UI tests only (`-uiTesting -uiTestingLegacyLedgerRows <n>`): writes n old-style `LedgerEntry` rows, as an install from
     /// before the Activity store would have them, so the real import can be tested end to end. Only when there are none yet.
-    static func seedLegacyForTests(context: ModelContext) {
+    package static func seedLegacyForTests(context: ModelContext) {
         let args = ProcessInfo.processInfo.arguments
         guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingLegacyLedgerRows"), i + 1 < args.count,
               let n = Int(args[i + 1]), n >= 5,
@@ -318,19 +319,19 @@ enum LedgerMigration {
 
 /// Grants in the store (SwiftData: in memory under `-uiTesting`, so a test's grant never leaks into the next run).
 @MainActor
-enum GrantStore {
-    static func all(_ context: ModelContext) -> [AIGrant] {
+package enum GrantStore {
+    package static func all(_ context: ModelContext) -> [AIGrant] {
         (try? context.fetch(FetchDescriptor<AIGrant>(sortBy: [SortDescriptor(\.expires, order: .reverse)]))) ?? []
     }
 
-    static func infos(_ context: ModelContext) -> [GrantInfo] { all(context).compactMap(\.info) }
+    package static func infos(_ context: ModelContext) -> [GrantInfo] { all(context).compactMap(\.info) }
 
-    static func active(_ scope: GrantScope, context: ModelContext, now: Date = .now) -> AIGrant? {
+    package static func active(_ scope: GrantScope, context: ModelContext, now: Date = .now) -> AIGrant? {
         all(context).first { $0.info.map { $0.scope == scope && $0.isActive(at: now) } ?? false }
     }
 
     /// Settings grants the same scope as a plan card. Turning off revokes every active copy of that scope.
-    static func setEnabled(_ enabled: Bool, scope: GrantScope, context: ModelContext) throws {
+    package static func setEnabled(_ enabled: Bool, scope: GrantScope, context: ModelContext) throws {
         let now = Date.now
         let changed: [AIGrant]
         if enabled {
@@ -363,14 +364,14 @@ enum GrantStore {
     }
 
     @discardableResult
-    static func grant(_ scope: GrantScope, context: ModelContext) -> AIGrant {
+    package static func grant(_ scope: GrantScope, context: ModelContext) -> AIGrant {
         let g = AIGrant(scope: scope)
         context.insert(g)
         record(g, granted: true, context: context)
         return g
     }
 
-    static func revoke(_ g: AIGrant, context: ModelContext) {
+    package static func revoke(_ g: AIGrant, context: ModelContext) {
         g.revoked = .now
         record(g, granted: false, context: context)
     }
@@ -380,9 +381,9 @@ enum GrantStore {
 /// the free-gap time Today already suggests for them (`DaySchedule`), each one checked by `AutonomyPolicy`. One toast with
 /// Undo, one Activity entry per reminder. Planned time only: deadlines, events and Apple Reminders are never touched.
 @MainActor
-enum AutoPlan {
+package enum AutoPlan {
     /// `now` places the day (Today's clock, pinned in UI tests); grants and the 24-hour rule always use the real time.
-    static func run(context: ModelContext, toast: UndoToast, now: Date = TodayClock.now) {
+    package static func run(context: ModelContext, toast: UndoToast, now: Date = TodayClock.now) {
         guard GrantStore.active(.planFreeTime, context: context, now: .now) != nil else { return }
         // Nothing applies by itself without an Activity entry and an Undo: when changes are not being recorded (Settings →
         // Activity data), the plan waits for a tap like any other card.
@@ -439,3 +440,4 @@ enum AutoPlan {
         }
     }
 }
+#endif

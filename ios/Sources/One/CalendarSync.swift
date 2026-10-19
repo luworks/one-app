@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -8,45 +9,45 @@ import SwiftUI
 import os
 
 /// A read-only event from the system calendar (Apple Calendar, Google, Exchange…).
-struct ExternalEvent: Identifiable, Hashable {
-    let id: String
+package struct ExternalEvent: Identifiable, Hashable {
+    package let id: String
     /// EventKit identifier, for opening the event in Apple's own viewer.
-    let eventIdentifier: String
-    let title: String
-    var location: String = ""
-    let start: Date
-    let end: Date
-    let isAllDay: Bool
-    var calendarID: String = ""
-    let calendarTitle: String
-    let color: Color
+    package let eventIdentifier: String
+    package let title: String
+    package var location: String = ""
+    package let start: Date
+    package let end: Date
+    package let isAllDay: Bool
+    package var calendarID: String = ""
+    package let calendarTitle: String
+    package let color: Color
     /// Address plus coordinate (when Apple Calendar has one), for travel time. Nil without a location.
-    var place: TravelPlace? = nil
+    package var place: TravelPlace? = nil
     /// Part of a repeating series (Delete asks "this event or all future", and offers no Undo).
-    var repeats = false
+    package var repeats = false
     /// From a subscribed, holiday or Birthdays calendar: background, not the user's own load (Year's busy days).
-    var isBackground = false
-    var isBirthday = false
-    var isHoliday = false
+    package var isBackground = false
+    package var isBirthday = false
+    package var isHoliday = false
 
-    var durationMinutes: Int { max(1, Int(end.timeIntervalSince(start) / 60)) }
+    package var durationMinutes: Int { max(1, Int(end.timeIntervalSince(start) / 60)) }
 }
 
 /// A system calendar (one line in Apple's Calendars list).
-struct SystemCalendar: Identifiable, Hashable {
-    let id: String
-    let title: String
-    let sourceTitle: String
-    let color: Color
-    var isBirthday = false
-    var isHoliday = false
+package struct SystemCalendar: Identifiable, Hashable {
+    package let id: String
+    package let title: String
+    package let sourceTitle: String
+    package let color: Color
+    package var isBirthday = false
+    package var isHoliday = false
 }
 
 /// EventKit bridge: shows system calendar events in Today / Calendar, and can save new events there.
 @MainActor
 @Observable
-final class CalendarSync {
-    static let shared = CalendarSync()
+package final class CalendarSync {
+    package static let shared = CalendarSync()
     @ObservationIgnored private let log = Logger(subsystem: "com.luworks.one", category: "calendar")
 
     /// Created on first use: EKEventStore is slow to set up and most launches don't need it.
@@ -61,21 +62,21 @@ final class CalendarSync {
     private static let hiddenKey = "one.calendarSync.hiddenCalendars"
 
     /// Bumped when the system calendar changes so views refetch.
-    private(set) var version = 0
+    package private(set) var version = 0
     /// UI tests start with Apple Calendar off (a saved "on" from an earlier run would leak test events into the
     /// system calendar); the tests that need it pass `-uiTestingCalendarSync`.
-    private(set) var enabled = UserDefaults.standard.bool(forKey: CalendarSync.enabledKey)
+    package private(set) var enabled = UserDefaults.standard.bool(forKey: CalendarSync.enabledKey)
         && (!ProcessInfo.processInfo.arguments.contains("-uiTesting") || ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSync"))
     /// Calendars turned off in the Calendars list. Stored as "hidden" so new calendars show by default, like Apple's.
     /// (UI tests start with every calendar shown, so an earlier run can't hide events from a later one.)
-    private(set) var hiddenCalendarIDs: Set<String> = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+    package private(set) var hiddenCalendarIDs: Set<String> = ProcessInfo.processInfo.arguments.contains("-uiTesting")
         ? [] : Set(UserDefaults.standard.stringArray(forKey: CalendarSync.hiddenKey) ?? [])
 
-    var hasAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
-    var isOn: Bool { enabled && hasAccess }
+    package var hasAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
+    package var isOn: Bool { enabled && hasAccess }
 
     /// Apple's own event editor is used when Calendar access is on. UI tests keep the in-app editor (no permission prompts).
-    var usesNativeEditor: Bool { isOn && !ProcessInfo.processInfo.arguments.contains("-uiTesting") }
+    package var usesNativeEditor: Bool { isOn && !ProcessInfo.processInfo.arguments.contains("-uiTesting") }
 
     private init() {}
 
@@ -84,10 +85,10 @@ final class CalendarSync {
     @ObservationIgnored private var warming = false
 
     /// False while Apple Calendar is on but the store is still warming up (events read now would come back empty).
-    var isReady: Bool { !isOn || storeReady }
+    package var isReady: Bool { !isOn || storeReady }
 
     /// Creates the store now: a background refresh has no first frame to protect.
-    func prepareStore() {
+    package func prepareStore() {
         guard isOn, !storeReady else { return }
         _ = store
         storeReady = true
@@ -106,14 +107,14 @@ final class CalendarSync {
     }
 
     /// Sets the store up right away. App Intents (Siri, Shortcuts) read events with no UI that would warm it first.
-    func prepare() {
+    package func prepare() {
         guard isOn, !storeReady else { return }
         _ = store
         storeReady = true
     }
 
     /// On the first launch show iOS's own Calendar permission prompt. Does nothing afterwards.
-    func connectIfFirstRun() async {
+    package func connectIfFirstRun() async {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-seedCalendarDemo") {
             await seedDemo()
@@ -126,7 +127,7 @@ final class CalendarSync {
     }
 
     /// Turns sync on (asking for access the first time) or off.
-    func setEnabled(_ on: Bool) async {
+    package func setEnabled(_ on: Bool) async {
         if on && !hasAccess {
             _ = try? await store.requestFullAccessToEvents()
         }
@@ -137,15 +138,15 @@ final class CalendarSync {
     }
 
     /// The store behind every system event, for Apple's own editor and calendar chooser.
-    var eventStore: EKEventStore { store }
+    package var eventStore: EKEventStore { store }
 
     /// Tells views to refetch (after Apple's editor saved or deleted something).
-    func refresh() { version += 1 }
+    package func refresh() { version += 1 }
 
     // MARK: Calendars list
 
     /// All event calendars in the order Apple lists them: by account, then by name.
-    func calendars() -> [SystemCalendar] {
+    package func calendars() -> [SystemCalendar] {
         _ = version
         guard isOn, storeReady else { return [] }
         return store.calendars(for: .event)
@@ -154,7 +155,7 @@ final class CalendarSync {
     }
 
     /// Applies the Calendars list: `selected` calendars stay visible, the rest are hidden everywhere.
-    func setVisibleCalendars(_ selected: Set<String>) {
+    package func setVisibleCalendars(_ selected: Set<String>) {
         let all = Set(store.calendars(for: .event).map(\.calendarIdentifier))
         hiddenCalendarIDs = all.subtracting(selected)
         UserDefaults.standard.set(Array(hiddenCalendarIDs), forKey: Self.hiddenKey)
@@ -176,7 +177,7 @@ final class CalendarSync {
     // MARK: Events
 
     /// System events overlapping `interval`, excluding ones Today created itself (`exclude`).
-    func events(in interval: DateInterval, excluding exclude: Set<String> = []) -> [ExternalEvent] {
+    package func events(in interval: DateInterval, excluding exclude: Set<String> = []) -> [ExternalEvent] {
         _ = version
         guard isOn else { return [] }
         guard storeReady else {
@@ -204,18 +205,18 @@ final class CalendarSync {
             }
     }
 
-    func events(on day: Date, excluding exclude: Set<String> = []) -> [ExternalEvent] {
+    package func events(on day: Date, excluding exclude: Set<String> = []) -> [ExternalEvent] {
         guard let interval = Calendar.current.dateInterval(of: .day, for: day) else { return [] }
         return events(in: interval, excluding: exclude)
     }
 
     /// The calendar a mirrored event (one Today created) lives in: its color, and whether the Calendars list hides it.
-    func calendar(forExternalID id: String?) -> SystemCalendar? {
+    package func calendar(forExternalID id: String?) -> SystemCalendar? {
         mirror(id)?.calendar
     }
 
     /// The location of a mirrored event's system copy (Today's own events keep no location), for travel time.
-    func place(forExternalID id: String?) -> TravelPlace? {
+    package func place(forExternalID id: String?) -> TravelPlace? {
         mirror(id)?.place
     }
 
@@ -234,7 +235,7 @@ final class CalendarSync {
     }
 
     /// An event's address, with the coordinate Apple Calendar stored when the location was picked from Maps.
-    static func place(_ e: EKEvent) -> TravelPlace? {
+    package static func place(_ e: EKEvent) -> TravelPlace? {
         let text = (e.location ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         let geo = e.structuredLocation?.geoLocation?.coordinate
@@ -245,24 +246,24 @@ final class CalendarSync {
     @ObservationIgnored private var mirrorCacheVersion = -1
 
     /// Color of a mirrored event's calendar, nil when unknown.
-    func color(forExternalID id: String?) -> Color? { calendar(forExternalID: id)?.color }
+    package func color(forExternalID id: String?) -> Color? { calendar(forExternalID: id)?.color }
 
     /// True when the Calendars list hides the calendar this mirrored event lives in.
-    func isHidden(externalID id: String?) -> Bool {
+    package func isHidden(externalID id: String?) -> Bool {
         guard let c = calendar(forExternalID: id) else { return false }
         return hiddenCalendarIDs.contains(c.id)
     }
 
     /// A system event and the store it belongs to, for Apple's event viewer.
     /// `occurrence`: the start of the occurrence that was tapped, so a repeating event opens on that day, not its first one.
-    func nativeEvent(identifier: String, occurrence: Date? = nil) -> (EKEvent, EKEventStore)? {
+    package func nativeEvent(identifier: String, occurrence: Date? = nil) -> (EKEvent, EKEventStore)? {
         guard isOn, let e = occurrence.flatMap({ self.occurrence(identifier, at: $0) }) ?? store.event(withIdentifier: identifier) else { return nil }
         return (e, store)
     }
 
     /// Saves a copy of `event` to the default calendar and returns its identifier.
     /// `span` is what a repeating event's change applies to; the default keeps the old behavior, AI edits pass `.thisEvent`.
-    func save(_ event: OneEvent, span: EKSpan = .futureEvents) -> String? {
+    package func save(_ event: OneEvent, span: EKSpan = .futureEvents) -> String? {
         guard isOn, let calendar = store.defaultCalendarForNewEvents else {
             log.error("save skipped isOn=\(self.isOn) default=\(self.store.defaultCalendarForNewEvents != nil)")
             return nil
@@ -295,7 +296,7 @@ final class CalendarSync {
     /// occurrence, so without it "Delete This Event Only" removed another day's occurrence and the tapped one stayed
     /// (seen on a real iCloud calendar). With it, that occurrence is removed, and "all future events" start there.
     @discardableResult
-    func delete(externalID: String?, occurrence: Date? = nil, span: EKSpan = .futureEvents) -> Bool {
+    package func delete(externalID: String?, occurrence: Date? = nil, span: EKSpan = .futureEvents) -> Bool {
         guard isOn, let id = externalID, let ek = occurrence.flatMap({ self.occurrence(id, at: $0) }) ?? store.event(withIdentifier: id) else {
             log.info("delete: no system copy (isOn=\(self.isOn), id=\(externalID ?? "nil", privacy: .public))")
             return true
@@ -304,7 +305,7 @@ final class CalendarSync {
     }
 
     /// The occurrence of event `id` that starts at `start` (within a minute).
-    func occurrence(_ id: String, at start: Date) -> EKEvent? {
+    package func occurrence(_ id: String, at start: Date) -> EKEvent? {
         let predicate = store.predicateForEvents(withStart: start.addingTimeInterval(-60), end: start.addingTimeInterval(60), calendars: nil)
         let found = store.events(matching: predicate)
         return EventMatch.occurrence(id, at: start, in: found.map { ($0.eventIdentifier, $0.startDate) }).map { found[$0] }
@@ -314,7 +315,7 @@ final class CalendarSync {
     /// event; then the id finds nothing, and the copy would survive the delete and come back as a calendar event. So when the
     /// id misses, the copy is found by title and start time instead.
     @discardableResult
-    func delete(_ event: OneEvent, span: EKSpan = .futureEvents) -> Bool {
+    package func delete(_ event: OneEvent, span: EKSpan = .futureEvents) -> Bool {
         guard let ek = systemCopy(of: event) else {
             log.info("delete: no linked system copy")
             return true
@@ -343,7 +344,7 @@ final class CalendarSync {
 
     /// The Apple Calendar copy of an event Today created: by its identifier, or, when sync has re-keyed it, by the same title
     /// starting within a minute of the same time (then the new identifier is saved on the event).
-    func systemCopy(of event: OneEvent) -> EKEvent? {
+    package func systemCopy(of event: OneEvent) -> EKEvent? {
         guard isOn, let id = event.externalID else { return nil }
         if let ek = store.event(withIdentifier: id) { return ek }
         let predicate = store.predicateForEvents(withStart: event.start.addingTimeInterval(-60),
@@ -357,14 +358,14 @@ final class CalendarSync {
     }
 
     /// Whether the system copy of an event can be deleted (its calendar accepts changes). True when there is no system copy.
-    func canDelete(externalID: String?) -> Bool {
+    package func canDelete(externalID: String?) -> Bool {
         guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else { return true }
         return ek.calendar.allowsContentModifications
     }
 
     /// Events Today created whose copy in Apple Calendar is gone (deleted there). Apple Calendar is the source of truth, so
     /// the local copy goes too. Empty unless Calendar sync is on and its store is ready, so a missing permission never counts as a delete.
-    func removedMirrors(_ events: [OneEvent]) -> [OneEvent] {
+    package func removedMirrors(_ events: [OneEvent]) -> [OneEvent] {
         guard isOn, storeReady else { return [] }
         // A copy found again under a new identifier is relinked, not dropped (see `systemCopy(of:)`).
         return events.filter { e in e.externalID != nil && systemCopy(of: e) == nil }
@@ -374,7 +375,7 @@ final class CalendarSync {
     /// UI-test hook (`-debugDeleteSystemEvent <title>`): deletes system events with this title, as if they had been deleted
     /// in the Calendar app. Also the cleanup for the events the create hooks below make: a whole series goes, even one
     /// that started days ago (its earliest occurrence is removed with all future events).
-    func debugDeleteSystemEvents(titled title: String) {
+    package func debugDeleteSystemEvents(titled title: String) {
         guard isOn else { return }
         storeReady = true
         let predicate = store.predicateForEvents(withStart: .now.addingTimeInterval(-30 * 86_400), end: .now.addingTimeInterval(30 * 86_400), calendars: nil)
@@ -389,7 +390,7 @@ final class CalendarSync {
     /// app, not by Today, in the default calendar. It starts at the top of the current hour (next to the Today list's now
     /// line, and still today at 23:59); the repeating one is daily and starts yesterday, so it has a past occurrence,
     /// today's and tomorrow's.
-    func debugCreateSystemEvent(titled title: String, repeating: Bool) {
+    package func debugCreateSystemEvent(titled title: String, repeating: Bool) {
         guard isOn, let calendar = store.defaultCalendarForNewEvents else { return }
         storeReady = true
         let cal = Calendar.current
@@ -416,13 +417,13 @@ final class CalendarSync {
     #endif
 
     /// Whether the system copy of an event repeats (Delete then asks: this event or the series).
-    func isRepeating(externalID: String?) -> Bool {
+    package func isRepeating(externalID: String?) -> Bool {
         guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else { return false }
         return ek.hasRecurrenceRules
     }
 
     /// Who a change to the system copy of an event reaches: attendee count and whether you organize it. Nil without a system copy.
-    func audience(externalID: String?) -> (attendees: Int, isOrganizer: Bool)? {
+    package func audience(externalID: String?) -> (attendees: Int, isOrganizer: Bool)? {
         guard isOn, storeReady, let id = externalID, let ek = store.event(withIdentifier: id) else { return nil }
         return (ek.attendees?.count ?? 0, ek.organizer?.isCurrentUser ?? true)
     }
@@ -432,14 +433,14 @@ final class CalendarSync {
 /// Embedded, its Delete Event confirmation closed without deleting anything (reproduced in the simulator), and a sheet
 /// attached to each row of a long list could open the wrong event. One presenter for every place that opens it.
 @MainActor
-enum NativeEvents {
+package enum NativeEvents {
     private static var delegate: Delegate?
     private static let log = Logger(subsystem: "com.luworks.one", category: "calendar")
 
     /// `identifier` nil = a new event starting at `start`.
     /// `start`: for an existing event, the start of the occurrence that was tapped; for a new event, when it starts.
     /// `end`: for a new event, when it ends (default one hour after `start`).
-    static func edit(identifier: String? = nil, start: Date = .now, end: Date? = nil,
+    package static func edit(identifier: String? = nil, start: Date = .now, end: Date? = nil,
                      fullOptions: Bool = false, onComplete: ((EKEventEditViewAction) -> Void)? = nil) {
         let sync = CalendarSync.shared
         // iOS 27's remote editor disables Done for an unchanged existing event.
@@ -687,24 +688,24 @@ private struct ExistingCalendarEventEditor: View {
 /// Opening a system event goes straight to Apple's editor (EventKitUI): title, start and end, all-day, calendar, alerts and
 /// Delete Event are all editable at once, Done saves. Apple's read-only viewer made you tap Edit first and drew its own
 /// Delete, so it is not used.
-struct NativeEventSheet: View {
-    let identifier: String
+package struct NativeEventSheet: View {
+    package let identifier: String
 
-    var body: some View {
+    package var body: some View {
         NativeEventEditor(identifier: identifier).ignoresSafeArea()
     }
 }
 
 /// Apple's own event editor (EventKitUI), for a new event or an existing one. Saving, cancelling and deleting
 /// (with Apple's "This event only / all future events" prompts) are all Apple's.
-struct NativeEventEditor: UIViewControllerRepresentable {
+package struct NativeEventEditor: UIViewControllerRepresentable {
     /// nil = a new event.
-    var identifier: String?
+    package var identifier: String?
     /// Where a new event starts (ignored when editing).
-    var start: Date = .now
+    package var start: Date = .now
     @Environment(\.dismiss) private var dismiss
 
-    func makeUIViewController(context: Context) -> EKEventEditViewController {
+    package func makeUIViewController(context: Context) -> EKEventEditViewController {
         let sync = CalendarSync.shared
         let vc = EKEventEditViewController()
         vc.eventStore = sync.eventStore
@@ -721,11 +722,11 @@ struct NativeEventEditor: UIViewControllerRepresentable {
         return vc
     }
 
-    func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
+    package func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
+    package func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
 
-    final class Coordinator: NSObject, EKEventEditViewDelegate {
+    package final class Coordinator: NSObject, EKEventEditViewDelegate {
         let dismiss: () -> Void
         init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
         func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
@@ -736,3 +737,4 @@ struct NativeEventEditor: UIViewControllerRepresentable {
     }
 }
 
+#endif

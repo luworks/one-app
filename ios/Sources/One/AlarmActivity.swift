@@ -1,3 +1,4 @@
+#if os(iOS)
 #if canImport(AlarmKit)
 import AlarmKit
 import AppIntents
@@ -60,4 +61,5 @@ struct StopAlarmIntent: LiveActivityIntent {
         return .result()
     }
 }
+#endif
 #endif

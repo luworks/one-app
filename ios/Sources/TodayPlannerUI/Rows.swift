@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import SwiftUI
 import SwiftData
@@ -6,17 +7,17 @@ import TodayPlatform
 import TodayDesignSystem
 
 /// Events are fixed: no move actions here. `start` is the occurrence shown (repeating events).
-struct EventRow: View {
+package struct EventRow: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dynamicTypeSize) private var typeSize
-    let event: OneEvent
-    var start: Date? = nil
+    package let event: OneEvent
+    package var start: Date? = nil
     /// The list that holds this row asks "this event or the series?" for a repeating one (see `entryDeleteDialog`).
-    @Binding var pendingDelete: CalEntry?
-    let open: @MainActor (OneEvent) -> Void
+    package @Binding var pendingDelete: CalEntry?
+    package let open: @MainActor (OneEvent) -> Void
     @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
-    init(event: OneEvent, start: Date? = nil, pendingDelete: Binding<CalEntry?> = .constant(nil), open: @escaping @MainActor (OneEvent) -> Void) {
+    package init(event: OneEvent, start: Date? = nil, pendingDelete: Binding<CalEntry?> = .constant(nil), open: @escaping @MainActor (OneEvent) -> Void) {
         self.open = open
         self.event = event
         self.start = start
@@ -35,7 +36,7 @@ struct EventRow: View {
         return parts.joined(separator: " · ")
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 10) {
             if !event.isAllDay {
                 TimeColumn(date: start ?? event.start)
@@ -87,25 +88,25 @@ struct EventRow: View {
 
 /// Tasks flex: they can be moved, and only the circle completes them (like Apple Reminders).
 /// Moving a task changes its planned time, never its deadline.
-struct TaskRow: View {
+package struct TaskRow: View {
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
     @Environment(\.dynamicTypeSize) private var typeSize
-    let task: OneTask
-    var showsTime = false
+    package let task: OneTask
+    package var showsTime = false
     /// The time in the time column; nil = the planned time.
-    var time: Date? = nil
+    package var time: Date? = nil
     /// Add the list name to the detail line. Off inside a list, where it is the title.
-    var showsList = true
+    package var showsList = true
     /// Day view: detail on the title's line when it fits, titles capped at two lines, tighter insets.
-    var compact = false
+    package var compact = false
     /// A suggested time for a reminder due today with no time: shown faint with a Plan button. Nothing is saved until Plan.
-    var suggested: Date? = nil
+    package var suggested: Date? = nil
     /// Set on the Today tab: the day the row sits on. The detail line then keeps at most two facts (see `RowSubtitle`).
-    var agendaDay: Date? = nil
-    let open: @MainActor (OneTask) -> Void
+    package var agendaDay: Date? = nil
+    package let open: @MainActor (OneTask) -> Void
 
-    init(task: OneTask, showsTime: Bool = false, time: Date? = nil, showsList: Bool = true, compact: Bool = false, suggested: Date? = nil, agendaDay: Date? = nil, open: @escaping @MainActor (OneTask) -> Void) {
+    package init(task: OneTask, showsTime: Bool = false, time: Date? = nil, showsList: Bool = true, compact: Bool = false, suggested: Date? = nil, agendaDay: Date? = nil, open: @escaping @MainActor (OneTask) -> Void) {
         self.task = task
         self.showsTime = showsTime
         self.time = time
@@ -116,7 +117,7 @@ struct TaskRow: View {
         self.open = open
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 10) {
             if let suggested {
                 TimeColumn(date: suggested).opacity(0.6)
@@ -250,11 +251,11 @@ struct TaskRow: View {
 }
 
 /// An alarm in the day's schedule, so the whole day reads in one list.
-struct AlarmMarkRow: View {
-    let alarm: OneAlarm
-    let date: Date
+package struct AlarmMarkRow: View {
+    package let alarm: OneAlarm
+    package let date: Date
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 10) {
             TimeColumn(date: date)
             Image(systemName: "alarm")
@@ -271,3 +272,4 @@ struct AlarmMarkRow: View {
         .accessibilityLabel("Alarm \(alarm.label) at \(date.formatted(date: .omitted, time: .shortened))")
     }
 }
+#endif

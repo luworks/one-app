@@ -3,9 +3,9 @@ import SwiftUI
 
 /// The colored circle with a white glyph that stands for a list (cards, rows, the editor preview).
 package struct ListGlyph: View {
-    let color: Color
-    let symbol: String
-    var size: CGFloat
+    package let color: Color
+    package let symbol: String
+    package var size: CGFloat
 
     package init(color: Color, symbol: String, size: CGFloat = 30) {
         self.color = color

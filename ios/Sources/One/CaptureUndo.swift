@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -9,19 +10,19 @@ import EventKit
 /// Takes back exactly what a card's Add wrote, and finds it again for Open. The card keeps the created item's id
 /// (`Ledger.ref` JSON) and the Activity entry of its creation (`StoredCard.itemRef` / `entryID`).
 @MainActor
-enum CaptureUndo {
-    enum Item {
+package enum CaptureUndo {
+    package enum Item {
         case task(OneTask)
         case event(OneEvent)
         case alarm(OneAlarm)
     }
 
-    static func decode(_ ref: String) -> PersistentIdentifier? {
+    package static func decode(_ ref: String) -> PersistentIdentifier? {
         ref.data(using: .utf8).flatMap { try? JSONDecoder().decode(PersistentIdentifier.self, from: $0) }
     }
 
     /// The item an Add wrote, or nil when it is gone (deleted since).
-    static func resolve(_ ref: String?, in context: ModelContext) -> Item? {
+    package static func resolve(_ ref: String?, in context: ModelContext) -> Item? {
         guard let ref, let id = decode(ref) else { return nil }
         switch id.entityName {
         case "OneTask":
@@ -50,7 +51,7 @@ enum CaptureUndo {
 
     /// Removes the created item and records the undo in Activity. An item that is already gone counts as taken back.
     /// False only when it could not be removed (an event in a read-only calendar).
-    static func undo(itemRef: String?, entryID: UUID?, title: String, context: ModelContext) -> Bool {
+    package static func undo(itemRef: String?, entryID: UUID?, title: String, context: ModelContext) -> Bool {
         let created = entry(entryID, in: context)
         switch resolve(itemRef, in: context) {
         case nil:
@@ -86,8 +87,8 @@ enum CaptureUndo {
 
 
 /// A title-only edit never copies a stale Capture back over dates, recurrence or alarm state.
-extension CaptureUndo {
-    static func title(_ ref: String?, in context: ModelContext) -> String? {
+package extension CaptureUndo {
+    package static func title(_ ref: String?, in context: ModelContext) -> String? {
         switch resolve(ref, in: context) {
         case .task(let task): return task.title
         case .alarm(let alarm): return alarm.label
@@ -102,7 +103,7 @@ extension CaptureUndo {
 
     /// Resolving again at commit time prevents a deleted item from being resurrected by an open sheet or Undo toast.
     @discardableResult
-    static func rename(_ ref: String?, to title: String, in context: ModelContext) -> Bool {
+    package static func rename(_ ref: String?, to title: String, in context: ModelContext) -> Bool {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         switch resolve(ref, in: context) {
         case .alarm(let alarm):
@@ -144,3 +145,4 @@ extension CaptureUndo {
         return true
     }
 }
+#endif

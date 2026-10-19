@@ -1,15 +1,16 @@
+#if os(iOS)
 import Foundation
 import SwiftData
 
 /// The one data store. The app and its App Intents (Siri, Shortcuts, Spotlight run them in this process) share it,
 /// whichever of them asks first.
 @MainActor
-enum OneStore {
+public enum OneStore {
     private static var started = false
 
     /// Opens the store and hooks up notifications and Apple Reminders sync, once per process.
     @discardableResult
-    static func start() -> ModelContainer {
+    public static func start() -> ModelContainer {
         if !started {
             started = true
             Reminders.shared.configure(container)
@@ -19,7 +20,7 @@ enum OneStore {
         return container
     }
 
-    static let container: ModelContainer = {
+    public static let container: ModelContainer = {
         do {
             // UI tests launch with -uiTesting: a fresh in-memory store with the sample data.
             // -dataset <path> (with -uiTesting) loads tests/fixtures/today-dataset.json instead of the sample data.
@@ -41,3 +42,4 @@ enum OneStore {
         }
     }()
 }
+#endif

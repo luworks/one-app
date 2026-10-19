@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -15,17 +16,17 @@ import EventKit
 /// A repeating event asks first whether Delete means this one or the series, so a swipe never silently removes a series.
 /// The question is asked by `entryDeleteDialog` on the container (the list), not on the row: a row is rebuilt when its
 /// swipe actions close, which would drop the dialog.
-struct EntryActions: ViewModifier {
+package struct EntryActions: ViewModifier {
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
 
-    let entry: CalEntry
+    package let entry: CalEntry
     /// Set when Delete needs the "this event or the series" question; the container shows it.
-    @Binding var pendingDelete: CalEntry?
-    var open: (CalEntry) -> Void
-    var edit: (CalEntry) -> Void
+    package @Binding var pendingDelete: CalEntry?
+    package var open: (CalEntry) -> Void
+    package var edit: (CalEntry) -> Void
     /// Rows in a list get the swipe; blocks on the week grid only get the long-press menu.
-    var swipes = true
+    package var swipes = true
 
     /// Whether Delete needs a question first: any repeating event, local or in Apple's calendar.
     private var isRepeating: Bool {
@@ -36,7 +37,7 @@ struct EntryActions: ViewModifier {
         }
     }
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .contextMenu { menu }
             .modifier(SwipeIfRows(enabled: swipes, entry: entry, isRepeating: isRepeating, delete: requestDelete, flag: toggleFlag))
@@ -71,12 +72,12 @@ struct EntryActions: ViewModifier {
 }
 
 /// Asks "this event or the series?" for the entry in `pending`. Put it on the list or grid that holds the rows.
-struct EntryDeleteDialog: ViewModifier {
+package struct EntryDeleteDialog: ViewModifier {
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
-    @Binding var pending: CalEntry?
+    package @Binding var pending: CalEntry?
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content.confirmationDialog(
             "Delete Event",
             isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
@@ -121,15 +122,16 @@ private struct SwipeIfRows: ViewModifier {
     }
 }
 
-extension View {
+package extension View {
     /// Swipe and long-press actions on a calendar entry (see `EntryActions`).
-    func entryActions(_ entry: CalEntry, pendingDelete: Binding<CalEntry?>, open: @escaping (CalEntry) -> Void,
+    package func entryActions(_ entry: CalEntry, pendingDelete: Binding<CalEntry?>, open: @escaping (CalEntry) -> Void,
                       edit: @escaping (CalEntry) -> Void, swipes: Bool = true) -> some View {
         modifier(EntryActions(entry: entry, pendingDelete: pendingDelete, open: open, edit: edit, swipes: swipes))
     }
 
     /// The "this event or the series?" question for a repeating event's Delete (see `EntryActions`).
-    func entryDeleteDialog(_ pending: Binding<CalEntry?>) -> some View {
+    package func entryDeleteDialog(_ pending: Binding<CalEntry?>) -> some View {
         modifier(EntryDeleteDialog(pending: pending))
     }
 }
+#endif

@@ -7,13 +7,13 @@ import UIKit
 
 /// Opt-in app-side monotonic timings. Layout/display-link opportunities do not prove presentation.
 @MainActor @Observable
-final class AIResponseTrace {
-    static let shared = AIResponseTrace()
-    static let enabled = ProcessInfo.processInfo.arguments.contains("-performanceTrace")
-    static let showsHistory = enabled && ProcessInfo.processInfo.arguments.contains("-uiTesting")
+package final class AIResponseTrace {
+    package static let shared = AIResponseTrace()
+    package static let enabled = ProcessInfo.processInfo.arguments.contains("-performanceTrace")
+    package static let showsHistory = enabled && ProcessInfo.processInfo.arguments.contains("-uiTesting")
 
-    enum Phase: String, Hashable { case feedback, response }
-    enum LocalReplyBoundary: String { case before, after }
+    package enum Phase: String, Hashable { case feedback, response }
+    package enum LocalReplyBoundary: String { case before, after }
     private struct Turn {
         let token: UUID
         let start: UInt64
@@ -30,9 +30,9 @@ final class AIResponseTrace {
     @ObservationIgnored private var conversationStageToken: UUID?
     @ObservationIgnored private var completedStageLine: String?
     @ObservationIgnored private var stageDispatch = "async"
-    private(set) var history: [String] = []
+    package private(set) var history: [String] = []
 
-    func begin(_ token: UUID, modelAvailable: Bool) {
+    package func begin(_ token: UUID, modelAvailable: Bool) {
         guard Self.enabled else { return }
         cancel()
         turn = Turn(token: token, start: DispatchTime.now().uptimeNanoseconds, modelAvailable: modelAvailable)
@@ -42,13 +42,13 @@ final class AIResponseTrace {
     }
 
     /// Only the conversation wrapper is diagnosed; model internals and save outcomes remain unobserved.
-    func diagnoseConversation(_ token: UUID) {
+    package func diagnoseConversation(_ token: UUID) {
         guard Self.enabled, stageToken == token else { return }
         conversationStageToken = token
     }
 
     /// Call around actual synchronous fallback work; never synthesize task or await timestamps.
-    func localReply(_ boundary: LocalReplyBoundary, token: UUID) {
+    package func localReply(_ boundary: LocalReplyBoundary, token: UUID) {
         guard Self.enabled, stageToken == token, conversationStageToken == token else { return }
         switch boundary {
         case .before: stageDispatch = "local_sync"
@@ -58,7 +58,7 @@ final class AIResponseTrace {
         stage("local_reply_" + boundary.rawValue, token: token)
     }
 
-    func stage(_ name: String, token: UUID, at timestamp: UInt64? = nil) {
+    package func stage(_ name: String, token: UUID, at timestamp: UInt64? = nil) {
         guard Self.enabled, stageToken == token,
               name == "context_complete" || conversationStageToken == token else { return }
         let now = timestamp ?? DispatchTime.now().uptimeNanoseconds
@@ -78,13 +78,13 @@ final class AIResponseTrace {
         return completedStageLine
     }
 
-    func backend(_ backend: String, token: UUID) {
+    package func backend(_ backend: String, token: UUID) {
         guard turn?.token == token else { return }
         turn?.backend = backend
     }
 
     /// Called only after this turn has emitted its own reply, card or follow-up state.
-    func ready(_ token: UUID) {
+    package func ready(_ token: UUID) {
         guard var current = turn, current.token == token, current.ready == nil else { return }
         let now = DispatchTime.now().uptimeNanoseconds
         current.ready = now
@@ -95,12 +95,12 @@ final class AIResponseTrace {
         emit("ai_send_to_full_response_ready", start: current.start, end: now, turn: current)
     }
 
-    func wants(_ phase: Phase, token: UUID) -> Bool {
+    package func wants(_ phase: Phase, token: UUID) -> Bool {
         guard let turn, turn.token == token, turn.pending.contains(phase) else { return false }
         return phase == .feedback || turn.ready != nil
     }
 
-    func layout(_ phase: Phase, token: UUID) {
+    package func layout(_ phase: Phase, token: UUID) {
         guard wants(phase, token: token), var current = turn else { return }
         let end = DispatchTime.now().uptimeNanoseconds
         current.pending.remove(phase)
@@ -118,7 +118,7 @@ final class AIResponseTrace {
         if let diagnostic { print(diagnostic) }
     }
 
-    func cancel(_ token: UUID? = nil) {
+    package func cancel(_ token: UUID? = nil) {
         guard let current = turn, token == nil || token == current.token else { return }
         if !current.pending.isEmpty {
             print("PERF_TRACE v=1 event=ai_cancel turn=\(current.token.uuidString) uptime_ns=\(DispatchTime.now().uptimeNanoseconds)")
@@ -148,15 +148,15 @@ final class AIResponseTrace {
 }
 
 /// Background of the actual sent message or emitted reply/card, never an artificial layout request.
-struct AIResponseContentProbe: UIViewRepresentable {
-    let token: UUID
-    let phase: AIResponseTrace.Phase
+package struct AIResponseContentProbe: UIViewRepresentable {
+    package let token: UUID
+    package let phase: AIResponseTrace.Phase
 
-    func makeUIView(context: Context) -> ProbeView { ProbeView() }
-    func updateUIView(_ view: ProbeView, context: Context) { view.arm(token: token, phase: phase) }
-    static func dismantleUIView(_ view: ProbeView, coordinator: ()) { view.stop() }
+    package func makeUIView(context: Context) -> ProbeView { ProbeView() }
+    package func updateUIView(_ view: ProbeView, context: Context) { view.arm(token: token, phase: phase) }
+    package static func dismantleUIView(_ view: ProbeView, coordinator: ()) { view.stop() }
 
-    final class ProbeView: UIView {
+    package final class ProbeView: UIView {
         private var link: CADisplayLink?
         private var token: UUID?
         private var phase: AIResponseTrace.Phase = .feedback
@@ -197,8 +197,8 @@ struct AIResponseContentProbe: UIViewRepresentable {
 }
 
 /// Diagnostic-only accessibility data lives on Ask, including when Ask is itself a full-screen sheet.
-struct AIResponseTraceHistory: View {
-    var body: some View {
+package struct AIResponseTraceHistory: View {
+    package var body: some View {
         if AIResponseTrace.showsHistory {
             Text("AI trace")
                 .font(.system(size: 1))

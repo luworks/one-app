@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -11,20 +12,20 @@ import WidgetKit
 /// as a small JSON snapshot into the App Group, then asks WidgetKit to reload. The widget never opens SwiftData;
 /// it reads Apple Calendar itself when it can (see `NextItems.merge`), so the snapshot matters most for Today's own items.
 @MainActor
-enum WidgetFeed {
+package enum WidgetFeed {
     private static var lastWritten: WidgetSnapshot?
     private static var container: ModelContainer?
 
     /// Background refresh: rewrites the snapshot while the app isn't open (at midnight, and whenever iOS allows).
-    nonisolated static let refreshTaskID = "com.luworks.one.widgetRefresh"
+    package nonisolated static let refreshTaskID = "com.luworks.one.widgetRefresh"
 
     private static var isUITesting: Bool { ProcessInfo.processInfo.arguments.contains("-uiTesting") }
 
-    static func configure(_ container: ModelContainer) {
+    package static func configure(_ container: ModelContainer) {
         self.container = container
     }
 
-    static func update(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], now: Date = .now, calendar: Calendar = .current) {
+    package static func update(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], now: Date = .now, calendar: Calendar = .current) {
         // UI tests run on a throwaway store; keep them from replacing what the widget shows.
         guard !isUITesting else { return }
         let items = items(tasks: tasks, events: events, alarms: alarms, now: now, calendar: calendar)
@@ -40,7 +41,7 @@ enum WidgetFeed {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    static func items(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], now: Date, calendar: Calendar) -> [WidgetItem] {
+    package static func items(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], now: Date, calendar: Calendar) -> [WidgetItem] {
         let today = calendar.startOfDay(for: now)
         let days = (0..<WidgetSnapshot.days).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
         guard let end = calendar.date(byAdding: .day, value: WidgetSnapshot.days, to: today) else { return [] }
@@ -112,7 +113,7 @@ enum WidgetFeed {
     // MARK: Background refresh
 
     /// Must run before launch finishes (`application(_:didFinishLaunchingWithOptions:)`).
-    nonisolated static func registerBackgroundRefresh() {
+    package nonisolated static func registerBackgroundRefresh() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: refreshTaskID, using: .main) { task in
             // BackgroundTasks promises this callback on the explicitly supplied main queue.
             // The ObjC BGTask API carries no actor annotation; no task or context crosses a thread here.
@@ -124,7 +125,7 @@ enum WidgetFeed {
 
     /// Asks iOS to wake the app in about three hours, and no later than just after midnight (one pending request;
     /// each run books the next one, so this repeats while iOS allows).
-    static func scheduleBackgroundRefresh() {
+    package static func scheduleBackgroundRefresh() {
         guard !isUITesting else { return }
         Task { await submitRefreshRequest() }
     }
@@ -166,7 +167,7 @@ enum WidgetFeed {
     }
 
     /// Rewrites the snapshot from the data store (no views needed).
-    static func rewriteFromStore() {
+    package static func rewriteFromStore() {
         guard let context = container?.mainContext else { return }
         let tasks = (try? context.fetch(FetchDescriptor<OneTask>(predicate: #Predicate { !$0.isDone }))) ?? []
         let events = (try? context.fetch(FetchDescriptor<OneEvent>())) ?? []
@@ -174,3 +175,4 @@ enum WidgetFeed {
         update(tasks: tasks, events: events, alarms: alarms)
     }
 }
+#endif

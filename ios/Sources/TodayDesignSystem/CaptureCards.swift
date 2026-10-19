@@ -3,21 +3,21 @@ import SwiftUI
 import TodayCore
 
 /// AI preview: what will be created. The user can switch reminder / event / alarm before tapping Add.
-struct CaptureCard: View {
-    @Binding var capture: Capture
+package struct CaptureCard: View {
+    package @Binding var capture: Capture
     /// The user's Reminders lists; when given, a task shows which one it goes to, changeable with one tap.
-    var lists: [String] = []
+    package var lists: [String] = []
     /// Open until the user decides. The card stays in the conversation afterwards (see `CardFooter`).
-    var status: CardStatus = .open
-    var onAdd: () -> Void
-    var onCancel: () -> Void
-    var cancelTitle = "Cancel"
-    var onUndo: () -> Void = {}
-    var onOpen: () -> Void = {}
+    package var status: CardStatus = .open
+    package var onAdd: () -> Void
+    package var onCancel: () -> Void
+    package var cancelTitle = "Cancel"
+    package var onUndo: () -> Void = {}
+    package var onOpen: () -> Void = {}
 
-    var onRename: (String) -> Bool = { _ in false }
+    package var onRename: (String) -> Bool = { _ in false }
 
-    enum Mode: Hashable, CaseIterable { case task, event, alarm }
+    package enum Mode: Hashable, CaseIterable { case task, event, alarm }
 
     /// An alarm is a task that rings; it needs a time, so switching to Alarm with none picks the next full hour.
     private var mode: Binding<Mode> {
@@ -42,7 +42,7 @@ struct CaptureCard: View {
             })
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(capture.kindLabel, systemImage: "sparkles")
@@ -118,13 +118,13 @@ private struct DecidedCardLabel: ViewModifier {
     }
 }
 
-struct CaptureTitleButton: View {
-    let title: String
-    var editable = true
-    var onSave: (String) -> Bool
+package struct CaptureTitleButton: View {
+    package let title: String
+    package var editable = true
+    package var onSave: (String) -> Bool
     @State private var editing = false
 
-    var body: some View {
+    package var body: some View {
         Group {
             if editable {
                 Button { editing = true } label: {
@@ -181,16 +181,16 @@ private struct CaptureTitleEditor: View {
 }
 /// The bottom line of a card once it is decided: a green check "Added" with Undo and Open, "Undone" with Add again, or a
 /// quiet "Dropped" with nothing to tap. The same on the full card and on a row of a list.
-struct CardFooter: View {
-    let status: CardStatus
-    var compact = false
-    var onAdd: () -> Void = {}
-    var onUndo: () -> Void = {}
-    var onOpen: () -> Void = {}
+package struct CardFooter: View {
+    package let status: CardStatus
+    package var compact = false
+    package var onAdd: () -> Void = {}
+    package var onUndo: () -> Void = {}
+    package var onOpen: () -> Void = {}
 
     private var font: Font { compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold) }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 8) {
             switch status {
             case .open:
@@ -238,11 +238,11 @@ struct CardFooter: View {
 }
 
 /// Where a task will be filed. One tap opens the user's lists.
-struct ListMenu: View {
-    @Binding var capture: Capture
-    let lists: [String]
+package struct ListMenu: View {
+    package @Binding var capture: Capture
+    package let lists: [String]
 
-    var body: some View {
+    package var body: some View {
         Menu {
             Picker("List", selection: Binding(get: { capture.listName == "Reminders" ? "" : capture.listName ?? "" },
                                               set: { capture.listName = $0.isEmpty ? nil : $0 })) {

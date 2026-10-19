@@ -16,11 +16,11 @@ import os
 /// Rules (who is eligible, keys, refresh, leave-by) live in `Shared/TravelTime.swift` and are unit-tested.
 @MainActor
 @Observable
-final class TravelTimes: NSObject, CLLocationManagerDelegate {
-    static let shared = TravelTimes()
+package final class TravelTimes: NSObject, CLLocationManagerDelegate {
+    package static let shared = TravelTimes()
 
     /// Bumped when an estimate lands or location permission changes, so rows redraw.
-    private(set) var version = 0
+    package private(set) var version = 0
 
     @ObservationIgnored private let log = Logger(subsystem: "com.luworks.one", category: "travel")
     @ObservationIgnored private var cache: [String: TravelEstimate] = [:]
@@ -46,7 +46,7 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
     private var isUITesting: Bool { ProcessInfo.processInfo.arguments.contains("-uiTesting") }
 
     /// The Settings toggle (on unless turned off).
-    static var isEnabled: Bool { UserDefaults.standard.object(forKey: SettingsKey.travelTime) as? Bool ?? true }
+    package static var isEnabled: Bool { UserDefaults.standard.object(forKey: SettingsKey.travelTime) as? Bool ?? true }
 
     private override init() {
         super.init()
@@ -60,7 +60,7 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
 
     /// Travel seconds worth showing for this occurrence, or nil. Never waits: a lookup it needs runs in the background.
     /// `askPermission`: false from background work (no prompt can show there).
-    func seconds(eventID: String, start: Date, isAllDay: Bool, place: TravelPlace?, now: Date = .now,
+    package func seconds(eventID: String, start: Date, isAllDay: Bool, place: TravelPlace?, now: Date = .now,
                  askPermission: Bool = true) -> TimeInterval? {
         _ = version
         guard !isUITesting, Self.isEnabled, let place, !eventID.isEmpty,
@@ -169,26 +169,26 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
 
     // MARK: CLLocationManagerDelegate
 
-    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    package nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in self.version += 1 }
     }
 
     /// The fix lands in `manager.location`, which address searches read; nothing else to do.
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {}
+    package nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {}
 
     /// Required with `requestLocation()`. Without a fix, searches just aren't biased toward you.
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+    package nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
 
-extension TravelTimes {
+package extension TravelTimes {
     /// The row line for an occurrence ("Drive 18 min · Leave by 14:20"), or nil.
-    func label(eventID: String, start: Date, isAllDay: Bool, place: TravelPlace?, now: Date = .now) -> String? {
+    package func label(eventID: String, start: Date, isAllDay: Bool, place: TravelPlace?, now: Date = .now) -> String? {
         guard let s = seconds(eventID: eventID, start: start, isAllDay: isAllDay, place: place, now: now) else { return nil }
         return TravelTime.label(start: start, travelSeconds: s, now: now) { $0.formatted(date: .omitted, time: .shortened) }
     }
 
     /// Travel fields for the widget snapshot (no permission prompt from here).
-    func widgetFields(eventID: String, start: Date, isAllDay: Bool, place: TravelPlace?, now: Date) -> (minutes: Int, leaveBy: Date)? {
+    package func widgetFields(eventID: String, start: Date, isAllDay: Bool, place: TravelPlace?, now: Date) -> (minutes: Int, leaveBy: Date)? {
         guard let s = seconds(eventID: eventID, start: start, isAllDay: isAllDay, place: place, now: now, askPermission: false)
         else { return nil }
         return (TravelTime.minutes(s), TravelTime.leaveBy(start: start, travelSeconds: s))

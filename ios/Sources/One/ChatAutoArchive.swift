@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -8,8 +9,8 @@ import SwiftData
 /// Archives conversations that are finished (rule: `ConversationHistory.shouldAutoArchive`). Runs when the sidebar opens.
 /// Off in Settings ("Archive finished chats").
 @MainActor
-enum ChatAutoArchive {
-    static func run(_ context: ModelContext, now: Date = .now) {
+package enum ChatAutoArchive {
+    package static func run(_ context: ModelContext, now: Date = .now) {
         guard UserDefaults.standard.object(forKey: SettingsKey.autoArchiveChats) as? Bool ?? true else { return }
         let open = (try? context.fetch(FetchDescriptor<ChatThread>(predicate: #Predicate { !$0.archived }))) ?? []
         var changed = false
@@ -41,3 +42,4 @@ enum ChatAutoArchive {
         }
     }
 }
+#endif

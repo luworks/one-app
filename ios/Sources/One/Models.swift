@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -7,32 +8,32 @@ import SwiftData
 
 /// A task. Its planned time is flexible and can move; its deadline (`due`) never moves with it.
 @Model
-final class OneTask {
-    var title: String
-    var note: String
-    var isDone: Bool
-    var doneAt: Date?
+package final class OneTask {
+    package var title: String
+    package var note: String
+    package var isDone: Bool
+    package var doneAt: Date?
     /// When you plan to work on it. nil = not scheduled.
-    var plannedStart: Date?
-    var durationMinutes: Int
+    package var plannedStart: Date?
+    package var durationMinutes: Int
     /// Deadline. Moving planned time never changes this.
-    var due: Date?
-    var createdAt: Date
+    package var due: Date?
+    package var createdAt: Date
     /// Minutes before the planned time (or a timed deadline) to remind. nil = no reminder.
-    var reminderOffsetMinutes: Int? = 0
+    package var reminderOffsetMinutes: Int? = 0
     /// "" = Inbox.
-    var listName: String = ""
-    var tags: [String] = []
-    var flagged: Bool = false
+    package var listName: String = ""
+    package var tags: [String] = []
+    package var flagged: Bool = false
     /// RepeatRule raw value; nil = one-off.
-    var repeatRule: String? = nil
-    var checklist: [ChecklistItem] = []
+    package var repeatRule: String? = nil
+    package var checklist: [ChecklistItem] = []
     /// Ring like an alarm (AlarmKit) instead of a quiet notification.
-    var ringsAsAlarm: Bool = false
+    package var ringsAsAlarm: Bool = false
     /// EKReminder.calendarItemIdentifier when this task is synced with Apple Reminders.
-    var externalID: String? = nil
+    package var externalID: String? = nil
 
-    init(title: String, note: String = "", plannedStart: Date? = nil, durationMinutes: Int = 25, due: Date? = nil) {
+    package init(title: String, note: String = "", plannedStart: Date? = nil, durationMinutes: Int = 25, due: Date? = nil) {
         self.title = title
         self.note = note
         self.isDone = false
@@ -43,19 +44,19 @@ final class OneTask {
         self.createdAt = .now
     }
 
-    var isOverdue: Bool {
+    package var isOverdue: Bool {
         guard !isDone, let due else { return false }
         return due < Calendar.current.startOfDay(for: .now)
     }
 
     /// A deadline at a time of day (a date-only deadline is stored at midnight).
-    var dueHasTime: Bool {
+    package var dueHasTime: Bool {
         guard let due else { return false }
         return Calendar.current.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0)
     }
 
     /// When the reminder fires: planned time, else a deadline that has a time of day.
-    var reminderDate: Date? {
+    package var reminderDate: Date? {
         guard let offset = reminderOffsetMinutes else { return nil }
         let base: Date?
         if let plannedStart {
@@ -68,15 +69,15 @@ final class OneTask {
         return base?.addingTimeInterval(TimeInterval(-offset * 60))
     }
 
-    func toggleDone() {
+    package func toggleDone() {
         isDone.toggle()
         doneAt = isDone ? .now : nil
     }
 
-    var repeats: RepeatRule? { repeatRule.flatMap(RepeatRule.init(rawValue:)) }
+    package var repeats: RepeatRule? { repeatRule.flatMap(RepeatRule.init(rawValue:)) }
 
     /// The next occurrence of a repeating task: same task, dates moved by the rule, checklist reset.
-    func nextOccurrence() -> OneTask? {
+    package func nextOccurrence() -> OneTask? {
         guard let rule = repeats else { return nil }
         let next = OneTask(title: title, note: note,
                            plannedStart: plannedStart.map { rule.next(after: $0) },
@@ -94,7 +95,7 @@ final class OneTask {
     }
 
     /// Everything needed to recreate a deleted task (for Undo).
-    func copy() -> OneTask {
+    package func copy() -> OneTask {
         let t = OneTask(title: title, note: note, plannedStart: plannedStart, durationMinutes: durationMinutes, due: due)
         t.isDone = isDone
         t.doneAt = doneAt
@@ -109,13 +110,13 @@ final class OneTask {
         return t
     }
 
-    func postpone(minutes: Int) {
+    package func postpone(minutes: Int) {
         guard let start = plannedStart else { return }
         plannedStart = start.addingTimeInterval(TimeInterval(minutes * 60))
     }
 
     /// Today at the same time of day, or the next full hour when it has no planned time yet.
-    func moveToToday() {
+    package func moveToToday() {
         let cal = Calendar.current
         if let start = plannedStart {
             let t = cal.dateComponents([.hour, .minute], from: start)
@@ -126,7 +127,7 @@ final class OneTask {
         }
     }
 
-    func moveToTomorrow() {
+    package func moveToTomorrow() {
         let cal = Calendar.current
         if let start = plannedStart {
             plannedStart = cal.date(byAdding: .day, value: 1, to: start)
@@ -139,40 +140,40 @@ final class OneTask {
 /// A calendar event. Events stay fixed: nothing in the app moves them.
 /// Later this is replaced by the system calendar (EventKit).
 @Model
-final class OneEvent {
-    var note: String = ""
-    var title: String
-    var start: Date
-    var durationMinutes: Int
-    var calendarName: String
-    var reminderOffsetMinutes: Int? = 10
-    var isAllDay: Bool = false
-    var ringsAsAlarm: Bool = false
+package final class OneEvent {
+    package var note: String = ""
+    package var title: String
+    package var start: Date
+    package var durationMinutes: Int
+    package var calendarName: String
+    package var reminderOffsetMinutes: Int? = 10
+    package var isAllDay: Bool = false
+    package var ringsAsAlarm: Bool = false
     /// Identifier of the copy in the system calendar, when calendar sync is on.
-    var externalID: String? = nil
+    package var externalID: String? = nil
     /// RepeatRule raw value; nil = one-off.
-    var repeatRule: String? = nil
+    package var repeatRule: String? = nil
 
-    var repeats: RepeatRule? { repeatRule.flatMap(RepeatRule.init(rawValue:)) }
-    var duration: TimeInterval { TimeInterval(durationMinutes * 60) }
+    package var repeats: RepeatRule? { repeatRule.flatMap(RepeatRule.init(rawValue:)) }
+    package var duration: TimeInterval { TimeInterval(durationMinutes * 60) }
 
     /// Start dates of this event's occurrences overlapping `interval` (one-off events give 0 or 1).
-    func occurrences(in interval: DateInterval) -> [Date] {
+    package func occurrences(in interval: DateInterval) -> [Date] {
         Recurrence.occurrences(start: start, duration: duration, rule: repeats, in: interval)
     }
 
-    func occurs(on day: Date, calendar: Calendar = .current) -> [Date] {
+    package func occurs(on day: Date, calendar: Calendar = .current) -> [Date] {
         guard let interval = calendar.dateInterval(of: .day, for: day) else { return [] }
         return occurrences(in: interval)
     }
 
     /// Next occurrence starting after `date`, for reminders.
-    func nextStart(after date: Date) -> Date? {
+    package func nextStart(after date: Date) -> Date? {
         occurrences(in: DateInterval(start: date, duration: 400 * 86400)).first { $0 > date }
     }
 
     /// Next reminder: before the next upcoming occurrence (all-day events remind at 9:00 that day).
-    var reminderDate: Date? {
+    package var reminderDate: Date? {
         guard let offset = reminderOffsetMinutes else { return nil }
         let now = Date.now
         let lead = TimeInterval(offset * 60)
@@ -182,7 +183,7 @@ final class OneEvent {
     }
 
     /// Everything needed to recreate a deleted event (for Undo).
-    func copy() -> OneEvent {
+    package func copy() -> OneEvent {
         let e = OneEvent(title: title, start: start, durationMinutes: durationMinutes, calendarName: calendarName)
         e.note = note
         e.reminderOffsetMinutes = reminderOffsetMinutes
@@ -192,7 +193,7 @@ final class OneEvent {
         return e
     }
 
-    init(title: String, start: Date, durationMinutes: Int, calendarName: String = "Local") {
+    package init(title: String, start: Date, durationMinutes: Int, calendarName: String = "Local") {
         self.title = title
         self.start = start
         self.durationMinutes = durationMinutes
@@ -200,8 +201,8 @@ final class OneEvent {
     }
 }
 
-extension Capture {
-    func makeTask() -> OneTask {
+package extension Capture {
+    package func makeTask() -> OneTask {
         let timing = taskTiming
         let t = OneTask(title: title, plannedStart: timing.plannedStart, durationMinutes: durationMinutes ?? 25, due: timing.due)
         t.note = notes ?? ""
@@ -214,7 +215,7 @@ extension Capture {
 
     /// An alarm request becomes a real alarm (Alarms tab) when it can be one: it rings within the next day, or repeats
     /// daily / on selected weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
-    func makeAlarm(now: Date = .now) -> OneAlarm? {
+    package func makeAlarm(now: Date = .now) -> OneAlarm? {
         guard kind == .task, ringsAsAlarm, let start = plannedStart else { return nil }
         let cal = Calendar.current
         let weekdays: [Int]
@@ -234,7 +235,7 @@ extension Capture {
         return alarm
     }
 
-    func makeEvent() -> OneEvent {
+    package func makeEvent() -> OneEvent {
         let start = plannedStart ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
         let e = OneEvent(title: title, start: isAllDay ? day : start, durationMinutes: isAllDay ? 1440 : durationMinutes ?? 60)
         e.note = notes ?? ""
@@ -247,14 +248,14 @@ extension Capture {
     /// Inserts what this capture becomes and returns its id (final, after the save).
     /// Recorded in Activity as made by `actor` through `channel`.
     @MainActor @discardableResult
-    func insert(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
+    package func insert(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
                 approval: LedgerApproval = .userMade) -> PersistentIdentifier {
         insertRecorded(into: context, actor: actor, channel: channel, approval: approval).id
     }
 
     /// `insert`, and the Activity entry that recorded it (so Undo can be recorded against it).
     @MainActor
-    func insertRecorded(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
+    package func insertRecorded(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
                         approval: LedgerApproval = .userMade) -> (id: PersistentIdentifier, entry: LedgerItem) {
         let model: any PersistentModel
         switch kind {
@@ -274,10 +275,11 @@ extension Capture {
 /// Committed with a Share reminder. Kept after Undo/deletion so an unacknowledged share cannot resurrect it.
 /// Separate from OneTask.externalID, which belongs exclusively to EventKit.
 @Model
-final class ShareImportReceipt {
-    var sharedID: UUID = UUID()
+package final class ShareImportReceipt {
+    package var sharedID: UUID = UUID()
 
-    init(sharedID: UUID) {
+    package init(sharedID: UUID) {
         self.sharedID = sharedID
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -12,14 +13,14 @@ import UIKit
 /// Rules (document §3): only this process opens `activity.sqlite`; extensions append to the App Group outbox; the Activity screen
 /// pages through the store (150 rows at a time); text that is personal content stays in its own columns and tables.
 @MainActor
-final class ActivityCenter {
-    static let shared = ActivityCenter()
+package final class ActivityCenter {
+    package static let shared = ActivityCenter()
 
     /// nil when the file could not be opened at all: nothing is recorded and the Activity screen is empty, the rest of the app works.
-    let store: ActivityStore?
-    let recorder: ActivityRecorder
+    package let store: ActivityStore?
+    package let recorder: ActivityRecorder
     /// Posted after events were written (the Activity screen and Settings refresh).
-    static let didChange = Notification.Name("ActivityCenter.didChange")
+    package static let didChange = Notification.Name("ActivityCenter.didChange")
 
     private init() {
         let args = ProcessInfo.processInfo.arguments
@@ -69,21 +70,21 @@ final class ActivityCenter {
         }
     }
 
-    var settings: ActivitySettings { ActivitySettings(.standard) }
+    package var settings: ActivitySettings { ActivitySettings(.standard) }
 
     // MARK: Recording
 
     /// Records one event (dropped when its category is off or paused).
-    static func record(_ event: ActivityEvent) {
+    package static func record(_ event: ActivityEvent) {
         shared.recorder.record(event)
     }
 
     /// Whether changes (tier 1) are being kept. When not, nothing applies by itself under a grant: an automatic change without
     /// an Activity entry and an Undo would break "AI prepares, the user decides".
-    static var recordsChanges: Bool { shared.recorder.isRecording(.changes) }
+    package static var recordsChanges: Bool { shared.recorder.isRecording(.changes) }
 
     /// Writes what is buffered, inside a background task so the write finishes if the app is being suspended.
-    static func flushInBackground() {
+    package static func flushInBackground() {
         let app = UIApplication.shared
         var task = UIBackgroundTaskIdentifier.invalid
         task = app.beginBackgroundTask(withName: "activity.flush") {
@@ -97,7 +98,7 @@ final class ActivityCenter {
     // MARK: Launch and activation
 
     /// Brings in what the Share extension and widgets left behind. Called when the app becomes active.
-    static func importOutbox() {
+    package static func importOutbox() {
         let files = ActivityOutbox.pendingFiles()
         guard !files.isEmpty else { return }
         let read = ActivityOutboxImport.read(files)
@@ -107,20 +108,20 @@ final class ActivityCenter {
     }
 
     /// Drops expired rows (once per launch) according to the retention setting.
-    static func prune() {
+    package static func prune() {
         guard let store = shared.store else { return }
         _ = try? store.prune(retention: shared.settings.retention)
     }
 
     // MARK: Numbers for Settings
 
-    struct Summary {
+    package struct Summary {
         var perTier: [ActivityTier: Int] = [:]
         var fileBytes: Int64 = 0
         var total: Int { perTier.values.reduce(0, +) }
     }
 
-    static func summary() -> Summary {
+    package static func summary() -> Summary {
         shared.recorder.flush()
         guard let store = shared.store else { return Summary() }
         return Summary(perTier: (try? store.countByTier()) ?? [:], fileBytes: store.fileSize())
@@ -130,7 +131,7 @@ final class ActivityCenter {
 
     /// Deletes recorded activity (all of it, or some categories). Also the old SwiftData ledger rows when everything goes, and
     /// anything still waiting to be written. Never touches reminders, events, alarms, Apple Calendar or Apple Reminders.
-    static func clear(tiers: Set<ActivityTier>? = nil, context: ModelContext?) {
+    package static func clear(tiers: Set<ActivityTier>? = nil, context: ModelContext?) {
         shared.recorder.discardBuffered()
         try? shared.store?.clear(tiers: tiers)
         if tiers == nil || tiers?.contains(.changes) == true {
@@ -143,7 +144,7 @@ final class ActivityCenter {
     }
 
     /// Writes the export to a temp file and returns it (for the share sheet). Runs off the main thread.
-    static func export(_ format: ActivityExportFormat) async throws -> URL {
+    package static func export(_ format: ActivityExportFormat) async throws -> URL {
         shared.recorder.flush()
         guard let store = shared.store else { throw ActivityStoreError.open("no store") }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(ActivityExport.fileName(format))
@@ -154,3 +155,4 @@ final class ActivityCenter {
     }
 }
 
+#endif

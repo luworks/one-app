@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import SwiftUI
 import SwiftData
@@ -5,8 +6,8 @@ import EventKit
 
 /// Deleting an entry: an Apple Calendar event, a mirrored local event, or a planned task (which has Undo).
 @MainActor
-enum EntryDeletion {
-    static func perform(_ entry: CalEntry, span: EKSpan, context: ModelContext, toast: UndoToast?) {
+package enum EntryDeletion {
+    package static func perform(_ entry: CalEntry, span: EKSpan, context: ModelContext, toast: UndoToast?) {
         switch entry.source {
         case .system(let id):
             guard CalendarSync.shared.canDelete(externalID: id) else {
@@ -51,3 +52,4 @@ enum EntryDeletion {
         }
     }
 }
+#endif

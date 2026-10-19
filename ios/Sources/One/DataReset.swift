@@ -1,10 +1,11 @@
+#if os(iOS)
 import SwiftData
 import TodayCore
 import TodayShared
 /// Clears Today's own data. Never touches Apple Calendar or Apple Reminders.
 @MainActor
-enum DataReset {
-    static func run(_ context: ModelContext) {
+package enum DataReset {
+    package static func run(_ context: ModelContext) {
         // Forget the link first so a local wipe is never mirrored to Apple Reminders.
         RemindersSync.shared.forgetLink()
         try? context.delete(model: OneTask.self)
@@ -25,3 +26,4 @@ enum DataReset {
     }
 }
 
+#endif

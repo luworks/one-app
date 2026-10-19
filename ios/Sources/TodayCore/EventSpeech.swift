@@ -1,8 +1,8 @@
 import Foundation
 
 /// VoiceOver text for an event, like Calendar's: "Lunch with Priya, 12:15 to 1:00 PM, Calendar: Work".
-enum EventSpeech {
-    static func label(title: String, start: Date, end: Date, isAllDay: Bool, location: String = "", calendar: String = "",
+package enum EventSpeech {
+    package static func label(title: String, start: Date, end: Date, isAllDay: Bool, location: String = "", calendar: String = "",
                       day: Date? = nil) -> String {
         var parts = [title]
         if isAllDay {

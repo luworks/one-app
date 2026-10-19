@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -19,8 +20,8 @@ import os
 /// - "Planned time" and duration are Today-only concepts: they stay local, never overwrite Apple's due date.
 @MainActor
 @Observable
-final class RemindersSync {
-    static let shared = RemindersSync()
+package final class RemindersSync {
+    package static let shared = RemindersSync()
     @ObservationIgnored private let log = Logger(subsystem: "com.luworks.one", category: "reminders-sync")
 
     private static let enabledKey = "today.remindersSync.enabled"
@@ -30,7 +31,7 @@ final class RemindersSync {
     private static let uploadFromKey = "today.remindersSync.uploadFrom"
     private static let pendingKey = "today.remindersSync.pendingDeletes"          // reminders the user deleted in the app
     private static let pendingListsKey = "today.remindersSync.pendingListDeletes" // lists the user deleted in the app
-    static let maxRemoteDeletes = 10
+    package static let maxRemoteDeletes = 10
 
     /// Created on first use: EKEventStore is slow to set up.
     @ObservationIgnored private lazy var store: EKEventStore = {
@@ -48,23 +49,23 @@ final class RemindersSync {
     @ObservationIgnored private var completionFence = ReminderCompletionFence()
 
     /// Bumped after each finished pass so views that care can refresh.
-    private(set) var version = 0
-    private(set) var lastError: String?
+    package private(set) var version = 0
+    package private(set) var lastError: String?
     #if DEBUG
     /// UI tests only (`-uiTestingSyncDump <prefix>`): what Apple Reminders and the app hold after the last pass.
-    private(set) var debugAppleDump = ""
-    private(set) var debugAppDump = ""
-    private(set) var debugPersistedDump = ""
+    package private(set) var debugAppleDump = ""
+    package private(set) var debugAppDump = ""
+    package private(set) var debugPersistedDump = ""
     @ObservationIgnored private var debugOpsDone = false
     #endif
     /// UI tests start with Apple Reminders off (a saved "on" from an earlier run would upload and pull test data);
     /// the test that needs it passes `-uiTestingRemindersSync`.
-    private(set) var enabled = UserDefaults.standard.bool(forKey: RemindersSync.enabledKey)
+    package private(set) var enabled = UserDefaults.standard.bool(forKey: RemindersSync.enabledKey)
         && (!ProcessInfo.processInfo.arguments.contains("-uiTesting") || ProcessInfo.processInfo.arguments.contains("-uiTestingRemindersSync"))
 
-    var hasAccess: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
+    package var hasAccess: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
     /// True once the user allowed access to Apple Reminders and sync is on.
-    var isConnected: Bool { enabled && hasAccess }
+    package var isConnected: Bool { enabled && hasAccess }
 
     private init() {}
 
@@ -78,7 +79,7 @@ final class RemindersSync {
     // MARK: Lifecycle
 
     /// Call once at launch. Starts watching local saves; syncs right away when already connected.
-    func configure(_ container: ModelContainer) {
+    package func configure(_ container: ModelContainer) {
         self.container = container
         NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.scheduleReconcile() }
@@ -87,20 +88,20 @@ final class RemindersSync {
     }
 
     /// iOS lets the app ask only once; after a "Don't Allow" the user has to change it in Settings.
-    var isDenied: Bool {
+    package var isDenied: Bool {
         let s = EKEventStore.authorizationStatus(for: .reminder)
         return s == .denied || s == .restricted
     }
 
     /// The first time the Reminders tab opens, show iOS's own permission prompt. Does nothing afterwards.
-    func connectIfFirstRun() async {
+    package func connectIfFirstRun() async {
         guard !ProcessInfo.processInfo.arguments.contains("-uiTesting"),
               EKEventStore.authorizationStatus(for: .reminder) == .notDetermined else { return }
         await connect()
     }
 
     /// Asks for access (the first time) and turns sync on.
-    func connect() async {
+    package func connect() async {
         if !hasAccess {
             do {
                 let granted = try await store.requestFullAccessToReminders()
@@ -120,14 +121,14 @@ final class RemindersSync {
     }
 
     /// Stops syncing and forgets what was linked. Nothing is deleted on either side.
-    func disconnect() {
+    package func disconnect() {
         enabled = false
         forgetLink()
         UserDefaults.standard.set(false, forKey: Self.enabledKey)
     }
 
     /// Forget the linkage (not the data). Call before wiping local data so the wipe is never mirrored to Apple.
-    func forgetLink() {
+    package func forgetLink() {
         for k in [Self.baseKey, Self.listBaseKey, Self.fpKey, Self.uploadFromKey, Self.pendingKey, Self.pendingListsKey] {
             UserDefaults.standard.removeObject(forKey: k)
         }
@@ -136,19 +137,19 @@ final class RemindersSync {
     /// The user deleted a synced reminder in the app: delete it in Apple Reminders too.
     /// Only explicit deletes like this are mirrored; a reminder that is merely missing locally (a wiped or
     /// rebuilt local store) is restored from Apple instead of being deleted there.
-    func noteDeleted(reminder externalID: String?) {
+    package func noteDeleted(reminder externalID: String?) {
         guard let externalID, isConnected else { return }
         saveSet(loadSet(Self.pendingKey).union([externalID]), Self.pendingKey)
         scheduleReconcile()
     }
 
-    func noteDeleted(list externalID: String?) {
+    package func noteDeleted(list externalID: String?) {
         guard let externalID, isConnected else { return }
         saveSet(loadSet(Self.pendingListsKey).union([externalID]), Self.pendingListsKey)
         scheduleReconcile()
     }
 
-    func scheduleReconcile(after delay: Duration = .milliseconds(1200)) {
+    package func scheduleReconcile(after delay: Duration = .milliseconds(1200)) {
         guard isConnected else { return }
         debounce?.cancel()
         debounce = Task { @MainActor in
@@ -161,7 +162,7 @@ final class RemindersSync {
     /// A completion is an explicit user write, not a whole-reminder fingerprint edit. Commit it before
     /// the row or the success toast changes. Only this field is written, preserving concurrent Apple edits.
     @discardableResult
-    func commitCompletion(_ task: OneTask, done: Bool, restoringDue: Date? = nil, restoresDue: Bool = false,
+    package func commitCompletion(_ task: OneTask, done: Bool, restoringDue: Date? = nil, restoresDue: Bool = false,
                           expected: Remote? = nil) throws -> Remote? {
         guard let id = task.externalID else { return nil }
         var accepted: Remote?
@@ -195,7 +196,7 @@ final class RemindersSync {
 
     /// Keep the agreed completion fingerprint in step with the accepted user write. A repeating reminder
     /// that Apple advanced will differ and be pulled normally on the next pass.
-    func didPersistCompletion(_ task: OneTask, restoredDue: Bool = false) {
+    package func didPersistCompletion(_ task: OneTask, restoredDue: Bool = false) {
         if let id = task.externalID, isConnected {
             var fp = storedFP
             if let agreed = fp[id] {
@@ -223,7 +224,7 @@ final class RemindersSync {
     // MARK: Values
 
     /// A reminder as read from EventKit (plain values, safe to pass around).
-    struct Remote: Sendable {
+    package struct Remote: Sendable {
         let id: String
         let title: String
         let notes: String
@@ -257,30 +258,30 @@ final class RemindersSync {
         }
     }
 
-    static func fingerprint(of t: OneTask) -> String {
+    package static func fingerprint(of t: OneTask) -> String {
         [t.title, t.note, t.isDone ? "1" : "0", t.due.map { String(Int($0.timeIntervalSince1970)) } ?? "-", t.listName,
          t.flagged ? "1" : "0", t.repeatRule ?? "-"].joined(separator: "\u{1F}")
     }
 
-    static func fingerprint(of l: OneList) -> String { "\(l.name)\u{1F}\(l.colorIndex)" }
+    package static func fingerprint(of l: OneList) -> String { "\(l.name)\u{1F}\(l.colorIndex)" }
 
     // MARK: Date / recurrence mapping
 
     /// A due date with no time of day is stored as midnight, like everywhere else in the app.
-    nonisolated static func date(from c: DateComponents) -> Date? {
+    package nonisolated static func date(from c: DateComponents) -> Date? {
         var comps = c
         if comps.hour == nil { comps.hour = 0; comps.minute = 0 }
         return (comps.calendar ?? Calendar.current).date(from: comps)
     }
 
-    static func components(for due: Date) -> DateComponents {
+    package static func components(for due: Date) -> DateComponents {
         let cal = Calendar.current
         let t = cal.dateComponents([.hour, .minute], from: due)
         let hasTime = !(t.hour == 0 && t.minute == 0)
         return cal.dateComponents(hasTime ? [.year, .month, .day, .hour, .minute] : [.year, .month, .day], from: due)
     }
 
-    nonisolated static func repeatRule(from rules: [EKRecurrenceRule]?) -> RepeatRule? {
+    package nonisolated static func repeatRule(from rules: [EKRecurrenceRule]?) -> RepeatRule? {
         guard let rules, rules.count == 1, let r = rules.first, r.interval == 1 else { return nil }
         switch r.frequency {
         case .daily: return .daily
@@ -299,7 +300,7 @@ final class RemindersSync {
         }
     }
 
-    static func recurrence(for rule: RepeatRule) -> EKRecurrenceRule {
+    package static func recurrence(for rule: RepeatRule) -> EKRecurrenceRule {
         switch rule {
         case .daily: return EKRecurrenceRule(recurrenceWith: .daily, interval: 1, end: nil)
         case .weekly: return EKRecurrenceRule(recurrenceWith: .weekly, interval: 1, end: nil)
@@ -316,7 +317,7 @@ final class RemindersSync {
     }
 
     /// The palette color nearest to a calendar color.
-    static func colorIndex(for cg: CGColor) -> Int {
+    package static func colorIndex(for cg: CGColor) -> Int {
         let ui = UIColor(cgColor: cg)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         ui.getRed(&r, green: &g, blue: &b, alpha: &a)
@@ -332,7 +333,7 @@ final class RemindersSync {
 
     // MARK: Reconcile
 
-    func reconcile() async {
+    package func reconcile() async {
         guard isConnected, let container else { return }
         if running { again = true; return }
         running = true
@@ -662,7 +663,7 @@ final class RemindersSync {
 /// - `-uiTestingAppOp complete|rename|delete|repeat` runs on the app's reminder after the first pass, through the
 ///   same `TaskActions` the screens use.
 /// - `-uiTestingSyncDump <prefix>` shows both sides as hidden labels (`SyncDumpProbe`).
-extension RemindersSync {
+package extension RemindersSync {
     private static func debugOps(_ flag: String) -> [(op: String, title: String, value: String)] {
         let args = ProcessInfo.processInfo.arguments
         guard args.contains("-uiTesting") else { return [] }
@@ -766,10 +767,10 @@ extension RemindersSync {
 }
 
 /// Hidden labels a UI test reads: `syncDump.apple` and `syncDump.app`.
-struct SyncDumpProbe: View {
+package struct SyncDumpProbe: View {
     private let sync = RemindersSync.shared
 
-    var body: some View {
+    package var body: some View {
         VStack {
             Text(sync.debugAppleDump).accessibilityIdentifier("syncDump.apple").accessibilityLabel(sync.debugAppleDump)
             Text(sync.debugAppDump).accessibilityIdentifier("syncDump.app").accessibilityLabel(sync.debugAppDump)
@@ -780,4 +781,5 @@ struct SyncDumpProbe: View {
         .allowsHitTesting(false)
     }
 }
+#endif
 #endif
