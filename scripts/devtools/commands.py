@@ -130,6 +130,11 @@ def test(root, group, *, only=(), timeout=600, full=False, allow_skips=(), _lock
             first = first or code
             code = test(root, 'ui', timeout=timeout, full=True, allow_skips=allow_skips, _locked=True)
             return first or code
+    if group == 'helpers':
+        if only or allow_skips:
+            raise ValueError('helpers runs the complete bounded CI policy collection')
+        return execute(root, [sys.executable, '-m', 'unittest', 'discover',
+                              '-s', 'tests/ci', '-p', 'test_*.py', '-v'], timeout=timeout).returncode
     contract = testing_contract(root)
     if group in ('ios-unit', 'integration', 'snapshot'):
         if not _locked:

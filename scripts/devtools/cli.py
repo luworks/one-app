@@ -54,7 +54,7 @@ def main(argv=None, root=ROOT):
     build_parser.add_argument('configuration', nargs='?', choices=['Debug', 'Release'], default='Debug')
     build_parser.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench'], default='Today')
     test_parser = sub.add_parser('test', help='run an authoritative test group')
-    test_parser.add_argument('group', choices=['unit', 'ios-unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
+    test_parser.add_argument('group', choices=['helpers', 'unit', 'ios-unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
     test_parser.add_argument('--only', action='append', default=[])
     test_parser.add_argument('--allow-skip', action='append', default=[], choices=['hardware', 'screenshot', 'time'])
     test_parser.add_argument('--timeout', type=float, default=None, help='per-process seconds; default 600')

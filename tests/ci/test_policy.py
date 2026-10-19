@@ -14,6 +14,7 @@ import policy  # noqa: E402 - standalone test import bootstrap
 import prerequisite  # noqa: E402 - standalone test import bootstrap
 import release_guard  # noqa: E402 - standalone test import bootstrap
 import re  # noqa: E402 - standalone test import bootstrap
+import subprocess  # noqa: E402 - standalone test import bootstrap
 
 spec = importlib.util.spec_from_file_location('ci_run', ROOT / 'scripts/ci/run.py')
 runner = importlib.util.module_from_spec(spec)
@@ -216,6 +217,51 @@ class PrerequisiteTests(unittest.TestCase):
         errors = prerequisite.verify('x86_64', 'Xcode 27.1\nBuild version 27A9275',
             'iphoneos27.1 iphonesimulator27.1', {'runtimes': [{'version': '27.0', 'isAvailable': False}]})
         self.assertEqual(len(errors), 2)
+
+
+class SetupTests(unittest.TestCase):
+    def test_only_consumed_tools_and_dependencies_are_prepared(self):
+        for lane in policy.LANES:
+            with self.subTest(lane=lane), tempfile.TemporaryDirectory() as directory:
+                sha = 'c' * 40
+                report = {'sha': sha, 'lane': lane, 'status': 'passed', 'executed': 1,
+                          'failed': 0, 'cancelled': 0, 'missing': 0, 'synthetic': True}
+                with (patch.dict(os.environ, {'GITHUB_SHA': sha, 'RUNNER_TEMP': directory}),
+                      patch.object(sys, 'argv', ['run.py', lane]),
+                      patch.object(runner.subprocess, 'check_output', return_value=sha),
+                      patch.object(runner, 'producer_boundary'),
+                      patch.object(runner, 'execute', side_effect=lambda argv, **kw:
+                                   subprocess.CompletedProcess(argv, 0, '')) as execute,
+                      patch.object(runner, 'close_wrapper', return_value=report),
+                      patch.object(runner, 'stage')):
+                    self.assertEqual(runner.main(), 0)
+                commands = [call.args[0] for call in execute.call_args_list]
+                prepared = [c for c in commands if c[:2] == ['./dev', 'bootstrap']]
+                tools = {'format': ['swift-format'], 'lint': ['swiftlint', 'ruff', 'actionlint'],
+                         'business': []}.get(lane, ['xcodegen'])
+                self.assertEqual(prepared, [['./dev', 'bootstrap', *[
+                    arg for name in tools for arg in ('--tool', name)]]] if tools else [])
+                native = lane not in ('format', 'lint', 'business')
+                for step in ('generate', 'resolve'):
+                    self.assertEqual(['./dev', step] in commands, native)
+                self.assertEqual(commands[-1][:3], ['./dev', 'ci', lane])
+
+    def test_setup_failure_never_runs_or_passes_lane(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sha = 'c' * 40
+            failed = {'sha': sha, 'lane': 'build', 'status': 'failed', 'executed': 0,
+                      'failed': 1, 'cancelled': 0, 'missing': 0, 'synthetic': True}
+            with (patch.dict(os.environ, {'GITHUB_SHA': sha, 'RUNNER_TEMP': directory}),
+                  patch.object(sys, 'argv', ['run.py', 'build']),
+                  patch.object(runner.subprocess, 'check_output', return_value=sha),
+                  patch.object(runner, 'producer_boundary'),
+                  patch.object(runner, 'execute', return_value=subprocess.CompletedProcess([], 9, '')) as execute,
+                  patch.object(runner, 'close_producer') as close,
+                  patch.object(runner, 'close_wrapper', return_value=failed),
+                  patch.object(runner, 'stage')):
+                self.assertEqual(runner.main(), 9)
+            self.assertEqual(execute.call_count, 1)
+            self.assertEqual(close.call_args.args[1]['executed'], 0)
 
 
 class WorkflowTests(unittest.TestCase):

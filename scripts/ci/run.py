@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 
 try:
     from .policy import LANES, validate_report
@@ -307,9 +308,19 @@ def main():
     producer_boundary(sha, lane, output)
     output.mkdir(exist_ok=False)
     selection = output / 'selection.json'
-    # Re-enter ./dev for each step: bootstrap installs the pinned runtimes that
-    # subsequent invocations select. Never call the in-process CLI from here.
-    setup = [['./dev', step] for step in ('bootstrap', 'generate', 'resolve')]
+    # Use the existing checksummed tool selector, not the full local environment:
+    # none of these lanes invokes mise, Ruby, Bundler or Fastlane. The wrapper and
+    # helpers already use the hosted system Python; dev adapters use stdlib only.
+    tools = {
+        'format': ('swift-format',),
+        'lint': ('swiftlint', 'ruff', 'actionlint'),
+        'business': (),
+    }.get(lane, ('xcodegen',))
+    setup = []
+    if tools:
+        setup.append(['./dev', 'bootstrap', *[arg for name in tools for arg in ('--tool', name)]])
+    if lane not in ('format', 'lint', 'business'):
+        setup.extend([['./dev', 'generate'], ['./dev', 'resolve']])
     setup.append([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)])
     command = ['./dev', 'ci', lane, '--selection', str(selection), '--output', str(output),
                '--sha', sha, '--synthetic', '--no-distribute']
@@ -318,12 +329,15 @@ def main():
     secret_found = False
     for argv in [*setup, command]:
         transcript.append('$ ' + ' '.join(argv) + '\n')
+        started = time.monotonic()
         try:
             # The adapter may build and test serially before closing its receipt.
             completed = execute(argv, timeout=2100 if argv == command else 600, grace=30)
         except OSError as error:
             # Exception text may include private paths; retain only its type.
             completed = subprocess.CompletedProcess(argv, 1, type(error).__name__ + '\n')
+        transcript.append(json.dumps({'command_seconds': round(time.monotonic() - started, 3),
+                                      'exit': completed.returncode}) + '\n')
         transcript.append(completed.stdout or '')
         secret_found |= getattr(completed, 'secret_found', False)
         if completed.returncode:
@@ -340,12 +354,16 @@ def main():
             close_producer(output, report, roots=('selection.json',))
         # Adapter receipts remain authoritative; never synthesize one for a
         # missing, malformed or unsuccessful adapter report.
+        started = time.monotonic()
         report = close_wrapper(output, sha, lane, text)
+        print(json.dumps({'close_wrapper_seconds': round(time.monotonic() - started, 3)}))
         if secret_found:
             raise ValueError('blocking secret candidate in wrapper output')
         print(sanitize(text))
         # A stopped failed run may still have useful synthetic diffs/crashes.
+        started = time.monotonic()
         stage(output, Path(os.environ['RUNNER_TEMP']) / ('today-artifacts-' + lane), sha, lane)
+        print(json.dumps({'stage_seconds': round(time.monotonic() - started, 3)}))
         validate_report(report, sha, lane)
     except (OSError, ValueError, KeyError, TypeError) as error:
         print('::error::CI adapter report rejected (' + type(error).__name__ +

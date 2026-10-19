@@ -192,8 +192,8 @@ class ProducerTests(unittest.TestCase):
         self.assertNotIn('artifact_provenance', report)
         self.assertTrue((self.output / 'runner/ui.xcresult/.live').is_file())
 
-    def wrapper(self, execute):
-        with patch.object(sys, 'argv', ['run.py', 'business']), patch.object(
+    def wrapper(self, execute, lane='business'):
+        with patch.object(sys, 'argv', ['run.py', lane]), patch.object(
                 producer.subprocess, 'check_output', return_value=SHA), patch.object(
                 producer, 'execute', side_effect=execute), contextlib.redirect_stdout(io.StringIO()):
             return producer.main()
@@ -216,15 +216,15 @@ class ProducerTests(unittest.TestCase):
             return SimpleNamespace(returncode=0, stdout=argv[1] + ' finished\n')
 
         self.assertEqual(self.wrapper(execute), 0)
-        self.assertEqual([argv[:2] for argv in calls[:3]],
-                         [['./dev', step] for step in ('bootstrap', 'generate', 'resolve')])
-        self.assertEqual(calls[3][:3], [sys.executable, 'scripts/ci/policy.py', 'select'])
-        self.assertEqual(calls[4][:3], ['./dev', 'ci', 'business'])
+        self.assertEqual(calls[0][:3], [sys.executable, 'scripts/ci/policy.py', 'select'])
+        self.assertEqual(calls[1][:3], ['./dev', 'ci', 'business'])
+        self.assertEqual(len(calls), 2)
         log = (self.base / 'today-artifacts-business/wrapper-command.log').read_text()
-        for step in ('bootstrap', 'generate', 'resolve', 'ci'):
-            self.assertIn(step + ' finished', log)
+        self.assertIn('ci finished', log)
 
     def test_wrapper_setup_first_failure_closes_evidence_and_never_dispatches(self):
+        self.output.rename(self.base / 'today-build')
+        self.output = self.base / 'today-build'
         steps = ('bootstrap', 'generate', 'resolve', 'select')
         for failed_index in range(len(steps)):
             with self.subTest(step=steps[failed_index]):
@@ -236,10 +236,10 @@ class ProducerTests(unittest.TestCase):
                     code = 23 if len(calls) - 1 == failed_index else 0
                     return SimpleNamespace(returncode=code, stdout='setup /Users/synthetic/fixture\n')
 
-                self.assertEqual(self.wrapper(execute), 23)
+                self.assertEqual(self.wrapper(execute, lane='build'), 23)
                 self.assertEqual(len(calls), failed_index + 1)
                 self.assertFalse(any(argv[:2] == ['./dev', 'ci'] for argv in calls))
-                target = self.base / 'today-artifacts-business'
+                target = self.base / 'today-artifacts-build'
                 report = json.loads((target / 'report.json').read_text())
                 self.assertEqual((report['status'], report['executed'], report['failed']), ('failed', 0, 1))
                 self.assertEqual(report['errors'], ['setup_exit:23'])
@@ -250,7 +250,7 @@ class ProducerTests(unittest.TestCase):
                 entry = next(e for e in receipt if e['path'] == 'wrapper-command.log')
                 self.assertEqual(producer.artifact_digest(log), {k: entry[k] for k in ('bytes', 'sha256')})
                 with self.assertRaises(ValueError):
-                    producer.validate_report(report, SHA, 'business')
+                    producer.validate_report(report, SHA, 'build')
                 shutil.rmtree(target)
 
     def test_wrapper_setup_timeout_or_spawn_failure_retains_failure(self):
