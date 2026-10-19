@@ -1,23 +1,33 @@
 import SwiftUI
+import TodayCore
+import TodayDesignSystem
+import TodayPlatform
 
 /// The one stopwatch. It stores only dates (`StopwatchState`), saved to UserDefaults on every change, so it keeps
 /// running while you are on another tab, with the app in the background, or after a relaunch. UI tests start it clean.
 @MainActor
 @Observable
-final class StopwatchModel {
-    static let shared = StopwatchModel()
+public final class StopwatchModel {
+    public static let shared = StopwatchModel()
 
-    private(set) var state: StopwatchState
+    public private(set) var state: StopwatchState
     /// The face shown: digital or analog. Kept across launches.
-    var page: StopwatchPage {
-        didSet { UserDefaults.standard.set(page.rawValue, forKey: StopwatchPage.defaultsKey) }
+    public var page: StopwatchPage {
+        didSet { defaults.set(page.rawValue, forKey: StopwatchPage.defaultsKey) }
     }
 
-    private init() {
-        let args = ProcessInfo.processInfo.arguments
+    private let defaults: UserDefaults
+    private let now: (() -> Date)?
+
+    /// An injected clock also drives the rendered faces and current lap. Nil keeps production's live timeline dates.
+    public init(defaults: UserDefaults = .standard, now: (() -> Date)? = nil,
+                arguments: [String] = ProcessInfo.processInfo.arguments) {
+        self.defaults = defaults
+        self.now = now
+        let args = arguments
         if args.contains("-uiTesting") {
-            UserDefaults.standard.removeObject(forKey: StopwatchState.defaultsKey)
-            UserDefaults.standard.removeObject(forKey: StopwatchPage.defaultsKey)
+            defaults.removeObject(forKey: StopwatchState.defaultsKey)
+            defaults.removeObject(forKey: StopwatchPage.defaultsKey)
             state = StopwatchState()
             page = .analog
             #if DEBUG
@@ -35,33 +45,46 @@ final class StopwatchModel {
             }
             #endif
         } else {
-            state = StopwatchState.load(from: .standard)
-            page = StopwatchPage.load(from: .standard)
+            state = StopwatchState.load(from: defaults)
+            page = StopwatchPage.load(from: defaults)
         }
     }
 
-    func startStop() { update { $0.isRunning ? $0.stop(at: .now) : $0.start(at: .now) } }
+    public func startStop() {
+        let date = date(at: .now)
+        update { $0.isRunning ? $0.stop(at: date) : $0.start(at: date) }
+    }
 
     /// Lap while running, Reset while stopped.
-    func lapReset() { update { $0.isRunning ? $0.lap(at: .now) : $0.reset() } }
+    public func lapReset() {
+        let date = date(at: .now)
+        update { $0.isRunning ? $0.lap(at: date) : $0.reset() }
+    }
+
+    fileprivate func date(at timelineDate: Date) -> Date { now?() ?? timelineDate }
 
     private func update(_ change: (inout StopwatchState) -> Void) {
         change(&state)
-        state.save(to: .standard)
+        state.save(to: defaults)
     }
 }
 
 /// Stopwatch, as in Apple's Clock app: a big analog dial (seconds ring, 30-minute counter, orange hands) or big digits
 /// (swipe sideways, the dots show which), Lap/Reset on the left and Start/Stop on the right, and the laps below,
 /// newest first, with the fastest in green and the slowest in red.
-struct StopwatchView: View {
-    @State private var model = StopwatchModel.shared
-    @State private var scrolledPage: StopwatchPage? = StopwatchModel.shared.page
+public struct StopwatchView: View {
+    @State private var model: StopwatchModel
+    @State private var scrolledPage: StopwatchPage?
+
+    public init(model: StopwatchModel = .shared) {
+        _model = State(initialValue: model)
+        _scrolledPage = State(initialValue: model.page)
+    }
     @ScaledMetric(relativeTo: .largeTitle) private var digitSize = 76
 
     private var state: StopwatchState { model.state }
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geo in
             let side = dialSide(in: geo.size)
             VStack(spacing: 0) {
@@ -119,7 +142,7 @@ struct StopwatchView: View {
         ZStack {
             StopwatchFace()
             TimelineView(.animation(paused: !state.isRunning)) { context in
-                let elapsed = state.elapsed(at: context.date)
+                let elapsed = state.elapsed(at: model.date(at: context.date))
                 ZStack {
                     StopwatchHands(elapsed: elapsed)
                     Text(StopwatchState.format(elapsed))
@@ -137,7 +160,7 @@ struct StopwatchView: View {
 
     private func digitalFace(side: CGFloat) -> some View {
         TimelineView(.animation(paused: !state.isRunning)) { context in
-            let elapsed = state.elapsed(at: context.date)
+            let elapsed = state.elapsed(at: model.date(at: context.date))
             Text(StopwatchState.digital(elapsed))
                 .font(.system(size: digitSize, weight: .thin).monospacedDigit())
                 .lineLimit(1)
@@ -199,7 +222,7 @@ struct StopwatchView: View {
                 if state.hasTime {
                     LapSeparator()
                     TimelineView(.animation(paused: !state.isRunning)) { context in
-                        LapRow(number: state.laps.count + 1, time: state.currentLap(at: context.date), mark: nil)
+                        LapRow(number: state.laps.count + 1, time: state.currentLap(at: model.date(at: context.date)), mark: nil)
                     }
                     LapSeparator()
                 }

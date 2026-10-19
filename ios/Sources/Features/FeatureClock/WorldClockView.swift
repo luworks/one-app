@@ -1,8 +1,11 @@
 import SwiftUI
+import TodayCore
+import TodayDesignSystem
+import TodayPlatform
 
-extension CityDatabase {
+public extension CityDatabase {
     /// The bundled list (`cities.json`). Empty if the file is missing, so the tab still opens.
-    static let shared: CityDatabase = {
+    @MainActor static let shared: CityDatabase = {
         guard let url = Bundle.main.url(forResource: "cities", withExtension: "json"),
               let data = try? Data(contentsOf: url), let db = try? CityDatabase.decode(data) else { return CityDatabase(cities: []) }
         return db
@@ -15,69 +18,66 @@ private extension Color {
 
 /// The saved World Clock cities (city keys, in the user's order), kept in UserDefaults. Old installs saved time zone
 /// identifiers; they are converted to cities when loaded (`CityDatabase.migrate`). The home city (the device's time
-/// zone, mapped to a named city) is not stored: it is always shown first. A singleton, so the list survives leaving the tab.
+/// zone, mapped to a named city) is not stored: it is always shown first. The shared production store survives leaving the tab.
 /// UI tests start empty (or from `-uiTestingCities Europe/London,g1816670`) and can pin the home zone with
 /// `-uiTestingHomeZone America/Los_Angeles`.
 @MainActor
 @Observable
-final class WorldClockStore {
-    static let shared = WorldClockStore()
-    static let defaultsKey = "today.worldClock.cities"
+public final class WorldClockStore {
+    public static let shared = WorldClockStore()
+    public static let defaultsKey = "today.worldClock.cities"
 
-    private(set) var keys: [String]
+    public private(set) var keys: [String]
     /// The overlap graph is open instead of the cards (not saved: World Clock opens on the cards).
-    var showsGraph = false
-    let database = CityDatabase.shared
+    public var showsGraph = false
+    public let database: CityDatabase
+    private let defaults: UserDefaults
     private let homeZoneIdentifier: String
-    /// UI tests only (`-uiTestingHomeCity g5392171`): a chosen home city instead of the one for the zone.
+    /// An injected home city, or the UI-test override (`-uiTestingHomeCity g5392171`).
     private var homeOverride: CityRecord?
 
-    private init() {
-        let args = ProcessInfo.processInfo.arguments
-        let db = CityDatabase.shared
+    public init(database: CityDatabase = .shared, defaults: UserDefaults = .standard,
+                homeZoneIdentifier: String = TimeZone.current.identifier, homeCity: CityRecord? = nil,
+                arguments: [String] = ProcessInfo.processInfo.arguments) {
+        self.database = database
+        self.defaults = defaults
+        self.homeOverride = homeCity
+        let args = arguments
+        let db = database
         if args.contains("-uiTesting") {
-            UserDefaults.standard.removeObject(forKey: Self.defaultsKey)
+            defaults.removeObject(forKey: Self.defaultsKey)
             if let i = args.firstIndex(of: "-uiTestingCities"), i + 1 < args.count {
                 keys = db.migrate(args[i + 1].split(separator: ",").map(String.init))
             } else {
                 keys = []
             }
-            if let i = args.firstIndex(of: "-uiTestingHomeZone"), i + 1 < args.count { homeZoneIdentifier = args[i + 1] }
-            else { homeZoneIdentifier = TimeZone.current.identifier }
+            if let i = args.firstIndex(of: "-uiTestingHomeZone"), i + 1 < args.count { self.homeZoneIdentifier = args[i + 1] }
+            else { self.homeZoneIdentifier = homeZoneIdentifier }
             if let i = args.firstIndex(of: "-uiTestingHomeCity"), i + 1 < args.count { homeOverride = db.city(forKey: args[i + 1]) }
         } else {
-            let stored = UserDefaults.standard.stringArray(forKey: Self.defaultsKey)
+            let stored = defaults.stringArray(forKey: Self.defaultsKey)
             let migrated = db.migrate(stored)
-            if migrated != (stored ?? []) { UserDefaults.standard.set(migrated, forKey: Self.defaultsKey) }
+            if migrated != (stored ?? []) { defaults.set(migrated, forKey: Self.defaultsKey) }
             keys = migrated
-            homeZoneIdentifier = TimeZone.current.identifier
+            self.homeZoneIdentifier = homeZoneIdentifier
         }
     }
 
-    #if DEBUG
-    static func previewFixture() -> WorldClockStore {
-        let store = WorldClockStore()
-        store.keys = store.database.migrate(["Europe/London", "Asia/Shanghai", "Asia/Tokyo"])
-        store.homeOverride = store.database.city(forTimeZone: "America/Los_Angeles")
-        return store
-    }
-    #endif
-
     /// The starred first card: the city that stands for the device's time zone.
-    var home: CityRecord {
+    public var home: CityRecord {
         homeOverride ?? database.city(forTimeZone: homeZoneIdentifier) ?? CityRecord(id: 0, name: homeZoneIdentifier, tz: homeZoneIdentifier)
     }
 
     /// The cities after home, in the user's order.
-    var others: [CityRecord] { WorldClock.others(keys, home: home.key).compactMap { database.city(forKey: $0) } }
+    public var others: [CityRecord] { WorldClock.others(keys, home: home.key).compactMap { database.city(forKey: $0) } }
 
-    func contains(_ city: CityRecord) -> Bool { city.key == home.key || keys.contains(city.key) }
+    public func contains(_ city: CityRecord) -> Bool { city.key == home.key || keys.contains(city.key) }
 
-    func add(_ city: CityRecord) { set(WorldClock.adding(city.key, to: keys)) }
+    public func add(_ city: CityRecord) { set(WorldClock.adding(city.key, to: keys)) }
 
-    func remove(_ city: CityRecord) { set(keys.filter { $0 != city.key }) }
+    public func remove(_ city: CityRecord) { set(keys.filter { $0 != city.key }) }
 
-    func insert(_ city: CityRecord, at index: Int) {
+    public func insert(_ city: CityRecord, at index: Int) {
         guard !keys.contains(city.key) else { return }
         var list = others.map(\.key)
         list.insert(city.key, at: min(max(0, index), list.count))
@@ -85,13 +85,13 @@ final class WorldClockStore {
     }
 
     /// Reorders the cities after home (`others` indices, as `List.onMove` gives them).
-    func move(from source: IndexSet, to destination: Int) {
+    public func move(from source: IndexSet, to destination: Int) {
         set(WorldClock.moving(others.map(\.key), from: source, to: destination))
     }
 
     private func set(_ list: [String]) {
         keys = list
-        UserDefaults.standard.set(list, forKey: Self.defaultsKey)
+        defaults.set(list, forKey: Self.defaultsKey)
     }
 }
 
@@ -101,29 +101,30 @@ final class WorldClockStore {
 /// "NOW") and a tap on it goes back to now. The bell curve at the right of the pill swaps the cards for the overlap graph.
 /// No Edit button: a long press on a city offers Move Up / Move Down and Delete, press, hold and drag reorders
 /// (the sideways swipe belongs to scrubbing). + adds a city.
-struct WorldClockView: View {
-    @Environment(UndoToast.self) private var toast: UndoToast?
+public struct WorldClockView: View {
+    private let now: () -> Date
+    private let showUndo: (String, @escaping () -> Void) -> Void
     @Environment(\.colorScheme) private var colorScheme
-    @State private var store = WorldClockStore.shared
+    @State private var store: WorldClockStore
     /// Minutes away from now; 0 = now.
     @State private var scrub = 0
     @State private var dragStart: Int?
     /// How far the page is pulled past the end of the scale (points, signed).
     @State private var rubber: CGFloat = 0
 
-    init() {}
-
-    #if DEBUG
-    init(previewStore: WorldClockStore) {
-        _store = State(initialValue: previewStore)
+    /// The app supplies its existing Undo toast; Workbench can capture and exercise the same undo action.
+    public init(store: WorldClockStore = .shared, now: @escaping () -> Date = { TodayClock.now },
+                showUndo: @escaping (String, @escaping () -> Void) -> Void) {
+        _store = State(initialValue: store)
+        self.now = now
+        self.showUndo = showUndo
     }
-    #endif
 
     private var db: CityDatabase { store.database }
 
-    var body: some View {
+    public var body: some View {
         TimelineView(.everyMinute) { _ in
-            let now = TodayClock.now
+            let now = self.now()
             let date = WorldClock.Scrub.date(now: now, offset: scrub)
             let home = store.home
             let others = store.others
@@ -293,7 +294,7 @@ struct WorldClockView: View {
     private func remove(_ city: CityRecord) {
         guard let index = store.others.firstIndex(of: city) else { return }
         withAnimation(.snappy) { store.remove(city) }
-        toast?.show("Removed \(db.displayName(city))") {
+        showUndo("Removed \(db.displayName(city))") {
             withAnimation(.snappy) { store.insert(city, at: index) }
         }
     }
@@ -463,15 +464,21 @@ private struct WaveBackground: View {
 /// Add a city: about a thousand cities (every capital, every big city, the main hubs), searchable in English and Chinese,
 /// by city, country or time zone. Each row: "Beijing, China", the UTC offset and the local time there.
 /// Cities already shown (home included) are checked.
-struct CityPicker: View {
+public struct CityPicker: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var store = WorldClockStore.shared
+    @State private var store: WorldClockStore
+    private let now: () -> Date
     @State private var query = ""
 
-    var body: some View {
+    public init(store: WorldClockStore = .shared, now: @escaping () -> Date = { TodayClock.now }) {
+        _store = State(initialValue: store)
+        self.now = now
+    }
+
+    public var body: some View {
         let db = store.database
         let results = db.search(query)
-        let now = TodayClock.now
+        let now = self.now()
         NavigationStack {
             List {
                 ForEach(results) { city in
@@ -534,9 +541,3 @@ struct CityPicker: View {
         .contentShape(Rectangle())
     }
 }
-
-#if DEBUG
-#Preview("World Clock") {
-    WorldClockView(previewStore: .previewFixture())
-}
-#endif
