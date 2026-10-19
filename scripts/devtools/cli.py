@@ -56,6 +56,7 @@ def main(argv=None, root=ROOT):
     test_parser = sub.add_parser('test', help='run an authoritative test group')
     test_parser.add_argument('group', choices=['unit', 'ios-unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
     test_parser.add_argument('--only', action='append', default=[])
+    test_parser.add_argument('--timeout', type=float, default=None, help='per-process seconds; default 600')
     test_parser.add_argument('--full', action='store_true', help='only for an explicitly authorized frozen final revision')
     format_parser = sub.add_parser('format', help='Apple swift-format only')
     format_parser.add_argument('--check', action='store_true')
@@ -150,7 +151,10 @@ def main(argv=None, root=ROOT):
             if args.command == 'test':
                 if args.full and args.group not in ('ui', 'release'):
                     raise ValueError('--full requires ui or release collection')
-                return commands.test(root, args.group, only=args.only, full=args.full)
+                options = {} if args.timeout is None else {'timeout': args.timeout}
+                if args.timeout is not None and args.timeout <= 0:
+                    raise ValueError('--timeout must be positive')
+                return commands.test(root, args.group, only=args.only, full=args.full, **options)
             if args.command == 'format':
                 return commands.format_sources(root, check=args.check)
             if args.command == 'lint':

@@ -328,6 +328,10 @@
         {
           "package": "TodayModules",
           "product": "TodayScenes"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureAsk"
         }
       ]
     },

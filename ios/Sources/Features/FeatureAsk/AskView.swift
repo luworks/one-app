@@ -2076,10 +2076,13 @@
         return AutonomyPolicy.decide(change, grants: GrantStore.infos(context), now: anchor)
           == .auto
       }
-      let entries = applied.compactMap { p in
-        actions.setPlanned(
-          p.task, to: p.start, context: context, actor: .todayAI,
-          channel: auto ? .automatic : .ask, approval: approval)
+      let entries = applied.compactMap { p -> (task: OneTask, start: Date, entry: LedgerItem)? in
+        guard
+          let entry = actions.setPlanned(
+            p.task, to: p.start, context: context, actor: .todayAI,
+            channel: auto ? .automatic : .ask, approval: approval)
+        else { return nil }
+        return (p.task, p.start, entry)
       }
       if rows == nil { plan = [] }
       let n = applied.count
@@ -2096,14 +2099,14 @@
       feedback.undo = UndoRow(
         label: label,
         action: {
-          for entry in entries {
-            guard
-              let row = applied.first(where: {
-                Ledger.ref($0.task.persistentModelID).map(Ledger.comparisonKey)
-                  == entry.itemRef.map(Ledger.comparisonKey)
-              }),
-              !row.task.isDeleted, row.task.modelContext != nil, row.task.plannedStart == row.start
+          for row in entries {
+            guard !row.task.isDeleted, row.task.modelContext != nil,
+              !row.task.isDone, row.task.plannedStart == row.start
             else { continue }
+            // Record returns before flush resolves its pending model reference.
+            // Retain the exact applied task rather than matching the unhydrated value copy.
+            var entry = row.entry
+            entry.itemRef = Ledger.ref(row.task.persistentModelID)
             _ = actions.undo(entry, context: context)
           }
         })
@@ -2152,15 +2155,15 @@
         feedback.messages.append(reply("Couldn't save the new dates. The preview is still here."))
         return feedback
       }
-      var entries: [LedgerItem] = []
+      var entries: [(task: OneTask, entry: LedgerItem)] = []
       for r in changes {
         let new = r.task.due
-        entries.append(
-          ledger.record(
-            .redated, task: r.task, title: r.task.title,
-            before: ledger.timeLabel(r.oldDue, none: "No date"),
-            after: ledger.timeLabel(new, none: "No date"), beforeDate: r.oldDue, afterDate: new,
-            actor: .todayAI, channel: .ask, approval: .asked, context: context))
+        let entry = ledger.record(
+          .redated, task: r.task, title: r.task.title,
+          before: ledger.timeLabel(r.oldDue, none: "No date"),
+          after: ledger.timeLabel(new, none: "No date"), beforeDate: r.oldDue, afterDate: new,
+          actor: .todayAI, channel: .ask, approval: .asked, context: context)
+        entries.append((r.task, entry))
       }
       rows = []
       let label = "Moved \(changes.count) reminder\(changes.count == 1 ? "" : "s")."
@@ -2168,14 +2171,12 @@
       feedback.undo = UndoRow(
         label: label,
         action: {
-          for entry in entries {
-            guard
-              let row = changes.first(where: {
-                Ledger.ref($0.task.persistentModelID).map(Ledger.comparisonKey)
-                  == entry.itemRef.map(Ledger.comparisonKey)
-              }),
-              !row.task.isDeleted, row.task.modelContext != nil, row.task.due == entry.afterDate
+          for row in entries {
+            guard !row.task.isDeleted, row.task.modelContext != nil,
+              !row.task.isDone, row.task.due == row.entry.afterDate
             else { continue }
+            var entry = row.entry
+            entry.itemRef = Ledger.ref(row.task.persistentModelID)
             _ = actions.undo(entry, context: context)
           }
         })

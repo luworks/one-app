@@ -7,11 +7,41 @@
   import TodayCore
   import TodayData
   import TodayTestSupport
+  import FeatureAsk
   @testable import One
 
   /// Native integration: real One models/actions and SQLite Activity, local service boundaries only.
   @MainActor
   struct PlannerSessionTests {
+    @Test
+    func askPlanUndoRestoresOnlyUnchangedTasksAndRecordsOnce() throws {
+      let a = try Session(seed: 1400)
+      defer { a.dispose() }
+      let task = try a.add("Plan and undo")
+      let edited = try a.add("User edited")
+      let deleted = try a.add("Deleted after apply")
+      let completed = try a.add("Completed after apply")
+      let start = a.clock.now().addingTimeInterval(3600)
+      var plan = [task, edited, deleted, completed].map { (task: $0, start: start) }
+      let feedback = AskNativeActions.applyPlan(
+        plan: &plan, grant: nil, context: a.context, actions: a.services.actions,
+        ledger: a.services.ledger, runtime: a.runtime)
+      #expect(plan.isEmpty && task.plannedStart == start && task.due == a.day)
+      edited.plannedStart = start.addingTimeInterval(1800)
+      completed.isDone = true
+      a.context.delete(deleted)
+      try a.context.save()
+      let undo = try #require(feedback.undo)
+      undo.action()
+      undo.action()
+      #expect(task.plannedStart == nil && task.due == a.day)
+      #expect(edited.plannedStart == start.addingTimeInterval(1800))
+      #expect(completed.isDone && completed.plannedStart == start)
+      #expect(try a.tasks().count == 3)
+      #expect(try a.rows().filter { $0.actionValue == .undone }.count == 1)
+      #expect(a.services.reminders.completionCalls.isEmpty)
+    }
+
     @Test
     func existentialObservationAndDisposalStayInsideTheirSession() async throws {
       let a = try Session(seed: 100)

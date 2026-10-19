@@ -77,6 +77,14 @@ class FoundationTests(unittest.TestCase):
             main(['test', 'nonexistent'], self.root)
         self.assertEqual(caught.exception.code, 2)
 
+    def test_explicit_final_timeout_reaches_runner_and_nonpositive_is_rejected(self):
+        with patch('scripts.devtools.commands.test', return_value=65) as runner:
+            self.assertEqual(main(['test', 'release', '--full', '--timeout', '14400'], self.root), 65)
+            runner.assert_called_once_with(self.root, 'release', only=[], full=True, timeout=14400)
+        with patch('scripts.devtools.commands.test') as runner, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(main(['test', 'ui', '--timeout', '0'], self.root), 1)
+            runner.assert_not_called()
+
     def test_worktree_and_spaces_have_distinct_dd(self):
         other = self.root / 'other worktree'
         other.mkdir()
