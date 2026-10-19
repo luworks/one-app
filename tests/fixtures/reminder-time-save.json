@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "about": "Owner-reported time save regression: unplanned reminder with a timed deadline at 14:00. Native EventKit seeding adds mirrored start/due, explicit timezone, two alerts and an unsupported biweekly recurrence so the real editor must preserve native metadata.",
+  "lists": [],
+  "reminders": [{"title": "Time save regression", "due": {"day": 0, "time": "14:00"}, "note": "Preserve the native note."}],
+  "events": [], "alarms": [], "chats": []
+}

@@ -91,3 +91,34 @@ root owns cross-module type checking and runtime acceptance.
 
 QA session: `reminders-module-20261018`, canonical journal
 `/Users/yuanlu/code/one-app/tests/results/activity.sqlite`.
+
+
+## Reminder editor time commit boundary (2026-10-19)
+
+The editor now confirms the linked EventKit edit before changing its local model
+and closing. Previously it saved locally and closed before queued reconciliation;
+a concurrent Apple note update made Apple win the whole fingerprint and restored
+the old deadline. A real EventKit regression fixture reproduces that ordering.
+
+Exact new package signatures in ReminderService:
+
+```swift
+func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws -> RemindersSync.Remote?
+func didPersistEdit(_ task: OneTask, accepted: RemindersSync.Remote?)
+```
+
+RemindersSync and TestReminderService implement both methods. TaskEditor.save is
+the only production caller. A nil receipt means local-only; a linked receipt is
+returned only after EventKit commits. Changed fields alone are patched, preserving
+native start/date timezone components, URL, notes, priority, alarms and unsupported
+recurrence rules when those fields are unedited. The existing completion fence
+rejects in-flight snapshots that predate an accepted editor write. This does not
+wait on an old reconcile round, cancel another caller, or create a new sync service.
+
+Planned time stays local and never changes the deadline. Unchanged Done closes
+without requiring synchronization. Failures retain the draft for explicit retry;
+a confirmed system write followed by a local save failure is reported separately
+and retries the same object. This is not a cross-store atomic transaction.
+
+The original full native editor is retained in this layer. Compact Due styling
+and strict deletion/Undo are isolated in the following change.

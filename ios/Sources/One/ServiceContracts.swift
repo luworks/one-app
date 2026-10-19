@@ -66,6 +66,9 @@
     func noteDeleted(list externalID: String?)
     func scheduleReconcile(after delay: Duration)
     func reconcile() async
+    func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
+      -> RemindersSync.Remote?
+    func didPersistEdit(_ task: OneTask, accepted: RemindersSync.Remote?)
     func commitCompletion(
       _ task: OneTask, done: Bool, restoringDue: Date?, restoresDue: Bool,
       expected: RemindersSync.Remote?

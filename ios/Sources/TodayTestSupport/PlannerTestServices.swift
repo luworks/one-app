@@ -228,6 +228,30 @@
       guard !isDisposed else { return }
       reconcileCount += 1
     }
+    package var editFailure: Failure?
+    package private(set) var editCalls = 0
+
+    package func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
+      -> RemindersSync.Remote?
+    {
+      guard let id = task.externalID else { return nil }
+      guard isConnected else { throw Failure.disconnected }
+      editCalls += 1
+      if let editFailure { throw editFailure }
+      if let currentRemote, currentRemote.fingerprint != RemindersSync.fingerprint(of: expected) {
+        throw Failure.changedOutside
+      }
+      let accepted = RemindersSync.Remote(
+        id: id, title: draft.title, notes: draft.note,
+        isDone: draft.isDone, doneAt: draft.doneAt, due: draft.due, listID: "test-list",
+        listTitle: draft.listName, flagged: draft.flagged, repeatRule: draft.repeatRule,
+        repeats: draft.repeatRule != nil)
+      currentRemote = accepted
+      return accepted
+    }
+    package func didPersistEdit(_ task: OneTask, accepted: RemindersSync.Remote?) {
+      scheduleReconcile(after: .milliseconds(50))
+    }
     package func commitCompletion(
       _ task: OneTask, done: Bool, restoringDue: Date?, restoresDue: Bool,
       expected: RemindersSync.Remote?
