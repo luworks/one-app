@@ -341,13 +341,22 @@ def _product_identity(root, product):
     return {'files': files}
 
 
-def xctestrun_products(root, path):
+def xctestrun_products(root, path, *, identities=None):
     """Resolve both Xcode plist formats into exact local test/host product roots."""
     path = Path(path).absolute()
     products = (derived_data(root) / 'Build/Products').resolve()
     if path.suffix != '.xctestrun' or path.parent.resolve() != products:
         raise ValueError('xctestrun must belong to this worktree Build/Products')
-    _product_identity(root, path)
+    # Share byte reads only inside this synchronous validation. Every later
+    # dispatch starts with an empty map and rehashes the live products.
+    identities = {} if identities is None else identities
+
+    def inspect(product):
+        key = str(Path(product).absolute())
+        if key not in identities:
+            identities[key] = _product_identity(root, product)
+
+    inspect(path)
     with path.open('rb') as stream:
         data = plistlib.load(stream)
     if not isinstance(data, dict):
@@ -378,7 +387,7 @@ def xctestrun_products(root, path):
         resolved = Path(value).resolve()
         if not resolved.is_relative_to(products):
             raise ValueError('Foreign xctestrun product: ' + value)
-        _product_identity(root, Path(value))
+        inspect(Path(value))
         found.add(str(Path(value).absolute()))
         return resolved
 
@@ -411,13 +420,17 @@ def record_build(root, current, products, *, returncode, kind='build', xctestrun
                    configuration=inputs['configuration'], tools=inputs['toolchain']) != current:
         raise ValueError('Source changed before provenance publication')
     products = list(products)
+    artifacts = {}
     if kind == 'build-for-testing':
         if xctestrun is None or not Path(xctestrun).name.startswith(current['inputs']['scheme'] + '_'):
             raise ValueError('Exact scheme xctestrun required')
-        products.extend(xctestrun_products(root, xctestrun))
+        products.extend(xctestrun_products(root, xctestrun, identities=artifacts))
     elif xctestrun is not None:
         raise ValueError('xctestrun requires build-for-testing provenance')
-    artifacts = {str(Path(p).absolute()): _product_identity(root, p) for p in products}
+    for product in products:
+        key = str(Path(product).absolute())
+        if key not in artifacts:
+            artifacts[key] = _product_identity(root, product)
     atomic_json(destination, {'schema': 2, 'kind': kind, 'worktree': str(Path(root).resolve()),
                              'fingerprint': current, 'products': artifacts,
                              'xctestrun': str(Path(xctestrun).absolute()) if xctestrun else None})
@@ -435,16 +448,18 @@ def provenance(root, current, *, kind='build', xctestrun=None):
         products = stored.get('products', {})
         if not isinstance(products, dict) or not products:
             raise ValueError('Missing products')
+        identities = {}
         if kind == 'build-for-testing':
             actual = stored.get('xctestrun')
             if not actual or (xctestrun is not None and str(Path(xctestrun).absolute()) != actual):
                 raise ValueError('xctestrun identity mismatch')
             if not Path(actual).name.startswith(current['inputs']['scheme'] + '_'):
                 raise ValueError('xctestrun scheme mismatch')
-            if set(xctestrun_products(root, actual)) - set(products):
+            if set(xctestrun_products(root, actual, identities=identities)) - set(products):
                 raise ValueError('Unrecorded xctestrun products')
         for name, digest in products.items():
-            if _product_identity(root, name) != digest:
+            actual_digest = identities[name] if name in identities else _product_identity(root, name)
+            if actual_digest != digest:
                 raise ValueError('Missing or modified product')
         return {'valid': True, 'reason': 'fingerprint and products match', 'xctestrun': stored.get('xctestrun')}
     except (OSError, ValueError, TypeError, KeyError, plistlib.InvalidFileException) as error:

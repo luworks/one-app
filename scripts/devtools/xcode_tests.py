@@ -153,6 +153,7 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                 flags = locked_arguments(root)
                 identity = None
                 if reuse:
+                    started = time.monotonic()
                     try:
                         test_run = ensure_test_products(root, scheme, invoke, flags=flags)
                     except NativeBuildError as exc:
@@ -169,9 +170,14 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                         evidence.journal.artifact(evidence.session, path)
                         print(json.dumps({'report': str(path), 'status': report['status']}))
                         continue
+                    print(json.dumps({'native_phase': 'ensure_test_products',
+                                      'seconds': round(time.monotonic() - started, 3)}))
+                    started = time.monotonic()
                     identity = fingerprint(root, scheme=scheme, architecture='arm64')
                     if not provenance(root, identity, kind='build-for-testing', xctestrun=test_run)['valid']:
                         raise ValueError('Test products changed before dispatch')
+                    print(json.dumps({'native_phase': 'validate_before_dispatch',
+                                      'seconds': round(time.monotonic() - started, 3)}))
                     command = ['xcodebuild', 'test-without-building', '-xctestrun', str(test_run)]
                 else:
                     # Legacy direct test always builds; it never consumes cached provenance.
