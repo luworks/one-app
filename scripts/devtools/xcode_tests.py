@@ -6,7 +6,8 @@ from pathlib import Path
 import tempfile
 import uuid
 
-from .core import ResourceLock, atomic_json, dd_lock, derived_data, host_lock
+from .core import (NativeBuildError, ResourceLock, atomic_json, dd_lock, derived_data,
+                   ensure_test_products, fingerprint, host_lock, provenance)
 from .process import Evidence, Redactor, run_process
 
 SCHEMES = {'unit': 'TodayTests', 'integration': 'TodayTests', 'snapshot': 'TodaySnapshotTests'}
@@ -60,9 +61,11 @@ def completed_report(contract, expected, lane, data, exit_code, raw_log, parser_
     return report
 
 
-def run(root, contract, groups, *, only=(), timeout=600, locked=False):
+def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=False):
     """Caller may hold the shared host/DD locks across a final serial collection."""
     lanes = selected(contract, root, groups, only)
+    if not lanes or any(not ids for ids in lanes.values()):
+        raise ValueError('At least one expected test per lane required')
     batches = {}
     for lane, ids in lanes.items():
         batch = batches.setdefault(SCHEMES[lane], {'lane': lane, 'expected': []})
@@ -118,8 +121,22 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False):
                 expected = list(dict.fromkeys(batch['expected']))
                 from .resolve import locked_arguments
                 flags = locked_arguments(root)
-                result = invoke(['xcodebuild', 'test', '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
-                                 '-configuration', 'Debug', '-sdk', 'iphonesimulator',
+                identity = None
+                if reuse:
+                    try:
+                        test_run = ensure_test_products(root, scheme, invoke, flags=flags)
+                    except NativeBuildError as exc:
+                        first_failure = first_failure or exc.returncode
+                        continue
+                    identity = fingerprint(root, scheme=scheme, architecture='arm64')
+                    if not provenance(root, identity, kind='build-for-testing', xctestrun=test_run)['valid']:
+                        raise ValueError('Test products changed before dispatch')
+                    command = ['xcodebuild', 'test-without-building', '-xctestrun', str(test_run)]
+                else:
+                    # Legacy direct test always builds; it never consumes cached provenance.
+                    command = ['xcodebuild', 'test', '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
+                               '-configuration', 'Debug', '-sdk', 'iphonesimulator']
+                result = invoke([*command,
                                  '-destination', 'platform=iOS Simulator,id=' + simulator,
                                  '-derivedDataPath', str(derived_data(root)), '-resultBundlePath', str(bundle),
                                  '-jobs', '2', '-parallel-testing-enabled', 'NO',
@@ -145,6 +162,10 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False):
                     report['status'] = 'failed'
                     report['coverage_status'] = 'incomplete'
                     report['errors'].append('xcresult_summary_failure')
+                if identity is not None and fingerprint(root, scheme=scheme, architecture='arm64') != identity:
+                    report['status'] = 'failed'
+                    report['coverage_status'] = 'incomplete'
+                    report['errors'].append('source_changed_during_test')
                 path = output / (scheme + '.report.json')
                 atomic_json(path, report)
                 evidence.journal.artifact(evidence.session, path)
