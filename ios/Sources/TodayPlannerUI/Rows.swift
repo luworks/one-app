@@ -182,7 +182,10 @@
       }
       .frame(minHeight: 44)
       .contentShape(Rectangle())
-      .onTapGesture { open(task) }
+      .onTapGesture {
+        PerformanceTrace.shared.beginPage("reminder.editor")
+        open(task)
+      }
 
       .listRowSeparator(.hidden)
       .listRowInsets(
@@ -196,6 +199,7 @@
       }
       .contextMenu {
         Button {
+          PerformanceTrace.shared.beginPage("reminder.editor")
           open(task)
         } label: {
           Label("Show Details", systemImage: "info.circle")
