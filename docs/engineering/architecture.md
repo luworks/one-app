@@ -23,3 +23,7 @@ The compatibility bridge exits only after production features no longer depend o
 ## Live and Mock dependency graphs
 
 Debug/Release remain optimization configurations. A separate `TodayMock` developer target/scheme and `TodayWorkbench` depend on test support; production `Today` links only live production products in both configurations. UI journeys run against TodayMock. Both app variants preserve the existing app bundle and model module identity on their owned simulator; they are never installed concurrently or on a phone. Workbench has its own development-only identity and is absent from production archive membership. This explicit graph separation avoids relying on a DEBUG guard or dead stripping as proof that fake dependencies are absent from Release.
+
+## Next integration ownership
+
+The integration writer owns project/package/configuration, persistent identities and service contracts. The isolated Workbench lane owns only Development scene assembly and registry adaptation; it cannot assert service isolation until live side effects are replaced at explicit composition seams. The isolated native test adapter lane owns test routing and completed-result parsing. Release validation owns only release scripts and synthetic validator tests. No lane may build, boot a simulator or alter signing while the integration writer owns the host-heavy lane.
