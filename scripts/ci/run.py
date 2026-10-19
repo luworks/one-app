@@ -319,7 +319,8 @@ def main():
     for argv in [*setup, command]:
         transcript.append('$ ' + ' '.join(argv) + '\n')
         try:
-            completed = execute(argv, timeout=600, grace=30)
+            # The adapter may build and test serially before closing its receipt.
+            completed = execute(argv, timeout=2100 if argv == command else 600, grace=30)
         except OSError as error:
             # Exception text may include private paths; retain only its type.
             completed = subprocess.CompletedProcess(argv, 1, type(error).__name__ + '\n')

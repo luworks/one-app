@@ -182,6 +182,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.invoke(lane='core-ui', runner=run), 0)
         self.assertEqual(self.report()['executed'], 7)
         self.assertNotIn('--full', self.calls[0][0])
+        self.assertEqual(self.calls[0][1], {'timeout': 1200, 'heavy': True, 'grace': 20})
 
     def test_ui_rejects_runner_from_another_sha(self):
         def run(root, argv, **options):
@@ -192,7 +193,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.invoke(lane='core-ui', runner=run), 1)
         self.assertIn('Runner SHA mismatch', ' '.join(self.report()['errors']))
 
-    def native(self, lane='integration', *, statuses=('Passed',), code=0, diagnostic='', bundle=True, change=None):
+    def native(self, lane='integration', *, statuses=('Passed',), code=0, diagnostic='', bundle=True, change=None, receipts=1):
         from scripts.devtools import xcode_tests
         kind, expected = adapter.test_plan(self.root, lane)
         directory = self.root / ('tests/results/devtools/logs/' + lane + '-xcode')
@@ -214,7 +215,10 @@ class AdapterTests(unittest.TestCase):
         def test(root, group, **kwargs):
             self.assertEqual(group, kind)
             self.assertEqual(kwargs, {'timeout': 600})
-            print(json.dumps({'report': str(path), 'status': native['status']}))
+            print(json.dumps({'exit': 0, 'reason': 'exited', 'seconds': 0.1, 'log': str(directory / 'build.log')}))
+            for _ in range(receipts):
+                print(json.dumps({'report': str(path), 'status': native['status']}))
+            print(json.dumps({'exit': 0, 'reason': 'exited', 'seconds': 0.1, 'log': str(directory / 'shutdown.log')}))
             (directory / 'shutdown.log').write_text('owned simulator shutdown finished')
             return code
         # Result storage is ignored by real repositories, including hosted CI.
@@ -286,8 +290,13 @@ class AdapterTests(unittest.TestCase):
     def test_native_missing_bundle_and_receipt_fail_closed(self):
         self.assertEqual(self.native(bundle=False), 1)
         self.assertIn('Missing completed native xcresult', ' '.join(self.report()['errors']))
-        with patch.object(adapter.commands, 'test', return_value=0):
+        with patch.object(adapter.commands, 'test', return_value=0), patch.object(
+                adapter, 'source_state', return_value='fixed'):
             self.assertEqual(self.invoke(lane='integration', output=self.output.with_name('missing')), 1)
+
+    def test_native_duplicate_receipts_fail_closed(self):
+        self.assertEqual(self.native(receipts=2), 1)
+        self.assertIn('Missing or ambiguous native test receipt', ' '.join(self.report()['errors']))
 
     def test_release_does_not_accept_debug_products(self):
         dd = Path(self.temporary.name) / 'dd'

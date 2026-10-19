@@ -86,7 +86,8 @@ def _native_results(root, lane, output, report):
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
         code = commands.test(root, kind, timeout=600)
-    receipts = [json.loads(line) for line in captured.getvalue().splitlines() if line.startswith('{')]
+    events = [json.loads(line) for line in captured.getvalue().splitlines() if line.startswith('{')]
+    receipts = [event for event in events if isinstance(event, dict) and 'report' in event]
     if len(receipts) != 1 or set(receipts[0]) != {'report', 'status'}:
         raise ValueError('Missing or ambiguous native test receipt')
     scheme = xcode_tests.SCHEMES[kind]
@@ -144,7 +145,10 @@ def _test_results(root, lane, output, run, report):
                  '--derived-data', str(derived_data(root)), '--output', str(output / 'runner')]
     if kind == 'ui':
         report['artifact_writers_closed'] = False
-    result = run(root, argv, timeout=600, heavy=True)
+    options = {'timeout': 1200 if kind == 'ui' else 600, 'heavy': True}
+    if kind == 'ui':
+        options['grace'] = 20
+    result = run(root, argv, **options)
     raw = Path(result.log).read_text()
     (output / 'command.log').write_text(Redactor()(raw))
     report['cancelled'] += int(result.reason == 'cancelled' or result.returncode in (130, -2, -15))
