@@ -302,7 +302,8 @@ final class HealthLoadingTests: XCTestCase {
     func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric:
       HealthSeries]
     {
-      [:]  // The optional diagnostic query must be used instead of silently treating errors as empty.
+      // Optional diagnostic queries must not silently turn errors into empty results.
+      [:]
     }
     func query(_ metric: HealthMetric, days: Int, now: Date) async throws -> HealthSeries {
       if metric == .steps { throw CocoaError(.fileReadUnknown) }
