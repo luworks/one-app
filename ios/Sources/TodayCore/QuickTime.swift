@@ -30,7 +30,11 @@ public enum QuickTime {
   }
 
   public static func nudge(_ date: Date, minutes: Int, calendar cal: Calendar = .current) -> Date {
-    cal.date(byAdding: .minute, value: minutes, to: date) ?? date
+    // A day button keeps wall-clock time across daylight-saving transitions.
+    if abs(minutes) == 1440 {
+      return cal.date(byAdding: .day, value: minutes / 1440, to: date) ?? date
+    }
+    return cal.date(byAdding: .minute, value: minutes, to: date) ?? date
   }
 
   /// Moves to a day, keeping the time of day. This Weekend = the coming Saturday; Next Week = next Monday.

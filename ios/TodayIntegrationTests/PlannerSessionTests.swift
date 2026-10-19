@@ -14,6 +14,73 @@
   @MainActor
   struct PlannerSessionTests {
     @Test
+    func confirmedEditorDeleteFailurePreservesIdentityThenRetryAndUndoCommitOnce() async throws {
+      let a = try Session(seed: 1900)
+      defer { a.dispose() }
+      await a.services.reminders.connect()
+      let task = try a.add("Editor deletion")
+      task.externalID = "editor-delete-id"
+      task.note = "Retain this note"
+      task.plannedStart = a.clock.now().addingTimeInterval(3600)
+      try a.context.save()
+      let identity = task.persistentModelID
+      let original = Ledger.snapshot(of: task)
+      a.services.reminders.currentRemote = RemindersSync.Remote(
+        id: "editor-delete-id",
+        title: task.title, notes: task.note, isDone: false, doneAt: nil, due: task.due,
+        listID: "test-list", listTitle: task.listName, flagged: false, repeatRule: nil,
+        repeats: false)
+      a.services.reminders.deletionFailure = .injected
+      #expect(throws: TestReminderService.Failure.self) {
+        try a.services.actions.deleteConfirmed(task, context: a.context, toast: a.toast)
+      }
+      #expect(!task.isDeleted && task.persistentModelID == identity)
+      #expect(try a.tasks().count == 1 && Ledger.snapshot(of: task) == original)
+      #expect(try a.rows().filter { $0.actionValue == .deleted }.isEmpty)
+      #expect(!a.toast.canUndo)
+      a.services.reminders.deletionFailure = nil
+      try a.services.actions.deleteConfirmed(task, context: a.context, toast: a.toast)
+      #expect(try a.tasks().isEmpty && a.toast.canUndo)
+      #expect(try a.rows().filter { $0.actionValue == .deleted }.count == 1)
+      a.toast.performUndo()
+      a.toast.performUndo()
+      let restored = try #require(try a.tasks().first)
+      #expect(try a.tasks().count == 1)
+      #expect(restored.note == original.note && restored.plannedStart == original.plannedStart)
+      #expect(restored.due == original.due)
+      #expect(restored.externalID == a.services.reminders.currentRemote?.id)
+      #expect(restored.externalID != "editor-delete-id")
+      #expect(try a.rows().filter { $0.actionValue == .undone }.count == 1)
+    }
+
+    @Test
+    func confirmedEditorDeleteCannotResurrectExternalRemovalOrReappearance() async throws {
+      for alreadyAbsent in [false, true] {
+        let a = try Session(seed: alreadyAbsent ? 1902 : 1901)
+        defer { a.dispose() }
+        await a.services.reminders.connect()
+        let task = try a.add("Guarded editor Undo")
+        task.externalID = "guarded-delete-id"
+        try a.context.save()
+        let remote = RemindersSync.Remote(
+          id: "guarded-delete-id", title: task.title,
+          notes: task.note, isDone: false, doneAt: nil, due: task.due,
+          listID: "test-list", listTitle: task.listName, flagged: false, repeatRule: nil,
+          repeats: false)
+        a.services.reminders.currentRemote = alreadyAbsent ? nil : remote
+        try a.services.actions.deleteConfirmed(task, context: a.context, toast: a.toast)
+        if alreadyAbsent {
+          #expect(!a.toast.canUndo)
+        } else {
+          a.services.reminders.currentRemote = remote
+        }
+        a.toast.performUndo()
+        #expect(try a.tasks().isEmpty)
+        #expect(try a.rows().filter { $0.actionValue == .undone }.isEmpty)
+      }
+    }
+
+    @Test
     func askPlanUndoRestoresOnlyUnchangedTasksAndRecordsOnce() throws {
       let a = try Session(seed: 1400)
       defer { a.dispose() }

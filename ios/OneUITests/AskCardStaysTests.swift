@@ -164,10 +164,10 @@ final class AskCardStaysTests: XCTestCase {
     // Open shows the created reminder.
     app.buttons["capture-open"].tap()
     XCTAssertTrue(
-      app.navigationBars["Reminder"].waitForExistence(timeout: 5), "Open shows the reminder")
+      app.textFields["task.title"].waitForExistence(timeout: 5), "Open shows the reminder")
     XCTAssertEqual(app.textFields["task.title"].value as? String, "Order printer paper")
-    app.navigationBars["Reminder"].buttons["Cancel"].tap()
-    XCTAssertTrue(app.navigationBars["Reminder"].waitForNonExistence(timeout: 5))
+    app.buttons["Cancel"].tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
 
     // Undo takes back exactly that; the card says Undone and offers Add again.
     app.buttons["capture-undo"].tap()

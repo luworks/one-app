@@ -447,7 +447,7 @@ final class SettingsChoicesTests: XCTestCase {
     XCTAssertTrue(saved.waitForExistence(timeout: 5), "the saved reminder actually belongs to Work")
     saved.tap()
     XCTAssertTrue(
-      app.navigationBars["Reminder"].waitForExistence(timeout: 5),
+      app.textFields["task.title"].waitForExistence(timeout: 5),
       "the saved reminder can be reopened from the selected list")
     XCTAssertEqual(app.textFields["task.title"].value as? String, "Check the handoff checklist")
   }
