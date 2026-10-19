@@ -109,14 +109,10 @@
             onState(.unavailable)
             return
           }
-          var tapError: NSError?
-          guard
-            input.__installTap(
-              onBus: 0, bufferSize: 1024, format: format, error: &tapError,
-              block: Self.tapBlock(request))
-          else {
-            throw tapError ?? NSError(domain: "Today.AudioInput", code: 1)
-          }
+          // The NSError out parameter imports as a throwing Swift call.
+          try input.__installTap(
+            onBus: 0, bufferSize: 1024, format: format, error: (),
+            block: Self.tapBlock(request))
           tapped = true
           engine.prepare()
           try engine.start()
