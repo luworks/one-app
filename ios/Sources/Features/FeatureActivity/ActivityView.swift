@@ -1,21 +1,18 @@
+import One
 import TodayCore
-import TodayShared
 import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
-import SwiftData
 
 /// Activity, from the sidebar: what changed, newest first, grouped by day. Each row: time · who · what, before → after,
 /// and Undo where Today can put it back. Filter chips: All / AI / You / Agents. Read-only apart from Undo.
 ///
 /// The rows come from the Activity data store (`ActivityStore`), one page of 150 at a time: "Show more" asks for the next page
 /// from where the last one ended, so a long history never loads at once.
-struct ActivityView: View {
+@MainActor
+package struct ActivityView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
     @State private var filter: ActivityFilter = .all
     @State private var items: [LedgerItem] = []
     @State private var undone: Set<UUID> = []
@@ -26,8 +23,18 @@ struct ActivityView: View {
     @State private var now = Date.now
 
     private let pageSize = 150
+    private let activity: ActivityCenter
+    private let flush: @MainActor () -> Void
+    private let undo: @MainActor (LedgerItem) -> Bool
 
-    var body: some View {
+    package init(activity: ActivityCenter, flush: @escaping @MainActor () -> Void,
+                 undo: @escaping @MainActor (LedgerItem) -> Bool) {
+        self.activity = activity
+        self.flush = flush
+        self.undo = undo
+    }
+
+    package var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 chips
@@ -61,7 +68,7 @@ struct ActivityView: View {
                     Section {
                         ForEach(group.items) { item in
                             ActivityRow(item: item, undone: undone.contains(item.id)) {
-                                let ok = Ledger.undo(item, context: context)
+                                let ok = undo(item)
                                 reload()
                                 return ok
                             }
@@ -102,22 +109,22 @@ struct ActivityView: View {
         case .you: .you
         case .agents: .others
         }
-        let since = ActivityCenter.shared.settings.retention.cutoff(now: .now).map(ActivityClock.ms)
+        let since = activity.settings.retention.cutoff(now: .now).map(ActivityClock.ms)
         return ActivityQuery(tiers: [.changes], actors: actors, sinceMs: since)
     }
 
     /// Reads the newest rows again (keeping as many as are shown), after Undo, a new change or another filter.
     private func reload(keepCount: Bool = true) {
-        Ledger.flush(context)
-        recording = ActivityCenter.recordsChanges
-        guard let store = ActivityCenter.shared.store else { loaded = true; return }
+        flush()
+        recording = activity.recorder.isRecording(.changes)
+        guard let store = activity.store else { loaded = true; return }
         let want = keepCount ? max(pageSize, items.count) : pageSize
         let page = (try? store.page(query, limit: want + 1)) ?? []
         show(Array(page.prefix(want)), more: page.count > want, store: store, replacing: true)
     }
 
     private func loadMore() {
-        guard let store = ActivityCenter.shared.store, let after = moreAfter else { return }
+        guard let store = activity.store, let after = moreAfter else { return }
         let page = (try? store.page(query, after: after, limit: pageSize + 1)) ?? []
         show(Array(page.prefix(pageSize)), more: page.count > pageSize, store: store, replacing: false)
     }
@@ -138,7 +145,7 @@ private struct ActivityRow: View {
     let item: LedgerItem
     let undone: Bool
     /// Runs Undo; false when it could not (the reminder is gone or changed again).
-    let onUndo: () -> Bool
+    let onUndo: @MainActor () -> Bool
     @State private var failed = false
 
     private var actor: LedgerActor { item.actorValue }

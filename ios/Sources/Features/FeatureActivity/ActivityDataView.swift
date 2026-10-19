@@ -1,17 +1,12 @@
-import TodayCore
-import TodayShared
+import One
 import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
-import SwiftData
 
 /// Settings → Activity → Activity data: what Today records about your use, where it lives, and the basics: pause, switch a
 /// category off, how long changes are kept, export (JSON Lines or CSV) and clear. Everything stays on this iPhone.
-struct ActivityDataView: View {
-    @Environment(\.modelContext) private var context
+@MainActor
+package struct ActivityDataView: View {
     @AppStorage(ActivitySettings.pausedKey) private var paused = false
     @AppStorage(ActivitySettings.retentionKey) private var retentionRaw = ActivityRetention.default.rawValue
     @AppStorage(ActivitySettings.keepChatTextKey) private var keepChatText = true
@@ -29,6 +24,21 @@ struct ActivityDataView: View {
     @State private var benchmarking = false
     @State private var legacyRows = 0
 
+    private let readSummary: @MainActor () -> ActivityCenter.Summary
+    private let clear: @MainActor () -> Void
+    private let exportFile: @MainActor (ActivityExportFormat) async throws -> URL
+    private let legacyRowCount: @MainActor () -> Int
+
+    package init(summary: @escaping @MainActor () -> ActivityCenter.Summary,
+                 clear: @escaping @MainActor () -> Void,
+                 export: @escaping @MainActor (ActivityExportFormat) async throws -> URL,
+                 legacyRowCount: @escaping @MainActor () -> Int) {
+        self.readSummary = summary
+        self.clear = clear
+        self.exportFile = export
+        self.legacyRowCount = legacyRowCount
+    }
+
     private struct ExportedFile: Identifiable {
         let id = UUID()
         let url: URL
@@ -38,7 +48,7 @@ struct ActivityDataView: View {
         Binding(get: { ActivityRetention(rawValue: retentionRaw) ?? .default }, set: { retentionRaw = $0.rawValue })
     }
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 Toggle("Pause recording", isOn: $paused)
@@ -138,7 +148,7 @@ struct ActivityDataView: View {
         .onReceive(NotificationCenter.default.publisher(for: ActivityCenter.didChange)) { _ in refresh() }
         .confirmationDialog("Clear activity history?", isPresented: $askingClear, titleVisibility: .visible) {
             Button("Clear \(summary.total) Events", role: .destructive) {
-                ActivityCenter.clear(context: context)
+                clear()
                 refresh()
             }
             Button("Cancel", role: .cancel) {}
@@ -161,9 +171,9 @@ struct ActivityDataView: View {
     }
 
     private func refresh() {
-        summary = ActivityCenter.summary()
+        summary = readSummary()
         #if DEBUG
-        legacyRows = (try? context.fetchCount(FetchDescriptor<LedgerEntry>())) ?? 0
+        legacyRows = legacyRowCount()
         #endif
     }
 
@@ -171,7 +181,7 @@ struct ActivityDataView: View {
         exporting = true
         exportFailed = false
         Task {
-            do { exported = ExportedFile(url: try await ActivityCenter.export(format)) } catch { exportFailed = true }
+            do { exported = ExportedFile(url: try await exportFile(format)) } catch { exportFailed = true }
             exporting = false
         }
     }
