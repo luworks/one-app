@@ -83,12 +83,16 @@ class AdapterTests(unittest.TestCase):
         from scripts.devtools import core
         with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'core-ui'}):
             routine = core.fingerprint(self.root, tools={})
-            self.assertEqual(core.native_test_options(), ['-enableCodeCoverage', 'NO'])
+            self.assertEqual(core.native_test_options(), [
+                '-enableCodeCoverage', 'NO', 'COMPILER_INDEX_STORE_ENABLE=NO',
+                'SWIFT_ENABLE_EXPLICIT_MODULES=NO'])
             import runpy
             ui = runpy.run_path(str(ROOT / 'ios/Eval/run-e2e.py'))
             command = ui['ui_command'](['TodayUITests/JourneyTests/testJ3_completeAndUndo'],
                                        'synthetic-device', Path('derived'), Path('output'))
             self.assertEqual(command[command.index('-enableCodeCoverage') + 1], 'NO')
+            self.assertIn('COMPILER_INDEX_STORE_ENABLE=NO', command)
+            self.assertIn('SWIFT_ENABLE_EXPLICIT_MODULES=NO', command)
             self.assertIn('-only-testing:TodayUITests/JourneyTests/testJ3_completeAndUndo', command)
             self.assertEqual(command[command.index('-parallel-testing-enabled') + 1], 'NO')
         for lane in ('extended', 'release', 'protected-release', ''):

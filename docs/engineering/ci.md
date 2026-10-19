@@ -149,3 +149,45 @@ first/final helper logs and journal hashes remain under the primary checkout's
 `tests/results/ci-hillclimb-20261019/`. Main Release run `39287295546` is now
 completed/success at exact `f76b106`; that API status alone is not full artifact
 or device qualification. The failed earlier run remains retained.
+
+
+### Iteration 3: cold native compiler experiment
+
+Run [39294049533](https://github.com/luworks/one-app/actions/runs/39294049533)
+at head `8db19ea` tested integrated SHA `b3f4f613d0185049a194b92d7906e3fc04e12bea`.
+Snapshot job `118202044017` failed before executing any tests: its retained
+`build-for-testing` process exited 124 after **617.627 seconds** under the existing
+600-second deadline (includes termination/evidence overhead). Six tests remain
+missing. The failed receipt, compiler log and closed artifact `12209445257` are
+preserved; no pixel regression, parser root cause or compiler diagnostic error
+is established. Job duration was 793 seconds, not a successful 300-second gate.
+
+The log contains 237 explicit Clang module generation tasks, seven Swift SDK
+interface compilation tasks (including two distinct XCUIAutomation variants),
+and 30 compiler invocations requesting index-store output. The same run's passing
+integration build took 537.258 seconds, readiness wait after compilation 3.481
+seconds, and fresh test command 94.832 seconds (13/13 passed). Its ordinary App
+build process took 89.052 seconds. Different VM/runtime/dependency conditions
+prevent attributing the difference solely to explicit modules or boot contention.
+Overlap is observable; a total speedup is still unproven.
+
+Routine synthetic integration/snapshots/core-ui now disable compiler index-store
+output (no CI consumer) and test Apple's supported
+[`SWIFT_ENABLE_EXPLICIT_MODULES=NO` compiler path](https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes).
+This tests whether on-demand module loading avoids costly cold SDK expansion;
+it is a hypothesis, not a demonstrated timeout repair. Both settings participate
+in the existing product fingerprint and apply to build and fresh test dispatch.
+Local/extended/Release compilation, debug symbols, runtime checks, selectors,
+image baselines, failure/skip gates, two build jobs and the 600-second deadline
+are retained. No cache/results transport, framework or product dependency changes
+are included. The next hosted sample must establish build success and phase costs;
+core UI bodies near 280 seconds remain an independent obstacle to total 300 seconds.
+
+
+Host validation: `./dev test helpers` passed 113 tests in 32.872 seconds;
+`./dev lint` and `git diff --check` passed. A focused review checked mode scoping,
+build/dispatch consistency and cross-mode provenance invalidation. No local
+simulator/build or physical-device validation ran. The previous run's core-ui
+job remained active at the handoff; publishing a new PR head would cancel it
+under the existing same-ref policy. Retain its first result before pushing the
+prepared compiler experiment. Do not merge PR104 or claim the total-time goal.

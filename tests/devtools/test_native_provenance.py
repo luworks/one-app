@@ -1,6 +1,7 @@
 """Host-only native cache behavior using real product trees and synthetic Xcode."""
 from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import plistlib
 import subprocess
@@ -83,6 +84,22 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 4)
         self.assertTrue(all(command[1] == 'build-for-testing' for command in self.calls))
         self.assertEqual(self.calls[0][self.calls[0].index('-derivedDataPath') + 1], str(core.derived_data(self.root)))
+
+    def test_routine_compiler_mode_rebuilds_existing_products_and_reuses_only_same_mode(self):
+        self.ensure()
+        ordinary = self.fp()
+        for lane in ('integration', 'snapshots', 'core-ui'):
+            with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': lane}):
+                self.assertNotEqual(ordinary, self.fp())
+                self.ensure()
+                count = len(self.calls)
+                self.ensure()
+                self.assertEqual(len(self.calls), count)
+                self.assertIn('COMPILER_INDEX_STORE_ENABLE=NO', self.calls[-1])
+                self.assertIn('SWIFT_ENABLE_EXPLICIT_MODULES=NO', self.calls[-1])
+        self.ensure()
+        self.assertEqual(len(self.calls), 3)
+        self.assertNotIn('SWIFT_ENABLE_EXPLICIT_MODULES=NO', self.calls[-1])
 
     def test_whole_host_bundle_and_xctestrun_are_guarded(self):
         path = self.ensure()

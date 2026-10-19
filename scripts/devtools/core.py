@@ -160,14 +160,18 @@ def toolchain():
 
 
 def native_test_options():
-    """Routine synthetic CI needs test results, not unused coverage instrumentation.
+    """Routine synthetic CI needs test results, not IDE indexing or coverage.
 
     Explicit extended/release collections retain their scheme coverage settings.
     These options are part of build provenance so products cannot cross modes.
     """
     if (os.environ.get('TODAY_CI_SYNTHETIC') == '1'
             and os.environ.get('TODAY_LANE') in ('integration', 'snapshots', 'core-ui')):
-        return ['-enableCodeCoverage', 'NO']
+        # Hosted cold test builds expand XCTest/XCUIAutomation SDK interfaces
+        # under explicit scheduling. Measure the supported implicit compiler
+        # path with identical sources/tests; keep diagnostics and debug symbols.
+        return ['-enableCodeCoverage', 'NO', 'COMPILER_INDEX_STORE_ENABLE=NO',
+                'SWIFT_ENABLE_EXPLICIT_MODULES=NO']
     return []
 
 
