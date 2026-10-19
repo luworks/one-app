@@ -24,12 +24,13 @@ final class TodayFocusTests: XCTestCase {
     app.buttons["focus.\(name)"].firstMatch
   }
 
-  private func assertCounts(
-    _ app: XCUIApplication, active: Int, snoozed: Int, settled: Int,
+  private func assertFocusSections(
+    _ app: XCUIApplication, snoozed: Int, settled: Int,
     file: StaticString = #filePath, line: UInt = #line
   ) {
+    XCTAssertFalse(section("active", in: app).exists, "Active items have no collapse control")
     for (id, title, count) in [
-      ("active", "Active", active), ("snoozed", "Snoozed", snoozed),
+      ("snoozed", "Snoozed", snoozed),
       ("settled", "Settled", settled),
     ] {
       let header = section(id, in: app)
@@ -80,12 +81,13 @@ final class TodayFocusTests: XCTestCase {
         NSPredicate(format: "label BEGINSWITH %@", title + ",")
       ).firstMatch
     reveal(row, in: app)
-    // A partial leading swipe reveals both choices without triggering a full-swipe default.
-    let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5))
-    let end = start.withOffset(CGVector(dx: min(180, app.frame.width * 0.45), dy: 0))
+    // A trailing swipe reveals the commands without a full-swipe default.
+    let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
+    let end = start.withOffset(CGVector(dx: -min(270, app.frame.width * 0.7), dy: 0))
     start.press(forDuration: 0.05, thenDragTo: end)
     let button = app.buttons[action].firstMatch
     XCTAssertTrue(button.waitForExistence(timeout: 3), app.debugDescription)
+    if action == "Settle" { screenshot("today-trailing-attention-actions") }
     button.tap()
   }
 
@@ -142,27 +144,98 @@ final class TodayFocusTests: XCTestCase {
 
   func testSettleAndRestoreChangeFocusCountsWithoutCompletingReminder() {
     let app = launch()
-    assertCounts(app, active: 4, snoozed: 0, settled: 0)
+    assertFocusSections(app, snoozed: 0, settled: 0)
     let title = app.staticTexts["Focus invoice"].firstMatch
     reveal(title, in: app)
     screenshot("before.png")
+    title.press(forDuration: 1)
+    XCTAssertTrue(app.buttons["Settle"].waitForExistence(timeout: 3))
+    XCTAssertTrue(app.buttons["Snooze"].exists)
+    screenshot("today-native-attention-context-menu")
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
     act("Settle", on: "Focus invoice", in: app)
-    assertCounts(app, active: 3, snoozed: 0, settled: 1)
+    assertFocusSections(app, snoozed: 0, settled: 1)
     XCTAssertTrue(title.waitForNonExistence(timeout: 3), "Collapsed Settled hides the active row")
     screenshot("after.png")
     openReminderSource("Focus invoice", in: app)
     XCTAssertEqual(app.textFields["task.title"].value as? String, "Focus invoice")
     closeReminder(in: app)
     restore("Focus invoice", section: "settled", in: app)
-    assertCounts(app, active: 4, snoozed: 0, settled: 0)
+    assertFocusSections(app, snoozed: 0, settled: 0)
     reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
+    screenshot("active-always-visible-after-restore.png")
     // Explicit Delete is separate from Settle and uses the confirmed action; its local-only Undo restores a source row.
     app.staticTexts["Focus invoice"].firstMatch.swipeLeft()
     app.buttons["Delete"].firstMatch.tap()
+    let confirm = app.buttons["Delete Reminder"].firstMatch
+    XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+    confirm.tap()
     XCTAssertTrue(app.staticTexts["Focus invoice"].firstMatch.waitForNonExistence(timeout: 3))
     XCTAssertTrue(app.buttons["Undo"].firstMatch.waitForExistence(timeout: 3))
     app.buttons["Undo"].firstMatch.tap()
-    assertCounts(app, active: 4, snoozed: 0, settled: 0)
+    assertFocusSections(app, snoozed: 0, settled: 0)
+  }
+
+  func testAlarmAttentionRestoresAndDeleteRequiresConfirmation() {
+    let app = XCUIApplication()
+    app.launchArguments =
+      TestData.fixtureArguments("today-alarm-actions.json") + [
+        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
+      ]
+    app.launch()
+    let row = app.buttons.matching(identifier: "today.alarm.row")
+      .matching(NSPredicate(format: "label CONTAINS 'Timeline alarm'")).firstMatch
+    reveal(row, in: app)
+    row.swipeLeft()
+    XCTAssertTrue(app.buttons["Settle"].waitForExistence(timeout: 3))
+    screenshot("alarm-trailing-attention-actions")
+    app.buttons["Settle"].tap()
+    assertFocusSections(app, snoozed: 0, settled: 1)
+    restore("Timeline alarm", section: "settled", in: app)
+    reveal(row, in: app)
+    row.swipeLeft()
+    app.buttons["Snooze"].tap()
+    app.buttons["In 1 hour"].tap()
+    assertFocusSections(app, snoozed: 1, settled: 0)
+    restore("Timeline alarm", section: "snoozed", in: app)
+    reveal(row, in: app)
+    row.tap()
+    XCTAssertTrue(app.textFields["alarm.label"].waitForExistence(timeout: 3))
+    XCTAssertEqual(app.textFields["alarm.label"].value as? String, "Timeline alarm")
+    app.buttons["Cancel"].tap()
+    reveal(row, in: app)
+    row.swipeLeft()
+    app.buttons["Delete"].firstMatch.tap()
+    XCTAssertTrue(app.buttons["Delete Alarm"].waitForExistence(timeout: 3))
+    screenshot("alarm-confirmed-delete")
+    // Native confirmation popovers omit Cancel at this size; tapping outside cancels.
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+    XCTAssertTrue(app.buttons["Delete Alarm"].waitForNonExistence(timeout: 3))
+    XCTAssertTrue(row.exists, "Cancelling Delete keeps the source alarm")
+  }
+
+  func testAttentionRowsRemainReachableAtLargestTypeInDark() {
+    let app = XCUIApplication()
+    app.launchArguments =
+      TestData.fixtureArguments("today-alarm-actions.json") + [
+        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
+        "-appearance", "dark", "-UIPreferredContentSizeCategoryName",
+        "UICTContentSizeCategoryAccessibilityXXXL",
+      ]
+    app.launch()
+    let row = app.buttons.matching(identifier: "today.alarm.row")
+      .matching(NSPredicate(format: "label CONTAINS 'Timeline alarm'")).firstMatch
+    reveal(row, in: app)
+    XCTAssertTrue(row.isHittable)
+    for button in [app.buttons["Today"], app.buttons["Ask AI or add anything"], app.buttons["New"]]
+    {
+      XCTAssertTrue(button.isHittable)
+      XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+      XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+    }
+    screenshot("today-attention-dark-largest-type")
   }
 
   func testSnoozeKeepsDeadlineAndSourceAndUndoRestoresActiveRow() {
@@ -176,7 +249,7 @@ final class TodayFocusTests: XCTestCase {
     XCTAssertTrue(app.buttons["Tomorrow morning"].exists)
     XCTAssertTrue(app.buttons["Choose date and time"].exists)
     app.buttons["In 1 hour"].tap()
-    assertCounts(app, active: 3, snoozed: 1, settled: 0)
+    assertFocusSections(app, snoozed: 1, settled: 0)
     XCTAssertFalse(app.staticTexts["Focus invoice"].exists)
     screenshot("after-snooze.png")
     openReminderSource("Focus invoice", in: app)
@@ -192,7 +265,7 @@ final class TodayFocusTests: XCTestCase {
     let undo = app.buttons["Undo"].firstMatch
     XCTAssertTrue(undo.waitForExistence(timeout: 3))
     undo.tap()
-    assertCounts(app, active: 4, snoozed: 0, settled: 0)
+    assertFocusSections(app, snoozed: 0, settled: 0)
     reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
   }
 
@@ -202,21 +275,21 @@ final class TodayFocusTests: XCTestCase {
     act("Settle", on: "Busy meeting", in: app)
     act("Snooze", on: "Focus invoice", in: app)
     app.buttons["Tomorrow morning"].tap()
-    assertCounts(app, active: 2, snoozed: 1, settled: 1)
+    assertFocusSections(app, snoozed: 1, settled: 1)
     app.terminate()
     app = launch(store: store, seed: false)
-    assertCounts(app, active: 2, snoozed: 1, settled: 1)
+    assertFocusSections(app, snoozed: 1, settled: 1)
     XCTAssertFalse(app.staticTexts["Busy meeting"].exists)
     XCTAssertFalse(app.staticTexts["Focus invoice"].exists)
     restore("Busy meeting", section: "settled", in: app)
     restore("Focus invoice", section: "snoozed", in: app)
-    assertCounts(app, active: 4, snoozed: 0, settled: 0)
+    assertFocusSections(app, snoozed: 0, settled: 0)
     act("Snooze", on: "Focus invoice", in: app)
     app.buttons["In 1 hour"].tap()
-    assertCounts(app, active: 3, snoozed: 1, settled: 0)
+    assertFocusSections(app, snoozed: 1, settled: 0)
     app.terminate()
     app = launch(store: store, seed: false, time: "10:01")
-    assertCounts(app, active: 4, snoozed: 0, settled: 0)
+    assertFocusSections(app, snoozed: 0, settled: 0)
     reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
   }
 
@@ -252,9 +325,9 @@ final class TodayFocusTests: XCTestCase {
       app.buttons["Complete Focus overdue"].exists,
       "Overdue stays visible and incomplete until an explicit action")
     act("Settle", on: "Focus overdue", in: app)
-    assertCounts(app, active: 2, snoozed: 0, settled: 2)
+    assertFocusSections(app, snoozed: 0, settled: 2)
     restore("Focus overdue", section: "settled", in: app)
-    assertCounts(app, active: 3, snoozed: 0, settled: 1)
+    assertFocusSections(app, snoozed: 0, settled: 1)
     reveal(app.buttons["1 overdue"].firstMatch, in: app)
   }
 }

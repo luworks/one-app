@@ -777,42 +777,47 @@
     private var plusAddsCity: Bool { tab == .clock && clockSection == .worldClock }
 
     private var bottomButtons: some View {
-      HStack(spacing: 10) {
-        Button {
-          traceTabAction(to: .today)
-          withAnimation(.snappy) { tab = .today }
-        } label: {
-          bottomDestinationLabel("Today", icon: "sun.max", selected: tab == .today && ask == nil)
+      HStack(spacing: 12) {
+        HStack(spacing: 4) {
+          Button {
+            traceTabAction(to: .today)
+            withAnimation(.snappy) { tab = .today }
+          } label: {
+            bottomDestinationLabel(icon: "sun.max", selected: tab == .today && ask == nil)
+          }
+          .buttonStyle(PressScale())
+          .accessibilityLabel("Today")
+          .accessibilityAddTraits(tab == .today && ask == nil ? .isSelected : [])
+          Button {
+            openAsk(nil)
+          } label: {
+            bottomDestinationLabel(icon: "bubble.left.and.bubble.right", selected: false)
+          }
+          .buttonStyle(PressScale())
+          .accessibilityLabel("Chat")
+          // Keep the existing automation entry while giving VoiceOver the visible control's name.
+          .accessibilityIdentifier("Ask AI or add anything")
+          .accessibilityHint("Opens a new chat. Past chats are in the menu.")
         }
-        .buttonStyle(PressScale())
-        .accessibilityLabel("Today")
-        .accessibilityAddTraits(tab == .today && ask == nil ? .isSelected : [])
-        Button {
-          openAsk(nil)
-        } label: {
-          bottomDestinationLabel("Chat", icon: "bubble.left.and.bubble.right", selected: false)
-        }
-        .buttonStyle(PressScale())
-        .accessibilityLabel("Chat")
-        // Keep the existing automation entry while giving VoiceOver the visible control's name.
-        .accessibilityIdentifier("Ask AI or add anything")
-        .accessibilityHint("Opens a new chat. Past chats are in the menu.")
+        .padding(3)
+        .background(Color(.secondarySystemBackground), in: Capsule())
+        .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.25), lineWidth: 0.5) }
         plusButton
       }
+      .frame(maxWidth: 280)
+      .frame(maxWidth: .infinity)
       .padding(.horizontal, 20)
       .padding(.top, 6)
       .padding(.bottom, 4)
     }
 
-    private func bottomDestinationLabel(_ title: String, icon: String, selected: Bool) -> some View
-    {
-      VStack(spacing: 2) {
-        Image(systemName: icon).font(.title3.weight(.semibold))
-        Text(title).font(.caption).lineLimit(1)
-      }
-      .frame(maxWidth: .infinity, minHeight: 56)
-      .background(PillStyle.fill(selected: selected), in: Capsule())
-      .foregroundStyle(PillStyle.text(selected: selected))
+    private func bottomDestinationLabel(icon: String, selected: Bool) -> some View {
+      Image(systemName: icon)
+        .font(.system(size: 20, weight: .medium))
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .background(selected ? Color(.tertiarySystemFill) : .clear, in: Capsule())
+        .foregroundStyle(selected ? Color.primary : Color.secondary)
+        .contentShape(Capsule())
     }
 
     private var newReminderUsesPreferredList: Bool {
@@ -856,14 +861,13 @@
     }
 
     private var plusLabel: some View {
-      VStack(spacing: 2) {
-        Image(systemName: "plus").font(.title3.weight(.semibold))
-        Text(plusCaption).font(.caption2).lineLimit(1)
-      }
-      .foregroundStyle(.primary)
-      .padding(.horizontal, 12)
-      .frame(minWidth: 64, minHeight: 56)
-      .glassCapsule()
+      Image(systemName: "plus")
+        .font(.system(size: 20, weight: .medium))
+        .foregroundStyle(.primary)
+        .frame(width: 44, height: 44)
+        .background(Color(.secondarySystemBackground), in: Circle())
+        .overlay { Circle().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
+        .contentShape(Circle())
     }
 
     private var creationChoices: some View {

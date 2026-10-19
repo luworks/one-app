@@ -29,12 +29,14 @@ final class HealthReviewTests: XCTestCase {
     _ app: XCUIApplication, expectingReview: Bool = false
   ) -> XCUIElement {
     let header = app.buttons["tomorrowHeader"]
-    let target = expectingReview ? app.buttons["reviewToday"] : header
     let viewport = app.collectionViews.firstMatch.frame
-    for _ in 0..<8 where !(target.exists && target.isFullyVisible(in: viewport)) {
+    for _ in 0..<8 where !(header.exists && header.isFullyVisible(in: viewport)) {
       app.swipeUp()
     }
     XCTAssertTrue(header.waitForExistence(timeout: 5), "Today ends with a Tomorrow section")
+    if header.value as? String == "Collapsed" { header.tap() }
+    let target = expectingReview ? app.buttons["reviewToday"] : header
+    for _ in 0..<4 where !(target.exists && target.isFullyVisible(in: viewport)) { app.swipeUp() }
     return app.buttons["reviewToday"]
   }
 
@@ -59,7 +61,7 @@ final class HealthReviewTests: XCTestCase {
     let app = launch(at: "09:41")
     XCTAssertTrue(healthLine(app).waitForExistence(timeout: 5))
     _ = scrollToReview(app)
-    app.buttons["tomorrowHeader"].tap()
+    app.buttons["tomorrow.openDay"].tap()
     XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
     for _ in 0..<3 { app.swipeDown() }
     XCTAssertFalse(app.buttons["health.summary"].exists, "another day has no health line")

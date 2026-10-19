@@ -10,13 +10,15 @@
     @Environment(PlannerPresentation.self) private var presentation
     package init(
       event: ExternalEvent, pendingDelete: Binding<CalEntry?>, calendar: any CalendarService,
-      travel: any TravelTimeProviding
+      travel: any TravelTimeProviding, attention: TodayRowAttention? = nil
     ) {
+      self.attention = attention
       self.event = event
       _pendingDelete = pendingDelete
       self.calendar = calendar
       self.travelProvider = travel
     }
+    private let attention: TodayRowAttention?
     private let calendar: any CalendarService
     private let travelProvider: any TravelTimeProviding
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -38,7 +40,8 @@
     package var body: some View {
       HStack(spacing: 10) {
         if !event.isAllDay {
-          TimeColumn(date: event.start)
+          TimeColumn(date: event.start).dynamicTypeSize(
+            ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
         }
         CalendarBar(color: event.color)
         VStack(alignment: .leading, spacing: 1) {
@@ -62,6 +65,7 @@
       .fixedSize(horizontal: false, vertical: true)
       .frame(minHeight: 44)
       .contentShape(Rectangle())
+      .modifier(TodayItemSurface(enabled: attention != nil))
       .onTapGesture {
         (calendar as? any NativeCalendarService)?.edit(
           identifier: event.eventIdentifier, start: event.start, end: nil, fullOptions: false,
@@ -78,10 +82,14 @@
           (calendar as? any NativeCalendarService)?.edit(
             identifier: event.eventIdentifier, start: event.start, end: nil, fullOptions: false,
             onComplete: nil)
-        }, calendar: calendar
+        }, calendar: calendar, attention: attention
       )
       .listRowSeparator(.hidden)
-      .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
+      .listRowInsets(
+        EdgeInsets(
+          top: attention == nil ? 1 : 3, leading: attention == nil ? 20 : 12,
+          bottom: attention == nil ? 1 : 3, trailing: attention == nil ? 20 : 12)
+      )
       .accessibilityElement(children: .combine)
       .accessibilityLabel(
         plannerEventSpeech(

@@ -306,6 +306,7 @@ final class SettingsChoicesTests: XCTestCase {
     let header = app.buttons["tomorrowHeader"]
     for _ in 0..<8 where !(header.exists && header.isHittable) { app.swipeUp() }
     XCTAssertTrue(header.waitForExistence(timeout: 5), "Today ends with a Tomorrow section")
+    if header.value as? String == "Collapsed" { header.tap() }
     app.swipeUp()
     return header
   }

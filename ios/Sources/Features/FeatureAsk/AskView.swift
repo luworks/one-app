@@ -414,9 +414,9 @@
     }
 
     private var emptyState: some View {
-      VStack(alignment: .leading, spacing: 20) {
+      VStack(alignment: .leading, spacing: 24) {
         Text("What do you want to plan?")
-          .font(.title2.bold())
+          .font(.title2.weight(.medium))
         if showsSuggestions {
           AskSuggestionList(
             calendar: calendarSync, now: now, presentation: presentation, travel: travel,
@@ -508,14 +508,16 @@
                 .font(voice.state == .listening ? .system(size: 28) : .body)
                 .foregroundStyle(voice.state == .listening ? Color.red : Color.secondary)
                 .symbolEffect(.pulse, isActive: voice.state == .listening)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
             }
             .accessibilityLabel(voice.state == .listening ? "Stop dictation" : "Dictate")
           } else {
             Button {
               send(draft)
             } label: {
-              Image(systemName: "arrow.up.circle.fill").font(.system(size: 32))
+              Image(systemName: "arrow.up.circle.fill")
+                .font(.system(size: 28, weight: .medium))
+                .frame(width: 44, height: 44)
             }
             .accessibilityLabel("Send")
           }
@@ -523,10 +525,16 @@
         .padding(.leading, 16)
         .padding(.trailing, 6)
         .padding(.vertical, 4)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24))
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 22))
+        .overlay {
+          RoundedRectangle(cornerRadius: 22)
+            .strokeBorder(Color(.separator).opacity(0.45), lineWidth: 0.5)
+            .allowsHitTesting(false)
+        }
       }
       .padding(.horizontal, 12)
       .padding(.bottom, 6)
+      .background(Color(.systemBackground))
       .animation(.snappy, value: plan.count)
       .animation(.snappy, value: change)
       .animation(.snappy, value: followup)
