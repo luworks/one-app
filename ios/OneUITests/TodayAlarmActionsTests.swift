@@ -38,7 +38,7 @@ final class TodayAlarmActionsTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
     let field = app.textFields["alarm.label"]
     XCTAssertEqual(field.value as? String, "Timeline alarm")
-    field.tap()
+    field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
     field.typeText(" draft")
     app.buttons["Cancel"].tap()
     XCTAssertTrue(row().waitForExistence(timeout: 5))
@@ -54,7 +54,7 @@ final class TodayAlarmActionsTests: XCTestCase {
     app.buttons["Edit Alarm"].tap()
     let field = app.textFields["alarm.label"]
     XCTAssertTrue(field.waitForExistence(timeout: 5))
-    field.tap()
+    field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
     field.typeText(" edited")
     app.buttons["alarm.save"].tap()
     XCTAssertTrue(row("Timeline alarm edited").waitForExistence(timeout: 5))
@@ -99,7 +99,7 @@ final class TodayAlarmActionsTests: XCTestCase {
     row().tap()
     let field = app.textFields["alarm.label"]
     XCTAssertTrue(field.waitForExistence(timeout: 5))
-    field.tap()
+    field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
     field.typeText(" retry")
     app.buttons["alarm.save"].tap()
     XCTAssertTrue(app.alerts["Couldn’t Update Alarm"].waitForExistence(timeout: 5))
