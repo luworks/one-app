@@ -1,20 +1,22 @@
+import One
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
 
 /// The colored circle with a white glyph that stands for a list (cards, rows, the editor preview).
-struct ListGlyph: View {
+package struct ListGlyph: View {
     let color: Color
     let symbol: String
-    var size: CGFloat = 30
+    var size: CGFloat
 
-    var body: some View {
+    package init(color: Color, symbol: String, size: CGFloat = 30) {
+        self.color = color
+        self.symbol = symbol
+        self.size = size
+    }
+
+    package var body: some View {
         Circle()
             .fill(color)
             .frame(width: size, height: size)
@@ -102,14 +104,14 @@ private struct DeleteListAlert: ViewModifier {
 
 /// New List / Name & Appearance: a big preview circle, the name, 12 colors and a grid of symbols.
 /// Creates a list when `list` is nil, otherwise edits it.
-struct ListEditor: View {
+package struct ListEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \OneList.order) private var lists: [OneList]
 
     let list: OneList?
     /// Called with the list that was just created.
-    var onCreated: ((OneList) -> Void)?
+    var onCreated: (@MainActor (OneList) -> Void)?
 
     @State private var name: String
     @State private var colorIndex: Int
@@ -117,7 +119,7 @@ struct ListEditor: View {
     @State private var pendingDelete: PendingListDeletion?
     @FocusState private var nameFocused: Bool
 
-    init(list: OneList? = nil, onCreated: ((OneList) -> Void)? = nil) {
+    package init(list: OneList? = nil, onCreated: (@MainActor (OneList) -> Void)? = nil) {
         self.list = list
         self.onCreated = onCreated
         // Copied once: the sheet must not read the model again, it may be deleted while the sheet closes.
@@ -133,7 +135,7 @@ struct ListEditor: View {
     private var problem: String? { ListActions.nameProblem(name, existing: lists, excluding: list) }
     private var canSave: Bool { problem == nil }
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {

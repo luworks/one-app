@@ -1,17 +1,15 @@
+import One
 import TodayCore
-import TodayShared
 import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
 
 /// Adding a reminder in one screen, modeled on Due: type what, then set when with one tap on the grid
 /// (times of day, +/− nudges, days). No date picker unless you want one; Save is always one tap away.
 /// Editing an existing reminder still opens `TaskEditor` (notes, checklist, tags…).
-struct QuickReminderSheet: View {
+package struct QuickReminderSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \OneList.order) private var lists: [OneList]
@@ -31,13 +29,13 @@ struct QuickReminderSheet: View {
     @State private var suggestions: [ReminderSuggest.Suggestion] = []
     @FocusState private var focused: Bool
 
-    init(listName: String = "") {
+    package init(listName: String = "") {
         _listName = State(initialValue: listName)
     }
 
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 16) {
             header
                 .padding(.horizontal, 16)

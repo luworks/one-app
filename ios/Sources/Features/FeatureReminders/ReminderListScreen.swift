@@ -1,17 +1,19 @@
+import One
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
+import TodayPlannerUI
 import SwiftUI
 import SwiftData
 
 /// One list pushed from Reminders: a smart list (Today, Scheduled, All, Flagged, Completed), the default
 /// list, or a list from My Lists. Big colored title, the reminders, and an inline "New Reminder" row.
-struct ReminderListScreen: View {
+package struct ReminderListScreen: View {
     let target: ReminderTarget
+
+    package init(target: ReminderTarget) {
+        self.target = target
+    }
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -23,6 +25,7 @@ struct ReminderListScreen: View {
 
     @State private var showsCompleted = false
     @State private var editing: OneList?
+    @State private var editingTask: OneTask?
     @State private var pendingDelete: PendingListDeletion?
 
     private struct Group: Identifiable {
@@ -137,7 +140,7 @@ struct ReminderListScreen: View {
 
     // MARK: Body
 
-    var body: some View {
+    package var body: some View {
         // The reader lets the New Reminder row scroll itself fully into view as it grows (note, date, flag).
         ScrollViewReader { proxy in
             List {
@@ -149,7 +152,10 @@ struct ReminderListScreen: View {
 
                 ForEach(groups) { group in
                     Section {
-                        ForEach(group.tasks) { TaskRow(task: $0, showsList: smart != nil && smart != .all) }
+                        ForEach(group.tasks) { task in
+                            TaskRow(task: task, showsList: smart != nil && smart != .all,
+                                    open: { editingTask = $0 })
+                        }
                     } header: {
                         if let heading = group.title {
                             Text(heading)
@@ -170,7 +176,9 @@ struct ReminderListScreen: View {
 
                 if isListScreen, showsCompleted, !done.isEmpty {
                     Section {
-                        ForEach(done) { TaskRow(task: $0, showsList: false) }
+                        ForEach(done) { task in
+                            TaskRow(task: task, showsList: false, open: { editingTask = $0 })
+                        }
                     } header: {
                         Text("Completed")
                             .font(.subheadline.weight(.semibold))
@@ -203,6 +211,7 @@ struct ReminderListScreen: View {
         }
         .performanceDestination("reminders.list")
         .sheet(item: $editing) { ListEditor(list: $0) }
+        .sheet(item: $editingTask) { TaskEditor(task: $0) }
         .deleteListAlert($pendingDelete)
         .onChange(of: isMissing) { _, missing in if missing { dismiss() } }
     }
@@ -287,7 +296,7 @@ private struct NewReminderRow: View {
     var onCreate: (NewReminderDraft) -> Void
     var suggestions: () -> [ReminderSuggest.Suggestion]
     /// Called once the row has grown for editing, so the list can scroll it clear of the keyboard and the bottom bar.
-    var reveal: () -> Void = {}
+    var reveal: () -> Void
 
     static let id = "newReminderRow"
 

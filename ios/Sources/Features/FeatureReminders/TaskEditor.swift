@@ -1,16 +1,12 @@
+import One
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
 
 /// Create or edit a task. Edits are held locally and written back on Done.
 /// Planned time and deadline are separate: changing one never changes the other.
-struct TaskEditor: View {
+package struct TaskEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
@@ -36,7 +32,7 @@ struct TaskEditor: View {
     @State private var addingList = false
     @FocusState private var titleFocused: Bool
 
-    init(task: OneTask? = nil) {
+    package init(task: OneTask? = nil) {
         self.task = task
         let nextHour = Calendar.current.nextDate(after: .now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? .now
         _title = State(initialValue: task?.title ?? "")
@@ -61,7 +57,7 @@ struct TaskEditor: View {
         return listName.isEmpty || names.contains(listName) ? names : names + [listName]
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             Form {
                 Section {

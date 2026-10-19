@@ -1,20 +1,17 @@
+import One
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
 
 /// The five smart lists at the top of Apple Reminders.
-enum SmartList: String, CaseIterable, Identifiable, Hashable {
+package enum SmartList: String, CaseIterable, Identifiable, Hashable {
     case today, scheduled, all, flagged, completed
 
-    var id: Self { self }
+    package var id: Self { self }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .today: "Today"
         case .scheduled: "Scheduled"
@@ -24,7 +21,7 @@ enum SmartList: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    var symbol: String {
+    package var symbol: String {
         switch self {
         case .today: "calendar"
         case .scheduled: "calendar.badge.clock"
@@ -34,7 +31,7 @@ enum SmartList: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    var color: Color {
+    package var color: Color {
         switch self {
         case .today: Color(.systemBlue)
         case .scheduled: Color(.systemRed)
@@ -46,7 +43,7 @@ enum SmartList: String, CaseIterable, Identifiable, Hashable {
 
     /// Today: due today or planned today, plus overdue. Scheduled: has a deadline or a planned time.
     /// All: every open reminder. Flagged: open and flagged. Completed: done.
-    func includes(_ task: OneTask, calendar: Calendar = .current) -> Bool {
+    package func includes(_ task: OneTask, calendar: Calendar = .current) -> Bool {
         if self == .completed { return task.isDone }
         guard !task.isDone else { return false }
         switch self {
@@ -62,7 +59,7 @@ enum SmartList: String, CaseIterable, Identifiable, Hashable {
 }
 
 /// Where a row or pill in Reminders leads. Lists are referenced by id so a rename or delete can't leave a stale model behind.
-enum ReminderTarget: Hashable {
+package enum ReminderTarget: Hashable {
     case smart(SmartList)
     case list(PersistentIdentifier)
     /// Reminders that belong to no list (`listName == ""`); Apple calls this list "Reminders".
@@ -72,28 +69,28 @@ enum ReminderTarget: Hashable {
 /// Which smart lists show at the top of Reminders, and in what order. Changed in Settings (a switch per list;
 /// press, hold and drag to reorder) or with Hide in a smart list's long-press menu.
 /// Stored as comma-separated raw values so it fits in `@AppStorage`.
-struct SmartListLayout {
-    static let orderKey = "reminders.smartOrder"
-    static let hiddenKey = "reminders.smartHidden"
+package struct SmartListLayout {
+    package static let orderKey = "reminders.smartOrder"
+    package static let hiddenKey = "reminders.smartHidden"
 
-    var order: [SmartList]
-    var hidden: Set<SmartList>
+    package var order: [SmartList]
+    package var hidden: Set<SmartList>
 
-    init(order raw: String, hidden rawHidden: String) {
+    package init(order raw: String, hidden rawHidden: String) {
         // Smart lists added in a later version show up at the end.
         order = PillOrder.decode(raw, all: SmartList.allCases)
         hidden = Set(rawHidden.split(separator: ",").compactMap { SmartList(rawValue: String($0)) })
     }
 
-    var visible: [SmartList] { order.filter { !hidden.contains($0) } }
-    var orderString: String { PillOrder.encode(order) }
+    package var visible: [SmartList] { order.filter { !hidden.contains($0) } }
+    package var orderString: String { PillOrder.encode(order) }
 
     /// A pill was moved in the row of shown smart lists (a drag, or Move Left / Move Right). Hidden lists keep their
     /// places, so Settings shows the same order.
-    mutating func reorderVisible(_ newVisible: [SmartList]) {
+    package mutating func reorderVisible(_ newVisible: [SmartList]) {
         order = PillOrder.merge(visible: newVisible, into: order)
     }
-    var hiddenString: String { hidden.map(\.rawValue).sorted().joined(separator: ",") }
+    package var hiddenString: String { hidden.map(\.rawValue).sorted().joined(separator: ",") }
 }
 
 /// The Reminders tab: small pills above the List (smart lists, then pinned lists), My Lists, Add List. Everything
@@ -101,7 +98,7 @@ struct SmartListLayout {
 /// No Edit button and no edit mode: editing works as everywhere else in the app. Press and hold a list for Rename,
 /// Color & Icon, Pin and Delete; press, hold and drag a row to reorder; swipe a row from the right for Delete, Info
 /// and Pin (`RowAction`). Which smart lists show, and in what order, is in Settings (or Hide in a pill's menu).
-struct RemindersView: View {
+package struct RemindersView: View {
     /// True while a list screen is pushed, so the shell can leave the left-edge swipe to "back".
     @Binding var isPushed: Bool
 
@@ -126,7 +123,16 @@ struct RemindersView: View {
     @State private var dropTarget: String?
     @State private var reorderTick = 0
 
-    private let sync = RemindersSync.shared
+    private let sync: RemindersSync
+    private let requestAccess: @MainActor () async -> Void
+
+    package init(isPushed: Binding<Bool>, path: Binding<[ReminderTarget]>,
+                 sync: RemindersSync, requestAccess: @escaping @MainActor () async -> Void) {
+        _isPushed = isPushed
+        _path = path
+        self.sync = sync
+        self.requestAccess = requestAccess
+    }
 
     /// My Lists in display order: the user's own order once they have dragged, else numbered lists first by number.
     private var sortedLists: [OneList] {
@@ -155,7 +161,7 @@ struct RemindersView: View {
         }
     }()
 
-    var body: some View {
+    package var body: some View {
         let _ = Self.uiTestReset
         let stats = Stats(tasks: tasks.filter { !$0.isDeleted })
         NavigationStack(path: $path) {
@@ -214,10 +220,7 @@ struct RemindersView: View {
             }
         }
         .task {
-            #if TODAY_MOCK
-            guard !PreviewFixtures.isAxe else { return }
-            #endif
-            await FirstRun.reminders()
+            await requestAccess()
         }
         .onChange(of: path.count) { _, n in isPushed = n > 0 }
         .onAppear { isPushed = !path.isEmpty }
@@ -595,10 +598,3 @@ private struct ListRow: View {
         .accessibilityLabel(pinned ? "\(name), pinned, \(reminderCountText(count))" : "\(name), \(reminderCountText(count))")
     }
 }
-
-#if TODAY_MOCK
-#Preview("My Lists") {
-    RemindersView(isPushed: .constant(false), path: .constant([]))
-        .modelContainer(PreviewFixtures.reminders)
-}
-#endif
