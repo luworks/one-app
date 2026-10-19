@@ -184,10 +184,13 @@ final class AlarmsTabTests: XCTestCase {
   }
 
   /// Missing permissions are one slim row above the list, not two big cards. (The simulator denies AlarmKit.)
-  func testPermissionIsOneSlimRow() throws {
+  func testPermissionIsOneSlimRow() {
+    app.launchArguments.append("-uiTestingAlarmDenied")
+    app.launch()
+    app.buttons["Clock"].firstMatch.tap()
     let row = app.descendants(matching: .any)["alarms.permissionRow"]
-    try XCTSkipUnless(
-      row.waitForExistence(timeout: 3), "alarms and notifications are both allowed here")
+    XCTAssertTrue(
+      row.waitForExistence(timeout: 3), "the denied fixture must expose permission guidance")
     XCTAssertLessThanOrEqual(row.frame.height, 60, "a slim row, not a card")
     XCTAssertTrue(
       row.label.contains("off")

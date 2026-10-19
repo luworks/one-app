@@ -41,6 +41,10 @@
       calendar = TestCalendarService(runtime: runtime)
       reminders = TestReminderService(runtime: runtime, arguments: arguments)
       alarms = TestAlarmService()
+      if arguments.contains("-uiTestingAlarmDenied") {
+        alarms.authorization = .denied
+        alarms.authorizationResponse = .denied
+      }
       timers = TestTimerService(defaults: defaults, runtime: runtime, arguments: arguments)
       notifications = TestNotificationService()
       travel = TestTravelTimes(runtime: runtime)

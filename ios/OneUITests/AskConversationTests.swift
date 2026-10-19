@@ -84,7 +84,8 @@ final class AskConversationTests: XCTestCase {
     send("Set an alarm for 7am")
     XCTAssertTrue(reply("New alarm").waitForExistence(timeout: 20))
     app.buttons["Cancel"].firstMatch.tap()
-    send("Dentist tomorrow at 3pm")
+    // Appointment makes the event explicit for the deterministic rule backend.
+    send("Dentist appointment tomorrow at 3pm")
     XCTAssertTrue(reply("New event").waitForExistence(timeout: 20))
     XCTAssertTrue(app.buttons["Add"].exists)
   }

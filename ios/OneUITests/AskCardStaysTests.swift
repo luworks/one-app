@@ -133,7 +133,9 @@ final class AskCardStaysTests: XCTestCase {
   func testAddedCardStaysThenUndoAndAddAgain() {
     send("Order printer paper tomorrow at 3pm")
     XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
-    XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
+    let title = app.buttons["capture-title"]
+    XCTAssertTrue(title.exists)
+    XCTAssertEqual(title.label, "Order printer paper")
     app.buttons["Add"].tap()
 
     // The card is still there, now confirmed; there is no separate "Added …" text line.
