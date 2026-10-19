@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The choices added to Settings: every default is what the app did before the choice existed, and each choice maps to its effect.
 final class PreferencesTests: XCTestCase {

@@ -1,5 +1,5 @@
 import XCTest
-@testable import OneShared
+@testable import TodayShared
 
 /// The widgets' "next three things today": selection, order, tomorrow fallback, timeline dates, JSON round trip.
 final class WidgetSnapshotTests: XCTestCase {

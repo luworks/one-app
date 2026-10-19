@@ -25,7 +25,8 @@
         {
           "path": "One",
           "excludes": [
-            "**/.DS_Store"
+            "**/.DS_Store",
+            "PreviewFixtures.swift"
           ]
         },
         {
@@ -43,6 +44,34 @@
         {
           "target": "TodayShare",
           "embed": true
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayData"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlatform"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayDesignSystem"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureClock"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
         }
       ],
       "productName": "One"
@@ -68,7 +97,13 @@
           ]
         }
       ],
-      "productName": "ShareExtension"
+      "productName": "ShareExtension",
+      "dependencies": [
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        }
+      ]
     },
     "TodayUITests": {
       "type": "bundle.ui-testing",
@@ -87,7 +122,7 @@
       ],
       "dependencies": [
         {
-          "target": "Today"
+          "target": "TodayMock"
         }
       ],
       "productName": "OneUITests"
@@ -112,7 +147,70 @@
             "**/.DS_Store"
           ]
         }
+      ],
+      "dependencies": [
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        }
       ]
+    },
+    "TodayMock": {
+      "type": "application",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayMock-Debug.xcconfig",
+        "Release": "Config/TodayMock-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "One",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        },
+        {
+          "path": "Shared",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayData"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlatform"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayDesignSystem"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureClock"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayTestSupport"
+        }
+      ],
+      "productName": "TodayMock"
     }
   },
   "schemes": {
@@ -127,9 +225,7 @@
       },
       "test": {
         "config": "Debug",
-        "targets": [
-          "TodayUITests"
-        ],
+        "targets": [],
         "gatherCoverageData": false
       },
       "profile": {
@@ -138,6 +234,28 @@
       "archive": {
         "config": "Release"
       }
+    },
+    "TodayMock": {
+      "build": {
+        "targets": {
+          "TodayMock": "all"
+        }
+      },
+      "run": {
+        "config": "Debug"
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          "TodayUITests"
+        ],
+        "gatherCoverageData": true
+      }
+    }
+  },
+  "packages": {
+    "TodayModules": {
+      "path": "."
     }
   }
 }

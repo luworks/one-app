@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The rule behind the Health sheet never hanging: every call is raced against a timer, each metric is read on its own,
 /// permission requests are made once per new batch and never waited on forever. Timeouts here are fractions of a second.

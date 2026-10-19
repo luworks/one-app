@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The Ask page's empty-state suggestions: context -> candidates -> the best two or three, and the check that every sentence
 /// lands on something the app can do. Friday 16 Oct 2026, UTC.

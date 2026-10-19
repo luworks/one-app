@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 final class HealthMetricsTests: XCTestCase {
     private var cal: Calendar = {
@@ -77,7 +79,8 @@ final class HealthMetricsTests: XCTestCase {
         XCTAssertEqual(HealthSelection.decoded(HealthSelection(shown: []).encoded()).shown, [], "a saved empty list stays empty")
     }
 
-    func testStorePersistsAndTestLaunchesStartClean() {
+    @MainActor
+    func testStorePersistsAndTestLaunchesStartClean() async {
         let suite = "health-test-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }

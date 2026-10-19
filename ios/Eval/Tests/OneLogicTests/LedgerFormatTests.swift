@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 final class LedgerFormatTests: XCTestCase {
     let cal: Calendar = { var c = Calendar(identifier: .gregorian); c.timeZone = .current; return c }()

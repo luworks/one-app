@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 import SwiftData
 
@@ -207,8 +214,7 @@ struct ReminderListScreen: View {
                     withAnimation(.snappy) { showsCompleted.toggle() }
                 } label: {
                     // Gray count and a full-color Show, as in Apple Reminders (a tinted .secondary was too faint to read).
-                    (Text("\(done.count) Completed · ").foregroundStyle(Color(.secondaryLabel))
-                        + Text(showsCompleted ? "Hide" : "Show").foregroundStyle(color))
+                    Text("\(Text("\(done.count) Completed · ").foregroundStyle(Color(.secondaryLabel)))\(Text(showsCompleted ? "Hide" : "Show").foregroundStyle(color))")
                         .font(.subheadline)
                 }
                 .buttonStyle(.borderless)

@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import Charts
 import TodayCore
@@ -237,3 +238,4 @@ public struct HealthMetricDetail: View {
         .accessibilityIdentifier("health.fact.\(title.lowercased())")
     }
 }
+#endif

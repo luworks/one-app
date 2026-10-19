@@ -1,4 +1,8 @@
+#if os(iOS)
 import Foundation
+import TodayCore
+import os
+private let healthLog = Logger(subsystem: "com.luworks.one", category: "health")
 import HealthKit
 
 /// Apple Health through HealthKit. Totals (steps, energy, distance, minutes) are daily sums from HealthKit's own
@@ -6,10 +10,12 @@ import HealthKit
 /// samples themselves; sleep is category samples grouped into nights; mindful minutes are session durations per day.
 /// Values come back in the canonical units of `HealthMetric` (kg, meters, kcal, minutes, percent); display units
 /// follow the region in `HealthUnits`.
-final class HealthKitSource: HealthSource, @unchecked Sendable {
+public final class HealthKitSource: HealthSource, @unchecked Sendable {
     private let store = HKHealthStore()
 
-    var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
+    public init() {}
+
+    public var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
     private enum Reading {
         /// A quantity summed per day.
@@ -43,18 +49,18 @@ final class HealthKitSource: HealthSource, @unchecked Sendable {
         }
     }
 
-    func requestAccess(for metrics: [HealthMetric]) async {
+    public func requestAccess(for metrics: [HealthMetric]) async {
         guard isAvailable, !metrics.isEmpty else { return }
         // HealthKit shows its sheet only for types it has not asked about yet, so asking again is free.
         do {
             try await store.requestAuthorization(toShare: [], read: Set(metrics.map(objectType)))
         } catch {
-            healthLog.error("requestAuthorization failed: \(error.localizedDescription, privacy: .public)")
+            healthLog.error("requestAuthorization failed: \((error as NSError).code, privacy: .public)")
         }
     }
 
     /// Health lets people pick kg or lb (and km or mi) independent of the region; this reads that choice.
-    func preferredUnits() async -> HealthUnits? {
+    public func preferredUnits() async -> HealthUnits? {
         guard isAvailable else { return nil }
         let weight = HKQuantityType(.bodyMass), distance = HKQuantityType(.distanceWalkingRunning)
         guard let units = try? await store.preferredUnits(for: [weight, distance]) else { return nil }
@@ -64,7 +70,7 @@ final class HealthKitSource: HealthSource, @unchecked Sendable {
             milesForDistance: units[distance].map { $0 == .mile() } ?? base.milesForDistance)
     }
 
-    func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric: HealthSeries] {
+    public func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric: HealthSeries] {
         guard isAvailable else { return [:] }
         return await withTaskGroup(of: (HealthMetric, HealthSeries).self) { group in
             for metric in metrics {
@@ -73,7 +79,7 @@ final class HealthKitSource: HealthSource, @unchecked Sendable {
                     do {
                         return (metric, try await load(metric, days: days, now: now))
                     } catch {
-                        healthLog.error("query failed for \(metric.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        healthLog.error("query failed for \(metric.rawValue, privacy: .public): \((error as NSError).code, privacy: .public)")
                         return (metric, .empty)
                     }
                 }
@@ -145,3 +151,4 @@ final class HealthKitSource: HealthSource, @unchecked Sendable {
         }
     }
 }
+#endif

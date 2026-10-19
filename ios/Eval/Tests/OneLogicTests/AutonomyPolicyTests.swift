@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The one policy that decides what Today's AI may change by itself under a grant, and what always needs a tap.
 final class AutonomyPolicyTests: XCTestCase {

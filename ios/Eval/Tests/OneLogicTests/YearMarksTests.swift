@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The Year view's marks: holidays computed from rules, what counts as "load", and which days are unusually busy.
 final class YearMarksTests: XCTestCase {

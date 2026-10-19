@@ -1,6 +1,8 @@
 import XCTest
 import CryptoKit
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Actual pure production fallback observations. UI gates, writes, EventKit and FM remain unmeasured.
 final class RecurringReminderExportTests: XCTestCase {

@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The bundled city list (ios/One/cities.json) and the pure logic around it: search, time zone to city, migration,
 /// card colors, the sentence and the waves behind the graph.

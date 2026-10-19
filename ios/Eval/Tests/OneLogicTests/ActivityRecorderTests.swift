@@ -1,7 +1,10 @@
 import XCTest
-@testable import OneLogic
-@testable import OneShared
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
+@testable import TodayShared
 
+@MainActor
 final class ActivityRecorderTests: XCTestCase {
     let cal: Calendar = { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }()
     let now = Date(timeIntervalSince1970: 1_792_000_000)
@@ -18,20 +21,21 @@ final class ActivityRecorderTests: XCTestCase {
         }
     }
 
+    @MainActor
     final class Clock {
-        var pending: [() -> Void] = []
+        var pending: [@MainActor @Sendable () -> Void] = []
         var delays: [TimeInterval] = []
-        func schedule(_ d: TimeInterval, _ w: @escaping () -> Void) { delays.append(d); pending.append(w) }
+        func schedule(_ d: TimeInterval, _ w: @escaping @MainActor @Sendable () -> Void) { delays.append(d); pending.append(w) }
         func fire() { let p = pending; pending = []; p.forEach { $0() } }
     }
 
     private func recorder(_ store: ActivityStoring?, settings: ActivitySettings = ActivitySettings(), clock: Clock = Clock()) -> ActivityRecorder {
-        ActivityRecorder(store: store, session: "S1", settings: { settings }, schedule: clock.schedule)
+        ActivityRecorder(store: store, session: "S1", settings: { settings }, schedule: { delay, work in clock.schedule(delay, work) })
     }
 
     private func ev(_ kind: String = "ui.screen.open") -> ActivityEvent { ActivityEvent(kind: kind, actor: "you", at: now, calendar: cal) }
 
-    func testEventsAreBufferedAndWrittenInOneBatchWhenTheTimerFires() {
+    func testEventsAreBufferedAndWrittenInOneBatchWhenTheTimerFires() async {
         let store = SpyStore(), clock = Clock()
         let r = recorder(store, clock: clock)
         for _ in 0..<5 { r.record(ev()) }
@@ -44,7 +48,7 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertEqual(store.batches[0].first?.session, "S1", "the launch session id is added")
     }
 
-    func testFlushWritesAtOnceAndAFullBufferDoesNotWait() {
+    func testFlushWritesAtOnceAndAFullBufferDoesNotWait() async {
         let store = SpyStore()
         let r = recorder(store)
         r.maxBuffered = 3
@@ -59,7 +63,7 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertEqual(store.batches.count, 2, "an empty flush writes nothing")
     }
 
-    func testPauseAndCategoryTogglesDropEventsBeforeTheyAreBuffered() {
+    func testPauseAndCategoryTogglesDropEventsBeforeTheyAreBuffered() async {
         var s = ActivitySettings()
         s.tiers.remove(.usage)
         let store = SpyStore()
@@ -76,14 +80,14 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertTrue(store.batches.isEmpty)
     }
 
-    func testNoStoreMeansNothingRecordedAndNoCrash() {
+    func testNoStoreMeansNothingRecordedAndNoCrash() async {
         let r = recorder(nil)
         XCTAssertFalse(r.record(ev()))
         XCTAssertFalse(r.isAvailable)
         r.flush()
     }
 
-    func testAFailedWriteKeepsTheEventsForTheNextTry() {
+    func testAFailedWriteKeepsTheEventsForTheNextTry() async {
         let store = SpyStore()
         let r = recorder(store)
         r.record(ev()); r.record(ev())
@@ -96,7 +100,7 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertEqual(r.writeFailures, 0, "a good write resets the failure count")
     }
 
-    func testRecorderWritesIntoARealStore() throws {
+    func testRecorderWritesIntoARealStore() async throws {
         let store = try ActivityStore(location: .memory)
         let r = recorder(store)
         r.record(ActivityEvents.chipTapped(id: "overdue", rank: 0, source: "rules", at: now))
@@ -108,7 +112,7 @@ final class ActivityRecorderTests: XCTestCase {
 
     // MARK: Settings
 
-    func testSettingsRoundTripAndDefaults() throws {
+    func testSettingsRoundTripAndDefaults() async throws {
         let suite = "activity-settings-\(UUID().uuidString)"
         let d = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { d.removePersistentDomain(forName: suite) }
@@ -124,7 +128,7 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertFalse(s.records(.changes), "paused wins")
     }
 
-    func testRetentionCutoffs() {
+    func testRetentionCutoffs() async {
         XCTAssertEqual(ActivityRetention.days90.days, 90)
         XCTAssertEqual(ActivityRetention.year.days, 365)
         XCTAssertNil(ActivityRetention.forever.days)
@@ -136,7 +140,7 @@ final class ActivityRecorderTests: XCTestCase {
 
     // MARK: Event shapes
 
-    func testAITurnKeepsNoTextUnlessAsked() {
+    func testAITurnKeepsNoTextUnlessAsked() async {
         let thread = UUID()
         let off = ActivityEvents.aiTurn(intent: "capture", route: "rules", text: "明天下午三点开会", keepText: false, thread: thread, at: now)
         XCTAssertEqual(off.kind, "ai.turn")
@@ -152,7 +156,7 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertEqual(ActivityProps.dictionary(on.props)["lang"] as? String, "en")
     }
 
-    func testSentChatTurnsRespectAIRecordingAndTextSettingsInStore() throws {
+    func testSentChatTurnsRespectAIRecordingAndTextSettingsInStore() async throws {
         for mode in ["text", "noText", "paused", "aiOff"] {
             let store = try ActivityStore(location: .memory)
             var settings = ActivitySettings()
@@ -187,7 +191,7 @@ final class ActivityRecorderTests: XCTestCase {
         }
     }
 
-    func testResolvedCardNamesEditedFieldsInPropsAndKeepsWordsInContent() {
+    func testResolvedCardNamesEditedFieldsInPropsAndKeepsWordsInContent() async {
         var shown = Capture(title: "Call mom", day: now, hasDay: true)
         shown.hour = 15
         var final = shown
@@ -207,7 +211,7 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertEqual(e.content.count, 3)
     }
 
-    func testKindsMapToTiers() {
+    func testKindsMapToTiers() async {
         XCTAssertEqual(ActivityKind.tier(of: "change.moved"), .changes)
         XCTAssertEqual(ActivityKind.tier(of: "grant.granted"), .changes)
         XCTAssertEqual(ActivityKind.tier(of: "ai.chip.tapped"), .ai)
@@ -220,7 +224,7 @@ final class ActivityRecorderTests: XCTestCase {
 
     // MARK: Outbox (extensions) → app
 
-    func testOutboxFilesWrittenByAnExtensionAreImportedByTheApp() throws {
+    func testOutboxFilesWrittenByAnExtensionAreImportedByTheApp() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("outbox-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
         XCTAssertTrue(ActivityOutbox.append(kind: "sys.share.add", actor: "share", channel: "share", props: ["has_url": true, "len": 12], at: now, in: folder))
@@ -247,7 +251,7 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertTrue(ActivityOutbox.pendingFiles(in: folder).isEmpty)
     }
 
-    func testOutboxEventsFollowThePauseSetting() throws {
+    func testOutboxEventsFollowThePauseSetting() async throws {
         var s = ActivitySettings()
         s.tiers.remove(.system)
         let store = SpyStore()
@@ -256,7 +260,7 @@ final class ActivityRecorderTests: XCTestCase {
         XCTAssertFalse(r.record(e), "an imported system event is dropped when that category is off")
     }
 
-    func testOutboxIsCappedAndUnavailableGroupIsHandled() {
+    func testOutboxIsCappedAndUnavailableGroupIsHandled() async {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("outbox-cap-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
         XCTAssertFalse(ActivityOutbox.append(kind: "sys.x", actor: "system", in: nil), "no App Group → false, no crash")

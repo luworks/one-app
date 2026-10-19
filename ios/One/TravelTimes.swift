@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import CoreLocation
 import MapKit
 import Observation
@@ -130,7 +137,7 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
         do {
             return try await MKDirections(request: request).calculateETA().expectedTravelTime
         } catch {
-            log.info("ETA failed: \(error.localizedDescription, privacy: .public)")
+            log.info("ETA failed: \((error as NSError).code, privacy: .public)")
             return nil
         }
     }
@@ -153,7 +160,7 @@ final class TravelTimes: NSObject, CLLocationManagerDelegate {
             if let item { resolved[address] = item }
             return item
         } catch {
-            log.info("Address search failed: \(error.localizedDescription, privacy: .public)")
+            log.info("Address search failed: \((error as NSError).code, privacy: .public)")
             return nil
         }
     }

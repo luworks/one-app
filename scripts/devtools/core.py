@@ -163,9 +163,9 @@ def fingerprint(root, *, sdk='iphonesimulator', architecture=None, configuration
     names = probe(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], root).split('\0')
     files = {}
     for name in sorted(set(names)):
-        if not name or not (name.startswith(('ios/', 'scripts/', 'tests/fixtures/')) or name == 'dev'
+        if not name or not (name.startswith(('ios/', 'scripts/', 'tests/fixtures/', '.github/')) or name == 'dev'
                             or Path(name).name in ('Package.resolved', 'package-lock.json', 'yarn.lock',
-                                                   'pnpm-lock.yaml', 'uv.lock', 'requirements.txt')):
+                                                   'pnpm-lock.yaml', 'uv.lock', 'requirements.txt', 'Gemfile.lock', 'Gemfile', 'mise.lock', '.mise.toml', '.swift-format', '.swiftlint.yml', 'ruff.toml', 'tool-pins.json')):
             continue
         if any(part in ('.build', '__pycache__', 'DerivedData') for part in Path(name).parts):
             continue

@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Which alarms show on which Calendar day: the same rule as the Today timeline (AlarmPlan.fire), expanded over a range.
 final class CalendarAlarmsTests: XCTestCase {

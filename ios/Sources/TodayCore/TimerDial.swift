@@ -24,7 +24,7 @@ public enum TimerSource: String, Codable, Equatable, Sendable {
 /// A running countdown, as the app remembers it between launches. AlarmKit's `Alarm` has no fire date,
 /// so the end time (or what is left while paused) is kept here, keyed by the AlarmKit id.
 /// The list of them is `TimerList` / `TimerStore` (TimerList.swift).
-public struct RunningTimer: Codable, Equatable, Identifiable {
+public struct RunningTimer: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     /// What the user set, in seconds.
     public let total: Int

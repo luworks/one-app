@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Small inline fixtures for request syntax versus meaningful action wording.
 final class CaptureTitleCleanupTests: XCTestCase {

@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 import SwiftData
 
@@ -23,7 +30,7 @@ struct DayAgenda: View {
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
     @Environment(\.scenePhase) private var scenePhase
-    @State private var health = HealthLineModel()
+    @Environment(HealthLineModel.self) private var health
     /// The open "Review today" sheet: tomorrow and its first items, taken when the row is tapped.
     @State private var review: ReviewRequest?
 
@@ -380,21 +387,6 @@ enum DayEntry: Identifiable {
     }
 }
 
-/// The time Today reasons about. UI tests can pin it with `-uiTestingNow HH:mm` (today's date, that time).
-enum TodayClock {
-    static var now: Date {
-        #if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        if args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingNow"), i + 1 < args.count {
-            let parts = args[i + 1].split(separator: ":").compactMap { Int($0) }
-            if parts.count == 2, let pinned = Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: .now) {
-                return pinned
-            }
-        }
-        #endif
-        return .now
-    }
-}
 
 enum TimelineItem: Identifiable {
     case event(OneEvent, Date)

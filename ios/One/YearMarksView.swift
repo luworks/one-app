@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 
 /// The Settings choice behind the Year view's holiday numbers. Stored as "auto" (follow region and language), "none" or the chosen sets.

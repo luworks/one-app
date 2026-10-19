@@ -3,7 +3,7 @@ import Foundation
 /// Decide whether a NEW message asks for a planner item before extracting its kind or dates.
 /// Uncertainty is a conversation, never permission to manufacture an obligation.
 public enum ChatRouting {
-    public enum Intent: Equatable { case capture, conversation, unsure }
+    public enum Intent: Equatable, Sendable { case capture, conversation, unsure }
 
     private static func has(_ text: String, _ pattern: String) -> Bool {
         text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil

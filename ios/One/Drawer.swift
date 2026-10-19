@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 
 /// State of the left drawer. Kept out of `HomeView`'s body on purpose: only the small modifiers below read

@@ -1,27 +1,34 @@
-// swift-tools-version: 5.10
-// Eval harness (run from ios/: `swift test`): compiles the app's pure-logic files for macOS and runs them under `swift test`.
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
-    name: "OneEval",
-    platforms: [.macOS(.v14)],
+    name: "TodayModules",
+    platforms: [.macOS(.v14), .iOS("27.0")],
+    products: [
+        .library(name: "TodayCore", targets: ["TodayCore"]),
+        .library(name: "TodayShared", targets: ["TodayShared"]),
+        .library(name: "TodayData", targets: ["TodayData"]),
+        .library(name: "TodayPlatform", targets: ["TodayPlatform"]),
+        .library(name: "TodayDesignSystem", targets: ["TodayDesignSystem"]),
+        .library(name: "FeatureClock", targets: ["FeatureClock"]),
+        .library(name: "FeatureHealth", targets: ["FeatureHealth"]),
+        .library(name: "TodayTestSupport", targets: ["TodayTestSupport"]),
+    ],
     targets: [
-        .target(
-            name: "OneLogic",
-            path: "One",
-            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ChatRouting.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift", "TimerDial.swift", "Pomodoro.swift", "IntentLogic.swift", "EventMatch.swift", "ClockLogic.swift", "CityDatabase.swift", "WorldClockLook.swift", "OverdueTidy.swift", "LedgerLogic.swift", "AutonomyPolicy.swift", "HealthLogic.swift", "EveningReview.swift", "EditingLogic.swift", "RowSubtitle.swift", "MessageCopy.swift", "AskSuggestions.swift", "AppearanceLogic.swift", "ActivityEvent.swift", "ActivityStore.swift", "ActivityRecorder.swift", "ActivityLedger.swift", "ActivityEvents.swift", "ActivityExport.swift", "TimerList.swift", "TimerRecents.swift", "TimerPhrase.swift", "CaptureLeadIn.swift", "CaptureCardState.swift", "CalendarAlarms.swift", "HealthMetrics.swift", "HealthSampleSeries.swift", "HealthLoading.swift", "Preferences.swift", "YearMarks.swift", "PillOrder.swift", "TabMemory.swift", "StopwatchLogic.swift", "ReminderCompletionFence.swift"]
-        ),
-        // Code shared by the app and the TodayWidgets extension (the widget snapshot and "next items" logic).
-        .target(
-            name: "OneShared",
-            path: "Shared",
-            sources: ["WidgetSnapshot.swift", "NextUpSpeech.swift", "TravelTime.swift", "ShareInbox.swift", "LockScreenNext.swift", "ActivityOutbox.swift"]
-        ),
-        .testTarget(
-            name: "OneLogicTests",
-            dependencies: ["OneLogic", "OneShared"],
-            path: "Eval/Tests/OneLogicTests",
-            resources: [.copy("capture-cases.json"), .copy("conversation-journeys.json")]
-        ),
-    ]
+        .target(name: "TodayCore"),
+        .target(name: "TodayShared"),
+        .target(name: "TodayData", dependencies: ["TodayCore", "TodayShared"],
+                linkerSettings: [.linkedLibrary("sqlite3")]),
+        .target(name: "TodayPlatform", dependencies: ["TodayCore", "TodayShared"]),
+        .target(name: "TodayDesignSystem", dependencies: ["TodayCore"]),
+        .target(name: "FeatureClock", dependencies: ["TodayCore", "TodayDesignSystem", "TodayPlatform"],
+                path: "Sources/Features/FeatureClock", exclude: ["README.md"]),
+        .target(name: "FeatureHealth", dependencies: ["TodayCore", "TodayDesignSystem", "TodayPlatform"],
+                path: "Sources/Features/FeatureHealth"),
+        .target(name: "TodayTestSupport", dependencies: ["TodayCore", "TodayShared"]),
+        .testTarget(name: "TodayTests", dependencies: ["TodayCore", "TodayShared", "TodayData", "TodayTestSupport"],
+                    path: "Eval/Tests/OneLogicTests",
+                    resources: [.copy("capture-cases.json"), .copy("conversation-journeys.json")]),
+    ],
+    swiftLanguageModes: [.v6]
 )

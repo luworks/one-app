@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 
 /// Reads Apple Health for the line at the top of Today. Health data stays in memory (never in SwiftData or the widget).
@@ -6,11 +13,12 @@ import SwiftUI
 @MainActor
 @Observable
 final class HealthLineModel {
-    private let source: HealthSource = HealthSources.current()
+    private let source: any HealthSource
     private(set) var line: String?
     @ObservationIgnored nonisolated(unsafe) private var observer: NSObjectProtocol?
 
-    init() {
+    init(source: any HealthSource) {
+        self.source = source
         // The line follows a changed choice of metrics (from the sheet or Settings), unless the line is switched off.
         observer = NotificationCenter.default.addObserver(forName: HealthSelectionStore.didChange, object: nil, queue: .main) { [weak self] _ in
             guard UserDefaults.standard.object(forKey: SettingsKey.healthSummary) as? Bool ?? true else { return }
@@ -78,11 +86,12 @@ struct TodayHealthLine: View {
 
 /// The Health list in a sheet, with Done.
 struct HealthDetailSheet: View {
+    @Environment(HealthModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            HealthView()
+            HealthView(model: model)
                 .navigationTitle("Health")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

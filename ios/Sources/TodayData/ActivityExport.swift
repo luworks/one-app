@@ -1,16 +1,18 @@
 import Foundation
+import TodayCore
+import TodayShared
 
 // Export of the Activity store (Settings → Activity data → Export) and the insert/query benchmark that checks the store's speed.
 // Pure Foundation + the store, so `swift test` covers both.
 
-enum ActivityExportFormat: String, CaseIterable, Identifiable {
+public enum ActivityExportFormat: String, CaseIterable, Identifiable, Sendable {
     case jsonl = "JSON Lines", csv = "CSV"
-    var id: Self { self }
+    public var id: Self { self }
 
-    var fileExtension: String { self == .jsonl ? "jsonl" : "csv" }
+    public var fileExtension: String { self == .jsonl ? "jsonl" : "csv" }
 
     /// Machine-readable: every field, snapshots and edited-card diffs included. CSV is flat, for a spreadsheet.
-    var summary: String {
+    public var summary: String {
         switch self {
         case .jsonl: "Every field, one event per line. For scripts and backup."
         case .csv: "One row per event, opens in Numbers or Excel."
@@ -18,8 +20,8 @@ enum ActivityExportFormat: String, CaseIterable, Identifiable {
     }
 }
 
-enum ActivityExport {
-    static func fileName(_ format: ActivityExportFormat, now: Date = .now, calendar: Calendar = .current) -> String {
+public enum ActivityExport {
+    public static func fileName(_ format: ActivityExportFormat, now: Date = .now, calendar: Calendar = .current) -> String {
         let c = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
         return String(format: "today-activity-%04d%02d%02d-%02d%02d.%@", c.year ?? 0, c.month ?? 0, c.day ?? 0, c.hour ?? 0, c.minute ?? 0,
                       format.fileExtension)
@@ -27,7 +29,7 @@ enum ActivityExport {
 
     /// Streams every event, oldest first, into a file. Returns the number of events written.
     @discardableResult
-    static func write(_ format: ActivityExportFormat, from store: ActivityStore, to url: URL) throws -> Int {
+    public static func write(_ format: ActivityExportFormat, from store: ActivityStore, to url: URL) throws -> Int {
         try? FileManager.default.removeItem(at: url)
         guard FileManager.default.createFile(atPath: url.path, contents: nil) else { throw ActivityStoreError.open("cannot create \(url.lastPathComponent)") }
         let handle = try FileHandle(forWritingTo: url)
@@ -49,19 +51,19 @@ enum ActivityExport {
 /// Inserts a lot of synthetic events into a throwaway store and times the things the app does: batch inserts, the newest page
 /// for a filter, a deep page, a one-day count, a text search. Run by a test on the Mac and by the debug button in Settings
 /// on a phone (`ActivityDataView`), so the numbers in the research document can be re-measured on the device.
-enum ActivityBenchmark {
-    struct Result: Equatable {
-        var rows: Int
-        var insertSeconds: Double
-        var insertRowsPerSecond: Double
-        var newestPageMs: Double
-        var deepPageMs: Double
-        var dayCountMs: Double
-        var searchMs: Double
-        var fileBytes: Int64
-        var diagnostics: ActivityDiagnostics
+public enum ActivityBenchmark {
+    public struct Result: Equatable {
+        public var rows: Int
+        public var insertSeconds: Double
+        public var insertRowsPerSecond: Double
+        public var newestPageMs: Double
+        public var deepPageMs: Double
+        public var dayCountMs: Double
+        public var searchMs: Double
+        public var fileBytes: Int64
+        public var diagnostics: ActivityDiagnostics
 
-        var summary: String {
+        public var summary: String {
             """
             \(rows) rows · SQLite \(diagnostics.sqliteVersion) · fts5 \(diagnostics.fts5 ? "yes" : "no") · json \(diagnostics.json ? "yes" : "no")
             insert \(Int(insertRowsPerSecond)) rows/s (\(String(format: "%.2f", insertSeconds)) s) · file \(fileBytes / 1_000_000) MB
@@ -71,7 +73,7 @@ enum ActivityBenchmark {
         }
     }
 
-    static func run(rows: Int, batch: Int = 1000, in directory: URL = FileManager.default.temporaryDirectory) throws -> Result {
+    public static func run(rows: Int, batch: Int = 1000, in directory: URL = FileManager.default.temporaryDirectory) throws -> Result {
         let url = directory.appendingPathComponent("activity-bench-\(UUID().uuidString).sqlite")
         defer {
             for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: url.path + suffix) }

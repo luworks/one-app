@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import Foundation
 import SwiftData
 import SwiftUI
@@ -39,6 +46,16 @@ final class AlarmCenter {
         authorization = Ringer.authorization
     }
 
+    @MainActor
+    private final class WatchSession {
+        private let context: ModelContext
+        init(context: ModelContext) { self.context = context }
+        func synchronize() async {
+            guard !Task.isCancelled else { return }
+            await Ringer.sync(context)
+        }
+    }
+
     /// Follows AlarmKit until the calling task is cancelled (attach it to the view with `.task`).
     /// Every update also runs a sync, so a one-time alarm that rang is switched off in the list.
     func watch(context: ModelContext) async {
@@ -46,17 +63,18 @@ final class AlarmCenter {
         guard #available(iOS 26, *) else { return }
         authorization = Ringer.authorization
         refreshStates()
+        let session = WatchSession(context: context)
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
                 for await _ in AlarmManager.shared.alarmUpdates {
                     self.refreshStates()
-                    await Ringer.sync(context)
+                    await session.synchronize()
                 }
             }
             group.addTask { @MainActor in
                 for await _ in AlarmManager.shared.authorizationUpdates {
                     self.authorization = Ringer.authorization
-                    await Ringer.sync(context)
+                    await session.synchronize()
                 }
             }
         }

@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import TodayCore
 import TodayDesignSystem
@@ -439,3 +440,4 @@ private struct RoundButton: View {
         return Color(UIColor { $0.userInterfaceStyle == .dark ? ui(dark) : ui(light) })
     }
 }
+#endif

@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 import SwiftData
 
@@ -207,7 +214,7 @@ struct RemindersView: View {
             }
         }
         .task {
-            #if DEBUG
+            #if TODAY_MOCK
             guard !PreviewFixtures.isAxe else { return }
             #endif
             await FirstRun.reminders()
@@ -589,7 +596,7 @@ private struct ListRow: View {
     }
 }
 
-#if DEBUG
+#if TODAY_MOCK
 #Preview("My Lists") {
     RemindersView(isPushed: .constant(false), path: .constant([]))
         .modelContainer(PreviewFixtures.reminders)

@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 final class ReminderRecoveryTests: XCTestCase {
     private struct Case: Decodable {

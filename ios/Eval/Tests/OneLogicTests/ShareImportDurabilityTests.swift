@@ -1,5 +1,5 @@
 import XCTest
-@testable import OneShared
+@testable import TodayShared
 
 final class ShareImportDurabilityTests: XCTestCase {
     enum Failure: Error { case save }

@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The Recents list on the Timer tab: newest first, no repeats, at most 20, presets while it is empty.
 final class TimerRecentsTests: XCTestCase {

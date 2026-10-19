@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// NL-capture eval. Prints accuracy per split; fails if a split drops below its ratchet.
 /// Raise the ratchet after a round that improves it; never lower it.

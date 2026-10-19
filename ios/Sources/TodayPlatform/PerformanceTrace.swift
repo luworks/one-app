@@ -1,12 +1,13 @@
+#if os(iOS)
 import SwiftUI
 import UIKit
 import os.signpost
 
 /// Opt-in benchmark probes. Times are app-side layout proxies, never touch-to-photon measurements.
 @MainActor @Observable
-final class PerformanceTrace {
-    static let shared = PerformanceTrace()
-    static let enabled = ProcessInfo.processInfo.arguments.contains("-performanceTrace")
+public final class PerformanceTrace {
+    public static let shared = PerformanceTrace()
+    public static let enabled = ProcessInfo.processInfo.arguments.contains("-performanceTrace")
     private static var pageContext: String {
         ProcessInfo.processInfo.arguments.contains("-performancePageRevisits")
             ? "first_cycle_plus_two_revisits" : "unclassified"
@@ -21,12 +22,12 @@ final class PerformanceTrace {
     private var phaseMarks: [String: UInt64] = [:]
     private var sequence = 0
     private var pageVisits: [String: Int] = [:]
-    private(set) var bootstrapComplete = false
-    private(set) var launchComplete = false
-    private(set) var generation = 0
-    private(set) var report = ""
+    public private(set) var bootstrapComplete = false
+    public private(set) var launchComplete = false
+    public private(set) var generation = 0
+    public private(set) var report = ""
 
-    func mark(_ event: String) {
+    public func mark(_ event: String) {
         guard Self.enabled else { return }
         let now = DispatchTime.now().uptimeNanoseconds
         if ["store_start", "store_ready", "bootstrap_start", "bootstrap_complete"].contains(event) {
@@ -36,18 +37,18 @@ final class PerformanceTrace {
         print("PERF_TRACE v=1 event=\(event) uptime_ns=\(now)")
     }
 
-    func beginLaunch() {
+    public func beginLaunch() {
         guard Self.enabled else { return }
         begin("app_init_to_content_layout", destination: nil)
     }
 
-    func finishBootstrap() {
+    public func finishBootstrap() {
         guard Self.enabled else { return }
         mark("bootstrap_complete")
         bootstrapComplete = true
     }
 
-    func begin(_ name: String, destination: String?) {
+    public func begin(_ name: String, destination: String?) {
         guard Self.enabled else { return }
         // A superseded operation is not silently turned into a successful sample.
         if let pending { mark("cancel.\(pending.name)") }
@@ -59,12 +60,12 @@ final class PerformanceTrace {
         }
     }
 
-    func wantsLayout(_ route: String) -> Bool {
+    public func wantsLayout(_ route: String) -> Bool {
         guard Self.enabled, bootstrapComplete, let pending else { return false }
         return pending.destination == nil || pending.destination == route
     }
 
-    func finishLayout(_ route: String, generation expected: Int) {
+    public func finishLayout(_ route: String, generation expected: Int) {
         guard expected == generation, wantsLayout(route), let pending else { return }
         let end = DispatchTime.now().uptimeNanoseconds
         self.pending = nil
@@ -101,18 +102,21 @@ final class PerformanceTrace {
 /// Attached to the real content's background, after its bootstrap state has been published.
 /// Two display-link callbacks leave a display opportunity between layout and the endpoint;
 /// neither callback proves compositor presentation, animation completion or asynchronous sync.
-struct PerformanceContentProbe: UIViewRepresentable {
-    let route: String
-    let generation: Int
-    let bootstrapComplete: Bool
+public struct PerformanceContentProbe: UIViewRepresentable {
+    public init(route: String, generation: Int, bootstrapComplete: Bool) {
+        self.route = route; self.generation = generation; self.bootstrapComplete = bootstrapComplete
+    }
+    public let route: String
+    public let generation: Int
+    public let bootstrapComplete: Bool
 
-    func makeUIView(context: Context) -> ProbeView { ProbeView() }
-    func updateUIView(_ view: ProbeView, context: Context) {
+    public func makeUIView(context: Context) -> ProbeView { ProbeView() }
+    public func updateUIView(_ view: ProbeView, context: Context) {
         view.arm(route: route, generation: generation, ready: bootstrapComplete)
     }
-    static func dismantleUIView(_ view: ProbeView, coordinator: ()) { view.stop() }
+    public static func dismantleUIView(_ view: ProbeView, coordinator: ()) { view.stop() }
 
-    final class ProbeView: UIView {
+    public final class ProbeView: UIView {
         private var link: CADisplayLink?
         private var route = ""
         private var generation = -1
@@ -156,14 +160,14 @@ struct PerformanceContentProbe: UIViewRepresentable {
 /// Page timers start in the action (or a control's binding setter), before navigation mutates state.
 /// The endpoint describes content geometry, not async data readiness or animation completion.
 extension PerformanceTrace {
-    func beginPage(_ route: String) {
+    public func beginPage(_ route: String) {
         begin("page.\(route)", destination: route)
     }
 }
 
 extension Binding where Value: Equatable {
     @MainActor
-    func performanceAction(_ route: @escaping (Value) -> String?) -> Binding<Value> {
+    public func performanceAction(_ route: @escaping (Value) -> String?) -> Binding<Value> {
         guard PerformanceTrace.enabled else { return self }
         return Binding(get: { wrappedValue }, set: { value in
             if value != wrappedValue, let destination = route(value) {
@@ -175,8 +179,8 @@ extension Binding where Value: Equatable {
 }
 
 private struct PerformanceDestination: ViewModifier {
-    let route: String
-    func body(content: Content) -> some View {
+    public let route: String
+    public func body(content: Content) -> some View {
         content.background {
             if PerformanceTrace.enabled {
                 PerformanceContentProbe(route: route, generation: PerformanceTrace.shared.generation,
@@ -196,7 +200,7 @@ private struct PerformanceDestination: ViewModifier {
 
 extension View {
     /// Apply to the destination's List/Form/content, never the obscured presenting root.
-    func performanceDestination(_ route: String) -> some View {
+    public func performanceDestination(_ route: String) -> some View {
         modifier(PerformanceDestination(route: route))
     }
 }
@@ -206,7 +210,7 @@ extension View {
     /// Keep NavigationLink's production structure and state ownership unchanged.
     /// Opt-in runs begin on the real navigation tap, never destination onAppear.
     @ViewBuilder
-    func performanceNavigationAction(_ route: String) -> some View {
+    public func performanceNavigationAction(_ route: String) -> some View {
         if PerformanceTrace.enabled {
             simultaneousGesture(TapGesture().onEnded { PerformanceTrace.shared.beginPage(route) })
         } else {
@@ -219,25 +223,27 @@ extension View {
 /// Opt-in navigation owns its activation binding so beginPage precedes the state write.
 /// Without tracing, the caller's original NavigationLink is returned unchanged.
 private struct PerformanceControlledNavigation<Destination: View, LinkLabel: View>: ViewModifier {
-    let route: String
-    let destination: () -> Destination
-    let label: () -> LinkLabel
+    public let route: String
+    public let destination: () -> Destination
+    public let label: () -> LinkLabel
     @State private var isActive = false
 
-    init(route: String, destination: @escaping () -> Destination, label: @escaping () -> LinkLabel) {
+    public init(route: String, destination: @escaping () -> Destination, label: @escaping () -> LinkLabel) {
         self.route = route
         self.destination = destination
         self.label = label
     }
 
     @ViewBuilder
-    func body(content: Content) -> some View {
+    public func body(content: Content) -> some View {
         if PerformanceTrace.enabled {
-            NavigationLink(isActive: $isActive.performanceAction { $0 ? route : nil }) {
-                destination()
+            Button {
+                PerformanceTrace.shared.beginPage(route)
+                isActive = true
             } label: {
                 label()
             }
+            .navigationDestination(isPresented: $isActive) { destination() }
         } else {
             content
         }
@@ -245,7 +251,7 @@ private struct PerformanceControlledNavigation<Destination: View, LinkLabel: Vie
 }
 
 extension View {
-    func performanceControlledNavigation<Destination: View, LinkLabel: View>(
+    public func performanceControlledNavigation<Destination: View, LinkLabel: View>(
         _ route: String,
         @ViewBuilder destination: @escaping () -> Destination,
         @ViewBuilder label: @escaping () -> LinkLabel
@@ -253,3 +259,4 @@ extension View {
         modifier(PerformanceControlledNavigation(route: route, destination: destination, label: label))
     }
 }
+#endif

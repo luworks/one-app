@@ -1,12 +1,13 @@
+#if os(iOS)
 import Foundation
 import Darwin
 
 #if DEBUG
 /// Separate opt-in resource cohort. Sampling maxima are not exact allocation peaks or leak evidence.
 /// All mutable sampling state belongs to the serial queue; latency endpoints remain unchanged.
-final class PageResourceTrace: @unchecked Sendable {
-    static let shared = PageResourceTrace()
-    static let enabled: Bool = {
+public final class PageResourceTrace: @unchecked Sendable {
+    public static let shared = PageResourceTrace()
+    public static let enabled: Bool = {
         let arguments = ProcessInfo.processInfo.arguments
         return ["-performanceResources", "-performanceTrace", "-uiTesting"].allSatisfy(arguments.contains)
     }()
@@ -84,7 +85,7 @@ final class PageResourceTrace: @unchecked Sendable {
     private var window: Window?
     private var operationVisits: [String: Int] = [:]
 
-    func begin(generation: Int, start: UInt64) {
+    public func begin(generation: Int, start: UInt64) {
         guard Self.enabled else { return }
         queue.async { [self] in
             if let old = window {
@@ -95,7 +96,7 @@ final class PageResourceTrace: @unchecked Sendable {
         }
     }
 
-    func layout(generation: Int, sequence: Int, name: String, route: String, visit: Int, end: UInt64,
+    public func layout(generation: Int, sequence: Int, name: String, route: String, visit: Int, end: UInt64,
                 completion: @escaping @MainActor @Sendable (String) -> Void) {
         guard Self.enabled else { return }
         queue.async { [self] in
@@ -190,11 +191,12 @@ final class PageResourceTrace: @unchecked Sendable {
 }
 #else
 /// Resource diagnostics are absent from Release; normal navigation keeps the same API.
-final class PageResourceTrace: @unchecked Sendable {
-    static let shared = PageResourceTrace()
-    static let enabled = false
-    func begin(generation: Int, start: UInt64) {}
-    func layout(generation: Int, sequence: Int, name: String, route: String, visit: Int, end: UInt64,
+public final class PageResourceTrace: @unchecked Sendable {
+    public static let shared = PageResourceTrace()
+    public static let enabled = false
+    public func begin(generation: Int, start: UInt64) {}
+    public func layout(generation: Int, sequence: Int, name: String, route: String, visit: Int, end: UInt64,
                 completion: @escaping @MainActor @Sendable (String) -> Void) {}
 }
+#endif
 #endif

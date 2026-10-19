@@ -1,16 +1,17 @@
 import Foundation
+import TodayCore
 
 /// Realistic made-up Health data for UI tests and the simulator: 180 days per metric, relative to `now`, identical on
 /// every run (seeded per metric). Two metrics show the edge states on purpose: Body Fat was last measured 12 days
 /// ago (a stale date label) and Mindful Minutes has nothing at all (the "—" row).
-enum HealthSampleSeries {
-    static let days = MovingAverage.historyDays
+public enum HealthSampleSeries {
+    public static let days = MovingAverage.historyDays
 
-    static func all(now: Date, calendar: Calendar = .current) -> [HealthMetric: HealthSeries] {
+    public static func all(now: Date, calendar: Calendar = .current) -> [HealthMetric: HealthSeries] {
         Dictionary(uniqueKeysWithValues: HealthMetric.allCases.map { ($0, series(for: $0, now: now, calendar: calendar)) })
     }
 
-    static func series(for metric: HealthMetric, now: Date, calendar: Calendar = .current) -> HealthSeries {
+    public static func series(for metric: HealthMetric, now: Date, calendar: Calendar = .current) -> HealthSeries {
         var rng = SeededRandom(seed: 42 + UInt64(HealthMetric.allCases.firstIndex(of: metric) ?? 0) * 1_000)
         let today = calendar.startOfDay(for: now)
         func day(_ back: Int) -> Date { calendar.date(byAdding: .day, value: -back, to: today) ?? today }

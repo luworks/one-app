@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import Foundation
 
 /// The items an edit sentence ("move the dentist to 4") can name: the next week's events and the open tasks, with short ids.

@@ -1,14 +1,34 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 import SwiftData
+#if TODAY_MOCK
+import TodayTestSupport
+#endif
 
 @main
 struct OneApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    let healthModel: HealthModel
+    let healthLineModel: HealthLineModel
     let container: ModelContainer
 
     init() {
+        let source: any HealthSource
+        #if TODAY_MOCK
+        source = HealthTestSources.scripted(base: MockHealthSource(), arguments: ProcessInfo.processInfo.arguments)
+        #else
+        source = HealthKitSource()
+        #endif
+        healthModel = HealthModel(source: source)
+        healthLineModel = HealthLineModel(source: source)
         if PerformanceTrace.enabled { PerformanceTrace.shared.beginLaunch() }
-        #if DEBUG
+        #if TODAY_MOCK
         if PreviewFixtures.isAxe {
             container = PreviewFixtures.reminders
             return
@@ -25,14 +45,14 @@ struct OneApp: App {
 
     var body: some Scene {
         WindowGroup {
-            #if DEBUG
+            #if TODAY_MOCK
             if PreviewFixtures.isAxe {
                 Color.clear
             } else {
-                HomeView().appearanceRoot()
+                HomeView().appearanceRoot().environment(healthModel).environment(healthLineModel)
             }
             #else
-            HomeView().appearanceRoot()
+            HomeView().appearanceRoot().environment(healthModel).environment(healthLineModel)
             #endif
         }
         .modelContainer(container)

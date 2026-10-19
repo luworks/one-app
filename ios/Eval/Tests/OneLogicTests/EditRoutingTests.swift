@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Edit or capture? An edit is only read when the sentence points at an item that exists; otherwise the message is a new item.
 /// Regression: "请把我可以卖的东西都放到车库去，然后今天下午 3 点的时候提醒我移动一下" matched an event only because it

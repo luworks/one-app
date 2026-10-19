@@ -1,12 +1,14 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 final class ReminderCompletionFenceTests: XCTestCase {
     func testAcceptedCompletionRejectsFetchStartedBeforeCommit() throws {
         var fence = ReminderCompletionFence()
         let oldFetch = fence.revision
         var backendCompleted = false
-        try fence.commit { backendCompleted = true }
+        fence.commit { backendCompleted = true }
         XCTAssertTrue(backendCompleted)
         XCTAssertFalse(fence.accepts(snapshot: oldFetch), "An old open snapshot must not resurrect the accepted completion")
         XCTAssertTrue(fence.accepts(snapshot: fence.revision))

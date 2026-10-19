@@ -1,5 +1,5 @@
 import XCTest
-@testable import OneShared
+@testable import TodayShared
 
 /// The Lock Screen rectangular widget: one item, a time line, an optional "+N", and the empty state.
 final class LockScreenNextTests: XCTestCase {

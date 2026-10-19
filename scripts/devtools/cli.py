@@ -1,4 +1,4 @@
-"""Read-only ./dev commands. Build/test dispatch is intentionally not installed."""
+"""Today development commands; doctor, inventory and plan are read-only."""
 import argparse
 import json
 from pathlib import Path
@@ -33,12 +33,47 @@ def main(argv=None, root=ROOT):
     plan.add_argument('--sdk', default='iphonesimulator')
     plan.add_argument('--architecture')
     plan.add_argument('--configuration', choices=['Debug', 'Release'], default='Debug')
+    bootstrap_parser = sub.add_parser('bootstrap', help='install exact checksummed worktree-local tools')
+    bootstrap_parser.add_argument('--tool', action='append')
+    sub.add_parser('generate', help='generate Today.xcodeproj from the sole specification')
+    build_parser = sub.add_parser('build', help='build the real app and embedded extensions')
+    build_parser.add_argument('configuration', nargs='?', choices=['Debug', 'Release'], default='Debug')
+    build_parser.add_argument('--scheme', choices=['Today', 'TodayMock'], default='Today')
+    test_parser = sub.add_parser('test', help='run an authoritative test group')
+    test_parser.add_argument('group', choices=['unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
+    test_parser.add_argument('--only', action='append', default=[])
+    test_parser.add_argument('--full', action='store_true', help='only for an explicitly authorized frozen final revision')
+    format_parser = sub.add_parser('format', help='Apple swift-format only')
+    format_parser.add_argument('--check', action='store_true')
+    sub.add_parser('lint', help='SwiftLint, maintained Python Ruff and actionlint')
+    release_parser = sub.add_parser('release', help='guarded release preflight/archive/validate')
+    release_parser.add_argument('action', choices=['preflight', 'archive', 'validate'])
+    release_parser.add_argument('options', nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.command == 'help':
         parser.print_help()
         return 0
     try:
         root = Path(root).resolve()
+        if args.command not in ('doctor', 'inventory', 'plan'):
+            from . import commands
+            if args.command == 'bootstrap':
+                print(json.dumps(commands.bootstrap(root, tools=args.tool), indent=2))
+                return 0
+            if args.command == 'generate':
+                return commands.generate(root)
+            if args.command == 'build':
+                return commands.build(root, args.configuration, scheme=args.scheme)
+            if args.command == 'test':
+                if args.full and args.group not in ('ui', 'release'):
+                    raise ValueError('--full requires ui or release collection')
+                return commands.test(root, args.group, only=args.only, full=args.full)
+            if args.command == 'format':
+                return commands.format_sources(root, check=args.check)
+            if args.command == 'lint':
+                return commands.lint(root)
+            if args.command == 'release':
+                return commands.release(root, args.action, args.options)
         data = inventory(root)
         if args.command == 'doctor':
             checks = {'git': probe(['git', 'rev-parse', '--is-inside-work-tree'], root) == 'true',
@@ -58,6 +93,6 @@ def main(argv=None, root=ROOT):
             code = 0
         print(Redactor()(json.dumps(data, indent=2, sort_keys=True)))
         return code
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print('dev: ' + Redactor()(str(error)), file=sys.stderr)
         return 1

@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import BackgroundTasks
 import Foundation
 import SwiftData
@@ -110,7 +117,11 @@ enum WidgetFeed {
     /// Must run before launch finishes (`application(_:didFinishLaunchingWithOptions:)`).
     nonisolated static func registerBackgroundRefresh() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: refreshTaskID, using: .main) { task in
-            MainActor.assumeIsolated { runBackgroundRefresh(task) }
+            // BackgroundTasks promises this callback on the explicitly supplied main queue.
+            // The ObjC BGTask API carries no actor annotation; no task or context crosses a thread here.
+            dispatchPrecondition(condition: .onQueue(.main))
+            nonisolated(unsafe) let mainQueueTask = task
+            MainActor.assumeIsolated { runBackgroundRefresh(mainQueueTask) }
         }
     }
 
@@ -128,27 +139,32 @@ enum WidgetFeed {
         try? await BGTaskScheduler.shared.submitTaskRequest(request)
     }
 
-    private static func runBackgroundRefresh(_ task: BGTask) {
-        var finished = false
+    @MainActor
+    private final class RefreshCompletion {
+        private let task: BGTask
+        private var finished = false
+        init(task: BGTask) { self.task = task }
         func finish(_ success: Bool) {
             guard !finished else { return }
             finished = true
             task.setTaskCompleted(success: success)
         }
+    }
+
+    private static func runBackgroundRefresh(_ task: BGTask) {
+        let completion = RefreshCompletion(task: task)
         let work = Task { @MainActor in
-            // Book the next run before this one completes.
             if !isUITesting { await submitRefreshRequest() }
-            // Pull Apple Reminders first (does nothing when Reminders sync is off), so new reminders reach the widget too.
+            guard !Task.isCancelled else { completion.finish(false); return }
             await RemindersSync.shared.reconcile()
+            guard !Task.isCancelled else { completion.finish(false); return }
             CalendarSync.shared.prepareStore()
             rewriteFromStore()
-            finish(true)
+            completion.finish(true)
         }
         task.expirationHandler = {
-            Task { @MainActor in
-                work.cancel()
-                finish(false)
-            }
+            work.cancel()
+            Task { @MainActor in completion.finish(false) }
         }
     }
 

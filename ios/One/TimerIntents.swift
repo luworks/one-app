@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import AppIntents
 import SwiftUI
 
@@ -91,7 +98,7 @@ struct StartTimerForIntent: AppIntent {
 enum TimerIntentSupport {
     /// Tells Siri the user just did "start a timer" by hand, so it can suggest the phrase.
     static func donate(seconds: Int) {
-        var intent = StartTimerIntent()
+        let intent = StartTimerIntent()
         intent.length = IntentTimer.spoken(seconds: seconds)
         Task { _ = try? await IntentDonationManager.shared.donate(intent: intent) }
     }

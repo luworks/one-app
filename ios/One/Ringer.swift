@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import Foundation
 import SwiftData
 import SwiftUI
@@ -55,7 +62,7 @@ enum Ringer {
             let state = try await AlarmManager.shared.requestAuthorization()
             AlarmScheduler.log.info("auth result \(String(describing: state))")
         } catch {
-            AlarmScheduler.log.error("auth failed \(error.localizedDescription)")
+            AlarmScheduler.log.error("auth failed \((error as NSError).code, privacy: .public)")
         }
         #endif
     }
@@ -218,10 +225,10 @@ enum AlarmScheduler {
             sound: AlarmSound.named(sound)?.alertSound ?? .default)
         do {
             _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
-            log.info("scheduled \(title, privacy: .public)")
+            log.info("alarm scheduled")
             return true
         } catch {
-            log.error("schedule failed \(error.localizedDescription, privacy: .public)")
+            log.error("schedule failed \((error as NSError).code, privacy: .public)")
             return false
         }
     }

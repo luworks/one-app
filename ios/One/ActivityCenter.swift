@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 import SwiftData
 import UIKit
@@ -144,7 +151,7 @@ final class ActivityCenter {
         guard let store = shared.store else { throw ActivityStoreError.open("no store") }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(ActivityExport.fileName(format))
         try await Task.detached(priority: .utility) {
-            try ActivityExport.write(format, from: store, to: url)
+            _ = try ActivityExport.write(format, from: store, to: url)
         }.value
         return url
     }

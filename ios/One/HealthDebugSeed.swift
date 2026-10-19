@@ -1,4 +1,11 @@
 #if DEBUG
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import Foundation
 import HealthKit
 import os
@@ -48,7 +55,7 @@ enum HealthDebugSeed {
             try await store.save(samples)
             log.info("seeded \(samples.count) Health samples for \(ids.joined(separator: ","), privacy: .public)")
         } catch {
-            log.error("seeding Health failed: \(error.localizedDescription, privacy: .public)")
+            log.error("seeding Health failed: \((error as NSError).code, privacy: .public)")
         }
     }
 }

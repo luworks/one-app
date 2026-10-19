@@ -73,7 +73,7 @@ def canonical(value, lane='ui'):
         value = '/'.join(objc.groups())
     value = re.sub(r'\([^)]*\)', '', value).replace('.', '/')
     parts = value.split('/')
-    if parts[0] in ('OneUITests', 'TodayUITests', 'OneLogicTests'):
+    if parts[0] in ('OneUITests', 'TodayUITests', 'OneLogicTests', 'TodayTests'):
         parts.pop(0)
     return (TARGET if lane == 'ui' else SETTINGS['logic_target']) + '/' + '/'.join(parts)
 
@@ -211,7 +211,7 @@ def report(expected, attempts, exit_code=0, allowed_skips=(), skip_rules=(), raw
             errors.append('test_failure')
         elif attempt['status'] == 'skipped':
             matches = [rule for rule in skip_rules if rule['category'] in allowed_skips
-                       and canonical(rule['test'], 'logic' if attempt['test'].startswith('OneLogicTests/') else 'ui') == attempt['test']
+                       and canonical(rule['test'], 'logic' if attempt['test'].startswith(SETTINGS['logic_target'] + '/') else 'ui') == attempt['test']
                        and re.search(rule['reason'], str(attempt.get('reason', '')), re.I)]
             (allowed if matches else unexpected).append(attempt)
         elif attempt['status'] != 'passed':

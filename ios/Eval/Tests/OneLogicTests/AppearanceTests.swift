@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Settings → Appearance: System (default), Light, Dark and how they map to the SwiftUI and UIKit styles.
 final class AppearanceTests: XCTestCase {

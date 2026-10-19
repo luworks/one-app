@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Which Reminders list a new task is filed in. Weak or ambiguous evidence must leave it in the Inbox.
 final class ListGuessTests: XCTestCase {

@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import AVFoundation
 import Speech
 import SwiftUI
@@ -26,8 +33,7 @@ final class VoiceInput {
         #if targetEnvironment(simulator)
         // CoreAudio input deadlocks in the simulator ("RPC timeout"); dictation is device-only.
         state = .unavailable
-        return
-        #endif
+        #else
         let speech = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
         let mic = await AVAudioApplication.requestRecordPermission()
         guard speech == .authorized, mic else { state = .denied; return }
@@ -46,7 +52,10 @@ final class VoiceInput {
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)
             guard format.sampleRate > 0, format.channelCount > 0 else { state = .unavailable; return }
-            input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tapBlock(request))
+            var tapError: NSError?
+            guard input.__installTap(onBus: 0, bufferSize: 1024, format: format, error: &tapError, block: Self.tapBlock(request)) else {
+                throw tapError ?? NSError(domain: "Today.AudioInput", code: 1)
+            }
             engine.prepare()
             try engine.start()
             state = .listening
@@ -56,6 +65,7 @@ final class VoiceInput {
             stop()
             state = .unavailable
         }
+        #endif
     }
 
     // Audio and speech callbacks arrive on background threads, so they must not be main-actor closures.

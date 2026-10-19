@@ -1,4 +1,11 @@
 #if DEBUG
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import EventKit
 import SwiftUI
 

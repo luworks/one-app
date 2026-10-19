@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 import SwiftData
 import UserNotifications
@@ -33,7 +40,7 @@ struct AlarmsView: View {
             Group {
                 switch section {
                 case .alarms: alarmsList
-                case .worldClock: WorldClockView()
+                case .worldClock: WorldClockView(showUndo: { message, undo in toast?.show(message, undo: undo) })
                 case .stopwatch: StopwatchView()
                 case .timer: TimerSection()
                 }

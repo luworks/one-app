@@ -1,6 +1,8 @@
 import XCTest
 import SQLite3
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 final class ActivityStoreTests: XCTestCase {
     var dir: URL!

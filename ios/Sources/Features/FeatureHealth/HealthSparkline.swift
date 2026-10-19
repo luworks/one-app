@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import TodayCore
 import TodayDesignSystem
@@ -68,3 +69,4 @@ public struct HealthSparkline: View {
         .accessibilityHidden(true)
     }
 }
+#endif

@@ -2,7 +2,7 @@ import Foundation
 
 /// The pure rules for "move / delete / ask" on items that already exist (no model, no UI), so they run under `swift test`.
 /// The model part (instructions and the one request) is in Editing.swift.
-public struct EditItem: Equatable {
+public struct EditItem: Equatable, Sendable {
     public var id: String
     public var type: String // "event" | "task"
     public var title: String

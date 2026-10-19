@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// "帮我增加一个 reminder 吧：我需要…" is an instruction to the app; the title is what the user wrote after it.
 final class CaptureLeadInTests: XCTestCase {

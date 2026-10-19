@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 final class ConversationJourneyTests: XCTestCase {
     private struct Journey: Decodable { let name: String; let steps: [Step] }

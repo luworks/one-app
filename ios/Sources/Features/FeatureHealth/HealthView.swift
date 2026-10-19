@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import TodayCore
 import TodayDesignSystem
@@ -234,3 +235,4 @@ private struct HealthRow: View {
         .contentShape(Rectangle())
     }
 }
+#endif

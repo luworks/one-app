@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The AI preview card says what will be created: "New reminder", "Tomorrow 9:00 AM · alerts you", the list, and the saved
 /// reminder is written that way (due time + alert at it, never a planned time unless the line is about working time).

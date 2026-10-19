@@ -1,6 +1,8 @@
 import XCTest
-@testable import OneLogic
-@testable import OneShared
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
+@testable import TodayShared
 
 /// Siri / Shortcuts: what "Add Reminder" saves, the timer's minute range, and what "What's next" says.
 final class IntentTests: XCTestCase {

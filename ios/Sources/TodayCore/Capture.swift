@@ -2,8 +2,8 @@ import Foundation
 
 /// What the composer understood from a line of text. Shown as a preview card;
 /// nothing is created until the user taps 添加.
-public struct Capture: Equatable, Codable {
-    public enum Kind: String, CaseIterable, Codable { case task, event }
+public struct Capture: Equatable, Codable, Sendable {
+    public enum Kind: String, CaseIterable, Codable, Sendable { case task, event }
 
     public var title: String
     public var day: Date

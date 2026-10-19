@@ -1,4 +1,6 @@
 import Foundation
+import TodayCore
+import TodayShared
 import SQLite3
 
 // The Activity data store: one app-private SQLite file (system SQLite3, no dependency), WAL, `user_version` migrations.
@@ -7,67 +9,71 @@ import SQLite3
 // Compiled into the `OneLogic` SPM target, so `swift test` runs it against a temp file or `:memory:`.
 
 /// What the recorder needs from a store (a seam for tests).
-protocol ActivityStoring: AnyObject {
+public protocol ActivityStoring: AnyObject {
     /// Inserts events (and their snapshots and content rows) in one transaction. Rows whose `uid` exists are skipped.
     /// Returns the number of new events.
     @discardableResult func insert(_ events: [ActivityEvent]) throws -> Int
 }
 
-struct ActivityQuery: Equatable {
+public struct ActivityQuery: Equatable {
+    public init(tiers: [ActivityTier] = [], actors: Actors = .all, sinceMs: Int64? = nil, search: String? = nil, subjectRef: String? = nil, kinds: [String] = []) {
+        self.tiers = tiers; self.actors = actors; self.sinceMs = sinceMs
+        self.search = search; self.subjectRef = subjectRef; self.kinds = kinds
+    }
     /// The Activity filter chips: All / You / AI / Agents (everything that is neither you nor Today AI).
-    enum Actors: Equatable { case all, you, ai, others }
+    public enum Actors: Equatable { case all, you, ai, others }
 
     /// Empty = every tier.
-    var tiers: [ActivityTier] = []
-    var actors: Actors = .all
+    public var tiers: [ActivityTier] = []
+    public var actors: Actors = .all
     /// Only events at or after this time (unix ms).
-    var sinceMs: Int64?
+    public var sinceMs: Int64?
     /// Case-insensitive substring of the title, before or after text (LIKE on the bounded window; Chinese works, FTS5 would not).
-    var search: String?
-    var subjectRef: String?
-    var kinds: [String] = []
+    public var search: String?
+    public var subjectRef: String?
+    public var kinds: [String] = []
 }
 
 /// Where the next page starts: after the last row of the previous one, in (ts, id) order, so rows arriving meanwhile do not shift pages.
-struct ActivityCursor: Equatable {
-    var ts: Int64
-    var id: Int64
+public struct ActivityCursor: Equatable {
+    public var ts: Int64
+    public var id: Int64
 
-    init(ts: Int64, id: Int64) { self.ts = ts; self.id = id }
+    public init(ts: Int64, id: Int64) { self.ts = ts; self.id = id }
 
-    init?(after event: ActivityEvent?) {
+    public init?(after event: ActivityEvent?) {
         guard let event, let id = event.rowID else { return nil }
         self.init(ts: event.ts, id: id)
     }
 }
 
-enum ActivityStoreError: Error, Equatable {
+public enum ActivityStoreError: Error, Equatable {
     case open(String)
     case sql(String)
     /// The file was written by a newer version of the app.
     case newerSchema(Int)
 }
 
-struct ActivityPruneResult: Equatable {
-    var changes = 0, ai = 0, usageAndSystem = 0, snapshots = 0
+public struct ActivityPruneResult: Equatable {
+    public var changes = 0, ai = 0, usageAndSystem = 0, snapshots = 0
 }
 
-struct ActivityDiagnostics: Equatable {
-    var sqliteVersion: String
-    var fts5: Bool
-    var json: Bool
-    var journalMode: String
+public struct ActivityDiagnostics: Equatable {
+    public var sqliteVersion: String
+    public var fts5: Bool
+    public var json: Bool
+    public var journalMode: String
 }
 
-final class ActivityStore: ActivityStoring, @unchecked Sendable {
-    enum Location: Equatable {
+public final class ActivityStore: ActivityStoring, @unchecked Sendable {
+    public enum Location: Equatable {
         case memory
         case file(URL)
     }
 
-    static let schemaVersion = 1
+    public static let schemaVersion = 1
 
-    let location: Location
+    public let location: Location
     private var db: OpaquePointer?
     /// One connection, one lock: the recorder (main), the Activity screen (main) and an export (background) never overlap statements.
     private let lock = NSRecursiveLock()
@@ -78,7 +84,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
 
     // MARK: Open
 
-    init(location: Location) throws {
+    public init(location: Location) throws {
         self.location = location
         var handle: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
@@ -115,7 +121,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     /// Opens the file; a file SQLite cannot read is moved aside (never deleted) and a new one is started.
-    static func openOrRecover(at url: URL) throws -> ActivityStore {
+    public static func openOrRecover(at url: URL) throws -> ActivityStore {
         do {
             return try ActivityStore(location: .file(url))
         } catch let error as ActivityStoreError {
@@ -134,14 +140,14 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     /// `Application Support/Activity/activity.sqlite`: in the app container, not the App Group.
-    static func defaultURL() -> URL {
+    public static func defaultURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("Activity", isDirectory: true).appendingPathComponent("activity.sqlite")
     }
 
     /// New files in the directory stay readable after the first unlock, so a write while the phone is locked works.
-    static func protect(_ directory: URL) {
+    public static func protect(_ directory: URL) {
         #if os(iOS)
         try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
                                                ofItemAtPath: directory.path)
@@ -157,7 +163,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     // MARK: Schema
 
     /// Ordered; entry i brings `user_version` to i + 1. Never edit an old entry, add a new one.
-    static let migrations: [String] = [
+    public static let migrations: [String] = [
         """
         CREATE TABLE event (
           id           INTEGER PRIMARY KEY,
@@ -236,7 +242,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     // MARK: Writing
 
     @discardableResult
-    func insert(_ events: [ActivityEvent]) throws -> Int {
+    public func insert(_ events: [ActivityEvent]) throws -> Int {
         guard !events.isEmpty else { return 0 }
         return try transaction {
             var inserted = 0
@@ -264,7 +270,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     /// Drops what has expired (document §2.3): the changes ledger by the user's retention setting, AI decisions after 180 days,
     /// usage after 30 and system events after 90 (their counts are first rolled up per day), Undo snapshots after 30.
     @discardableResult
-    func prune(retention: ActivityRetention, now: Date = .now, calendar: Calendar = .current) throws -> ActivityPruneResult {
+    public func prune(retention: ActivityRetention, now: Date = .now, calendar: Calendar = .current) throws -> ActivityPruneResult {
         var result = ActivityPruneResult()
         try transaction {
             if let cutoff = retention.cutoff(now: now, calendar: calendar) {
@@ -301,7 +307,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     /// Deletes events of these tiers (nil = all of them, plus the daily counts). Settings and the device id stay.
-    func clear(tiers: Set<ActivityTier>? = nil) throws {
+    public func clear(tiers: Set<ActivityTier>? = nil) throws {
         try transaction {
             if let tiers, tiers.count < ActivityTier.allCases.count {
                 let list = tiers.map { String($0.rawValue) }.sorted().joined(separator: ",")
@@ -320,7 +326,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     // MARK: Reading
 
     /// A page of events, newest first. Pass the cursor of the last row of the previous page to continue.
-    func page(_ query: ActivityQuery, after cursor: ActivityCursor? = nil, limit: Int = 150) throws -> [ActivityEvent] {
+    public func page(_ query: ActivityQuery, after cursor: ActivityCursor? = nil, limit: Int = 150) throws -> [ActivityEvent] {
         var (conds, args) = Self.conditions(query)
         if let cursor {
             conds.append("(e.ts < ? OR (e.ts = ? AND e.id < ?))")
@@ -330,12 +336,12 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
         return try rows(sql, args + [max(1, limit)]) { Self.event($0) }
     }
 
-    func count(_ query: ActivityQuery = ActivityQuery()) throws -> Int {
+    public func count(_ query: ActivityQuery = ActivityQuery()) throws -> Int {
         let (conds, args) = Self.conditions(query)
         return Int(try rows("SELECT COUNT(*) FROM event e" + Self.whereClause(conds), args) { $0.int(0) ?? 0 }.first ?? 0)
     }
 
-    func countByTier() throws -> [ActivityTier: Int] {
+    public func countByTier() throws -> [ActivityTier: Int] {
         var out: [ActivityTier: Int] = [:]
         let counts = try rows("SELECT tier, COUNT(*) FROM event GROUP BY tier", []) { ($0.int(0) ?? 0, $0.int(1) ?? 0) }
         for (tier, n) in counts {
@@ -344,22 +350,22 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
         return out
     }
 
-    func event(uid: String) throws -> ActivityEvent? {
+    public func event(uid: String) throws -> ActivityEvent? {
         try rows("SELECT \(Self.columns) FROM event e WHERE e.uid = ?", [uid]) { Self.event($0) }.first
     }
 
-    func snapshot(uid: String) throws -> Data? {
+    public func snapshot(uid: String) throws -> Data? {
         try rows("SELECT data FROM snapshot WHERE event_uid = ?", [uid]) { $0.blob(0) }.first.flatMap { $0 }
     }
 
-    func content(uid: String) throws -> [ActivityContent] {
+    public func content(uid: String) throws -> [ActivityContent] {
         try rows("SELECT field, before_txt, after_txt FROM content WHERE event_uid = ? ORDER BY field", [uid]) {
             ActivityContent(field: $0.text(0) ?? "", before: $0.text(1), after: $0.text(2))
         }
     }
 
     /// Which of these events have an `undo_of` row pointing at them.
-    func undone(among uids: [String]) throws -> Set<String> {
+    public func undone(among uids: [String]) throws -> Set<String> {
         var out = Set<String>()
         for chunk in stride(from: 0, to: uids.count, by: 400).map({ Array(uids[$0..<min($0 + 400, uids.count)]) }) {
             let marks = Array(repeating: "?", count: chunk.count).joined(separator: ",")
@@ -370,7 +376,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
 
     /// The subjects (reminder refs) an actor changed since a time, optionally only by some kinds. Two of these answer the
     /// autonomy policy's "AI changed it recently" and "you chose its time" (`Ledger.protectedRefs`).
-    func subjectRefs(actor: String, kinds: [String] = [], sinceMs: Int64) throws -> Set<String> {
+    public func subjectRefs(actor: String, kinds: [String] = [], sinceMs: Int64) throws -> Set<String> {
         var sql = "SELECT DISTINCT subject_ref FROM event WHERE tier = 1 AND actor = ? AND ts >= ? AND subject_ref IS NOT NULL"
         var args: [Any?] = [actor, sinceMs]
         if !kinds.isEmpty {
@@ -381,7 +387,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     /// How many of these uids are stored (used to check an import).
-    func existingCount(uids: [String]) throws -> Int {
+    public func existingCount(uids: [String]) throws -> Int {
         var n = 0
         for chunk in stride(from: 0, to: uids.count, by: 400).map({ Array(uids[$0..<min($0 + 400, uids.count)]) }) {
             let marks = Array(repeating: "?", count: chunk.count).joined(separator: ",")
@@ -390,7 +396,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
         return n
     }
 
-    func rollups(day: Int? = nil) throws -> [(day: Int, kind: String, actor: String, n: Int, sumMs: Int)] {
+    public func rollups(day: Int? = nil) throws -> [(day: Int, kind: String, actor: String, n: Int, sumMs: Int)] {
         let sql = "SELECT day, kind, actor, n, sum_ms FROM rollup_daily" + (day == nil ? "" : " WHERE day = ?") + " ORDER BY day, kind, actor"
         return try rows(sql, day.map { [$0] } ?? []) {
             (Int($0.int(0) ?? 0), $0.text(1) ?? "", $0.text(2) ?? "", Int($0.int(3) ?? 0), Int($0.int(4) ?? 0))
@@ -398,7 +404,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     /// Every event, oldest first, in batches, with snapshots and content rows. For export; memory stays at one batch.
-    func export(batchSize: Int = 500, _ body: ([ActivityEvent]) throws -> Void) throws {
+    public func export(batchSize: Int = 500, _ body: ([ActivityEvent]) throws -> Void) throws {
         var lastID: Int64 = 0
         while true {
             var batch = try rows("SELECT \(Self.columns) FROM event e WHERE e.id > ? ORDER BY e.id LIMIT ?", [lastID, batchSize]) { Self.event($0) }
@@ -420,11 +426,11 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
         }
     }
 
-    func meta(_ key: String) throws -> String? {
+    public func meta(_ key: String) throws -> String? {
         try rows("SELECT value FROM meta WHERE key = ?", [key]) { $0.text(0) }.first.flatMap { $0 }
     }
 
-    func setMeta(_ key: String, _ value: String?) throws {
+    public func setMeta(_ key: String, _ value: String?) throws {
         if let value {
             try exec("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", [key, value])
         } else {
@@ -433,7 +439,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     /// The size of the database file on disk (0 for memory).
-    func fileSize() -> Int64 {
+    public func fileSize() -> Int64 {
         guard case .file(let url) = location else { return 0 }
         var total: Int64 = 0
         for suffix in ["", "-wal"] {
@@ -443,7 +449,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
         return total
     }
 
-    func diagnostics() -> ActivityDiagnostics {
+    public func diagnostics() -> ActivityDiagnostics {
         let fts5 = (try? exec("CREATE VIRTUAL TABLE temp.fts5_probe USING fts5(x)")) != nil
         _ = try? exec("DROP TABLE IF EXISTS temp.fts5_probe")
         let json = (try? rows("SELECT json_extract('{\"a\":1}', '$.a')", []) { $0.int(0) })?.first != nil
@@ -452,7 +458,7 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     /// `EXPLAIN QUERY PLAN` text for a page query (tests check that it uses an index).
-    func plan(for query: ActivityQuery, after cursor: ActivityCursor? = nil) throws -> String {
+    public func plan(for query: ActivityQuery, after cursor: ActivityCursor? = nil) throws -> String {
         var (conds, args) = Self.conditions(query)
         if let cursor {
             conds.append("(e.ts < ? OR (e.ts = ? AND e.id < ?))")
@@ -577,19 +583,19 @@ final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
 
     /// One result row, valid inside the `rows` closure only.
-    struct Row {
+    public struct Row {
         fileprivate let stmt: OpaquePointer
 
-        func text(_ i: Int32) -> String? {
+        public func text(_ i: Int32) -> String? {
             guard sqlite3_column_type(stmt, i) != SQLITE_NULL, let c = sqlite3_column_text(stmt, i) else { return nil }
             return String(cString: c)
         }
 
-        func int(_ i: Int32) -> Int64? {
+        public func int(_ i: Int32) -> Int64? {
             sqlite3_column_type(stmt, i) == SQLITE_NULL ? nil : sqlite3_column_int64(stmt, i)
         }
 
-        func blob(_ i: Int32) -> Data? {
+        public func blob(_ i: Int32) -> Data? {
             guard sqlite3_column_type(stmt, i) != SQLITE_NULL, let p = sqlite3_column_blob(stmt, i) else { return nil }
             return Data(bytes: p, count: Int(sqlite3_column_bytes(stmt, i)))
         }

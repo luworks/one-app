@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import TodayCore
 import TodayDesignSystem
@@ -120,3 +121,4 @@ public final class HealthModel {
         HealthRowModel(metric: metric, series: series[metric], now: TodayClock.now, units: units)
     }
 }
+#endif

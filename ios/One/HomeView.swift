@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 import SwiftData
 
@@ -48,7 +55,8 @@ struct HomeView: View {
     private static func restored<T: RawRepresentable>(_: T.Type, key: String) -> T? where T.RawValue == String {
         guard !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return nil }
         // A tab saved under an old name (`alarms`, now `clock`) still opens on the same tab.
-        return UserDefaults.standard.string(forKey: key).map { key == tabKey ? TabMemory.migrated($0) : $0 }.flatMap(T.init(rawValue:))
+        guard let raw = UserDefaults.standard.string(forKey: key) else { return nil }
+        return T(rawValue: key == tabKey ? TabMemory.migrated(raw) : raw)
     }
     /// Settings > Calendar > "Open Calendar on": a chosen view, or the one it was left in (Week the first time).
     private static func startingCalendarMode() -> CalendarView.Mode {
@@ -737,14 +745,7 @@ struct CircleButton: View {
 }
 
 /// 0.97 press scale with a light haptic.
-struct PressScale: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
-            .sensoryFeedback(.impact(weight: .light), trigger: configuration.isPressed) { _, pressed in pressed }
-    }
-}
+
 
 extension View {
     /// Liquid Glass on iOS 26+, material on older systems.

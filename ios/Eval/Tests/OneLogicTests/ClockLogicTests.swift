@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 final class WorldClockTests: XCTestCase {
     private func tz(_ id: String) -> TimeZone { TimeZone(identifier: id)! }

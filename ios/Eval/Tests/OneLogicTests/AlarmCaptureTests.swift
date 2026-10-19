@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Alarm sentences: relative times in every common form, and a clean alarm name.
 final class AlarmCaptureTests: XCTestCase {

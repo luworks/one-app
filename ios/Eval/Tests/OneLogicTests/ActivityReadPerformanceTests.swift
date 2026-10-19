@@ -1,6 +1,8 @@
 import XCTest
 import Dispatch
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Portable to the frozen source baseline: uses only the existing store API.
 /// This is a warm host SQLite read benchmark, not app UI latency or cold I/O.

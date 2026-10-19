@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 final class TimerListTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_000_000)

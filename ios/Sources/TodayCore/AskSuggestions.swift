@@ -14,7 +14,7 @@ import Foundation
 
 // MARK: - Language
 
-public enum SuggestionLanguage: String {
+public enum SuggestionLanguage: String, Sendable {
     case en, zh
 
     /// More Chinese characters than Latin letters.
@@ -114,7 +114,7 @@ public enum SentenceRoute: Equatable {
 }
 
 /// What a candidate's sentence must land on. Checked against `SentenceRoute`, for the rule sentence and for any rewording.
-public enum SuggestionExpectation: Equatable {
+public enum SuggestionExpectation: Equatable, Sendable {
     case tidy, plan, review, question
     /// Move this item (by title) to this time.
     case move(title: String, to: Date)
@@ -303,8 +303,8 @@ public struct SuggestionContext: Equatable {
 
 // MARK: - Candidates
 
-public struct SuggestionCandidate: Equatable, Identifiable {
-    public enum Kind: String { case plan, tidy, review, whatsLeft, moveTask, moveEvent, habit, prepare, leave, wake, fallbackReminder }
+public struct SuggestionCandidate: Equatable, Identifiable, Sendable {
+    public enum Kind: String, Sendable { case plan, tidy, review, whatsLeft, moveTask, moveEvent, habit, prepare, leave, wake, fallbackReminder }
 
     public var id: String
     public var kind: Kind

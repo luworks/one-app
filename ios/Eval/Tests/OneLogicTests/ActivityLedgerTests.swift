@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The changes ledger on the Activity store: mapping, the one-time import of the old SwiftData rows, and the queries the
 /// Activity screen, Undo and the autonomy policy use.

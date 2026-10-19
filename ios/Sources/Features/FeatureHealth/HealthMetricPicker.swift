@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import TodayCore
 import TodayDesignSystem
@@ -52,3 +53,4 @@ public struct HealthMetricPicker: View {
         .presentationDragIndicator(.visible)
     }
 }
+#endif

@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Finding the Apple Calendar occurrence that was tapped (Delete This Event Only, Apple's editor) and a re-keyed copy.
 final class EventMatchTests: XCTestCase {

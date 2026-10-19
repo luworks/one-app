@@ -19,3 +19,7 @@ Use explicit constructor injection at adapter boundaries. Do not manufacture a v
 Swift 6 is a language-mode gate, not a compiler-version label. Resolve concrete isolation/Sendable errors at ownership boundaries; do not blanket-isolate every domain type or add broad unchecked suppression. Main-actor model contexts never cross actors. Existing measured performance hooks remain sanitized and local.
 
 The compatibility bridge exits only after production features no longer depend on model-bound helpers, all store writer/reader tests pass, and a reviewed schema migration can preserve installed data. Until then `One` remains an explicit, tested identity constraint.
+
+## Live and Mock dependency graphs
+
+Debug/Release remain optimization configurations. A separate `TodayMock` developer target/scheme and `TodayWorkbench` depend on test support; production `Today` links only live production products in both configurations. UI journeys run against TodayMock. Both app variants preserve the existing app bundle and model module identity on their owned simulator; they are never installed concurrently or on a phone. Workbench has its own development-only identity and is absent from production archive membership. This explicit graph separation avoids relying on a DEBUG guard or dead stripping as proof that fake dependencies are absent from Release.

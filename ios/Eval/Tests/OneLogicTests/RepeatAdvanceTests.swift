@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// A repeating reminder rolls to its next occurrence: the finished occurrence's plan must not stay on today.
 final class RepeatAdvanceTests: XCTestCase {

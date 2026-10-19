@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Model output -> Capture. The model itself cannot run in `swift test`; this covers everything around it.
 final class AICaptureMappingTests: XCTestCase {

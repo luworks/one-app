@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// A preview card stays in the chat after Add / Cancel: its status moves open → added → undone → added, or open → dropped,
 /// and the decided cards are saved with the conversation.

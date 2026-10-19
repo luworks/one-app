@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The stopwatch face's geometry and wording (no UI). The face is measured from Apple's Clock app: 240 ticks on the
 /// ring (four a second), white every 5 s, a 30-minute counter with 60 ticks and white every 5 minutes.

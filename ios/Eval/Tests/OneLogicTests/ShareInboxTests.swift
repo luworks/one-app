@@ -1,5 +1,5 @@
 import XCTest
-@testable import OneShared
+@testable import TodayShared
 
 final class ShareInboxTests: XCTestCase {
     let cal: Calendar = { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }()

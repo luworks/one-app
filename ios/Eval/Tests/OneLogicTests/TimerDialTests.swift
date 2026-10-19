@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// The length limits and `RunningTimer` (pause, resume, storage). The kitchen-timer dial was replaced by Apple's wheel picker.
 final class TimerDialTests: XCTestCase {

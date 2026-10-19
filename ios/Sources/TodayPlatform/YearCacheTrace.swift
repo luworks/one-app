@@ -1,10 +1,11 @@
+#if os(iOS)
 #if DEBUG
 import Foundation
 
 /// Process-lifetime diagnostics only; never retains marks, model objects, signatures or titles.
 /// Header lifecycle callbacks mean appeared/disappeared, not viewport visibility.
-enum YearCacheTrace {
-    static let enabled: Bool = {
+public enum YearCacheTrace {
+    public static let enabled: Bool = {
         let arguments = ProcessInfo.processInfo.arguments
         return ["-performanceYearCacheCounts", "-uiTesting", "-performanceTrace", "-performanceResources"]
             .allSatisfy(arguments.contains)
@@ -12,11 +13,11 @@ enum YearCacheTrace {
     // Gate before allocating any mutable store, including its lock and event buffer.
     private static let store: Store? = enabled ? Store() : nil
 
-    enum Kind: String, Codable, Sendable {
+    public enum Kind: String, Codable, Sendable {
         case miss, invalidated, appeared, disappeared
     }
 
-    struct Event: Codable, Sendable {
+    public struct Event: Codable, Sendable {
         let sequence: UInt64
         let kind: Kind
         let ns: UInt64
@@ -30,7 +31,7 @@ enum YearCacheTrace {
     /// Counters are as of snapshot_ns, which may be later than the original layout_ns.
     /// Endpoint claims MUST filter events by ns <= layout_ns (miss ns is end_ns).
     /// Aggregate counters cannot be backdated; truncated events cannot prove absence.
-    struct Snapshot: Codable, Sendable {
+    public struct Snapshot: Codable, Sendable {
         let snapshot_ns: UInt64
         let request_count: UInt64
         let hit_count: UInt64
@@ -63,21 +64,21 @@ enum YearCacheTrace {
         }
     }
 
-    static func request() {
+    public static func request() {
         guard let store else { return }
         store.lock.lock()
         defer { store.lock.unlock() }
         store.requests += 1
     }
 
-    static func hit() {
+    public static func hit() {
         guard let store else { return }
         store.lock.lock()
         defer { store.lock.unlock() }
         store.hits += 1
     }
 
-    static func miss(year: Int, start: UInt64, cacheCount: Int) {
+    public static func miss(year: Int, start: UInt64, cacheCount: Int) {
         guard let store else { return }
         store.lock.lock()
         defer { store.lock.unlock() }
@@ -85,7 +86,7 @@ enum YearCacheTrace {
         store.append(.miss, year: year, start: start, cacheCount: cacheCount)
     }
 
-    static func invalidated(cacheCount: Int) {
+    public static func invalidated(cacheCount: Int) {
         guard let store else { return }
         store.lock.lock()
         defer { store.lock.unlock() }
@@ -93,14 +94,14 @@ enum YearCacheTrace {
         store.append(.invalidated, cacheCount: cacheCount)
     }
 
-    static func header(year: Int, appeared: Bool) {
+    public static func header(year: Int, appeared: Bool) {
         guard let store else { return }
         store.lock.lock()
         defer { store.lock.unlock() }
         store.append(appeared ? .appeared : .disappeared, year: year)
     }
 
-    static func snapshot() -> Snapshot? {
+    public static func snapshot() -> Snapshot? {
         guard let store else { return nil }
         store.lock.lock()
         defer { store.lock.unlock() }
@@ -110,4 +111,5 @@ enum YearCacheTrace {
                         truncated_count: store.truncated, events: store.events)
     }
 }
+#endif
 #endif

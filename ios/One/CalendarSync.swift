@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import EventKit
 import EventKitUI
 import SwiftUI
@@ -279,7 +286,7 @@ final class CalendarSync {
             log.info("saved \(ek.eventIdentifier ?? "nil", privacy: .public)")
             return ek.eventIdentifier
         } catch {
-            log.error("save failed \(error.localizedDescription, privacy: .public)")
+            log.error("save failed \((error as NSError).code, privacy: .public)")
             return nil
         }
     }
@@ -312,14 +319,14 @@ final class CalendarSync {
     @discardableResult
     func delete(_ event: OneEvent, span: EKSpan = .futureEvents) -> Bool {
         guard let ek = systemCopy(of: event) else {
-            log.info("delete: no system copy for \(event.title, privacy: .public) (isOn=\(self.isOn))")
+            log.info("delete: no linked system copy")
             return true
         }
         return remove(ek, span: span)
     }
 
     private func remove(_ ek: EKEvent, span: EKSpan) -> Bool {
-        log.info("delete: \(ek.title ?? "", privacy: .public) calendar=\(ek.calendar.title, privacy: .public) source=\(ek.calendar.source?.title ?? "", privacy: .public) modifiable=\(ek.calendar.allowsContentModifications) recurring=\(ek.hasRecurrenceRules) span=\(span == .thisEvent ? "this" : "future", privacy: .public)")
+        log.info("event deletion requested; modifiable=\(ek.calendar.allowsContentModifications) recurring=\(ek.hasRecurrenceRules) thisOccurrence=\(span == .thisEvent)")
         guard ek.calendar.allowsContentModifications else {
             log.error("delete refused: calendar is read-only")
             return false
@@ -332,7 +339,7 @@ final class CalendarSync {
             version += 1
             return true
         } catch {
-            log.error("delete failed \(error.localizedDescription, privacy: .public)")
+            log.error("delete failed \((error as NSError).code, privacy: .public)")
             return false
         }
     }
@@ -347,7 +354,7 @@ final class CalendarSync {
         let found = store.events(matching: predicate)
         guard let i = EventMatch.copy(titled: event.title, at: event.start, in: found.map { ($0.title, $0.startDate) }) else { return nil }
         let match = found[i]
-        log.info("relinked \(event.title, privacy: .public): its identifier changed")
+        log.info("event relinked after identifier changed")
         event.externalID = match.eventIdentifier
         return match
     }
@@ -406,7 +413,7 @@ final class CalendarSync {
             e.alarms = [EKAlarm(relativeOffset: -1800), EKAlarm(relativeOffset: -300)]
         }
         if repeating { e.recurrenceRules = [EKRecurrenceRule(recurrenceWith: .daily, interval: 1, end: nil)] }
-        do { try store.save(e, span: .futureEvents) } catch { log.error("debug create failed \(error.localizedDescription, privacy: .public)") }
+        do { try store.save(e, span: .futureEvents) } catch { log.error("debug create failed \((error as NSError).code, privacy: .public)") }
         version += 1
     }
     #endif
@@ -558,7 +565,7 @@ enum NativeEvents {
         return top
     }
 
-    private final class Delegate: NSObject, EKEventEditViewDelegate, UIAdaptivePresentationControllerDelegate {
+    private final class Delegate: NSObject, @MainActor EKEventEditViewDelegate, UIAdaptivePresentationControllerDelegate {
         let onComplete: ((EKEventEditViewAction) -> Void)?
         init(onComplete: ((EKEventEditViewAction) -> Void)?) { self.onComplete = onComplete }
         /// Swiped down: nothing to save; refetch in case something changed meanwhile.

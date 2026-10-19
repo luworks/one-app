@@ -1,7 +1,7 @@
 import Foundation
 
 /// One city of the bundled list (`cities.json`, built by `scripts/build_cities.py` from GeoNames, CC BY 4.0).
-public struct CityRecord: Codable, Hashable, Identifiable {
+public struct CityRecord: Codable, Hashable, Identifiable, Sendable {
     /// GeoNames id; 0 for a city made up from a time zone identifier (see `CityDatabase.city(forKey:)`).
     public let id: Int
     public let name: String
@@ -42,13 +42,13 @@ public struct CityRecord: Codable, Hashable, Identifiable {
 
 /// The offline city list: search that understands English and Chinese names, countries and diacritics, the time zone of
 /// the device mapped to a city, and the saved list's migration from time zone identifiers.
-public struct CityDatabase {
+public struct CityDatabase: Sendable {
     public let cities: [CityRecord]
     private let byKey: [String: CityRecord]
     private let folded: [String: Folded]
     private let countryNames: [String: (en: String, zh: String)]
 
-    private struct Folded {
+    private struct Folded: Sendable {
         var name: String
         var words: [String]
         var zhHans: String

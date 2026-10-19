@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import TodayCore
 import TodayDesignSystem
@@ -541,3 +542,4 @@ public struct CityPicker: View {
         .contentShape(Rectangle())
     }
 }
+#endif

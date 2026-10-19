@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import SwiftUI
 import AppIntents
 #if canImport(AlarmKit)
@@ -135,7 +142,7 @@ final class TimerController {
             if byHand { TimerIntentSupport.donate(seconds: seconds) }
             return timer
         } catch {
-            AlarmScheduler.log.error("timer failed \(error.localizedDescription, privacy: .public)")
+            AlarmScheduler.log.error("timer failed \((error as NSError).code, privacy: .public)")
             set(before.filter { $0.id != id })
             message = "Couldn't start the timer."
             return nil
@@ -278,7 +285,7 @@ final class TimerController {
 
     #if canImport(AlarmKit)
     @available(iOS 26, *)
-    private static func configuration(for timer: RunningTimer, sound: String) -> AlarmManager.AlarmConfiguration<AlarmScheduler.Meta> {
+    nonisolated private static func configuration(for timer: RunningTimer, sound: String) -> AlarmManager.AlarmConfiguration<AlarmScheduler.Meta> {
         // "Focus", "Break" or the user's name: the full-screen alert, the Lock Screen and the Dynamic Island show this.
         let title = LocalizedStringResource(stringLiteral: TimerList.title(timer))
         let alert: AlarmPresentation.Alert

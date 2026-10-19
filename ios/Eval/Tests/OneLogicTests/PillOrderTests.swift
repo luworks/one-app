@@ -1,5 +1,7 @@
 import XCTest
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Reordering a row of pills (Reminders smart lists and pinned lists): drag, Move Left / Move Right, hidden entries
 /// and the stored form.

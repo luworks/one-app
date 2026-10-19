@@ -1,6 +1,8 @@
 import XCTest
 import CryptoKit
-@testable import OneLogic
+@testable import TodayCore
+@testable import TodayData
+import TodayTestSupport
 
 /// Exports actual production fallback content on the frozen development inputs.
 /// This host seam cannot observe UI gates or persisted writes; those stay null/unmeasured.

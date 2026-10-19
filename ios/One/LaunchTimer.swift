@@ -1,7 +1,15 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import Foundation
 import Darwin
 
 /// Cold start time: process start (from the kernel) to Today's first appearance.
+@MainActor
 enum LaunchTimer {
     private(set) static var milliseconds: Int?
 

@@ -1,3 +1,10 @@
+import TodayCore
+import TodayShared
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import FeatureClock
+import FeatureHealth
 import EventKit
 import SwiftData
 import SwiftUI
@@ -102,7 +109,7 @@ final class RemindersSync {
                 let granted = try await store.requestFullAccessToReminders()
                 log.info("reminders access request: granted \(granted)")
             } catch {
-                log.error("reminders access request failed: \(error.localizedDescription, privacy: .public)")
+                log.error("reminders access request failed: \((error as NSError).code, privacy: .public)")
             }
         }
         log.info("reminders authorization status: \(EKEventStore.authorizationStatus(for: .reminder).rawValue)")
@@ -349,7 +356,7 @@ final class RemindersSync {
             lastError = nil
         } catch {
             lastError = error.localizedDescription
-            log.error("sync failed: \(error.localizedDescription, privacy: .public)")
+            log.error("sync failed: \((error as NSError).code, privacy: .public)")
         }
         version += 1
     }
@@ -367,17 +374,16 @@ final class RemindersSync {
         let open = store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: cals)
         let since = Calendar.current.date(byAdding: .day, value: -30, to: .now)
         let done = store.predicateForCompletedReminders(withCompletionDateStarting: since, ending: .now, calendars: cals)
-        async let a = Self.fetch(store, Unchecked(open))
-        async let b = Self.fetch(store, Unchecked(done))
-        return await a + b
+        let incomplete = await Self.fetch(store, open)
+        let completed = await Self.fetch(store, done)
+        return incomplete + completed
     }
 
-    /// EventKit objects are not Sendable; they are only touched inside this call.
-    private struct Unchecked<T>: @unchecked Sendable { let value: T; init(_ v: T) { value = v } }
-
-    private nonisolated static func fetch(_ store: EKEventStore, _ predicate: Unchecked<NSPredicate>) async -> [Remote] {
+    /// The store and predicates stay on their owning actor. The callback copies EventKit rows
+    /// immediately into Sendable values before resuming the actor's continuation.
+    private static func fetch(_ store: EKEventStore, _ predicate: NSPredicate) async -> [Remote] {
         await withCheckedContinuation { c in
-            store.fetchReminders(matching: predicate.value) { c.resume(returning: ($0 ?? []).map(Remote.init)) }
+            store.fetchReminders(matching: predicate) { c.resume(returning: ($0 ?? []).map(Remote.init)) }
         }
     }
 
@@ -405,7 +411,7 @@ final class RemindersSync {
                 var removed = false
                 if remoteDeletes <= Self.maxRemoteDeletes {
                     do { try store.removeCalendar(cal, commit: true); removed = true }
-                    catch { log.error("list delete failed: \(error.localizedDescription, privacy: .public)") }
+                    catch { log.error("list delete failed: \((error as NSError).code, privacy: .public)") }
                 }
                 if !removed { listsToRetry.insert(id); continue }
             }
@@ -526,7 +532,7 @@ final class RemindersSync {
                 var removed = false
                 if remoteDeletes <= Self.maxRemoteDeletes, let ek = store.calendarItem(withIdentifier: r.id) as? EKReminder {
                     do { try store.remove(ek, commit: true); removed = true }
-                    catch { log.error("reminder delete failed: \(error.localizedDescription, privacy: .public)") }
+                    catch { log.error("reminder delete failed: \((error as NSError).code, privacy: .public)") }
                 }
                 if removed {
                     base.remove(r.id)
@@ -673,11 +679,13 @@ extension RemindersSync {
         return args[i + 1]
     }
 
-    private func debugAllReminders() async -> [Unchecked<EKReminder>] {
+    private func debugAllReminderIDs() async -> [String] {
         let store = self.store
-        let predicate = Unchecked(store.predicateForReminders(in: nil))
-        return await withCheckedContinuation { c in
-            store.fetchReminders(matching: predicate.value) { c.resume(returning: ($0 ?? []).map(Unchecked.init)) }
+        let predicate = store.predicateForReminders(in: nil)
+        return await withCheckedContinuation { continuation in
+            store.fetchReminders(matching: predicate) { reminders in
+                continuation.resume(returning: (reminders ?? []).map(\.calendarItemIdentifier))
+            }
         }
     }
 
@@ -685,7 +693,8 @@ extension RemindersSync {
         let ops = Self.debugOps("-uiTestingAppleOp")
         guard !ops.isEmpty else { return }
         for op in ops {
-            let all = await debugAllReminders().map(\.value)
+            let ids = await debugAllReminderIDs()
+            let all = ids.compactMap { store.calendarItem(withIdentifier: $0) as? EKReminder }
             let match = all.first { $0.title == op.title && !$0.isCompleted } ?? all.first { $0.title == op.title }
             debugApply(op, to: match)
         }
@@ -742,9 +751,9 @@ extension RemindersSync {
         }
         // A fresh EventKit store verifies the committed backend, not the object just mutated by the action.
         let verifyingStore = EKEventStore()
-        let predicate = Unchecked(verifyingStore.predicateForReminders(in: nil))
+        let predicate = verifyingStore.predicateForReminders(in: nil)
         let all: [Remote] = await withCheckedContinuation { c in
-            verifyingStore.fetchReminders(matching: predicate.value) { c.resume(returning: ($0 ?? []).map(Remote.init)) }
+            verifyingStore.fetchReminders(matching: predicate) { c.resume(returning: ($0 ?? []).map(Remote.init)) }
         }
         let apple = all.filter { $0.title.hasPrefix(prefix) }
         debugAppleDump = apple.map { line($0.title, $0.isDone, $0.due, $0.repeatRule) }.sorted().joined(separator: ";")
