@@ -147,31 +147,6 @@ public enum Preferences {
     public static func newAlarmSoundName(_ defaults: UserDefaults = .standard) -> String {
         defaults.string(forKey: newAlarmSoundKey) ?? newAlarmSound
     }
-
-    // MARK: UI tests
-
-    /// `-uiTesting` starts from the defaults (the in-memory store does not reset `UserDefaults`, so a switch flipped in one
-    /// test would leak into the next), then `-uiTestingPrefs key=value,key=value` sets what a test needs
-    /// (`dimPastDays=0`). Keys are the part after `today.setting.`. `-uiTestingKeepPreferences` skips the reset (the relaunch check).
-    public static func applyLaunchOverride(arguments: [String] = ProcessInfo.processInfo.arguments, defaults: UserDefaults = .standard) {
-        guard arguments.contains("-uiTesting"), !arguments.contains("-uiTestingKeepPreferences") else { return }
-        for key in allKeys { defaults.removeObject(forKey: key) }
-        guard let i = arguments.firstIndex(of: "-uiTestingPrefs"), i + 1 < arguments.count else { return }
-        for pair in arguments[i + 1].split(separator: ",") {
-            let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
-            guard parts.count == 2 else { continue }
-            let key = "today.setting." + parts[0]
-            guard allKeys.contains(key) else { continue }
-            if let n = Int(parts[1]) {
-                // 0 / 1 are switches, other numbers are hours or minutes; a switch key reads Bool, so store both ways.
-                if switchKeys.contains(key) { defaults.set(n != 0, forKey: key) } else { defaults.set(n, forKey: key) }
-            } else {
-                defaults.set(parts[1], forKey: key)
-            }
-        }
-    }
-
-    private static let switchKeys: Set<String> = [dimPastDaysKey, weekNumbersKey, showTomorrowKey, showFreeTimeKey, suggestTimesKey, askSuggestionsKey]
 }
 
 extension Calendar {

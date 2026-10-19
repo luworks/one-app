@@ -44,11 +44,4 @@ public enum Appearance: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// UI tests: `-appearance light|dark|system` sets the choice at launch; without it a `-uiTesting` run starts on System,
-    /// unless `-uiTestingKeepAppearance` is passed (the relaunch check of the saved choice). Returns the value to store, if any.
-    public static func launchOverride(arguments: [String]) -> Appearance? {
-        guard arguments.contains("-uiTesting") else { return nil }
-        if let i = arguments.firstIndex(of: "-appearance"), i + 1 < arguments.count, let a = Appearance(rawValue: arguments[i + 1]) { return a }
-        return arguments.contains("-uiTestingKeepAppearance") ? nil : .system
-    }
 }
