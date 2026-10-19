@@ -72,7 +72,7 @@ def ui_command(selected, simulator, derived, output, test_products=None):
             "-destination", f"platform=iOS Simulator,id={simulator}",
             "-derivedDataPath", str(derived), "-resultBundlePath", str(output / "ui.xcresult"),
             "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
-            "-maximum-parallel-testing-workers", "1", "-test-iterations", "1", "-collect-test-diagnostics", "never",
+            "-maximum-parallel-testing-workers", "1",
             *["-only-testing:" + value for value in selected]]
 
 

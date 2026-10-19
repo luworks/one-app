@@ -157,7 +157,8 @@ class RunnerIntegration(unittest.TestCase):
         self.assertEqual(command[command.index('-project') + 1], 'Today.xcodeproj')
         self.assertEqual(command[command.index('-scheme') + 1], 'Today')
         self.assertIn('-only-testing:TodayUITests/JourneyTests/testJ3_completeAndUndo', command)
-        self.assertEqual(command[command.index('-test-iterations') + 1], '1')
+        self.assertNotIn('-retry-tests-on-failure', command)
+        self.assertNotIn('-test-iterations', command)
 
     def test_unit_plan_never_schedules_a_simulator(self):
         r = self.runner
