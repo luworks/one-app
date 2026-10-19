@@ -1,43 +1,62 @@
 #if os(iOS)
 import Foundation
 import SwiftData
+import EventKit
+import UserNotifications
+import WidgetKit
+import TodayCore
+import TodayData
+import TodayShared
+import TodayPlatform
 
-/// The one data store. The app and its App Intents (Siri, Shortcuts, Spotlight run them in this process) share it,
-/// whichever of them asks first.
+/// Framework boundary shared by the live app and its App Intents, whichever starts first.
 @MainActor
 public enum OneStore {
-    private static var started = false
+    public static var container: ModelContainer { session.container }
 
-    /// Opens the store and hooks up notifications and Apple Reminders sync, once per process.
     @discardableResult
-    public static func start() -> ModelContainer {
-        if !started {
-            started = true
-            Reminders.shared.configure(container)
-            RemindersSync.shared.configure(container)
-            WidgetFeed.configure(container)
-        }
-        return container
-    }
+    public static func start() -> ModelContainer { session.container }
 
-    public static let container: ModelContainer = {
+    package static let session: PlannerSession = {
         do {
-            // UI tests launch with -uiTesting: a fresh in-memory store with the sample data.
-            // -dataset <path> (with -uiTesting) loads tests/fixtures/today-dataset.json instead of the sample data.
-            // -uiTestingStore <name> keeps the test store in a file, so a second launch can see what the first one saved.
-            let args = ProcessInfo.processInfo.arguments
-            let testing = args.contains("-uiTesting")
-            let inMemory = testing
-            let configuration: ModelConfiguration
-            if testing, let i = args.firstIndex(of: "-uiTestingStore"), i + 1 < args.count {
-                configuration = ModelConfiguration(url: FileManager.default.temporaryDirectory.appending(path: "\(args[i + 1]).store"))
-            } else {
-                configuration = ModelConfiguration(isStoredInMemoryOnly: inMemory)
+            let defaults = UserDefaults.standard
+            let runtime = PlannerRuntime(now: { Date.now }, nextID: { UUID() },
+                                         calendar: .current, locale: .current)
+            // Preserve the installed store's module, schema and default configuration identity.
+            let container = try ModelContainer(for: OneTask.self, OneEvent.self, OneAlarm.self, OneList.self,
+                                               Habit.self, ChatThread.self, LedgerEntry.self, AIGrant.self,
+                                               ShareImportReceipt.self, configurations: ModelConfiguration())
+            let calendar = CalendarSync(defaults: defaults, runtime: runtime, arguments: [], makeStore: { EKEventStore() })
+            let reminders = RemindersSync(defaults: defaults, runtime: runtime, arguments: [], makeStore: { EKEventStore() })
+            let driver = Ringer(defaults: defaults, runtime: runtime)
+            let alarms = AlarmCenter(driver: driver)
+            let timers = TimerController(defaults: defaults, runtime: runtime, driver: driver,
+                                         donate: { TimerIntentSupport.donate(seconds: $0) })
+            let store = try ActivityStore.openOrRecover(at: ActivityStore.defaultURL())
+            let activity = ActivityCenter(store: store, defaults: defaults, runtime: runtime)
+            let ledger = Ledger(activity: activity, reminders: reminders, runtime: runtime)
+            let notifications = Reminders(center: .current(), alarms: alarms, reminders: reminders,
+                                          ledger: ledger, runtime: runtime)
+            let travel = TravelTimes(defaults: defaults, runtime: runtime)
+            let sound = SoundPreview()
+            let actions = PlannerActions(calendar: calendar, reminders: reminders, alarms: alarms,
+                                         ledger: ledger, runtime: runtime)
+            let widget = WidgetFeed(container: container, calendar: calendar, reminders: reminders,
+                                    runtime: runtime, enabled: true,
+                                    travel: { travel.widgetFields(eventID: $0, start: $1, isAllDay: $2, place: $3, now: $4) },
+                                    save: { $0.save() }, reload: { WidgetCenter.shared.reloadAllTimelines() })
+            reminders.configure(container, ledger: ledger)
+            notifications.configure(container)
+            widget.registerBackgroundRefresh()
+            return PlannerSession(container: container, defaults: defaults, runtime: runtime, calendar: calendar,
+                                  reminders: reminders, alarms: alarms, timers: timers, notifications: notifications,
+                                  activity: activity, ledger: ledger, actions: actions, travel: travel,
+                                  soundPreview: sound, widget: widget, inbox: FileShareInbox(url: ShareInbox.fileURL)) {
+                calendar.dispose(); reminders.dispose(); notifications.dispose(); travel.dispose(); sound.stop()
+                ledger.dispose(); activity.dispose()
             }
-            return try ModelContainer(for: OneTask.self, OneEvent.self, OneAlarm.self, OneList.self, Habit.self, ChatThread.self,
-                                      LedgerEntry.self, AIGrant.self, ShareImportReceipt.self,
-                                      configurations: configuration)
         } catch {
+            // Never replace or delete the SwiftData store when opening fails.
             fatalError("Could not open the data store: \(error)")
         }
     }()

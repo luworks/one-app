@@ -35,9 +35,9 @@ public struct AddReminderIntent: AppIntent {
         }
         let context = OneStore.start().mainContext
         // A task without an alarm request always becomes a `OneTask`; the save also queues the Apple Reminders sync.
-        capture.insert(into: context, actor: .siri, channel: .intent)
-        ActivityCenter.record(ActivityEvents.intentRun(name: "add_reminder", outcome: "ok"))
-        await Reminders.shared.resync()
+        try capture.insert(into: context, actor: .siri, channel: .intent, ledger: OneStore.session.ledger, runtime: OneStore.session.runtime)
+        OneStore.session.activity.record(ActivityEvents.intentRun(name: "add_reminder", outcome: "ok"))
+        await OneStore.session.notifications.resync()
         IntentSupport.refreshWidgets(context)
         return .result(dialog: "Added “\(capture.title)”. \(capture.summary).")
     }
@@ -55,7 +55,7 @@ public struct WhatsNextIntent: AppIntent {
         let context = OneStore.start().mainContext
         let now = Date.now
         let next = NextItems.select(from: IntentSupport.widgetItems(context, now: now), now: now)
-        ActivityCenter.record(ActivityEvents.intentRun(name: "whats_next", outcome: "ok"))
+        OneStore.session.activity.record(ActivityEvents.intentRun(name: "whats_next", outcome: "ok"))
         return .result(dialog: "\(NextUpSpeech.line(next, now: now))", view: NextUpSnippet(next: next, now: now))
     }
 }
@@ -84,16 +84,16 @@ struct IntentMessage: Error, CustomLocalizedStringResourceConvertible {
 enum IntentSupport {
     /// The widget's items for today and tomorrow, from the store and Apple Calendar.
     static func widgetItems(_ context: ModelContext, now: Date) -> [WidgetItem] {
-        CalendarSync.shared.prepare()
+        OneStore.session.calendar.prepare()
         let (tasks, events, alarms) = fetch(context)
-        return WidgetFeed.items(tasks: tasks, events: events, alarms: alarms, now: now, calendar: .current)
+        return OneStore.session.widget.items(tasks: tasks, events: events, alarms: alarms, now: now, calendar: OneStore.session.runtime.calendar)
     }
 
     /// After a change made with the app closed, the widgets still show it.
     static func refreshWidgets(_ context: ModelContext) {
-        CalendarSync.shared.prepare()
+        OneStore.session.calendar.prepare()
         let (tasks, events, alarms) = fetch(context)
-        WidgetFeed.update(tasks: tasks, events: events, alarms: alarms)
+        OneStore.session.widget.update(tasks: tasks, events: events, alarms: alarms, now: OneStore.session.runtime.now(), calendar: OneStore.session.runtime.calendar)
     }
 
     /// Open tasks and alarms that are on: done tasks are never next, and their number only grows.

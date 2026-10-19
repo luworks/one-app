@@ -105,13 +105,13 @@ enum TimerIntentSupport {
 
     /// Starts a voice timer and returns what Siri says. Throws what went wrong (alarms not allowed, ...).
     static func start(seconds: Int, name: String?) async throws -> String {
-        let controller = TimerController.shared
+        let controller = OneStore.session.timers
         controller.refresh()
         guard let timer = await controller.start(seconds: seconds, label: name) else {
-            ActivityCenter.record(ActivityEvents.intentRun(name: "start_timer", outcome: "failed"))
+            OneStore.session.activity.record(ActivityEvents.intentRun(name: "start_timer", outcome: "failed"))
             throw IntentMessage(controller.message ?? "Couldn't start the timer.")
         }
-        ActivityCenter.record(ActivityEvents.intentRun(name: "start_timer", outcome: "ok"))
+        OneStore.session.activity.record(ActivityEvents.intentRun(name: "start_timer", outcome: "ok"))
         let label = TimerList.title(timer)
         return timer.label == nil ? "Timer started for \(IntentTimer.spoken(seconds: seconds))."
                                   : "\(label) started for \(IntentTimer.spoken(seconds: seconds))."
@@ -159,7 +159,7 @@ enum TimerStateEnum: String {
 struct TimerEntityQuery: EntityStringQuery {
     @MainActor
     func entities(matching string: String) async throws -> [TimerEntity] {
-        let controller = TimerController.shared
+        let controller = OneStore.session.timers
         controller.refresh()
         let needle = string.lowercased()
         return controller.timers.filter { TimerList.title($0).lowercased().contains(needle) }
@@ -168,14 +168,14 @@ struct TimerEntityQuery: EntityStringQuery {
 
     @MainActor
     func entities(for identifiers: [UUID]) async throws -> [TimerEntity] {
-        let controller = TimerController.shared
+        let controller = OneStore.session.timers
         controller.refresh()
         return controller.timers.filter { identifiers.contains($0.id) }.map { TimerEntity($0, ringing: controller.ringing.contains($0.id)) }
     }
 
     @MainActor
     func suggestedEntities() async throws -> [TimerEntity] {
-        let controller = TimerController.shared
+        let controller = OneStore.session.timers
         controller.refresh()
         return controller.timers.map { TimerEntity($0, ringing: controller.ringing.contains($0.id)) }
     }
@@ -192,7 +192,7 @@ struct CreateTimerIntent {
         guard let seconds = IntentTimer.seconds(seconds: Int(duration.components.seconds)) else {
             throw IntentMessage("Timers can run from 1 second to \(IntentTimer.maxMinutes) minutes.")
         }
-        let controller = TimerController.shared
+        let controller = OneStore.session.timers
         controller.refresh()
         guard let timer = await controller.start(seconds: seconds, label: label) else {
             throw IntentMessage(controller.message ?? "Couldn't start the timer.")
@@ -207,7 +207,7 @@ struct PauseTimerIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        TimerController.shared.pause(timer.id)
+        OneStore.session.timers.pause(timer.id)
         return .result()
     }
 }
@@ -218,7 +218,7 @@ struct ResumeTimerIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        TimerController.shared.resume(timer.id)
+        OneStore.session.timers.resume(timer.id)
         return .result()
     }
 }
@@ -229,7 +229,7 @@ struct CancelTimerIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        for id in entities.map(\.id) { TimerController.shared.cancel(id) }
+        for id in entities.map(\.id) { OneStore.session.timers.cancel(id) }
         return .result()
     }
 }
