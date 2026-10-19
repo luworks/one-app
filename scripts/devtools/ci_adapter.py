@@ -190,6 +190,10 @@ def _checks(root, lane, output, run, report):
                 '-configuration', 'Release' if lane == 'release' else 'Debug', '-destination', 'generic/platform=iOS Simulator',
                 '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64',
                 'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO']
+        if lane == 'release':
+            maps = output / 'release-maps'
+            maps.mkdir()
+            argv += ['LD_GENERATE_MAP_FILE=YES', 'LD_MAP_FILE_PATH=' + str(maps / '$(TARGET_NAME)-$(PRODUCT_NAME).map')]
         result = run(root, argv, timeout=600, heavy=True)
         (output / 'command.log').write_text(Redactor()(Path(result.log).read_text()))
         report['cancelled'] += int(result.reason == 'cancelled')
@@ -227,12 +231,12 @@ def _checks(root, lane, output, run, report):
             from scripts.release import release
             try:
                 release.validate_resources(root, products)
+                release.bind_product_link_maps(root, products, maps, result.log)
+                release.validate_product_link_maps(root, products, maps, target_names=True)
             except release.Blocked as error:
                 raise ValueError('Release artifact resources rejected: ' + str(error)) from None
-            # The archive validator requires iPhoneOS archive structure, dSYMs,
-            # resources and executable-UUID-bound maps. Simulator product presence
-            # cannot satisfy it, and this lane does not authorize an archive.
-            report['errors'].append('release_exclusion_authority_unavailable: actual Release archive resources and UUID-bound link maps required')
+            # Actual Release simulator resources and executable-bound linker inputs
+            # are accepted here. Archive/signing/distribution retain separate gates.
         return
     # Keep pinned tool resolution, exact flags and path scope in commands.py.
     # Its execute() prints JSON receipts carrying the real retained log paths.
@@ -332,7 +336,7 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
                 raise ValueError('runner writers or owned simulator shutdown not closed')
             close_producer(output, report, roots=(
                 'selection.json', 'accepted-selection.json', 'command.log',
-                'test-report.json', 'native', 'runner', 'release-graph.json', 'release-graph'))
+                'test-report.json', 'native', 'runner', 'release-graph.json', 'release-graph', 'release-maps'))
         except (OSError, ValueError, KeyError, TypeError) as error:
             report.pop('artifact_provenance', None)
             report['status'] = 'failed'

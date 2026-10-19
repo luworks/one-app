@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 import sys
 import time
+import uuid
 
 from .bootstrap import bootstrap as bootstrap_tools, BootstrapError
 from .core import (atomic_json, dd_lock, derived_data, fingerprint, host_lock,
@@ -78,6 +79,11 @@ def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=F
         current = fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64')
         from .resolve import locked_arguments
         command += locked_arguments(root)
+        maps = None
+        if configuration == 'Release' and scheme == 'Today':
+            maps = derived_data(root) / 'ReleaseMaps' / uuid.uuid4().hex
+            maps.mkdir(parents=True)
+            command += ['LD_GENERATE_MAP_FILE=YES', 'LD_MAP_FILE_PATH=' + str(maps / '$(TARGET_NAME)-$(PRODUCT_NAME).map')]
         result = execute(root, command, timeout=timeout)
         if result.returncode:
             return result.returncode
@@ -85,7 +91,15 @@ def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=F
         executable = derived_data(root) / f'Build/Products/{configuration}-iphonesimulator/{product}.app'
         if not executable.is_dir() or fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64') != current:
             raise ValueError('Missing executable or source changed during build; provenance rejected')
-        record_build(root, current, [executable], returncode=result.returncode)
+        products = [executable]
+        if maps is not None:
+            from scripts.release import release
+            release.validate_resources(root, executable)
+            release.bind_product_link_maps(root, executable, maps, result.log)
+            release.validate_product_link_maps(root, executable, maps, target_names=True)
+            products += sorted(path for path in maps.iterdir() if path.is_file())
+            print(json.dumps({'release_maps': str(maps), 'exclusion': 'actual_simulator_products', 'signing': 'not_checked'}))
+        record_build(root, current, products, returncode=result.returncode)
     return 0
 
 

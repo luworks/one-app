@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import plistlib
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -351,13 +352,66 @@ def validate_link_maps(root, args, inventory_files):
     for name in PRODUCTS:
         relative = f'ReleaseEvidence/{name}.map'
         require(relative in inventory_files, 'link_map_missing')
-        lines = (args.archive / relative).read_text().splitlines()
-        bundle = args.archive / 'Products/Applications/One.app'
+    validate_product_link_maps(root, args.archive / 'Products/Applications/One.app',
+                               args.archive / 'ReleaseEvidence')
+
+
+def bind_product_link_maps(root, app, maps, log):
+    """Bind Xcode 27 maps (which omit UUID headers) to this completed real link command."""
+    text = log.read_text()
+    for name, target in {'One': 'Today', 'TodayWidgets': 'TodayWidgets', 'ShareExtension': 'TodayShare'}.items():
+        binary = app / name if name == 'One' else app / 'PlugIns' / (name + '.appex') / name
+        linked_binary = binary if name == 'One' else app.parent / (name + '.appex') / name
+        require(linked_binary.is_file() and sha(linked_binary) == sha(binary), 'embedded_executable_mismatch')
+        path = maps / (target + '-' + name + '.map')
+        require(path.is_file() and not path.is_symlink(), 'link_map_missing')
+        matched = False
+        for line in text.splitlines():
+            if str(path) not in line or str(linked_binary) not in line:
+                continue
+            try:
+                args = shlex.split(line)
+                index = args.index('-map')
+                output = args.index('-o')
+                matched = args[index + 1:index + 3] == ['-Xlinker', str(path)] and args[output + 1] == str(linked_binary)
+            except (ValueError, IndexError):
+                continue
+            if matched:
+                break
+        require(matched, 'completed_link_command_missing')
+        headers = path.read_text().splitlines()
+        require('# Path: ' + str(linked_binary) in headers and '# Arch: arm64' in headers, 'link_map_product_mismatch')
+        receipt = {'schema': 1, 'map_sha256': sha(path), 'executable_sha256': sha(binary),
+                   'uuids': sorted(uuids(binary, root)), 'build_log_sha256': sha(log)}
+        path.with_suffix('.map.json').write_text(json.dumps(receipt, sort_keys=True) + '\n')
+
+
+def validate_product_link_maps(root, app, maps, *, target_names=False):
+    """Bind each retained link map to its actual executable, including simulator products.
+
+    This proves linked production inputs. It does not establish archive/signing readiness.
+    """
+    for name in PRODUCTS:
+        target = {'One': 'Today', 'TodayWidgets': 'TodayWidgets', 'ShareExtension': 'TodayShare'}[name]
+        path = maps / ((target + '-' if target_names else '') + name + '.map')
+        require(path.is_file() and not path.is_symlink(), 'link_map_missing')
+        lines = path.read_text().splitlines()
+        bundle = app
         if name != 'One':
             bundle = bundle / f'PlugIns/{name}.appex'
         map_ids = [line.removeprefix('# UUID: ').upper() for line in lines if line.startswith('# UUID: ')]
-        require(len(map_ids) == 1 and map_ids[0] in {uid for uid, _ in uuids(bundle / name, root)},
-                'link_map_executable_uuid_mismatch')
+        if target_names:
+            receipt_path = path.with_suffix('.map.json')
+            require(receipt_path.is_file() and not receipt_path.is_symlink(), 'link_receipt_missing')
+            receipt = json.loads(receipt_path.read_text())
+            require(receipt.get('schema') == 1 and receipt.get('map_sha256') == sha(path)
+                    and receipt.get('executable_sha256') == sha(bundle / name)
+                    and receipt.get('uuids') == [list(value) for value in sorted(uuids(bundle / name, root))]
+                    and bool(re.fullmatch('[0-9a-f]{64}', receipt.get('build_log_sha256', ''))),
+                    'link_receipt_product_mismatch')
+        else:
+            require(len(map_ids) == 1 and map_ids[0] in {uid for uid, _ in uuids(bundle / name, root)},
+                    'link_map_executable_uuid_mismatch')
         require('# Object files:' in lines and '# Sections:' in lines, 'invalid_link_map')
         objects = lines[lines.index('# Object files:') + 1:lines.index('# Sections:')]
         require(bool(objects), 'empty_link_map')

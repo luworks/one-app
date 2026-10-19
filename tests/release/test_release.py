@@ -133,6 +133,35 @@ class ReleaseTests(unittest.TestCase):
         self.f.reseal()
         self.blocked('development_artifact_in_archive', self.validate)
 
+    def test_xcode_maps_require_the_completed_link_and_reject_changed_products(self):
+        import shlex
+        app = self.f.args.archive / 'Products/Applications/One.app'
+        maps = self.f.root / 'current-maps'
+        maps.mkdir()
+        log = self.f.root / 'completed.log'
+        lines = []
+        for name, target in {'One': 'Today', 'TodayWidgets': 'TodayWidgets', 'ShareExtension': 'TodayShare'}.items():
+            binary = app / name if name == 'One' else app / 'PlugIns' / (name + '.appex') / name
+            linked_binary = binary if name == 'One' else app.parent / (name + '.appex') / name
+            linked_binary.parent.mkdir(parents=True, exist_ok=True)
+            linked_binary.write_bytes(binary.read_bytes())
+            path = maps / (target + '-' + name + '.map')
+            path.write_text('# Path: ' + str(linked_binary) + '\n# Arch: arm64\n# Object files:\n[  0] linker synthesized\n[  1] /build/One.o\n# Sections:\n')
+            lines.append('clang -Xlinker -map -Xlinker ' + shlex.quote(str(path)) + ' -o ' + shlex.quote(str(linked_binary)))
+        log.write_text('build succeeded without linking these products')
+        self.blocked('completed_link_command_missing', lambda: r.bind_product_link_maps(self.f.root, app, maps, log))
+        log.write_text('\n'.join(lines))
+        r.bind_product_link_maps(self.f.root, app, maps, log)
+        r.validate_product_link_maps(self.f.root, app, maps, target_names=True)
+        binary = app / 'One'
+        original = binary.read_bytes()
+        binary.write_bytes(original + b'changed')
+        self.blocked('link_receipt_product_mismatch', lambda: r.validate_product_link_maps(self.f.root, app, maps, target_names=True))
+        binary.write_bytes(original)
+        path = maps / 'Today-One.map'
+        path.write_text(path.read_text() + '\nchanged')
+        self.blocked('link_receipt_product_mismatch', lambda: r.validate_product_link_maps(self.f.root, app, maps, target_names=True))
+
     def test_missing_local_executable_or_dsym_still_blocks(self):
         binary = self.f.args.archive / 'Products/Applications/One.app/One'
         binary.unlink()
@@ -350,7 +379,8 @@ def build_app(**options)
   path = options[:archive_path]
   FileUtils.mkdir(path)
   %w[One TodayWidgets ShareExtension].each do |name|
-    File.write(File.join(path + '.linkmaps', name + '.map'), 'synthetic')
+    target = {'One' => 'Today', 'TodayWidgets' => 'TodayWidgets', 'ShareExtension' => 'TodayShare'}.fetch(name)
+    File.write(File.join(path + '.linkmaps', target + '-' + name + '.map'), 'synthetic')
   end
 end
 $lanes[:archive_local].call(commit: 'a' * 40, version: '1.2.3', build: '42', archive: ARGV[1])

@@ -110,7 +110,7 @@ def close_producer(output, report, *, roots):
             if not candidate.is_file():
                 raise ValueError('unsupported producer entry')
             in_bundle = any(part.endswith('.xcresult') for part in candidate.relative_to(output).parts)
-            if not in_bundle and (candidate.suffix not in ('.log', '.txt', '.json', '.jsonl', '.crash', '.ips', '.png')
+            if not in_bundle and (candidate.suffix not in ('.log', '.txt', '.json', '.jsonl', '.crash', '.ips', '.png', '.map')
                                   or any(part.startswith('.') for part in Path(rel).parts)):
                 raise ValueError('unexpected generated artifact')
             data = candidate.read_bytes()
@@ -212,7 +212,7 @@ def stage(source, destination, sha, lane):
             raise ValueError('invalid or duplicate artifact inventory entry')
         in_bundle = any(path.is_relative_to(bundle) for bundle in bundle_paths)
         if not in_bundle and (any(p.endswith('.xcresult') or p.startswith('.') for p in Path(relative).parts)
-                              or path.suffix not in ('.log', '.txt', '.json', '.jsonl', '.crash', '.ips', '.png')):
+                              or path.suffix not in ('.log', '.txt', '.json', '.jsonl', '.crash', '.ips', '.png', '.map')):
             raise ValueError('artifact outside allowed generated evidence')
         if (type(entry.get('bytes')) is not int or entry['bytes'] < 0
                 or not isinstance(entry.get('sha256'), str)
@@ -247,7 +247,7 @@ def stage(source, destination, sha, lane):
         if in_bundle and bundle_secret(data):
             raise ValueError('blocking secret in closed bundle; publication rejected')
         transformation = 'identity'
-        if not in_bundle and path.suffix in ('.log', '.txt', '.json', '.jsonl', '.crash', '.ips'):
+        if not in_bundle and path.suffix in ('.log', '.txt', '.json', '.jsonl', '.crash', '.ips', '.map'):
             data = sanitize(data.decode('utf-8')).encode('utf-8')
             transformation = 'sanitize-v1' if artifact_digest(data) != original else 'identity'
         target = destination / relative

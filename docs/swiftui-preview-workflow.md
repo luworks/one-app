@@ -1,4 +1,6 @@
-# SwiftUI preview workflow (development only)
+# Historical axe preview workflow (development only)
+
+The linked-module reconstruction supersedes the executable commands below. The former One.xcodeproj/ios/One preview entry is archival, not a supported current workflow. Use ./dev ui open, ./dev ui capture or ./dev ui gallery against the real Workbench registry. The axe accelerator has not been revalidated against the linked graph and is outside this frozen batch's acceptance claim. Do not run the historical commands as current instructions.
 
 ## Adopted scope
 

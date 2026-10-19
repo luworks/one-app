@@ -32,6 +32,7 @@ class AdapterTests(unittest.TestCase):
         sources = {
             'ios/SceneRegistryTests/SceneRegistryTests.swift': 'final class SceneRegistryTests: XCTestCase {\n func testRegistry() {}\n}',
             'ios/TodayIntegrationTests/StoreUpgradeTests.swift': 'struct StoreUpgradeTests {\n @Test func baselineStorePreservesAllFieldsAcrossReopenAndMutation() {}\n}',
+            'ios/TodayIntegrationTests/PlannerSessionTests.swift': 'struct PlannerSessionTests {\n @Test func isolatedSessionBehavior() {}\n}',
             'ios/TodaySnapshotTests/NativeSnapshotTests.swift': 'final class NativeSnapshotTests: XCTestCase {\n func testImage() {}\n}',
         }
         for selector in adapter.CORE_EXTRA + (
@@ -149,7 +150,7 @@ class AdapterTests(unittest.TestCase):
                         'commit', '-qm', 'Remove synthetic selector'], cwd=self.root, check=True, capture_output=True)
         self.sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=self.root, text=True).strip()
         self.assertEqual(self.invoke(lane='integration'), 1)
-        self.assertIn('Zero discovered tests', ' '.join(self.report()['errors']))
+        self.assertRegex(' '.join(self.report()['errors']), 'Zero discovered tests|Unknown selection: StoreUpgradeTests')
         self.assertEqual(self.calls, [])
 
     def test_ui_log_failure_survives_passing_tree(self):
@@ -230,7 +231,7 @@ class AdapterTests(unittest.TestCase):
                 self.output = Path(self.temporary.name) / lane
                 self.assertEqual(self.native(lane), 0)
                 validate_report(self.report(), self.sha, lane)
-                self.assertEqual(self.report()['executed'], 1)
+                self.assertEqual(self.report()['executed'], 2 if lane == 'integration' else 1)
                 copied = next((self.output / 'native').glob('*.xcresult/Data/binary'))
                 self.assertEqual(copied.read_bytes(), b'\x00opaque\xff')
                 entries = {entry['path'] for entry in self.report()['artifact_provenance']['files']}
@@ -315,7 +316,7 @@ class AdapterTests(unittest.TestCase):
         self.assertIn('Release', self.calls[0][0])
         self.assertIn('Release artifact resources rejected: required_privacy_manifest_missing', ' '.join(self.report()['errors']))
 
-    def test_release_source_and_resources_cannot_replace_actual_archive_link_maps(self):
+    def test_release_source_and_resources_cannot_replace_actual_product_link_maps(self):
         import plistlib
         dd = Path(self.temporary.name) / 'dd'
         products = dd / 'Build/Products/Release-iphonesimulator/One.app'
@@ -334,10 +335,39 @@ class AdapterTests(unittest.TestCase):
                 adapter, 'source_state', return_value='fixed'), patch(
                 'scripts.release.graph.check', return_value={'model_module': 'One'}):
             self.assertEqual(self.invoke(lane='release'), 1)
-        self.assertIn('release_exclusion_authority_unavailable', str(self.report()['errors']))
+        self.assertIn('link_map_missing', str(self.report()['errors']))
         self.assertTrue((self.output / 'release-graph.json').is_file())
         self.assertIn('protected-release', adapter.UNSUPPORTED)
         self.assertFalse(any('archive' in argv for argv, _ in self.calls))
+
+        # A completed Release link supplies three executable-bound maps. The
+        # same validator used by archive validation rejects changed UUIDs/inputs.
+        uid = '11111111-1111-1111-1111-111111111111'
+        def linked(root, argv, **options):
+            lines = []
+            if argv[0] == 'xcodebuild':
+                map_arg = next(x for x in argv if x.startswith('LD_MAP_FILE_PATH='))
+                folder = Path(map_arg.split('=', 1)[1]).parent
+                for name in ('One', 'TodayWidgets', 'ShareExtension'):
+                    target = {'One': 'Today', 'TodayWidgets': 'TodayWidgets', 'ShareExtension': 'TodayShare'}[name]
+                    path = folder / (target + '-' + name + '.map')
+                    binary = products / name if name == 'One' else products / 'PlugIns' / (name + '.appex') / name
+                    linked_binary = binary if name == 'One' else products.parent / (name + '.appex') / name
+                    linked_binary.parent.mkdir(parents=True, exist_ok=True)
+                    linked_binary.write_bytes(binary.read_bytes())
+                    path.write_text('# Path: ' + str(linked_binary) + '\n# Arch: arm64\n# Object files:\n[  1] /synthetic/One.o\n# Sections:\n')
+                    import shlex
+                    lines.append('clang -Xlinker -map -Xlinker ' + shlex.quote(str(path)) + ' -o ' + shlex.quote(str(linked_binary)))
+            return self.runner(raw='\n'.join(lines))(root, argv, **options)
+        with patch.object(adapter, 'derived_data', return_value=dd), patch.object(
+                adapter, 'source_state', return_value='fixed'), patch(
+                'scripts.release.graph.check', return_value={'model_module': 'One'}), patch(
+                'scripts.release.release.uuids', return_value=[(uid, 'arm64')]):
+            result_code = self.invoke(lane='release', output=self.output.parent / 'linked', runner=linked)
+            self.assertEqual(result_code, 0, (self.output.parent / 'linked/report.json').read_text())
+        result = json.loads((self.output.parent / 'linked/report.json').read_text())
+        self.assertEqual(result['executed'], 3)
+        self.assertEqual(result['status'], 'passed')
 
     def test_existing_report_never_overwritten(self):
         self.output.mkdir()

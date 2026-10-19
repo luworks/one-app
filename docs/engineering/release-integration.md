@@ -29,6 +29,12 @@ archive check separately inspects resource paths and linker object-file sections
 including static package members, and binds each map UUID to its actual executable.
 Symbol/string sections are ignored. Maps are local evidence, not remote attestations.
 
+## Current batch evidence boundary
+
+Xcode 27.1 / 27A9275 emits real linker maps without UUID headers. Release simulator checks bind each map to its completed linker command, exact output path and architecture, and retain map/executable hashes and actual Mach-O UUIDs. They compare linked and embedded extension bytes and inspect object-file paths and app resources. Local Release and hosted main Release use this authority; neither establishes iPhoneOS archive or signing acceptance.
+
+The archive validator's original UUID-header path has only synthetic coverage. An actual unsigned archive has not passed on this host; Xcode 27 map compatibility remains a blocker outside this batch's delivery claim. Do not describe archive-local/validate-local as validated release readiness. Signed archive/export/distribution and physical-device capabilities remain unverified and unauthorized. The optional offline scanner is unavailable, never a successful vulnerability scan.
+
 ## Three separate gates
 
 - `preflight-local`: clean exact commit, frozen tools/locks and source graph only.

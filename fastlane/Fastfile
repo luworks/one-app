@@ -57,7 +57,7 @@ def archive_release(options, local: false)
   UI.user_error!('Link map destination already exists') if File.exist?(maps)
   FileUtils.mkdir(maps)
   extra = ['-onlyUsePackageVersionsFromResolvedFile', 'LD_GENERATE_MAP_FILE=YES',
-           Shellwords.escape('LD_MAP_FILE_PATH=' + maps + '/$(PRODUCT_NAME).map')]
+           Shellwords.escape('LD_MAP_FILE_PATH=' + maps + '/$(TARGET_NAME)-$(PRODUCT_NAME).map')]
   extra << 'CODE_SIGNING_ALLOWED=NO' if local
   build_app(
     project: File.join(RELEASE_ROOT, 'ios/Today.xcodeproj'), scheme: 'Today',
@@ -71,9 +71,10 @@ def archive_release(options, local: false)
   evidence = File.join(path, 'ReleaseEvidence')
   FileUtils.mkdir(evidence)
   %w[One TodayWidgets ShareExtension].each do |product|
-    map = File.join(maps, product + '.map')
+    target = {'One' => 'Today', 'TodayWidgets' => 'TodayWidgets', 'ShareExtension' => 'TodayShare'}.fetch(product)
+    map = File.join(maps, target + '-' + product + '.map')
     UI.user_error!('Required linker map missing') unless File.file?(map)
-    FileUtils.cp(map, evidence)
+    FileUtils.cp(map, File.join(evidence, product + '.map'))
   end
   release_check(local ? 'seal-local' : 'seal', options.merge(archive: path))
   release_check(local ? 'validate-local' : 'validate', options.merge(archive: path))
