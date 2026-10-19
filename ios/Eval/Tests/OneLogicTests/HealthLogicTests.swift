@@ -44,6 +44,26 @@ final class HealthLogicTests: XCTestCase {
     XCTAssertEqual(nights[0].stages, [.rem, .core])
   }
 
+  func testDuplicateStagedSourcesCountEachInstantOnlyOnce() {
+    let sample = SleepInterval(start: date(15, 23), end: date(16, 7), stage: .core)
+    let nights = HealthMath.nights([sample, sample], count: 7, now: date(16, 9), calendar: cal)
+    XCTAssertEqual(nights.first?.asleep, 8 * 3600)
+    XCTAssertEqual(nights.first?.total(.core), 8 * 3600)
+  }
+
+  func testPlainAsleepFillsOnlyUncoveredStagedGapsAndAwakeTakesPrecedence() {
+    let intervals = [
+      SleepInterval(start: date(15, 23), end: date(16, 3), stage: .core),
+      SleepInterval(start: date(16, 3), end: date(16, 7), stage: .unspecified),
+    ]
+    let nights = HealthMath.nights(intervals, count: 7, now: date(16, 9), calendar: cal)
+    XCTAssertEqual(nights.first?.asleep, 8 * 3600, "unstaged coverage must survive outside the staged interval")
+    let awake = SleepInterval(start: date(16, 2), end: date(16, 2, 30), stage: .awake)
+    let interrupted = HealthMath.nights(intervals + [awake], count: 7, now: date(16, 9), calendar: cal)
+    XCTAssertEqual(interrupted.first?.asleep, 7.5 * 3600)
+    XCTAssertEqual(interrupted.first?.total(.awake), 30 * 60)
+  }
+
   func testDurationText() {
     XCTAssertEqual(HealthMath.duration(45 * 60), "45 min")
     XCTAssertEqual(HealthMath.duration(7 * 3600), "7 hr")

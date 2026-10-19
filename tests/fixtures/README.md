@@ -231,3 +231,9 @@ logs and closed hosted artifacts belong in the primary QA results directory.
 The same native provenance fixture covers compiler-module transport keys,
 Swift-source edits that still rebuild products, lock/configuration/toolchain
 partitioning, routine-only scope and primary-checkout paths for linked worktrees.
+
+### Health dashboard
+
+- `health-dashboard-ui.json`: deterministic launch scenarios consumed by `HealthMetricsTests`, including cross-category drag/relaunch, no-readable data and large type.
+- `health-records.json`: synthetic category events, workout sessions, paired blood pressure and profile values mirrored by the small inline `MockHealthSource` payload. Production never selects this source. These fixtures do not prove live HealthKit authorization, device coverage or every possible record combination.
+- `TodayTestSupport/HealthSampleSeries.swift` (package-bound inline generator): seeded 180-day series for the entire numeric catalog; missing mindful values and stale body-fat readings are deliberate. `HealthCatalogTests` covers canonical units, daily sums versus averages, category codes, overlap union and calendar-day/DST splitting.

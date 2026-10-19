@@ -1,7 +1,7 @@
 import XCTest
 
-/// The Health sheet as a compact metrics list (sample Health data under `-uiTesting`): the default rows, the detail with
-/// its 7 / 30 / 90 day switch, Add Metric, Hide and the order surviving a relaunch. The clock is pinned with `-uiTestingNow`.
+/// The Health dashboard under `-uiTesting`: global native reorder, persistence, visibility and chart detail.
+/// Synthetic history comes from HealthSampleSeries; scenario inputs are versioned in tests/fixtures.
 /// Mindful Minutes has no data in the sample (the "—" row) and Body Fat was last measured 12 days ago (a stale date).
 @MainActor
 final class HealthMetricsTests: XCTestCase {
@@ -9,7 +9,10 @@ final class HealthMetricsTests: XCTestCase {
     continueAfterFailure = false
     let app = XCUIApplication()
     app.launchArguments =
-      TestData.launchArguments + ["-uiTestingNow", "09:41", "-today.setting.healthSummary", "YES"]
+      TestData.launchArguments + [
+        "-uiTestingNow", "09:41", "-today.setting.healthSummary", "YES",
+        "-AppleLanguages", "(en)", "-AppleLocale", "en_US_POSIX",
+      ]
       + extra
     app.launch()
     return app
@@ -203,32 +206,180 @@ final class HealthMetricsTests: XCTestCase {
 
   // MARK: Order
 
-  func testOrderSurvivesARelaunch() {
-    var app = launch(["-uiTestingHealthMetrics", "steps,activeEnergy,daylight,sleep,weight"])
-    openSheet(app)
-    XCTAssertLessThan(
-      row(app, "activeEnergy").frame.minY, row(app, "daylight").frame.minY,
-      "starts with energy above daylight")
+  /// Drags the native List reorder handle, retaining geometry and hierarchy for diagnosis.
+  /// There is no preference injection or accessibility action standing in for the gesture.
+  private func dragMetric(
+    _ app: XCUIApplication, source: XCUIElement, above target: XCUIElement, name: String
+  ) {
+    XCTAssertTrue(source.exists && target.exists)
+    let sourceCell = app.cells.containing(.any, identifier: source.identifier).firstMatch
+    let sourceFrame = sourceCell.exists ? sourceCell.frame : source.frame
+    let targetFrame = target.frame
+    XCTAssertGreaterThan(sourceFrame.height, 0)
+    XCTAssertGreaterThan(targetFrame.height, 0)
+    let handles = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] 'Reorder'"))
+      .allElementsBoundByIndex
+    let nativeHandle = handles.first {
+      $0.frame.midY >= sourceFrame.minY && $0.frame.midY <= sourceFrame.maxY
+    }
+    let handleDescription = handles.map { "\($0.label): \($0.frame)" }.joined(separator: "\n")
+    let evidence = XCTAttachment(string:
+      "source=\(sourceFrame), target=\(targetFrame)\nNative handles:\n\(handleDescription)\n\(app.debugDescription)")
+    evidence.name = "\(name)-before-hierarchy"
+    evidence.lifetime = .keepAlways
+    add(evidence)
+    capture(app, "\(name)-before")
+    let origin = app.coordinate(withNormalizedOffset: .zero)
+    let handle: XCUICoordinate
+    if let nativeHandle {
+      handle = nativeHandle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    } else {
+      // Some runtimes omit the system handle from AX. Its fallback belongs to the List cell,
+      // whose trailing edge includes the handle; the content button's edge does not.
+      XCTAssertTrue(sourceCell.exists, "native handle fallback requires the containing List cell")
+      handle = origin.withOffset(CGVector(dx: sourceCell.frame.maxX - 22, dy: sourceCell.frame.midY))
+    }
+    let destination = origin.withOffset(
+      CGVector(dx: handle.screenPoint.x, dy: targetFrame.minY + 5))
+    handle.press(forDuration: 0.8, thenDragTo: destination)
+    capture(app, "\(name)-after")
+    XCTAssertFalse(app.buttons["health.detail.done"].exists, "drag must not navigate to detail")
+  }
 
-    row(app, "daylight").press(forDuration: 1.0)
-    let up = app.buttons["Move Up"]
-    XCTAssertTrue(up.waitForExistence(timeout: 3), "the long-press menu has Move Up")
-    up.tap()
+  private func capture(_ app: XCUIApplication, _ name: String) {
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = name
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
+  private func assertAbove(_ upper: XCUIElement, _ lower: XCUIElement, _ message: String) {
     let moved = XCTNSPredicateExpectation(
       predicate: NSPredicate { _, _ in
-        self.row(app, "daylight").frame.minY < self.row(app, "activeEnergy").frame.minY
+        upper.exists && lower.exists && upper.frame.minY < lower.frame.minY
       }, object: nil)
-    XCTAssertEqual(
-      XCTWaiter().wait(for: [moved], timeout: 5), .completed, "daylight moved above energy")
+    XCTAssertEqual(XCTWaiter().wait(for: [moved], timeout: 5), .completed, message)
+  }
+
+  private func dashboardArguments(_ scenario: String) throws -> [String] {
+    let data = try Data(contentsOf: URL(fileURLWithPath: TestData.fixturePath("health-dashboard-ui.json")))
+    let document = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let scenarios = try XCTUnwrap(document["scenarios"] as? [String: [String: Any]])
+    let input = try XCTUnwrap(scenarios[scenario])
+    return try XCTUnwrap(input["launchArguments"] as? [String])
+  }
+
+  func testOrderSurvivesARelaunch() throws {
+    var app = launch(try dashboardArguments("crossGroupOrder"))
+    openSheet(app)
+    assertAbove(row(app, "steps"), row(app, "weight"), "Steps initially precedes Weight")
+    app.buttons["health.customize"].tap()
+    XCTAssertEqual(app.buttons["health.customize"].label, "Done Customizing")
+    dragMetric(app, source: row(app, "weight"), above: row(app, "steps"), name: "weight-above-steps")
+    app.buttons["health.customize"].tap()
+    assertAbove(row(app, "weight"), row(app, "steps"), "Weight crosses former Body / Activity boundaries")
+    app.buttons["Done"].tap()
+    openSheet(app)
+    assertAbove(row(app, "weight"), row(app, "steps"), "dismissal preserves global order")
     app.terminate()
 
-    // The same data and clock, but keep what the first launch saved (no -uiTestingHealthMetrics).
     app = launch(["-uiTestingKeepHealthMetrics"])
     openSheet(app)
-    XCTAssertTrue(row(app, "daylight").waitForExistence(timeout: 5))
-    XCTAssertLessThan(
-      row(app, "daylight").frame.minY, row(app, "activeEnergy").frame.minY, "the order was saved")
-    XCTAssertLessThan(row(app, "steps").frame.minY, row(app, "daylight").frame.minY)
+    assertAbove(row(app, "weight"), row(app, "steps"), "relaunch preserves global order")
+    row(app, "weight").tap()
+    XCTAssertTrue(app.buttons["health.range.90"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.navigationBars["Weight"].exists, "reordered row retains its detail")
+  }
+
+  func testManageMetricsReordersAndSearchesHiddenMetrics() throws {
+    let app = launch(try dashboardArguments("crossGroupOrder"))
+    openSheet(app)
+    app.buttons["health.add"].tap()
+    let weight = app.descendants(matching: .any)["health.pick.row.weight"].firstMatch
+    let steps = app.descendants(matching: .any)["health.pick.row.steps"].firstMatch
+    XCTAssertTrue(weight.waitForExistence(timeout: 5))
+    app.buttons["health.pick.customize"].tap()
+    dragMetric(app, source: weight, above: steps, name: "manage-weight-above-steps")
+    app.buttons["health.pick.customize"].tap()
+    assertAbove(weight, steps, "Manage Metrics uses the same global order")
+    let search = app.searchFields["Search Metrics"]
+    XCTAssertTrue(search.exists)
+    search.tap()
+    search.typeText("Mindful")
+    let mindful = app.switches["health.pick.mindfulMinutes"]
+    XCTAssertTrue(mindful.waitForExistence(timeout: 5), "hidden metrics are discoverable by search")
+    XCTAssertEqual(mindful.value as? String, "0")
+    mindful.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+    XCTAssertEqual(mindful.value as? String, "1")
+    app.buttons["health.pick.add"].tap()
+    XCTAssertTrue(row(app, "mindfulMinutes").waitForExistence(timeout: 5))
+    assertAbove(row(app, "weight"), row(app, "steps"), "picker order is committed to the dashboard")
+    app.buttons["health.add"].tap()
+    XCTAssertEqual(app.switches["health.pick.mindfulMinutes"].value as? String, "1")
+    app.buttons["health.pick.add"].tap()
+  }
+
+  func testNoReadableMetricKeepsOtherDataAndExplainsEmptyDetail() throws {
+    let app = launch(try dashboardArguments("noReadableMetric"))
+    openSheet(app)
+    let mindful = row(app, "mindfulMinutes")
+    XCTAssertTrue(mindful.waitForExistence(timeout: 5))
+    XCTAssertTrue(mindful.label.contains("No data"), mindful.label)
+    XCTAssertFalse(mindful.label.localizedCaseInsensitiveContains("denied"))
+    XCTAssertTrue(row(app, "steps").label.contains("steps"), "one empty metric does not hide readable data")
+    mindful.tap()
+    XCTAssertTrue(app.staticTexts["No data in the last 30 days."].waitForExistence(timeout: 5))
+    app.buttons["health.range.90"].tap()
+    XCTAssertTrue(app.staticTexts["No data in the last 90 days."].waitForExistence(timeout: 5))
+    app.buttons["health.detail.done"].tap()
+    XCTAssertTrue(row(app, "steps").waitForExistence(timeout: 5))
+  }
+
+  func testLargeTypeKeepsCustomizationAndDetailReachable() throws {
+    let app = launch(try dashboardArguments("largeType"))
+    openSheet(app)
+    let customize = app.buttons["health.customize"]
+    XCTAssertTrue(customize.isHittable)
+    customize.tap()
+    XCTAssertEqual(customize.label, "Done Customizing")
+    XCTAssertGreaterThanOrEqual(row(app, "steps").frame.height, 44)
+    XCTAssertFalse(row(app, "steps").isEnabled, "customizing cannot accidentally open detail")
+    capture(app, "health-large-type-customizing")
+    customize.tap()
+    row(app, "steps").tap()
+    XCTAssertTrue(app.buttons["health.range.90"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["health.detail.done"].isHittable)
+  }
+
+  func testHealthEventRecordsReadOnlyAfterUserAction() throws {
+    let data = try Data(contentsOf: URL(fileURLWithPath: TestData.fixturePath("health-records.json")))
+    let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let families = try XCTUnwrap(fixture["families"] as? [String: [String: Any]])
+    let categories = try XCTUnwrap(families["categories"])
+    let expectedLabels = try XCTUnwrap(categories["expectedLabels"] as? [String])
+    let app = launch()
+    openSheet(app)
+    let records = app.buttons["health.records"]
+    for _ in 0..<3 where !records.isHittable { app.swipeUp() }
+    XCTAssertTrue(records.waitForExistence(timeout: 5))
+    records.tap()
+    let events = app.buttons["health.records.categories"]
+    XCTAssertTrue(events.waitForExistence(timeout: 5))
+    events.tap()
+    let read = app.buttons["health.records.read"]
+    XCTAssertTrue(read.waitForExistence(timeout: 5))
+    XCTAssertEqual(read.label, "Read Health Events")
+    XCTAssertFalse(app.staticTexts["Handwashing"].exists, "opening a family does not read its records")
+    read.tap()
+    XCTAssertTrue(app.staticTexts["Stand Hour"].waitForExistence(timeout: 5))
+    XCTAssertEqual(read.label, "Refresh")
+    for title in expectedLabels {
+      let record = app.staticTexts[title]
+      for _ in 0..<3 where !record.isHittable { app.swipeUp() }
+      XCTAssertTrue(record.exists, "typed category record: \(title)")
+    }
+    XCTAssertFalse(app.staticTexts["health.records.error"].exists)
+    capture(app, "health-events-synthetic-records")
   }
 
   func testStaleReadingShowsItsDateNotToday() {

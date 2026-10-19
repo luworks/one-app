@@ -52,35 +52,33 @@ final class HealthMetricsTests: XCTestCase {
 
   // MARK: Selection
 
-  func testGroupsListShownMetricsByGroupThenUserOrder() {
+  func testCategoriesDoNotChangeGlobalOrder() {
     var s = HealthSelection.default
     s.add([.daylight, .bodyFat, .activeEnergy, .steps])
     XCTAssertEqual(
       s.shown, [.steps, .sleep, .weight, .daylight, .bodyFat, .activeEnergy],
       "no duplicates, added at the end")
-    XCTAssertEqual(s.ordered, [.steps, .daylight, .activeEnergy, .sleep, .weight, .bodyFat])
+    XCTAssertEqual(s.ordered, s.shown)
     XCTAssertEqual(s.groups.map(\.group), [.activity, .recovery, .body])
     s.hide(.sleep)
     XCTAssertEqual(s.groups.map(\.group), [.activity, .body], "an empty group is not listed")
     XCTAssertTrue(s.hidden.contains(.sleep))
   }
 
-  func testMoveStaysInsideTheGroup() {
-    var s = HealthSelection(shown: [.steps, .sleep, .daylight, .weight, .activeEnergy])
-    s.move(in: .activity, from: [2], to: 0)  // activeEnergy to the top of Activity
-    XCTAssertEqual(s.metrics(in: .activity), [.activeEnergy, .steps, .daylight])
-    XCTAssertEqual(
-      s.shown.filter { $0.group != .activity }, [.sleep, .weight], "other groups did not move")
-    s.nudge(.activeEnergy, by: 1)
-    XCTAssertEqual(s.metrics(in: .activity), [.steps, .activeEnergy, .daylight])
-    s.nudge(.steps, by: -1)
-    XCTAssertEqual(
-      s.metrics(in: .activity), [.steps, .activeEnergy, .daylight], "the first cannot go up")
-    s.nudge(.daylight, by: 1)
-    XCTAssertEqual(
-      s.metrics(in: .activity), [.steps, .activeEnergy, .daylight], "the last cannot go down")
-    s.move(in: .activity, from: [0], to: 3)  // to the end
-    XCTAssertEqual(s.metrics(in: .activity), [.activeEnergy, .daylight, .steps])
+  func testMoveCrossesCategoriesAndNudgesUseGlobalOrder() {
+    var selection = HealthSelection(shown: [.steps, .sleep, .weight, .activeEnergy])
+    selection.move(from: [2], to: 0)
+    XCTAssertEqual(selection.ordered, [.weight, .steps, .sleep, .activeEnergy])
+    XCTAssertEqual(HealthSelection.decoded(selection.encoded()), selection)
+    selection.nudge(.sleep, by: -1)
+    XCTAssertEqual(selection.ordered, [.weight, .sleep, .steps, .activeEnergy])
+    selection.nudge(.weight, by: -1)
+    selection.nudge(.activeEnergy, by: 1)
+    XCTAssertEqual(selection.ordered, [.weight, .sleep, .steps, .activeEnergy])
+    selection.moveToTop(.activeEnergy)
+    XCTAssertEqual(selection.ordered.first, .activeEnergy)
+    selection.move(from: [0, 2], to: 4)
+    XCTAssertEqual(selection.ordered, [.weight, .steps, .activeEnergy, .sleep])
   }
 
   func testSavedFormRoundTripsAndToleratesJunk() {
@@ -362,14 +360,14 @@ final class HealthMetricsTests: XCTestCase {
     var s = HealthSelection.default
     s.hide(.sleep)
     s.add([.daylight, .activeEnergy])
-    // Listed order: Activity (steps, daylight, energy), Body (weight) → steps + daylight.
-    XCTAssertEqual(HealthLine.metrics(for: s), [.steps, .daylight])
+    // The summary fallback follows the same global order as the dashboard.
+    XCTAssertEqual(HealthLine.metrics(for: s), [.steps, .weight])
     let series = lineSeries(
-      steps: 3_000, sleepMinutes: nil, extra: [.daylight: HealthSeries(points: [daily(0, 85)])])
-    XCTAssertEqual(line(s, series), "3,000 steps · 1 hr 25 min daylight")
+      steps: 3_000, sleepMinutes: nil, extra: [.weight: HealthSeries(points: [daily(0, 70.3)])])
+    XCTAssertEqual(line(s, series), "3,000 steps · 70.3 kg")
 
     s.hide(.steps)
-    XCTAssertEqual(HealthLine.metrics(for: s), [.daylight, .activeEnergy])
+    XCTAssertEqual(HealthLine.metrics(for: s), [.weight, .daylight])
     XCTAssertNil(
       line(s, series.filter { $0.key == .steps }), "a metric with no value today stays quiet")
 

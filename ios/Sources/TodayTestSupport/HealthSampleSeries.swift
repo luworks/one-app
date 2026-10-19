@@ -76,6 +76,27 @@ public enum HealthSampleSeries {
         points.append(HealthPoint(date: at, value: v))
       case .mindfulMinutes:
         break
+      default:
+        // Deterministic numeric coverage uses each descriptor's unit and aggregation, never a shared sparkline.
+        guard let descriptor = HealthCatalog.quantities[metric] else { continue }
+        let base: Double
+        switch descriptor.unit {
+        case .celsius: base = 36.5
+        case .percent: base = 45
+        case .kilograms: base = 55
+        case .perMinute: base = metric == .heartRate ? 72 : 16
+        case .glucose: base = 95
+        case .millimetersOfMercury: base = metric == .bloodPressureSystolic ? 118 : 76
+        case .metersPerSecond: base = 1.3
+        case .meters: base = descriptor.aggregation == .dailySum ? 4_200 : 1.7
+        case .milliliters: base = 1_800
+        case .milliseconds: base = 42
+        case .decibels: base = 64
+        case .watts: base = 160
+        default: base = 12
+        }
+        let value = base * rng.next(in: 0.85...1.15)
+        points.append(HealthPoint(date: day(back), value: descriptor.aggregation == .dailySum ? partial(back, value) : value))
       }
     }
     return HealthSeries(points: points)

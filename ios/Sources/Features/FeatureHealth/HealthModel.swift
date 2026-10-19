@@ -44,6 +44,8 @@
       selection = store.selection
     }
 
+    public var recordSource: (any HealthRecordSource)? { source as? any HealthRecordSource }
+
     public var isAvailable: Bool { source.isAvailable }
     /// The page shows made-up numbers (UI tests and the simulator).
     public var isSample: Bool { source.isSample }
@@ -119,6 +121,19 @@
 
     public func move(in group: HealthGroup, from source: IndexSet, to destination: Int) {
       update { $0.move(in: group, from: source, to: destination) }
+    }
+
+    public func move(from source: IndexSet, to destination: Int) {
+      update { $0.move(from: source, to: destination) }
+    }
+
+    public func moveToTop(_ metric: HealthMetric) { update { $0.moveToTop(metric) } }
+
+    /// Apply visibility and order together; permission requests only cover explicitly added metrics.
+    public func customize(_ next: HealthSelection) async {
+      let fresh = next.shown.filter { !selection.shown.contains($0) }
+      update { $0 = next }
+      if !fresh.isEmpty { await run(fresh) }
     }
 
     public func nudge(_ metric: HealthMetric, by step: Int) {

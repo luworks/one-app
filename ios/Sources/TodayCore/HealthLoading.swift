@@ -50,6 +50,7 @@ public enum HealthTimeout {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Outcome<T>, Never>?
     private var timer: Task<Void, Never>?
+    private var operation: Task<Void, Never>?
 
     init(_ continuation: CheckedContinuation<Outcome<T>, Never>) {
       self.continuation = continuation
@@ -66,6 +67,13 @@ public enum HealthTimeout {
       lock.unlock()
     }
 
+    func setOperation(_ task: Task<Void, Never>) {
+      lock.lock()
+      if continuation == nil { lock.unlock(); task.cancel(); return }
+      operation = task
+      lock.unlock()
+    }
+
     /// True when this call was the one that resumed.
     @discardableResult
     func resume(_ outcome: Outcome<T>) -> Bool {
@@ -76,9 +84,12 @@ public enum HealthTimeout {
       }
       self.continuation = nil
       let timer = self.timer
+      let operation = self.operation
       self.timer = nil
+      self.operation = nil
       lock.unlock()
       timer?.cancel()
+      if case .timedOut = outcome { operation?.cancel() }
       continuation.resume(returning: outcome)
       return true
     }
@@ -89,15 +100,17 @@ public enum HealthTimeout {
   /// instead of holding this call open. `onLate` gets the value of an operation that answers after the timeout.
   public static func race<T: Sendable>(
     seconds: Double = HealthTimeout.seconds,
+    cancelOnTimeout: Bool = false,
     _ operation: @escaping @Sendable () async -> T,
     onLate: (@Sendable (T) -> Void)? = nil
   ) async -> Outcome<T> {
     await withCheckedContinuation { (continuation: CheckedContinuation<Outcome<T>, Never>) in
       let gate = Gate<T>(continuation)
-      Task.detached {
+      let task = Task.detached {
         let value = await operation()
         if !gate.resume(.value(value)) { onLate?(value) }
       }
+      if cancelOnTimeout { gate.setOperation(task) }
       gate.setTimer(
         Task.detached {
           try? await Task.sleep(for: .seconds(seconds))
@@ -169,19 +182,22 @@ public enum HealthLoader {
     return access
   }
 
-  /// Fetches every metric on its own with its own timeout, and reports each as soon as it settles, so one stalled
-  /// metric never delays or blanks the others. Returns when all have settled (at most `timeout` later).
+  /// Fetches at most four metrics concurrently, reporting each as soon as it settles. A timed-out metric
+  /// releases its scheduling slot so other rows still progress. Each query retains its own timeout.
   public static func fetch(
     _ metrics: [HealthMetric], source: HealthSource, days: Int, now: Date,
     timeout: Double = HealthTimeout.seconds,
     onResult: @escaping @Sendable (HealthMetric, HealthFetchResult) async -> Void
   ) async {
+    var seen = Set<HealthMetric>()
+    let requested = metrics.filter { seen.insert($0).inserted }
     await withTaskGroup(of: Void.self) { group in
-      for metric in metrics {
+      func enqueue(_ metric: HealthMetric) {
         group.addTask {
-          let outcome = await HealthTimeout.race(seconds: timeout) {
+          let outcome = await HealthTimeout.race(seconds: timeout, cancelOnTimeout: true) {
             await source.series(for: [metric], days: days, now: now)[metric] ?? .empty
           }
+          guard !Task.isCancelled else { return }
           switch outcome {
           case .value(let series): await onResult(metric, .series(series))
           case .timedOut:
@@ -190,6 +206,18 @@ public enum HealthLoader {
             )
             await onResult(metric, .stalled)
           }
+        }
+      }
+      var next = 0
+      while next < min(requested.count, HealthCatalog.maximumConcurrentQueries) {
+        enqueue(requested[next])
+        next += 1
+      }
+      while await group.next() != nil {
+        guard !Task.isCancelled else { group.cancelAll(); return }
+        if next < requested.count {
+          enqueue(requested[next])
+          next += 1
         }
       }
     }
@@ -268,4 +296,43 @@ public actor HealthAccessGate {
   }
 
   public init() {}
+}
+
+/// Bounds actual source operations, including operations whose UI timeout already settled. A timed-out caller
+/// cannot start an unbounded tail of native queries. Cancellation removes queued work before it acquires a slot.
+public actor HealthQueryLimiter {
+  private var available: Int
+  private var waiting: [(UUID, CheckedContinuation<Void, any Error>)] = []
+
+  public init(limit: Int = HealthCatalog.maximumConcurrentQueries) { available = max(1, limit) }
+
+  public func run<T: Sendable>(_ operation: @Sendable () async throws -> T) async throws -> T {
+    try await acquire()
+    defer { release() }
+    try Task.checkCancellation()
+    return try await operation()
+  }
+
+  private func acquire() async throws {
+    try Task.checkCancellation()
+    if available > 0 { available -= 1; return }
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+        waiting.append((id, continuation))
+      }
+    } onCancel: {
+      Task { await self.cancel(id) }
+    }
+  }
+
+  private func cancel(_ id: UUID) {
+    guard let index = waiting.firstIndex(where: { $0.0 == id }) else { return }
+    waiting.remove(at: index).1.resume(throwing: CancellationError())
+  }
+
+  private func release() {
+    if waiting.isEmpty { available += 1 }
+    else { waiting.removeFirst().1.resume() }
+  }
 }

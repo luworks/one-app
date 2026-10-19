@@ -58,27 +58,53 @@ public struct SleepNight: Equatable, Identifiable {
 
 public enum HealthMath {
   /// Groups sleep into nights. A stretch belongs to the day it ends near: start + 6 h, so 22:30 and 01:00 both count
-  /// for the next morning. When a night has staged data (Apple Watch), plain "Asleep" from other sources that night
-  /// is dropped so the same sleep isn't counted twice.
+  /// for the next morning. Overlaps are resolved per instant, preserving unspecified sleep outside staged coverage.
+  /// Awake takes precedence; conflicting staged samples use the stable stage order because source priority is absent.
   public static func nights(
     _ intervals: [SleepInterval], count: Int, now: Date, calendar: Calendar = .current
   ) -> [SleepNight] {
+    guard count > 0 else { return [] }
     let today = calendar.startOfDay(for: now)
     guard let first = calendar.date(byAdding: .day, value: -(count - 1), to: today) else {
       return []
     }
-    let byDay = Dictionary(grouping: intervals) {
+    let valid = intervals.compactMap { interval -> SleepInterval? in
+      let end = min(interval.end, now)
+      guard end > interval.start else { return nil }
+      return SleepInterval(start: interval.start, end: end, stage: interval.stage)
+    }
+    let byDay = Dictionary(grouping: valid) {
       calendar.startOfDay(for: $0.start.addingTimeInterval(6 * 3600))
     }
     return byDay.compactMap { day, items -> SleepNight? in
       guard day >= first, day <= today else { return nil }
-      let staged = items.contains { $0.stage == .rem || $0.stage == .core || $0.stage == .deep }
-      let kept = (staged ? items.filter { $0.stage != .unspecified } : items).sorted {
-        $0.start < $1.start
-      }
+      let kept = resolvedSleepIntervals(items)
       return kept.isEmpty ? nil : SleepNight(day: day, intervals: kept)
     }
     .sorted { $0.day < $1.day }
+  }
+
+  /// Sweep the interval boundaries rather than adding source durations. The resulting intervals never overlap.
+  private static func resolvedSleepIntervals(_ items: [SleepInterval]) -> [SleepInterval] {
+    var events: [Date: [SleepStage: Int]] = [:]
+    for item in items {
+      events[item.start, default: [:]][item.stage, default: 0] += 1
+      events[item.end, default: [:]][item.stage, default: 0] -= 1
+    }
+    let boundaries = events.keys.sorted()
+    guard boundaries.count > 1 else { return [] }
+    var active: [SleepStage: Int] = [:]
+    var result: [SleepInterval] = []
+    for index in 0..<(boundaries.count - 1) {
+      let start = boundaries[index]
+      for (stage, delta) in events[start] ?? [:] { active[stage, default: 0] += delta }
+      let end = boundaries[index + 1]
+      guard let stage = SleepStage.allCases.first(where: { active[$0, default: 0] > 0 }), end > start else { continue }
+      if let previous = result.last, previous.stage == stage, previous.end == start {
+        result[result.count - 1] = SleepInterval(start: previous.start, end: end, stage: stage)
+      } else { result.append(SleepInterval(start: start, end: end, stage: stage)) }
+    }
+    return result
   }
 
   public static func average(_ values: [Double]) -> Double? {

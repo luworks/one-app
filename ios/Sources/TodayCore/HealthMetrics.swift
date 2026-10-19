@@ -10,7 +10,7 @@ import Foundation
 /// How a metric is drawn on a row: bars for totals (a day's steps), dots for single readings (a weigh-in).
 public enum HealthShape: Equatable { case bars, dots }
 
-public enum HealthGroup: Int, CaseIterable, Equatable {
+public enum HealthGroup: Int, CaseIterable, Equatable, Sendable {
   case activity, recovery, body
 
   public var title: String {
@@ -29,6 +29,8 @@ public enum HealthMetric: String, CaseIterable, Codable, Identifiable, Sendable 
   case steps, sleep, weight
   case restingHeartRate, activeEnergy, exerciseMinutes, distance, bodyFat, mindfulMinutes, daylight
 
+  case appleSleepingWristTemperature, bodyMassIndex, electrodermalActivity, height, leanBodyMass, waistCircumference, appleMoveTime, appleStandTime, basalEnergyBurned, crossCountrySkiingSpeed, cyclingCadence, cyclingFunctionalThresholdPower, cyclingPower, cyclingSpeed, distanceCrossCountrySkiing, distanceCycling, distanceDownhillSnowSports, distancePaddleSports, distanceRowing, distanceSkatingSports, distanceSwimming, distanceWheelchair, estimatedWorkoutEffortScore, flightsClimbed, nikeFuel, paddleSportsSpeed, physicalEffort, pushCount, rowingSpeed, runningPower, runningSpeed, swimmingStrokeCount, underwaterDepth, workoutEffortScore, environmentalAudioExposure, environmentalSoundReduction, headphoneAudioExposure, atrialFibrillationBurden, heartRate, heartRateRecoveryOneMinute, heartRateVariabilityRMSSD, heartRateVariabilitySDNN, peripheralPerfusionIndex, vO2Max, walkingHeartRateAverage, appleWalkingSteadiness, runningGroundContactTime, runningStrideLength, runningVerticalOscillation, sixMinuteWalkTestDistance, stairAscentSpeed, stairDescentSpeed, walkingAsymmetryPercentage, walkingDoubleSupportPercentage, walkingSpeed, walkingStepLength, dietaryBiotin, dietaryCaffeine, dietaryCalcium, dietaryCarbohydrates, dietaryChloride, dietaryCholesterol, dietaryChromium, dietaryCopper, dietaryEnergyConsumed, dietaryFatMonounsaturated, dietaryFatPolyunsaturated, dietaryFatSaturated, dietaryFatTotal, dietaryFiber, dietaryFolate, dietaryIodine, dietaryIron, dietaryMagnesium, dietaryManganese, dietaryMolybdenum, dietaryNiacin, dietaryPantothenicAcid, dietaryPhosphorus, dietaryPotassium, dietaryProtein, dietaryRiboflavin, dietarySelenium, dietarySodium, dietarySugar, dietaryThiamin, dietaryVitaminA, dietaryVitaminB12, dietaryVitaminB6, dietaryVitaminC, dietaryVitaminD, dietaryVitaminE, dietaryVitaminK, dietaryWater, dietaryZinc, bloodAlcoholContent, bloodPressureDiastolic, bloodPressureSystolic, insulinDelivery, numberOfAlcoholicBeverages, numberOfTimesFallen, uVExposure, waterTemperature, basalBodyTemperature, appleSleepingBreathingDisturbances, forcedExpiratoryVolume1, forcedVitalCapacity, inhalerUsage, oxygenSaturation, peakExpiratoryFlowRate, respiratoryRate, bloodGlucose, bodyTemperature
+
   public var id: String { rawValue }
 
   /// Shown when nothing was chosen yet: all three work with an iPhone alone.
@@ -46,6 +48,7 @@ public enum HealthMetric: String, CaseIterable, Codable, Identifiable, Sendable 
     case .bodyFat: "Body Fat"
     case .mindfulMinutes: "Mindful Minutes"
     case .daylight: "Time in Daylight"
+    default: HealthCatalog.quantities[self]?.title ?? rawValue
     }
   }
 
@@ -62,6 +65,7 @@ public enum HealthMetric: String, CaseIterable, Codable, Identifiable, Sendable 
     case .bodyFat: "From a smart scale or entered by hand."
     case .mindfulMinutes: "Time in mindfulness sessions."
     case .daylight: "Minutes spent outside in daylight."
+    default: HealthCatalog.quantities[self]?.summary ?? "Read-only Health data."
     }
   }
 
@@ -70,13 +74,15 @@ public enum HealthMetric: String, CaseIterable, Codable, Identifiable, Sendable 
     case .steps, .distance, .activeEnergy, .exerciseMinutes, .daylight: .activity
     case .sleep, .restingHeartRate, .mindfulMinutes: .recovery
     case .weight, .bodyFat: .body
+    default: HealthCatalog.quantities[self]?.group ?? .body
     }
   }
 
   public var shape: HealthShape {
     switch self {
     case .weight, .restingHeartRate, .bodyFat: .dots
-    default: .bars
+    case .sleep, .mindfulMinutes: .bars
+    default: HealthCatalog.quantities[self]?.aggregation == .dailySum ? .bars : .dots
     }
   }
 
@@ -193,8 +199,7 @@ public enum MovingAverage {
 
 // MARK: - Selection
 
-/// Which metrics are shown, in the user's order. Groups are fixed (Activity, Sleep & Recovery, Body); inside a group
-/// the order is the user's.
+/// Which metrics are shown, in one stable user-controlled order. Categories never constrain placement.
 public struct HealthSelection: Equatable, Sendable {
   public var shown: [HealthMetric]
 
@@ -203,8 +208,8 @@ public struct HealthSelection: Equatable, Sendable {
   /// Metrics not shown yet: what Add metric offers.
   public var hidden: [HealthMetric] { HealthMetric.allCases.filter { !shown.contains($0) } }
 
-  /// Shown metrics in the order the sheet lists them: by group, then the user's order.
-  public var ordered: [HealthMetric] { HealthGroup.allCases.flatMap { metrics(in: $0) } }
+  /// The dashboard and customization sheet share this exact order.
+  public var ordered: [HealthMetric] { shown }
 
   public func metrics(in group: HealthGroup) -> [HealthMetric] {
     shown.filter { $0.group == group }
@@ -238,13 +243,23 @@ public struct HealthSelection: Equatable, Sendable {
     shown = shown.map { $0.group == group ? (next.next() ?? $0) : $0 }
   }
 
-  /// Move Up / Move Down in the long-press menu: one place inside the group.
+  /// Native List reorder offsets refer to the complete visible list, across categories.
+  public mutating func move(from source: IndexSet, to destination: Int) {
+    let indices = source.filter { shown.indices.contains($0) }.sorted()
+    let moved = indices.map { shown[$0] }
+    for index in indices.reversed() { shown.remove(at: index) }
+    let target = min(max(0, destination - indices.filter { $0 < destination }.count), shown.count)
+    shown.insert(contentsOf: moved, at: target)
+  }
+
   public mutating func nudge(_ metric: HealthMetric, by step: Int) {
-    let inGroup = metrics(in: metric.group)
-    guard let i = inGroup.firstIndex(of: metric), (0..<inGroup.count).contains(i + step) else {
-      return
-    }
-    move(in: metric.group, from: [i], to: step > 0 ? i + 2 : i - 1)
+    guard let index = shown.firstIndex(of: metric), shown.indices.contains(index + step) else { return }
+    move(from: [index], to: step > 0 ? index + step + 1 : index + step)
+  }
+
+  public mutating func moveToTop(_ metric: HealthMetric) {
+    guard let index = shown.firstIndex(of: metric) else { return }
+    move(from: [index], to: 0)
   }
 
   // MARK: Saved form
@@ -355,18 +370,21 @@ public enum HealthFormat {
   {
     switch metric {
     case .sleep, .daylight: canonical / 60
-    case .weight: units.poundsForWeight ? canonical * poundsPerKilogram : canonical
+    case .weight, .leanBodyMass: units.poundsForWeight ? canonical * poundsPerKilogram : canonical
     case .distance: units.milesForDistance ? canonical / metersPerMile : canonical / 1000
-    default: canonical
+    default:
+      if let descriptor = HealthCatalog.quantities[metric], descriptor.unit == .meters, descriptor.aggregation == .dailySum {
+        units.milesForDistance ? canonical / metersPerMile : canonical / 1000
+      } else { canonical }
     }
   }
 
   /// Decimals shown for a value already in its display unit.
   static func fractionDigits(_ metric: HealthMetric, _ shown: Double) -> Int {
     switch metric {
-    case .weight, .bodyFat: 1
+    case .weight, .leanBodyMass, .bodyFat: 1
     case .distance: shown < 1 ? 2 : 1
-    default: 0
+    default: HealthCatalog.quantities[metric]?.digits ?? 0
     }
   }
 
@@ -388,7 +406,7 @@ public enum HealthFormat {
       return .init(parts: [.init(number: number(canonical, 0), unit: "min")])
     case .restingHeartRate: return .init(parts: [.init(number: number(canonical, 0), unit: "bpm")])
     case .bodyFat: return .init(parts: [.init(number: number(canonical, 1), unit: "%")])
-    case .weight:
+    case .weight, .leanBodyMass:
       return .init(parts: [
         .init(
           number: number(displayValue(.weight, canonical, units: units), 1),
@@ -401,6 +419,13 @@ public enum HealthFormat {
           number: number(d, fractionDigits(.distance, d)),
           unit: units.milesForDistance ? "mi" : "km")
       ])
+    default:
+      let descriptor = HealthCatalog.quantities[metric]
+      if descriptor?.unit == .meters, descriptor?.aggregation == .dailySum {
+        let shown = displayValue(metric, canonical, units: units)
+        return .init(parts: [.init(number: number(shown, shown < 1 ? 2 : 1), unit: units.milesForDistance ? "mi" : "km")])
+      }
+      return .init(parts: [.init(number: number(canonical, descriptor?.digits ?? 1), unit: descriptor?.label ?? "")])
     }
   }
 
@@ -467,6 +492,7 @@ public enum HealthFormat {
     case .mindfulMinutes: return v + " mindful"
     case .daylight: return v + " daylight"
     case .steps, .weight, .distance: return v
+    default: return metric.title + " " + v
     }
   }
 }
