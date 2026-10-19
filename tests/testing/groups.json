@@ -8,10 +8,8 @@
       ]
     },
     "integration": {
-      "ui": [
-        "CalendarSyncTests",
-        "RemindersSyncTests",
-        "EventSaveTests"
+      "integration": [
+        "StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation"
       ]
     },
     "ui": {
@@ -28,32 +26,33 @@
       ]
     },
     "snapshot": {
-      "ui": [
-        "AppearanceUITests/testScreenshotsOfEveryScreenInBothModes",
-        "HealthMetricsTests/testScreenshots",
-        "StopwatchTests/testScreenshots"
-      ],
-      "pending": [
-        "Reference-image comparison suite (not implemented; attachments alone are not snapshot parity)"
+      "snapshot": [
+        "NativeSnapshotTests"
       ]
     },
     "accessibility": {
       "ui": [
-        "AppearanceUITests/testDarkAppliesAtOnceAndSticksAfterRelaunch"
-      ],
-      "pending": [
-        "Dedicated accessibility audit suite including VoiceOver, Dynamic Type and contrast assertions (not implemented; appearance persistence is only an existing supporting journey)"
+        "AccessibilityAuditTests/testCoreTabsAudit",
+        "AccessibilityAuditTests/testHealthDetailRangeAndDismissAudit",
+        "AccessibilityAuditTests/testStopwatchLargeTypeActionsAudit"
       ]
     },
     "release": {
       "includes": [
         "unit",
+        "ios-unit",
+        "integration",
         "ui",
         "snapshot",
         "accessibility"
       ],
       "pending": [
         "Physical-device AlarmKit, Siri, Live Activities and permission acceptance owned by integration; no simulator substitute"
+      ]
+    },
+    "ios-unit": {
+      "unit": [
+        "*"
       ]
     }
   },
@@ -4861,6 +4860,59 @@
     "ui_target": "TodayUITests",
     "logic_target": "TodayTests",
     "ui_source": "ios/OneUITests",
-    "logic_source": "ios/Eval/Tests/OneLogicTests"
+    "logic_source": "ios/Eval/Tests/OneLogicTests",
+    "lanes": {
+      "logic": {
+        "runner": "swiftpm",
+        "target": "TodayTests",
+        "sources": [
+          "ios/Eval/Tests/OneLogicTests",
+          "ios/SceneRegistryTests"
+        ],
+        "source_targets": {
+          "ios/SceneRegistryTests": "SceneRegistryTests"
+        },
+        "platform": "host"
+      },
+      "unit": {
+        "runner": "xcodebuild",
+        "target": "TodayTests",
+        "sources": [
+          "ios/Eval/Tests/OneLogicTests",
+          "ios/SceneRegistryTests"
+        ],
+        "platform": "iOS Simulator"
+      },
+      "integration": {
+        "runner": "xcodebuild",
+        "target": "TodayTests",
+        "sources": [
+          "ios/TodayIntegrationTests"
+        ],
+        "platform": "iOS Simulator"
+      },
+      "snapshot": {
+        "runner": "xcodebuild",
+        "target": "TodaySnapshotTests",
+        "sources": [
+          "ios/TodaySnapshotTests"
+        ],
+        "platform": "iOS Simulator",
+        "dependency": {
+          "product": "SnapshotTesting",
+          "exact": "1.19.6",
+          "test_only": true
+        }
+      },
+      "ui": {
+        "runner": "xcodebuild",
+        "target": "TodayUITests",
+        "sources": [
+          "ios/OneUITests"
+        ],
+        "platform": "iOS Simulator",
+        "app_host": "TodayMock"
+      }
+    }
   }
 }
