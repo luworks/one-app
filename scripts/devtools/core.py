@@ -243,6 +243,37 @@ def _provenance_path(root, current, kind):
     return derived_data(root) / ('dev-provenance-' + key + '.json')
 
 
+def compiler_module_cache(root, current):
+    """Transport only compiler module leaves, never reusable test products.
+
+    Xcode always builds products after a source mismatch. Its implicit compiler
+    validates imported modules against the current headers/options. Partition
+    transport by the full toolchain/SDK/scheme/options and all non-Swift inputs;
+    Package.swift remains a configuration input. Source bytes select the exact
+    entry; only Swift edits may fall back to a compatible module-only entry.
+    """
+    inputs = current['inputs']
+    scheme = {'integration': 'TodayTests', 'snapshots': 'TodaySnapshotTests',
+              'core-ui': 'TodayMock'}.get(os.environ.get('TODAY_LANE'))
+    if (not scheme or inputs.get('scheme') != scheme
+            or inputs.get('configuration') != 'Debug' or inputs.get('sdk') != 'iphonesimulator'
+            or inputs.get('architecture') != 'arm64'
+            or inputs.get('test_options') != native_test_options() or not native_test_options()):
+        return None
+    # Validate the canonical source fingerprint before deriving a transport key.
+    _provenance_path(root, current, 'build-for-testing')
+    partition = dict(inputs)
+    partition['source_and_locks'] = {
+        k: v for k, v in inputs['source_and_locks'].items()
+        if not k.endswith('.swift') or Path(k).name == 'Package.swift'}
+    digest = hashlib.sha256(json.dumps(partition, sort_keys=True).encode()).hexdigest()
+    prefix = 'today-compiler-modules-v1-' + digest + '-'
+    # A linked worktree's DD belongs to the primary checkout. Cache supports
+    # absolute paths; do not assume canonical results are inside this worktree.
+    path = derived_data(root) / 'ModuleCache.noindex'
+    return {'prefix': prefix, 'key': prefix + current['sha256'], 'path': str(path)}
+
+
 def _product_identity(root, product):
     """Hash complete bundles, resources and signatures; never follow foreign links."""
     owned = derived_data(root).absolute()

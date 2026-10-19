@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .core import (derived_data, fingerprint, inspect_lock, provenance,
+from .core import (compiler_module_cache, derived_data, fingerprint, inspect_lock, provenance,
                    state_root, toolchain, worktree_id)
 from .process import Redactor
 
@@ -175,6 +175,7 @@ def main(argv=None, root=ROOT):
             current = fingerprint(root, sdk=args.sdk, architecture=args.architecture,
                                   configuration=args.configuration, tools=data['toolchain'], scheme=args.scheme)
             data.update({'fingerprint': current, 'provenance': provenance(root, current),
+                         'compiler_module_cache': compiler_module_cache(root, current),
                          'execution_supported': True,
                          'next': './dev generate; ./dev resolve; ./dev build Debug'})
             code = 0
