@@ -33,7 +33,7 @@ def selection_data(path):
     data = json.loads(Path(path).read_text())
     if not isinstance(data, dict) or type(data.get('version')) is not int or data['version'] != 1:
         raise ValueError('Unsupported selection version')
-    if data.get('mode') not in ('wide', 'affected') or not isinstance(data.get('reason'), str):
+    if data.get('mode') not in ('wide', 'affected', 'docs') or not isinstance(data.get('reason'), str):
         raise ValueError('Invalid selection mode/reason')
     for key in ('changed', 'targets'):
         if not isinstance(data.get(key), list) or any(not isinstance(x, str) or not x for x in data[key]):
@@ -146,6 +146,10 @@ def _test_results(root, lane, output, run, report, selection=None):
     if kind == 'logic':
         # Identical swift test authority to commands.test(unit), with no guessed filter.
         argv = ['swift', 'test', '--package-path', 'ios', '--jobs', '2']
+        if selection is not None:
+            _, broad = test_plan(root, lane)
+            if expected != broad:
+                argv += ['--filter', '|'.join('/'.join(test.split('/')[1:]) for test in expected)]
     else:
         # The same serial runner as commands.test; output is explicit and fresh so
         # evidence cannot be confused with a previous run in the canonical journal.
@@ -222,7 +226,7 @@ def _checks(root, lane, output, run, report):
             maps.mkdir()
             argv += ['LD_GENERATE_MAP_FILE=YES', 'LD_MAP_FILE_PATH=' + str(maps / '$(TARGET_NAME)-$(PRODUCT_NAME).map')]
         if lane == 'build' and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1':
-            from .core import ensure_test_products, host_lock, dd_lock
+            from .core import ensure_test_products, host_lock, dd_lock, ci_test_scheme
             from .resolve import locked_arguments
             results = []
 
@@ -232,7 +236,7 @@ def _checks(root, lane, output, run, report):
                 return result
 
             with host_lock(root), dd_lock(root):
-                ensure_test_products(root, 'TodayCI', build, flags=locked_arguments(root))
+                ensure_test_products(root, ci_test_scheme('TodayCI'), build, flags=locked_arguments(root))
             if len(results) != 1:
                 raise ValueError('Native batch requires one fresh build producer')
             result = results[0]
@@ -350,7 +354,7 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
             _, broad = test_plan(root, lane)
             accepted['execution'] = {'kind': kind, 'selected': effective,
                                      'broad_group': broad,
-                                     'deferred_to': 'main broad core and explicit extended authority',
+                                     'deferred_to': 'explicit extended / release validation',
                                      'deferred': [test for test in broad if test not in effective]}
         atomic_json(output / 'accepted-selection.json', accepted)
         before = source_state(root, sha)

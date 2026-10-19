@@ -13,7 +13,6 @@ sys.path.insert(0, str(ROOT / 'scripts/ci'))
 import policy  # noqa: E402 - standalone test import bootstrap
 import prerequisite  # noqa: E402 - standalone test import bootstrap
 import release_guard  # noqa: E402 - standalone test import bootstrap
-import re  # noqa: E402 - standalone test import bootstrap
 import subprocess  # noqa: E402 - standalone test import bootstrap
 
 spec = importlib.util.spec_from_file_location('ci_run', ROOT / 'scripts/ci/run.py')
@@ -22,154 +21,98 @@ spec.loader.exec_module(runner)
 
 
 class SelectionTests(unittest.TestCase):
-    def setUp(self):
-        self.nodes = {
-            'domain': {'paths': ['ios/Domain'], 'dependencies': []},
-            'calendar': {'paths': ['ios/Calendar'], 'dependencies': ['domain']},
-            'clock': {'paths': ['ios/Clock'], 'dependencies': []},
-            'app': {'paths': ['ios/App'], 'dependencies': ['calendar', 'clock']}}
-
-    def test_reverse_transitive_closure(self):
-        result = policy.select(['ios/Domain/Date.swift'], self.nodes)
-        self.assertEqual(result['targets'], ['app', 'calendar', 'domain'])
-        self.assertFalse(result['all_targets'])
-
-    def test_unrelated_feature_excluded(self):
-        self.assertEqual(policy.select(['ios/Clock/Timer.swift'], self.nodes)['targets'], ['app', 'clock'])
+    def test_feature_minimum_and_core_logic(self):
+        feature = policy.select(['ios/Sources/Features/FeatureClock/TimerView.swift'])
+        self.assertEqual(feature['targets'], ['ios:FeatureClock'])
+        self.assertEqual(policy.routine_lanes(feature), ['format', 'lint', 'business', 'build', 'core-ui'])
+        core = policy.select(['ios/Sources/TodayCore/AutonomyPolicy.swift'])
+        self.assertEqual(policy.routine_lanes(core), ['format', 'lint', 'business', 'build'])
+        self.assertFalse(feature['snapshots'])
 
     def test_wide_fallbacks(self):
-        for path in ('ios/Shared/Foo.swift', 'ios/Models.swift', 'ios/project.yml',
-                     'ios/Package.swift', '.github/workflows/today.yml', 'new/unknown.swift',
-                     'ios/Foo.xcconfig', 'ios/Packages/TodayShared/File.swift', 'ios/App/Info.plist',
-                     'ios/App/App.entitlements', 'tests/fixtures/data.json'):
+        for path in ('ios/Sources/TodayShared/Foo.swift', 'ios/Sources/One/Models.swift',
+                     'ios/project.yml', 'ios/Package.swift', '.github/workflows/today.yml',
+                     'new/unknown.swift', 'ios/Config/Debug.xcconfig',
+                     'ios/App/Info.plist', 'tests/fixtures/data.json', 'scripts/ci/policy.py',
+                     'ios/Sources/TodayCore/Schema.swift',
+                     'ios/Sources/Features/FeatureHealth/HealthModel.swift'):
             with self.subTest(path=path):
-                self.assertTrue(policy.select([path], self.nodes)['all_targets'])
+                result = policy.select([path])
+                self.assertTrue(result['all_targets'])
+                self.assertEqual(set(policy.routine_lanes(result)),
+                                 {'format', 'lint', 'business', 'build', 'core-ui', 'integration', 'snapshots'})
 
     def test_empty_diff_is_wide(self):
-        self.assertTrue(policy.select([], self.nodes)['all_targets'])
+        self.assertTrue(policy.select([])['all_targets'])
 
-    def test_docs_only(self):
-        result = policy.select(['docs/notes.md'], self.nodes)
+    def test_docs_only_and_mixed_diff(self):
+        result = policy.select(['docs/notes.md', 'ios/README.md'])
         self.assertEqual(result['targets'], [])
         self.assertFalse(result['snapshots'])
+        self.assertEqual(policy.routine_lanes(result), ['format', 'lint'])
+        mixed = policy.select(['docs/notes.md', 'ios/Sources/TodayCore/AutonomyPolicy.swift'])
+        self.assertIn('build', policy.routine_lanes(mixed))
+        self.assertTrue(policy.select(['docs/executable.py'])['all_targets'])
 
-    def test_graph_missing_reason(self):
-        self.assertTrue(policy.select(['ios/Domain/File.swift'], {}, 'missing graph')['all_targets'])
-
-    def test_actual_project_and_package_edges(self):
-        project = {'targets': {'App': {'sources': ['App'], 'dependencies': [{'target': 'Widget'}, {'package': 'Domain'}]},
-                               'Widget': {'sources': ['Widget'], 'dependencies': [{'package': 'Domain'}]}}}
-        package = {'targets': [{'name': 'Domain', 'dependencies': []},
-                               {'name': 'DomainTests', 'dependencies': [{'byName': ['Domain', None]}]}],
-                   'products': [{'name': 'Domain', 'targets': ['Domain']}]}
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'ios/Domain').mkdir(parents=True)
-            (root / 'ios/Domain/Package.swift').touch()
-            (root / 'ios/project.yml').touch()
-            with patch.object(policy, 'capture', side_effect=[json.dumps(project), json.dumps(package)]) as probe:
-                nodes = policy.graph(root)
-            self.assertIn('dump-package', probe.call_args_list[1].args[0])
-            self.assertEqual(policy.select(['ios/Domain/Sources/Domain/A.swift'], nodes)['targets'],
-                             ['ios/Domain:Domain', 'ios/Domain:DomainTests', 'xcode:App', 'xcode:Widget'])
-
-    def test_missing_project_is_explicit(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(ValueError, 'graph incomplete'):
-                policy.graph(Path(directory))
-
-    def test_unsupported_xcode_include_falls_wide(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'ios').mkdir()
-            (root / 'ios/project.yml').touch()
-            with patch.object(policy, 'capture', return_value='{"include": ["other.yml"]}'):
-                with self.assertRaisesRegex(ValueError, 'expanded graph'):
-                    policy.graph(root)
+    def test_diff_failure_and_forged_receipt_widen(self):
+        self.assertTrue(policy.select(['README.md'], reason='diff unavailable')['all_targets'])
+        self.assertIn('integration', policy.routine_lanes({'changed': ['ios/Package.swift'], 'all_targets': False}))
 
 
 class RiskExecutionTests(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         from scripts.testing import contract
-        self.contract = contract
-        self.source = contract.inventory(ROOT)
-        self.broad = contract.plan(['core'], self.source)['selectors']['ui']
-        self.selection = {'mode': 'affected', 'all_targets': False,
-                          'changed': ['ios/Sources/Features/FeatureClock/TimerView.swift'],
-                          'targets': ['ios:FeatureClock', 'ios:TodayShell', 'xcode:TodayMock']}
+        cls.contract = contract
+        cls.source = contract.inventory(ROOT)
+        cls.broad = contract.plan(['core'], cls.source)['selectors']['ui']
+        cls.logic = contract.plan(['unit'], cls.source)['selectors']['logic']
 
-    def selected(self, selection=None):
-        with patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'pull_request'}):
-            return policy.execution_selection(selection or self.selection, self.source, 'core-ui', self.broad)
+    def test_feature_selects_bounded_actual_methods(self):
+        for feature in policy.FEATURE_UI:
+            selection = policy.select(['ios/Sources/Features/' + feature + '/Screen.swift'])
+            result = policy.execution_selection(selection, self.source, 'core-ui', self.broad)
+            self.assertGreater(len(result), 0)
+            self.assertLessEqual(len(result), 2)
+            self.assertEqual(result, self.contract.expand(policy.FEATURE_UI[feature], self.source, 'ui'))
+            logic = policy.execution_selection(selection, self.source, 'business', self.logic)
+            self.assertGreater(len(logic), 0)
+            self.assertLess(len(logic), len(self.logic))
 
-    def test_feature_runs_smoke_and_existing_feature_suites(self):
-        result = self.selected()
-        for test in self.contract.expand(policy.SMOKE, self.source, 'ui'):
-            self.assertIn(test, result)
-        for test in self.contract.expand(['TimerTests'], self.source, 'ui'):
-            self.assertIn(test, result)
-        self.assertFalse(any('/CalendarSyncTests/' in test for test in result))
-        self.assertEqual(len(result), len(set(result)))
+    def test_completion_delete_risk_retains_undo_regression(self):
+        for path in ('ios/Sources/TodayCore/ReminderCompletionFence.swift',
+                     'ios/Sources/Features/FeatureReminders/ReminderListScreen.swift',
+                     'ios/Sources/Features/FeatureToday/DeleteActions.swift'):
+            selection = policy.select([path])
+            self.assertIn('core-ui', policy.routine_lanes(selection))
+            tests = policy.execution_selection(selection, self.source, 'core-ui', self.broad)
+            self.assertIn('TodayUITests/JourneyTests/testJ3_completeAndUndo', tests)
 
-    def test_every_feature_mapping_resolves_actual_test_authorities(self):
-        for suites in policy.FEATURE_SUITES.values():
-            self.assertTrue(self.contract.expand(suites, self.source, 'ui'))
+    def test_changed_logic_uses_exact_authority_and_unknown_keeps_all(self):
+        selection = policy.select(['ios/Sources/TodayCore/AutonomyPolicy.swift'])
+        self.assertEqual(policy.execution_selection(selection, self.source, 'business', self.logic),
+                         self.contract.expand(['AutonomyPolicyTests'], self.source, 'logic'))
+        selection = policy.select(['ios/Sources/TodayCore/NewRule.swift'])
+        self.assertEqual(policy.execution_selection(selection, self.source, 'business', self.logic), self.logic)
 
-    def test_config_missing_graph_unknown_path_and_main_do_not_narrow(self):
-        for selection in (dict(self.selection, all_targets=True),
-                          dict(self.selection, changed=['ios/Sources/TodayCore/Timer.swift']),
-                          dict(self.selection, targets=[]), dict(self.selection, changed=[])):
-            self.assertEqual(self.selected(selection), self.broad)
-        with patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'push'}):
-            self.assertEqual(policy.execution_selection(self.selection, self.source, 'core-ui', self.broad), self.broad)
+    def test_missing_mapped_test_is_error_not_zero_success(self):
+        selection = policy.select(['ios/Sources/Features/FeatureClock/Screen.swift'])
+        with patch.dict(policy.FEATURE_UI, {'FeatureClock': ('MissingTests/testMissing',)}):
+            with self.assertRaisesRegex(ValueError, 'Unknown selection'):
+                policy.execution_selection(selection, self.source, 'core-ui', self.broad)
 
-    def test_changed_feature_test_is_not_hidden_by_bounded_core(self):
-        selection = dict(self.selection, all_targets=True,
-                         changed=['ios/OneUITests/TimerTests.swift'])
-        selected = self.selected(selection)
+    def test_manual_and_unknown_changes_keep_broad(self):
+        selection = policy.select(['ios/Sources/Features/FeatureClock/TimerView.swift'])
+        with patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'workflow_dispatch'}):
+            self.assertEqual(policy.execution_selection(selection, self.source, 'core-ui', self.broad), self.broad)
+        for path in ('ios/Package.swift', 'unknown.swift'):
+            self.assertEqual(policy.execution_selection(policy.select([path]), self.source, 'core-ui', self.broad), self.broad)
+
+    def test_changed_ui_test_is_not_hidden_by_core(self):
+        selection = policy.select(['ios/OneUITests/TimerTests.swift'])
+        selected = policy.execution_selection(selection, self.source, 'core-ui', self.broad)
         for test in self.contract.expand(['TimerTests'], self.source, 'ui'):
             self.assertIn(test, selected)
-
-
-class AggregateTests(unittest.TestCase):
-    def needs(self, event='pull_request', ref='refs/pull/1/merge'):
-        return {name: {'result': 'success' if name not in policy.LANES or policy.expected(event, ref, name) else 'skipped'}
-                for name in ('helpers', 'host', 'native', 'release', *policy.MANUAL)}
-
-    def test_pr_and_merge_queue_pass(self):
-        for event in ('pull_request', 'merge_group'):
-            self.assertEqual(policy.aggregate(self.needs(event), event, 'refs/pull/1/merge'), [])
-
-    def test_main_release_required(self):
-        needs = self.needs('push', 'refs/heads/main')
-        self.assertFalse(policy.aggregate(needs, 'push', 'refs/heads/main'))
-        needs['release']['result'] = 'skipped'
-        self.assertTrue(policy.aggregate(needs, 'push', 'refs/heads/main'))
-
-    def test_all_failure_states_rejected(self):
-        for state in ('failure', 'cancelled', 'skipped', None, ''):
-            for name in ('helpers', 'host', 'native'):
-                needs = self.needs()
-                needs[name]['result'] = state
-                self.assertTrue(policy.aggregate(needs, 'pull_request', 'refs/pull/1/merge'), (name, state))
-
-    def test_missing_even_optional_job_rejected(self):
-        for name in self.needs():
-            needs = self.needs()
-            del needs[name]
-            self.assertTrue(policy.aggregate(needs, 'pull_request', 'refs/pull/1/merge'), name)
-
-    def test_manual_selected_lane_cannot_skip(self):
-        with patch.dict(os.environ, {'MANUAL_LANE': 'sanitizer'}):
-            needs = self.needs('workflow_dispatch', 'refs/heads/main')
-            self.assertFalse(policy.aggregate(needs, 'workflow_dispatch', 'refs/heads/main'))
-            needs['sanitizer']['result'] = 'skipped'
-            self.assertTrue(policy.aggregate(needs, 'workflow_dispatch', 'refs/heads/main'))
-
-    def test_cancelled_exempt_job_still_fails(self):
-        needs = self.needs()
-        needs['extended']['result'] = 'cancelled'
-        self.assertTrue(policy.aggregate(needs, 'pull_request', 'refs/pull/1/merge'))
 
 
 class ReportTests(unittest.TestCase):
@@ -269,6 +212,36 @@ class SetupTests(unittest.TestCase):
             Path(argv[argv.index('--output') + 1]).write_text('{}')
         return subprocess.CompletedProcess(argv, 0, '')
 
+    def test_routine_selects_once_and_stops_before_unexecuted_lanes(self):
+        for paths, fail_at in [(['README.md'], None),
+                               (['ios/Sources/TodayCore/AutonomyPolicy.swift'], 'build'),
+                               (['ios/Sources/Features/FeatureToday/TaskActions.swift'], 'core-ui')]:
+            with self.subTest(paths=paths), tempfile.TemporaryDirectory() as directory:
+                selection = policy.select(paths)
+                def select_command(argv, **kwargs):
+                    Path(argv[argv.index('--output') + 1]).write_text(json.dumps(selection))
+                    return subprocess.CompletedProcess(argv, 0, '')
+                def lane_command(lane, prepared):
+                    self.assertEqual(json.loads(prepared['selection']), selection)
+                    return 1 if lane == fail_at else 0
+                with (patch.dict(os.environ, {'RUNNER_TEMP': directory}),
+                      patch.object(sys, 'argv', ['run.py', 'routine']),
+                      patch.object(runner, 'execute', side_effect=select_command) as execute,
+                      patch.object(runner, 'run_lane', side_effect=lane_command) as run):
+                    self.assertEqual(runner.main(), int(fail_at is not None))
+                self.assertEqual(execute.call_count, 1)
+                expected = policy.routine_lanes(selection)
+                if fail_at:
+                    expected = expected[:expected.index(fail_at) + 1]
+                self.assertEqual([call.args[0] for call in run.call_args_list], expected)
+
+    def test_selection_failure_never_dispatches_checks(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'RUNNER_TEMP': directory}), patch.object(
+                sys, 'argv', ['run.py', 'routine']), patch.object(runner, 'execute', return_value=
+                subprocess.CompletedProcess([], 9, 'diff authority failed')), patch.object(runner, 'run_lane') as run:
+            self.assertEqual(runner.main(), 9)
+        run.assert_not_called()
+
     def test_batch_prepares_native_once_and_stops_on_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             sha = 'd' * 40
@@ -337,18 +310,6 @@ class SetupTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
-    def test_every_job_is_aggregated(self):
-        text = (ROOT / '.github/workflows/today.yml').read_text()
-        jobs = set(re.findall(r'^  ([a-z][a-z-]+):$', text.split('jobs:', 1)[1], re.M))
-        expected = {'helpers', 'host', 'native', 'release', *policy.MANUAL}
-        self.assertEqual(jobs, expected | {'today-required'})
-        aggregate = text.split('  today-required:', 1)[1]
-        needs = re.search(r'needs: \[(.*?)\]', aggregate).group(1).split(', ')
-        self.assertEqual(set(needs), expected)
-        self.assertIn('if: always()', aggregate)
-        self.assertNotIn('paths:', text)
-        self.assertNotIn('pull_request_target:', text)
-
     def test_release_protection_is_real(self):
         self.assertFalse(release_guard.protected({}))
         self.assertFalse(release_guard.protected({'protection_rules': [{'type': 'required_reviewers', 'reviewers': []}]}))

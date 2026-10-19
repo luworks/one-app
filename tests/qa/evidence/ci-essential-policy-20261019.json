@@ -1,0 +1,129 @@
+{
+  "base": "1748a4a8565fd86f4bf5fe23d64b1ff010ee0d43",
+  "policy": "essential-risk-selected",
+  "status": "local-helpers-passed-remote-pending",
+  "local": {
+    "helpers": 141,
+    "lint": "passed",
+    "format": "passed",
+    "native": "not-run",
+    "phone": "not-run"
+  },
+  "previous_failure": {
+    "pr": 118,
+    "head": "a29e0fc9a6351d56926ce71a1e64cb38dce2117a",
+    "run": 39336559322,
+    "leaves": 36,
+    "passed": 35,
+    "failed": [
+      "TodayUITests/JourneyTests/testJ3_completeAndUndo"
+    ],
+    "push_to_required_seconds": 1318,
+    "created_to_native_seconds": 314,
+    "evidence": "tests/results/ci-hillclimb-20261019/pr118-first-failure/audit.json",
+    "classification": "test-wait-condition-consumed-toast-window; known failed until remote repair proof"
+  },
+  "selection": {
+    "version": 1,
+    "mode": "wide",
+    "reason": "shared/schema/dependency/engineering or unmapped path: tests/ci/test_policy.py",
+    "changed": [
+      ".github/actions/check/action.yml",
+      ".github/workflows/today.yml",
+      "docs/engineering/ci.md",
+      "ios/OneUITests/JourneyTests.swift",
+      "ios/project.yml",
+      "scripts/ci/policy.py",
+      "scripts/ci/run.py",
+      "scripts/devtools/ci_adapter.py",
+      "scripts/devtools/core.py",
+      "tests/ci/test_adapter.py",
+      "tests/ci/test_policy.py"
+    ],
+    "targets": [],
+    "all_targets": true,
+    "snapshots": true
+  },
+  "required_lanes": [
+    "format",
+    "lint",
+    "business",
+    "build",
+    "integration",
+    "snapshots",
+    "core-ui"
+  ],
+  "expected": {
+    "business": {
+      "kind": "logic",
+      "count": 705
+    },
+    "integration": {
+      "kind": "integration",
+      "count": 23,
+      "tests": [
+        "TodayTests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation",
+        "TodayTests/PlannerSessionTests/confirmedEditorDeleteFailurePreservesIdentityThenRetryAndUndoCommitOnce",
+        "TodayTests/PlannerSessionTests/confirmedEditorDeleteCannotResurrectExternalRemovalOrReappearance",
+        "TodayTests/PlannerSessionTests/alarmCommitAndCancelErrorsKeepIdentityAndRetry",
+        "TodayTests/PlannerSessionTests/newAlarmFailureRetryRetainsSystemID",
+        "TodayTests/PlannerSessionTests/alarmLocalSaveFailureCompensatesAndKeepsPreviousSettings",
+        "TodayTests/PlannerSessionTests/askPlanUndoRestoresOnlyUnchangedTasksAndRecordsOnce",
+        "TodayTests/PlannerSessionTests/deterministicCaptureKeepsProductionAlarmAndReminderRules",
+        "TodayTests/PlannerSessionTests/askDeleteUndoOutlivesItsToastAndRunsOnce",
+        "TodayTests/PlannerSessionTests/askMoveUndoPreservesDeadlineAndSubsequentEdits",
+        "TodayTests/PlannerSessionTests/localCalendarDeleteAndUndoKeepExternalWritesRefused",
+        "TodayTests/PlannerSessionTests/existentialObservationAndDisposalStayInsideTheirSession",
+        "TodayTests/PlannerSessionTests/addApplyAndActivityUndoPersistWithoutChangingDeadlineOrPeer",
+        "TodayTests/PlannerSessionTests/automaticPlanningRequiresRecordedChangesAndPreservesScopeAndUndo",
+        "TodayTests/PlannerSessionTests/sevenDayExpiryAndRevocationUseOnlyTheirSessionClockAndStore",
+        "TodayTests/PlannerSessionTests/localRecurrenceToastUndoRestoresOccurrenceAndCannotResurrectDeletedTask",
+        "TodayTests/PlannerSessionTests/completionUndoPassesAcceptedReceiptAndRefusesOutsideEdit",
+        "TodayTests/PlannerSessionTests/rejectedRemoteCompletionAndAlarmStopNeverCompleteAnotherTask",
+        "TodayTests/PlannerSessionTests/focusPausedOrDisabledActivityDoesNotOwnFocusOrItsUndo",
+        "TodayTests/PlannerSessionTests/focusRefreshedSourceFieldsKeepFocusButDifferentIdentityDoesNotInheritIt",
+        "TodayTests/PlannerSessionTests/recurringEventFocusAppliesOnlyToSelectedOccurrence",
+        "TodayTests/PlannerSessionTests/calendarDeletionKeepsUnavailableOrChangedMirrorsAndLocalSeriesUndo",
+        "TodayTests/PlannerSessionTests/deleteAllLocalDataClearsFocusWithoutDeletingItsAppleSource"
+      ]
+    },
+    "snapshots": {
+      "kind": "snapshot",
+      "count": 6,
+      "tests": [
+        "TodaySnapshotTests/NativeSnapshotTests/testHealthStepsLight",
+        "TodaySnapshotTests/NativeSnapshotTests/testHealthEmptyDarkLargeType",
+        "TodaySnapshotTests/NativeSnapshotTests/testStopwatchStoppedAnalog",
+        "TodaySnapshotTests/NativeSnapshotTests/testStopwatchRunningDigitalDark",
+        "TodaySnapshotTests/NativeSnapshotTests/testNativePillSwitcherLargeType",
+        "TodaySnapshotTests/NativeSnapshotTests/testHealthDataPerturbationChangesPixels"
+      ]
+    },
+    "core-ui": {
+      "kind": "ui",
+      "count": 20,
+      "tests": [
+        "TodayUITests/JourneyTests/testJ1_addTimedTaskFromOneLine",
+        "TodayUITests/JourneyTests/testJ3_completeAndUndo",
+        "TodayUITests/CalendarAlarmTests/testWeekLateAlarmOpensItsEditorWithoutOtherEntries",
+        "TodayUITests/AskSuggestionTests/testPolitePlanRequestPreservesPreviewThroughOperationQuestionsUntilApply",
+        "TodayUITests/SinglePresentationTests/testLongPressOnAnEventShowsOnlyItsMenu",
+        "TodayUITests/SinglePresentationTests/testDraggingATaskDoesNotMakeAnEvent",
+        "TodayUITests/ShareImportTests/testPersistedShareIsVisibleAndReplayDoesNotDuplicate",
+        "TodayUITests/JourneyTests/testJ2_todayShowsWhatsLeft",
+        "TodayUITests/JourneyTests/testJ4_addEvent",
+        "TodayUITests/JourneyTests/testJ5_addReminderToList",
+        "TodayUITests/JourneyTests/testJ6_addAlarmAndSeeItInToday",
+        "TodayUITests/JourneyTests/testJ7_search",
+        "TodayUITests/JourneyTests/testSearchFindsEventsAndRemindersTogether",
+        "TodayUITests/JourneyTests/testSearchSuggestionsAndCancelClosesIt",
+        "TodayUITests/JourneyTests/testSidebarOpensWithEdgeSwipe",
+        "TodayUITests/JourneyTests/testMenuButtonOpensTheSidebar",
+        "TodayUITests/JourneyTests/testPlanMyDay",
+        "TodayUITests/JourneyTests/testDragTaskInWeekGrid",
+        "TodayUITests/JourneyTests/testSettingsExplainsEachOptionUnderItsRow",
+        "TodayUITests/JourneyTests/testSettingsDeleteAllDataNeedsTwoConfirmations"
+      ]
+    }
+  }
+}

@@ -10,9 +10,9 @@ import sys
 import time
 
 try:
-    from .policy import LANES, validate_report
+    from .policy import LANES, validate_report, routine_lanes
 except ImportError:  # Direct workflow entry point.
-    from policy import LANES, validate_report
+    from policy import LANES, validate_report, routine_lanes
 
 
 def sanitize(text):
@@ -322,6 +322,7 @@ def run_lane(lane, prepared):
     if tools:
         setup.append(['./dev', 'bootstrap', *[arg for name in tools for arg in ('--tool', name)]])
     if lane not in ('format', 'lint', 'business') and not prepared['native']:
+        setup.append([sys.executable, 'scripts/ci/prerequisite.py'])
         setup.extend([['./dev', 'generate'], ['./dev', 'resolve']])
     if prepared['selection'] is None:
         setup.append([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)])
@@ -400,9 +401,22 @@ def run_lane(lane, prepared):
 
 def main():
     lanes = sys.argv[1:]
+    prepared = {'tools': set(), 'native': False, 'selection': None}
+    if lanes == ['routine']:
+        selection = Path(os.environ['RUNNER_TEMP']) / 'routine-selection.json'
+        selected = execute([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)])
+        if selected.returncode:
+            print(sanitize(selected.stdout or 'selection failed'))
+            return selected.returncode
+        prepared['selection'] = selection.read_bytes()
+        lanes = routine_lanes(json.loads(prepared['selection']))
+        if 'core-ui' in lanes or 'integration' in lanes or 'snapshots' in lanes:
+            os.environ['TODAY_CI_NATIVE_BATCH'] = '1'
+            os.environ['TODAY_CI_UI_ONLY'] = '1' if not any(
+                lane in lanes for lane in ('integration', 'snapshots')) else '0'
+        print(json.dumps({'required_lanes': lanes, 'selection': json.loads(prepared['selection'])}))
     if not lanes or len(lanes) != len(set(lanes)) or any(lane not in LANES for lane in lanes):
         raise ValueError('Expected unique known lanes')
-    prepared = {'tools': set(), 'native': False, 'selection': None}
     for lane in lanes:
         os.environ['TODAY_LANE'] = lane
         code = run_lane(lane, prepared)

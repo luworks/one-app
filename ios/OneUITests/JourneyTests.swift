@@ -69,8 +69,8 @@ final class JourneyTests: XCTestCase {
     tap(app.buttons["Complete Buy milk"])
     let undo = app.buttons["Undo"]
     XCTAssertTrue(undo.waitForExistence(timeout: 3), "undo toast appears")
-    XCTAssertFalse(
-      app.staticTexts["Buy milk"].waitForExistence(timeout: 1), "completed task leaves Today")
+    XCTAssertTrue(
+      app.staticTexts["Buy milk"].waitForNonExistence(timeout: 1), "completed task leaves Today")
     undo.tap()
     XCTAssertTrue(app.staticTexts["Buy milk"].waitForExistence(timeout: 3), "undo brings it back")
     XCTAssertTrue(app.buttons["Complete Buy milk"].exists, "and it is open again")
