@@ -74,7 +74,7 @@ def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=F
         result = execute(root, command, timeout=timeout)
         if result.returncode:
             return result.returncode
-        product = 'TodayMock' if scheme == 'TodayMock' else 'One'
+        product = {'Today': 'One', 'TodayMock': 'TodayMock', 'TodayWorkbench': 'TodayWorkbench'}[scheme]
         executable = derived_data(root) / f'Build/Products/{configuration}-iphonesimulator/{product}.app/{product}'
         if not executable.is_file() or fingerprint(root, configuration=configuration) != current:
             raise ValueError('Missing executable or source changed during build; provenance rejected')
@@ -175,9 +175,9 @@ def lint(root, timeout=600):
 
 
 def release(root, action, options=(), timeout=600):
-    if action == 'preflight' or action == 'validate':
+    if action in ('preflight', 'validate', 'preflight-local', 'validate-local'):
         return execute(root, [sys.executable, 'scripts/release/release.py', action, *options], timeout=timeout).returncode
-    if action != 'archive':
+    if action not in ('archive', 'archive-local'):
         raise ValueError('Distribution requires separate explicit authorization and is not a default dev action')
     from .runtimes import command, environment
-    return execute(root, command(root, ['bundle', '_4.0.16_', 'exec', 'fastlane', 'archive', *options]), env=environment(root), timeout=timeout, heavy=True).returncode
+    return execute(root, command(root, ['bundle', '_4.0.16_', 'exec', 'fastlane', 'ios', 'archive_local' if action == 'archive-local' else 'archive', *options]), env=environment(root), timeout=timeout, heavy=True).returncode

@@ -2,6 +2,7 @@
 import Foundation
 import SwiftData
 import TodayCore
+import TodayData
 
 extension Capture {
     package func makeTask() -> OneTask {

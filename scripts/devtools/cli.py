@@ -38,7 +38,7 @@ def main(argv=None, root=ROOT):
     sub.add_parser('generate', help='generate Today.xcodeproj from the sole specification')
     build_parser = sub.add_parser('build', help='build the real app and embedded extensions')
     build_parser.add_argument('configuration', nargs='?', choices=['Debug', 'Release'], default='Debug')
-    build_parser.add_argument('--scheme', choices=['Today', 'TodayMock'], default='Today')
+    build_parser.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench'], default='Today')
     test_parser = sub.add_parser('test', help='run an authoritative test group')
     test_parser.add_argument('group', choices=['unit', 'ios-unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
     test_parser.add_argument('--only', action='append', default=[])
@@ -47,7 +47,7 @@ def main(argv=None, root=ROOT):
     format_parser.add_argument('--check', action='store_true')
     sub.add_parser('lint', help='SwiftLint, maintained Python Ruff and actionlint')
     release_parser = sub.add_parser('release', help='guarded release preflight/archive/validate')
-    release_parser.add_argument('action', choices=['preflight', 'archive', 'validate'])
+    release_parser.add_argument('action', choices=['preflight', 'archive', 'validate', 'preflight-local', 'archive-local', 'validate-local'])
     release_parser.add_argument('options', nargs=argparse.REMAINDER)
     ci_parser = sub.add_parser('ci', help='execute one fail-closed integrated-SHA CI lane')
     ci_parser.add_argument('lane')
@@ -59,6 +59,20 @@ def main(argv=None, root=ROOT):
     feature_parser = sub.add_parser('new-feature', help='create a linked native feature or verify a temporary one')
     feature_parser.add_argument('name')
     feature_parser.add_argument('--verify', action='store_true')
+    ui_parser = sub.add_parser('ui', help='open/capture actual registered native scenes or serve their loopback gallery')
+    ui_sub = ui_parser.add_subparsers(dest='ui_action', required=True)
+    for verb in ('open', 'capture'):
+        action = ui_sub.add_parser(verb)
+        action.add_argument('--scene', required=True)
+        action.add_argument('--scenario', default='normal')
+        action.add_argument('--appearance', choices=['system', 'light', 'dark'], default='light')
+        action.add_argument('--type-size', default='large')
+        action.add_argument('--locale', default='en_US')
+        if verb == 'capture':
+            action.add_argument('--output', type=Path, required=True)
+    gallery_parser = ui_sub.add_parser('gallery')
+    gallery_parser.add_argument('--watch', action=argparse.BooleanOptionalAction, default=True)
+    gallery_parser.add_argument('--port', type=int, default=0)
     args = parser.parse_args(argv)
     if args.command == 'help':
         parser.print_help()
@@ -67,6 +81,18 @@ def main(argv=None, root=ROOT):
         root = Path(root).resolve()
         if args.command not in ('doctor', 'inventory', 'plan'):
             from . import commands
+            if args.command == 'ui':
+                from . import ui
+                if args.ui_action == 'gallery':
+                    ui.gallery(root, watch=args.watch, port=args.port)
+                else:
+                    options = dict(appearance=args.appearance, type_size=args.type_size, locale=args.locale)
+                    if args.ui_action == 'capture':
+                        identity = ui.capture(root, args.scene, args.scenario, args.output, **options)
+                    else:
+                        identity = ui.open_scene(root, args.scene, args.scenario, **options)
+                    print(json.dumps({'device': identity.device, 'os': identity.os}))
+                return 0
             if args.command == 'ci':
                 from .ci_adapter import main as ci_main
                 return ci_main(root, args.lane, selection=args.selection, output=args.output,
