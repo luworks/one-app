@@ -120,20 +120,23 @@
       ledger: Ledger, runtime: PlannerRuntime
     ) -> Bool {
       do {
-        let backup = try remove(alarm, context: context, alarms: alarms)
+        var backup = try remove(alarm, context: context, alarms: alarms)
         ledger.record(
           .deleted, kind: "alarm", title: alarmTitle(backup, runtime: runtime), context: context)
         var restoring = false
-        toast?.show("Deleted alarm") {
+        func restore() {
           guard !restoring, backup.modelContext == nil else { return }
           restoring = true
           Task { @MainActor in
             defer { restoring = false }
             do { try await alarms.commit(backup, context: context) } catch {
-              toast?.showNotice(error.localizedDescription)
+              backup = backup.snapshot()
+              toast?.show(
+                "Couldn’t restore alarm. Check alarm access and try Undo again.", undo: restore)
             }
           }
         }
+        toast?.show("Deleted alarm", undo: restore)
         return true
       } catch {
         toast?.showNotice(error.localizedDescription)

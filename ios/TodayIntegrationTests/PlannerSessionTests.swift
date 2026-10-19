@@ -52,12 +52,23 @@
       }
       #expect(!alarm.isDeleted && alarm.modelContext != nil)
       a.services.alarms.failsCancel = false
-      _ = try AlarmActions.remove(alarm, context: a.context, alarms: a.services.alarms)
+      let deleted = try AlarmActions.remove(alarm, context: a.context, alarms: a.services.alarms)
       await a.services.alarms.sync(a.context)
       #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 1)
       #expect(try ModelContext(a.context.container).fetch(FetchDescriptor<OneAlarm>()).count == 1)
       #expect(a.services.alarms.cancelledIDs == [id])
       #expect(!reminder.isDone && reminder.due == due && reminder.plannedStart == nil)
+      a.services.alarms.failsSchedule = true
+      do {
+        try await a.services.alarms.commit(deleted, context: a.context)
+        Issue.record("Expected Undo schedule failure")
+      } catch {}
+      #expect(deleted.modelContext == nil)
+      a.services.alarms.failsSchedule = false
+      try await a.services.alarms.commit(deleted, context: a.context)
+      try await a.services.alarms.commit(deleted, context: a.context)
+      #expect(deleted.alarmKitID == id)
+      #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 2)
     }
 
     @Test
