@@ -1,11 +1,6 @@
-import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import Foundation
+import One
+import TodayCore
 
 /// The items an edit sentence ("move the dentist to 4") can name: the next week's events and the open tasks, with short ids.
 /// One place builds them, so the Ask page and the suggestions (which check that a suggested sentence really resolves) agree.
@@ -13,7 +8,7 @@ import Foundation
 enum EditCandidates {
     typealias Result = (items: [EditItem], tasks: [String: OneTask], events: [String: OneEvent])
 
-    static func build(events: [OneEvent], tasks: [OneTask], now: Date = .now, calendar cal: Calendar = .current) -> Result {
+    static func build(events: [OneEvent], tasks: [OneTask], calendarSync: CalendarSync, now: Date = .now, calendar cal: Calendar = .current) -> Result {
         let window = DateInterval(start: cal.startOfDay(for: now), end: cal.date(byAdding: .day, value: 8, to: cal.startOfDay(for: now)) ?? now)
         var items: [EditItem] = []
         var taskByID: [String: OneTask] = [:]
@@ -23,7 +18,7 @@ enum EditCandidates {
         for (i, pair) in eventPairs.enumerated() {
             let id = "e\(i + 1)"
             eventByID[id] = pair.0
-            let n = CalendarSync.shared.audience(externalID: pair.0.externalID)?.attendees ?? 0
+            let n = calendarSync.audience(externalID: pair.0.externalID)?.attendees ?? 0
             items.append(EditItem(id: id, type: "event", title: pair.0.title, start: pair.1, minutes: pair.0.durationMinutes, attendees: n))
         }
         let openTasks = tasks.filter { t in

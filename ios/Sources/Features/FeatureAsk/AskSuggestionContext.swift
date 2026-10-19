@@ -1,19 +1,16 @@
-import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import Foundation
 import SwiftData
+import One
+import TodayCore
+import TodayShared
+import TodayPlatform
 
 /// Fills a `SuggestionContext` from what the app holds: SwiftData (reminders, events, alarms, chats), Apple Calendar (through
 /// `CalendarSync`) and the cached travel times. Reads only; nothing leaves the device and nothing is written.
 @MainActor
 enum AskSuggestionContextBuilder {
-    static func build(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], context: ModelContext,
-                      now: Date = TodayClock.now, calendar cal: Calendar = .current) -> SuggestionContext {
+    static func build(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], context: ModelContext, calendarSync: CalendarSync,
+                      now: Date, calendar cal: Calendar = .current) -> SuggestionContext {
         let today = cal.startOfDay(for: now)
         let tomorrow = cal.date(byAdding: .day, value: 1, to: today) ?? now
         let afterTomorrow = cal.date(byAdding: .day, value: 2, to: today) ?? now
@@ -27,15 +24,15 @@ enum AskSuggestionContextBuilder {
             var list: [SuggestionContext.Event] = []
             for e in events where !e.isAllDay {
                 for start in e.occurs(on: day, calendar: cal) {
-                    let place = CalendarSync.shared.place(forExternalID: e.externalID)
+                    let place = calendarSync.place(forExternalID: e.externalID)
                     list.append(.init(title: e.title, start: start, end: start.addingTimeInterval(e.duration),
                                       location: place?.address ?? "",
                                       travelMinutes: travel(id: e.externalID ?? "", start: start, place: place, now: now),
-                                      attendees: CalendarSync.shared.audience(externalID: e.externalID)?.attendees ?? 0,
+                                      attendees: calendarSync.audience(externalID: e.externalID)?.attendees ?? 0,
                                       repeats: e.repeats != nil))
                 }
             }
-            for e in CalendarSync.shared.events(on: day, excluding: mirrored) where !e.isAllDay {
+            for e in calendarSync.events(on: day, excluding: mirrored) where !e.isAllDay {
                 list.append(.init(title: e.title, start: e.start, end: max(e.end, e.start), location: e.location,
                                   travelMinutes: travel(id: e.eventIdentifier, start: e.start, place: e.place, now: now),
                                   attendees: 0, repeats: e.repeats))
@@ -82,7 +79,7 @@ enum AskSuggestionContextBuilder {
         let past = tasks.map { ReminderSuggest.Past(title: $0.title, createdAt: $0.createdAt, due: $0.due, isOpen: !$0.isDone) }
         ctx.habits = ReminderSuggest.suggest(from: past, now: now, calendar: cal, limit: 2)
 
-        ctx.editItems = EditCandidates.build(events: events, tasks: tasks, now: now, calendar: cal).items
+        ctx.editItems = EditCandidates.build(events: events, tasks: tasks, calendarSync: calendarSync, now: now, calendar: cal).items
         return ctx
     }
 

@@ -1,31 +1,26 @@
 import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 
 /// One item the AI proposes from the user's line. Nothing is written until it is added. The card stays in the
 /// conversation afterwards: Added (with Undo and Open), Dropped, or Undone (with Add again).
-struct CaptureProposal: Identifiable, Equatable {
-    var id = UUID()
-    var capture: Capture
+package struct CaptureProposal: Identifiable, Equatable {
+    package var id = UUID()
+    package var capture: Capture
     /// The proposal as the AI first made it, to tell what the user changed before Add (Activity data, edited-card diffs).
-    let original: Capture
-    var status: CardStatus = .open
+    package let original: Capture
+    package var status: CardStatus = .open
     /// How many items the line produced; a line with several keeps the list layout.
-    var batchSize = 1
+    package var batchSize = 1
     /// The items of one line share a batch.
-    var batch = UUID()
+    package var batch = UUID()
     /// The AI message the card sits under.
-    var anchor: UUID?
+    package var anchor: UUID?
     /// What Add wrote (the created item's id and its Activity entry), kept so Undo and Open reach exactly that.
-    var itemRef: String?
-    var entryID: UUID?
+    package var itemRef: String?
+    package var entryID: UUID?
 
-    init(capture: Capture, batchSize: Int = 1, batch: UUID = UUID(), anchor: UUID? = nil) {
+    package init(capture: Capture, batchSize: Int = 1, batch: UUID = UUID(), anchor: UUID? = nil) {
         self.capture = capture
         self.original = capture
         self.batchSize = batchSize
@@ -33,7 +28,7 @@ struct CaptureProposal: Identifiable, Equatable {
         self.anchor = anchor
     }
 
-    init(_ stored: StoredCard) {
+    package init(_ stored: StoredCard) {
         id = stored.id
         capture = stored.capture
         original = stored.capture
@@ -46,7 +41,7 @@ struct CaptureProposal: Identifiable, Equatable {
     }
 
     /// The saved form; nil for a card with no message to sit under.
-    var stored: StoredCard? {
+    package var stored: StoredCard? {
         anchor.map { StoredCard(id: id, anchor: $0, batch: batch, batchSize: batchSize, capture: capture, status: status,
                                 itemRef: itemRef, entryID: entryID) }
     }
@@ -54,24 +49,38 @@ struct CaptureProposal: Identifiable, Equatable {
 
 /// Every item from one line at once: a single item is the full preview card; several are compact rows with their own
 /// Add and Skip, one "Add all", and a tap to open a row for editing. Added items keep their place with a check, Undo and Open.
-struct CaptureStack: View {
-    @Binding var proposals: [CaptureProposal]
+package struct CaptureStack: View {
+    @Binding package var proposals: [CaptureProposal]
     /// The user's Reminders lists, for the list menu on tasks.
-    let lists: [String]
-    var onAdd: (UUID) -> Void
-    var onSkip: (UUID) -> Void
-    var onAddAll: () -> Void
-    var onUndo: (UUID) -> Void = { _ in }
-    var onOpen: (UUID) -> Void = { _ in }
+    package let lists: [String]
+    package var onAdd: (UUID) -> Void
+    package var onSkip: (UUID) -> Void
+    package var onAddAll: () -> Void
+    package var onUndo: (UUID) -> Void
+    package var onOpen: (UUID) -> Void
 
-    var onRename: (UUID, String) -> Bool = { _, _ in false }
+    package var onRename: (UUID, String) -> Bool
+
+    package init(proposals: Binding<[CaptureProposal]>, lists: [String], onAdd: @escaping (UUID) -> Void,
+                 onSkip: @escaping (UUID) -> Void, onAddAll: @escaping () -> Void,
+                 onUndo: @escaping (UUID) -> Void, onOpen: @escaping (UUID) -> Void,
+                 onRename: @escaping (UUID, String) -> Bool) {
+        _proposals = proposals
+        self.lists = lists
+        self.onAdd = onAdd
+        self.onSkip = onSkip
+        self.onAddAll = onAddAll
+        self.onUndo = onUndo
+        self.onOpen = onOpen
+        self.onRename = onRename
+    }
 
     @State private var expanded: UUID?
 
     private var openCount: Int { proposals.filter { $0.status == .open }.count }
     private var addedCount: Int { proposals.filter { $0.status == .added }.count }
 
-    var body: some View {
+    package var body: some View {
         Group {
             if proposals.count == 1, let only = proposals.first, only.batchSize == 1 {
                 CaptureCard(capture: binding(only.id), lists: lists, status: only.status,
@@ -121,7 +130,9 @@ struct CaptureStack: View {
     private func row(_ p: CaptureProposal) -> some View {
         if p.status == .open, expanded == p.id {
             CaptureCard(capture: binding(p.id), lists: lists,
-                        onAdd: { onAdd(p.id) }, onCancel: { onSkip(p.id) }, cancelTitle: "Skip")
+                        onAdd: { onAdd(p.id) }, onCancel: { onSkip(p.id) }, cancelTitle: "Skip",
+                        onUndo: { onUndo(p.id) }, onOpen: { onOpen(p.id) },
+                        onRename: { onRename(p.id, $0) })
         } else {
             CompactCaptureRow(capture: binding(p.id), lists: lists, status: p.status,
                               onOpen: { withAnimation(.snappy) { expanded = p.id } },
@@ -149,9 +160,9 @@ struct CompactCaptureRow: View {
     var onOpen: () -> Void
     var onAdd: () -> Void
     var onSkip: () -> Void
-    var onUndo: () -> Void = {}
-    var onShow: () -> Void = {}
-    var onRename: (String) -> Bool = { _ in false }
+    var onUndo: () -> Void
+    var onShow: () -> Void
+    var onRename: (String) -> Bool
 
     var body: some View {
         if status == .open { openRow } else { decidedRow }

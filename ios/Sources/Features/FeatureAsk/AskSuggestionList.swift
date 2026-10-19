@@ -1,12 +1,9 @@
-import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
+import One
+import TodayCore
+import TodayData
+import TodayDesignSystem
 
 /// The last model answer, kept for a few minutes so reopening the page right away shows the same wording at once.
 @MainActor
@@ -19,7 +16,15 @@ private enum AskSuggestionMemory {
 /// no empty first frame; when the on-device model has re-ranked and reworded them (at most ~2 s later) the same number of chips
 /// cross-fades to the new text. A new context (data changed, a few minutes passed) refreshes them the same way.
 struct AskSuggestionList: View {
+    private let calendarSync: CalendarSync
+    private let now: () -> Date
     var onSend: (String) -> Void
+
+    init(calendar: CalendarSync, now: @escaping () -> Date, onSend: @escaping (String) -> Void) {
+        self.calendarSync = calendar
+        self.now = now
+        self.onSend = onSend
+    }
 
     @Environment(\.modelContext) private var context
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
@@ -53,7 +58,8 @@ struct AskSuggestionList: View {
     }
 
     private func rebuild() {
-        let ctx = AskSuggestionContextBuilder.build(tasks: tasks, events: events, alarms: alarms, context: context)
+        let ctx = AskSuggestionContextBuilder.build(tasks: tasks, events: events, alarms: alarms, context: context,
+                                                    calendarSync: calendarSync, now: now())
         held.ctx = ctx
         held.pool = SuggestionRules.pool(ctx)
         held.rules = SuggestionRules.chips(ctx)
