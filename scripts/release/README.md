@@ -158,3 +158,5 @@ Versioned synthetic fixture builders and their catalog live in
 physical-device test or real archive is required for this tooling-only lane.
 Record development/check actions through the existing `tests/qa/journal.py` and
 retain logs in the primary `/Users/yuanlu/code/one-app/tests/results/` checkout.
+
+Formal `preflight` reports `pending_acceptance` from the test authority's release group and fails with `release_acceptance_pending` while known red audits or device acceptance remain unresolved. PR101's broad accessibility remediation is explicitly deferred for merge, and remains a release blocker. `preflight-local` is source-only evidence and does not certify those gates.

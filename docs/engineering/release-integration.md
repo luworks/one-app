@@ -109,3 +109,5 @@ Record commands, exit statuses and evidence hashes through canonical
 logs/maps/result bundle. Never archive a live result bundle. Real archive,
 signed export/distribution, simulator journeys, installed Shortcuts, physical-device
 upgrade and on-device capability checks remain root-owned acceptance gates.
+
+Formal release `preflight` also reads the authoritative `tests/testing/groups.json` release pending gates. Three known failed extended `.all` accessibility audits and unverified physical-device acceptance currently block it with `release_acceptance_pending`, with the reasons visible in JSON. Root excluded broad accessibility remediation from PR101 merge acceptance; this does not confer formal release qualification. The unsigned source-only gate retains its separate limited meaning.

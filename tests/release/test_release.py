@@ -42,6 +42,18 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(r.preflight(self.f.root, self.f.args, self.f.env).data['status'], 'ready')
         self.assertTrue(all('-allowProvisioningUpdates' not in a and 'archive' not in a for a in self.f.calls))
 
+    def test_known_failed_audit_blocks_formal_release_without_claiming_local_acceptance(self):
+        authority = self.f.root / 'tests/testing/groups.json'
+        failure = 'Known failed AccessibilityAuditTests/testCoreTabsAudit; release blocked'
+        authority.write_text(json.dumps({'groups': {'release': {'pending': [failure]}}}))
+        result = r.preflight(self.f.root, self.f.args, self.f.env).data
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['checks']['release_acceptance']['code'], 'release_acceptance_pending')
+        self.assertEqual(result['pending_acceptance'], [failure])
+        local = r.local_preflight(self.f.root, self.f.args).data
+        self.assertEqual(local['readiness'], 'unsigned_local')
+        self.assertEqual(local['evidence'], 'source_checks_only')
+
     def test_today_app_module_is_required_while_product_remains_one(self):
         original = self.f.run
         def wrong_module(argv, root):

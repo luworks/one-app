@@ -198,12 +198,23 @@ class Report:
 
 def preflight(root, args, env):
     report = Report('preflight')
+    report.check('release_acceptance', lambda: check_release_acceptance(root, report))
     report.check('release_metadata', lambda: metadata(args))
     report.check('git_commit_clean', lambda: check_git(root, args.commit))
     report.check('locked_tools', lambda: check_tools(root))
     report.check('generated_project', lambda: check_project(root))
     report.check('signing_environment', lambda: check_signing(root, args.team, env, args.version, args.build))
     return report
+
+
+def check_release_acceptance(root, report):
+    # Use the test authority's existing pending gates, including known red audits.
+    manifest = json.loads((root / 'tests/testing/groups.json').read_text())
+    pending = manifest['groups']['release']['pending']
+    require(isinstance(pending, list) and all(isinstance(item, str) and item for item in pending),
+            'release_acceptance_manifest_invalid')
+    report.data['pending_acceptance'] = pending
+    require(not pending, 'release_acceptance_pending')
 
 
 def metadata(args, local=False):

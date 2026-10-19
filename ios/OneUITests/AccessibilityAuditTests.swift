@@ -5,6 +5,20 @@ import XCTest
 final class AccessibilityAuditTests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
 
+  private func audit(_ app: XCUIApplication) throws {
+    try app.performAccessibilityAudit(for: .all) { issue in
+      let details =
+        "\(issue.compactDescription)\n\(issue.detailedDescription)\n"
+        + (issue.element?.debugDescription ?? "No element supplied by the system audit")
+      let attachment = XCTAttachment(string: details + "\nApplication:\n" + app.debugDescription)
+      attachment.name = "Accessibility issue and element geometry"
+      attachment.lifetime = .keepAlways
+      self.add(attachment)
+      print("AX_AUDIT_ISSUE \(details)")
+      return false
+    }
+  }
+
   private func launch(largeType: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments =
@@ -31,7 +45,7 @@ final class AccessibilityAuditTests: XCTestCase {
       XCTAssertEqual(tab.label, title)
       tab.tap()
       XCTAssertTrue(tab.isSelected, "The current tab must announce selection: \(title)")
-      try app.performAccessibilityAudit(for: .all)
+      try audit(app)
     }
   }
 
@@ -54,7 +68,7 @@ final class AccessibilityAuditTests: XCTestCase {
     }
     app.buttons["health.range.7"].tap()
     XCTAssertTrue(app.buttons["health.range.7"].isSelected)
-    try app.performAccessibilityAudit(for: .all)
+    try audit(app)
     let done = app.buttons["health.detail.done"]
     XCTAssertEqual(done.label, "Done")
     done.tap()
@@ -74,7 +88,7 @@ final class AccessibilityAuditTests: XCTestCase {
     XCTAssertEqual(lapReset.label, "Lap")
     XCTAssertFalse(lapReset.isEnabled)
     XCTAssertEqual(app.staticTexts["stopwatch.time"].label, "Stopwatch, 0 seconds")
-    try app.performAccessibilityAudit(for: .all)
+    try audit(app)
     startStop.tap()
     XCTAssertEqual(startStop.label, "Stop")
     XCTAssertTrue(lapReset.isEnabled)

@@ -30,6 +30,9 @@ class Fixture:
             target = root / file
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(release.ROOT / file, target)
+        authority = root / 'tests/testing/groups.json'
+        authority.parent.mkdir(parents=True)
+        authority.write_text(json.dumps({'groups': {'release': {'pending': []}}}))
         shutil.copytree(release.ROOT / 'ios/Config', root / 'ios/Config')
         # Evaluated manifest data, not a hand-parsed Swift declaration.
         self.package = {'targets': [{'name': 'One', 'type': 'regular', 'dependencies': []},

@@ -48,7 +48,8 @@
         "accessibility"
       ],
       "pending": [
-        "Physical-device AlarmKit, Siri, Live Activities and permission acceptance owned by integration; no simulator substitute"
+        "Physical-device AlarmKit, Siri, Live Activities and permission acceptance owned by integration; no simulator substitute",
+        "Known failed extended accessibility audits at 4891c673823a0c564f9d89e1bc4baf3c175f5e06: AccessibilityAuditTests/testCoreTabsAudit (hit region), testHealthDetailRangeAndDismissAudit (Dynamic Type), testStopwatchLargeTypeActionsAudit (hit region). Broad product remediation excluded from PR101 merge scope by root; formal Release remains blocked. Raw results: today-qa-20261018-230913-339cfd22; unchanged diagnostic reproduction: today-qa-20261018-232809-bbb8b05f. Manual VoiceOver unverified."
       ]
     },
     "ios-unit": {

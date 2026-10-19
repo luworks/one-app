@@ -37,8 +37,9 @@ final class JourneyTests: XCTestCase {
       : app.textViews.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.typeText("Call Alex tomorrow at 3pm\n")
-    XCTAssertTrue(
-      app.staticTexts["Call Alex"].waitForExistence(timeout: 5), "preview shows the parsed title")
+    let title = app.buttons["capture-title"]
+    XCTAssertTrue(title.waitForExistence(timeout: 5), "preview shows the parsed title")
+    XCTAssertEqual(title.label, "Call Alex")
     tap(app.buttons["Add"])
     XCTAssertTrue(
       app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5),
