@@ -1,13 +1,14 @@
 {
   "base": "1748a4a8565fd86f4bf5fe23d64b1ff010ee0d43",
   "policy": "essential-risk-selected",
-  "status": "local-helpers-passed-remote-pending",
+  "status": "pr119-entry-repaired-remote-pending",
   "local": {
-    "helpers": 141,
+    "helpers": 142,
     "lint": "passed",
     "format": "passed",
     "native": "not-run",
-    "phone": "not-run"
+    "phone": "not-run",
+    "helpers_seconds": 24.258
   },
   "previous_failure": {
     "pr": 118,
@@ -125,5 +126,25 @@
         "TodayUITests/JourneyTests/testSettingsDeleteAllDataNeedsTwoConfirmations"
       ]
     }
-  }
+  },
+  "pr119_first_failure": {
+    "head": "16065252aa8e04d3f67615d85b64766824799bc4",
+    "run": 39339915559,
+    "job": 118358616714,
+    "status": "failed-before-selection",
+    "cause": "ModuleNotFoundError: scripts; routine execute called before run_lane path initialization",
+    "queue_seconds": 6,
+    "job_seconds": 22,
+    "run_created_to_job_closed_seconds": 28,
+    "native_started": false,
+    "formatter_started": false,
+    "reports": [],
+    "test_leaves": [],
+    "xcresult": null,
+    "artifacts_count": 0,
+    "not_execution_success": true,
+    "evidence": "tests/results/ci-hillclimb-20261019/pr119-first-failure/audit.json"
+  },
+  "repair": "Initialize repository package path before routine selection; subprocess regression preserves success and nonzero exit.",
+  "acceptance": "Remote risk-selected reports and fresh native leaves pending; five-minute ordinary Swift profile remains unqualified."
 }

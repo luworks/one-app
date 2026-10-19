@@ -9,6 +9,9 @@ import subprocess
 import sys
 import time
 
+# Direct workflow execution must resolve package imports before routine selection.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 try:
     from .policy import LANES, validate_report, routine_lanes
 except ImportError:  # Direct workflow entry point.
@@ -299,7 +302,6 @@ def execute(argv, *, timeout=600, grace=30):
 
 
 def run_lane(lane, prepared):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     if lane not in LANES:
         raise ValueError('unknown lane')
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=5).strip()
