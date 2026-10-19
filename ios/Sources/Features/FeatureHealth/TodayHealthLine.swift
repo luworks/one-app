@@ -1,10 +1,6 @@
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 
 /// Reads Apple Health for the line at the top of Today. Health data stays in memory (never in SwiftData or the widget).

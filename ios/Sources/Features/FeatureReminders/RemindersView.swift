@@ -5,92 +5,12 @@ import TodayDesignSystem
 import SwiftUI
 import SwiftData
 
-/// The five smart lists at the top of Apple Reminders.
-package enum SmartList: String, CaseIterable, Identifiable, Hashable {
-    case today, scheduled, all, flagged, completed
-
-    package var id: Self { self }
-
-    package var title: String {
-        switch self {
-        case .today: "Today"
-        case .scheduled: "Scheduled"
-        case .all: "All"
-        case .flagged: "Flagged"
-        case .completed: "Completed"
-        }
-    }
-
-    package var symbol: String {
-        switch self {
-        case .today: "calendar"
-        case .scheduled: "calendar.badge.clock"
-        case .all: "tray.fill"
-        case .flagged: "flag.fill"
-        case .completed: "checkmark"
-        }
-    }
-
-    package var color: Color {
-        switch self {
-        case .today: Color(.systemBlue)
-        case .scheduled: Color(.systemRed)
-        case .all: Color(UIColor { $0.userInterfaceStyle == .dark ? .systemGray2 : .darkGray })
-        case .flagged: Color(.systemOrange)
-        case .completed: Color(.systemGray)
-        }
-    }
-
-    /// Today: due today or planned today, plus overdue. Scheduled: has a deadline or a planned time.
-    /// All: every open reminder. Flagged: open and flagged. Completed: done.
-    package func includes(_ task: OneTask, calendar: Calendar = .current) -> Bool {
-        if self == .completed { return task.isDone }
-        guard !task.isDone else { return false }
-        switch self {
-        case .today:
-            return task.isOverdue
-                || [task.due, task.plannedStart].contains { $0.map(calendar.isDateInToday) ?? false }
-        case .scheduled: return task.due != nil || task.plannedStart != nil
-        case .all: return true
-        case .flagged: return task.flagged
-        case .completed: return task.isDone
-        }
-    }
-}
-
 /// Where a row or pill in Reminders leads. Lists are referenced by id so a rename or delete can't leave a stale model behind.
 package enum ReminderTarget: Hashable {
     case smart(SmartList)
     case list(PersistentIdentifier)
     /// Reminders that belong to no list (`listName == ""`); Apple calls this list "Reminders".
     case defaultList
-}
-
-/// Which smart lists show at the top of Reminders, and in what order. Changed in Settings (a switch per list;
-/// press, hold and drag to reorder) or with Hide in a smart list's long-press menu.
-/// Stored as comma-separated raw values so it fits in `@AppStorage`.
-package struct SmartListLayout {
-    package static let orderKey = "reminders.smartOrder"
-    package static let hiddenKey = "reminders.smartHidden"
-
-    package var order: [SmartList]
-    package var hidden: Set<SmartList>
-
-    package init(order raw: String, hidden rawHidden: String) {
-        // Smart lists added in a later version show up at the end.
-        order = PillOrder.decode(raw, all: SmartList.allCases)
-        hidden = Set(rawHidden.split(separator: ",").compactMap { SmartList(rawValue: String($0)) })
-    }
-
-    package var visible: [SmartList] { order.filter { !hidden.contains($0) } }
-    package var orderString: String { PillOrder.encode(order) }
-
-    /// A pill was moved in the row of shown smart lists (a drag, or Move Left / Move Right). Hidden lists keep their
-    /// places, so Settings shows the same order.
-    package mutating func reorderVisible(_ newVisible: [SmartList]) {
-        order = PillOrder.merge(visible: newVisible, into: order)
-    }
-    package var hiddenString: String { hidden.map(\.rawValue).sorted().joined(separator: ",") }
 }
 
 /// The Reminders tab: small pills above the List (smart lists, then pinned lists), My Lists, Add List. Everything
@@ -596,5 +516,23 @@ private struct ListRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(pinned ? "\(name), pinned, \(reminderCountText(count))" : "\(name), \(reminderCountText(count))")
+    }
+}
+
+extension SmartList {
+    /// Today: due today or planned today, plus overdue. Scheduled: has a deadline or a planned time.
+    /// All: every open reminder. Flagged: open and flagged. Completed: done.
+    package func includes(_ task: OneTask, calendar: Calendar = .current) -> Bool {
+        if self == .completed { return task.isDone }
+        guard !task.isDone else { return false }
+        switch self {
+        case .today:
+            return task.isOverdue
+                || [task.due, task.plannedStart].contains { $0.map(calendar.isDateInToday) ?? false }
+        case .scheduled: return task.due != nil || task.plannedStart != nil
+        case .all: return true
+        case .flagged: return task.flagged
+        case .completed: return task.isDone
+        }
     }
 }

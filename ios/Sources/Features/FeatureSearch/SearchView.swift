@@ -1,16 +1,17 @@
+import One
 import TodayCore
 import TodayShared
 import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
 
 /// Search everything in one place: reminders, calendar events (Today's and the whole system calendar) and alarms.
 /// Native search field with scopes; results are grouped, and tapping one opens it in its own editor.
-struct SearchView: View {
+package struct SearchView<Editor: View>: View {
+    private let editor: @MainActor (OpenedEntry) -> Editor
+    package init(@ViewBuilder editor: @escaping @MainActor (OpenedEntry) -> Editor) { self.editor = editor }
     enum Scope: String, CaseIterable, Identifiable {
         case all = "All", reminders = "Reminders", events = "Events", alarms = "Alarms"
         var id: Self { self }
@@ -65,7 +66,7 @@ struct SearchView: View {
         }
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             let r = results
             List {
@@ -154,10 +155,10 @@ struct SearchView: View {
             .onAppear { focused = true }
             .sheet(item: $opened) { item in
                 switch item {
-                case .task(let t): TaskEditor(task: t)
-                case .event(let e): EventEditor(event: e)
+                case .task(let t): editor(.task(t))
+                case .event(let e): editor(.local(e))
                 case .system(let id): NativeEventSheet(identifier: id)
-                case .alarm(let a): AlarmEditor(alarm: a)
+                case .alarm(let a): editor(.alarm(a))
                 }
             }
         }

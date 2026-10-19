@@ -1,13 +1,16 @@
+import One
 import SwiftUI
 import EventKit
 import EventKitUI
 
 /// Apple's own calendar list (EventKitUI): accounts, color dots, checkmarks. Its selection is the Calendars filter.
-struct NativeCalendarChooser: UIViewControllerRepresentable {
+package struct NativeCalendarChooser: UIViewControllerRepresentable {
+    let calendar: CalendarSync
+    package init(calendar: CalendarSync) { self.calendar = calendar }
     @Environment(\.dismiss) private var dismiss
 
     func makeUIViewController(context: Context) -> UINavigationController {
-        let sync = CalendarSync.shared
+        let sync = calendar
         let store = sync.eventStore
         let chooser = EKCalendarChooser(selectionStyle: .multiple, displayStyle: .allCalendars, entityType: .event, eventStore: store)
         let hidden = sync.hiddenCalendarIDs

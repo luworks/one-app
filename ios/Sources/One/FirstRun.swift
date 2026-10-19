@@ -2,9 +2,6 @@ import TodayCore
 import TodayShared
 import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import Foundation
 
 /// First-run access to Apple Calendar and Apple Reminders. iOS shows its own permission prompt the first time;
