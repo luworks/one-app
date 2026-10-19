@@ -1,10 +1,8 @@
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
+import One
+import TodayPlannerUI
 import SwiftUI
 import SwiftData
 
@@ -12,23 +10,51 @@ import SwiftData
 /// day's events listed below) and Year (twelve mini months). The day view is the Today tab: tapping a day's header
 /// opens it there. One control row under the tab pills: the view switcher. Which calendars show is a Setting.
 /// System events open in Apple's own viewer; new events use Apple's own editor when Calendar access is on.
-struct CalendarView: View {
-    enum Mode: String, CaseIterable, Identifiable {
+package struct CalendarView: View {
+    package enum Mode: String, CaseIterable, Identifiable {
         case week = "Week", month = "Month", year = "Year"
-        var id: Self { self }
+        package var id: Self { self }
     }
 
     @Binding var day: Date
     /// Week / Month / Year. Kept by `HomeView`, so switching tabs and back keeps the view.
     @Binding var mode: Mode
-    var onOpenDay: (Date) -> Void
+    let calendar: CalendarSync
+    let onOpenTask: @MainActor (OneTask) -> Void
+    let onOpenAlarm: @MainActor (OneAlarm) -> Void
+    let onOpenDay: @MainActor (Date) -> Void
 
-    @State private var opened: OpenedEntry?
+    @State private var opened: EventPresentation?
+    private enum EventPresentation: Identifiable {
+        case local(OneEvent)
+        case new(start: Date, end: Date)
+
+        var id: String {
+            switch self {
+            case .local(let event): "l\(event.persistentModelID.hashValue)"
+            case .new(let start, _): "n\(start.timeIntervalSince1970)"
+            }
+        }
+    }
+
     /// The month title of the visible week / month page, published by the page and shown in the control row.
     @State private var title = ""
     private let cal = Calendar.current
 
-    var body: some View {
+    @MainActor
+    package init(day: Binding<Date>, mode: Binding<Mode>, calendar: CalendarSync,
+                 onOpenTask: @escaping @MainActor (OneTask) -> Void,
+                 onOpenAlarm: @escaping @MainActor (OneAlarm) -> Void,
+                 onOpenDay: @escaping @MainActor (Date) -> Void) {
+        _day = day
+        _mode = mode
+        self.calendar = calendar
+        self.onOpenTask = onOpenTask
+        self.onOpenAlarm = onOpenAlarm
+        self.onOpenDay = onOpenDay
+    }
+
+    package var body: some View {
         VStack(spacing: 0) {
             controlRow
             Group {
@@ -38,7 +64,7 @@ struct CalendarView: View {
                 case .month:
                     MonthView(day: $day, title: $title, open: open, edit: edit, openDay: openDay)
                 case .year:
-                    YearView(day: $day, openDay: showMonth) { month in
+                    YearView(day: $day, calendar: calendar, openDay: showMonth) { month in
                         withAnimation(.snappy) {
                             day = CalendarMath.landingDay(inMonthOf: month)
                             mode = .month
@@ -50,26 +76,27 @@ struct CalendarView: View {
         }
         .sheet(item: $opened) { item in
             switch item {
-            case .system(let id): NativeEventSheet(identifier: id)
-            case .editSystem(let id): NativeEventEditor(identifier: id).ignoresSafeArea()
-            case .local(let event): EventEditor(event: event)
-            case .task(let task): TaskEditor(task: task)
-            case .alarm(let alarm): AlarmEditor(alarm: alarm)
-            case .new(let start, let end): EventEditor(start: start, end: end)
+            case .local(let event): EventEditor(event: event, calendar: calendar)
+            case .new(let start, let end): EventEditor(start: start, end: end, calendar: calendar)
             }
         }
     }
 
     /// System events open in Apple's editor (presented by UIKit, see `NativeEvents`); the rest in our editors.
     private func open(_ entry: CalEntry) {
-        if case .system(let id) = entry.source { NativeEvents.edit(identifier: id, start: entry.start) } else { opened = OpenedEntry(entry) }
+        switch entry.source {
+        case .system(let id): NativeEvents.edit(identifier: id, start: entry.start)
+        case .task(let task): onOpenTask(task)
+        case .alarm(let alarm): onOpenAlarm(alarm)
+        case .local(let event): opened = .local(event)
+        }
     }
 
     private func edit(_ entry: CalEntry) { open(entry) }
 
     /// A long-press on an empty slot of the Week grid: Apple's editor when Calendar access is on, else ours, prefilled.
     private func create(start: Date, end: Date) {
-        if CalendarSync.shared.usesNativeEditor { NativeEvents.edit(start: start, end: end) } else { opened = .new(start: start, end: end) }
+        if calendar.usesNativeEditor { NativeEvents.edit(start: start, end: end) } else { opened = .new(start: start, end: end) }
     }
 
     /// Tapping a day that is already selected opens it in Today (the day view).
@@ -141,12 +168,18 @@ private struct ModePill: View {
 }
 
 /// The Calendars list: Apple's own EKCalendarChooser (accounts, color dots, checkmarks) when access is on.
-struct CalendarsSheet: View {
+package struct CalendarsSheet: View {
+    let calendar: CalendarSync
+
+    package init(calendar: CalendarSync) {
+        self.calendar = calendar
+    }
+
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
-        if CalendarSync.shared.isOn {
-            NativeCalendarChooser()
+    package var body: some View {
+        if calendar.isOn {
+            NativeCalendarChooser(calendar: calendar)
                 .ignoresSafeArea()
                 .presentationDetents([.medium, .large])
         } else {
@@ -158,7 +191,7 @@ struct CalendarsSheet: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    Button("Turn On") { Task { await CalendarSync.shared.setEnabled(true) } }
+                    Button("Turn On") { Task { await calendar.setEnabled(true) } }
                         .buttonStyle(.borderedProminent)
                 }
                 .padding(32)
@@ -422,7 +455,7 @@ private struct DayAgendaList: View {
 
 /// One line of Apple's event list: calendar-colored bar, bold title, location, start and end time on the right.
 /// All-day events lead with a calendar glyph and say "all-day".
-struct AgendaRow: View {
+private struct AgendaRow: View {
     let entry: CalEntry
     let day: Date
     @Environment(\.displayScale) private var scale
@@ -492,6 +525,7 @@ struct AgendaRow: View {
 
 private struct YearView: View {
     @Binding var day: Date
+    let calendar: CalendarSync
     var openDay: (Date) -> Void
     var pickMonth: (Date) -> Void
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
@@ -539,7 +573,7 @@ private struct YearView: View {
 
     private var dataSignature: Int {
         var h = Hasher()
-        h.combine(CalendarSync.shared.version)
+        h.combine(calendar.version)
         h.combine(holidaySetting)
         for e in events { h.combine(e.start); h.combine(e.durationMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.title); h.combine(e.calendarName); h.combine(e.externalID) }
         for t in tasks { h.combine(t.plannedStart); h.combine(t.due); h.combine(t.repeatRule); h.combine(t.isDone) }
@@ -771,8 +805,8 @@ private struct WeekView: View {
     /// 7 = a calendar week; 3 = the next 3 days starting today.
     var dayCount = 7
     var open: (CalEntry) -> Void
-    var edit: (CalEntry) -> Void = { _ in }
-    var create: (Date, Date) -> Void = { _, _ in }
+    var edit: (CalEntry) -> Void
+    var create: (Date, Date) -> Void
     var openDay: (Date) -> Void
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
@@ -843,8 +877,8 @@ private struct WeekPage: View {
     @Binding var topHour: Int?
     @Binding var hourHeight: CGFloat
     var open: (CalEntry) -> Void
-    var edit: (CalEntry) -> Void = { _ in }
-    var create: (Date, Date) -> Void = { _, _ in }
+    var edit: (CalEntry) -> Void
+    var create: (Date, Date) -> Void
     var openDay: (Date) -> Void
     @State private var pendingDelete: CalEntry?
     /// The new event being placed by a long-press on an empty slot: day column and start minute.
@@ -1321,7 +1355,7 @@ private struct SlotPressView: UIViewRepresentable {
 
 /// Long-press, then drag a planned task to another time (15-minute steps) or day. Events never move.
 /// Moving changes only the planned time, never the deadline.
-struct DraggableTaskBlock<Content: View>: View {
+private struct DraggableTaskBlock<Content: View>: View {
     let task: OneTask
     let colWidth: CGFloat
     let hourHeight: CGFloat

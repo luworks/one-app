@@ -1,21 +1,18 @@
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
+import One
 import SwiftUI
 import SwiftData
 
 /// Create or edit a task. Edits are held locally and written back on Done.
 /// Planned time and deadline are separate: changing one never changes the other.
-struct EventEditor: View {
+package struct EventEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
 
     let event: OneEvent?
+    private let calendar: CalendarSync
 
     @State private var title: String
     @State private var isAllDay: Bool
@@ -29,14 +26,16 @@ struct EventEditor: View {
     private let defaultStart: Date
 
     /// The next full hour today, or 9:00 on another day.
-    static func defaultStart(for day: Date) -> Date {
+    package static func defaultStart(for day: Date) -> Date {
         let cal = Calendar.current
         let base = cal.isDateInToday(day) ? Date.now : (cal.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
         return cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
     }
 
     /// `start` / `end`: a new event at a slot picked on the Week grid (instead of the default time on `day`).
-    init(event: OneEvent? = nil, day: Date = .now, start slotStart: Date? = nil, end slotEnd: Date? = nil) {
+    package init(event: OneEvent? = nil, day: Date = .now, start slotStart: Date? = nil, end slotEnd: Date? = nil,
+                 calendar: CalendarSync) {
+        self.calendar = calendar
         self.event = event
         let rounded = slotStart ?? Self.defaultStart(for: day)
         defaultStart = rounded
@@ -51,8 +50,8 @@ struct EventEditor: View {
         _ringsAsAlarm = State(initialValue: event?.ringsAsAlarm ?? false)
     }
 
-    var body: some View {
-        if event == nil && CalendarSync.shared.usesNativeEditor {
+    package var body: some View {
+        if event == nil && calendar.usesNativeEditor {
             // Calendar access is on: a new event is made with Apple's own editor and lives in the system calendar.
             NativeEventEditor(start: defaultStart).ignoresSafeArea()
         } else {
@@ -95,7 +94,7 @@ struct EventEditor: View {
                     Section {
                         Button(event.repeats == nil ? "Delete event" : "Delete all occurrences", role: .destructive) {
                             let backup = event.copy()
-                            guard CalendarSync.shared.delete(event) else {
+                            guard calendar.delete(event) else {
                                 toast?.showNotice("Couldn't delete “\(event.title)” from Calendar, so it was kept.")
                                 dismiss()
                                 return
@@ -103,7 +102,7 @@ struct EventEditor: View {
                             Ledger.record(.deleted, kind: "event", title: backup.title, before: DayLabel.withTime(backup.start), context: context)
                             context.delete(event)
                             toast?.show("Deleted “\(backup.title)”") {
-                                backup.externalID = CalendarSync.shared.save(backup)
+                                backup.externalID = calendar.save(backup)
                                 withAnimation(.snappy) { context.insert(backup) }
                                 try? context.save()
                             }
@@ -155,7 +154,7 @@ struct EventEditor: View {
         e.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if event == nil { context.insert(e) }
         try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
-        if CalendarSync.shared.isOn { e.externalID = CalendarSync.shared.save(e) ?? e.externalID }
+        if calendar.isOn { e.externalID = calendar.save(e) ?? e.externalID }
         if event == nil { Ledger.record(.created, kind: "event", title: e.title, after: DayLabel.withTime(e.start), context: context) }
         dismiss()
     }

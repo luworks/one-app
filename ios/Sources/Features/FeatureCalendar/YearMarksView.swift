@@ -1,10 +1,6 @@
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 
 /// The Settings choice behind the Year view's holiday numbers. Stored as "auto" (follow region and language), "none" or the chosen sets.
@@ -18,10 +14,12 @@ enum YearMarkSettings {
 }
 
 /// Settings → Holidays in Year: which sets of holidays and festivals show as red day numbers.
-struct YearHolidaysSettingsView: View {
+package struct YearHolidaysSettingsView: View {
+    package init() {}
+
     @AppStorage(YearMarkSettings.holidaysKey) private var stored = YearMarkSettings.auto
 
-    var body: some View {
+    package var body: some View {
         Form {
             Section {
                 ForEach(HolidaySet.allCases) { set in
