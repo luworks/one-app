@@ -10,9 +10,15 @@ import SwiftData
 /// One list pushed from Reminders: a smart list (Today, Scheduled, All, Flagged, Completed), the default
 /// list, or a list from My Lists. Big colored title, the reminders, and an inline "New Reminder" row.
 package struct ReminderListScreen: View {
+    @Environment(PlannerPresentation.self) private var presentation
+    private let actions: PlannerActions
+    private let ledger: Ledger
+    private let reminders: any ReminderService
+    private let alarms: any AlarmService
     let target: ReminderTarget
 
-    package init(target: ReminderTarget) {
+    package init(target: ReminderTarget, actions: PlannerActions, ledger: Ledger, reminders: any ReminderService, alarms: any AlarmService) {
+        self.actions = actions; self.ledger = ledger; self.reminders = reminders; self.alarms = alarms
         self.target = target
     }
 
@@ -74,7 +80,7 @@ package struct ReminderListScreen: View {
 
     private var scoped: [OneTask] {
         switch target {
-        case .smart(let s): tasks.filter { s.includes($0) }
+        case .smart(let s): tasks.filter { s.includes($0, now: presentation.now, calendar: presentation.calendar) }
         case .defaultList: tasks.filter { $0.listName.isEmpty }
         case .list: list.map { l in tasks.filter { $0.listName == l.name } } ?? []
         }
@@ -87,11 +93,11 @@ package struct ReminderListScreen: View {
     private func when(_ t: OneTask) -> Date { t.plannedStart ?? t.due ?? t.createdAt }
 
     private var groups: [Group] {
-        let cal = Calendar.current
+        let cal = presentation.calendar
         switch target {
         case .smart(.today):
-            let overdue = open.filter(\.isOverdue).sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
-            let today = open.filter { !$0.isOverdue }.sorted { when($0) < when($1) }
+            let overdue = open.filter { plannerIsOverdue($0, now: presentation.now, calendar: presentation.calendar) }.sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
+            let today = open.filter { !plannerIsOverdue($0, now: presentation.now, calendar: presentation.calendar) }.sorted { when($0) < when($1) }
             return [Group(id: "overdue", title: "Overdue", color: .red, tasks: overdue),
                     Group(id: "today", title: "Today", color: SmartList.today.color, tasks: today)]
                 .filter { !$0.tasks.isEmpty }
@@ -100,8 +106,8 @@ package struct ReminderListScreen: View {
                 cal.startOfDay(for: [t.due, t.plannedStart].compactMap { $0 }.min() ?? t.createdAt)
             }
             return byDay.keys.sorted().map { day in
-                let past = day < cal.startOfDay(for: .now)
-                return Group(id: "day-\(day.timeIntervalSince1970)", title: Self.dayHeader(day), color: past ? .red : .primary,
+                let past = day < cal.startOfDay(for: presentation.now)
+                return Group(id: "day-\(day.timeIntervalSince1970)", title: dayHeader(day), color: past ? .red : .primary,
                              tasks: (byDay[day] ?? []).sorted { when($0) < when($1) })
             }
         case .smart(.all):
@@ -128,12 +134,12 @@ package struct ReminderListScreen: View {
         }
     }
 
-    private static func dayHeader(_ day: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(day) { return "Today" }
-        if cal.isDateInTomorrow(day) { return "Tomorrow" }
-        if cal.isDateInYesterday(day) { return "Yesterday" }
-        return day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    private func dayHeader(_ day: Date) -> String {
+        let cal = presentation.calendar
+        if cal.isDate(day, inSameDayAs: presentation.now) { return "Today" }
+        if cal.isDate(day, inSameDayAs: cal.date(byAdding: .day, value: 1, to: presentation.now) ?? presentation.now) { return "Tomorrow" }
+        if cal.isDate(day, inSameDayAs: cal.date(byAdding: .day, value: -1, to: presentation.now) ?? presentation.now) { return "Yesterday" }
+        return day.plannerFormatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day(), runtime: presentation.runtime)
     }
 
     private var isListScreen: Bool { smart == nil }
@@ -211,10 +217,12 @@ package struct ReminderListScreen: View {
             menu
         }
         .performanceDestination("reminders.list")
-        .sheet(item: $editing) { ListEditor(list: $0) }
-        .sheet(item: $editingTask) { TaskEditor(task: $0) }
-        .deleteListAlert($pendingDelete)
+        .sheet(item: $editing) { ListEditor(list: $0, ledger: ledger, reminders: reminders) }
+        .sheet(item: $editingTask) { TaskEditor(task: $0, actions: actions, ledger: ledger, reminders: reminders, alarms: alarms, presentation: presentation) }
+        .deleteListAlert($pendingDelete, reminders: reminders, ledger: ledger)
         .onChange(of: isMissing) { _, missing in if missing { dismiss() } }
+        .environment(actions)
+        .defaultAppStorage(presentation.defaults)
     }
 
     private var titleBlock: some View {
@@ -270,21 +278,22 @@ package struct ReminderListScreen: View {
         switch target {
         case .list: t.listName = list?.name ?? ""
         case .defaultList: break
-        case .smart(.today), .smart(.scheduled): if t.due == nil { t.due = Calendar.current.startOfDay(for: .now) }
+        case .smart(.today), .smart(.scheduled): if t.due == nil { t.due = presentation.calendar.startOfDay(for: presentation.now) }
         case .smart(.flagged): t.flagged = true
         case .smart: break
         }
+        t.createdAt = presentation.now
         withAnimation { context.insert(t) }
         // Saved now so its id is final: an autosave later would change the id under an open editor and close it.
         try? context.save()
-        Ledger.record(.created, task: t, title: t.title, after: LedgerFormat.time(t.due, none: ""), context: context)
+        ledger.record(.created, task: t, title: t.title, after: ledger.timeLabel(t.due, none: ""), context: context)
     }
 
     /// Up to three guesses from this list's own past reminders (done ones too; `suggest` skips titles still open).
     private func suggestions() -> [ReminderSuggest.Suggestion] {
         ReminderSuggest.suggest(from: scoped.map {
             .init(title: $0.title, createdAt: $0.createdAt, due: $0.due ?? $0.plannedStart, isOpen: !$0.isDone)
-        }, limit: 3)
+        }, now: presentation.now, calendar: presentation.calendar, limit: 3)
     }
 }
 
@@ -294,6 +303,7 @@ package struct ReminderListScreen: View {
 /// Date and repeat open a row of chips right under the buttons, not a Menu: a Menu takes the keyboard away, and
 /// losing focus is what saves the row. Only Return, or focus going somewhere outside the row, saves it.
 private struct NewReminderRow: View {
+    @Environment(PlannerPresentation.self) private var presentation
     var onCreate: (NewReminderDraft) -> Void
     var suggestions: () -> [ReminderSuggest.Suggestion]
     /// Called once the row has grown for editing, so the list can scroll it clear of the keyboard and the bottom bar.
@@ -386,7 +396,7 @@ private struct NewReminderRow: View {
                             Image(systemName: "sparkles").font(.caption).foregroundStyle(Color.accentColor)
                             Text(s.title).lineLimit(1)
                             if let w = s.when {
-                                Text(w.formatted(date: .omitted, time: .shortened)).foregroundStyle(.secondary)
+                                Text(w.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime)).foregroundStyle(.secondary)
                             }
                         }
                         .font(.subheadline)
@@ -406,7 +416,7 @@ private struct NewReminderRow: View {
     private func dateChip(_ due: Date) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "calendar")
-            Text(DayLabel.withTime(due))
+            Text(plannerDayLabel(due, runtime: presentation.runtime))
             if draft.repeatRule != nil { Image(systemName: "repeat") }
         }
         .font(.caption.weight(.medium))
@@ -414,7 +424,7 @@ private struct NewReminderRow: View {
         .padding(.horizontal, 8).padding(.vertical, 4)
         .background(Color(.tertiarySystemFill), in: Capsule())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(draft.repeatRule.map { "\(DayLabel.withTime(due)), \($0.label)" } ?? DayLabel.withTime(due))
+        .accessibilityLabel(draft.repeatRule.map { "\(plannerDayLabel(due, runtime: presentation.runtime)), \($0.label)" } ?? plannerDayLabel(due, runtime: presentation.runtime))
         .accessibilityIdentifier("newRow.dateChip")
     }
 
@@ -426,7 +436,7 @@ private struct NewReminderRow: View {
                 roundIcon("calendar", on: draft.due != nil || panel == .date, tint: .accentColor)
             }
             .buttonStyle(PressScale())
-            .accessibilityLabel(draft.due.map { "Date, \(DayLabel.withTime($0))" } ?? "Date")
+            .accessibilityLabel(draft.due.map { "Date, \(plannerDayLabel($0, runtime: presentation.runtime))" } ?? "Date")
             .accessibilityIdentifier("newRow.date")
 
             Button {
@@ -460,12 +470,12 @@ private struct NewReminderRow: View {
             HStack(spacing: 8) {
                 ForEach(QuickTime.Day.allCases) { day in
                     chip(day.rawValue) {
-                        draft.choose(day)
+                        draft.choose(day, now: presentation.now, calendar: presentation.calendar)
                         close()
                     }
                 }
                 chip("Custom…") {
-                    if draft.due == nil { draft.due = QuickTime.start() }
+                    if draft.due == nil { draft.due = QuickTime.start(now: presentation.now, calendar: presentation.calendar) }
                     panel = nil
                     showsPicker = true
                 }
@@ -528,7 +538,7 @@ private struct NewReminderRow: View {
     private var datePickerSheet: some View {
         NavigationStack {
             VStack {
-                DatePicker("Date", selection: Binding(get: { draft.due ?? QuickTime.start() }, set: { draft.due = $0 }),
+                DatePicker("Date", selection: Binding(get: { draft.due ?? QuickTime.start(now: presentation.now, calendar: presentation.calendar) }, set: { draft.due = $0 }),
                            displayedComponents: [.date, .hourAndMinute])
                     .datePickerStyle(.graphical)
                     .padding(.horizontal, 12)

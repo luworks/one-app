@@ -30,12 +30,15 @@ struct PendingListDeletion {
 
 extension View {
     /// Confirmation before deleting a list and the reminders in it.
-    func deleteListAlert(_ pending: Binding<PendingListDeletion?>) -> some View {
-        modifier(DeleteListAlert(pending: pending))
+    func deleteListAlert(_ pending: Binding<PendingListDeletion?>, reminders: any ReminderService, ledger: Ledger) -> some View {
+        modifier(DeleteListAlert(reminders: reminders, ledger: ledger, pending: pending))
     }
 }
 
 private struct DeleteListAlert: ViewModifier {
+    let reminders: any ReminderService
+    let ledger: Ledger
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.modelContext) private var context
     @Binding var pending: PendingListDeletion?
 
@@ -43,14 +46,14 @@ private struct DeleteListAlert: ViewModifier {
     /// reads a model that was just deleted.
     private func run(_ item: PendingListDeletion, keepingTasks: Bool) {
         guard let after = item.afterDelete else {
-            ListActions.delete(item.list, keepingTasks: keepingTasks, in: context)
+            ListActions.delete(item.list, keepingTasks: keepingTasks, in: context, reminders: reminders, ledger: ledger, runtime: presentation.runtime)
             return
         }
         after()
         let context = context
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(500))
-            ListActions.delete(item.list, keepingTasks: keepingTasks, in: context)
+            ListActions.delete(item.list, keepingTasks: keepingTasks, in: context, reminders: reminders, ledger: ledger, runtime: presentation.runtime)
         }
     }
 
@@ -82,6 +85,9 @@ private struct DeleteListAlert: ViewModifier {
 /// New List / Name & Appearance: a big preview circle, the name, 12 colors and a grid of symbols.
 /// Creates a list when `list` is nil, otherwise edits it.
 package struct ListEditor: View {
+    private let ledger: Ledger
+    private let reminders: any ReminderService
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \OneList.order) private var lists: [OneList]
@@ -96,7 +102,8 @@ package struct ListEditor: View {
     @State private var pendingDelete: PendingListDeletion?
     @FocusState private var nameFocused: Bool
 
-    package init(list: OneList? = nil, onCreated: (@MainActor (OneList) -> Void)? = nil) {
+    package init(list: OneList? = nil, ledger: Ledger, reminders: any ReminderService, onCreated: (@MainActor (OneList) -> Void)? = nil) {
+        self.ledger = ledger; self.reminders = reminders
         self.list = list
         self.onCreated = onCreated
         // Copied once: the sheet must not read the model again, it may be deleted while the sheet closes.
@@ -223,7 +230,7 @@ package struct ListEditor: View {
                 }
             }
             .onAppear { if list == nil { nameFocused = true } }
-            .deleteListAlert($pendingDelete)
+            .deleteListAlert($pendingDelete, reminders: reminders, ledger: ledger)
         }
         .tint(color)
         .presentationDetents([.large])
@@ -231,10 +238,10 @@ package struct ListEditor: View {
 
     private func save() {
         if let list {
-            guard ListActions.rename(list, to: name, in: context) else { return }
+            guard ListActions.rename(list, to: name, in: context, ledger: ledger) else { return }
             list.colorIndex = colorIndex
             list.symbol = symbol
-        } else if let created = ListActions.create(name: name, colorIndex: colorIndex, symbol: symbol, in: context) {
+        } else if let created = ListActions.create(name: name, colorIndex: colorIndex, symbol: symbol, in: context, ledger: ledger, runtime: presentation.runtime) {
             onCreated?(created)
         } else {
             return

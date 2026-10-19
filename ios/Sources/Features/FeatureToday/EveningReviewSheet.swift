@@ -22,7 +22,11 @@ package struct ReviewPeek: Identifiable {
 /// (Keep / Tomorrow / Later / Drop, see `EveningReview`), and tomorrow's first items. Items first, no commentary.
 /// Choices are a preview: nothing changes until Apply, and one Undo reverts them all. `due` is never changed.
 package struct EveningReviewSheet: View {
-    package init(now: Date, tomorrow: Date, peek: [ReviewPeek]) { self.now = now; self.tomorrow = tomorrow; self.peek = peek }
+    @Environment(PlannerPresentation.self) private var presentation
+    private let actions: PlannerActions
+    private let reminders: any ReminderService
+    private let ledger: Ledger
+    package init(now: Date, tomorrow: Date, peek: [ReviewPeek], actions: PlannerActions, reminders: any ReminderService, ledger: Ledger) { self.actions = actions; self.reminders = reminders; self.ledger = ledger; self.now = now; self.tomorrow = tomorrow; self.peek = peek }
     let now: Date
     let tomorrow: Date
     let peek: [ReviewPeek]
@@ -77,7 +81,7 @@ package struct EveningReviewSheet: View {
                     }
                     ForEach(peek) { item in
                         HStack(spacing: 12) {
-                            Text(item.time.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Anytime")
+                            Text(item.time.map { $0.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime) } ?? "Anytime")
                                 .font(.subheadline.monospacedDigit())
                                 .foregroundStyle(.secondary)
                                 .frame(width: 72, alignment: .leading)
@@ -86,7 +90,7 @@ package struct EveningReviewSheet: View {
                         .accessibilityElement(children: .combine)
                     }
                 } header: {
-                    Text("Tomorrow · " + tomorrow.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                    Text("Tomorrow · " + tomorrow.plannerFormatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated), runtime: presentation.runtime))
                 }
             }
             .listStyle(.insetGrouped)
@@ -101,6 +105,8 @@ package struct EveningReviewSheet: View {
                 }
             }
         }
+        .environment(actions)
+        .defaultAppStorage(presentation.defaults)
         .onAppear { if snapshot == nil { takeSnapshot() } }
     }
 
@@ -111,14 +117,14 @@ package struct EveningReviewSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title).font(.subheadline).lineLimit(2)
                 Group {
-                    if let note = EveningReview.note(for: item, choice, now: now) {
+                    if let note = EveningReview.note(for: item, choice, now: now, calendar: presentation.calendar) {
                         Text(note).foregroundStyle(.red)
-                    } else if choice == .tomorrow, let start = EveningReview.newPlannedStart(item, .tomorrow, now: now) {
-                        Text("Tomorrow " + start.formatted(date: .omitted, time: .shortened))
+                    } else if choice == .tomorrow, let start = EveningReview.newPlannedStart(item, .tomorrow, now: now, calendar: presentation.calendar) {
+                        Text("Tomorrow " + start.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))
                     } else if let start = task.plannedStart {
-                        Text(start.formatted(date: .omitted, time: .shortened))
-                    } else if let due = task.due, task.dueHasTime {
-                        Text("Due " + due.formatted(date: .omitted, time: .shortened))
+                        Text(start.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))
+                    } else if let due = task.due, plannerDueHasTime(task, calendar: presentation.calendar) {
+                        Text("Due " + due.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))
                     } else {
                         Text("Due today")
                     }
@@ -153,7 +159,7 @@ package struct EveningReviewSheet: View {
     }
 
     private func takeSnapshot() {
-        let summary = EveningReview.summary(tasks.enumerated().map { Self.item($1, id: $0) }, now: now)
+        let summary = EveningReview.summary(tasks.enumerated().map { Self.item($1, id: $0) }, now: now, calendar: presentation.calendar)
         // Left in the order of the day: planned time, else the deadline.
         let left = summary.left.map { tasks[$0] }.sorted {
             ($0.plannedStart ?? $0.due ?? .distantFuture) < ($1.plannedStart ?? $1.due ?? .distantFuture)
@@ -164,20 +170,21 @@ package struct EveningReviewSheet: View {
     /// Writes every non-Keep choice at once; one Undo puts them all back. Deadlines are untouched.
     private func apply() {
         guard let left = snapshot?.left else { return }
-        var moved: [(task: OneTask, old: Date?)] = []
-        var dropped: [OneTask] = []
+        var moved: [LedgerItem] = []
+        var dropped: [(task: OneTask, entry: LedgerItem)] = []
         for task in left {
             let choice = choices[task.persistentModelID] ?? .keep
             switch choice {
             case .keep: continue
             case .tomorrow, .later:
-                moved.append((task, task.plannedStart))
-                task.plannedStart = EveningReview.newPlannedStart(Self.item(task), choice, now: now)
+                if let entry = actions.setPlanned(task, to: EveningReview.newPlannedStart(Self.item(task), choice, now: now, calendar: presentation.calendar), context: context) { moved.append(entry) }
             case .drop:
-                RemindersSync.shared.noteDeleted(reminder: task.externalID)
+                reminders.noteDeleted(reminder: task.externalID)
                 let backup = task.copy()
-                if task.externalID != nil { backup.createdAt = .now }   // Undo creates it again in Apple Reminders too
-                dropped.append(backup)
+                if task.externalID != nil { backup.createdAt = presentation.now }   // Undo creates it again in Apple Reminders too
+                let entry = ledger.record(.deleted, title: task.title,
+                                          snapshot: Ledger.snapshot(of: task), context: context)
+                dropped.append((backup, entry))
                 context.delete(task)
             }
         }
@@ -187,8 +194,11 @@ package struct EveningReviewSheet: View {
         dismiss()
         toast?.show(message) {
             withAnimation {
-                for m in moved { m.task.plannedStart = m.old }
-                for d in dropped { context.insert(d) }
+                for entry in moved { _ = actions.undo(entry, context: context) }
+                for d in dropped {
+                    context.insert(d.task)
+                    ledger.recordUndo(of: d.entry, task: d.task, context: context)
+                }
             }
             try? context.save()
         }

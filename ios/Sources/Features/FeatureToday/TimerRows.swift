@@ -10,9 +10,10 @@ import FeatureHealth
 import SwiftUI
 
 /// One timer as a line: icon, name and length, and the time left counting down on its own
-/// (`Text(timerInterval:)` is drawn by the system, so nothing re-renders every second). Used by the Today tab.
+/// (the countdown reads the session clock on each timeline tick). Used by the Today tab.
 /// The Timer tab has its own screen (TimerSection.swift). Logic: TimerList.swift.
 struct TimerLine: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let timer: RunningTimer
     let isRinging: Bool
 
@@ -33,7 +34,7 @@ struct TimerLine: View {
                 .frame(maxWidth: 110, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(TimerList.spoken(timer, ringing: isRinging, now: .now))
+        .accessibilityLabel(TimerList.spoken(timer, ringing: isRinging, now: presentation.now))
     }
 
     private var subtitle: String {
@@ -46,10 +47,11 @@ struct TimerLine: View {
         if isRinging {
             Text("0:00")
         } else if timer.isPaused {
-            Text(TimerList.clock(timer.remaining(now: .now)))
-        } else if let end = timer.endsAt {
-            let start = Date.now
-            Text(timerInterval: start...max(end, start), pauseTime: nil, countsDown: true, showsHours: timer.total >= 3600)
+            Text(TimerList.clock(timer.remaining(now: presentation.now)))
+        } else if timer.endsAt != nil {
+            TimelineView(.periodic(from: presentation.now, by: 1)) { _ in
+                Text(TimerList.clock(timer.remaining(now: presentation.now)))
+            }
         } else {
             Text("0:00")
         }
@@ -59,11 +61,14 @@ struct TimerLine: View {
 /// The running timers at the top of the Today tab: up to two quiet rows with the time left, then "+N more".
 /// Tap opens the Timer tab; swipe right to left (or long-press) for Pause/Resume and Stop. Nothing when no timer runs.
 package struct TodayTimerRows: View {
+    @Environment(PlannerPresentation.self) private var presentation
+    let controller: any TimerService
     var open: () -> Void
-    @State private var controller = TimerController.shared
+
+    package init(controller: any TimerService, open: @escaping () -> Void) { self.controller = controller; self.open = open }
 
     package var body: some View {
-        let split = TimerList.rows(controller.timers, ringing: controller.ringing, now: .now)
+        let split = TimerList.rows(controller.timers, ringing: controller.ringing, now: presentation.now)
         ForEach(split.shown) { timer in
             let ringing = controller.ringing.contains(timer.id)
             Button(action: open) {

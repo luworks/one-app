@@ -9,14 +9,17 @@ enum YearMarkSettings {
     static let holidaysKey = "today.setting.yearHolidays"
     static let auto = "auto"
 
-    static func sets(_ stored: String) -> Set<HolidaySet> {
-        HolidaySet.resolve(stored, region: Locale.current.region?.identifier, language: Locale.preferredLanguages.first)
+    static func sets(_ stored: String, locale: Locale) -> Set<HolidaySet> {
+        HolidaySet.resolve(stored, region: locale.region?.identifier, language: locale.language.languageCode?.identifier)
     }
 }
 
 /// Settings → Holidays in Year: which sets of holidays and festivals show as red day numbers.
 package struct YearHolidaysSettingsView: View {
-    package init() {}
+    @Environment(PlannerPresentation.self) private var presentation
+    package init(presentation: PlannerPresentation) {
+        _stored = AppStorage(wrappedValue: YearMarkSettings.auto, YearMarkSettings.holidaysKey, store: presentation.defaults)
+    }
 
     @AppStorage(YearMarkSettings.holidaysKey) private var stored = YearMarkSettings.auto
 
@@ -42,9 +45,9 @@ package struct YearHolidaysSettingsView: View {
 
     private func binding(_ set: HolidaySet) -> Binding<Bool> {
         Binding {
-            YearMarkSettings.sets(stored).contains(set)
+            YearMarkSettings.sets(stored, locale: presentation.locale).contains(set)
         } set: { on in
-            var sets = YearMarkSettings.sets(stored)
+            var sets = YearMarkSettings.sets(stored, locale: presentation.locale)
             if on { sets.insert(set) } else { sets.remove(set) }
             stored = HolidaySet.store(sets)
         }

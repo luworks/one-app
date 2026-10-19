@@ -1,13 +1,14 @@
 #if os(iOS)
 import One
+import TodayDesignSystem
 import SwiftUI
 import EventKit
 import EventKitUI
 
 /// Apple's own calendar list (EventKitUI): accounts, color dots, checkmarks. Its selection is the Calendars filter.
 package struct NativeCalendarChooser: UIViewControllerRepresentable {
-    let calendar: CalendarSync
-    package init(calendar: CalendarSync) { self.calendar = calendar }
+    let calendar: any NativeCalendarService
+    package init(calendar: any NativeCalendarService) { self.calendar = calendar }
     @Environment(\.dismiss) private var dismiss
 
     package func makeUIViewController(context: Context) -> UINavigationController {
@@ -25,16 +26,17 @@ package struct NativeCalendarChooser: UIViewControllerRepresentable {
 
     package func updateUIViewController(_ controller: UINavigationController, context: Context) {}
 
-    package func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
+    package func makeCoordinator() -> Coordinator { Coordinator(calendar: calendar, dismiss: { dismiss() }) }
 
     @MainActor
     package final class Coordinator: NSObject, @MainActor EKCalendarChooserDelegate {
+        let calendar: any NativeCalendarService
         let dismiss: () -> Void
-        init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
+        init(calendar: any NativeCalendarService, dismiss: @escaping () -> Void) { self.calendar = calendar; self.dismiss = dismiss }
 
         package func calendarChooserSelectionDidChange(_ chooser: EKCalendarChooser) {
             let ids = Set(chooser.selectedCalendars.map(\.calendarIdentifier))
-            Task { @MainActor in CalendarSync.shared.setVisibleCalendars(ids) }
+            calendar.setVisibleCalendars(ids)
         }
         package func calendarChooserDidFinish(_ chooser: EKCalendarChooser) { dismiss() }
         package func calendarChooserDidCancel(_ chooser: EKCalendarChooser) { dismiss() }

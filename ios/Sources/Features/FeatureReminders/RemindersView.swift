@@ -1,5 +1,6 @@
 #if os(iOS)
 import One
+import TodayPlannerUI
 import TodayCore
 import TodayPlatform
 import TodayDesignSystem
@@ -20,6 +21,7 @@ package enum ReminderTarget: Hashable {
 /// Color & Icon, Pin and Delete; press, hold and drag a row to reorder; swipe a row from the right for Delete, Info
 /// and Pin (`RowAction`). Which smart lists show, and in what order, is in Settings (or Hide in a pill's menu).
 package struct RemindersView: View {
+    @Environment(PlannerPresentation.self) private var presentation
     /// True while a list screen is pushed, so the shell can leave the left-edge swipe to "back".
     @Binding var isPushed: Bool
 
@@ -44,13 +46,21 @@ package struct RemindersView: View {
     @State private var dropTarget: String?
     @State private var reorderTick = 0
 
-    private let sync: RemindersSync
+    private let sync: any ReminderService
+    private let actions: PlannerActions
+    private let ledger: Ledger
+    private let alarms: any AlarmService
+    private let openSettings: @MainActor () -> Void
     private let requestAccess: @MainActor () async -> Void
 
     package init(isPushed: Binding<Bool>, path: Binding<[ReminderTarget]>,
-                 sync: RemindersSync, requestAccess: @escaping @MainActor () async -> Void) {
+                 sync: any ReminderService, actions: PlannerActions, ledger: Ledger, alarms: any AlarmService, presentation: PlannerPresentation, openSettings: @escaping @MainActor () -> Void, requestAccess: @escaping @MainActor () async -> Void) {
         _isPushed = isPushed
         _path = path
+        self.actions = actions; self.ledger = ledger; self.alarms = alarms; self.openSettings = openSettings
+        _smartOrder = AppStorage(wrappedValue: "", SmartListLayout.orderKey, store: presentation.defaults)
+        _smartHidden = AppStorage(wrappedValue: "", SmartListLayout.hiddenKey, store: presentation.defaults)
+        _listsReordered = AppStorage(wrappedValue: false, "reminders.listsReordered", store: presentation.defaults)
         self.sync = sync
         self.requestAccess = requestAccess
     }
@@ -71,20 +81,8 @@ package struct RemindersView: View {
     }
     private var layout: SmartListLayout { SmartListLayout(order: smartOrder, hidden: smartHidden) }
 
-    /// UI tests start from the default pill order and visibility, like their fresh in-memory data store (the stored
-    /// choice survives a launch otherwise). `-uiTestingKeepReminderPills` keeps it, for the relaunch check. Runs once
-    /// per process, the first time the tab's body is built.
-    private static let uiTestReset: Void = {
-        let args = ProcessInfo.processInfo.arguments
-        guard args.contains("-uiTesting"), !args.contains("-uiTestingKeepReminderPills") else { return }
-        for key in [SmartListLayout.orderKey, SmartListLayout.hiddenKey, "reminders.listsReordered"] {
-            UserDefaults.standard.removeObject(forKey: key)
-        }
-    }()
-
     package var body: some View {
-        let _ = Self.uiTestReset
-        let stats = Stats(tasks: tasks.filter { !$0.isDeleted })
+        let stats = Stats(tasks: tasks.filter { !$0.isDeleted }, now: presentation.now, calendar: presentation.calendar)
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 pills(stats)
@@ -93,7 +91,7 @@ package struct RemindersView: View {
                     if showsAccessOff {
                         Section {
                             Button {
-                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                                openSettings()
                             } label: {
                                 Label("Apple Reminders is off for Today. Open Settings", systemImage: "exclamationmark.circle")
                                     .font(.subheadline)
@@ -122,13 +120,13 @@ package struct RemindersView: View {
             // The app's own top bar is above; this is the title the pushed screen's back button shows.
             .navigationTitle("Lists")
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: ReminderTarget.self) { ReminderListScreen(target: $0) }
+            .navigationDestination(for: ReminderTarget.self) { ReminderListScreen(target: $0, actions: actions, ledger: ledger, reminders: sync, alarms: alarms) }
         }
         // Apple's Reminders is blue whatever the app's accent is.
         .tint(Color(.systemBlue))
-        .sheet(isPresented: $addingList) { ListEditor() }
-        .sheet(item: $editing) { ListEditor(list: $0) }
-        .deleteListAlert($pendingDelete)
+        .sheet(isPresented: $addingList) { ListEditor(ledger: ledger, reminders: sync) }
+        .sheet(item: $editing) { ListEditor(list: $0, ledger: ledger, reminders: sync) }
+        .deleteListAlert($pendingDelete, reminders: sync, ledger: ledger)
         // The same Rename as a conversation's in the sidebar. `presenting:` hands the list to the buttons: the alert
         // clears `renaming` as it closes, which can happen before Save's action runs.
         .alert("Rename List", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } }),
@@ -137,7 +135,7 @@ package struct RemindersView: View {
             Button("Cancel", role: .cancel) {}
             Button("Save") {
                 guard !list.isDeleted else { return }
-                withAnimation(.snappy) { _ = ListActions.rename(list, to: renameText, in: context) }
+                withAnimation(.snappy) { _ = ListActions.rename(list, to: renameText, in: context, ledger: ledger) }
             }
         }
         .task {
@@ -146,6 +144,8 @@ package struct RemindersView: View {
         .onChange(of: path.count) { _, n in isPushed = n > 0 }
         .onAppear { isPushed = !path.isEmpty }
         .onDisappear { isPushed = false }
+        .environment(actions)
+        .defaultAppStorage(presentation.defaults)
     }
 
     // MARK: Pills
@@ -362,7 +362,7 @@ package struct RemindersView: View {
 
             // An inline row at the end of the list, not a floating button: the app's own bottom bar owns
             // the bottom of the screen, so this stays visible and tappable.
-            Button { PerformanceTrace.shared.beginPage("list.editor"); addingList = true } label: {
+            Button { addingList = true } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 26))
@@ -451,12 +451,11 @@ package struct RemindersView: View {
         var open: [String: Int] = [:]
         var total: [String: Int] = [:]
 
-        init(tasks: [OneTask]) {
-            let cal = Calendar.current
+        init(tasks: [OneTask], now: Date, calendar cal: Calendar) {
             for t in tasks {
                 total[t.listName, default: 0] += 1
                 if !t.isDone { open[t.listName, default: 0] += 1 }
-                for s in SmartList.allCases where s.includes(t, calendar: cal) { smart[s, default: 0] += 1 }
+                for s in SmartList.allCases where s.includes(t, now: now, calendar: cal) { smart[s, default: 0] += 1 }
             }
         }
     }
@@ -464,10 +463,11 @@ package struct RemindersView: View {
 
 /// Today's mark in its pill: the day of the month inside a small tinted calendar outline (no filled circle).
 private struct DayMark: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let color: Color
 
     var body: some View {
-        Text("\(Calendar.current.component(.day, from: .now))")
+        Text("\(presentation.calendar.component(.day, from: presentation.now))")
             .font(.system(size: 11, weight: .bold, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(color)
@@ -523,13 +523,13 @@ private struct ListRow: View {
 extension SmartList {
     /// Today: due today or planned today, plus overdue. Scheduled: has a deadline or a planned time.
     /// All: every open reminder. Flagged: open and flagged. Completed: done.
-    package func includes(_ task: OneTask, calendar: Calendar = .current) -> Bool {
+    package func includes(_ task: OneTask, now: Date, calendar: Calendar) -> Bool {
         if self == .completed { return task.isDone }
         guard !task.isDone else { return false }
         switch self {
         case .today:
-            return task.isOverdue
-                || [task.due, task.plannedStart].contains { $0.map(calendar.isDateInToday) ?? false }
+            return plannerIsOverdue(task, now: now, calendar: calendar)
+                || [task.due, task.plannedStart].contains { $0.map { calendar.isDate($0, inSameDayAs: now) } ?? false }
         case .scheduled: return task.due != nil || task.plannedStart != nil
         case .all: return true
         case .flagged: return task.flagged

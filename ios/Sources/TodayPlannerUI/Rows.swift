@@ -8,6 +8,9 @@ import TodayDesignSystem
 
 /// Events are fixed: no move actions here. `start` is the occurrence shown (repeating events).
 package struct EventRow: View {
+    private let calendar: any CalendarService
+    private let travelProvider: any TravelTimeProviding
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.modelContext) private var context
     @Environment(\.dynamicTypeSize) private var typeSize
     package let event: OneEvent
@@ -17,7 +20,8 @@ package struct EventRow: View {
     package let open: @MainActor (OneEvent) -> Void
     @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
-    package init(event: OneEvent, start: Date? = nil, pendingDelete: Binding<CalEntry?> = .constant(nil), open: @escaping @MainActor (OneEvent) -> Void) {
+    package init(event: OneEvent, start: Date? = nil, pendingDelete: Binding<CalEntry?> = .constant(nil), open: @escaping @MainActor (OneEvent) -> Void, calendar: any CalendarService, travel: any TravelTimeProviding) {
+        self.calendar = calendar; self.travelProvider = travel
         self.open = open
         self.event = event
         self.start = start
@@ -41,7 +45,7 @@ package struct EventRow: View {
             if !event.isAllDay {
                 TimeColumn(date: start ?? event.start)
             }
-            CalendarBar(color: CalendarSync.shared.color(forExternalID: event.externalID) ?? Color.blue)
+            CalendarBar(color: calendar.color(forExternalID: event.externalID) ?? Color.blue)
             VStack(alignment: .leading, spacing: 1) {
                 TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2) {
                     Label(detail, systemImage: "lock.fill")
@@ -62,19 +66,18 @@ package struct EventRow: View {
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(EventSpeech.label(title: event.title, start: start ?? event.start,
+        .accessibilityLabel(plannerEventSpeech(title: event.title, start: start ?? event.start,
                                               end: (start ?? event.start).addingTimeInterval(event.duration), isAllDay: event.isAllDay,
-                                              calendar: CalendarSync.shared.calendar(forExternalID: event.externalID)?.title ?? event.calendarName)
+                                              calendar: calendar.calendar(forExternalID: event.externalID)?.title ?? event.calendarName, runtime: presentation.runtime)
                             + (travel.map { ". " + $0 } ?? ""))
         .accessibilityAddTraits(.isButton)
-        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in open(event) }, edit: { _ in open(event) })
+        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in open(event) }, edit: { _ in open(event) }, calendar: calendar)
     }
 
     /// "Drive 18 min · Leave by 14:20" when the event's Apple Calendar copy has a location (Today's own events keep none).
     private var travel: String? {
         guard travelOn, let id = event.externalID else { return nil }
-        return TravelTimes.shared.label(eventID: id, start: start ?? event.start, isAllDay: event.isAllDay,
-                                        place: CalendarSync.shared.place(forExternalID: id))
+        return travelProvider.label(eventID: id, start: start ?? event.start, isAllDay: event.isAllDay, place: calendar.place(forExternalID: id), now: presentation.now)
     }
 
     /// The same swipe and long-press actions as in the Calendar tab.
@@ -82,13 +85,15 @@ package struct EventRow: View {
         let begin = start ?? event.start
         return CalEntry(id: "r\(event.persistentModelID.hashValue)@\(begin.timeIntervalSince1970)", source: .local(event), title: event.title,
                         start: begin, end: begin.addingTimeInterval(event.duration), isAllDay: event.isAllDay,
-                        color: CalendarSync.shared.color(forExternalID: event.externalID) ?? .blue, repeats: event.repeats != nil)
+                        color: calendar.color(forExternalID: event.externalID) ?? .blue, repeats: event.repeats != nil)
     }
 }
 
 /// Tasks flex: they can be moved, and only the circle completes them (like Apple Reminders).
 /// Moving a task changes its planned time, never its deadline.
 package struct TaskRow: View {
+    @Environment(PlannerActions.self) private var actions
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -125,7 +130,7 @@ package struct TaskRow: View {
                 TimeColumn(date: start)
             }
             Button {
-                TaskActions.toggleDone(task, context: context, toast: toast)
+                actions.toggleDone(task, context: context, toast: toast)
             } label: {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
@@ -154,41 +159,38 @@ package struct TaskRow: View {
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture { PerformanceTrace.shared.beginPage("reminder.editor"); open(task) }
+        .onTapGesture { open(task) }
         
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: compact ? 1 : 4, leading: 20, bottom: compact ? 1 : 4, trailing: 20))
         // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
         // long-press for the menu. (Delete has an Undo toast.)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            RowAction.delete { TaskActions.delete(task, context: context, toast: toast) }
+            RowAction.delete { actions.delete(task, context: context, toast: toast) }
             RowAction.flag(task.flagged) { withAnimation { task.flagged.toggle() } }
         }
         .contextMenu {
-            Button { PerformanceTrace.shared.beginPage("reminder.editor"); open(task) } label: { Label("Show Details", systemImage: "info.circle") }
+            Button { open(task) } label: { Label("Show Details", systemImage: "info.circle") }
             Button { task.flagged.toggle() } label: {
                 Label(task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }
-            Button { plan { $0.moveToToday() } } label: { Label("Today", systemImage: "calendar") }
-            Button { plan { $0.moveToTomorrow() } } label: { Label("Tomorrow", systemImage: "sunrise") }
+            Button { plan(tomorrow: false) } label: { Label("Today", systemImage: "calendar") }
+            Button { plan(tomorrow: true) } label: { Label("Tomorrow", systemImage: "sunrise") }
             if task.plannedStart != nil {
-                Button { TaskActions.setPlanned(task, to: nil, context: context) } label: {
+                Button { actions.setPlanned(task, to: nil, context: context) } label: {
                     Label("Unschedule", systemImage: "calendar.badge.minus")
                 }
             }
-            Button(role: .destructive) { TaskActions.delete(task, context: context, toast: toast) } label: {
+            Button(role: .destructive) { actions.delete(task, context: context, toast: toast) } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
     }
 
     /// Today / Tomorrow from the menu: works out the new planned time on the task, then records it like any other move.
-    private func plan(_ move: (OneTask) -> Void) {
-        let old = task.plannedStart
-        move(task)
-        let new = task.plannedStart
-        task.plannedStart = old
-        TaskActions.setPlanned(task, to: new, context: context)
+    private func plan(tomorrow: Bool) {
+        let new = plannerMove(task, tomorrow: tomorrow, now: presentation.now, calendar: presentation.calendar)
+        actions.setPlanned(task, to: new, context: context)
     }
 
     private var title: Text {
@@ -199,12 +201,11 @@ package struct TaskRow: View {
 
     /// Sets the planned time only; the deadline stays where it is. Undo clears it again.
     private func planButton(_ start: Date) -> some View {
-        let time = start.formatted(date: .omitted, time: .shortened)
+        let time = start.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime)
         return Button("Plan") {
-            let entry = TaskActions.setPlanned(task, to: start, context: context)
+            let entry = actions.setPlanned(task, to: start, context: context)
             toast?.show("Planned “\(task.title)” at \(time)") {
-                withAnimation { task.plannedStart = nil }
-                if let entry { Ledger.recordUndo(of: entry, context: context) }
+                if let entry { _ = actions.undo(entry, context: context) }
             }
         }
         .font(.subheadline.weight(.semibold))
@@ -218,7 +219,7 @@ package struct TaskRow: View {
         if let detail {
             Text(detail)
                 .font(.caption)
-                .foregroundStyle(task.isOverdue ? Color.red : Color.secondary)
+                .foregroundStyle(plannerIsOverdue(task, now: presentation.now, calendar: presentation.calendar) ? Color.red : Color.secondary)
                 .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
         }
     }
@@ -228,17 +229,17 @@ package struct TaskRow: View {
         if let agendaDay {
             let planned = showsTime ? nil : task.plannedStart.flatMap { $0 != task.due ? $0 : nil }
             let shown = suggested ?? (showsTime ? (time ?? task.plannedStart) : nil)
-            return RowSubtitle.line(.init(isSuggested: suggested != nil, due: task.due, dueHasTime: task.dueHasTime,
+            return plannerRowSubtitle(.init(isSuggested: suggested != nil, due: task.due, dueHasTime: plannerDueHasTime(task, calendar: presentation.calendar),
                                           shownTime: shown, planned: planned, repeats: task.repeats != nil,
                                           stepsDone: task.checklist.filter(\.done).count, stepsTotal: task.checklist.count,
                                           listName: showsList ? task.listName : ""),
-                                   day: agendaDay)
+                                   day: agendaDay, runtime: presentation.runtime)
         }
         var parts: [String] = []
         if suggested != nil { parts.append("Suggested") }
-        if let due = task.due { parts.append("Due " + DayLabel.withTime(due)) }
+        if let due = task.due { parts.append("Due " + plannerDayLabel(due, runtime: presentation.runtime)) }
         if !showsTime, let start = task.plannedStart, start != task.due {
-            parts.append("Planned " + DayLabel.withTime(start))
+            parts.append("Planned " + plannerDayLabel(start, runtime: presentation.runtime))
         }
         if task.repeats != nil { parts.append("↻") }
         if !task.checklist.isEmpty {
@@ -252,6 +253,7 @@ package struct TaskRow: View {
 
 /// An alarm in the day's schedule, so the whole day reads in one list.
 package struct AlarmMarkRow: View {
+    @Environment(PlannerPresentation.self) private var presentation
     package init(alarm: OneAlarm, date: Date) { self.alarm = alarm; self.date = date }
     package let alarm: OneAlarm
     package let date: Date
@@ -270,7 +272,7 @@ package struct AlarmMarkRow: View {
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Alarm \(alarm.label) at \(date.formatted(date: .omitted, time: .shortened))")
+        .accessibilityLabel("Alarm \(alarm.label) at \(date.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))")
     }
 }
 #endif

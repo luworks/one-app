@@ -2,18 +2,23 @@
 import TodayCore
 import TodayPlatform
 import One
+import TodayDesignSystem
 import SwiftUI
 import SwiftData
 
 /// Create or edit a task. Edits are held locally and written back on Done.
 /// Planned time and deadline are separate: changing one never changes the other.
 package struct EventEditor: View {
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
 
     let event: OneEvent?
-    private let calendar: CalendarSync
+    private let calendar: any CalendarService
+    private let actions: PlannerActions
+    private let ledger: Ledger
+    private let alarms: any AlarmService
 
     @State private var title: String
     @State private var isAllDay: Bool
@@ -27,18 +32,18 @@ package struct EventEditor: View {
     private let defaultStart: Date
 
     /// The next full hour today, or 9:00 on another day.
-    package static func defaultStart(for day: Date) -> Date {
-        let cal = Calendar.current
-        let base = cal.isDateInToday(day) ? Date.now : (cal.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
+    package static func defaultStart(for day: Date, now: Date, calendar cal: Calendar) -> Date {
+        let base = cal.isDate(day, inSameDayAs: now) ? now : (cal.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day)
         return cal.nextDate(after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
     }
 
     /// `start` / `end`: a new event at a slot picked on the Week grid (instead of the default time on `day`).
-    package init(event: OneEvent? = nil, day: Date = .now, start slotStart: Date? = nil, end slotEnd: Date? = nil,
-                 calendar: CalendarSync) {
+    package init(event: OneEvent? = nil, day: Date? = nil, start slotStart: Date? = nil, end slotEnd: Date? = nil,
+                 calendar: any CalendarService, actions: PlannerActions, ledger: Ledger, alarms: any AlarmService, presentation: PlannerPresentation) {
+        self.actions = actions; self.ledger = ledger; self.alarms = alarms
         self.calendar = calendar
         self.event = event
-        let rounded = slotStart ?? Self.defaultStart(for: day)
+        let rounded = slotStart ?? Self.defaultStart(for: day ?? presentation.now, now: presentation.now, calendar: presentation.calendar)
         defaultStart = rounded
         let start = event?.start ?? rounded
         _title = State(initialValue: event?.title ?? "")
@@ -52,12 +57,16 @@ package struct EventEditor: View {
     }
 
     package var body: some View {
-        if event == nil && calendar.usesNativeEditor {
-            // Calendar access is on: a new event is made with Apple's own editor and lives in the system calendar.
-            NativeEventEditor(start: defaultStart).ignoresSafeArea()
-        } else {
-            form
+        Group {
+            if event == nil && calendar.usesNativeEditor, let native = calendar as? any NativeCalendarService {
+                // Calendar access is on: a new event is made with Apple's own editor and lives in the system calendar.
+                NativeEventEditor(identifier: nil, start: defaultStart, calendar: native).ignoresSafeArea()
+            } else {
+                form
+            }
         }
+        .environment(actions)
+        .defaultAppStorage(presentation.defaults)
     }
 
     private var form: some View {
@@ -86,7 +95,7 @@ package struct EventEditor: View {
                     } label: {
                         Label("Remind me", systemImage: "bell")
                     }
-                    if Ringer.isAvailable, reminder != nil {
+                    if alarms.isAvailable, reminder != nil {
                         Toggle(isOn: $ringsAsAlarm) { Label("Ring as alarm", systemImage: "alarm") }
                     }
                 }
@@ -100,7 +109,7 @@ package struct EventEditor: View {
                                 dismiss()
                                 return
                             }
-                            Ledger.record(.deleted, kind: "event", title: backup.title, before: DayLabel.withTime(backup.start), context: context)
+                            ledger.record(.deleted, kind: "event", title: backup.title, before: plannerDayLabel(backup.start, runtime: presentation.runtime), context: context)
                             context.delete(event)
                             toast?.show("Deleted “\(backup.title)”") {
                                 backup.externalID = calendar.save(backup)
@@ -136,7 +145,7 @@ package struct EventEditor: View {
     }
 
     private func save() {
-        let cal = Calendar.current
+        let cal = presentation.calendar
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         var s = start
         var minutes = max(5, Int(end.timeIntervalSince(start) / 60))
@@ -154,9 +163,14 @@ package struct EventEditor: View {
         e.reminderOffsetMinutes = reminder
         e.ringsAsAlarm = ringsAsAlarm && reminder != nil
         if event == nil { context.insert(e) }
-        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
+        do { try context.save() }
+        catch {
+            if event == nil { context.delete(e) }
+            toast?.showNotice("Couldn’t save the event. " + error.localizedDescription)
+            return
+        }
         if calendar.isOn { e.externalID = calendar.save(e) ?? e.externalID }
-        if event == nil { Ledger.record(.created, kind: "event", title: e.title, after: DayLabel.withTime(e.start), context: context) }
+        if event == nil { ledger.record(.created, kind: "event", title: e.title, after: plannerDayLabel(e.start, runtime: presentation.runtime), context: context) }
         dismiss()
     }
 }

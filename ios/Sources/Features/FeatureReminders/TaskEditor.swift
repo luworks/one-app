@@ -1,5 +1,6 @@
 #if os(iOS)
 import One
+import TodayDesignSystem
 import TodayCore
 import TodayPlatform
 import SwiftUI
@@ -8,11 +9,16 @@ import SwiftData
 /// Create or edit a task. Edits are held locally and written back on Done.
 /// Planned time and deadline are separate: changing one never changes the other.
 package struct TaskEditor: View {
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
     @Query(sort: \OneList.order) private var lists: [OneList]
 
+    private let actions: PlannerActions
+    private let ledger: Ledger
+    private let reminders: any ReminderService
+    private let alarms: any AlarmService
     let task: OneTask?
 
     @State private var title: String
@@ -33,16 +39,17 @@ package struct TaskEditor: View {
     @State private var addingList = false
     @FocusState private var titleFocused: Bool
 
-    package init(task: OneTask? = nil) {
+    package init(task: OneTask? = nil, actions: PlannerActions, ledger: Ledger, reminders: any ReminderService, alarms: any AlarmService, presentation: PlannerPresentation) {
+        self.actions = actions; self.ledger = ledger; self.reminders = reminders; self.alarms = alarms
         self.task = task
-        let nextHour = Calendar.current.nextDate(after: .now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? .now
+        let nextHour = presentation.calendar.nextDate(after: presentation.now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? presentation.now
         _title = State(initialValue: task?.title ?? "")
         _note = State(initialValue: task?.note ?? "")
         _hasStart = State(initialValue: task?.plannedStart != nil)
         _start = State(initialValue: task?.plannedStart ?? nextHour)
         _duration = State(initialValue: task?.durationMinutes ?? 25)
         _hasDue = State(initialValue: task?.due != nil)
-        _due = State(initialValue: task?.due ?? Calendar.current.startOfDay(for: .now))
+        _due = State(initialValue: task?.due ?? presentation.calendar.startOfDay(for: presentation.now))
         _reminder = State(initialValue: task == nil ? 0 : task?.reminderOffsetMinutes)
         _listName = State(initialValue: task?.listName ?? "")
         _tagsText = State(initialValue: task?.tags.joined(separator: ", ") ?? "")
@@ -119,12 +126,12 @@ package struct TaskEditor: View {
                         } label: {
                             Label("Remind me", systemImage: "bell")
                         }
-                        if Ringer.isAvailable, reminder != nil {
+                        if alarms.isAvailable, reminder != nil {
                             Toggle(isOn: $ringsAsAlarm) { Label("Ring as alarm", systemImage: "alarm") }
                         }
                     } footer: {
                         Text(ringsAsAlarm
-                             ? (Ringer.isDenied ? "Alarms are turned off for Today in Settings, so this will only notify."
+                             ? (alarms.authorization == .denied ? "Alarms are turned off for Today in Settings, so this will only notify."
                                                 : "Rings like an alarm, even on Silent. Stopping it doesn't complete the task.")
                              : "One notification at the reminder time.")
                     }
@@ -148,11 +155,11 @@ package struct TaskEditor: View {
                 if let task {
                     Section {
                         Button(task.isDone ? "Mark as not done" : "Mark done") {
-                            TaskActions.toggleDone(task, context: context, toast: toast)
+                            actions.toggleDone(task, context: context, toast: toast)
                             dismiss()
                         }
                         Button("Delete task", role: .destructive) {
-                            TaskActions.delete(task, context: context, toast: toast)
+                            actions.delete(task, context: context, toast: toast)
                             dismiss()
                         }
                     }
@@ -170,9 +177,13 @@ package struct TaskEditor: View {
             }
             .onAppear { if task == nil { titleFocused = true } }
             .sheet(isPresented: $addingList) {
-                ListEditor { created in listName = created.name }
+                ListEditor(ledger: ledger, reminders: reminders) { created in listName = created.name }
+                    .environment(actions)
+                    .environment(presentation)
             }
         }
+        .environment(actions)
+        .defaultAppStorage(presentation.defaults)
     }
 
     private func addItem() {
@@ -199,9 +210,14 @@ package struct TaskEditor: View {
         t.repeatRule = repeatRule?.rawValue
         t.checklist = checklist.filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
         t.ringsAsAlarm = ringsAsAlarm && reminder != nil
-        if task == nil { context.insert(t) }
-        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
-        if task == nil { Ledger.record(.created, task: t, title: t.title, after: LedgerFormat.time(t.plannedStart ?? t.due, none: ""), context: context) }
+        if task == nil { t.createdAt = presentation.now; context.insert(t) }
+        do { try context.save() }
+        catch {
+            if task == nil { context.delete(t) }
+            toast?.showNotice("Couldn’t save the reminder. " + error.localizedDescription)
+            return
+        }
+        if task == nil { ledger.record(.created, task: t, title: t.title, after: ledger.timeLabel(t.plannedStart ?? t.due, none: ""), context: context) }
         dismiss()
     }
 }

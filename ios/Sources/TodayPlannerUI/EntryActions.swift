@@ -16,6 +16,9 @@ import EventKit
 /// The question is asked by `entryDeleteDialog` on the container (the list), not on the row: a row is rebuilt when its
 /// swipe actions close, which would drop the dialog.
 package struct EntryActions: ViewModifier {
+    @Environment(PlannerActions.self) private var actions
+    package let calendar: any CalendarService
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
 
@@ -30,7 +33,7 @@ package struct EntryActions: ViewModifier {
     /// Whether Delete needs a question first: any repeating event, local or in Apple's calendar.
     private var isRepeating: Bool {
         switch entry.source {
-        case .system(let id): CalendarSync.shared.isRepeating(externalID: id)
+        case .system(let id): calendar.isRepeating(externalID: id)
         case .local(let e): e.repeats != nil
         case .task, .alarm: false
         }
@@ -48,9 +51,9 @@ package struct EntryActions: ViewModifier {
             Button { withAnimation { task.flagged.toggle() } } label: {
                 Label(task.flagged ? "Remove Flag" : "Flag", systemImage: task.flagged ? "flag.slash" : "flag")
             }
-            Button { withAnimation { task.moveToToday() } } label: { Label("Today", systemImage: "calendar") }
-            Button { withAnimation { task.moveToTomorrow() } } label: { Label("Tomorrow", systemImage: "sunrise") }
-            Button { withAnimation { task.plannedStart = nil } } label: { Label("Unschedule", systemImage: "calendar.badge.minus") }
+            Button { withAnimation { actions.setPlanned(task, to: plannerMove(task, tomorrow: false, now: presentation.now, calendar: presentation.calendar), context: context) } } label: { Label("Today", systemImage: "calendar") }
+            Button { withAnimation { actions.setPlanned(task, to: plannerMove(task, tomorrow: true, now: presentation.now, calendar: presentation.calendar), context: context) } } label: { Label("Tomorrow", systemImage: "sunrise") }
+            Button { withAnimation { actions.setPlanned(task, to: nil, context: context) } } label: { Label("Unschedule", systemImage: "calendar.badge.minus") }
         } else {
             Button { edit(entry) } label: { Label("Edit", systemImage: "pencil") }
         }
@@ -65,13 +68,14 @@ package struct EntryActions: ViewModifier {
         if isRepeating {
             pendingDelete = entry
         } else {
-            EntryDeletion.perform(entry, span: .futureEvents, context: context, toast: toast)
+            actions.delete(entry, span: .futureEvents, context: context, toast: toast)
         }
     }
 }
 
 /// Asks "this event or the series?" for the entry in `pending`. Put it on the list or grid that holds the rows.
 package struct EntryDeleteDialog: ViewModifier {
+    @Environment(PlannerActions.self) private var actions
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
     @Binding package var pending: CalEntry?
@@ -96,7 +100,7 @@ package struct EntryDeleteDialog: ViewModifier {
     }
 
     private func run(_ entry: CalEntry, _ span: EKSpan) {
-        EntryDeletion.perform(entry, span: span, context: context, toast: toast)
+        actions.delete(entry, span: span, context: context, toast: toast)
         pending = nil
     }
 }
@@ -124,8 +128,8 @@ private struct SwipeIfRows: ViewModifier {
 extension View {
     /// Swipe and long-press actions on a calendar entry (see `EntryActions`).
     package func entryActions(_ entry: CalEntry, pendingDelete: Binding<CalEntry?>, open: @escaping (CalEntry) -> Void,
-                      edit: @escaping (CalEntry) -> Void, swipes: Bool = true) -> some View {
-        modifier(EntryActions(entry: entry, pendingDelete: pendingDelete, open: open, edit: edit, swipes: swipes))
+                      edit: @escaping (CalEntry) -> Void, swipes: Bool = true, calendar: any CalendarService) -> some View {
+        modifier(EntryActions(calendar: calendar, entry: entry, pendingDelete: pendingDelete, open: open, edit: edit, swipes: swipes))
     }
 
     /// The "this event or the series?" question for a repeating event's Delete (see `EntryActions`).

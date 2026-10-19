@@ -1,5 +1,6 @@
 #if os(iOS)
 import One
+import TodayPlannerUI
 import TodayCore
 import TodayData
 import TodayPlatform
@@ -11,6 +12,12 @@ import SwiftData
 /// (times of day, +/− nudges, days). No date picker unless you want one; Save is always one tap away.
 /// Editing an existing reminder still opens `TaskEditor` (notes, checklist, tags…).
 package struct QuickReminderSheet: View {
+    private let actions: PlannerActions
+    private let ledger: Ledger
+    private let alarms: any AlarmService
+    private let activity: ActivityCenter
+    @State private var saveError: String?
+    @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \OneList.order) private var lists: [OneList]
@@ -18,19 +25,22 @@ package struct QuickReminderSheet: View {
 
     @State private var title = ""
     /// When it reminds you (the reminder's due date and time). nil = no date.
-    @State private var when: Date? = QuickTime.start()
+    @State private var when: Date?
     @State private var listName: String
     @State private var flagged = false
     @State private var repeatRule: RepeatRule?
     @State private var ringsAsAlarm = false
     @State private var showsPicker = false
     /// When the sheet opened: how long a quick add takes (Activity data, usage).
-    @State private var openedAt = Date.now
+    @State private var openedAt: Date
     /// What you are likely adding, from your own past reminders (`ReminderSuggest`). Worked out once when the sheet opens.
     @State private var suggestions: [ReminderSuggest.Suggestion] = []
     @FocusState private var focused: Bool
 
-    package init(listName: String = "") {
+    package init(listName: String = "", actions: PlannerActions, ledger: Ledger, alarms: any AlarmService, activity: ActivityCenter, presentation: PlannerPresentation) {
+        self.actions = actions; self.ledger = ledger; self.alarms = alarms; self.activity = activity
+        _when = State(initialValue: QuickTime.start(now: presentation.now, calendar: presentation.calendar))
+        _openedAt = State(initialValue: presentation.now)
         _listName = State(initialValue: listName)
     }
 
@@ -55,11 +65,14 @@ package struct QuickReminderSheet: View {
         .onAppear {
             focused = true
             // Settings > Reminders > "New reminders go to" (Auto leaves the list as it was opened).
-            if listName.isEmpty, let chosen = Preferences.newReminderList(existing: lists.map(\.name)) { listName = chosen }
+            if listName.isEmpty, let chosen = Preferences.newReminderList(existing: lists.map(\.name), presentation.defaults) { listName = chosen }
             suggestions = ReminderSuggest.suggest(from: tasks.map {
                 .init(title: $0.title, createdAt: $0.createdAt, due: $0.due ?? $0.plannedStart, isOpen: !$0.isDone)
-            })
+            }, now: presentation.now, calendar: presentation.calendar)
         }
+        .environment(actions)
+        .defaultAppStorage(presentation.defaults)
+        .alert("Couldn’t Save Reminder", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) { Button("OK", role: .cancel) {} } message: { Text(saveError ?? "") }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
@@ -105,7 +118,7 @@ package struct QuickReminderSheet: View {
             .disabled(when == nil)
             .accessibilityLabel(repeatRule.map { "Repeat, \($0.label)" } ?? "Repeat")
 
-            if Ringer.isAvailable {
+            if alarms.isAvailable {
                 Button { ringsAsAlarm.toggle() } label: {
                     Image(systemName: ringsAsAlarm ? "alarm.fill" : "bell").frame(width: 40, height: 40)
                         .foregroundStyle(ringsAsAlarm ? Color.orange : Color.primary)
@@ -168,7 +181,7 @@ package struct QuickReminderSheet: View {
                             Image(systemName: "sparkles").font(.caption).foregroundStyle(Color.accentColor)
                             Text(s.title).lineLimit(1)
                             if let w = s.when {
-                                Text(w.formatted(date: .omitted, time: .shortened)).foregroundStyle(.secondary)
+                                Text(w.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime)).foregroundStyle(.secondary)
                             }
                         }
                         .font(.subheadline)
@@ -188,14 +201,14 @@ package struct QuickReminderSheet: View {
 
     private var whenBar: some View {
         Button {
-            if when == nil { when = QuickTime.start() }
+            if when == nil { when = QuickTime.start(now: presentation.now, calendar: presentation.calendar) }
             withAnimation(.snappy) { showsPicker.toggle() }
         } label: {
             HStack(spacing: 8) {
                 if let when {
-                    Text(when.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))
+                    Text(when.plannerFormatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute(), runtime: presentation.runtime))
                         .font(.title3.weight(.medium))
-                    Text(QuickTime.relative(when)).font(.subheadline).opacity(0.8)
+                    Text(QuickTime.relative(when, now: presentation.now)).font(.subheadline).opacity(0.8)
                 } else {
                     Text("No date").font(.title3.weight(.medium))
                 }
@@ -215,7 +228,7 @@ package struct QuickReminderSheet: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(QuickTime.Day.allCases) { day in
-                    chip(day.rawValue) { set(QuickTime.move(when ?? QuickTime.start(), to: day)) }
+                    chip(day.rawValue) { set(QuickTime.move(when ?? QuickTime.start(now: presentation.now, calendar: presentation.calendar), to: day, now: presentation.now, calendar: presentation.calendar)) }
                 }
                 chip("No Date") {
                     withAnimation(.snappy) {
@@ -247,18 +260,18 @@ package struct QuickReminderSheet: View {
             GridRow {
                 ForEach(QuickTime.presets, id: \.hour) { p in
                     cell(String(format: "%02d:%02d", p.hour, p.minute)) {
-                        set(QuickTime.preset(hour: p.hour, minute: p.minute, on: when ?? .now))
+                        set(QuickTime.preset(hour: p.hour, minute: p.minute, on: when ?? presentation.now, now: presentation.now, calendar: presentation.calendar))
                     }
                 }
             }
             GridRow {
                 ForEach(QuickTime.nudges, id: \.self) { m in
-                    cell(QuickTime.nudgeLabel(m)) { set(QuickTime.nudge(when ?? QuickTime.start(), minutes: m)) }
+                    cell(QuickTime.nudgeLabel(m)) { set(QuickTime.nudge(when ?? QuickTime.start(now: presentation.now, calendar: presentation.calendar), minutes: m, calendar: presentation.calendar)) }
                 }
             }
             GridRow {
                 ForEach(QuickTime.nudges, id: \.self) { m in
-                    cell(QuickTime.nudgeLabel(-m)) { set(QuickTime.nudge(when ?? QuickTime.start(), minutes: -m)) }
+                    cell(QuickTime.nudgeLabel(-m)) { set(QuickTime.nudge(when ?? QuickTime.start(now: presentation.now, calendar: presentation.calendar), minutes: -m, calendar: presentation.calendar)) }
                 }
             }
         }
@@ -294,10 +307,16 @@ package struct QuickReminderSheet: View {
         t.reminderOffsetMinutes = when == nil ? nil : 0   // remind at the time you picked
         t.repeatRule = when == nil ? nil : repeatRule?.rawValue
         t.ringsAsAlarm = ringsAsAlarm && when != nil
+        t.createdAt = presentation.now
         context.insert(t)
-        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
-        Ledger.record(.created, task: t, title: t.title, after: LedgerFormat.time(t.due, none: ""), context: context)
-        ActivityCenter.record(ActivityEvents.quickAddCommit(ms: Int(Date.now.timeIntervalSince(openedAt) * 1000)))
+        do { try context.save() }
+        catch {
+            context.delete(t)
+            saveError = "Your reminder was not saved. Please try again."
+            return
+        }
+        ledger.record(.created, task: t, title: t.title, after: ledger.timeLabel(t.due, none: ""), context: context)
+        activity.record(ActivityEvents.quickAddCommit(ms: Int(presentation.now.timeIntervalSince(openedAt) * 1000)))
         dismiss()
     }
 }

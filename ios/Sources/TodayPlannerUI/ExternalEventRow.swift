@@ -7,7 +7,10 @@ import TodayDesignSystem
 
 /// Row for a system calendar event (read-only, opens nothing).
 package struct ExternalEventRow: View {
-    package init(event: ExternalEvent, pendingDelete: Binding<CalEntry?>) { self.event = event; _pendingDelete = pendingDelete }
+    @Environment(PlannerPresentation.self) private var presentation
+    package init(event: ExternalEvent, pendingDelete: Binding<CalEntry?>, calendar: any CalendarService, travel: any TravelTimeProviding) { self.event = event; _pendingDelete = pendingDelete; self.calendar = calendar; self.travelProvider = travel }
+    private let calendar: any CalendarService
+    private let travelProvider: any TravelTimeProviding
     @Environment(\.dynamicTypeSize) private var typeSize
     package let event: ExternalEvent
     /// The list that holds this row asks "this event or the series?" (see `entryDeleteDialog`).
@@ -43,14 +46,14 @@ package struct ExternalEventRow: View {
         .fixedSize(horizontal: false, vertical: true)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .onTapGesture { NativeEvents.edit(identifier: event.eventIdentifier, start: event.start) }
-        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in NativeEvents.edit(identifier: event.eventIdentifier, start: event.start) },
-                      edit: { _ in NativeEvents.edit(identifier: event.eventIdentifier, start: event.start) })
+        .onTapGesture { (calendar as? any NativeCalendarService)?.edit(identifier: event.eventIdentifier, start: event.start, end: nil, fullOptions: false, onComplete: nil) }
+        .entryActions(entry, pendingDelete: $pendingDelete, open: { _ in (calendar as? any NativeCalendarService)?.edit(identifier: event.eventIdentifier, start: event.start, end: nil, fullOptions: false, onComplete: nil) },
+                      edit: { _ in (calendar as? any NativeCalendarService)?.edit(identifier: event.eventIdentifier, start: event.start, end: nil, fullOptions: false, onComplete: nil) }, calendar: calendar)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 1, leading: 20, bottom: 1, trailing: 20))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(EventSpeech.label(title: event.title, start: event.start, end: event.end, isAllDay: event.isAllDay,
-                                              location: event.location, calendar: event.calendarTitle)
+        .accessibilityLabel(plannerEventSpeech(title: event.title, start: event.start, end: event.end, isAllDay: event.isAllDay,
+                                              location: event.location, calendar: event.calendarTitle, runtime: presentation.runtime)
                             + (travel.map { ". " + $0 } ?? ""))
         .accessibilityAddTraits(.isButton)
     }
@@ -58,7 +61,7 @@ package struct ExternalEventRow: View {
     /// "Drive 18 min · Leave by 14:20" for an upcoming event with a location (today or tomorrow).
     private var travel: String? {
         guard travelOn else { return nil }
-        return TravelTimes.shared.label(eventID: event.eventIdentifier, start: event.start, isAllDay: event.isAllDay, place: event.place)
+        return travelProvider.label(eventID: event.eventIdentifier, start: event.start, isAllDay: event.isAllDay, place: event.place, now: presentation.now)
     }
 }
 #endif

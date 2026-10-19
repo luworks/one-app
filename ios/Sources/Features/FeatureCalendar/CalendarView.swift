@@ -12,15 +12,19 @@ import SwiftData
 /// opens it there. One control row under the tab pills: the view switcher. Which calendars show is a Setting.
 /// System events open in Apple's own viewer; new events use Apple's own editor when Calendar access is on.
 package struct CalendarView: View {
+    @Environment(PlannerPresentation.self) private var presentation
     package enum Mode: String, CaseIterable, Identifiable {
         case week = "Week", month = "Month", year = "Year"
         package var id: Self { self }
     }
 
+    private let actions: PlannerActions
+    private let ledger: Ledger
+    private let alarms: any AlarmService
     @Binding var day: Date
     /// Week / Month / Year. Kept by `HomeView`, so switching tabs and back keeps the view.
     @Binding var mode: Mode
-    let calendar: CalendarSync
+    let calendar: any CalendarService
     let onOpenTask: @MainActor (OneTask) -> Void
     let onOpenAlarm: @MainActor (OneAlarm) -> Void
     let onOpenDay: @MainActor (Date) -> Void
@@ -40,16 +44,17 @@ package struct CalendarView: View {
 
     /// The month title of the visible week / month page, published by the page and shown in the control row.
     @State private var title = ""
-    private let cal = Calendar.current
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
 
     @MainActor
-    package init(day: Binding<Date>, mode: Binding<Mode>, calendar: CalendarSync,
+    package init(day: Binding<Date>, mode: Binding<Mode>, calendar: any CalendarService, actions: PlannerActions, ledger: Ledger, alarms: any AlarmService,
                  onOpenTask: @escaping @MainActor (OneTask) -> Void,
                  onOpenAlarm: @escaping @MainActor (OneAlarm) -> Void,
                  onOpenDay: @escaping @MainActor (Date) -> Void) {
         _day = day
         _mode = mode
         self.calendar = calendar
+        self.actions = actions; self.ledger = ledger; self.alarms = alarms
         self.onOpenTask = onOpenTask
         self.onOpenAlarm = onOpenAlarm
         self.onOpenDay = onOpenDay
@@ -61,13 +66,13 @@ package struct CalendarView: View {
             Group {
                 switch mode {
                 case .week:
-                    WeekView(day: $day, title: $title, dayCount: 7, open: open, edit: edit, create: create, openDay: openDay)
+                    WeekView(calendar: calendar, day: $day, title: $title, dayCount: 7, open: open, edit: edit, create: create, openDay: openDay)
                 case .month:
-                    MonthView(day: $day, title: $title, open: open, edit: edit, openDay: openDay)
+                    MonthView(calendar: calendar, day: $day, title: $title, open: open, edit: edit, openDay: openDay)
                 case .year:
                     YearView(day: $day, calendar: calendar, openDay: showMonth) { month in
                         withAnimation(.snappy) {
-                            day = CalendarMath.landingDay(inMonthOf: month)
+                            day = CalendarMath.landingDay(inMonthOf: month, today: presentation.now, calendar: cal)
                             mode = .month
                         }
                     }
@@ -77,16 +82,18 @@ package struct CalendarView: View {
         }
         .sheet(item: $opened) { item in
             switch item {
-            case .local(let event): EventEditor(event: event, calendar: calendar)
-            case .new(let start, let end): EventEditor(start: start, end: end, calendar: calendar)
+            case .local(let event): EventEditor(event: event, calendar: calendar, actions: actions, ledger: ledger, alarms: alarms, presentation: presentation)
+            case .new(let start, let end): EventEditor(start: start, end: end, calendar: calendar, actions: actions, ledger: ledger, alarms: alarms, presentation: presentation)
             }
         }
+        .environment(actions)
+        .defaultAppStorage(presentation.defaults)
     }
 
     /// System events open in Apple's editor (presented by UIKit, see `NativeEvents`); the rest in our editors.
     private func open(_ entry: CalEntry) {
         switch entry.source {
-        case .system(let id): NativeEvents.edit(identifier: id, start: entry.start)
+        case .system(let id): (calendar as? any NativeCalendarService)?.edit(identifier: id, start: entry.start, end: nil, fullOptions: false, onComplete: nil)
         case .task(let task): onOpenTask(task)
         case .alarm(let alarm): onOpenAlarm(alarm)
         case .local(let event): opened = .local(event)
@@ -97,7 +104,7 @@ package struct CalendarView: View {
 
     /// A long-press on an empty slot of the Week grid: Apple's editor when Calendar access is on, else ours, prefilled.
     private func create(start: Date, end: Date) {
-        if calendar.usesNativeEditor { NativeEvents.edit(start: start, end: end) } else { opened = .new(start: start, end: end) }
+        if calendar.usesNativeEditor, let native = calendar as? any NativeCalendarService { native.edit(identifier: nil, start: start, end: end, fullOptions: false, onComplete: nil) } else { opened = .new(start: start, end: end) }
     }
 
     /// Tapping a day that is already selected opens it in Today (the day view).
@@ -170,19 +177,34 @@ private struct ModePill: View {
 
 /// The Calendars list: Apple's own EKCalendarChooser (accounts, color dots, checkmarks) when access is on.
 package struct CalendarsSheet: View {
-    let calendar: CalendarSync
+    let calendar: any CalendarService
 
-    package init(calendar: CalendarSync) {
+    package init(calendar: any CalendarService) {
         self.calendar = calendar
     }
 
     @Environment(\.dismiss) private var dismiss
 
     package var body: some View {
-        if calendar.isOn {
-            NativeCalendarChooser(calendar: calendar)
+        if calendar.isOn, let native = calendar as? any NativeCalendarService {
+            NativeCalendarChooser(calendar: native)
                 .ignoresSafeArea()
                 .presentationDetents([.medium, .large])
+        } else if calendar.isOn {
+            NavigationStack {
+                List(calendar.calendars(), id: \.id) { item in
+                    Toggle(isOn: Binding(get: { !calendar.hiddenCalendarIDs.contains(item.id) }, set: { visible in
+                        var selected = Set(calendar.calendars().map(\.id)).subtracting(calendar.hiddenCalendarIDs)
+                        if visible { selected.insert(item.id) } else { selected.remove(item.id) }
+                        calendar.setVisibleCalendars(selected)
+                    })) {
+                        Label { Text(item.title) } icon: { Circle().fill(item.color).frame(width: 12, height: 12) }
+                    }
+                }
+                .navigationTitle("Calendars")
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            }
+            .presentationDetents([.medium, .large])
         } else {
             NavigationStack {
                 VStack(spacing: 14) {
@@ -208,6 +230,8 @@ package struct CalendarsSheet: View {
 // MARK: - Month
 
 private struct MonthView: View {
+    let calendar: any CalendarService
+    @Environment(PlannerPresentation.self) private var presentation
     @Binding var day: Date
     @Binding var title: String
     var open: (CalEntry) -> Void
@@ -218,17 +242,17 @@ private struct MonthView: View {
     @Query private var tasks: [OneTask]
     @Query private var allAlarms: [OneAlarm]
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
-    // Read so the grid is laid out again when Settings changes them (the layout itself asks `Calendar.app`).
+    // Read so the grid updates when Settings changes the session calendar layout.
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
     @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
     /// Months from the current one, the id of each page in the pager.
     @State private var pos: Int? = 0
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 51
-    private let cal = Calendar.current
-    private let base = CalendarMath.monthStart(offset: 0, from: .now)
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
+    private var base: Date { CalendarMath.monthStart(offset: 0, from: presentation.now, calendar: cal) }
     private let range = -360...360
 
-    private func month(_ offset: Int) -> Date { CalendarMath.monthStart(offset: offset, from: base) }
+    private func month(_ offset: Int) -> Date { CalendarMath.monthStart(offset: offset, from: base, calendar: cal) }
     private var current: Int { pos ?? 0 }
     /// Alarms follow Settings → "Show alarms in the day", like the Today timeline.
     private var alarms: [OneAlarm] { showsAlarms ? allAlarms : [] }
@@ -241,22 +265,22 @@ private struct MonthView: View {
                 if showsWeekNumbers { weekNumberColumn }
                 pager
             }
-            DayAgendaList(day: day, events: events, tasks: tasks, alarms: alarms, open: open, edit: edit)
+            DayAgendaList(calendar: calendar, day: day, events: events, tasks: tasks, alarms: alarms, open: open, edit: edit)
         }
         .onChange(of: day) { _, new in
-            let target = CalendarMath.monthOffset(of: new, from: base)
+            let target = CalendarMath.monthOffset(of: new, from: base, calendar: cal)
             if target != pos { withAnimation(.snappy) { pos = target } }
         }
         .onChange(of: pos) { _, new in
-            guard let new, CalendarMath.monthOffset(of: day, from: base) != new else { return }
-            day = CalendarMath.landingDay(inMonthOf: month(new))
+            guard let new, CalendarMath.monthOffset(of: day, from: base, calendar: cal) != new else { return }
+            day = CalendarMath.landingDay(inMonthOf: month(new), today: presentation.now, calendar: cal)
         }
-        .onChange(of: current, initial: true) { _, new in title = month(new).formatted(.dateTime.month(.wide)) }
-        .onAppear { pos = CalendarMath.monthOffset(of: day, from: base) }
+        .onChange(of: current, initial: true) { _, new in title = month(new).plannerFormatted(.dateTime.month(.wide), runtime: presentation.runtime) }
+        .onAppear { pos = CalendarMath.monthOffset(of: day, from: base, calendar: cal) }
     }
 
     private var weekdayHeader: some View {
-        let letters = CalendarMath.weekdayLetters()
+        let letters = CalendarMath.weekdayLetters(calendar: cal)
         return HStack(spacing: 0) {
             if showsWeekNumbers { Color.clear.frame(width: Self.weekNumberWidth, height: 1) }
             ForEach(0..<7, id: \.self) { i in
@@ -274,10 +298,10 @@ private struct MonthView: View {
 
     /// Settings > Calendar > "Show week numbers": the week of the year at the start of each row of the visible month.
     private var weekNumberColumn: some View {
-        let weeks = CalendarMath.monthWeeks(of: month(current))
+        let weeks = CalendarMath.monthWeeks(of: month(current), calendar: cal)
         return VStack(spacing: 0) {
             ForEach(weeks.indices, id: \.self) { w in
-                let number = weeks[w].compactMap { $0 }.first.map { CalendarMath.weekNumber(of: $0) }
+                let number = weeks[w].compactMap { $0 }.first.map { CalendarMath.weekNumber(of: $0, calendar: cal) }
                 Text(number.map(String.init) ?? "")
                     .font(.system(size: 11, weight: .medium).monospacedDigit())
                     .foregroundStyle(.tertiary)
@@ -293,7 +317,7 @@ private struct MonthView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 0) {
                 ForEach(range, id: \.self) { offset in
-                    MonthPage(month: month(offset), selected: day, rowHeight: rowHeight, events: events, tasks: tasks, alarms: alarms) { picked in
+                    MonthPage(calendar: calendar, month: month(offset), selected: day, rowHeight: rowHeight, events: events, tasks: tasks, alarms: alarms) { picked in
                         if cal.isDate(picked, inSameDayAs: day) {
                             openDay(picked)
                         } else {
@@ -309,8 +333,8 @@ private struct MonthView: View {
         .scrollTargetBehavior(.paging)
         .scrollPosition(id: $pos)
         .scrollBounceBehavior(.basedOnSize)
-        .frame(height: CGFloat(CalendarMath.monthWeeks(of: month(current)).count) * rowHeight)
-        .animation(.snappy, value: CalendarMath.monthWeeks(of: month(current)).count)
+        .frame(height: CGFloat(CalendarMath.monthWeeks(of: month(current), calendar: cal).count) * rowHeight)
+        .animation(.snappy, value: CalendarMath.monthWeeks(of: month(current), calendar: cal).count)
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityIdentifier("calendar.monthPager")
     }
@@ -318,6 +342,8 @@ private struct MonthView: View {
 
 /// One month of day cells: number, selection circle, and a small dot per event in the calendar's color.
 private struct MonthPage: View {
+    let calendar: any CalendarService
+    @Environment(PlannerPresentation.self) private var presentation
     let month: Date
     let selected: Date
     let rowHeight: CGFloat
@@ -325,21 +351,21 @@ private struct MonthPage: View {
     let tasks: [OneTask]
     let alarms: [OneAlarm]
     var onTap: (Date) -> Void
-    private let cal = Calendar.current
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
     @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
 
     var body: some View {
-        let weeks = CalendarMath.monthWeeks(of: month)
+        let weeks = CalendarMath.monthWeeks(of: month, calendar: cal)
         let all = weeks.flatMap { $0 }.compactMap { $0 }
         let interval = DateInterval(start: all.first ?? month, end: cal.date(byAdding: .day, value: 1, to: all.last ?? month) ?? month)
-        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms)
+        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar, now: presentation.now, calendar: cal)
         VStack(spacing: 0) {
             ForEach(weeks.indices, id: \.self) { w in
                 HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { i in
                         if let d = weeks[w][i] {
-                            cell(d, CalendarEntries.on(d, in: entries))
+                            cell(d, CalendarEntries.on(d, in: entries, calendar: cal))
                         } else {
                             Color.clear.frame(maxWidth: .infinity, minHeight: rowHeight)
                         }
@@ -351,9 +377,9 @@ private struct MonthPage: View {
     }
 
     private func cell(_ d: Date, _ items: [CalEntry]) -> some View {
-        let isToday = cal.isDateInToday(d)
+        let isToday = cal.isDate(d, inSameDayAs: presentation.now)
         let isSelected = cal.isDate(d, inSameDayAs: selected)
-        let past = dimsPast && d < cal.startOfDay(for: .now)
+        let past = dimsPast && d < cal.startOfDay(for: presentation.now)
         // Today is a red circle when selected (red number otherwise); any other selected day is a label-colored circle.
         // Days that are over are dimmed (Settings > Calendar > "Dim past days"). Weekends look like any other day.
         let fill: Color = isSelected ? (isToday ? .red : Color(.label)) : .clear
@@ -377,9 +403,9 @@ private struct MonthPage: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(d.formatted(date: .complete, time: .omitted)), \(Self.summary(items))")
+        .accessibilityLabel("\(d.plannerFormatted(date: .complete, time: .omitted, runtime: presentation.runtime)), \(Self.summary(items))")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier(CalendarIDs.day(d))
+        .accessibilityIdentifier(CalendarIDs.day(d, calendar: cal))
     }
 }
 
@@ -414,6 +440,8 @@ private struct DayDots: View {
 
 /// The selected day's events under the month grid: all-day first, then by time, like Apple's list layout.
 private struct DayAgendaList: View {
+    let calendar: any CalendarService
+    @Environment(PlannerPresentation.self) private var presentation
     let day: Date
     let events: [OneEvent]
     let tasks: [OneTask]
@@ -421,16 +449,16 @@ private struct DayAgendaList: View {
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void
     @State private var pendingDelete: CalEntry?
-    private let cal = Calendar.current
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
 
     var body: some View {
         let interval = cal.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 86400)
-        let items = CalendarEntries.on(day, in: CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms))
+        let items = CalendarEntries.on(day, in: CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar, now: presentation.now, calendar: cal), calendar: cal)
         List {
             ForEach(items) { entry in
                 AgendaRow(entry: entry, day: day)
                     .onTapGesture { open(entry) }
-                    .entryActions(entry, pendingDelete: $pendingDelete, open: open, edit: edit)
+                    .entryActions(entry, pendingDelete: $pendingDelete, open: open, edit: edit, calendar: calendar)
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
@@ -457,16 +485,17 @@ private struct DayAgendaList: View {
 /// One line of Apple's event list: calendar-colored bar, bold title, location, start and end time on the right.
 /// All-day events lead with a calendar glyph and say "all-day".
 private struct AgendaRow: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let entry: CalEntry
     let day: Date
     @Environment(\.displayScale) private var scale
     @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
-    private let cal = Calendar.current
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
 
     var body: some View {
-        let span = entry.span(on: day)
+        let span = entry.span(on: day, calendar: cal)
         // Events that are over fade, like Apple's (Settings > Calendar > "Dim past days").
-        let over = dimsPast && (span.allDay ? cal.startOfDay(for: day) < cal.startOfDay(for: .now) : span.end <= .now)
+        let over = dimsPast && (span.allDay ? cal.startOfDay(for: day) < cal.startOfDay(for: presentation.now) : span.end <= presentation.now)
         let titleColor: Color = over ? Color(.secondaryLabel) : Color(.label)
         HStack(alignment: .top, spacing: 12) {
             if entry.isAlarm {
@@ -499,10 +528,10 @@ private struct AgendaRow: View {
                 Text("all-day").font(.body).foregroundStyle(over ? Color(.secondaryLabel) : Color(.label))
             } else {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(span.start.formatted(date: .omitted, time: .shortened))
+                    Text(span.start.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))
                         .foregroundStyle(over ? Color(.secondaryLabel) : Color(.label))
                     if !entry.isTask, !entry.isAlarm {
-                        Text(span.end.formatted(date: .omitted, time: .shortened)).foregroundStyle(Color(.tertiaryLabel))
+                        Text(span.end.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime)).foregroundStyle(Color(.tertiaryLabel))
                     }
                 }
                 .font(.body.monospacedDigit())
@@ -516,7 +545,7 @@ private struct AgendaRow: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(entry.speech)
+        .accessibilityLabel(plannerEntrySpeech(entry, runtime: presentation.runtime))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier(entry.isAlarm ? "agenda.alarmRow" : "agenda.row")
     }
@@ -525,8 +554,9 @@ private struct AgendaRow: View {
 // MARK: - Year
 
 private struct YearView: View {
+    @Environment(PlannerPresentation.self) private var presentation
     @Binding var day: Date
-    let calendar: CalendarSync
+    let calendar: any CalendarService
     var openDay: (Date) -> Void
     var pickMonth: (Date) -> Void
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
@@ -535,8 +565,8 @@ private struct YearView: View {
     @AppStorage(YearMarkSettings.holidaysKey) private var holidaySetting = YearMarkSettings.auto
     @State private var cache = MarksCache()
     @State private var showsKey = false
-    private let cal = Calendar.current
-    private let baseYear = Calendar.current.dateInterval(of: .year, for: .now)?.start ?? .now
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
+    private var baseYear: Date { cal.dateInterval(of: .year, for: presentation.now)?.start ?? presentation.now }
 
     private func year(_ offset: Int) -> Date { cal.date(byAdding: .year, value: offset, to: baseYear) ?? baseYear }
     private func offset(of date: Date) -> Int { cal.component(.year, from: date) - cal.component(.year, from: baseYear) }
@@ -578,7 +608,7 @@ private struct YearView: View {
         h.combine(holidaySetting)
         for e in events { h.combine(e.start); h.combine(e.durationMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.title); h.combine(e.calendarName); h.combine(e.externalID) }
         for t in tasks { h.combine(t.plannedStart); h.combine(t.due); h.combine(t.repeatRule); h.combine(t.isDone) }
-        h.combine(cal.startOfDay(for: TodayClock.now))
+        h.combine(cal.startOfDay(for: presentation.now))
         return h.finalize()
     }
 
@@ -616,7 +646,7 @@ private struct YearView: View {
         guard let end = cal.date(byAdding: .year, value: 1, to: start) else { return YearMarks() }
         let interval = DateInterval(start: start, end: end)
         // Alarms are left out on purpose: a ring is not load. Everything else comes from the same merge as Week and Month.
-        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, forYearMarks: true).filter {
+        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, calendarService: calendar, now: presentation.now, calendar: cal, forYearMarks: true).filter {
             !$0.isAlarm && ($0.isTask || !YearEventMarks.isBirthday(title: $0.title, calendarTitle: $0.calendarTitle,
                                                                  isBirthdayCalendar: $0.isBirthday))
         }
@@ -624,7 +654,7 @@ private struct YearView: View {
             YearLoadItem(start: $0.start, end: $0.end, isAllDay: $0.isAllDay, repeats: $0.repeats, isBackground: $0.isBackground || YearLoad.isBackgroundCalendar(isSubscription: false, isBirthday: false, title: $0.calendarTitle))
         }
         // A reminder that is still due counts on its due day, unless it is already planned for that day (then it is counted above).
-        let today = cal.startOfDay(for: TodayClock.now)
+        let today = cal.startOfDay(for: presentation.now)
         for t in tasks where !t.isDone && t.repeatRule == nil {
             guard let due = t.due else { continue }
             let dueDay = cal.startOfDay(for: due)
@@ -639,7 +669,7 @@ private struct YearView: View {
                 && YearEventMarks.isTrip(start: $0.start, end: $0.end, isAllDay: $0.isAllDay, calendar: cal)
         }.sorted { $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start }
         result.busy = YearBusy.days(loads: YearLoad.counts(items, in: interval, calendar: cal))
-        let sets = YearMarkSettings.sets(holidaySetting)
+        let sets = YearMarkSettings.sets(holidaySetting, locale: presentation.locale)
         let names = Holidays.days(inYear: cal.component(.year, from: start), sets: sets)
         for (key, list) in names {
             if let date = cal.date(from: DateComponents(year: key.year, month: key.month, day: key.day)) { result.holidays[date] = list }
@@ -654,11 +684,11 @@ private struct YearView: View {
     }
 
     private func yearSection(_ start: Date) -> some View {
-        let isCurrent = cal.isDate(start, equalTo: .now, toGranularity: .year)
+        let isCurrent = cal.isDate(start, equalTo: presentation.now, toGranularity: .year)
         let marked = marks(in: start)
         return VStack(spacing: 14) {
             HStack {
-                Text(start.formatted(.dateTime.year()))
+                Text(start.plannerFormatted(.dateTime.year(), runtime: presentation.runtime))
                     .font(.largeTitle.bold())
                     .foregroundStyle(isCurrent ? Color.red : Color.primary)
                     .accessibilityAddTraits(.isHeader)
@@ -671,7 +701,7 @@ private struct YearView: View {
                     }
                     #endif
                 Spacer()
-                Button { PerformanceTrace.shared.beginPage("calendar.year.key"); showsKey = true } label: {
+                Button { showsKey = true } label: {
                     Image(systemName: "info.circle").font(.title3).foregroundStyle(.secondary)
                         .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
@@ -697,6 +727,7 @@ private struct YearView: View {
 /// A small month for the Year view: holidays, calendar-color trip bands, quiet busy tints, and today
 /// as a red circle (see `YearMarks.swift` and docs/design/year-view.md). Month keeps Apple's dots.
 private struct MiniMonth: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let month: Date
     /// Unusually busy days (start of day).
     var busy: Set<Date> = []
@@ -705,35 +736,35 @@ private struct MiniMonth: View {
     var trips: [CalEntry] = []
     var openDay: (Date) -> Void
     var onTap: () -> Void
-    private let cal = Calendar.current
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
 
-    private var days: [Date] { CalendarMath.monthWeeks(of: month).flatMap { $0 }.compactMap { $0 } }
+    private var days: [Date] { CalendarMath.monthWeeks(of: month, calendar: cal).flatMap { $0 }.compactMap { $0 } }
 
     private var summary: String {
         var parts = days.compactMap { holidays[$0] }.flatMap { $0 }
         let busyCount = days.filter { busy.contains($0) }.count
         if busyCount > 0 { parts.append("\(busyCount) busy day\(busyCount == 1 ? "" : "s")") }
-        parts += trips.filter { trip in days.contains { trip.overlaps($0) } }.map(\.title)
+        parts += trips.filter { trip in days.contains { trip.overlaps($0, calendar: cal) } }.map(\.title)
         return parts.joined(separator: "; ")
     }
 
     var body: some View {
-        let weeks = CalendarMath.monthWeeks(of: month)
-        let isCurrent = cal.isDate(month, equalTo: .now, toGranularity: .month)
+        let weeks = CalendarMath.monthWeeks(of: month, calendar: cal)
+        let isCurrent = cal.isDate(month, equalTo: presentation.now, toGranularity: .month)
         VStack(alignment: .leading, spacing: 6) {
             Button(action: onTap) {
-                Text(month.formatted(.dateTime.month(.abbreviated)))
+                Text(month.plannerFormatted(.dateTime.month(.abbreviated), runtime: presentation.runtime))
                     .font(.title3.bold())
                     .foregroundStyle(isCurrent ? Color.red : Color.primary)
                     .padding(.leading, 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel(month.formatted(.dateTime.month(.wide).year()))
+            .accessibilityLabel(month.plannerFormatted(.dateTime.month(.wide).year(), runtime: presentation.runtime))
             .accessibilityValue(summary)
             .accessibilityHint("Shows this month")
-            .accessibilityIdentifier(CalendarIDs.month(month))
+            .accessibilityIdentifier(CalendarIDs.month(month, calendar: cal))
             VStack(spacing: 6.5) {
                 ForEach(0..<6, id: \.self) { w in
                     HStack(spacing: 0) {
@@ -753,9 +784,9 @@ private struct MiniMonth: View {
     }
 
     private func dayButton(_ d: Date) -> some View {
-        let today = cal.isDateInToday(d)
+        let today = cal.isDate(d, inSameDayAs: presentation.now)
         let holiday = holidays[d] != nil
-        let spans = trips.filter { $0.overlaps(d) }
+        let spans = trips.filter { $0.overlaps(d, calendar: cal) }
         return Button { openDay(d) } label: {
             Text("\(cal.component(.day, from: d))")
                 .font(.system(size: 10.5, weight: holiday ? .bold : .semibold).monospacedDigit())
@@ -770,10 +801,10 @@ private struct MiniMonth: View {
                 }
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel(d.formatted(date: .complete, time: .omitted))
+        .accessibilityLabel(d.plannerFormatted(date: .complete, time: .omitted, runtime: presentation.runtime))
         .accessibilityValue(((holidays[d] ?? []) + spans.map(\.title) + (busy.contains(d) && spans.isEmpty ? ["Unusually busy"] : [])).joined(separator: "; "))
         .accessibilityHint("Shows this day and its events in Month")
-        .accessibilityIdentifier("year.\(CalendarIDs.day(d))")
+        .accessibilityIdentifier("year.\(CalendarIDs.day(d, calendar: cal))")
     }
 
     private func bands(week: Int, weeks: [[Date?]]) -> some View {
@@ -801,6 +832,8 @@ private struct MiniMonth: View {
 
 /// 7-day time grid. Events are tinted blocks in their calendar's color (fixed); planned tasks are accent outlines (flexible).
 private struct WeekView: View {
+    let calendar: any CalendarService
+    @Environment(PlannerPresentation.self) private var presentation
     @Binding var day: Date
     @Binding var title: String
     /// 7 = a calendar week; 3 = the next 3 days starting today.
@@ -820,13 +853,13 @@ private struct WeekView: View {
     @State private var topHour: Int? = 7
     /// Points per hour; pinch the grid to change it (shared by all pages).
     @State private var hourHeight: CGFloat = 48
-    private let cal = Calendar.current
-    private var base: Date { dayCount == 7 ? CalendarMath.weekStart(of: .now) : cal.startOfDay(for: .now) }
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
+    private var base: Date { dayCount == 7 ? CalendarMath.weekStart(of: presentation.now, calendar: cal) : cal.startOfDay(for: presentation.now) }
     private let range = -800...800
 
     private func weekStart(_ offset: Int) -> Date { cal.date(byAdding: .day, value: offset * dayCount, to: base) ?? base }
     private func offset(of date: Date) -> Int {
-        let start = dayCount == 7 ? CalendarMath.weekStart(of: date) : cal.startOfDay(for: date)
+        let start = dayCount == 7 ? CalendarMath.weekStart(of: date, calendar: cal) : cal.startOfDay(for: date)
         let days = cal.dateComponents([.day], from: base, to: start).day ?? 0
         return Int((Double(days) / Double(dayCount)).rounded(.down))
     }
@@ -836,7 +869,7 @@ private struct WeekView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 0) {
                     ForEach(range, id: \.self) { o in
-                        WeekPage(weekStart: weekStart(o), dayCount: dayCount, selected: day, events: events, tasks: tasks,
+                        WeekPage(calendar: calendar, weekStart: weekStart(o), dayCount: dayCount, selected: day, events: events, tasks: tasks,
                                  alarms: showsAlarms ? allAlarms : [], topHour: $topHour, hourHeight: $hourHeight, open: open, edit: edit, create: create, openDay: openDay)
                             .containerRelativeFrame([.horizontal, .vertical])
                             .id(o)
@@ -864,11 +897,13 @@ private struct WeekView: View {
     }
 
     private var weekTitle: String {
-        weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).formatted(.dateTime.month(.wide))
+        weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).plannerFormatted(.dateTime.month(.wide), runtime: presentation.runtime)
     }
 }
 
 private struct WeekPage: View {
+    let calendar: any CalendarService
+    @Environment(PlannerPresentation.self) private var presentation
     let weekStart: Date
     let dayCount: Int
     let selected: Date
@@ -887,7 +922,7 @@ private struct WeekPage: View {
     /// The hour height when the current pinch started.
     @State private var pinchStart: CGFloat?
     private let gutter: CGFloat = 44
-    private let cal = Calendar.current
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
     @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday.rawValue
     @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
@@ -895,7 +930,7 @@ private struct WeekPage: View {
     var body: some View {
         let days = (0..<dayCount).compactMap { cal.date(byAdding: .day, value: $0, to: weekStart) }
         let interval = DateInterval(start: weekStart, end: cal.date(byAdding: .day, value: dayCount, to: weekStart) ?? weekStart)
-        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms)
+        let entries = CalendarEntries.make(in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar, now: presentation.now, calendar: cal)
         VStack(spacing: 0) {
             header(days)
             allDayStrip(days, entries.filter(\.isAllDay))
@@ -909,24 +944,24 @@ private struct WeekPage: View {
     // MARK: Header
 
     private func header(_ days: [Date]) -> some View {
-        let letters = CalendarMath.weekdayLetters()
+        let letters = CalendarMath.weekdayLetters(calendar: cal)
         return HStack(spacing: 0) {
             // Settings > Calendar > "Show week numbers": "W42" over the hour labels (a 7-day week only).
             let showsNumber = showsWeekNumbers && dayCount == 7
-            Text(showsNumber ? "W\(CalendarMath.weekNumber(of: weekStart))" : "")
+            Text(showsNumber ? "W\(CalendarMath.weekNumber(of: weekStart, calendar: cal))" : "")
                 .font(.system(size: 10, weight: .medium).monospacedDigit())
                 .foregroundStyle(.tertiary)
                 .frame(width: gutter)
-                .accessibilityLabel("Week \(CalendarMath.weekNumber(of: weekStart))")
+                .accessibilityLabel("Week \(CalendarMath.weekNumber(of: weekStart, calendar: cal))")
                 .accessibilityHidden(!showsNumber)
                 .accessibilityIdentifier("calendar.weekNumber")
             ForEach(Array(days.enumerated()), id: \.offset) { i, d in
-                let isToday = cal.isDateInToday(d)
+                let isToday = cal.isDate(d, inSameDayAs: presentation.now)
                 let isSelected = cal.isDate(d, inSameDayAs: selected)
-                let past = dimsPast && d < cal.startOfDay(for: .now)
+                let past = dimsPast && d < cal.startOfDay(for: presentation.now)
                 Button { openDay(d) } label: {
                     VStack(spacing: 2) {
-                        Text(dayCount == 7 ? letters[i] : d.formatted(.dateTime.weekday(.abbreviated)))
+                        Text(dayCount == 7 ? letters[i] : d.plannerFormatted(.dateTime.weekday(.abbreviated), runtime: presentation.runtime))
                             .font(.system(size: 11, weight: .semibold))
                         Text("\(cal.component(.day, from: d))")
                             .font(.system(size: 17, weight: .medium))
@@ -939,7 +974,7 @@ private struct WeekPage: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(d.formatted(date: .complete, time: .omitted))
+                .accessibilityLabel(d.plannerFormatted(date: .complete, time: .omitted, runtime: presentation.runtime))
                 .accessibilityHint("Opens the day")
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
@@ -981,9 +1016,9 @@ private struct WeekPage: View {
                                 .background(EventTint.fill(e.color), in: RoundedRectangle(cornerRadius: 5))
                                 .offset(x: CGFloat(spans[i].start) * colW + 1, y: CGFloat(lanes[i]) * rowHeight)
                                 .onTapGesture { open(e) }
-                                .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false)
+                                .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false, calendar: calendar)
                                 .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(e.speech)
+                                .accessibilityLabel(plannerEntrySpeech(e, runtime: presentation.runtime))
                                 .accessibilityAddTraits(.isButton)
                         }
                     }
@@ -1032,7 +1067,7 @@ private struct WeekPage: View {
                         let placed = place(timed, on: d)
                         let markers = placeAlarms(alarms, on: d)
                         let lanes = CalendarLayout.timedLanes(columnWidth: Double(colW), hasAlarms: !markers.isEmpty)
-                        let past = dimsPast && d < cal.startOfDay(for: .now)
+                        let past = dimsPast && d < cal.startOfDay(for: presentation.now)
                         ForEach(placed, id: \.entry.id) { p in
                             let span = lanes.block(column: p.column, count: p.count)
                             block(p.entry, colW: colW, width: CGFloat(span.width),
@@ -1048,9 +1083,9 @@ private struct WeekPage: View {
                                 .offset(x: x + CGFloat(lanes.alarmX), y: m.y)
                         }
                     }
-                    if days.contains(where: cal.isDateInToday) {
-                        TimelineView(.everyMinute) { context in
-                            nowLine(context.date, days: days, colW: colW)
+                    if days.contains(where: { cal.isDate($0, inSameDayAs: presentation.now) }) {
+                        TimelineView(.everyMinute) { _ in
+                            nowLine(presentation.now, days: days, colW: colW)
                         }
                     }
                     if let draft, draft.day < days.count {
@@ -1079,13 +1114,13 @@ private struct WeekPage: View {
 
     private func nowLine(_ now: Date, days: [Date], colW: CGFloat) -> some View {
         let y = minutes(now) / 60 * hourHeight
-        let index = days.firstIndex(where: { cal.isDateInToday($0) }) ?? 0
+        let index = days.firstIndex(where: { cal.isDate($0, inSameDayAs: presentation.now) }) ?? 0
         return ZStack(alignment: .topLeading) {
             Rectangle().fill(Color.red.opacity(0.35)).frame(width: colW * CGFloat(days.count), height: 1)
                 .offset(x: gutter, y: y)
             Rectangle().fill(Color.red).frame(width: colW, height: 1.5)
                 .offset(x: gutter + CGFloat(index) * colW, y: y - 0.5)
-            Text(now.formatted(date: .omitted, time: .shortened))
+            Text(now.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))
                 .font(.system(size: 10, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.white)
                 .padding(.horizontal, 4)
@@ -1164,9 +1199,9 @@ private struct WeekPage: View {
         .clipShape(RoundedRectangle(cornerRadius: 3))
         .contentShape(Rectangle())
         .onTapGesture { open(e) }
-        .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false)
+        .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false, calendar: calendar)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(e.speech)
+        .accessibilityLabel(plannerEntrySpeech(e, runtime: presentation.runtime))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("calendar.alarmMarker")
     }
@@ -1210,9 +1245,9 @@ private struct WeekPage: View {
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .contentShape(Rectangle())
             .onTapGesture { open(e) }
-            .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false)
+            .entryActions(e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false, calendar: calendar)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(e.speech)
+            .accessibilityLabel(plannerEntrySpeech(e, runtime: presentation.runtime))
             .accessibilityAddTraits(.isButton)
         }
     }
@@ -1271,7 +1306,7 @@ private struct WeekPage: View {
         let start = cal.date(byAdding: .minute, value: slot.minute, to: day) ?? day
         return VStack(alignment: .leading, spacing: 0) {
             Text("New Event").font(.system(size: 10, weight: .semibold))
-            Text(start.formatted(date: .omitted, time: .shortened)).font(.system(size: 10).monospacedDigit())
+            Text(start.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime)).font(.system(size: 10).monospacedDigit())
         }
         .foregroundStyle(.white)
         .padding(3)
@@ -1282,7 +1317,7 @@ private struct WeekPage: View {
         .offset(x: gutter + CGFloat(slot.day) * colW + 1, y: CGFloat(slot.minute) / 60 * hourHeight)
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("New Event, \(DayLabel.withTime(start))")
+        .accessibilityLabel("New Event, \(plannerDayLabel(start, runtime: presentation.runtime))")
         .accessibilityIdentifier("calendar.newEventDraft")
     }
 
@@ -1292,8 +1327,8 @@ private struct WeekPage: View {
     }
 
     private func hourLabel(_ h: Int) -> String {
-        h == 0 ? "" : (cal.date(bySettingHour: h, minute: 0, second: 0, of: .now) ?? .now)
-            .formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+        h == 0 ? "" : (cal.date(bySettingHour: h, minute: 0, second: 0, of: presentation.now) ?? presentation.now)
+            .plannerFormatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)), runtime: presentation.runtime)
     }
 }
 
@@ -1357,6 +1392,9 @@ private struct SlotPressView: UIViewRepresentable {
 /// Long-press, then drag a planned task to another time (15-minute steps) or day. Events never move.
 /// Moving changes only the planned time, never the deadline.
 private struct DraggableTaskBlock<Content: View>: View {
+    @Environment(PlannerActions.self) private var actions
+    @Environment(\.modelContext) private var context
+    @Environment(PlannerPresentation.self) private var presentation
     let task: OneTask
     let colWidth: CGFloat
     let hourHeight: CGFloat
@@ -1382,14 +1420,14 @@ private struct DraggableTaskBlock<Content: View>: View {
                         defer { withAnimation(.snappy) { lifted = false } }
                         guard case .second(true, let drag?) = value, let start = task.plannedStart else { return }
                         let (days, minutes) = steps(drag.translation)
-                        let cal = Calendar.current
+                        let cal = presentation.calendar
                         let moved = cal.date(byAdding: .minute, value: minutes, to: start)
                             .flatMap { cal.date(byAdding: .day, value: days, to: $0) }
-                        withAnimation(.snappy) { task.plannedStart = moved ?? start }
+                        withAnimation(.snappy) { actions.setPlanned(task, to: moved ?? start, context: context) }
                     }
             )
             .sensoryFeedback(.impact(weight: .medium), trigger: lifted) { _, up in up }
-            .accessibilityLabel("\(task.title), planned \(task.plannedStart.map { DayLabel.withTime($0) } ?? "")")
+            .accessibilityLabel("\(task.title), planned \(task.plannedStart.map { plannerDayLabel($0, runtime: presentation.runtime) } ?? "")")
             .accessibilityHint("Long-press and drag to move it")
     }
 
@@ -1419,12 +1457,12 @@ enum DayTint {
 
 /// Accessibility identifiers for days and months, in the local time zone ("day.2026-10-15", "miniMonth.2026-10") so UI tests can find them.
 enum CalendarIDs {
-    static func day(_ d: Date, calendar: Calendar = .current) -> String {
+    static func day(_ d: Date, calendar: Calendar) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: d)
         return String(format: "day.%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
-    static func month(_ d: Date, calendar: Calendar = .current) -> String {
+    static func month(_ d: Date, calendar: Calendar) -> String {
         let c = calendar.dateComponents([.year, .month], from: d)
         return String(format: "miniMonth.%04d-%02d", c.year ?? 0, c.month ?? 0)
     }

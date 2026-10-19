@@ -15,6 +15,13 @@ import SwiftData
 /// Today shows the current day, followed by a short look at tomorrow (see `TomorrowPreview`);
 /// the Calendar tab adds the week strip to pick a day.
 package struct DayAgenda: View {
+    private let actions: PlannerActions
+    private let calendar: any CalendarService
+    private let timers: any TimerService
+    private let reminders: any ReminderService
+    private let ledger: Ledger
+    private let travel: any TravelTimeProviding
+    @Environment(PlannerPresentation.self) private var presentation
     @Binding var day: Date
     var showsWeekStrip: Bool
     /// Opens the Timer tab (a tap on a running timer's row).
@@ -22,7 +29,17 @@ package struct DayAgenda: View {
     let openTask: @MainActor (OneTask) -> Void
     let openEvent: @MainActor (OneEvent) -> Void
 
-    package init(day: Binding<Date>, showsWeekStrip: Bool, openTask: @escaping @MainActor (OneTask) -> Void, openEvent: @escaping @MainActor (OneEvent) -> Void, openTimer: @escaping @MainActor () -> Void) {
+    package init(day: Binding<Date>, showsWeekStrip: Bool, openTask: @escaping @MainActor (OneTask) -> Void, openEvent: @escaping @MainActor (OneEvent) -> Void, openTimer: @escaping @MainActor () -> Void, actions: PlannerActions, calendar: any CalendarService, timers: any TimerService, reminders: any ReminderService, ledger: Ledger, travel: any TravelTimeProviding, presentation: PlannerPresentation) {
+        self.actions = actions; self.calendar = calendar; self.timers = timers; self.reminders = reminders; self.ledger = ledger; self.travel = travel
+        _now = State(initialValue: presentation.now)
+        _showsOverdue = AppStorage(wrappedValue: true, SettingsKey.showOverdue, store: presentation.defaults)
+        _showsAlarms = AppStorage(wrappedValue: true, SettingsKey.showAlarms, store: presentation.defaults)
+        _jumpsToNow = AppStorage(wrappedValue: true, SettingsKey.jumpToNow, store: presentation.defaults)
+        _showsHealth = AppStorage(wrappedValue: true, SettingsKey.healthSummary, store: presentation.defaults)
+        _showsTomorrow = AppStorage(wrappedValue: Preferences.showTomorrow, Preferences.showTomorrowKey, store: presentation.defaults)
+        _eveningHour = AppStorage(wrappedValue: Preferences.eveningHour, Preferences.eveningHourKey, store: presentation.defaults)
+        _showsFreeTime = AppStorage(wrappedValue: Preferences.showFreeTime, Preferences.showFreeTimeKey, store: presentation.defaults)
+        _suggestsTimes = AppStorage(wrappedValue: Preferences.suggestTimes, Preferences.suggestTimesKey, store: presentation.defaults)
         _day = day; self.showsWeekStrip = showsWeekStrip
         self.openTask = openTask; self.openEvent = openEvent; self.openTimer = openTimer
     }
@@ -43,12 +60,12 @@ package struct DayAgenda: View {
     /// The open "Review today" sheet: tomorrow and its first items, taken when the row is tapped.
     @State private var review: ReviewRequest?
 
-    private let cal = Calendar.current
+    private var cal: Calendar { Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar) }
     @State private var showsAllOverdue = false
     /// nil = follow `TomorrowPreview` (open in the evening); otherwise the user's own "more" / "Show less".
     @State private var expandsTomorrow: Bool?
     /// Refreshed every minute, so the Now line moves and Tomorrow opens at 18:00 without a relaunch.
-    @State private var now = TodayClock.now
+    @State private var now: Date
     /// A repeating system event whose Delete is waiting for "this event or the series?".
     @State private var pendingDelete: CalEntry?
 
@@ -58,6 +75,8 @@ package struct DayAgenda: View {
                 .onAppear { scrollToNow(proxy) }
                 .onChange(of: day) { _, _ in scrollToNow(proxy) }
         }
+        .environment(actions)
+        .defaultAppStorage(presentation.defaults)
         .task(id: [showsHealth, isTodayTab, scenePhase == .active]) {
             // Asks for Health access only the first time the line would show (Today, setting on).
             guard showsHealth, isTodayTab, scenePhase == .active else { return }
@@ -66,14 +85,14 @@ package struct DayAgenda: View {
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
-                now = TodayClock.now
+                now = presentation.now
             }
         }
     }
 
     /// Open on what is happening now: the day's schedule scrolls to the "now" line.
     private func scrollToNow(_ proxy: ScrollViewProxy) {
-        guard cal.isDateInToday(day), jumpsToNow else { return }
+        guard cal.isDate(day, inSameDayAs: now), jumpsToNow else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
             withAnimation(.snappy) { proxy.scrollTo("now-line", anchor: .center) }
@@ -81,19 +100,19 @@ package struct DayAgenda: View {
     }
 
     /// The Today tab on today (not the Calendar tab, not another day).
-    private var isTodayTab: Bool { !showsWeekStrip && cal.isDateInToday(day) }
+    private var isTodayTab: Bool { !showsWeekStrip && cal.isDate(day, inSameDayAs: now) }
 
     private var list: some View {
         let items = items(on: day, now: now)
         return List {
             if !showsWeekStrip { DateTitle(day: day) }
             // Running timers: a live countdown at the top of today.
-            if isTodayTab { TodayTimerRows(open: openTimer) }
+            if isTodayTab { TodayTimerRows(controller: timers, open: openTimer) }
             if isTodayTab, showsHealth, let line = health.line {
                 TodayHealthLine(line: line)
             }
-            if !showsWeekStrip, !cal.isDateInToday(day) {
-                Button { withAnimation(.snappy) { day = cal.startOfDay(for: .now) } } label: {
+            if !showsWeekStrip, !cal.isDate(day, inSameDayAs: now) {
+                Button { withAnimation(.snappy) { day = cal.startOfDay(for: presentation.now) } } label: {
                     Label("Back to today", systemImage: "arrow.uturn.backward").font(.subheadline)
                         .frame(minHeight: 44)
                 }
@@ -110,11 +129,11 @@ package struct DayAgenda: View {
 
             if !items.allDay.isEmpty || !items.externalAllDay.isEmpty {
                 Section {
-                    ForEach(items.allDay) { EventRow(event: $0, pendingDelete: $pendingDelete, open: openEvent) }
-                    ForEach(items.externalAllDay) { ExternalEventRow(event: $0, pendingDelete: $pendingDelete) }
+                    ForEach(items.allDay) { EventRow(event: $0, pendingDelete: $pendingDelete, open: openEvent, calendar: calendar, travel: travel) }
+                    ForEach(items.externalAllDay) { ExternalEventRow(event: $0, pendingDelete: $pendingDelete, calendar: calendar, travel: travel) }
                 } header: { AgendaHeader(title: "All day") }
             }
-            if cal.isDateInToday(day), showsOverdue, !overdue.isEmpty {
+            if cal.isDate(day, inSameDayAs: now), showsOverdue, !overdue.isEmpty {
                 Section {
                     Button {
                         withAnimation(.snappy) { showsAllOverdue.toggle() }
@@ -139,12 +158,12 @@ package struct DayAgenda: View {
             // The Today tab names its day in the row at the top; the timeline needs no label of its own.
             if showsWeekStrip {
                 Section { timelineContent(items) } header: {
-                    AgendaHeader(title: day.formatted(.dateTime.month().day().weekday(.wide)))
+                    AgendaHeader(title: day.plannerFormatted(.dateTime.month().day().weekday(.wide), runtime: presentation.runtime))
                 }
             } else {
                 Section { timelineContent(items) }
             }
-            if !showsWeekStrip, showsTomorrow, cal.isDateInToday(day) { tomorrowSection(after: items) }
+            if !showsWeekStrip, showsTomorrow, cal.isDate(day, inSameDayAs: now) { tomorrowSection(after: items) }
         }
         .listStyle(.plain)
         // Rows set their own 44pt minimum where they can be tapped; this lets the alarm and now lines sit tighter.
@@ -152,7 +171,9 @@ package struct DayAgenda: View {
         .listSectionSpacing(6)
         .scrollContentBackground(.hidden)
         .entryDeleteDialog($pendingDelete)
-        .sheet(item: $review) { r in EveningReviewSheet(now: now, tomorrow: r.tomorrow, peek: r.peek) }
+        .sheet(item: $review) { r in EveningReviewSheet(now: now, tomorrow: r.tomorrow, peek: r.peek, actions: actions, reminders: reminders, ledger: ledger)
+            .environment(actions)
+            .environment(presentation) }
     }
 
     @ViewBuilder
@@ -163,7 +184,7 @@ package struct DayAgenda: View {
         }
         ForEach(items.timeline) { timelineRow($0, on: day) }
         if !items.anytime.isEmpty {
-            AnytimeLabel(title: cal.isDateInToday(day) ? "Anytime today" : "Anytime")
+            AnytimeLabel(title: cal.isDate(day, inSameDayAs: now) ? "Anytime today" : "Anytime")
             ForEach(items.anytime) { TaskRow(task: $0, compact: true, agendaDay: day, open: openTask) }
         }
     }
@@ -171,8 +192,8 @@ package struct DayAgenda: View {
     @ViewBuilder
     private func timelineRow(_ item: TimelineItem, on rowDay: Date) -> some View {
         switch item {
-        case .event(let event, let start): EventRow(event: event, start: start, pendingDelete: $pendingDelete, open: openEvent)
-        case .external(let e): ExternalEventRow(event: e, pendingDelete: $pendingDelete)
+        case .event(let event, let start): EventRow(event: event, start: start, pendingDelete: $pendingDelete, open: openEvent, calendar: calendar, travel: travel)
+        case .external(let e): ExternalEventRow(event: e, pendingDelete: $pendingDelete, calendar: calendar, travel: travel)
         case .task(let task): TaskRow(task: task, showsTime: true, compact: true, agendaDay: rowDay, open: openTask)
         case .due(let task): TaskRow(task: task, showsTime: true, time: task.due, compact: true, agendaDay: rowDay, open: openTask)
         case .suggested(let task, let start): TaskRow(task: task, compact: true, suggested: start, agendaDay: rowDay, open: openTask)
@@ -198,10 +219,10 @@ package struct DayAgenda: View {
         }.map(\.start)
         // Settings > Today > "Evening starts at" (nil = off: Tomorrow opens only when nothing timed is left today).
         let evening = eveningHour == Preferences.off ? nil : eveningHour
-        let expanded = expandsTomorrow ?? TomorrowPreview.opensByItself(now: now, todayStarts: todayStarts, eveningHour: evening)
+        let expanded = expandsTomorrow ?? TomorrowPreview.opensByItself(now: now, todayStarts: todayStarts, eveningHour: evening, calendar: cal)
         let shown = expanded ? entries : Array(entries.prefix(TomorrowPreview.limit))
         Section {
-            if EveningReview.shows(now: now, eveningHour: evening) {
+            if EveningReview.shows(now: now, eveningHour: evening, calendar: cal) {
                 Button {
                     review = ReviewRequest(tomorrow: tomorrow, peek: Array(entries.compactMap(Self.peek).prefix(EveningReview.tomorrowLimit)))
                 } label: {
@@ -222,8 +243,8 @@ package struct DayAgenda: View {
             }
             ForEach(shown) { entry in
                 switch entry {
-                case .allDay(let e): EventRow(event: e, pendingDelete: $pendingDelete, open: openEvent)
-                case .externalAllDay(let e): ExternalEventRow(event: e, pendingDelete: $pendingDelete)
+                case .allDay(let e): EventRow(event: e, pendingDelete: $pendingDelete, open: openEvent, calendar: calendar, travel: travel)
+                case .externalAllDay(let e): ExternalEventRow(event: e, pendingDelete: $pendingDelete, calendar: calendar, travel: travel)
                 case .anytime(let t): TaskRow(task: t, compact: true, agendaDay: tomorrow, open: openTask)
                 case .timeline(let item): timelineRow(item, on: tomorrow)
                 }
@@ -237,7 +258,7 @@ package struct DayAgenda: View {
         } header: {
             Button { withAnimation(.snappy) { day = tomorrow } } label: {
                 HStack {
-                    Text("Tomorrow · " + tomorrow.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                    Text("Tomorrow · " + tomorrow.plannerFormatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated), runtime: presentation.runtime))
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -288,11 +309,11 @@ package struct DayAgenda: View {
     // MARK: One day's items
 
     private func items(on day: Date, now: Date) -> DayItems {
-        let external = CalendarSync.shared.events(on: day, excluding: Set(events.compactMap(\.externalID)))
+        let external = calendar.events(on: day, excluding: Set(events.compactMap(\.externalID)))
         var timeline: [TimelineItem] = []
         var busy: [DateInterval] = []
         for e in events where !e.isAllDay {
-            for start in e.occurs(on: day) {
+            for start in e.occurs(on: day, calendar: cal) {
                 timeline.append(.event(e, start))
                 busy.append(DateInterval(start: start, duration: TimeInterval(e.durationMinutes * 60)))
             }
@@ -303,7 +324,7 @@ package struct DayAgenda: View {
         }
         // Overdue reminders stay in the overdue line, never inside a day's timeline.
         // A completed task leaves the day (Undo in the toast brings it back).
-        let open = tasks.filter { !$0.isDone && !$0.isOverdue }
+        let open = tasks.filter { !$0.isDone && !plannerIsOverdue($0, now: now, calendar: cal) }
         var untimed: [OneTask] = []
         for task in open {
             if let start = task.plannedStart {
@@ -312,7 +333,7 @@ package struct DayAgenda: View {
                 busy.append(DateInterval(start: start, duration: TimeInterval(task.durationMinutes * 60)))
             } else if let due = task.due, cal.isDate(due, inSameDayAs: day) {
                 // Planned time is not a deadline: only a task with no plan shows at its due time.
-                if task.dueHasTime {
+                if plannerDueHasTime(task, calendar: presentation.calendar) {
                     timeline.append(.due(task))
                     busy.append(DateInterval(start: due, duration: TimeInterval(task.durationMinutes * 60)))
                 } else {
@@ -324,7 +345,7 @@ package struct DayAgenda: View {
         untimed.sort { ($0.flagged ? 0 : 1, $0.createdAt) < ($1.flagged ? 0 : 1, $1.createdAt) }
         // Settings > Today > "Suggest times for reminders": off leaves them under "Anytime today".
         let starts = suggestsTimes
-            ? DaySchedule.suggestedStarts(minutes: untimed.map(\.durationMinutes), busy: busy, day: day, now: now)
+            ? DaySchedule.suggestedStarts(minutes: untimed.map(\.durationMinutes), busy: busy, day: day, now: now, calendar: cal)
             : [Date?](repeating: nil, count: untimed.count)
         var anytime: [OneTask] = []
         for (task, start) in zip(untimed, starts) {
@@ -337,16 +358,16 @@ package struct DayAgenda: View {
         }
         // What is still free after the suggestions, as quiet "Free 1 h 30 min" rows.
         if showsFreeTime {
-            timeline += DaySchedule.freeGaps(busy: busy, day: day, now: now).map(TimelineItem.gap)
+            timeline += DaySchedule.freeGaps(busy: busy, day: day, now: now, calendar: cal).map(TimelineItem.gap)
         }
         if showsAlarms {
-            timeline += CalendarAlarms.occurrences(of: alarms.map(\.spec), on: day, now: now).map { TimelineItem.alarm(alarms[$0.index], $0.date) }
+            timeline += CalendarAlarms.occurrences(of: alarms.map(\.spec), on: day, now: now, calendar: cal).map { TimelineItem.alarm(alarms[$0.index], $0.date) }
         }
-        if cal.isDateInToday(day), !timeline.isEmpty {
+        if cal.isDate(day, inSameDayAs: now), !timeline.isEmpty {
             timeline.append(.nowMarker(now))
         }
         return DayItems(
-            allDay: events.filter { $0.isAllDay && !$0.occurs(on: day).isEmpty },
+            allDay: events.filter { $0.isAllDay && !$0.occurs(on: day, calendar: cal).isEmpty },
             externalAllDay: external.filter(\.isAllDay),
             // At the same minute the Now line comes first, so free time from now sits under it.
             timeline: timeline.sorted { ($0.start, $0.isNow ? 0 : 1) < ($1.start, $1.isNow ? 0 : 1) },
@@ -355,7 +376,7 @@ package struct DayAgenda: View {
 
     /// Oldest deadline first.
     private var overdue: [OneTask] {
-        tasks.filter(\.isOverdue).sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
+        tasks.filter { plannerIsOverdue($0, now: now, calendar: cal) }.sorted { ($0.due ?? .distantPast) < ($1.due ?? .distantPast) }
     }
 }
 
@@ -442,9 +463,10 @@ enum TimelineItem: Identifiable {
 /// Small section label for the day view, so headers take less space than the default plain-list header.
 /// The day this page shows, in the system's own style ("Saturday, Oct 17"); the first row of the Today tab.
 struct DateTitle: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let day: Date
     package var body: some View {
-        Text(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+        Text(day.plannerFormatted(.dateTime.weekday(.wide).month(.abbreviated).day(), runtime: presentation.runtime))
             .font(.subheadline.weight(.bold))
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 0, trailing: 20))
@@ -479,6 +501,7 @@ struct AnytimeLabel: View {
 
 /// Free time between items: one quiet line, aligned with the titles.
 struct FreeRow: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let free: DateInterval
     package var body: some View {
         Text(DaySchedule.freeLabel(free.duration))
@@ -488,7 +511,7 @@ struct FreeRow: View {
             .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-            .accessibilityLabel(DaySchedule.freeLabel(free.duration) + " from " + free.start.formatted(date: .omitted, time: .shortened))
+            .accessibilityLabel(DaySchedule.freeLabel(free.duration) + " from " + free.start.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))
     }
 }
 
