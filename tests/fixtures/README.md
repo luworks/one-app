@@ -212,3 +212,14 @@ Event-save supplemental EventKit metadata is seeded by the versioned DEBUG hooks
 `ios/Eval/Tests/OneLogicTests/CaptureEditRoutingTests.swift` keeps its small synthetic context inline: explicit existing-item move versus ordinary time-only recovery, with a fixed UTC clock and no store or model calls.
 
 `ios/TodayIntegrationTests/PlannerSessionTests.swift` includes an inline synthetic local-event delete/Undo fixture and an external-ID refusal case; it never opens EventKit or writes a system calendar.
+
+## CI source inventory and preflight fixtures
+
+Small source/lock/configuration inputs, isolated Git repositories and generated
+`.gitignore` FIFOs are defined inline in
+`tests/devtools/test_native_provenance.py`; `tests/ci/test_native_execution.py`
+provides the synthetic owned-device/build callback lifecycle.
+`tests/ci/test_producer.py` defines closed preflight/build failure summaries and
+missing-test expectations. `./dev test helpers` loads these existing authorities.
+Temporary material is reconstructed from these versioned inputs; retained raw
+logs and closed hosted artifacts belong in the primary QA results directory.

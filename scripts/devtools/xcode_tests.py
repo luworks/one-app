@@ -4,10 +4,11 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import time
 import uuid
 
 from .core import (NativeBuildError, ResourceLock, atomic_json, dd_lock, derived_data,
-                   ensure_test_products, fingerprint, host_lock, provenance)
+                   ensure_test_products, fingerprint, host_lock, native_test_options, provenance)
 from .process import Evidence, Redactor, run_process
 
 SCHEMES = {'unit': 'TodayTests', 'integration': 'TodayTests', 'snapshot': 'TodaySnapshotTests'}
@@ -111,7 +112,11 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
         def invoke(command):
             # Each process owns a unique raw log, indexed by the existing QA helper.
             evidence.path = output / (uuid.uuid4().hex + '.log')
-            return run_process(command, cwd=root, evidence=evidence, timeout=timeout)
+            started = time.monotonic()
+            result = run_process(command, cwd=root, evidence=evidence, timeout=timeout)
+            print(json.dumps({'native_command': command[:2], 'seconds': round(time.monotonic() - started, 3),
+                              'exit': result.returncode, 'log': str(result.log)}))
+            return result
 
         def capture(command):
             result = invoke(command)
@@ -139,7 +144,6 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
             uuid.UUID(simulator)
             owned = True
             capture(['xcrun', 'simctl', 'boot', simulator])
-            capture(['xcrun', 'simctl', 'bootstatus', simulator, '-b'])
             for scheme, batch in batches.items():
                 bundle = output / (scheme + '.xcresult')
                 expected = list(dict.fromkeys(batch['expected']))
@@ -151,6 +155,17 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                         test_run = ensure_test_products(root, scheme, invoke, flags=flags)
                     except NativeBuildError as exc:
                         first_failure = first_failure or exc.returncode
+                        # A failed build has no xcresult test leaves. Retain a
+                        # failed receipt and its owned logs instead of hiding
+                        # the first failure behind a missing-receipt error.
+                        report = completed_report(contract, expected, batch['lane'], None,
+                                                  exc.returncode, '', 'build_for_testing_failed')
+                        report['errors'].append('native_build_exit:' + str(exc.returncode))
+                        report['build_error'] = str(exc)
+                        path = output / (scheme + '.report.json')
+                        atomic_json(path, report)
+                        evidence.journal.artifact(evidence.session, path)
+                        print(json.dumps({'report': str(path), 'status': report['status']}))
                         continue
                     identity = fingerprint(root, scheme=scheme, architecture='arm64')
                     if not provenance(root, identity, kind='build-for-testing', xctestrun=test_run)['valid']:
@@ -160,13 +175,16 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                     # Legacy direct test always builds; it never consumes cached provenance.
                     command = ['xcodebuild', 'test', '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
                                '-configuration', 'Debug', '-sdk', 'iphonesimulator']
+                # simctl boot starts asynchronously. Compile while it starts,
+                # then require readiness before dispatching any tests.
+                capture(['xcrun', 'simctl', 'bootstatus', simulator, '-b'])
                 result = invoke([*command,
                                  '-destination', 'platform=iOS Simulator,id=' + simulator,
                                  '-derivedDataPath', str(derived_data(root)), '-resultBundlePath', str(bundle),
                                  '-jobs', '2', '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
                                  '-maximum-concurrent-test-simulator-destinations', '1',
                                  '-maximum-parallel-testing-workers', '1',
-                                 *flags, *['-only-testing:' + value for value in execution_selectors(contract, root, expected)]])
+                                 *native_test_options(), '-showBuildTimingSummary', *flags, *['-only-testing:' + value for value in execution_selectors(contract, root, expected)]])
                 raw = result.log.read_text()
                 data, error, summary = None, None, None
                 try:

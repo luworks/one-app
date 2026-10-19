@@ -66,3 +66,207 @@ A focused replay of 20 existing completed Release link maps reproduced scanner r
 ## Artifact boundary
 
 Only explicit generated roots with a closed matching SHA/lane synthetic producer receipt may be staged. Existing symlink/path/secret checks, complete immutable xcresult inventory, text redaction, SHA-256 verification and atomic staging rename remain unchanged. No arbitrary workspace discovery, personal data, SQLite/product archives or stale images/results may enter publication. Binary evidence requires the existing no-secrets synthetic runner boundary. Whole completed bundles and failure evidence remain retained; uploads use pinned actions/upload-artifact, lane/SHA/attempt names and seven-day retention.
+
+### Native instrumentation hillclimb (2026-10-19)
+
+PR103 merged normally as `f76b106cde588968ccb463bbc67c4c782a378e64` after
+run [39283790269](https://github.com/luworks/one-app/actions/runs/39283790269).
+The exact tested merge ref was `6ae6eece3a3508faf716807e7e6454148625c16d`,
+parents `a02dd7f` and `d9cb76d`, with the same tree as the PR head. All seven
+closed lane reports passed (format 322, lint 3, business 678 plus four authorized
+skips, integration 13, snapshots 6, core UI 7, build 3); 216 published file
+sizes/hashes matched their manifests. The API retained stale in-progress
+integration/snapshot jobs, so their closed reports and successful aggregate log
+were checked as well. No test retry was dispatched.
+
+Workflow creation at 16:13:41 UTC to today-required completion at 16:34:49 was
+1,268 seconds. First job started at 16:13:45 (four seconds initial queue); the Mac
+prerequisite started at 16:13:53. Core UI waited eight seconds after job creation
+and ran 1,214 seconds. Its runner started at 16:15:16, first test at 16:29:25,
+last test ended at 16:34:04. Seven test bodies used 279.596 seconds; XCTest
+session overhead brought execution to 320.953 seconds. The 849 seconds before
+first test combines simulator/build/install work, not a proven compile duration.
+Integration and snapshot test sessions were about 48 and 50 seconds; their
+whole adapter commands took 770 and 713 seconds. Raw evidence is retained in
+`/Users/yuanlu/code/one-app/tests/results/ci-hillclimb-20261019/` and the QA journal.
+
+Iteration 1 disables coverage instrumentation only for synthetic routine
+integration/snapshots/core-ui, using Xcode's `-enableCodeCoverage NO`. These jobs
+have no coverage threshold or consumer; [Apple describes coverage as additional
+execution-frequency instrumentation](https://developer.apple.com/documentation/xcode/determining-how-much-code-your-tests-cover).
+ all selected tests, assertions, image
+baselines, completed-leaf parsing and failure gates remain unchanged. Local and
+explicit extended/release collection scheme coverage stays enabled. Build
+provenance includes these test options so instrumented and uninstrumented
+products cannot substitute. Native process durations and Xcode build timing
+summaries are retained to separate the next sample's build and test costs.
+This is a hypothesis under measurement, not a claimed speedup or a 300-second
+acceptance. Main Release run `39287295546` at merged `f76b106` is independently
+pending; the retained failed main receipt `39273400134` remains valid evidence.
+
+### Iteration 2: failed-build evidence and overlapping startup
+
+PR104 run [39287748963](https://github.com/luworks/one-app/actions/runs/39287748963)
+at head `56e023c` tested integrated SHA `700b49eda8fecacb9d21849d38580e88098564a9`
+and failed. Creation to failed today-required completion was **2,086 seconds**,
+including three seconds to the first job and additional per-job queues. This is
+not a 300-second result or proof that coverage removal improved performance.
+
+The original snapshot artifact `12205872422` contains six files (3,281 compressed
+bytes). Its report has zero executed, six missing, and `Missing or ambiguous
+native test receipt`. The native transcript proves `build-for-testing` exited
+124 after 601.320 seconds; `bootstatus` had already taken 153.747 seconds. There
+is no test execution or pixel-comparison result. The original compile log was
+not published, so a specific compiler failure cannot be inferred. Integration
+passed: startup wait 139.543 seconds, build 503.920 seconds, test-without-building
+60.862 seconds. Core UI passed seven tests: startup wait 181.017 seconds and
+317.908 seconds of test bodies (363.451-second XCTest session). These are cold
+hosted samples with separate VMs/caches; build, startup and queues remain distinct.
+
+The native authority now emits a failed receipt even when building times out or
+is cancelled. CI preserves that closed owned directory before requiring the test
+bundle, retaining the build log, original exit and missing tests without inventing
+leaves. Missing bundles and zero execution still fail. Wrapper rejection prints
+bounded redacted exception details and lane counters/errors; producer closure
+rejections retain their redacted reason without exposing rejected bytes.
+
+Native tests initiate simulator boot, build while startup proceeds, and require
+bootstatus before test dispatch. Synthetic core UI uses the existing canonical
+`ensure_test_products` authority to build TodayMock once during startup, validate
+source/toolchain/scheme/options/product provenance, and run fresh tests without
+building. It retains separate build time/log and the original test selections.
+There is one simulator and jobs=2; no result/image cache, cross-job product
+transport, timeout increase, tolerance change or coverage reduction is added.
+Overlapping startup is a measured hypothesis, not an additive speedup claim;
+resource contention and provenance hashing may affect the hosted outcome.
+
+`./dev test helpers` passed **112 host regressions**, now including the existing
+native provenance/lifecycle fixtures and core UI success/failure ordering.
+`./dev lint` and diff checks passed. First local fixture failures are retained;
+their cause was an unmocked workspace-lock prerequisite, now isolated in the
+synthetic fixture. No local simulator or physical-device test ran. Raw downloads,
+first/final helper logs and journal hashes remain under the primary checkout's
+`tests/results/ci-hillclimb-20261019/`. Main Release run `39287295546` is now
+completed/success at exact `f76b106`; that API status alone is not full artifact
+or device qualification. The failed earlier run remains retained.
+
+
+### Iteration 3: cold native compiler experiment
+
+Iteration 4 failure-path repair: that run completed **failure**. The full core-ui
+job log and annotations (`118202044022`) show the adapter action took 1,254.268
+seconds, then rejected a missing closed producer receipt; upload found no files.
+They contain no original failed command, build duration or compiler diagnostic.
+The original core-ui failure cannot be classified as a build timeout from this
+evidence. Its raw runner phases are unavailable, unlike the retained snapshot
+timeout below. No unchanged rerun was dispatched.
+
+Source inspection found that the new core-ui prebuild used unbounded
+`run_logged` under the existing 1,200-second runner deadline. If that outer
+deadline interrupts execution, the adapter deliberately refuses to seal live or
+unconfirmed-shutdown evidence, and `close_wrapper` previously raised before
+printing the adapter transcript/report errors. This is a reproduced failure
+path, not proof of the old run's hidden trigger. The prebuild now uses the
+existing owned-process authority and 600-second native build limit, retaining
+exit/reason/log before normal runner shutdown. Closed failed builds publish
+their real logs with zero execution and every selected test missing. Rejected
+receipts now expose bounded scanner-checked/redacted diagnostics without
+inventing provenance or uploading rejected bytes. All outer deadlines remain
+unchanged. Host helpers passed 116 tests in 9.589 seconds; lint and diff checks
+passed. No local native/device execution or measured compiler speedup is claimed.
+
+Run [39294049533](https://github.com/luworks/one-app/actions/runs/39294049533)
+at head `8db19ea` tested integrated SHA `b3f4f613d0185049a194b92d7906e3fc04e12bea`.
+Snapshot job `118202044017` failed before executing any tests: its retained
+`build-for-testing` process exited 124 after **617.627 seconds** under the existing
+600-second deadline (includes termination/evidence overhead). Six tests remain
+missing. The failed receipt, compiler log and closed artifact `12209445257` are
+preserved; no pixel regression, parser root cause or compiler diagnostic error
+is established. Job duration was 793 seconds, not a successful 300-second gate.
+
+The log contains 237 explicit Clang module generation tasks, seven Swift SDK
+interface compilation tasks (including two distinct XCUIAutomation variants),
+and 30 compiler invocations requesting index-store output. The same run's passing
+integration build took 537.258 seconds, readiness wait after compilation 3.481
+seconds, and fresh test command 94.832 seconds (13/13 passed). Its ordinary App
+build process took 89.052 seconds. Different VM/runtime/dependency conditions
+prevent attributing the difference solely to explicit modules or boot contention.
+Overlap is observable; a total speedup is still unproven.
+
+Routine synthetic integration/snapshots/core-ui now disable compiler index-store
+output (no CI consumer) and test Apple's supported
+[`SWIFT_ENABLE_EXPLICIT_MODULES=NO` compiler path](https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes).
+This tests whether on-demand module loading avoids costly cold SDK expansion;
+it is a hypothesis, not a demonstrated timeout repair. Both settings participate
+in the existing product fingerprint and apply to build and fresh test dispatch.
+Local/extended/Release compilation, debug symbols, runtime checks, selectors,
+image baselines, failure/skip gates, two build jobs and the 600-second deadline
+are retained. No cache/results transport, framework or product dependency changes
+are included. The next hosted sample must establish build success and phase costs;
+core UI bodies near 280 seconds remain an independent obstacle to total 300 seconds.
+
+
+Host validation: `./dev test helpers` passed 113 tests in 32.872 seconds;
+`./dev lint` and `git diff --check` passed. A focused review checked mode scoping,
+build/dispatch consistency and cross-mode provenance invalidation. No local
+simulator/build or physical-device validation ran. The previous run's core-ui
+job remained active at the handoff; publishing a new PR head would cancel it
+under the existing same-ref policy. Retain its first result before pushing the
+prepared compiler experiment. Do not merge PR104 or claim the total-time goal.
+
+### Iteration 5: source inventory before simulator boot
+
+Run [39298002981](https://github.com/luworks/one-app/actions/runs/39298002981)
+at published head `f53cdaa` tested integrated SHA
+`3cb1b104e37055356aafb04b0d29b66ab7e92718`. Its core UI artifact `12208362431`
+is a valid closed **failed** receipt: zero executed, seven missing, no xcresult.
+The original ZIP is 42,565 bytes, CRC-valid, SHA-256
+`dbea2f07a5612dbd262ac6f6fad4b2df7875ebe43d91bb690ccff35d74ef0e37`.
+The job lasted 249 seconds; its action lasted 240 seconds. This is not successful
+sub-five-minute acceptance. The runner's 181.496 seconds include Git inventory
+hitting its existing 30-second deadline after boot, then 134.415 seconds shutting
+down. No compiler command or UI test was dispatched. Pixel/native compiler
+regressions do not explain this particular failure. `ios/.build` was already
+Git-ignored; directory traversal or hosted CPU/filesystem contention is not a
+proven cause of the timeout.
+
+Core UI now checks the initial fresh source/product fingerprint before booting.
+On a cache miss its existing build callback starts boot, then compilation, keeping
+startup/build overlap. A preflight failure leaves the owned shutdown device alone
+and records that it was not booted; an attempted boot still requires shutdown.
+The runner retains prebuild-validation time. Failed preflight now produces the
+normal complete missing-test report without a secondary missing-tree exception;
+a UI stage that ran still requires its real xcresult leaves.
+
+The shared Git inventory explicitly prunes `.build`, `DerivedData` and
+`__pycache__` before untracked traversal. These were already excluded from source
+identity, so real untracked inputs and tracked deletions remain inputs. Format,
+Workbench discovery and the main fingerprint use this same enumeration. Ignore
+and attribute configuration join input identity. There is no reusable source
+manifest, timeout increase or provenance bypass. A redundant pre-publication Git
+walk in `ensure_test_products` is removed: `record_build` still freshly validates
+source/options before publication, the live toolchain is checked separately, and
+the final fingerprint/product check still runs before test dispatch. Git errors
+retain the command, original exit/deadline and bounded redacted stderr. The
+existing subprocess deadline kills and reaps the Git child.
+
+Host verification: `./dev test helpers` passed **124 tests** in 23.369 seconds;
+`./dev lint` and diff checks passed. Inline fixtures cover new untracked source,
+configuration/ignore/lock edits, tracked deletion, generated-tree pruning with
+unread FIFO ignore files, Git failure/timeout/empty inventory, source/toolchain
+mutation during build, preflight closure and cache-hit fresh test dispatch. The
+first helper failure was only the old error-message expectation after validation
+moved to `record_build`; the source-mutation rejection assertion remains intact.
+No local native build, simulator or physical-device validation ran.
+
+Other closed reports from this run pass: format, lint, business and ordinary
+Debug product build. The latter process took 136.068 seconds, with 37.059 seconds
+in dependency resolution; it is outside the routine native compiler experiment
+and cannot establish an implicit-modules speedup. Integration and snapshots were
+still active with no closed artifacts at inspection. Preserve their first native
+phase evidence before publishing this prepared batch, since a new PR push would
+cancel them under the existing workflow policy. The scoped index-store/implicit
+module candidate remains intact pending those results. No rerun, cancellation,
+merge or 300-second success is claimed. Raw ZIPs, manifests, helper first/final
+logs and this iteration's checkpoint remain under the primary checkout's
+`tests/results/ci-hillclimb-20261019/`, indexed in the QA journal.
