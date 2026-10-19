@@ -399,7 +399,7 @@
           case .today:
             DayAgenda(
               day: $todayDay, showsWeekStrip: false, openTask: { editor = .task($0) },
-              openEvent: { editor = .local($0) },
+              openEvent: { editor = .local($0) }, openAlarm: { editor = .alarm($0) },
               openTimer: {
                 clockSection = .timer
                 withAnimation(.snappy) { tab = .clock }

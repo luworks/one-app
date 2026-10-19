@@ -56,6 +56,29 @@
       return a
     }
 
+    /// Copies settings without changing either persistent or AlarmKit identity.
+    package func restoreSettings(from source: OneAlarm) {
+      hour = source.hour
+      minute = source.minute
+      label = source.label
+      note = source.note
+      weekdays = source.weekdays
+      isOn = source.isOn
+      createdAt = source.createdAt
+      snooze = source.snooze
+      sound = source.sound
+      snoozeMinutes = source.snoozeMinutes
+      alarmKitSignature = source.alarmKitSignature
+    }
+
+    package func snapshot() -> OneAlarm {
+      let result = copy()
+      result.createdAt = createdAt
+      result.alarmKitID = alarmKitID
+      result.alarmKitSignature = alarmKitSignature
+      return result
+    }
+
     /// The time of day as a date today (for pickers and display).
     package var timeToday: Date {
       Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
