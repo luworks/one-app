@@ -25,7 +25,11 @@ final class TodayReminderCompletionTests: XCTestCase {
   private func connect(includeCalendar: Bool = false) {
     let app = XCUIApplication()
     app.launchArguments = ["-uiTesting", "-uiTestingRemindersSync"]
-    if includeCalendar { app.launchArguments += ["-uiTestingCalendarSync"] }
+    if includeCalendar {
+      app.launchArguments += ["-uiTestingCalendarSync"]
+      // This owned-simulator fixture must not inherit a cancelled/denied Calendar prompt from another run.
+      app.resetAuthorizationStatus(for: .calendar)
+    }
     app.launch()
     app.openSidebar()
     app.buttons["Settings"].firstMatch.tap()
