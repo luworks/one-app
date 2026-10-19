@@ -321,6 +321,12 @@ public enum CaptureConversation {
     let proceed = proceeds(text)
     let time = Dialogue.isOnlyWhen(text, now: now, calendar: calendar)
     guard alarm || reminder || proceed || (time && pending == nil) else { return nil }
+    // An explicit existing-item edit must reach edit routing, not reconstruct another capture.
+    if pending == nil, time, !alarm, !reminder, !proceed,
+      Editing.looksLikeEdit(text, items: [], now: now, calendar: calendar)
+    {
+      return nil
+    }
     var prior: Capture?
     var requested = false
     for turn in context.userTurns {

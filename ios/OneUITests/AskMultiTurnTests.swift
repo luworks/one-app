@@ -97,7 +97,7 @@ final class AskMultiTurnTests: XCTestCase {
     let card = app.descendants(matching: .any)["capture-stack"].firstMatch
     XCTAssertTrue(
       card.buttons["Add"].waitForExistence(timeout: 20), "the new request gets its own preview")
-    XCTAssertTrue(card.staticTexts["call Mom"].exists)
+    XCTAssertEqual(card.buttons["capture-title"].label, "call Mom")
     XCTAssertTrue(
       card.staticTexts.containing(NSPredicate(format: "label CONTAINS '17:00'")).firstMatch.exists)
     XCTAssertFalse(app.otherElements["change-card"].exists, "no proposed move of Dentist")
@@ -211,12 +211,11 @@ final class AskMultiTurnTests: XCTestCase {
     XCTAssertFalse(label(containing: "Which one").exists, "no question about existing items")
     send("哦，我想卖家里的一些东西，然后去 Marketplace。今天下午 3 点提醒我吧")
     let card = app.descendants(matching: .any)["capture-stack"]
-    let newTitle = card.staticTexts.containing(
-      NSPredicate(format: "label CONTAINS %@", "Marketplace")
-    ).firstMatch
+    let newTitle = card.buttons["capture-title"]
     XCTAssertTrue(
       newTitle.waitForExistence(timeout: 90),
       "wait for the new preview, not the echoed user message")
+    XCTAssertTrue(newTitle.label.contains("Marketplace"))
     XCTAssertTrue(label(containing: "15:00").exists)
     XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1)
     XCTAssertFalse(app.otherElements["change-card"].exists, "never a change to an existing item")

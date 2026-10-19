@@ -200,3 +200,5 @@ Event-save supplemental EventKit metadata is seeded by the versioned DEBUG hooks
   are small inline inputs in `AlarmContextTests`.
 
 - `empty-relaunch.json`: empty dataset for file-backed relaunch checks; preserves saved list order without reseeding.
+
+`ios/Eval/Tests/OneLogicTests/CaptureEditRoutingTests.swift` keeps its small synthetic context inline: explicit existing-item move versus ordinary time-only recovery, with a fixed UTC clock and no store or model calls.
