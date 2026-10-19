@@ -16,6 +16,7 @@ Run `./dev` from the repository root for all local/CI engineering operations. Th
 ./dev plan --scheme Today --configuration Debug
 ./dev build Debug
 ./dev build Debug --scheme TodayMock
+./dev build Debug --scheme TodayMock --for-testing --timeout 180
 ./dev build Debug --scheme TodayWorkbench
 ./dev build Release
 ./dev test unit
@@ -25,6 +26,8 @@ Run `./dev` from the repository root for all local/CI engineering operations. Th
 ```
 
 Replace selector placeholders with discovered method IDs; repeat `--only` for a small representative set. Legacy `OneUITests/...` selectors are translated to `TodayUITests/...`. `test ios-unit`, `test integration` and `test snapshot` route to the actual Xcode test targets; `test core` and `test accessibility` select bounded UI journeys. The source inventory and expected/executed reconciliation belong to [the test contract](../scripts/testing/contract.py) and [groups.json](../tests/testing/groups.json). Missing execution, missing baselines and parser errors are failures, not passes. Only an explicitly authorized frozen final revision uses `./dev test release --full` for the complete collection, alone. Do not infer that collection ran from a Debug build.
+
+`build --for-testing` uses the same test-product provenance as the test adapters, without booting a device or executing tests. Set the existing synthetic CI environment when diagnosing its compiler mode. Native build logs retain elapsed phase markers and a read-only CPU/RSS process-tree sample every 30 seconds, including before a timeout; diagnostics do not change the build deadline or compiler settings.
 
 CI uses the same entry: `./dev ci <lane> --selection <selection.json> --output <fresh-directory> --sha <integrated-sha> --synthetic --no-distribute`. Read [CI adapter integration](../docs/engineering/ci-native-integration.md) for execution and artifact boundaries. Local success does not establish hosted CI acceptance.
 

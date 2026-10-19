@@ -234,6 +234,35 @@ class FoundationTests(unittest.TestCase):
         finally:
             evidence.close()
 
+    def test_group_permission_failure_retains_syscall_log_and_reaps_owned_child(self):
+        from scripts.devtools import process
+        evidence = Evidence(self.root, 'permission', Redactor({}))
+        previous = signal.getsignal(signal.SIGTERM)
+        real_popen = subprocess.Popen
+        children = []
+
+        def spawn(*args, **kwargs):
+            child = real_popen(*args, **kwargs)
+            children.append(child)
+            return child
+
+        try:
+            with patch.object(process.subprocess, 'Popen', side_effect=spawn), \
+                    patch.object(process.os, 'killpg', side_effect=PermissionError(1, 'Operation not permitted')):
+                with self.assertRaises(PermissionError) as caught:
+                    run_process([sys.executable, '-c', 'import time; print("partial", flush=True); time.sleep(20)'],
+                                cwd=self.root, evidence=evidence, timeout=0.2, grace=0.05)
+            self.assertIsNotNone(children[0].returncode)
+            self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
+            self.assertEqual(caught.exception.process_log, evidence.path)
+            text = evidence.path.read_text()
+            self.assertIn('partial', text)
+            self.assertIn('os.killpg(pgid=', text)
+            self.assertIn('PermissionError', text)
+            self.assertTrue(any(row['kind'] == 'qa.artifact' for row in evidence.journal.query('permission')))
+        finally:
+            evidence.close()
+
     def test_redactor_covers_tokens_credentials_and_explicit_secrets(self):
         redact = Redactor({'API_KEY': 'env secret'}, secrets=['literal secret'])
         self.assertEqual(redact.arguments(['tool', '--password', 'unknown secret', '--api-key=abc']),

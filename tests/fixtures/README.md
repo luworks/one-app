@@ -225,3 +225,6 @@ provides the synthetic owned-device/build callback lifecycle.
 missing-test expectations. `./dev test helpers` loads these existing authorities.
 Temporary material is reconstructed from these versioned inputs; retained raw
 logs and closed hosted artifacts belong in the primary QA results directory.
+The same native provenance fixture covers compiler-module transport keys,
+Swift-source edits that still rebuild products, lock/configuration/toolchain
+partitioning, routine-only scope and primary-checkout paths for linked worktrees.

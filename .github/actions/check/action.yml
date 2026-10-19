@@ -7,6 +7,41 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Plan routine compiler module cache
+      if: inputs.lane == 'integration' || inputs.lane == 'snapshots' || inputs.lane == 'core-ui'
+      id: modules
+      shell: bash
+      env:
+        TODAY_LANE: ${{ inputs.lane }}
+      run: |
+        case "$TODAY_LANE" in
+          integration) scheme=TodayTests ;;
+          snapshots) scheme=TodaySnapshotTests ;;
+          core-ui) scheme=TodayMock ;;
+        esac
+        ./dev plan --scheme "$scheme" --architecture arm64 > "$RUNNER_TEMP/native-plan.json"
+        python3 - <<'PY'
+        import json, os
+        from pathlib import Path
+        plan = json.loads((Path(os.environ['RUNNER_TEMP']) / 'native-plan.json').read_text())
+        cache = plan['compiler_module_cache']
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            for field in ('prefix', 'key', 'path'):
+                output.write(field + '=' + cache[field] + '\n')
+        PY
+    - name: Restore routine compiler modules
+      if: steps.modules.outputs.key != ''
+      id: module-restore
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        # Exclude session-validation sentinels, products, build databases and
+        # results. The compiler must validate modules in this fresh session.
+        path: |
+          ${{ steps.modules.outputs.path }}/**/*.pcm
+          ${{ steps.modules.outputs.path }}/**/*.swiftmodule
+        key: ${{ steps.modules.outputs.key }}
+        restore-keys: ${{ steps.modules.outputs.prefix }}
+        lookup-only: false
     - shell: bash
       env:
         TODAY_LANE: ${{ inputs.lane }}
@@ -19,3 +54,11 @@ runs:
         if-no-files-found: warn
         retention-days: 7
         include-hidden-files: true
+    - name: Save successful routine compiler modules
+      if: success() && steps.modules.outputs.key != '' && steps.module-restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: |
+          ${{ steps.modules.outputs.path }}/**/*.pcm
+          ${{ steps.modules.outputs.path }}/**/*.swiftmodule
+        key: ${{ steps.modules.outputs.key }}

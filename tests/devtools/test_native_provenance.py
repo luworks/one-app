@@ -111,10 +111,65 @@ class NativeProvenanceTests(unittest.TestCase):
             self.assertNotEqual(before, self.fp())
             count = len(self.calls)
             self.ensure()
+
             self.assertEqual(len(self.calls), count + 1)
             path.unlink()
             self.assertFalse(core.provenance(self.root, self.fp(), kind='build-for-testing')['valid'])
             self.ensure()
+
+    def test_module_transport_never_reuses_products_after_swift_source_changes(self):
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'integration'}):
+            self.ensure()
+            before = core.compiler_module_cache(self.root, self.fp())
+            self.source.write_text('different Swift source')
+            after = core.compiler_module_cache(self.root, self.fp())
+            self.assertEqual(before['prefix'], after['prefix'])
+            self.assertNotEqual(before['key'], after['key'])
+            self.ensure()
+            self.assertEqual(len(self.calls), 2)
+            self.assertTrue(all(c[1] == 'build-for-testing' for c in self.calls))
+            self.assertEqual(after['path'], str(core.derived_data(self.root) / 'ModuleCache.noindex'))
+            # Linked worktrees retain DD/evidence in the primary checkout.
+            with patch.object(core, 'derived_data', return_value=self.root.parent / 'primary-dd'):
+                plan = core.compiler_module_cache(self.root, self.fp())
+                self.assertEqual(plan['path'], str(self.root.parent / 'primary-dd/ModuleCache.noindex'))
+
+    def test_module_transport_partitions_locks_configuration_toolchain_and_scheme(self):
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'integration'}):
+            before = core.compiler_module_cache(self.root, self.fp())
+            for name in ('ios/Package.swift', 'ios/Package.resolved', 'ios/Config/Test.xcconfig',
+                         'ios/project.yml', 'ios/CSQLite/module.modulemap', 'ios/CSQLite/shim.h'):
+                with self.subTest(input=name):
+                    path = self.root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    original = path.read_bytes() if path.exists() else None
+                    path.write_text('changed configuration')
+                    after = core.compiler_module_cache(self.root, self.fp())
+                    self.assertNotEqual(before['prefix'], after['prefix'])
+                    if original is None:
+                        path.unlink()
+                    else:
+                        path.write_bytes(original)
+            with patch.object(core, 'toolchain', return_value={'xcode': '28', 'sdk': '28'}):
+                self.assertNotEqual(before['prefix'], core.compiler_module_cache(self.root, self.fp())['prefix'])
+            for options in ({'sdk': 'iphoneos'}, {'configuration': 'Release'}):
+                self.assertIsNone(core.compiler_module_cache(self.root, self.fp(**options)))
+            self.assertIsNone(core.compiler_module_cache(self.root, self.fp('TodayMock')))
+            other_arch = core.fingerprint(self.root, scheme='TodayTests', architecture='x86_64')
+            self.assertIsNone(core.compiler_module_cache(self.root, other_arch))
+            for lane, scheme in (('snapshots', 'TodaySnapshotTests'), ('core-ui', 'TodayMock')):
+                with patch.dict(os.environ, {'TODAY_LANE': lane}):
+                    self.assertNotEqual(before['prefix'], core.compiler_module_cache(self.root, self.fp(scheme))['prefix'])
+        for lane in ('release', 'protected-release', 'extended', 'business'):
+            with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': lane}):
+                self.assertIsNone(core.compiler_module_cache(self.root, self.fp()))
+
+    def test_module_transport_rejects_forged_fingerprint(self):
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'integration'}):
+            fp = self.fp()
+            fp['sha256'] = 'a' * 64
+            with self.assertRaisesRegex(ValueError, 'Invalid fingerprint'):
+                core.compiler_module_cache(self.root, fp)
 
     def test_generated_trees_are_pruned_before_git_reads_their_ignore_files(self):
         # An unread .gitignore FIFO proves pruning, rather than filtering names
@@ -132,6 +187,52 @@ class NativeProvenanceTests(unittest.TestCase):
             self.assertEqual(before, self.fp())
         # The normal implementation remains fresh too, without a cached manifest.
         self.assertEqual(before, self.fp())
+
+    def test_unrelated_tree_blocks_old_walk_but_scoped_source_inventory_finishes(self):
+        directory = self.root / 'unrelated-package-cache' / 'nested'
+        directory.mkdir(parents=True)
+        os.mkfifo(directory / '.gitignore')
+        command = ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard',
+                   *('--exclude=' + name + '/' for name in core.GENERATED_INPUT_DIRS)]
+        with self.assertRaises(subprocess.TimeoutExpired):
+            subprocess.check_output(command, cwd=self.root, timeout=0.2)
+        before = self.fp()
+        # Full tests source, root config and even tracked ignored inputs remain
+        # authoritative; the scoped walk does not mistake a new source for clean.
+        for name in ('tests/devtools/New.py', 'ios/Config/Local.xcconfig', 'requirements.txt'):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('new real input')
+            self.assertNotEqual(before, self.fp())
+            before = self.fp()
+        subprocess.run(['git', '-C', str(self.root), 'add', '-f', 'ios/Input.swift'], check=True)
+        (self.root / '.gitignore').write_text('ios/Input.swift\n')
+        before = self.fp()
+        self.source.write_text('tracked ignored modification')
+        self.assertNotEqual(before, self.fp())
+
+    def test_large_ignored_generated_tree_preserves_real_untracked_source(self):
+        (self.root / '.gitignore').write_text('tests/results/\n')
+        before = self.fp()
+        generated = self.root / 'tests/results/package-cache'
+        generated.mkdir(parents=True)
+        for number in range(1000):
+            (generated / str(number)).write_text('generated')
+        os.mkfifo(generated / '.gitignore')
+        self.assertEqual(before, self.fp())
+        self.source.write_text('dirty source')
+        self.assertNotEqual(before, self.fp())
+
+    def test_probe_timeout_reaps_only_its_child_and_keeps_pid_and_stderr(self):
+        with self.assertRaises(subprocess.TimeoutExpired) as caught:
+            core.probe([sys.executable, '-c',
+                        'import sys,time; print("inventory busy", file=sys.stderr, flush=True); time.sleep(20)'],
+                       self.root, timeout=0.2)
+        error = caught.exception
+        self.assertIn(b'inventory busy', error.stderr)
+        self.assertLess(error.seconds, 3)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(error.pid, 0)
 
     def test_tracked_deletion_and_tracked_ignored_file_still_invalidate(self):
         subprocess.run(['git', '-C', str(self.root), 'add', 'ios/Input.swift'], check=True)
@@ -327,9 +428,11 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(tests[0].count('-only-testing:' + METHOD + '()'), 1)
         self.assertIn('-xctestrun', tests[0])
         build_index = next(i for i, c in enumerate(self.calls) if c[:2] == ['xcodebuild', 'build-for-testing'])
+        boot_index = next(i for i, c in enumerate(self.calls) if c[:3] == ['xcrun', 'simctl', 'boot'])
         ready_index = next(i for i, c in enumerate(self.calls) if c[:3] == ['xcrun', 'simctl', 'bootstatus'])
         test_index = next(i for i, c in enumerate(self.calls) if c[:2] == ['xcodebuild', 'test-without-building'])
-        self.assertLess(build_index, ready_index)
+        self.assertLess(build_index, boot_index)
+        self.assertLess(boot_index, ready_index)
         self.assertLess(ready_index, test_index)
         self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
 
@@ -349,7 +452,8 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(reports[0]['executed_count'], 0)
         self.assertIn('native_build_exit:130', reports[0]['errors'])
         self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in self.calls))
-        self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+        self.assertFalse(any(c[:3] in (['xcrun', 'simctl', 'boot'],
+                                      ['xcrun', 'simctl', 'shutdown']) for c in self.calls))
 
     def test_adapter_build_timeout_retains_failure_receipt_without_test_or_ready_wait(self):
         code, reports, _ = self.run_adapter(build_code=124)
@@ -359,7 +463,8 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertIn('log=', reports[0]['build_error'])
         self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'bootstatus'] for c in self.calls))
         self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in self.calls))
-        self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+        self.assertFalse(any(c[:3] in (['xcrun', 'simctl', 'boot'],
+                                      ['xcrun', 'simctl', 'shutdown']) for c in self.calls))
 
 
 if __name__ == '__main__':
