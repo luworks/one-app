@@ -77,6 +77,8 @@ final class SystemEventEditorTests: XCTestCase {
     let fullOptions = app.buttons["More Options…"]
     let hadQuickEditor = fullOptions.exists
     if hadQuickEditor { fullOptions.tap() }
+    XCTAssertTrue(
+      app.buttons["alert-cell"].waitForExistence(timeout: 20), "the full system editor is ready")
     shot("1-opened")
     XCTAssertFalse(app.buttons["Edit"].exists, "no Edit to tap before changing full system options")
     XCTAssertTrue(
