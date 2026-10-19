@@ -84,9 +84,11 @@ def _native_results(root, lane, output, report):
     kind, expected = test_plan(root, lane)
     report['missing'] = len(expected)
     captured = io.StringIO()
-    with contextlib.redirect_stdout(captured):
-        code = commands.test(root, kind, timeout=600)
-    (output / 'command.log').write_text(Redactor()(captured.getvalue()))
+    try:
+        with contextlib.redirect_stdout(captured):
+            code = commands.test(root, kind, timeout=600)
+    finally:
+        (output / 'command.log').write_text(Redactor()(captured.getvalue()))
     events = [json.loads(line) for line in captured.getvalue().splitlines() if line.startswith('{')]
     receipts = [event for event in events if isinstance(event, dict) and 'report' in event]
     if len(receipts) != 1 or set(receipts[0]) != {'report', 'status'}:
@@ -101,31 +103,33 @@ def _native_results(root, lane, output, report):
     paths = [path.parent, *path.parent.rglob('*')]
     if any(p.is_symlink() for p in paths):
         raise ValueError('Symlink native evidence rejected')
+    # The synchronous authority has closed its writers and shut down its owned
+    # device. Keep failed-build logs even when no test bundle could be created.
+    shutil.copytree(path.parent, output / 'native')
+    native = json.loads(path.read_text())
+    report['errors'].extend(native['errors'])
+    if native.get('build_error'):
+        report['errors'].append(native['build_error'])
+    if code:
+        report['errors'].append('native_command_exit:' + str(code))
+        report['cancelled'] += int(code in (130, -2, -15))
     bundle = path.parent / (scheme + '.xcresult')
     if not bundle.is_dir() or not any(p.is_file() for p in bundle.rglob('*')):
         raise ValueError('Missing completed native xcresult bundle')
-    native = json.loads(path.read_text())
     # The dev adapter parsed the full completed tree with process/log/summary
     # diagnostics. Revalidate every retained attempt, including earlier failures.
     authority = contract.report(expected, native['attempts'], exit_code=native['exit_code'])
     if native.get('expected_count') != len(expected):
         report['errors'].append('native_selection_mismatch')
-    report['errors'].extend(native['errors'])
     report['errors'].extend(authority['errors'])
     if (native.get('status') != 'passed' or native.get('coverage_status') != 'complete'
             or receipts[0]['status'] != native.get('status')):
         report['errors'].append('native_incomplete')
     if any(a.get('source') != 'xcresult' for a in native['attempts']):
         report['errors'].append('native_non_leaf_authority')
-    if code:
-        report['errors'].append('native_command_exit:' + str(code))
-        report['cancelled'] += int(code in (130, -2, -15))
     report['executed'] = authority['executed_count']
     report['failed'] = sum(a['status'] == 'failed' for a in authority['attempts'])
     report['missing'] = len(authority['missing']) + len(authority['unexpected_skips'])
-    # Adapter returns only after shutdown and evidence closure. Preserve the whole
-    # result directory, including binary xcresult store files, without rewriting it.
-    shutil.copytree(path.parent, output / 'native')
     atomic_json(output / 'test-report.json', authority)
 
 
@@ -349,8 +353,9 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
             report.pop('artifact_provenance', None)
             report['status'] = 'failed'
             report['failed'] = max(1, report['failed'])
-            report['errors'].append('producer_close_rejected:' + type(error).__name__)
+            report['errors'].append(Redactor()('producer_close_rejected:' + type(error).__name__ + ': ' + str(error)))
             atomic_json(output / 'report.json', report)
+            print(json.dumps({'status': 'failed', 'errors': report['errors']}))
     return 0 if report['status'] == 'passed' else 1
 
 

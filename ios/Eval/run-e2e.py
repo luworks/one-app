@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import uuid
 
 IOS = Path(__file__).resolve().parents[1]
@@ -26,7 +27,7 @@ sys.path.insert(0, str(ROOT / "scripts/testing"))
 import contract
 
 sys.path.insert(0, str(ROOT))
-from scripts.devtools.core import native_test_options
+from scripts.devtools.core import (derived_data, ensure_test_products, native_test_options)
 
 CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
 
@@ -316,6 +317,25 @@ def main(argv=None):
         summary["device_type"] = args.device_type
         summary["runtime"] = args.runtime
         journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)
+        if (os.environ.get("TODAY_CI_SYNTHETIC") == "1"
+                and os.environ.get("TODAY_LANE") == "core-ui" and not args.test_products):
+            # One trusted build, using the same product/provenance authority as
+            # native tests. The owned simulator boots while compilation runs.
+            if derived != derived_data(ROOT).resolve():
+                raise ValueError("CI build reuse requires the canonical owned derived data")
+            from scripts.devtools.resolve import locked_arguments
+
+            def build(command):
+                command = list(command)
+                command[command.index("-project") + 1] = str(IOS / "Today.xcodeproj")
+                summary["commands"].append(command)
+                before = time.monotonic()
+                code = run_logged(command, output / "build.log", output / "progress.jsonl", [], journal)
+                summary["stages"]["build"] = code
+                summary["build_seconds"] = round(time.monotonic() - before, 3)
+                return SimpleNamespace(returncode=code, reason="exited", log=output / "build.log")
+
+            args.test_products = ensure_test_products(ROOT, "TodayMock", build, flags=locked_arguments(ROOT))
         journal.action(["xcrun", "simctl", "bootstatus", simulator, "-b"], subprocess.run, check=True)
         if args.test_products:
             summary["test_products"] = str(args.test_products.resolve())
@@ -343,7 +363,7 @@ def main(argv=None):
         summary["status"] = summary["reports"]["ui"]["status"]
         return code or (0 if summary["status"] == "passed" else 1)
 
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         summary["error"] = str(error)
         summary["status"] = "failed"
         print(f"QA failed: {error}", file=sys.stderr)

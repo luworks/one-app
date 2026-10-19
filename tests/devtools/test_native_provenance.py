@@ -240,6 +240,11 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(len(tests), 2)
         self.assertEqual(tests[0].count('-only-testing:' + METHOD + '()'), 1)
         self.assertIn('-xctestrun', tests[0])
+        build_index = next(i for i, c in enumerate(self.calls) if c[:2] == ['xcodebuild', 'build-for-testing'])
+        ready_index = next(i for i, c in enumerate(self.calls) if c[:3] == ['xcrun', 'simctl', 'bootstatus'])
+        test_index = next(i for i, c in enumerate(self.calls) if c[:2] == ['xcodebuild', 'test-without-building'])
+        self.assertLess(build_index, ready_index)
+        self.assertLess(ready_index, test_index)
         self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
 
     def test_adapter_zero_parser_timeout_and_source_changes_stay_failed(self):
@@ -253,7 +258,20 @@ class NativeProvenanceTests(unittest.TestCase):
     def test_adapter_failed_build_never_runs_tests_and_preserves_exit(self):
         code, reports, _ = self.run_adapter(build_code=130)
         self.assertEqual(code, 130)
-        self.assertEqual(reports, [])
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0]['status'], 'failed')
+        self.assertEqual(reports[0]['executed_count'], 0)
+        self.assertIn('native_build_exit:130', reports[0]['errors'])
+        self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in self.calls))
+        self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+
+    def test_adapter_build_timeout_retains_failure_receipt_without_test_or_ready_wait(self):
+        code, reports, _ = self.run_adapter(build_code=124)
+        self.assertEqual(code, 124)
+        self.assertEqual(reports[0]['exit_code'], 124)
+        self.assertIn('native_build_exit:124', reports[0]['errors'])
+        self.assertIn('log=', reports[0]['build_error'])
+        self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'bootstatus'] for c in self.calls))
         self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in self.calls))
         self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
 

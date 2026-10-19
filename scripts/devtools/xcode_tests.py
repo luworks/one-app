@@ -144,7 +144,6 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
             uuid.UUID(simulator)
             owned = True
             capture(['xcrun', 'simctl', 'boot', simulator])
-            capture(['xcrun', 'simctl', 'bootstatus', simulator, '-b'])
             for scheme, batch in batches.items():
                 bundle = output / (scheme + '.xcresult')
                 expected = list(dict.fromkeys(batch['expected']))
@@ -156,6 +155,17 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                         test_run = ensure_test_products(root, scheme, invoke, flags=flags)
                     except NativeBuildError as exc:
                         first_failure = first_failure or exc.returncode
+                        # A failed build has no xcresult test leaves. Retain a
+                        # failed receipt and its owned logs instead of hiding
+                        # the first failure behind a missing-receipt error.
+                        report = completed_report(contract, expected, batch['lane'], None,
+                                                  exc.returncode, '', 'build_for_testing_failed')
+                        report['errors'].append('native_build_exit:' + str(exc.returncode))
+                        report['build_error'] = str(exc)
+                        path = output / (scheme + '.report.json')
+                        atomic_json(path, report)
+                        evidence.journal.artifact(evidence.session, path)
+                        print(json.dumps({'report': str(path), 'status': report['status']}))
                         continue
                     identity = fingerprint(root, scheme=scheme, architecture='arm64')
                     if not provenance(root, identity, kind='build-for-testing', xctestrun=test_run)['valid']:
@@ -165,6 +175,9 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                     # Legacy direct test always builds; it never consumes cached provenance.
                     command = ['xcodebuild', 'test', '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
                                '-configuration', 'Debug', '-sdk', 'iphonesimulator']
+                # simctl boot starts asynchronously. Compile while it starts,
+                # then require readiness before dispatching any tests.
+                capture(['xcrun', 'simctl', 'bootstatus', simulator, '-b'])
                 result = invoke([*command,
                                  '-destination', 'platform=iOS Simulator,id=' + simulator,
                                  '-derivedDataPath', str(derived_data(root)), '-resultBundlePath', str(bundle),

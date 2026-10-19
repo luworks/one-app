@@ -103,3 +103,49 @@ summaries are retained to separate the next sample's build and test costs.
 This is a hypothesis under measurement, not a claimed speedup or a 300-second
 acceptance. Main Release run `39287295546` at merged `f76b106` is independently
 pending; the retained failed main receipt `39273400134` remains valid evidence.
+
+### Iteration 2: failed-build evidence and overlapping startup
+
+PR104 run [39287748963](https://github.com/luworks/one-app/actions/runs/39287748963)
+at head `56e023c` tested integrated SHA `700b49eda8fecacb9d21849d38580e88098564a9`
+and failed. Creation to failed today-required completion was **2,086 seconds**,
+including three seconds to the first job and additional per-job queues. This is
+not a 300-second result or proof that coverage removal improved performance.
+
+The original snapshot artifact `12205872422` contains six files (3,281 compressed
+bytes). Its report has zero executed, six missing, and `Missing or ambiguous
+native test receipt`. The native transcript proves `build-for-testing` exited
+124 after 601.320 seconds; `bootstatus` had already taken 153.747 seconds. There
+is no test execution or pixel-comparison result. The original compile log was
+not published, so a specific compiler failure cannot be inferred. Integration
+passed: startup wait 139.543 seconds, build 503.920 seconds, test-without-building
+60.862 seconds. Core UI passed seven tests: startup wait 181.017 seconds and
+317.908 seconds of test bodies (363.451-second XCTest session). These are cold
+hosted samples with separate VMs/caches; build, startup and queues remain distinct.
+
+The native authority now emits a failed receipt even when building times out or
+is cancelled. CI preserves that closed owned directory before requiring the test
+bundle, retaining the build log, original exit and missing tests without inventing
+leaves. Missing bundles and zero execution still fail. Wrapper rejection prints
+bounded redacted exception details and lane counters/errors; producer closure
+rejections retain their redacted reason without exposing rejected bytes.
+
+Native tests initiate simulator boot, build while startup proceeds, and require
+bootstatus before test dispatch. Synthetic core UI uses the existing canonical
+`ensure_test_products` authority to build TodayMock once during startup, validate
+source/toolchain/scheme/options/product provenance, and run fresh tests without
+building. It retains separate build time/log and the original test selections.
+There is one simulator and jobs=2; no result/image cache, cross-job product
+transport, timeout increase, tolerance change or coverage reduction is added.
+Overlapping startup is a measured hypothesis, not an additive speedup claim;
+resource contention and provenance hashing may affect the hosted outcome.
+
+`./dev test helpers` passed **112 host regressions**, now including the existing
+native provenance/lifecycle fixtures and core UI success/failure ordering.
+`./dev lint` and diff checks passed. First local fixture failures are retained;
+their cause was an unmocked workspace-lock prerequisite, now isolated in the
+synthetic fixture. No local simulator or physical-device test ran. Raw downloads,
+first/final helper logs and journal hashes remain under the primary checkout's
+`tests/results/ci-hillclimb-20261019/`. Main Release run `39287295546` is now
+completed/success at exact `f76b106`; that API status alone is not full artifact
+or device qualification. The failed earlier run remains retained.

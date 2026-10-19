@@ -370,6 +370,12 @@ def main():
     except (OSError, ValueError, KeyError, TypeError) as error:
         print('::error::CI adapter report rejected (' + type(error).__name__ +
               '); retained closed evidence requires a valid producer receipt. See docs/engineering/ci-artifact-producer.md.')
+        # Single-line redacted diagnostics remain useful even when report
+        # validation fails after successfully publishing a failed receipt.
+        print(sanitize(str(error)).replace('\n', ' ')[:1200])
+        if 'report' in locals() and isinstance(report, dict):
+            print(sanitize(json.dumps({key: report.get(key) for key in (
+                'lane', 'status', 'executed', 'failed', 'cancelled', 'missing', 'errors')}))[:4000])
         return completed.returncode or 1
     return completed.returncode
 
