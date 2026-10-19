@@ -218,7 +218,7 @@
     /// Writes every non-Keep choice at once; one Undo puts them all back. Deadlines are untouched.
     private func apply() {
       guard let left = snapshot?.left else { return }
-      var moved: [LedgerItem] = []
+      var moved: [(task: OneTask, start: Date?, entry: LedgerItem)] = []
       var dropped: [(task: OneTask, entry: LedgerItem)] = []
       for task in left {
         let choice = choices[task.persistentModelID] ?? .keep
@@ -230,7 +230,7 @@
             to: EveningReview.newPlannedStart(
               Self.item(task), choice, now: now, calendar: presentation.calendar), context: context)
           {
-            moved.append(entry)
+            moved.append((task, task.plannedStart, entry))
           }
         case .drop:
           reminders.noteDeleted(reminder: task.externalID)
@@ -253,7 +253,15 @@
       dismiss()
       toast?.show(message) {
         withAnimation {
-          for entry in moved { _ = actions.undo(entry, context: context) }
+          for row in moved {
+            guard !row.task.isDeleted, row.task.modelContext != nil,
+              !row.task.isDone, row.task.plannedStart == row.start
+            else { continue }
+            // The returned ledger value predates flush resolving its model reference.
+            var entry = row.entry
+            entry.itemRef = Ledger.ref(row.task.persistentModelID)
+            _ = actions.undo(entry, context: context)
+          }
           for d in dropped {
             context.insert(d.task)
             ledger.recordUndo(of: d.entry, task: d.task, context: context)
