@@ -25,7 +25,7 @@
     {
       if intent == .capture { return .capture }
       let fallback = ChatRouting.fallbackReply(text)
-      // The simulator has no model. A timeout, unavailable model or empty response also stays conversational.
+      // A timeout, unavailable model or empty response stays conversational on every runtime.
       guard AICapture.isAvailable else { return .reply(fallback) }
       let turn: ChatTurn? = await ModelTimeout.run(seconds: 8) {
         let session = LanguageModelSession(

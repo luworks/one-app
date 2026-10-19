@@ -107,6 +107,7 @@ class XcodeTests(unittest.TestCase):
         with patch.multiple(xcode_tests, host_lock=lock, dd_lock=lock, ResourceLock=lock), \
                 patch.object(xcode_tests, 'Evidence', return_value=evidence), \
                 patch.object(xcode_tests, 'run_process', side_effect=process), \
+                patch('scripts.devtools.resolve.locked_arguments', return_value=['-disableAutomaticPackageResolution']), \
                 patch.object(xcode_tests, 'selected', return_value=({'snapshot': [METHOD]} if snapshot else {'unit': [METHOD], 'integration': [METHOD]})):
             if active:
                 with self.assertRaisesRegex(ValueError, 'shutdown'):

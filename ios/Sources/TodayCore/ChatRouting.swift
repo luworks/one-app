@@ -65,6 +65,17 @@ public enum ChatRouting {
 
   public static func intent(_ raw: String) -> Intent {
     let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let month = CaptureParser.leadingMonth(text) {
+      // A date prefix must not turn a question, completed booking or refusal into a task.
+      if isQuestion(month.action)
+        || has(
+          month.action,
+          #"^(?:已经|已|不要|不用|别|预约(?:了|好|过)|(?:I\s+)?already\b|booked\b|don't\b|do not\b)"#)
+      {
+        return .conversation
+      }
+      return intent(month.action)
+    }
     if isContextQuestion(text) { return .conversation }
     // A complete leading clock phrase may introduce an explicit imperative.
     let withoutClock = text.replacingOccurrences(

@@ -1,5 +1,6 @@
 """Host-only CI regressions. No Swift, Xcode, simulator or full test execution."""
 import json
+import os
 import shutil
 from pathlib import Path
 import subprocess
@@ -77,6 +78,29 @@ class AdapterTests(unittest.TestCase):
             log.write_text(raw)
             return SimpleNamespace(returncode=code, reason=reason, log=log)
         return run
+
+    def test_routine_instrumentation_is_scoped_and_invalidates_product_provenance(self):
+        from scripts.devtools import core
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'core-ui'}):
+            routine = core.fingerprint(self.root, tools={})
+            self.assertEqual(core.native_test_options(), [
+                '-enableCodeCoverage', 'NO', 'COMPILER_INDEX_STORE_ENABLE=NO',
+                'SWIFT_ENABLE_EXPLICIT_MODULES=NO'])
+            import runpy
+            ui = runpy.run_path(str(ROOT / 'ios/Eval/run-e2e.py'))
+            command = ui['ui_command'](['TodayUITests/JourneyTests/testJ3_completeAndUndo'],
+                                       'synthetic-device', Path('derived'), Path('output'))
+            self.assertEqual(command[command.index('-enableCodeCoverage') + 1], 'NO')
+            self.assertIn('COMPILER_INDEX_STORE_ENABLE=NO', command)
+            self.assertIn('SWIFT_ENABLE_EXPLICIT_MODULES=NO', command)
+            self.assertIn('-only-testing:TodayUITests/JourneyTests/testJ3_completeAndUndo', command)
+            self.assertEqual(command[command.index('-parallel-testing-enabled') + 1], 'NO')
+        for lane in ('extended', 'release', 'protected-release', ''):
+            with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': lane}):
+                self.assertEqual(core.native_test_options(), [])
+                self.assertNotEqual(routine, core.fingerprint(self.root, tools={}))
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '0', 'TODAY_LANE': 'core-ui'}):
+            self.assertEqual(core.native_test_options(), [])
 
     def test_real_finished_test_required_for_success(self):
         self.assertEqual(self.invoke(), 0)
@@ -297,6 +321,29 @@ class AdapterTests(unittest.TestCase):
     def test_native_duplicate_receipts_fail_closed(self):
         self.assertEqual(self.native(receipts=2), 1)
         self.assertIn('Missing or ambiguous native test receipt', ' '.join(self.report()['errors']))
+
+    def test_native_build_timeout_publishes_closed_logs_but_never_passes(self):
+        def failed_build(native, directory):
+            native['attempts'] = []
+            native['exit_code'] = 124
+            native['status'] = 'failed'
+            native['errors'] = ['native_build_exit:124']
+            native['build_error'] = 'Native build failed; exit=124; log=/Users/synthetic/build.log'
+            (directory / 'build.log').write_text('build-for-testing timed out; exit=124')
+
+        self.assertEqual(self.native(lane='snapshots', code=124, bundle=False, change=failed_build), 1)
+        report = self.report()
+        self.assertEqual(report['executed'], 0)
+        self.assertGreater(report['missing'], 0)
+        self.assertIn('native_build_exit:124', report['errors'])
+        self.assertIn('native_command_exit:124', report['errors'])
+        self.assertTrue((self.output / 'native/build.log').is_file())
+        target = Path(self.temporary.name) / 'failed-build-published'
+        adapter.safe_artifacts(self.output, target, sha=self.sha, lane='snapshots')
+        self.assertEqual((target / 'native/build.log').read_text(), 'build-for-testing timed out; exit=124')
+        self.assertNotIn('/Users/synthetic', (target / 'report.json').read_text())
+        with self.assertRaises(ValueError):
+            validate_report(report, self.sha, 'snapshots')
 
     def test_release_does_not_accept_debug_products(self):
         dd = Path(self.temporary.name) / 'dd'

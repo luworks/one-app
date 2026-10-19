@@ -159,17 +159,59 @@ def toolchain():
     return {'developer_dir': str(developer) if developer else None, 'xcode': version, 'sdks': sdks}
 
 
+def native_test_options():
+    """Routine synthetic CI needs test results, not IDE indexing or coverage.
+
+    Explicit extended/release collections retain their scheme coverage settings.
+    These options are part of build provenance so products cannot cross modes.
+    """
+    if (os.environ.get('TODAY_CI_SYNTHETIC') == '1'
+            and os.environ.get('TODAY_LANE') in ('integration', 'snapshots', 'core-ui')):
+        # Hosted cold test builds expand XCTest/XCUIAutomation SDK interfaces
+        # under explicit scheduling. Measure the supported implicit compiler
+        # path with identical sources/tests; keep diagnostics and debug symbols.
+        return ['-enableCodeCoverage', 'NO', 'COMPILER_INDEX_STORE_ENABLE=NO',
+                'SWIFT_ENABLE_EXPLICIT_MODULES=NO']
+    return []
+
+
+# These directories were already excluded from input identity. Tell Git before
+# traversal, rather than walking their generated/dependency trees then filtering.
+GENERATED_INPUT_DIRS = ('.build', '__pycache__', 'DerivedData')
+
+
+def repository_files(root):
+    """Fresh Git inventory; tracked deletions and real untracked inputs survive.
+
+    No cached manifest or untracked-cache extension is trusted. Git prunes ignored
+    directories itself; explicit excludes also cover newly generated build trees
+    before an enclosing .gitignore exists. --cached still includes tracked paths.
+    """
+    command = ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard',
+               *('--exclude=' + name + '/' for name in GENERATED_INPUT_DIRS)]
+    try:
+        names = probe(command, root).split('\0')
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+        from .process import Redactor
+        detail = Redactor()((error.stderr or b'').decode(errors='replace')
+                            if isinstance(error.stderr, bytes) else (error.stderr or ''))
+        reason = ('timeout after ' + str(error.timeout) + 's; child killed and reaped'
+                  if isinstance(error, subprocess.TimeoutExpired) else 'exit=' + str(error.returncode))
+        raise RuntimeError('Git source inventory failed: ' + reason + '; command=' +
+                           ' '.join(command) + '; stderr=' + (detail[:2000] or '<empty>')) from None
+    return sorted({name for name in names if name and not any(
+        part in GENERATED_INPUT_DIRS for part in Path(name).parts)})
+
+
 def fingerprint(root, *, sdk='iphonesimulator', architecture=None, configuration='Debug', tools=None, scheme='Today'):
     """Hash current source bytes (including dirty/untracked inputs), not just HEAD."""
     root = Path(root).resolve()
-    names = probe(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], root).split('\0')
+    names = repository_files(root)
     files = {}
     for name in sorted(set(names)):
         if not name or not (name.startswith(('ios/', 'scripts/', 'tests/fixtures/', '.github/')) or name == 'dev'
                             or Path(name).name in ('Package.resolved', 'package-lock.json', 'yarn.lock',
-                                                   'pnpm-lock.yaml', 'uv.lock', 'requirements.txt', 'Gemfile.lock', 'Gemfile', 'mise.lock', '.mise.toml', '.swift-format', '.swiftlint.yml', 'ruff.toml', 'tool-pins.json')):
-            continue
-        if any(part in ('.build', '__pycache__', 'DerivedData') for part in Path(name).parts):
+                                                   'pnpm-lock.yaml', 'uv.lock', 'requirements.txt', 'Gemfile.lock', 'Gemfile', 'mise.lock', '.mise.toml', '.swift-format', '.swiftlint.yml', 'ruff.toml', 'tool-pins.json', '.gitignore', '.gitattributes')):
             continue
         path = root / name
         if path.is_symlink():
@@ -179,11 +221,13 @@ def fingerprint(root, *, sdk='iphonesimulator', architecture=None, configuration
             files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
         else:
             files[name] = None  # Tracked deletion invalidates provenance as well.
+    if not files:
+        raise ValueError('No repository source inputs; provenance rejected')
     if not isinstance(scheme, str) or not scheme.strip():
         raise ValueError('Explicit nonempty scheme required')
     data = {'schema': 2, 'scheme': scheme, 'worktree': str(root), 'source_and_locks': files,
             'toolchain': toolchain() if tools is None else tools, 'sdk': sdk,
-            'architecture': architecture or platform.machine(), 'configuration': configuration}
+            'architecture': architecture or platform.machine(), 'configuration': configuration, 'test_options': native_test_options()}
     return {'sha256': hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest(), 'inputs': data}
 
 
@@ -357,13 +401,15 @@ def ensure_test_products(root, scheme, invoke, *, configuration='Debug', sdk='ip
                      '-scheme', scheme, '-configuration', configuration, '-sdk', sdk,
                      '-destination', 'generic/platform=iOS Simulator',
                      '-derivedDataPath', str(derived_data(root)), '-jobs', '2',
-                     'ARCHS=' + architecture, *flags])
+                     'ARCHS=' + architecture, *native_test_options(), '-showBuildTimingSummary', *flags])
     if result.returncode:
         raise NativeBuildError(result)
     if getattr(result, 'reason', 'exited') != 'exited':
         raise ValueError('Interrupted build cannot publish provenance')
-    if fingerprint(root, **options) != current:
-        raise ValueError('Source or toolchain changed during build; provenance rejected')
+    # record_build freshly validates source/options before publication. Avoid a
+    # duplicate Git walk here while still rejecting a changed live toolchain.
+    if toolchain() != current['inputs']['toolchain']:
+        raise ValueError('Toolchain changed during build; provenance rejected')
     candidates = [p for p in (derived_data(root) / 'Build/Products').glob('*.xctestrun')
                   if p.name.startswith(scheme + '_')]
     if len(candidates) != 1:

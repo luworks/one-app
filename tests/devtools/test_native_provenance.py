@@ -1,6 +1,7 @@
 """Host-only native cache behavior using real product trees and synthetic Xcode."""
 from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import plistlib
 import subprocess
@@ -83,6 +84,81 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 4)
         self.assertTrue(all(command[1] == 'build-for-testing' for command in self.calls))
         self.assertEqual(self.calls[0][self.calls[0].index('-derivedDataPath') + 1], str(core.derived_data(self.root)))
+
+    def test_routine_compiler_mode_rebuilds_existing_products_and_reuses_only_same_mode(self):
+        self.ensure()
+        ordinary = self.fp()
+        for lane in ('integration', 'snapshots', 'core-ui'):
+            with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': lane}):
+                self.assertNotEqual(ordinary, self.fp())
+                self.ensure()
+                count = len(self.calls)
+                self.ensure()
+                self.assertEqual(len(self.calls), count)
+                self.assertIn('COMPILER_INDEX_STORE_ENABLE=NO', self.calls[-1])
+                self.assertIn('SWIFT_ENABLE_EXPLICIT_MODULES=NO', self.calls[-1])
+        self.ensure()
+        self.assertEqual(len(self.calls), 3)
+        self.assertNotIn('SWIFT_ENABLE_EXPLICIT_MODULES=NO', self.calls[-1])
+
+    def test_untracked_source_and_configuration_invalidate_reuse_without_stale_inventory(self):
+        self.ensure()
+        for name in ('ios/New.swift', 'ios/Config/Test.xcconfig', 'mise.lock', '.gitignore'):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            before = self.fp()
+            path.write_text('new input')
+            self.assertNotEqual(before, self.fp())
+            count = len(self.calls)
+            self.ensure()
+            self.assertEqual(len(self.calls), count + 1)
+            path.unlink()
+            self.assertFalse(core.provenance(self.root, self.fp(), kind='build-for-testing')['valid'])
+            self.ensure()
+
+    def test_generated_trees_are_pruned_before_git_reads_their_ignore_files(self):
+        # An unread .gitignore FIFO proves pruning, rather than filtering names
+        # after Git has already descended. No native tools or large trees needed.
+        before = self.fp()
+        for name in core.GENERATED_INPUT_DIRS:
+            directory = self.root / 'ios' / name / 'dependency'
+            directory.mkdir(parents=True)
+            os.mkfifo(directory / '.gitignore')
+            (directory / 'Generated.swift').write_text('not an input')
+        def bounded(command, root):
+            result = subprocess.check_output(command, cwd=root, timeout=2)
+            return result.decode().strip()
+        with patch.object(core, 'probe', side_effect=bounded):
+            self.assertEqual(before, self.fp())
+        # The normal implementation remains fresh too, without a cached manifest.
+        self.assertEqual(before, self.fp())
+
+    def test_tracked_deletion_and_tracked_ignored_file_still_invalidate(self):
+        subprocess.run(['git', '-C', str(self.root), 'add', 'ios/Input.swift'], check=True)
+        before = self.fp()
+        self.source.unlink()
+        after = self.fp()
+        self.assertNotEqual(before, after)
+        self.assertIsNone(after['inputs']['source_and_locks']['ios/Input.swift'])
+        self.source.write_text('source one')
+        (self.root / '.gitignore').write_text('ios/Input.swift\n')
+        before = self.fp()
+        self.source.write_text('tracked but ignored source edit')
+        self.assertNotEqual(before, self.fp())
+
+    def test_git_timeout_failure_and_empty_inventory_reject_provenance(self):
+        for error in (subprocess.TimeoutExpired(['git'], 30, stderr=b'busy'),
+                      subprocess.CalledProcessError(128, ['git'], stderr=b'fatal: unavailable token=fixture')):
+            with self.subTest(error=type(error).__name__), patch.object(core, 'probe', side_effect=error):
+                with self.assertRaisesRegex(RuntimeError, 'Git source inventory failed') as caught:
+                    self.ensure()
+                self.assertNotIn('token=fixture', str(caught.exception))
+                self.assertIn('stderr=', str(caught.exception))
+        self.assertEqual(self.calls, [])
+        with patch.object(core, 'probe', return_value=''):
+            with self.assertRaisesRegex(ValueError, 'No repository source inputs'):
+                self.ensure()
+        self.assertEqual(self.calls, [])
 
     def test_whole_host_bundle_and_xctestrun_are_guarded(self):
         path = self.ensure()
@@ -174,12 +250,22 @@ class NativeProvenanceTests(unittest.TestCase):
                 self.assertEqual(caught.exception.returncode, code)
                 self.assertFalse(core.provenance(self.root, self.fp(), kind='build-for-testing')['valid'])
 
+    def test_toolchain_change_during_build_rejects_before_publication(self):
+        before = self.fp()
+        def invoke(command):
+            result = self.invoke(command)
+            core.toolchain.return_value = {'xcode': 'changed', 'sdk': '27.0'}
+            return result
+        with self.assertRaisesRegex(ValueError, 'Toolchain changed during build'):
+            core.ensure_test_products(self.root, 'TodayTests', invoke)
+        self.assertFalse(core._provenance_path(self.root, before, 'build-for-testing').exists())
+
     def test_source_change_during_build_rejects_products(self):
         def invoke(command):
             result = self.invoke(command)
             self.source.write_text('source changed in flight')
             return result
-        with self.assertRaisesRegex(ValueError, 'changed during build'):
+        with self.assertRaisesRegex(ValueError, 'Source changed before provenance publication'):
             core.ensure_test_products(self.root, 'TodayTests', invoke)
         self.assertFalse(core.provenance(self.root, self.fp(), kind='build-for-testing')['valid'])
 
@@ -240,6 +326,11 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(len(tests), 2)
         self.assertEqual(tests[0].count('-only-testing:' + METHOD + '()'), 1)
         self.assertIn('-xctestrun', tests[0])
+        build_index = next(i for i, c in enumerate(self.calls) if c[:2] == ['xcodebuild', 'build-for-testing'])
+        ready_index = next(i for i, c in enumerate(self.calls) if c[:3] == ['xcrun', 'simctl', 'bootstatus'])
+        test_index = next(i for i, c in enumerate(self.calls) if c[:2] == ['xcodebuild', 'test-without-building'])
+        self.assertLess(build_index, ready_index)
+        self.assertLess(ready_index, test_index)
         self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
 
     def test_adapter_zero_parser_timeout_and_source_changes_stay_failed(self):
@@ -253,7 +344,20 @@ class NativeProvenanceTests(unittest.TestCase):
     def test_adapter_failed_build_never_runs_tests_and_preserves_exit(self):
         code, reports, _ = self.run_adapter(build_code=130)
         self.assertEqual(code, 130)
-        self.assertEqual(reports, [])
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0]['status'], 'failed')
+        self.assertEqual(reports[0]['executed_count'], 0)
+        self.assertIn('native_build_exit:130', reports[0]['errors'])
+        self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in self.calls))
+        self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+
+    def test_adapter_build_timeout_retains_failure_receipt_without_test_or_ready_wait(self):
+        code, reports, _ = self.run_adapter(build_code=124)
+        self.assertEqual(code, 124)
+        self.assertEqual(reports[0]['exit_code'], 124)
+        self.assertIn('native_build_exit:124', reports[0]['errors'])
+        self.assertIn('log=', reports[0]['build_error'])
+        self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'bootstatus'] for c in self.calls))
         self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in self.calls))
         self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
 

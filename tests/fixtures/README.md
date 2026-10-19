@@ -116,6 +116,14 @@ The fixture is intentionally frozen; future schema changes should keep opening i
 
 ## AI context journeys
 
+`ChatRoutingTests.testMonthOnlyBookingRequestPreservesActionWithoutInventingAppointment`
+keeps the exact owner input `明年8月 预约医生做 annual check` and its English contrast inline.
+A fixed 2030 Los Angeles calendar verifies relative-year anchoring, a booking task,
+month retention in title/notes, absent due/planned time, and preview-only follow-up.
+Its companion test keeps completed reports, questions and creation refusals conversational.
+`AIAnnualCheckTests` reuses `ai-context-ui.json` for native Add/Open/Undo and
+follow-up checks; it supplies no scripted model response.
+
 [`ai-context-ui.json`](ai-context-ui.json) is consumed by the three methods in
 `AIContextJourneyTests`. Its planner starts empty, so Activity must contain no
 change-ledger rows before Add. The text-only `Dinner alarm context` chat uses the
@@ -206,3 +214,14 @@ Event-save supplemental EventKit metadata is seeded by the versioned DEBUG hooks
 `ios/Eval/Tests/OneLogicTests/CaptureEditRoutingTests.swift` keeps its small synthetic context inline: explicit existing-item move versus ordinary time-only recovery, with a fixed UTC clock and no store or model calls.
 
 `ios/TodayIntegrationTests/PlannerSessionTests.swift` includes an inline synthetic local-event delete/Undo fixture and an external-ID refusal case; it never opens EventKit or writes a system calendar.
+
+## CI source inventory and preflight fixtures
+
+Small source/lock/configuration inputs, isolated Git repositories and generated
+`.gitignore` FIFOs are defined inline in
+`tests/devtools/test_native_provenance.py`; `tests/ci/test_native_execution.py`
+provides the synthetic owned-device/build callback lifecycle.
+`tests/ci/test_producer.py` defines closed preflight/build failure summaries and
+missing-test expectations. `./dev test helpers` loads these existing authorities.
+Temporary material is reconstructed from these versioned inputs; retained raw
+logs and closed hosted artifacts belong in the primary QA results directory.

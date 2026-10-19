@@ -197,10 +197,59 @@ public enum CaptureParser {
     "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
   ]
 
+  /// A month is context, not an exact due date. Keep it in the title and notes instead of
+  /// inventing a day. The remaining action also supplies the new-message routing boundary.
+  public static func leadingMonth(
+    _ raw: String, now: Date = .now, calendar: Calendar = .current
+  ) -> (action: String, label: String)? {
+    let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let pattern =
+      #"^(?:(明年|今年|[0-9]{4}年)\s*([0-9]{1,2})月(?!\s*[0-9])|next\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b(?!\s*[0-9]))\s*[,，:]?\s*"#
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+      let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+      let prefix = Range(match.range, in: text)
+    else { return nil }
+    func group(_ n: Int) -> String? {
+      Range(match.range(at: n), in: text).map { String(text[$0]) }
+    }
+    let currentYear = calendar.component(.year, from: now)
+    let month: Int
+    let year: Int
+    let label: String
+    if let zh = group(1), let number = group(2).flatMap(Int.init), (1...12).contains(number) {
+      month = number
+      year =
+        zh == "明年" ? currentYear + 1 : zh == "今年" ? currentYear : Int(zh.dropLast()) ?? currentYear
+      label = "\(year)年\(month)月"
+    } else if let name = group(3),
+      let index = months.firstIndex(of: String(name.lowercased().prefix(3)))
+    {
+      month = index + 1
+      year = currentYear + (month <= calendar.component(.month, from: now) ? 1 : 0)
+      label = "\(name.capitalized) \(year)"
+    } else {
+      return nil
+    }
+    let action = String(text[prefix.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !action.isEmpty else { return nil }
+    return (action, label)
+  }
+
+  /// Booking is a personal action, even when its object is an appointment or meeting.
+  public static func isBookingAction(_ raw: String) -> Bool {
+    let text = leadingMonth(raw)?.action ?? raw
+    return text.range(
+      of:
+        #"^(?:(?:please|can you|could you)\s+|请|帮我)?(?:book\s+(?:(?:a|an|the|my)\s+)?(?:doctor|dentist|appointment|annual\s+check)|预约(?!了|好|过)\S)"#,
+      options: [.regularExpression, .caseInsensitive]) != nil
+  }
+
   public static func parse(_ raw: String, now: Date = .now, calendar: Calendar = .current)
     -> Capture
   {
-    var text = " " + raw.trimmingCharacters(in: .whitespacesAndNewlines) + " "
+    let monthContext = leadingMonth(raw, now: now, calendar: calendar)
+    var text =
+      " " + (monthContext?.action ?? raw).trimmingCharacters(in: .whitespacesAndNewlines) + " "
     let today = calendar.startOfDay(for: now)
     var day = today
     var hasDay = false
@@ -486,7 +535,16 @@ public enum CaptureParser {
       repeatRule: repeatRule, durationMinutes: duration,
       kind: kind(title: finalTitle, hour: hour, duration: rangeDuration, repeatRule: repeatRule))
     capture.isWorkBlock = isWorkTime(raw, hasLength: duration != nil)
-    return CaptureTitleRefinement.fallback(capture, source: raw)
+    if isBookingAction(monthContext?.action ?? raw) { capture.kind = .task }
+    capture = CaptureTitleRefinement.fallback(capture, source: raw)
+    if let monthContext {
+      capture.title = monthContext.label + " " + capture.title
+      capture.notes = [
+        capture.notes, raw,
+        "Requested month: \(monthContext.label). No exact due date was specified.",
+      ].compactMap { $0 }.joined(separator: "\n")
+    }
+    return capture
   }
 
   /// True when the sentence is about time to work on something ("work on the report for 2 hours", "专注写方案"), not a
@@ -693,7 +751,7 @@ public enum CaptureParser {
         hadLeadIn = true
         changed = true
       }
-      for pattern in leadingFillers where !hadLeadIn {
+      for pattern in leadingFillers where !hadLeadIn && !isBookingAction(t) {
         if let r = t.range(of: pattern, options: [.regularExpression, .caseInsensitive]),
           !r.isEmpty, r.lowerBound == t.startIndex
         {
@@ -1425,6 +1483,14 @@ public enum CaptureTitleRefinement {
     guard !title.isEmpty else { return backup }
     var result = backup
     result.title = title
+    // Month-only requests have no due-date field to carry their month. Preserve the
+    // already anchored label even when title generation omits scheduling words.
+    if let prefix = backup.title.range(
+      of: #"^(?:[0-9]{4}年[0-9]{1,2}月|[A-Za-z]+ [0-9]{4})\s+"#,
+      options: .regularExpression), !title.hasPrefix(String(backup.title[prefix]))
+    {
+      result.title = String(backup.title[prefix]) + title
+    }
     result.fromAppleIntelligence = true
     // Keep all original facts, motivation, numbers and modality even when the model paraphrases the action.
     result.notes = retainedNotes(backup.notes, source: source)
