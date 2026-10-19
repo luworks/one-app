@@ -90,8 +90,8 @@ final class NativeSnapshotTests: XCTestCase {
         let repeated = try render(health(series))
         let empty = try render(health(HealthSeries(points: [])))
         let diffing = Snapshotting<UIImage, UIImage>.image(precision: 1, perceptualPrecision: 1).diffing
-        XCTAssertNil(diffing.diff(populated, repeated), "Identical frozen inputs must render identically.")
-        XCTAssertNotNil(diffing.diff(populated, empty), "Removing real Health samples must change the image.")
+        XCTAssertNil(diffing.diffV2(populated, repeated), "Identical frozen inputs must render identically.")
+        XCTAssertNotNil(diffing.diffV2(populated, empty), "Removing real Health samples must change the image.")
     }
 
     private var recording: SnapshotTestingConfiguration.Record {
@@ -113,14 +113,14 @@ final class NativeSnapshotTests: XCTestCase {
 
     private func render<V: View>(_ view: V, dark: Bool = false, largeType: Bool = false) throws -> UIImage {
         let size = CGSize(width: 393, height: 852)
-        let traits = UITraitCollection(traitsFrom: [
-            UITraitCollection(userInterfaceStyle: dark ? .dark : .light),
-            UITraitCollection(preferredContentSizeCategory: largeType ? .accessibilityExtraLarge : .large),
-            UITraitCollection(displayScale: 3),
-            UITraitCollection(userInterfaceIdiom: .phone),
-            UITraitCollection(horizontalSizeClass: .compact),
-            UITraitCollection(verticalSizeClass: .regular),
-        ])
+        let traits = UITraitCollection { traits in
+            traits.userInterfaceStyle = dark ? .dark : .light
+            traits.preferredContentSizeCategory = largeType ? .accessibilityExtraLarge : .large
+            traits.displayScale = 3
+            traits.userInterfaceIdiom = .phone
+            traits.horizontalSizeClass = .compact
+            traits.verticalSizeClass = .regular
+        }
         let root = view
             .environment(\.locale, locale)
             .environment(\.calendar, calendar)
@@ -131,7 +131,9 @@ final class NativeSnapshotTests: XCTestCase {
             .defaultAppStorage(defaults)
             .transaction { $0.disablesAnimations = true; $0.animation = nil }
         let controller = UIHostingController(rootView: root)
-        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(origin: .zero, size: size)
         window.overrideUserInterfaceStyle = dark ? .dark : .light
         window.rootViewController = controller
         window.isHidden = false
