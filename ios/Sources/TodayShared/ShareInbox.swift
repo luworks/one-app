@@ -1,32 +1,40 @@
 import Foundation
 
 /// A reminder added from the Share sheet, waiting for the app to pick it up.
-struct SharedReminder: Codable, Equatable, Identifiable {
-    var id = UUID()
-    var title: String
-    var note: String = ""
+public struct SharedReminder: Codable, Equatable, Identifiable {
+    public var id = UUID()
+    public var title: String
+    public var note: String = ""
     /// Date only (midnight), or nil for no date.
-    var due: Date?
-    var sharedAt = Date.now
+    public var due: Date?
+    public var sharedAt = Date.now
+
+    public init(id: UUID = UUID(), title: String, note: String = "", due: Date? = nil, sharedAt: Date = .now) {
+        self.id = id
+        self.title = title
+        self.note = note
+        self.due = due
+        self.sharedAt = sharedAt
+    }
 }
 
 /// Hands reminders from the Share extension to the app: the extension appends to a JSON file in the App Group, and
 /// the app reads them when active and acknowledges committed IDs after saving reminders. The extension never opens SwiftData.
 /// Shared by the app and the ShareExtension (and the widget, which ignores it). Foundation only, so `swift test` covers it.
-enum ShareInbox {
-    static let fileName = "share-inbox.json"
+public enum ShareInbox {
+    public static let fileName = "share-inbox.json"
 
-    static var fileURL: URL? {
+    public static var fileURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: WidgetSnapshot.appGroup)?.appendingPathComponent(fileName)
     }
 
-    enum Day: String, CaseIterable, Identifiable {
+    public enum Day: String, CaseIterable, Identifiable {
         case none = "No Date", today = "Today", tomorrow = "Tomorrow", nextWeek = "Next Week"
-        var id: Self { self }
+        public var id: Self { self }
     }
 
     /// The reminder's date for a day choice: the start of that day; Next Week = next Monday.
-    static func due(for day: Day, now: Date = .now, calendar cal: Calendar = .current) -> Date? {
+    public static func due(for day: Day, now: Date = .now, calendar cal: Calendar = .current) -> Date? {
         let today = cal.startOfDay(for: now)
         switch day {
         case .none: return nil
@@ -38,7 +46,7 @@ enum ShareInbox {
 
     /// Title and note from what was shared. Text: its first line is the title, the rest the note. A link: the page
     /// title (or the site's name) is the title, and the link goes in the note.
-    static func draft(text: String?, url: URL?, pageTitle: String?) -> (title: String, note: String) {
+    public static func draft(text: String?, url: URL?, pageTitle: String?) -> (title: String, note: String) {
         let lines = (text ?? "").split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         let page = pageTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         var title = lines.first ?? ""
@@ -49,13 +57,13 @@ enum ShareInbox {
         return (String(title.prefix(200)), noteLines.joined(separator: "\n"))
     }
 
-    static func decode(_ data: Data) -> [SharedReminder]? {
+    public static func decode(_ data: Data) -> [SharedReminder]? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try? decoder.decode([SharedReminder].self, from: data)
     }
 
-    static func encode(_ items: [SharedReminder]) -> Data? {
+    public static func encode(_ items: [SharedReminder]) -> Data? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         return try? encoder.encode(items)
@@ -63,7 +71,7 @@ enum ShareInbox {
 
     /// Adds one to the inbox. Returns false when the App Group is unavailable or the write fails.
     @discardableResult
-    static func append(_ item: SharedReminder, at url: URL? = fileURL) -> Bool {
+    public static func append(_ item: SharedReminder, at url: URL? = fileURL) -> Bool {
         guard let url else { return false }
         var ok = false
         coordinate(url) { url in
@@ -89,14 +97,14 @@ enum ShareInbox {
 
     /// Finishes a Share submission only after its reminder is safely in the inbox.
     /// The caller keeps its editor open on false; success alone records the Activity event and closes the extension.
-    static func submit(_ item: SharedReminder, at url: URL? = fileURL, onSaved: () -> Void) -> Bool {
+    public static func submit(_ item: SharedReminder, at url: URL? = fileURL, onSaved: () -> Void) -> Bool {
         guard append(item, at: url) else { return false }
         onSaved()
         return true
     }
 
     /// Reads a snapshot without consuming it. A corrupt or unreadable file throws and remains untouched.
-    static func read(at url: URL? = fileURL) throws -> [SharedReminder] {
+    public static func read(at url: URL? = fileURL) throws -> [SharedReminder] {
         guard let url else { return [] }
         var result: Result<[SharedReminder], Error> = .success([])
         try coordinateChecked(url) { url in
@@ -114,7 +122,7 @@ enum ShareInbox {
     /// Removes only committed IDs, rereading under the same coordination used by append.
     /// An extension append between read and acknowledgment survives. Any failure keeps the inbox retryable.
     @discardableResult
-    static func acknowledge(_ ids: Set<UUID>, at url: URL? = fileURL) -> Bool {
+    public static func acknowledge(_ ids: Set<UUID>, at url: URL? = fileURL) -> Bool {
         guard let url else { return false }
         do {
             var result: Result<Void, Error> = .success(())
@@ -144,7 +152,7 @@ enum ShareInbox {
     }
 
     /// Everything waiting, oldest first; the inbox is empty afterwards. Undecodable data stays untouched for recovery.
-    static func drain(at url: URL? = fileURL) -> [SharedReminder] {
+    public static func drain(at url: URL? = fileURL) -> [SharedReminder] {
         guard let url else { return [] }
         var items: [SharedReminder] = []
         coordinate(url) { url in
@@ -168,13 +176,18 @@ enum ShareInbox {
 
 /// The app's persistence boundary. The caller commits tasks and receipts in one transaction.
 /// After a crash between commit and ack, receipts filter the replay even if the task was subsequently undone.
-enum ShareImport {
-    struct Result<Value> {
-        var added: [Value]
-        var acknowledged: Bool
+public enum ShareImport {
+    public struct Result<Value> {
+        public var added: [Value]
+        public var acknowledged: Bool
+
+        public init(added: [Value], acknowledged: Bool) {
+            self.added = added
+            self.acknowledged = acknowledged
+        }
     }
 
-    static func run<Value>(at url: URL? = ShareInbox.fileURL,
+    public static func run<Value>(at url: URL? = ShareInbox.fileURL,
                            committedIDs: () throws -> Set<UUID>,
                            persist: ([SharedReminder]) throws -> [Value],
                            acknowledge: ((Set<UUID>) -> Bool)? = nil) throws -> Result<Value> {

@@ -5,9 +5,9 @@ import Foundation
 //   line 2-3: the title, wrapping onto two lines (a half-width widget cannot fit a time and a title on one line)
 // This file only decides the words (Foundation only, so `swift test` covers it); the view is `TodayWidgets/LockScreenNextView.swift`.
 
-struct LockScreenNext: Equatable {
+public struct LockScreenNext: Equatable {
     /// The part of line 1 after the time.
-    enum Lead: Equatable {
+    public enum Lead: Equatable {
         case none
         /// "in 24:59": the view draws `Text(date, style: .timer)`, which the system keeps ticking without new timeline entries.
         case countdown(to: Date)
@@ -16,24 +16,35 @@ struct LockScreenNext: Equatable {
     }
 
     /// Bold start of line 1: "20:00", "All day", "Now", or "Nothing else today".
-    var headline: String
+    public var headline: String
     /// Alarms get the alarm symbol in front of the time.
-    var showsAlarmSymbol: Bool
-    var lead: Lead
+    public var showsAlarmSymbol: Bool
+    public var lead: Lead
     /// Lines 2-3: the item's title; in the empty state, tomorrow's first item ("Tomorrow 09:00 · Title"), or "".
-    var title: String
+    public var title: String
     /// Small trailing count on line 1: "+2", or "+2 at 20:00" where the time is not already in the headline. nil when nothing else is left.
-    var more: String?
-    var isEmpty: Bool
+    public var more: String?
+    public var isEmpty: Bool
     /// "Next: Qina piano class at 20:00, in 25 minutes. 2 more today."
-    var accessibilityLabel: String
+    public var accessibilityLabel: String
+
+    public init(headline: String, showsAlarmSymbol: Bool, lead: Lead, title: String,
+                more: String? = nil, isEmpty: Bool, accessibilityLabel: String) {
+        self.headline = headline
+        self.showsAlarmSymbol = showsAlarmSymbol
+        self.lead = lead
+        self.title = title
+        self.more = more
+        self.isEmpty = isEmpty
+        self.accessibilityLabel = accessibilityLabel
+    }
 
     /// The live countdown only shows when the item starts within this long (a timeline entry sits at `start - countdownWindow`);
     /// further out the time alone says it.
-    static let countdownWindow: TimeInterval = 3600
+    public static let countdownWindow: TimeInterval = 3600
 
     /// `time` formats a clock time in the user's 12/24-hour setting (the view passes `shortTime`; tests pass a fixed format).
-    static func make(items: [WidgetItem], now: Date, calendar: Calendar = .current, time: (Date) -> String) -> LockScreenNext {
+    public static func make(items: [WidgetItem], now: Date, calendar: Calendar = .current, time: (Date) -> String) -> LockScreenNext {
         // Every item left today (not just the three the other families show), to group items that start together.
         let next = NextItems.select(from: items, now: now, calendar: calendar, limit: .max)
         guard let first = next.today.first else {
@@ -117,7 +128,7 @@ struct LockScreenNext: Equatable {
     }
 
     /// "in 25 minutes", "in 1 minute", "in less than a minute" (the countdown is at most an hour).
-    static func spokenCountdown(from now: Date, to start: Date) -> String {
+    public static func spokenCountdown(from now: Date, to start: Date) -> String {
         let minutes = Int(start.timeIntervalSince(now) / 60)
         switch minutes {
         case ..<1: return "in less than a minute"

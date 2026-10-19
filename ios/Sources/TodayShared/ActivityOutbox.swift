@@ -8,19 +8,19 @@ import Foundation
 /// The line format is the Activity export format (`ActivityJSONL` in the app): snake_case keys, `props` a nested object. This file
 /// only knows the few keys an extension can fill; the app fills `device`, `session` and anything else. Foundation only, shared by
 /// the app and the extensions, covered by `swift test`.
-enum ActivityOutbox {
-    static let folderName = "activity-outbox"
+public enum ActivityOutbox {
+    public static let folderName = "activity-outbox"
     /// More files than this and new ones are dropped (nothing drains an outbox while the app is not used).
-    static let maxFiles = 500
+    public static let maxFiles = 500
 
-    static var folderURL: URL? {
+    public static var folderURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: WidgetSnapshot.appGroup)?
             .appendingPathComponent(folderName, isDirectory: true)
     }
 
     /// Writes one event. `props` holds no free text. Returns false when the App Group is unavailable, the outbox is full or the write fails.
     @discardableResult
-    static func append(kind: String, tier: Int = 4, actor: String, channel: String? = nil, props: [String: Any] = [:],
+    public static func append(kind: String, tier: Int = 4, actor: String, channel: String? = nil, props: [String: Any] = [:],
                        at date: Date = .now, in folder: URL? = folderURL) -> Bool {
         guard let folder else { return false }
         let fm = FileManager.default
@@ -50,13 +50,13 @@ enum ActivityOutbox {
     }
 
     /// The files waiting, oldest first (the name starts with the time).
-    static func pendingFiles(in folder: URL? = folderURL) -> [URL] {
+    public static func pendingFiles(in folder: URL? = folderURL) -> [URL] {
         guard let folder,
               let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return [] }
         return names.filter { $0.hasSuffix(".jsonl") }.sorted().map { folder.appendingPathComponent($0) }
     }
 
-    static func remove(_ files: [URL]) {
+    public static func remove(_ files: [URL]) {
         for f in files { try? FileManager.default.removeItem(at: f) }
     }
 }

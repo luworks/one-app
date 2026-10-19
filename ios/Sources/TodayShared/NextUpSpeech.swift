@@ -1,9 +1,9 @@
 import Foundation
 
 /// What Siri says for "What's next today": the same items the Next Up widget shows (`NextItems.select`), as one line.
-enum NextUpSpeech {
+public enum NextUpSpeech {
     /// `time` formats a start time ("3:00 PM"); tests pass a fixed one.
-    static func line(_ next: NextUp, now: Date = .now,
+    public static func line(_ next: NextUp, now: Date = .now,
                      time: (Date) -> String = { $0.formatted(date: .omitted, time: .shortened) }) -> String {
         if next.today.isEmpty {
             guard let first = next.tomorrow else { return "Nothing left today." }
@@ -16,13 +16,13 @@ enum NextUpSpeech {
     }
 
     /// "Dentist at 3:00 PM", "Team offsite, all day", "Standup, now" (an event already under way).
-    static func phrase(_ item: WidgetItem, now: Date, time: (Date) -> String) -> String {
+    public static func phrase(_ item: WidgetItem, now: Date, time: (Date) -> String) -> String {
         if item.isAllDay { return "\(item.title), all day" }
         return item.start <= now ? "\(item.title), now" : "\(item.title) at \(time(item.start))"
     }
 
     /// "a", "a and b", "a, b and c".
-    static func list(_ parts: [String]) -> String {
+    public static func list(_ parts: [String]) -> String {
         guard let last = parts.last else { return "" }
         guard parts.count > 1 else { return last }
         return parts.dropLast().joined(separator: ", ") + " and " + last

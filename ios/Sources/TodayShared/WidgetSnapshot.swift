@@ -4,26 +4,26 @@ import Foundation
 // Foundation only: no SwiftData, SwiftUI or WidgetKit, so `swift test` can cover it on macOS.
 
 /// One thing on the widget: an event, a reminder with a time, or an alarm.
-struct WidgetItem: Codable, Hashable, Identifiable {
-    enum Kind: String, Codable { case event, reminder, alarm }
+public struct WidgetItem: Codable, Hashable, Identifiable {
+    public enum Kind: String, Codable { case event, reminder, alarm }
 
-    var id: String
-    var title: String
+    public var id: String
+    public var title: String
     /// For all-day items: the start of their day.
-    var start: Date
+    public var start: Date
     /// Events only. While an event is in progress it stays on the widget; reminders and alarms leave at their start.
-    var end: Date?
-    var isAllDay: Bool
-    var kind: Kind
+    public var end: Date?
+    public var isAllDay: Bool
+    public var kind: Kind
     /// Set for events that live in Apple Calendar (system events and Today's events mirrored there). When the widget can
     /// read EventKit itself it drops these and shows the live copies instead. Optional so older snapshots still decode.
-    var externalID: String?
+    public var externalID: String?
     /// Events with a location, when Travel time is on and the app has an estimate: driving minutes and when to leave.
     /// Optional so older snapshots still decode.
-    var travelMinutes: Int?
-    var leaveBy: Date?
+    public var travelMinutes: Int?
+    public var leaveBy: Date?
 
-    init(id: String, title: String, start: Date, end: Date? = nil, isAllDay: Bool = false, kind: Kind, externalID: String? = nil,
+    public init(id: String, title: String, start: Date, end: Date? = nil, isAllDay: Bool = false, kind: Kind, externalID: String? = nil,
          travelMinutes: Int? = nil, leaveBy: Date? = nil) {
         self.id = id
         self.title = title
@@ -37,14 +37,14 @@ struct WidgetItem: Codable, Hashable, Identifiable {
     }
 
     /// "Drive 18 min · Leave by 14:20" for this item at `now`, or nil without an estimate.
-    func travelText(now: Date, time: (Date) -> String) -> String? {
+    public func travelText(now: Date, time: (Date) -> String) -> String? {
         guard let travelMinutes, let leaveBy, start > now else { return nil }
         return "Drive \(TravelTime.durationText(seconds: Double(travelMinutes) * 60)) · \(TravelTime.leaveText(leaveBy: leaveBy, now: now, time: time))"
     }
 
     /// An event's rows on `days`, the way the Calendar tab reads them: clipped to each day it overlaps, and all-day on a day
     /// it covers completely (the middle of a multi-day event). `end` is exclusive (for all-day events: the midnight after).
-    static func eventRows(id: String, title: String, start: Date, end: Date, isAllDay: Bool, externalID: String?,
+    public static func eventRows(id: String, title: String, start: Date, end: Date, isAllDay: Bool, externalID: String?,
                           days: [Date], calendar: Calendar = .current) -> [WidgetItem] {
         days.compactMap { day in
             guard let interval = calendar.dateInterval(of: .day, for: day),
@@ -60,78 +60,89 @@ struct WidgetItem: Codable, Hashable, Identifiable {
 
 /// What the app hands the widget: the items of the next `WidgetSnapshot.days` days (so the "Tomorrow" line still has data
 /// after midnight), written as JSON into the App Group container.
-struct WidgetSnapshot: Codable, Equatable {
-    var generatedAt: Date
-    var items: [WidgetItem]
+public struct WidgetSnapshot: Codable, Equatable {
+    public var generatedAt: Date
+    public var items: [WidgetItem]
     /// The app's Apple Calendar settings, which the widget needs to read EventKit the way the app does:
     /// nil in snapshots from older builds (then the widget shows the snapshot as it is).
-    var calendar: CalendarSettings?
+    public var calendar: CalendarSettings?
 
-    struct CalendarSettings: Codable, Equatable {
+    public struct CalendarSettings: Codable, Equatable {
         /// Apple Calendar is on in Today and access is granted.
-        var isOn: Bool
+        public var isOn: Bool
         /// Calendars turned off in the Calendars list.
-        var hiddenCalendarIDs: [String]
+        public var hiddenCalendarIDs: [String]
+
+        public init(isOn: Bool, hiddenCalendarIDs: [String]) {
+            self.isOn = isOn
+            self.hiddenCalendarIDs = hiddenCalendarIDs
+        }
     }
 
-    init(generatedAt: Date, items: [WidgetItem], calendar: CalendarSettings? = nil) {
+    public init(generatedAt: Date, items: [WidgetItem], calendar: CalendarSettings? = nil) {
         self.generatedAt = generatedAt
         self.items = items
         self.calendar = calendar
     }
 
     /// Today, tomorrow and the day after: at 00:05 "today" is the old tomorrow and "Tomorrow" is the old day after.
-    static let days = 3
+    public static let days = 3
 
-    static let appGroup = "group.com.luworks.one"
-    static let fileName = "widget-snapshot.json"
+    public static let appGroup = "group.com.luworks.one"
+    public static let fileName = "widget-snapshot.json"
 
-    static var fileURL: URL? {
+    public static var fileURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?.appendingPathComponent(fileName)
     }
 
-    func encoded() throws -> Data {
+    public func encoded() throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
         return try encoder.encode(self)
     }
 
-    static func decode(_ data: Data) -> WidgetSnapshot? {
+    public static func decode(_ data: Data) -> WidgetSnapshot? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try? decoder.decode(WidgetSnapshot.self, from: data)
     }
 
     /// The last snapshot the app wrote, or nil (no App Group access, or the app never ran).
-    static func load() -> WidgetSnapshot? {
+    public static func load() -> WidgetSnapshot? {
         guard let url = fileURL, let data = try? Data(contentsOf: url) else { return nil }
         return decode(data)
     }
 
     /// Writes the snapshot atomically. Returns false when the App Group container is unavailable.
     @discardableResult
-    func save() -> Bool {
+    public func save() -> Bool {
         guard let url = Self.fileURL, let data = try? encoded() else { return false }
         return (try? data.write(to: url, options: .atomic)) != nil
     }
 }
 
 /// What the widgets show at one moment.
-struct NextUp: Equatable {
+public struct NextUp: Equatable {
     /// The next items today (all-day first, then by time), at most `limit`.
-    var today: [WidgetItem]
+    public var today: [WidgetItem]
     /// How many items are left today, including the ones in `today`.
-    var remainingToday: Int
+    public var remainingToday: Int
     /// The first item tomorrow; only set when nothing is left today.
-    var tomorrow: WidgetItem?
+    public var tomorrow: WidgetItem?
+
+    public init(today: [WidgetItem], remainingToday: Int, tomorrow: WidgetItem? = nil) {
+        self.today = today
+        self.remainingToday = remainingToday
+        self.tomorrow = tomorrow
+    }
 }
 
 /// Widget deep links: `today://today` opens the Today tab; `today://today?day=2026-10-16` opens Today on that day.
-enum WidgetLink {
-    static let scheme = "today"
+public enum WidgetLink {
+    public static let scheme = "today"
 
-    static func url(day: Date? = nil, calendar: Calendar = .current) -> URL {
+    public static func url(day: Date? = nil, calendar: Calendar = .current) -> URL {
         var c = URLComponents()
         c.scheme = scheme
         c.host = "today"
@@ -143,7 +154,7 @@ enum WidgetLink {
     }
 
     /// nil when the URL isn't a Today link. A link without a valid day means today.
-    static func day(from url: URL, now: Date = .now, calendar: Calendar = .current) -> Date? {
+    public static func day(from url: URL, now: Date = .now, calendar: Calendar = .current) -> Date? {
         guard url.scheme == scheme, url.host == "today" else { return nil }
         let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "day" }?.value
         let parts = (value ?? "").split(separator: "-").compactMap { Int($0) }
@@ -154,11 +165,11 @@ enum WidgetLink {
     }
 }
 
-enum NextItems {
+public enum NextItems {
     /// What the widget shows: the snapshot, with its Apple Calendar events replaced by `live` ones read from EventKit
     /// just now. `live == nil` (no access, or Apple Calendar is off) keeps the snapshot as it is. Today's own events,
     /// reminders and alarms always come from the snapshot.
-    static func merge(snapshot: [WidgetItem], live: [WidgetItem]?) -> [WidgetItem] {
+    public static func merge(snapshot: [WidgetItem], live: [WidgetItem]?) -> [WidgetItem] {
         guard let live else { return snapshot }
         // The widget can't compute travel time (no location, no network): keep the app's estimate on the live copy
         // of the same occurrence (same Apple Calendar event, same start).
@@ -181,20 +192,20 @@ enum NextItems {
     }
 
     /// Still worth showing at `now`: all-day items for their whole day, events until they end, the rest until they start.
-    static func isLeft(_ item: WidgetItem, now: Date, calendar: Calendar = .current) -> Bool {
+    public static func isLeft(_ item: WidgetItem, now: Date, calendar: Calendar = .current) -> Bool {
         if item.isAllDay { return calendar.isDate(item.start, inSameDayAs: now) }
         // Strictly after: the timeline has an entry at each start, and that entry must drop a reminder or alarm.
         return item.start > now || (item.end ?? item.start) > now
     }
 
     /// Apple's order: all-day first, then by start, then by title.
-    static func ordered(_ a: WidgetItem, _ b: WidgetItem) -> Bool {
+    public static func ordered(_ a: WidgetItem, _ b: WidgetItem) -> Bool {
         if a.isAllDay != b.isAllDay { return a.isAllDay }
         if a.start != b.start { return a.start < b.start }
         return a.title.localizedStandardCompare(b.title) == .orderedAscending
     }
 
-    static func select(from items: [WidgetItem], now: Date, calendar: Calendar = .current, limit: Int = 3) -> NextUp {
+    public static func select(from items: [WidgetItem], now: Date, calendar: Calendar = .current, limit: Int = 3) -> NextUp {
         let left = items
             .filter { calendar.isDate($0.start, inSameDayAs: now) && isLeft($0, now: now, calendar: calendar) }
             .sorted(by: ordered)
@@ -208,7 +219,7 @@ enum NextItems {
     /// When the widget should redraw: now, every start and end still ahead, and each midnight (where tomorrow's items
     /// become today's), for `days` days. Running past tonight's midnight keeps the widget right if iOS delays the reload.
     /// `countdownLead`: also a date that long before each start, where the Lock Screen widget starts its live countdown.
-    static func timelineDates(for items: [WidgetItem], now: Date, days: Int = 1, countdownLead: TimeInterval? = nil,
+    public static func timelineDates(for items: [WidgetItem], now: Date, days: Int = 1, countdownLead: TimeInterval? = nil,
                               calendar: Calendar = .current) -> [Date] {
         let today = calendar.startOfDay(for: now)
         let midnights = (1...max(1, days)).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
@@ -225,7 +236,7 @@ enum NextItems {
     }
 
     /// When the widget asks for a new timeline: within `interval` (to re-read Apple Calendar), and never after midnight.
-    static func reloadDate(now: Date, interval: TimeInterval = 3600, calendar: Calendar = .current) -> Date {
+    public static func reloadDate(now: Date, interval: TimeInterval = 3600, calendar: Calendar = .current) -> Date {
         let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now.addingTimeInterval(86_400)
         return min(now.addingTimeInterval(interval), midnight)
     }
