@@ -45,3 +45,15 @@ The original editor and standalone time-save repair evidence are recorded in `re
 This is a faithful compact layout with documented semantic/accessibility differences, not a claim of an exact pixel match. The reference's deep red, quiet/snooze control and Share action are intentionally not copied into unsupported behavior. No image is used as the production UI.
 
 The focused review's concrete native Undo payload concern was resolved by retaining/copying actual writable EventKit fields, including unsupported native recurrence and all alarms. The real EventKit UI method compares all recorded metadata except the newly assigned identifier after compensation.
+
+## Independent time-save delivery and main integration
+
+PR106 head `41e47590213da40465b814b33477df4c034153dc` was merged normally as `324760cc8a1c4c6d138d2ae5abf76346b89b9e9c` after auditing CI run 39301482757. Its actually tested integration SHA was `3ed1bd30f6db8fb553800b070cb32d8bf2960460`, with parents `f76b106cde588968ccb463bbc67c4c782a378e64` and `41e47590213da40465b814b33477df4c034153dc`.
+
+All seven lane reports had zero missing/errors/failures. All 209 reported artifact file sizes and SHA256 hashes matched the downloads. The core UI/integration/snapshot xcresults reopened successfully with 7/13/6 passing leaves and no skips. Business had 678 passing leaves plus four explicitly allowed existing benchmark/export skips; its report says incomplete coverage, so this is not described as a full-suite pass. The build log contains the actual successful Debug app build; no release/distribution product claim is made.
+
+Before merge, live main was `b87f94424c3a86a6ff8a0d4b59287b98b79ad2aa`, containing PR105 and PR104. Those AI/CI changes did not overlap the save-fix production sources. Existing required checks were clean and GitHub reported mergeable; no unrelated passing business suite was rerun solely to chase main. The older CI integration tree is not presented as a test of the later main tree.
+
+The compact branch then merged actual main without conflict as `be51c0b7ba57069f1f2f56bfd2f653969459a461`, parents `ed5a971fa6c8698411227606046239fc6f7e0056` and `324760cc8a1c4c6d138d2ae5abf76346b89b9e9c`. PR108 now targets main directly. Upstream AI and CI files were imported unchanged by the merge; no new local heavy run was started. The earlier native evidence remains tied to its recorded source hashes/commits. Hosted acceptance of the new PR108 integrated head remains separate.
+
+The complete downloaded reports, artifact audit, source parents and merge metadata are retained under `tests/results/reminder-compact-20261019/ci106-run-39301482757/` and indexed in the canonical QA journal. Release, physical-device and iCloud synchronization remain unverified.
