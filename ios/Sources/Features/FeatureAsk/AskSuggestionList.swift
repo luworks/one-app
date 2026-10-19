@@ -116,7 +116,12 @@
               .contentTransition(.opacity)
               .padding(.horizontal, 14)
               .padding(.vertical, 10)
-              .background(Color(.secondarySystemFill), in: Capsule())
+              .frame(minHeight: 44)
+              .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
+              .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                  .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
+              }
           }
           .buttonStyle(PressScale())
           .tint(.primary)
