@@ -1,10 +1,7 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
-import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import CoreLocation
 import MapKit
 import Observation
@@ -197,3 +194,5 @@ extension TravelTimes {
         return (TravelTime.minutes(s), TravelTime.leaveBy(start: start, travelSeconds: s))
     }
 }
+
+#endif

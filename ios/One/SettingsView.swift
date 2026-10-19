@@ -10,16 +10,6 @@ import SwiftData
 import UserNotifications
 import UIKit
 
-/// Keys for the choices in Settings (read by the screens they affect).
-enum SettingsKey {
-    static let showOverdue = "today.setting.showOverdue"
-    static let showAlarms = "today.setting.showAlarmsInToday"
-    static let jumpToNow = "today.setting.jumpToNow"
-    static let autoArchiveChats = "today.setting.autoArchiveChats"
-    static let travelTime = "today.setting.travelTime"
-    static let healthSummary = "today.setting.healthSummary"
-}
-
 /// Settings is its own screen (opened from the sidebar). Each screen's options live here, not in the sidebar;
 /// the destructive "Delete All Data" is the last row and needs two confirmations.
 struct SettingsView: View {
@@ -345,30 +335,6 @@ struct DeleteDataConfirmation: View {
             .onAppear { focused = true }
         }
         .presentationDetents([.medium])
-    }
-}
-
-/// Clears Today's own data. Never touches Apple Calendar or Apple Reminders.
-@MainActor
-enum DataReset {
-    static func run(_ context: ModelContext) {
-        // Forget the link first so a local wipe is never mirrored to Apple Reminders.
-        RemindersSync.shared.forgetLink()
-        try? context.delete(model: OneTask.self)
-        try? context.delete(model: OneEvent.self)
-        try? context.delete(model: OneAlarm.self)
-        try? context.delete(model: OneList.self)
-        try? context.delete(model: Habit.self)
-        try? context.delete(model: ChatThread.self)
-        try? context.delete(model: AIGrant.self)
-        // Clear pending shares before forgetting receipts, or an ack failure could resurrect deleted reminders.
-        // If the inbox is unreadable, retain only the opaque receipts until it can be safely cleared.
-        if let pending = try? ShareInbox.read(),
-           pending.isEmpty || ShareInbox.acknowledge(Set(pending.map(\.id))) {
-            try? context.delete(model: ShareImportReceipt.self)
-        }
-        Ledger.clearAll(context)
-        try? context.save()
     }
 }
 

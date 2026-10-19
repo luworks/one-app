@@ -1,10 +1,7 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
-import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import Foundation
 import AVFoundation
 #if canImport(AlarmKit)
@@ -51,3 +48,5 @@ final class SoundPreview {
         player = nil
     }
 }
+
+#endif

@@ -54,21 +54,6 @@ struct TimerLine: View {
     }
 }
 
-extension RowAction {
-    /// Stop a timer (cancel while it counts down, dismiss while it rings). Red and rightmost, like Delete.
-    static func timerStop(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Label("Stop", systemImage: "stop.fill").labelStyle(.iconOnly) }
-            .tint(.red)
-    }
-
-    static func timerPause(_ paused: Bool, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(paused ? "Resume" : "Pause", systemImage: paused ? "play.fill" : "pause.fill").labelStyle(.iconOnly)
-        }
-        .tint(.orange)
-    }
-}
-
 /// The running timers at the top of the Today tab: up to two quiet rows with the time left, then "+N more".
 /// Tap opens the Timer tab; swipe right to left (or long-press) for Pause/Resume and Stop. Nothing when no timer runs.
 struct TodayTimerRows: View {

@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import MetricKit
 import os.signpost
@@ -132,3 +133,5 @@ public final class LocalDiagnostics: NSObject, MXMetricManagerSubscriber {
         return url
     }
 }
+
+#endif

@@ -1,10 +1,7 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
-import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import Foundation
 import Darwin
 
@@ -36,3 +33,5 @@ enum LaunchTimer {
         return Int((Date().timeIntervalSince1970 - started) * 1000)
     }
 }
+
+#endif

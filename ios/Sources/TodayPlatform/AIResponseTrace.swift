@@ -1,10 +1,7 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
-import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import UIKit
 
@@ -212,3 +209,5 @@ struct AIResponseTraceHistory: View {
         }
     }
 }
+
+#endif
