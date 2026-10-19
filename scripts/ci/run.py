@@ -298,9 +298,8 @@ def execute(argv, *, timeout=600, grace=30):
         evidence.close()
 
 
-def main():
+def run_lane(lane, prepared):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    lane = sys.argv[1]
     if lane not in LANES:
         raise ValueError('unknown lane')
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=5).strip()
@@ -319,11 +318,15 @@ def main():
         'business': (),
     }.get(lane, ('xcodegen',))
     setup = []
+    tools = tuple(name for name in tools if name not in prepared['tools'])
     if tools:
         setup.append(['./dev', 'bootstrap', *[arg for name in tools for arg in ('--tool', name)]])
-    if lane not in ('format', 'lint', 'business'):
+    if lane not in ('format', 'lint', 'business') and not prepared['native']:
         setup.extend([['./dev', 'generate'], ['./dev', 'resolve']])
-    setup.append([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)])
+    if prepared['selection'] is None:
+        setup.append([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)])
+    else:
+        selection.write_bytes(prepared['selection'])
     command = ['./dev', 'ci', lane, '--selection', str(selection), '--output', str(output),
                '--sha', sha, '--synthetic', '--no-distribute']
     transcript = []
@@ -388,7 +391,25 @@ def main():
             if not secret_candidate(diagnostic.encode()):
                 print(diagnostic[:4000])
         return completed.returncode or 1
+    prepared['tools'].update(tools)
+    if lane not in ('format', 'lint', 'business'):
+        prepared['native'] = True
+    prepared['selection'] = selection.read_bytes()
     return completed.returncode
+
+
+def main():
+    lanes = sys.argv[1:]
+    if not lanes or len(lanes) != len(set(lanes)) or any(lane not in LANES for lane in lanes):
+        raise ValueError('Expected unique known lanes')
+    prepared = {'tools': set(), 'native': False, 'selection': None}
+    for lane in lanes:
+        os.environ['TODAY_LANE'] = lane
+        code = run_lane(lane, prepared)
+        if code:
+            # Do not manufacture successful receipts for unexecuted later lanes.
+            return code
+    return 0
 
 
 if __name__ == '__main__':

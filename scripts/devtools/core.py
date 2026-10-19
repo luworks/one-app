@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import platform
 import plistlib
+import re
 import subprocess
 import time
 import uuid
@@ -172,6 +173,13 @@ def toolchain():
     return {'developer_dir': str(developer) if developer else None, 'xcode': version, 'sdks': sdks}
 
 
+def ci_test_scheme(default):
+    """Only the explicit synthetic batch uses the common product provenance."""
+    if os.environ.get('TODAY_CI_SYNTHETIC') == '1' and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1':
+        return 'TodayCI'
+    return default
+
+
 def native_test_options():
     """Routine synthetic CI needs test results, not IDE indexing or coverage.
 
@@ -179,7 +187,9 @@ def native_test_options():
     These options are part of build provenance so products cannot cross modes.
     """
     if (os.environ.get('TODAY_CI_SYNTHETIC') == '1'
-            and os.environ.get('TODAY_LANE') in ('integration', 'snapshots', 'core-ui')):
+            and (os.environ.get('TODAY_LANE') in ('integration', 'snapshots', 'core-ui')
+                 or (os.environ.get('TODAY_LANE') == 'build'
+                     and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1'))):
         # Hosted cold test builds expand XCTest/XCUIAutomation SDK interfaces
         # under explicit scheduling. Measure the supported implicit compiler
         # path with identical sources/tests; keep diagnostics and debug symbols.
@@ -285,6 +295,7 @@ def compiler_module_cache(root, current):
     inputs = current['inputs']
     scheme = {'integration': 'TodayTests', 'snapshots': 'TodaySnapshotTests',
               'core-ui': 'TodayMock'}.get(os.environ.get('TODAY_LANE'))
+    scheme = ci_test_scheme(scheme)
     if (not scheme or inputs.get('scheme') != scheme
             or inputs.get('configuration') != 'Debug' or inputs.get('sdk') != 'iphonesimulator'
             or inputs.get('architecture') != 'arm64'
@@ -362,7 +373,7 @@ def xctestrun_products(root, path):
         value = value.replace('__TESTROOT__', str(products))
         if host is not None:
             value = value.replace('__TESTHOST__', str(host))
-        if '__' in value or not Path(value).is_absolute():
+        if re.search(r'__[A-Z][A-Z0-9_]*__', value) or not Path(value).is_absolute():
             raise ValueError('Unresolved xctestrun product path: ' + value)
         resolved = Path(value).resolve()
         if not resolved.is_relative_to(products):

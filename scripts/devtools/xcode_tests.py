@@ -7,13 +7,17 @@ import tempfile
 import time
 import uuid
 
-from .core import (NativeBuildError, ResourceLock, atomic_json, dd_lock, derived_data,
+from .core import (NativeBuildError, ResourceLock, atomic_json, ci_test_scheme, dd_lock, derived_data,
                    ensure_test_products, fingerprint, host_lock, native_test_options, provenance)
 from .process import Evidence, Redactor, run_process
 
 SCHEMES = {'unit': 'TodayTests', 'integration': 'TodayTests', 'snapshot': 'TodaySnapshotTests'}
 DEVICE = 'com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max'
 RUNTIME = 'com.apple.CoreSimulator.SimRuntime.iOS-27-0'
+
+
+def test_scheme(lane):
+    return ci_test_scheme(SCHEMES[lane])
 
 
 def simulator_name(root):
@@ -93,7 +97,7 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
         raise ValueError('At least one expected test per lane required')
     batches = {}
     for lane, ids in lanes.items():
-        batch = batches.setdefault(SCHEMES[lane], {'lane': lane, 'expected': []})
+        batch = batches.setdefault(test_scheme(lane), {'lane': lane, 'expected': []})
         batch['expected'].extend(ids)
     first_failure = 0
     with ExitStack() as stack:

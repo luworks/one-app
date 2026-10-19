@@ -24,7 +24,7 @@ def graph(root):
     """Read XcodeGen YAML and evaluated SPM manifests, never regex Swift source.
 
     Any unsupported/ambiguous edge triggers wide selection at the caller.
-    Package ownership is deliberately package-wide (including resources).
+    Target paths include resources; manifest changes always select the wide profile.
     """
     spec = root / 'ios/project.yml'
     if not spec.exists():
@@ -40,7 +40,7 @@ def graph(root):
     for manifest in manifests:
         rel = manifest.parent.relative_to(root).as_posix()
         package = json.loads(capture(['swift', 'package', '--package-path', str(manifest.parent), 'dump-package']))
-        # Package changes select all package targets; downstream edges stay target-specific.
+        # Source ownership follows actual target paths; dependency edges stay target-specific.
         for target in package['targets']:
             key = rel + ':' + target['name']
             deps = []
@@ -51,7 +51,8 @@ def graph(root):
                     deps.append(rel + ':' + dep['byName'][0])
                 else:
                     raise ValueError('external/product dependency requires wide selection')
-            nodes[key] = {'paths': [rel], 'dependencies': deps}
+            target_path = target.get('path') or ('Tests/' if target.get('type') == 'test' else 'Sources/') + target['name']
+            nodes[key] = {'paths': [(Path(rel) / target_path).as_posix()], 'dependencies': deps}
         for product in package.get('products', []):
             if product['name'] in products:
                 raise ValueError('ambiguous product name')
@@ -60,15 +61,26 @@ def graph(root):
         paths = []
         for source in target.get('sources', []):
             value = source if isinstance(source, str) else source['path']
-            if '$' in value or '..' in Path(value).parts:
+            if '$' in value:
                 raise ValueError('unresolved source path')
-            paths.append('ios/' + value.strip('/'))
+            resolved = (root / 'ios' / value).resolve()
+            if not resolved.is_relative_to(root.resolve()):
+                raise ValueError('source outside repository')
+            paths.append(resolved.relative_to(root.resolve()).as_posix())
         deps = []
         for dep in target.get('dependencies', []):
             if 'target' in dep:
                 deps.append('xcode:' + dep['target'])
             elif 'package' in dep:
-                deps.extend(products[dep.get('product', dep['package'])])
+                product = dep.get('product', dep['package'])
+                if product in products:
+                    deps.extend(products[product])
+                elif dep['package'] in project.get('packages', {}) and 'url' in project['packages'][dep['package']]:
+                    key = 'external:' + dep['package'] + ':' + product
+                    nodes.setdefault(key, {'paths': [], 'dependencies': []})
+                    deps.append(key)
+                else:
+                    raise ValueError('unresolved package product')
             elif 'sdk' not in dep:
                 raise ValueError('unresolved Xcode dependency')
         nodes['xcode:' + name] = {'paths': paths, 'dependencies': deps}
@@ -104,6 +116,53 @@ def select(paths, nodes, reason=None):
             'all_targets': bool(wide), 'snapshots': bool(wide or selected)}
 
 
+
+# Explicit reviewable mapping from graph feature nodes to existing UI authorities.
+# A changed feature runs its entire deterministic suite collection, never a guessed
+# test name. Unmapped/shared/test/config changes retain the broad PR authority.
+FEATURE_SUITES = {
+    'FeatureHealth': ('HealthMetricsTests', 'HealthReviewTests', 'HealthStallTests'),
+    'FeatureClock': ('AlarmTests', 'AlarmsTabTests', 'ClockTests', 'StopwatchTests', 'TimerTests'),
+    'FeatureToday': ('TodayReminderCompletionTests', 'TodayTimelineTests', 'TodayTimerTests', 'TodayTomorrowTests', 'HealthReviewTests', 'TodayFocusTests', 'TodayAlarmActionsTests'),
+    'FeatureCalendar': ('CalendarAlarmTests', 'CalendarDeleteSyncTests', 'CalendarRecurringDeleteTests', 'CalendarSyncTests', 'CalendarTabTests', 'EventSaveTests', 'SystemEventEditorTests', 'SinglePresentationTests'),
+    'FeatureReminders': ('InlineNewReminderTests', 'ReminderTimeSaveTests', 'RemindersListsTests', 'RemindersSyncBothWaysTests', 'RemindersSyncTests', 'RepeatingReminderTests', 'EntryActionsTests', 'ReminderEditorTests'),
+    'FeatureAsk': ('AIAlarmContextTests', 'AIAnnualCheckTests', 'AIContextJourneyTests', 'AIRecurringReminderTests', 'AIReminderRecoveryTests', 'AskCardStaysTests', 'AskConversationTests', 'AskEditTests', 'AskMultiCaptureTests', 'AskMultiTurnTests', 'AskSuggestionTests', 'LocalConversationResponseTests', 'MessageCopyTests', 'TidyOverdueTests'),
+    'FeatureSettings': ('SettingsChoicesTests', 'AppearanceUITests', 'ActivityDataTests', 'HealthMetricsTests'),
+    'FeatureActivity': ('ActivityDataTests', 'LedgerTests'),
+    'FeatureSearch': ('SidebarTests',),
+}
+SMOKE = ('JourneyTests/testJ1_addTimedTaskFromOneLine', 'JourneyTests/testJ3_completeAndUndo')
+
+
+def execution_selection(selection, source, lane, broad):
+    """PR risk selection; main/manual always retain the complete lane authority."""
+    from scripts.testing import contract
+    if lane == 'core-ui':
+        changed_sources = set(selection.get('changed', []))
+        added = [test for suite in source['ui'] if suite['path'] in changed_sources
+                 for test in contract.expand([suite['suite']], source, 'ui')]
+        broad = list(dict.fromkeys([*broad, *added]))
+    if (os.environ.get('GITHUB_EVENT_NAME') not in ('pull_request', 'merge_group')
+            or selection.get('all_targets') or lane not in ('core-ui', 'integration', 'snapshots')):
+        return broad
+    features = {node.rsplit(':', 1)[-1] for node in selection['targets']} & set(FEATURE_SUITES)
+    # Narrow only an entirely recognized feature Swift diff. A forged or stale
+    # selection cannot turn a shared change into a smoke-only execution.
+    if not selection['changed'] or any(not path.endswith('.swift') or not any(
+            path.startswith('ios/Sources/Features/' + name + '/') for name in features)
+            for path in selection['changed']):
+        return broad
+    if lane == 'core-ui':
+        values = list(SMOKE)
+        for feature in sorted(features):
+            values.extend(FEATURE_SUITES[feature])
+        selected = contract.expand(values, source, 'ui')
+        return selected
+    # Native store/session integration and all six snapshots remain small and
+    # protect cross-feature composition; run them unchanged even for narrow PRs.
+    return broad
+
+
 def expected(event, ref, lane):
     if lane == 'release':
         return event == 'push' and ref == 'refs/heads/main'
@@ -113,7 +172,7 @@ def expected(event, ref, lane):
 
 
 def aggregate(needs, event, ref):
-    required = {'helpers', 'prerequisite', *LANES}
+    required = {'helpers', 'host', 'native', 'release', *MANUAL}
     errors = []
     if set(needs) != required:
         errors.append('missing or unexpected jobs: ' + str(sorted(set(needs) ^ required)))

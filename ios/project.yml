@@ -601,6 +601,45 @@
           "TZ": "UTC"
         }
       }
+    },
+    "TodayCI": {
+      "build": {
+        "targets": {
+          "Today": "all",
+          "TodayMock": "all",
+          "TodayTests": [
+            "test"
+          ],
+          "TodaySnapshotTests": [
+            "test"
+          ]
+        }
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          {
+            "name": "TodayTests",
+            "parallelizable": false
+          },
+          {
+            "name": "TodaySnapshotTests",
+            "parallelizable": false
+          },
+          {
+            "name": "TodayUITests",
+            "parallelizable": false
+          }
+        ],
+        "gatherCoverageData": false,
+        "commandLineArguments": {
+          "-AppleLocale en_US_POSIX": true,
+          "-AppleLanguages (en)": true
+        },
+        "environmentVariables": {
+          "TZ": "UTC"
+        }
+      }
     }
   },
   "packages": {

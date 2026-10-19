@@ -102,6 +102,19 @@ class AdapterTests(unittest.TestCase):
         with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '0', 'TODAY_LANE': 'core-ui'}):
             self.assertEqual(core.native_test_options(), [])
 
+    def test_shared_batch_uses_identical_product_fingerprint_for_all_consumers(self):
+        from scripts.devtools import core, xcode_tests
+        identities = []
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_CI_NATIVE_BATCH': '1'}):
+            for lane in ('build', 'integration', 'snapshots', 'core-ui'):
+                with patch.dict(os.environ, {'TODAY_LANE': lane}):
+                    self.assertEqual(core.ci_test_scheme('TodayMock'), 'TodayCI')
+                    identities.append(core.fingerprint(self.root, scheme='TodayCI', tools={}))
+            self.assertTrue(all(identity == identities[0] for identity in identities))
+            self.assertEqual(xcode_tests.test_scheme('snapshot'), 'TodayCI')
+        with patch.dict(os.environ, {'TODAY_CI_NATIVE_BATCH': '0'}):
+            self.assertEqual(core.ci_test_scheme('TodayMock'), 'TodayMock')
+
     def test_real_finished_test_required_for_success(self):
         self.assertEqual(self.invoke(), 0)
         validate_report(self.report(), self.sha, 'business')
@@ -222,7 +235,7 @@ class AdapterTests(unittest.TestCase):
         kind, expected = adapter.test_plan(self.root, lane)
         directory = self.root / ('tests/results/devtools/logs/' + lane + '-xcode')
         directory.mkdir(parents=True)
-        scheme = xcode_tests.SCHEMES[kind]
+        scheme = xcode_tests.test_scheme(kind)
         if bundle:
             store = directory / (scheme + '.xcresult') / 'Data'
             store.mkdir(parents=True)
@@ -238,7 +251,7 @@ class AdapterTests(unittest.TestCase):
 
         def test(root, group, **kwargs):
             self.assertEqual(group, kind)
-            self.assertEqual(kwargs, {'timeout': 600})
+            self.assertEqual(kwargs, {'only': expected, 'timeout': 600})
             print(json.dumps({'exit': 0, 'reason': 'exited', 'seconds': 0.1, 'log': str(directory / 'build.log')}))
             for _ in range(receipts):
                 print(json.dumps({'report': str(path), 'status': native['status']}))
@@ -246,12 +259,29 @@ class AdapterTests(unittest.TestCase):
             (directory / 'shutdown.log').write_text('owned simulator shutdown finished')
             return code
         # Result storage is ignored by real repositories, including hosted CI.
+        def batch(root, authority, groups, **kwargs):
+            self.assertIs(authority, adapter.contract)
+            self.assertEqual(groups, [kind])
+            self.assertTrue(kwargs.pop('reuse'))
+            return test(root, kind, **kwargs)
+
+        batched = os.environ.get('TODAY_CI_NATIVE_BATCH') == '1'
         with patch.object(adapter, 'source_state', return_value='fixed'), patch.object(
-                adapter.commands, 'test', side_effect=test) as called:
+                adapter.commands, 'test', side_effect=test) as direct, patch.object(
+                xcode_tests, 'run', side_effect=batch) as shared:
             result = self.invoke(lane=lane)
-        called.assert_called_once()
+        (shared if batched else direct).assert_called_once()
+        (direct if batched else shared).assert_not_called()
         self.assertEqual(self.calls, [])
         return result
+
+    def test_native_batch_reuses_product_authority_and_requires_fresh_leaves(self):
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_CI_NATIVE_BATCH': '1'}):
+            for index, statuses in enumerate((('Passed',), ())):
+                self.output = Path(self.temporary.name) / ('batch' + str(index))
+                shutil.rmtree(self.root / 'tests/results/devtools/logs/integration-xcode', ignore_errors=True)
+                self.assertEqual(self.native(statuses=statuses), 0 if statuses else 1)
+                self.assertEqual(self.report()['status'], 'passed' if statuses else 'failed')
 
     def test_native_integration_and_snapshot_completed_leaf_success(self):
         for lane in ('integration', 'snapshots'):
