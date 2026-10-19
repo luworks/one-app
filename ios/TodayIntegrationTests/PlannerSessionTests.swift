@@ -43,6 +43,38 @@
     }
 
     @Test
+    func askDeleteUndoOutlivesItsToastAndRunsOnce() async throws {
+      let a = try Session(seed: 1500)
+      defer { a.dispose() }
+      let task = try a.add("Delete and restore")
+      task.note = "Retain the details"
+      task.tags = ["Synthetic"]
+      task.plannedStart = a.clock.now().addingTimeInterval(1800)
+      try a.context.save()
+      let deadline = task.due
+      let planned = task.plannedStart
+      let change = PendingChange(
+        subject: .task(task), delete: true, title: task.title, oldText: "",
+        newStart: nil, notes: [], attendees: 0)
+      let feedback = AskNativeActions.applyChange(
+        change, context: a.context, calendar: a.services.calendar,
+        actions: a.services.actions, ledger: a.services.ledger, runtime: a.runtime)
+      try a.context.save()
+      #expect(try a.tasks().isEmpty)
+      let undo = try #require(feedback.undo)
+      // The inline Ask action must survive the local toast's six-second dismissal.
+      try await Task.sleep(for: .seconds(7))
+      undo.action()
+      undo.action()
+      let restored = try #require(try a.tasks().first)
+      #expect(try a.tasks().count == 1)
+      #expect(restored.title == "Delete and restore" && restored.note == "Retain the details")
+      #expect(restored.tags == ["Synthetic"] && restored.due == deadline)
+      #expect(restored.plannedStart == planned)
+      #expect(try a.rows().filter { $0.actionValue == .undone }.count == 1)
+    }
+
+    @Test
     func existentialObservationAndDisposalStayInsideTheirSession() async throws {
       let a = try Session(seed: 100)
       let b = try Session(seed: 200)

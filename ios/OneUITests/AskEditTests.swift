@@ -42,8 +42,10 @@ final class AskEditTests: XCTestCase {
   /// Text on the newest preview card (earlier cards stay in the chat as Added / Dropped).
   private func cardText(containing s: String) -> XCUIElement {
     let stacks = app.descendants(matching: .any).matching(identifier: "capture-stack")
-    return stacks.element(boundBy: max(stacks.count - 1, 0)).staticTexts
-      .containing(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
+    let stack = stacks.element(boundBy: max(stacks.count - 1, 0))
+    let title = stack.buttons["capture-title"]
+    if title.exists && title.label.contains(s) { return title }
+    return stack.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", s)).firstMatch
   }
 
   // MARK: Capture

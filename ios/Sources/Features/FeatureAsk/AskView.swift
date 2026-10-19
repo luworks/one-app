@@ -1925,7 +1925,14 @@
           toast.undoManager = undoManager
           actions.delete(task, context: context, toast: toast, actor: .todayAI, channel: .ask)
           if let label = toast.message {
-            feedback.undo = UndoRow(label: label, action: { undoManager.undo() })
+            feedback.undo = UndoRow(
+              label: label,
+              action: {
+                // UndoManager does not retain its target. Keep it alive beyond the toast's timeout.
+                withExtendedLifetime(toast) {
+                  if undoManager.canUndo { undoManager.undo() }
+                }
+              })
           }
         } else if let new = c.newStart {
           if let entry = actions.setPlanned(
