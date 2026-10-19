@@ -8,6 +8,7 @@ import SwiftUI
 @MainActor
 @Observable
 package final class DrawerModel {
+    package init() {}
     package private(set) var isOpen = false
     /// Horizontal finger translation while dragging, 0 otherwise.
     package private(set) var drag: CGFloat = 0

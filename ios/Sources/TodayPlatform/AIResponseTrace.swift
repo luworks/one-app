@@ -148,6 +148,7 @@ package final class AIResponseTrace {
 
 /// Background of the actual sent message or emitted reply/card, never an artificial layout request.
 package struct AIResponseContentProbe: UIViewRepresentable {
+    package init(token: UUID, phase: AIResponseTrace.Phase) { self.token = token; self.phase = phase }
     package let token: UUID
     package let phase: AIResponseTrace.Phase
 
@@ -197,6 +198,7 @@ package struct AIResponseContentProbe: UIViewRepresentable {
 
 /// Diagnostic-only accessibility data lives on Ask, including when Ask is itself a full-screen sheet.
 package struct AIResponseTraceHistory: View {
+    package init() {}
     package var body: some View {
         if AIResponseTrace.showsHistory {
             Text("AI trace")

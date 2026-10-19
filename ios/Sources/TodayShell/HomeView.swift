@@ -156,7 +156,7 @@ public struct HomeView: View {
         // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
         // open, and the sidebar is put back underneath this screen when it goes back.
         .fullScreenCover(item: $ask) { route in
-            AskView(thread: route.thread, onBack: { show in
+            AskScreen(thread: route.thread, toast: toast, onBack: { show in
                 // Put the sidebar back underneath, so closing or swiping right lands on it.
                 if route.fromSidebar { drawer.set(open: show, animated: false) }
             }, onAdded: { capture in
@@ -313,7 +313,7 @@ public struct HomeView: View {
         context.insert(OneTask(title: args[i + 1]))
     }
 
-    private var main: some View {
+    private var page: some View {
         VStack(spacing: 0) {
             topBar
                 .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
@@ -358,44 +358,11 @@ public struct HomeView: View {
             case .alarm: AlarmEditor(showUndo: toast.show).performanceDestination("alarm.editor")
             }
         }
-        .task {
-            if PerformanceTrace.enabled { PerformanceTrace.shared.mark("bootstrap_start") }
-            if let prepareData {
-                guard await prepareData(context) else { return }
-            } else { SampleData.insertIfNeeded(context) }
-            ListActions.ensureLists(in: context)
-            #if DEBUG
-            // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
-            let args = ProcessInfo.processInfo.arguments
-            if let i = args.firstIndex(of: "-debugDeleteSystemEvent"), i + 1 < args.count {
-                CalendarSync.shared.debugDeleteSystemEvents(titled: args[i + 1])
-            }
-            if let i = args.firstIndex(of: "-debugCreateSystemEvent"), i + 1 < args.count {
-                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: false)
-            }
-            if let i = args.firstIndex(of: "-debugCreateRepeatingEvent"), i + 1 < args.count {
-                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: true)
-            }
-            #endif
-            Self.seedUITestReminder(context)
-            importShared()
-            // The old SwiftData ledger is copied into the Activity store once; then expired activity is dropped.
-            #if DEBUG
-            LedgerMigration.seedLegacyForTests(context: context)
-            #endif
-            LedgerMigration.run(context: context)
-            ActivityCenter.importOutbox()
-            Ledger.prune(context)
-            #if DEBUG
-            // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
-            if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"), GrantStore.active(.planFreeTime, context: context) == nil {
-                GrantStore.grant(.planFreeTime, context: context)
-            }
-            #endif
-            autoPlan()
-            await FirstRun.calendar()
-            if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
-        }
+    }
+
+    private var main: some View {
+        page
+        .task { await bootstrap() }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {
             if PerformanceTrace.enabled {
@@ -482,6 +449,47 @@ public struct HomeView: View {
             tab = .today
             todayDay = day
         }
+    }
+
+    private func bootstrap() async {
+
+            if PerformanceTrace.enabled { PerformanceTrace.shared.mark("bootstrap_start") }
+            if let prepareData {
+                guard await prepareData(context) else { return }
+            } else { SampleData.insertIfNeeded(context) }
+            ListActions.ensureLists(in: context)
+            #if DEBUG
+            // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-debugDeleteSystemEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugDeleteSystemEvents(titled: args[i + 1])
+            }
+            if let i = args.firstIndex(of: "-debugCreateSystemEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: false)
+            }
+            if let i = args.firstIndex(of: "-debugCreateRepeatingEvent"), i + 1 < args.count {
+                CalendarSync.shared.debugCreateSystemEvent(titled: args[i + 1], repeating: true)
+            }
+            #endif
+            Self.seedUITestReminder(context)
+            importShared()
+            // The old SwiftData ledger is copied into the Activity store once; then expired activity is dropped.
+            #if DEBUG
+            LedgerMigration.seedLegacyForTests(context: context)
+            #endif
+            LedgerMigration.run(context: context)
+            ActivityCenter.importOutbox()
+            Ledger.prune(context)
+            #if DEBUG
+            // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
+            if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"), GrantStore.active(.planFreeTime, context: context) == nil {
+                GrantStore.grant(.planFreeTime, context: context)
+            }
+            #endif
+            autoPlan()
+            await FirstRun.calendar()
+            if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
+        
     }
 
     /// Rewrites the Lock Screen / Home Screen widget snapshot (skipped when nothing changed).

@@ -12,23 +12,24 @@ import SwiftUI
 // (`OneStore`); only Open Today brings the app forward. Phrases in Chinese: AppShortcuts.xcstrings.
 
 /// "Add a reminder in Today": a title or one sentence ("call Mom tomorrow at 6pm"), read by `CaptureParser`.
-struct AddReminderIntent: AppIntent {
-    static let title: LocalizedStringResource = "Add Reminder"
-    static let description = IntentDescription("Adds a reminder. Say it in one sentence, like “Call Mom tomorrow at 6pm”.")
-    static let openAppWhenRun = false
+public struct AddReminderIntent: AppIntent {
+    public init() {}
+    public static let title: LocalizedStringResource = "Add Reminder"
+    public static let description = IntentDescription("Adds a reminder. Say it in one sentence, like “Call Mom tomorrow at 6pm”.")
+    public static let openAppWhenRun = false
 
     @Parameter(title: "Reminder", requestValueDialog: "What’s the reminder?")
-    var text: String
+    public var text: String
 
     @Parameter(title: "Date")
-    var date: Date?
+    public var date: Date?
 
-    static var parameterSummary: some ParameterSummary {
+    public static var parameterSummary: some ParameterSummary {
         Summary("Add \(\.$text)") { \.$date }
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let capture = IntentReminder.capture(text: text, date: date) else {
             throw $text.needsValueError("What’s the reminder?")
         }
@@ -43,13 +44,14 @@ struct AddReminderIntent: AppIntent {
 }
 
 /// "What's next in Today": the next three items today (or tomorrow's first), as the Next Up widget picks them.
-struct WhatsNextIntent: AppIntent {
-    static let title: LocalizedStringResource = "What’s Next Today"
-    static let description = IntentDescription("Tells you the next three things today: events, reminders with a time, and alarms.")
-    static let openAppWhenRun = false
+public struct WhatsNextIntent: AppIntent {
+    public init() {}
+    public static let title: LocalizedStringResource = "What’s Next Today"
+    public static let description = IntentDescription("Tells you the next three things today: events, reminders with a time, and alarms.")
+    public static let openAppWhenRun = false
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+    public func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let context = OneStore.start().mainContext
         let now = Date.now
         let next = NextItems.select(from: IntentSupport.widgetItems(context, now: now), now: now)
@@ -59,43 +61,15 @@ struct WhatsNextIntent: AppIntent {
 }
 
 /// "Show my day in Today": opens the Today tab on today, through the same link the widgets use.
-struct OpenTodayIntent: AppIntent {
-    static let title: LocalizedStringResource = "Open Today"
-    static let description = IntentDescription("Opens the Today tab on today.")
-    static let openAppWhenRun = false
+public struct OpenTodayIntent: AppIntent {
+    public init() {}
+    public static let title: LocalizedStringResource = "Open Today"
+    public static let description = IntentDescription("Opens the Today tab on today.")
+    public static let openAppWhenRun = false
 
     @MainActor
-    func perform() async throws -> some IntentResult & OpensIntent {
+    public func perform() async throws -> some IntentResult & OpensIntent {
         .result(opensIntent: OpenURLIntent(WidgetLink.url()))
-    }
-}
-
-struct TodayShortcuts: AppShortcutsProvider {
-    static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: AddReminderIntent(), phrases: [
-            "Add a reminder in \(.applicationName)",
-            "Remind me with \(.applicationName)",
-            "New \(.applicationName) reminder",
-        ], shortTitle: "Add Reminder", systemImageName: "checklist")
-        // "Start a timer in Today for 10 minutes": the length is one of a few presets, so Siri hears it in one breath.
-        AppShortcut(intent: StartTimerForIntent(), phrases: [
-            "Start a timer in \(.applicationName) for \(\.$length)",
-            "Set a \(.applicationName) timer for \(\.$length)",
-        ], shortTitle: "Timer for…", systemImageName: "timer")
-        // Any other length: Siri asks "How long?" and reads the answer ("an hour and a half", "十分钟").
-        AppShortcut(intent: StartTimerIntent(), phrases: [
-            "Start a timer in \(.applicationName)",
-            "Start a \(.applicationName) timer",
-            "Set a \(.applicationName) timer",
-        ], shortTitle: "Start Timer", systemImageName: "timer")
-        AppShortcut(intent: WhatsNextIntent(), phrases: [
-            "What’s next in \(.applicationName)",
-            "What’s next today in \(.applicationName)",
-        ], shortTitle: "What’s Next", systemImageName: "list.bullet.clipboard")
-        AppShortcut(intent: OpenTodayIntent(), phrases: [
-            "Show my day in \(.applicationName)",
-            "Show today in \(.applicationName)",
-        ], shortTitle: "Open Today", systemImageName: "sun.max")
     }
 }
 

@@ -768,6 +768,7 @@ extension RemindersSync {
 
 /// Hidden labels a UI test reads: `syncDump.apple` and `syncDump.app`.
 package struct SyncDumpProbe: View {
+    package init() {}
     private let sync = RemindersSync.shared
 
     package var body: some View {

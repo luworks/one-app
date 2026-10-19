@@ -16,23 +16,24 @@ import SwiftUI
 // way for Siri to hand "set a timer" to a third-party clock app.
 
 /// "Start a timer in Today": asks "How long?" and reads the answer ("ten minutes", "an hour and a half", "十分钟").
-struct StartTimerIntent: AppIntent {
-    static let title: LocalizedStringResource = "Start Timer"
-    static let description = IntentDescription("Starts a countdown timer. Say how long, like “10 minutes” or “an hour and a half”. It rings like an alarm, even on Silent, and shows on the Today tab.")
-    static let openAppWhenRun = false
+public struct StartTimerIntent: AppIntent {
+    public init() {}
+    public static let title: LocalizedStringResource = "Start Timer"
+    public static let description = IntentDescription("Starts a countdown timer. Say how long, like “10 minutes” or “an hour and a half”. It rings like an alarm, even on Silent, and shows on the Today tab.")
+    public static let openAppWhenRun = false
 
     @Parameter(title: "Length", requestValueDialog: "How long?")
-    var length: String
+    public var length: String
 
     @Parameter(title: "Name")
-    var name: String?
+    public var name: String?
 
-    static var parameterSummary: some ParameterSummary {
+    public static var parameterSummary: some ParameterSummary {
         Summary("Start a \(\.$length) timer") { \.$name }
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let asked = TimerPhrase.seconds(from: length) else {
             throw $length.needsValueError("How long? For example, 10 minutes.")
         }
@@ -44,16 +45,16 @@ struct StartTimerIntent: AppIntent {
 }
 
 /// The lengths Siri can hear inside the phrase "Start a timer in Today for 10 minutes".
-enum TimerLength: String, AppEnum {
+public enum TimerLength: String, AppEnum {
     case m1, m2, m3, m5, m10, m15, m20, m25, m30, m45, m60, m90
 
-    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Length")
-    static let caseDisplayRepresentations: [TimerLength: DisplayRepresentation] = [
+    public static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Length")
+    public static let caseDisplayRepresentations: [TimerLength: DisplayRepresentation] = [
         .m1: "1 minute", .m2: "2 minutes", .m3: "3 minutes", .m5: "5 minutes", .m10: "10 minutes", .m15: "15 minutes",
         .m20: "20 minutes", .m25: "25 minutes", .m30: "30 minutes", .m45: "45 minutes", .m60: "1 hour", .m90: "90 minutes",
     ]
 
-    var seconds: Int {
+    public var seconds: Int {
         switch self {
         case .m1: 60
         case .m2: 120
@@ -71,23 +72,24 @@ enum TimerLength: String, AppEnum {
     }
 }
 
-struct StartTimerForIntent: AppIntent {
-    static let title: LocalizedStringResource = "Start Timer for…"
-    static let description = IntentDescription("Starts a countdown timer for one of the usual lengths.")
-    static let openAppWhenRun = false
+public struct StartTimerForIntent: AppIntent {
+    public init() {}
+    public static let title: LocalizedStringResource = "Start Timer for…"
+    public static let description = IntentDescription("Starts a countdown timer for one of the usual lengths.")
+    public static let openAppWhenRun = false
 
     @Parameter(title: "Length", requestValueDialog: "How long?")
-    var length: TimerLength
+    public var length: TimerLength
 
     @Parameter(title: "Name")
-    var name: String?
+    public var name: String?
 
-    static var parameterSummary: some ParameterSummary {
+    public static var parameterSummary: some ParameterSummary {
         Summary("Start a \(\.$length) timer") { \.$name }
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    public func perform() async throws -> some IntentResult & ProvidesDialog {
         .result(dialog: "\(try await TimerIntentSupport.start(seconds: length.seconds, name: name))")
     }
 }

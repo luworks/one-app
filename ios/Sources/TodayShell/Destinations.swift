@@ -9,6 +9,7 @@ import FeatureReminders
 import FeatureClock
 import FeatureSettings
 import FeatureActivity
+import FeatureAsk
 
 /// Editors stay over the current modal root; dismissing restores its original navigation state.
 package struct PlannerEditor: View {
@@ -40,6 +41,27 @@ package struct ShellSettings: View {
                 export: { try await ActivityCenter.export($0) },
                 legacyRowCount: { (try? context.fetchCount(FetchDescriptor<LedgerEntry>())) ?? 0 })) },
             shareDiagnostics: { AnyView(SystemFileSheet(url: $0)) }, reset: DataReset.run)
+    }
+}
+
+package struct AskScreen: View {
+    let thread: ChatThread?
+    let toast: UndoToast
+    let onBack: (Bool) -> Void
+    let onAdded: (Capture) -> Void
+    let onOpenDay: (Date) -> Void
+    @State private var editor: OpenedEntry?
+    @State private var didDismissEditor: (() -> Void)?
+    package var body: some View {
+        AskView(thread: thread, calendar: .shared, now: { TodayClock.now },
+            onBack: onBack, onAdded: onAdded, onOpenDay: onOpenDay,
+            onOpenTask: { task, completion in didDismissEditor = completion; editor = .task(task) },
+            onOpenAlarm: { alarm, completion in didDismissEditor = completion; editor = .alarm(alarm) })
+        .sheet(item: $editor, onDismiss: {
+            let completion = didDismissEditor
+            didDismissEditor = nil
+            completion?()
+        }) { PlannerEditor(destination: $0, toast: toast) }
     }
 }
 

@@ -10,6 +10,7 @@ import SwiftData
 @MainActor
 @Observable
 package final class UndoToast {
+    package init() {}
     package private(set) var message: String?
     private var undo: (() -> Void)?
     private var token = UUID()

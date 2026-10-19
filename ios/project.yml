@@ -34,6 +34,9 @@
         {
           "path": "PrivacyInfo.xcprivacy",
           "buildPhase": "resources"
+        },
+        {
+          "path": "Sources/One/TodayShortcuts.swift"
         }
       ],
       "dependencies": [
@@ -170,6 +173,9 @@
         },
         {
           "path": "Development/Support"
+        },
+        {
+          "path": "Sources/One/TodayShortcuts.swift"
         }
       ],
       "dependencies": [

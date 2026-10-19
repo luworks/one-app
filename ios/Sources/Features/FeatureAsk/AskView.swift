@@ -153,7 +153,59 @@ package struct AskView: View {
 
     package var body: some View {
         NavigationStack {
-            ScrollViewReader { proxy in
+            conversation
+            .safeAreaInset(edge: .bottom) { inputArea }
+            .navigationTitle("AI")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { close() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Close")
+                }
+            }
+            .task {
+                // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
+                if messages.isEmpty { focused = true }
+                refreshCardTitles()
+                Understander.prewarm()
+            }
+            .onChange(of: emittedTurn) { _, token in
+                if AIResponseTrace.enabled, let token { AIResponseTrace.shared.stage("on_change_enter", token: token) }
+                guard let token, token == generationToken, !thinking, responseSignature != responseBaseline else { return }
+                AIResponseTrace.shared.ready(token)
+                responseTurn = token
+            }
+            .onDisappear {
+                closeOpenCards("ignored")
+                if AIResponseTrace.enabled { AIResponseTrace.shared.cancel(generationToken) }
+            }
+        }
+        .background(Color(.systemBackground).ignoresSafeArea())
+        // A soft edge on the left while the screen slides away, like the drawer's page.
+        .background(alignment: .leading) {
+            LinearGradient(colors: [.clear, .black.opacity(0.10)], startPoint: .leading, endPoint: .trailing)
+                .frame(width: 14)
+                .offset(x: -14)
+                .ignoresSafeArea()
+                .opacity(backDrag > 0 ? 1 : 0)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { screenWidth = $0 }
+        .offset(x: backDrag)
+        .simultaneousGesture(backSwipe)
+        // `onEnded` is skipped when the system cancels a drag; settle a claimed one by position.
+        .onChange(of: backActive) { _, isActive in
+            guard !isActive else { return }
+            Task { @MainActor in
+                if backClaim == true { settleBack(projected: backDrag) } else { backClaim = nil }
+            }
+        }
+        // Clear, so what this screen goes back to (the sidebar or the page) shows underneath during a back swipe.
+        .presentationBackground(.clear)
+        .overlay(alignment: .topTrailing) { AIResponseTraceHistory() }
+    }
+
+    private var conversation: some View {
+        ScrollViewReader { proxy in
                 ScrollView {
                     if messages.isEmpty {
                         emptyState
@@ -205,54 +257,6 @@ package struct AskView: View {
                 .onChange(of: proposals) { persistCards() }
 
             }
-            .safeAreaInset(edge: .bottom) { inputArea }
-            .navigationTitle("AI")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { close() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Close")
-                }
-            }
-            .task {
-                // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
-                if messages.isEmpty { focused = true }
-                refreshCardTitles()
-                Understander.prewarm()
-            }
-            .onChange(of: emittedTurn) { _, token in
-                if AIResponseTrace.enabled, let token { AIResponseTrace.shared.stage("on_change_enter", token: token) }
-                guard let token, token == generationToken, !thinking, responseSignature != responseBaseline else { return }
-                AIResponseTrace.shared.ready(token)
-                responseTurn = token
-            }
-            .onDisappear {
-                closeOpenCards("ignored")
-                if AIResponseTrace.enabled { AIResponseTrace.shared.cancel(generationToken) }
-            }
-        }
-        .background(Color(.systemBackground).ignoresSafeArea())
-        // A soft edge on the left while the screen slides away, like the drawer's page.
-        .background(alignment: .leading) {
-            LinearGradient(colors: [.clear, .black.opacity(0.10)], startPoint: .leading, endPoint: .trailing)
-                .frame(width: 14)
-                .offset(x: -14)
-                .ignoresSafeArea()
-                .opacity(backDrag > 0 ? 1 : 0)
-        }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { screenWidth = $0 }
-        .offset(x: backDrag)
-        .simultaneousGesture(backSwipe)
-        // `onEnded` is skipped when the system cancels a drag; settle a claimed one by position.
-        .onChange(of: backActive) { _, isActive in
-            guard !isActive else { return }
-            Task { @MainActor in
-                if backClaim == true { settleBack(projected: backDrag) } else { backClaim = nil }
-            }
-        }
-        // Clear, so what this screen goes back to (the sidebar or the page) shows underneath during a back swipe.
-        .presentationBackground(.clear)
-        .overlay(alignment: .topTrailing) { AIResponseTraceHistory() }
     }
 
     // MARK: Going back

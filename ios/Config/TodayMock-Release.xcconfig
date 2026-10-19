@@ -35,4 +35,4 @@ TARGETED_DEVICE_FAMILY = 1
 
 SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) TODAY_MOCK
 
-OTHER_SWIFT_FLAGS = $(inherited) -package-name TodayModules
+OTHER_SWIFT_FLAGS = $(inherited) -package-name ios
