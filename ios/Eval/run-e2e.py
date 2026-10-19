@@ -340,7 +340,16 @@ def main(argv=None):
                 before = time.monotonic()
                 # Use the existing owned-process deadline, leaving time for the
                 # runner to close its logs and simulator before the outer limit.
-                result = execute(ROOT, command, timeout=600)
+                try:
+                    result = execute(ROOT, command, timeout=600)
+                except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+                    log = getattr(error, "process_log", None)
+                    if log and Path(log).is_file():
+                        (output / "build.log").write_bytes(Path(log).read_bytes())
+                    summary["stages"]["build"] = 1
+                    summary["build_reason"] = "process_error"
+                    summary["build_seconds"] = round(time.monotonic() - before, 3)
+                    raise
                 (output / "build.log").write_bytes(result.log.read_bytes())
                 summary["stages"]["build"] = result.returncode
                 summary["build_reason"] = result.reason

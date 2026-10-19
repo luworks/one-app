@@ -374,3 +374,47 @@ DD path from the linked worktree. The first helper failure was a misplaced test
 method tail (`NameError`), fixed without weakening assertions; its raw log is
 retained. One focused cache trust review is complete with no unresolved finding.
 No local native build/simulator, full collection or physical-device run occurred.
+
+### Iteration 8: preserve process-failure attribution
+
+[Run 39304181194](https://github.com/luworks/one-app/actions/runs/39304181194)
+completed **failure** at integrated SHA `d693deb8c7ef6519bb1bd400c227de610b36f4e8`.
+Creation to failed required completion was **1,658 seconds**, including queue.
+Core UI executed zero tests with all seven missing; no UI assertion failed.
+Its 629.229-second runner records boot, a prebuild command and successful owned
+simulator shutdown, but no completed build stage or compiler log. The reported
+`[Errno 1] Operation not permitted` has no syscall traceback. Neither compiler
+failure nor cache causality is established by this receipt. The original
+43,756-byte ZIP, command logs and closed reports remain in primary results.
+
+Integration passed 13/13 and snapshots 6/6; their cold build processes took
+423.251s and 484.377s, fresh test commands 55.949s and 57.850s. Ordinary product
+build passed three products (82.314s process). All three module restores missed:
+core UI therefore restored no cache bytes. Integration saved 95,649,777 compressed
+bytes in 3.343s; snapshots saved 152,204,713 bytes in 9.591s. Planning/restore
+steps took respectively 0.881/0.518s, 0.427/0.384s and 0.396/0.412s for
+integration, snapshots and core UI. No warm restore benefit or net saving exists
+yet; the experiment must still justify its cost before adoption.
+
+A reproduced runner defect could replace an original process failure with a
+cleanup exception, bypass journal indexing and omit the partial build log from
+the closed failure artifact. Process cleanup now preserves the first exception,
+redacted traceback, owned process PID, elapsed time, reason and child exit;
+`killpg` errors identify the exact group/signal. A denied group signal remains
+a failure. Cleanup may kill/reap only the exact Popen child it created and waits
+boundedly; it does not ignore EPERM, discover other PIDs or elevate permissions.
+Core UI retains this partial log and failed build stage before shutdown, with
+no test dispatch or reuse authorization. This repairs evidence loss and bounded
+cleanup, **not a proven repair of the remote EPERM trigger**. The next integrated
+run must provide its actual syscall attribution if the failure recurs.
+
+`./dev test helpers` passed 131 host regressions in 10.950s; `./dev lint` and
+diff checks passed. Coverage includes injected EPERM with a real owned Python
+child, unrelated-process survival, timeout cleanup, spawn failure and runner
+partial-log retention. The first new regression caught use of Python 3.11-only
+exception notes on the supported hosted-system Python 3.9 path; the diagnostic
+now uses compatible OSError context. First and final logs are retained. No local
+native build, simulator, axe or physical-device work ran. Product, AI, selectors,
+assertions, baseline and timeout authorities are unchanged. The <=300s goal and
+current integrated-head acceptance remain open; PR104's earlier green run does
+not validate this candidate or newer main changes.

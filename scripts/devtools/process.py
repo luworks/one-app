@@ -9,6 +9,7 @@ import signal
 import subprocess
 import threading
 import time
+import traceback
 import uuid
 
 from .core import canonical_root
@@ -99,6 +100,8 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
     proc = None
     group_killed = False
     reason, code = 'exited', 1
+    failure = None
+    pending = b''
     start = time.monotonic()
     evidence.record(repr(evidence.redact.arguments(argv)), 'running')
     try:
@@ -152,24 +155,49 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
             if reason != 'exited':
                 code = 124 if reason == 'timeout' else 130
     except BaseException as error:
+        failure = error
+    finally:
+        # Cleanup failures must not erase the original operation or its log.
+        cleanup_errors = []
         if proc:
             if not group_killed:
-                _signal_group(proc.pid, signal.SIGKILL)
-                group_killed = True
-            proc.wait()
-        evidence.record(type(error).__name__ + ': ' + str(error), 'failed')
-        raise
-    finally:
-        # Restore caller state even if final cleanup or journal indexing fails.
-        for sig, handler in handlers.items():
-            signal.signal(sig, handler)
-        if proc:
+                try:
+                    _signal_group(proc.pid, signal.SIGKILL)
+                except OSError as error:
+                    cleanup_errors.append(error)
+                    # The Popen child is ours; never discover or signal other PIDs.
+                    if proc.poll() is None:
+                        try:
+                            proc.kill()
+                        except OSError as child_error:
+                            cleanup_errors.append(child_error)
+            try:
+                proc.wait(timeout=max(grace, 1))
+            except subprocess.TimeoutExpired as error:
+                cleanup_errors.append(error)
             if proc.stdout:
                 proc.stdout.close()
-            if not group_killed:
-                _signal_group(proc.pid, signal.SIGKILL)
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
+        if failure is None and cleanup_errors:
+            failure = cleanup_errors.pop(0)
+        if failure is not None:
+            # Keep syscall/line attribution and partial compiler output together.
+            diagnostic = (f'Owned process pid={proc.pid if proc else None}; reason={reason}; '
+                          f'child_exit={proc.returncode if proc else None}; '
+                          f'elapsed={time.monotonic() - start:.3f}s\n')
+            diagnostic += ''.join(traceback.format_exception(type(failure), failure, failure.__traceback__))
+            for error in cleanup_errors:
+                diagnostic += '\nCleanup failure: ' + repr(error)
+            with evidence.path.open('a', encoding='utf-8') as log:
+                log.write(evidence.redact(pending.decode('utf-8', errors='replace')))
+                log.write('\n' + evidence.redact(diagnostic))
+            failure.process_log = evidence.path
+            evidence.record(diagnostic, 'failed')
         if evidence.path.exists():
             evidence.journal.artifact(evidence.session, evidence.path)
+    if failure is not None:
+        raise failure
     evidence.record(f'{reason}; exit={code}; log={evidence.path}',
                     'passed' if code == 0 else 'interrupted' if reason == 'cancelled' else 'failed')
     return ProcessResult(code, reason, time.monotonic() - start, evidence.path)
@@ -180,3 +208,7 @@ def _signal_group(pid, sig):
         os.killpg(pid, sig)
     except ProcessLookupError:
         pass
+    except OSError as error:
+        detail = f'os.killpg(pgid={pid}, signal={sig}); owned start_new_session child'
+        error.strerror = f'{error.strerror}; {detail}'
+        raise

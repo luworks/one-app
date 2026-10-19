@@ -24,7 +24,10 @@ class CoreUIExecutionTests(unittest.TestCase):
     def test_cached_products_still_boot_once_and_execute_fresh_tests(self):
         self.run_ci_ui(cached=True)
 
-    def run_ci_ui(self, build_code=0, inventory_error=False, cached=False):
+    def test_process_error_preserves_partial_build_log_and_fails_before_tests(self):
+        self.run_ci_ui(process_error=True)
+
+    def run_ci_ui(self, build_code=0, inventory_error=False, cached=False, process_error=False):
         path = Path(__file__).resolve().parents[2] / 'ios/Eval/run-e2e.py'
         spec = importlib.util.spec_from_file_location('ci_ui_runner', path)
         runner = importlib.util.module_from_spec(spec)
@@ -67,6 +70,10 @@ class CoreUIExecutionTests(unittest.TestCase):
                 self.assertEqual(timeout, 600)
                 log = base / 'owned-build.log'
                 logged(command, log)
+                if process_error:
+                    error = PermissionError(1, 'Operation not permitted')
+                    error.process_log = log
+                    raise error
                 return SimpleNamespace(returncode=build_code, reason='timeout' if build_code == 124 else 'exited', log=log)
 
             with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'core-ui'}), \
@@ -97,6 +104,14 @@ class CoreUIExecutionTests(unittest.TestCase):
                 self.assertEqual(code, 0)
                 self.assertEqual(sum(c[:3] == ['xcrun', 'simctl', 'boot'] for c in calls), 1)
                 self.assertFalse(any(c[:2] == ['xcodebuild', 'build-for-testing'] for c in calls))
+                return
+            if process_error:
+                self.assertEqual(code, 1)
+                summary = (base / 'output/summary.json').read_text()
+                self.assertIn('"build_reason": "process_error"', summary)
+                self.assertIn('"build": 1', summary)
+                self.assertEqual((base / 'output/build.log').read_text(), 'synthetic process completed')
+                self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in calls))
                 return
             if build_code:
                 self.assertEqual(code, 1)
@@ -129,4 +144,12 @@ def load_tests(loader, tests, pattern):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         suite.addTests(loader.loadTestsFromModule(module))
+    path = Path(__file__).resolve().parents[1] / 'devtools/test_foundation.py'
+    spec = importlib.util.spec_from_file_location('ci_process_regressions', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for name in ('test_group_permission_failure_retains_syscall_log_and_reaps_owned_child',
+                 'test_timeout_kills_owned_descendant_and_leaves_unrelated_child',
+                 'test_spawn_failure_is_recorded_and_handler_restored'):
+        suite.addTest(module.FoundationTests(name))
     return suite
