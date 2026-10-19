@@ -432,7 +432,9 @@ private struct RoundButton: View {
     }
 
     /// Components above 1 are 0-255 values; at most 1 are 0-1 fractions.
-    private static func adaptive(light: (Double, Double, Double), dark: (Double, Double, Double)) -> Color {
+    // SwiftUI can resolve dynamic colors on its asynchronous renderer.
+    // This pure color factory must not inherit View's main-actor isolation.
+    nonisolated private static func adaptive(light: (Double, Double, Double), dark: (Double, Double, Double)) -> Color {
         func ui(_ c: (Double, Double, Double)) -> UIColor {
             let k = max(c.0, c.1, c.2) > 1 ? 255.0 : 1.0
             return UIColor(red: c.0 / k, green: c.1 / k, blue: c.2 / k, alpha: 1)

@@ -390,7 +390,10 @@
           "path": "Development/Support/TestDataset.swift"
         },
         {
-          "path": "One"
+          "path": "One",
+          "excludes": [
+            "AppShortcuts.xcstrings"
+          ]
         },
         {
           "path": "../tests/fixtures/today-dataset.json",
