@@ -141,6 +141,115 @@ final class Legacy: XCTestCase {
 
 
 
+class CurrentBatchAuthority(unittest.TestCase):
+    @staticmethod
+    def source(*entries):
+        return {'logic': [{'target': target, 'suite': suite,
+                           'methods': [{'name': method, 'framework': 'SwiftTesting'}
+                                       for method in methods]}
+                          for target, suite, methods in entries]}
+
+    def test_native_host_target_suite_collision_and_explicit_wrong_targets(self):
+        for lane in ('unit', 'integration', 'snapshot', 'ui'):
+            target = c.lane_settings(lane)['target']
+            expected = target + '/SceneRegistryTests/check'
+            attempts = c.xcresult_attempts(tree(('SceneRegistryTests/check()', 'Passed', '')), lane)
+            self.assertEqual(attempts[0]['test'], expected)
+            for wrong in ('TodayUITests/SceneRegistryTests/check',
+                          'SceneRegistryTests/SceneRegistryTests/check'):
+                if wrong == expected:
+                    continue
+                result = c.report([expected], c.xcresult_attempts(tree((wrong, 'Passed', '')), lane))
+                self.assertIn('missing_tests', result['errors'])
+        self.assertEqual(c.canonical('TodayUITests/check()', 'unit'), 'TodayUITests/check')
+
+    def test_swift_testing_suite_batches_use_authoritative_host_inventory(self):
+        source = self.source(('TodayTests', 'First', ['same']), ('SceneRegistryTests', 'Second', ['same']))
+        text = """◇ Suite First started.
+◇ Test same() started.
+✔ Test same() passed after 0.1 seconds.
+✔ Suite First passed after 0.1 seconds.
+◇ Suite Second started.
+◇ Test same() started.
+✔ Test same() passed after 0.1 seconds.
+✔ Suite Second passed after 0.1 seconds.
+"""
+        attempts = c.log_attempts(text, source=source)
+        self.assertEqual([a['test'] for a in attempts], ['TodayTests/First/same', 'SceneRegistryTests/Second/same'])
+        self.assertEqual(c.report(c.available(source, 'logic'), attempts)['status'], 'passed')
+
+    def test_concurrent_distinct_methods_resolve_without_latest_suite_guess(self):
+        source = self.source(('TodayTests', 'First', ['one']), ('SceneRegistryTests', 'Second', ['two']))
+        text = """◇ Suite First started.
+◇ Test one() started.
+◇ Suite Second started.
+◇ Test two() started.
+✔ Test one() passed after 0.1 seconds.
+✔ Suite First passed after 0.1 seconds.
+✔ Test two() passed after 0.1 seconds.
+"""
+        self.assertEqual(c.report(c.available(source, 'logic'), c.log_attempts(text, source=source))['status'], 'passed')
+
+    def test_ambiguous_unknown_and_wrong_suite_cannot_be_rescued_by_unique_method(self):
+        cases = [
+            (self.source(('TodayTests', 'Same', ['check']), ('SceneRegistryTests', 'Same', ['check'])),
+             '◇ Suite Same started.\n✔ Test check() passed after 0.1 seconds.'),
+            (self.source(('TodayTests', 'First', ['check']), ('TodayTests', 'Second', ['check'])),
+             '◇ Suite First started.\n◇ Suite Second started.\n✔ Test check() passed after 0.1 seconds.'),
+            (self.source(('TodayTests', 'Real', ['check'])),
+             '◇ Suite Fake started.\n✔ Test check() passed after 0.1 seconds.'),
+            (self.source(('TodayTests', 'Real', ['check'])),
+             '◇ Suite Real started.\n◇ Suite Fake started.\n✔ Test check() passed after 0.1 seconds.'),
+            (self.source(('TodayTests', 'Real', ['check'])),
+             '◇ Suite Real started.\n✔ Test unknown() passed after 0.1 seconds.'),
+        ]
+        for source, text in cases:
+            with self.subTest(text=text):
+                result = c.report(c.available(source, 'logic'), c.log_attempts(text, source=source))
+                self.assertEqual(result['status'], 'failed')
+                self.assertIn('parser_error', result['errors'])
+        source = self.source(('TodayTests', 'Real', ['check']))
+        for identifier in ('TodayUITests/Real/check()', 'TodayUITests/check()',
+                           '-[TodayUITests.Real check]'):
+            terminal = ("Test Case '" + identifier + "' passed (0.1 seconds)." if identifier.startswith('-[')
+                        else '✔ Test ' + identifier + ' passed after 0.1 seconds.')
+            result = c.report(c.available(source, 'logic'), c.log_attempts(
+                '◇ Suite Real started.\n' + terminal, source=source))
+            self.assertIn('missing_tests', result['errors'])
+
+    def test_concurrent_same_method_and_first_failure_remain_failures(self):
+        source = self.source(('TodayTests', 'First', ['check']), ('SceneRegistryTests', 'Second', ['check']))
+        text = """◇ Suite First started.
+◇ Test check() started.
+◇ Suite Second started.
+◇ Test check() started.
+✘ Test check() failed after 0.1 seconds.
+✔ Test check() passed after 0.1 seconds.
+"""
+        result = c.report(c.available(source, 'logic'), c.log_attempts(text, source=source))
+        self.assertIn('parser_error', result['errors'])
+        self.assertIn('test_failure', result['errors'])
+        self.assertEqual([a['status'] for a in result['attempts']], ['failed', 'passed'])
+        source = self.source(('SceneRegistryTests', 'First', ['check']))
+        text = '◇ Suite First started.\n✘ Test check() failed after 0.1 seconds.\n✔ Test check() passed after 0.1 seconds.'
+        result = c.report(c.available(source, 'logic'), c.log_attempts(text, source=source))
+        self.assertIn('test_failure', result['errors'])
+        self.assertEqual(result['missing'], [])
+
+    def test_xctest_skip_reasons_are_exact_and_consumed_per_attempt(self):
+        text = """Test Case '-[TodayTests.Real testOne]' started.
+/path/Test.swift:12: -[TodayTests.Other testOne] : Test skipped - unrelated
+/path/Test.swift:13: -[TodayTests.Real testOne] : Test skipped - set OPT_IN=1
+Test Case '-[TodayTests.Real testOne]' skipped (0.001 seconds).
+Test Case '-[TodayTests.Real testOne]' passed (0.001 seconds).
+Test Case '-[TodayTests.Real testOne]' skipped (0.001 seconds).
+"""
+        attempts = c.log_attempts(text)
+        self.assertEqual([a['reason'] for a in attempts], ['set OPT_IN=1', '', ''])
+        self.assertEqual(len(attempts), 3)
+        self.assertEqual(c.log_attempts('↷ Test skippedModern() skipped: disabled')[0]['reason'], 'disabled')
+
+
 class RunnerIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -242,8 +351,9 @@ class LaneAuthority(unittest.TestCase):
     def test_real_authorities_select_executable_methods(self):
         source = c.inventory()
         integration = c.plan(['integration'], source)
-        self.assertEqual(integration['selectors']['integration'], [
-            'TodayTests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation'])
+        self.assertIn('TodayTests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation',
+                      integration['selectors']['integration'])
+        self.assertCountEqual(integration['selectors']['integration'], c.available(source, 'integration'))
         self.assertFalse(integration['selectors']['ui'])
         snapshots = c.plan(['snapshot'], source)
         self.assertIn('TodaySnapshotTests/NativeSnapshotTests/testHealthDataPerturbationChangesPixels',

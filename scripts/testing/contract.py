@@ -100,9 +100,9 @@ def inventory(root=ROOT):
 def canonical(value, lane='ui'):
     config = lane_settings(lane)
     value = value.strip()
-    objc = re.fullmatch(r'-\[(?:\w+\.)?(\w+) (\w+)\]', value)
+    objc = re.fullmatch(r'-\[(?:(\w+)\.)?(\w+) (\w+)\]', value)
     if objc:
-        value = '/'.join(objc.groups())
+        value = '/'.join(part for part in objc.groups() if part)
     value = re.sub(r'\([^)]*\)', '', value).replace('.', '/')
     parts = value.split('/')
     aliases = {'OneUITests': TARGET, 'OneLogicTests': SETTINGS['logic_target']}
@@ -113,6 +113,13 @@ def canonical(value, lane='ui'):
     host_targets = set(config.get('source_targets', {}).values())
     if len(parts) == 2 and parts[0] in host_targets:
         parts.insert(0, parts[0])
+    # A host-only target name can also be a native suite. Native two-part
+    # leaves are suite/method; explicit target/suite/method stays untouched.
+    all_host_targets = {t for c in SETTINGS['lanes'].values()
+                        for t in c.get('source_targets', {}).values()}
+    if (len(parts) == 2 and config['runner'] == 'xcodebuild'
+            and parts[0] in all_host_targets and parts[0] != config['target']):
+        parts.insert(0, config['target'])
     if parts[0] not in targets:
         parts.insert(0, config['target'])
     if any(not re.fullmatch(r'\w+', part) for part in parts):
@@ -238,19 +245,82 @@ def xcresult_attempts(data, lane='ui'):
     return attempts
 
 
-def log_attempts(text, lane='logic'):
-    attempts = []
+def log_attempts(text, lane='logic', source=None):
+    """Parse terminals; optional source inventory authorizes Swift Testing identity.
+
+    Active suites are a set, never a stack: Swift Testing runs suites concurrently.
+    Bind at method start where possible and retain unresolved identity as an error
+    so report's legacy unique-method fallback cannot invent coverage.
+    """
+    attempts, active, pending, skip_reasons = [], Counter(), {}, {}
+    known = available(source, lane) if source is not None else None
+
+    def resolve(identifier):
+        test = canonical(identifier, lane)
+        if known is None:
+            return {'test': test}
+        # Only unqualified Swift Testing methods need suite context. Explicit
+        # targets/suites (including wrong ones) must never be reassigned.
+        if re.fullmatch(r'\w+(?:\([^)]*\))?', identifier):
+            method = re.sub(r'\([^)]*\)', '', identifier)
+            def in_suite(test, suite):
+                parts = test.split('/')
+                return '/'.join(parts[:-1]) == suite or (len(parts) == 3 and parts[1] == suite)
+
+            # An unknown concurrently active suite could own the same bare
+            # method. Do not let another known suite lend it an identity.
+            unknown_suite = any(not any(in_suite(k, suite) for k in known) for suite in active)
+            candidates = [] if unknown_suite else [
+                k for k in known if k.split('/')[-1] == method and
+                (any(in_suite(k, suite) for suite in active) if active
+                 else k.split('/')[0] == lane_settings(lane)['target'])]
+            if len(candidates) == 1:
+                return {'test': candidates[0]}
+            return {'test': test, 'resolution_error': 'ambiguous_or_unknown_method_context'}
+        return {'test': test}
+
     for line in text.splitlines():
-        match = re.search(r"Test Case '(.*?)' (passed|failed|skipped)", line)
-        if not match:
-            match = re.search(r'Test (?:"([^"\n]+)"|([^\s]+)) (passed|failed|skipped)(?: after|:|\s|$)', line)
-            if match:
-                match = (match[1] or match[2], match[3])
+        suite = re.search(r'\bSuite (?:"([^"\n]+)"|([^\s]+)) (started|passed|failed|skipped)(?: after|:|\s|[.]|$)', line)
+        if suite:
+            name = (suite[1] or suite[2]).replace('.', '/')
+            if suite[3] == 'started':
+                active[name] += 1
+            elif active[name] > 1:
+                active[name] -= 1
+            else:
+                active.pop(name, None)
+            continue
+        skip = re.search(r'(-\[[^]\n]+\])\s*:\s*Test skipped - (.*)$', line)
+        if skip:
+            skip_reasons[canonical(skip[1], lane)] = skip[2].strip()
+            continue
+        xctest = re.search(r"Test Case '(.*?)' (started|passed|failed|skipped)", line)
+        swift = None if xctest else re.search(
+            r'Test (?:"([^"\n]+)"|([^\s]+)) (started|passed|failed|skipped)(?: after|:|\s|[.]|$)', line)
+        if not xctest and not swift:
+            continue
+        identifier, status = (xctest[1], xctest[2]) if xctest else (swift[1] or swift[2], swift[3])
+        if status == 'started':
+            if xctest:
+                skip_reasons.pop(canonical(identifier, lane), None)
+            else:
+                bound = resolve(identifier)
+                waiting = pending.setdefault(identifier, [])
+                if waiting:
+                    for entry in [*waiting, bound]:
+                        entry['resolution_error'] = 'concurrent_indistinguishable_methods'
+                waiting.append(bound)
+            continue
+        if xctest:
+            identity = {'test': canonical(identifier, lane)}
+            reason = skip_reasons.pop(identity['test'], '')
         else:
-            match = (match[1], match[2])
-        if match:
-            attempts.append({'test': canonical(match[0], lane), 'status': match[1],
-                             'reason': '', 'source': 'log'})
+            waiting = pending.get(identifier, [])
+            identity = waiting.pop(0) if waiting else resolve(identifier)
+            reason_match = re.search(r'\bskipped:\s*(.*)$', line)
+            reason = reason_match[1].strip() if reason_match else ''
+        attempts.append({**identity, 'status': status,
+                         'reason': reason if status == 'skipped' else '', 'source': 'log'})
     return attempts
 
 
@@ -264,6 +334,8 @@ def report(expected, attempts, exit_code=0, allowed_skips=(), skip_rules=(), raw
     # expected method; ambiguity remains missing rather than inventing coverage.
     attempts = [dict(a) for a in attempts]
     for attempt in attempts:
+        if attempt.get('resolution_error'):
+            errors.append('parser_error')
         if not isinstance(attempt.get('test'), str) or attempt.get('status') not in ('passed', 'failed', 'skipped'):
             errors.append('parser_error')
             attempt['parser_detail'] = repr(attempt)
@@ -271,7 +343,8 @@ def report(expected, attempts, exit_code=0, allowed_skips=(), skip_rules=(), raw
                 attempt['test'] = ''
             if attempt.get('status') not in ('passed', 'failed', 'skipped'):
                 attempt['status'] = 'unknown'
-        if attempt['test'] not in expected and len(attempt['test'].split('/')) == 2:
+        if (not attempt.get('resolution_error') and attempt['test'] not in expected
+                and len(attempt['test'].split('/')) == 2):
             method = attempt['test'].split('/')[-1]
             candidates = [test for test in expected if test.split('/')[-1] == method
                           and test.split('/')[0] == attempt['test'].split('/')[0]]
