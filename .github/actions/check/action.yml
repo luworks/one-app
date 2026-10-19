@@ -1,0 +1,21 @@
+name: Today planned dev check
+description: Run a single integrated-SHA check through the integration-owned dev adapter
+inputs:
+  lane:
+    description: Fixed CI lane name
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        TODAY_LANE: ${{ inputs.lane }}
+      run: python3 scripts/ci/run.py "$TODAY_LANE"
+    - if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: today-${{ inputs.lane }}-${{ github.sha }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/today-artifacts-${{ inputs.lane }}/
+        if-no-files-found: warn
+        retention-days: 7
+        include-hidden-files: false

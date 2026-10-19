@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: swift
+    directory: /ios
+    schedule:
+      interval: weekly
+  # Integration adds and locks Gemfile here if fastlane is adopted.
+  - package-ecosystem: bundler
+    directory: /
+    schedule:
+      interval: weekly
