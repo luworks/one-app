@@ -10,32 +10,32 @@ import TodayPlatform
 /// `CalendarSync`) and the cached travel times. Reads only; nothing leaves the device and nothing is written.
 @MainActor
 enum AskSuggestionContextBuilder {
-    static func build(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], context: ModelContext, calendarSync: CalendarSync,
-                      now: Date, calendar cal: Calendar = .current) -> SuggestionContext {
+    static func build(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], context: ModelContext, calendarSync: any CalendarService, travel: any TravelTimeProviding, locale: Locale,
+                      now: Date, calendar cal: Calendar) -> SuggestionContext {
         let today = cal.startOfDay(for: now)
         let tomorrow = cal.date(byAdding: .day, value: 1, to: today) ?? now
         let afterTomorrow = cal.date(byAdding: .day, value: 2, to: today) ?? now
 
         var ctx = SuggestionContext(now: now)
-        ctx.systemIsChinese = Locale.preferredLanguages.first?.hasPrefix("zh") ?? false
+        ctx.systemIsChinese = locale.language.languageCode?.identifier == "zh"
 
         // Events: Today's own and the system calendar's (mirrored copies are counted once).
         let mirrored = Set(events.compactMap(\.externalID))
         func dayEvents(_ day: Date) -> [SuggestionContext.Event] {
             var list: [SuggestionContext.Event] = []
             for e in events where !e.isAllDay {
-                for start in e.occurs(on: day, calendar: cal) {
+                for start in askOccurrences(e, on: day, calendar: cal) {
                     let place = calendarSync.place(forExternalID: e.externalID)
                     list.append(.init(title: e.title, start: start, end: start.addingTimeInterval(e.duration),
                                       location: place?.address ?? "",
-                                      travelMinutes: travel(id: e.externalID ?? "", start: start, place: place, now: now),
+                                      travelMinutes: travelMinutes(provider: travel, id: e.externalID ?? "", start: start, place: place, now: now),
                                       attendees: calendarSync.audience(externalID: e.externalID)?.attendees ?? 0,
                                       repeats: e.repeats != nil))
                 }
             }
             for e in calendarSync.events(on: day, excluding: mirrored) where !e.isAllDay {
                 list.append(.init(title: e.title, start: e.start, end: max(e.end, e.start), location: e.location,
-                                  travelMinutes: travel(id: e.eventIdentifier, start: e.start, place: e.place, now: now),
+                                  travelMinutes: travelMinutes(provider: travel, id: e.eventIdentifier, start: e.start, place: e.place, now: now),
                                   attendees: 0, repeats: e.repeats))
             }
             return list.sorted { $0.start < $1.start }
@@ -85,9 +85,9 @@ enum AskSuggestionContextBuilder {
     }
 
     /// Cached travel minutes only: never starts a lookup or a permission prompt.
-    private static func travel(id: String, start: Date, place: TravelPlace?, now: Date) -> Int? {
+    private static func travelMinutes(provider: any TravelTimeProviding, id: String, start: Date, place: TravelPlace?, now: Date) -> Int? {
         guard let place, !id.isEmpty else { return nil }
-        return TravelTimes.shared.seconds(eventID: id, start: start, isAllDay: false, place: place, now: now, askPermission: false)
+        return provider.seconds(eventID: id, start: start, isAllDay: false, place: place, now: now, askPermission: false)
             .map(TravelTime.minutes)
     }
 }

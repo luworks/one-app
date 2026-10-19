@@ -9,12 +9,12 @@ import TodayCore
 enum EditCandidates {
     typealias Result = (items: [EditItem], tasks: [String: OneTask], events: [String: OneEvent])
 
-    static func build(events: [OneEvent], tasks: [OneTask], calendarSync: CalendarSync, now: Date = .now, calendar cal: Calendar = .current) -> Result {
+    static func build(events: [OneEvent], tasks: [OneTask], calendarSync: any CalendarService, now: Date, calendar cal: Calendar) -> Result {
         let window = DateInterval(start: cal.startOfDay(for: now), end: cal.date(byAdding: .day, value: 8, to: cal.startOfDay(for: now)) ?? now)
         var items: [EditItem] = []
         var taskByID: [String: OneTask] = [:]
         var eventByID: [String: OneEvent] = [:]
-        let eventPairs = events.compactMap { e in e.occurrences(in: window).first.map { (e, $0) } }
+        let eventPairs = events.compactMap { e in Recurrence.occurrences(start: e.start, duration: e.duration, rule: e.repeats, in: window, calendar: cal).first.map { (e, $0) } }
             .sorted { $0.1 < $1.1 }.prefix(8)
         for (i, pair) in eventPairs.enumerated() {
             let id = "e\(i + 1)"

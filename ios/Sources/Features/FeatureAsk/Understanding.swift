@@ -9,14 +9,14 @@ import FoundationModels
 /// Neither model step may change scheduling fields, and preview follow-ups do not repeat title generation.
 /// The result only feeds the preview card; nothing is written until the user taps Add.
 enum Understander {
-    static func parse(_ text: String, history: String = "", now: Date = .now, calendar: Calendar = .current) async -> Capture {
+    static func parse(_ text: String, history: String = "", now: Date, calendar: Calendar, localeID: String) async -> Capture {
         let parsed = CaptureConversation.parse(text, now: now, calendar: calendar)
         let result: Capture
         // Rules settle clear kinds without a classifier call. Only uncertain kinds use the model.
         if let kind = Understanding.ruleKind(text, parsed: parsed) {
             result = Understanding.combine(parser: parsed, kind: kind, text: text)
         } else if AICapture.isAvailable,
-                  let kind = await ModelTimeout.run(seconds: 8, { await Understanding.classify(text, history: history) }) {
+                  let kind = await ModelTimeout.run(seconds: 8, { await Understanding.classify(text, history: history, localeID: localeID) }) {
             result = Understanding.combine(parser: parsed, kind: kind, text: text)
         } else {
             result = parsed
@@ -26,8 +26,8 @@ enum Understander {
     }
 
     /// Loads the model ahead of the first request. No-op where the model isn't available.
-    static func prewarm() {
-        Understanding.prewarm()
+    static func prewarm(localeID: String) {
+        Understanding.prewarm(localeID: localeID)
     }
 }
 

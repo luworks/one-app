@@ -9,15 +9,16 @@ import FoundationModels
 /// the user's Apply.
 
 @Generable
-enum EditOp: String {
+package enum EditOp: String, Sendable {
     case move, delete, clarify, none
 }
 
 @Generable
-struct EditPlan {
-    var op: EditOp
+package struct EditPlan: Sendable {
+    package var op: EditOp
     @Guide(description: "id of the one item the message names, from the list. Empty if none or unsure")
-    var target: String?
+    package var target: String?
+    package init(op: EditOp, target: String?) { self.op = op; self.target = target }
 }
 
 extension EditPlan {

@@ -17,7 +17,15 @@ package struct AskView: View {
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
 
-    private let calendarSync: CalendarSync
+    private let calendarSync: any CalendarService
+    private let actions: PlannerActions
+    private let ledger: Ledger
+    private let activity: ActivityCenter
+    private let intelligence: AskIntelligence
+    private let presentation: PlannerPresentation
+    private let travel: any TravelTimeProviding
+    private let suggestionMemory: AskSuggestionMemory
+    private var runtime: PlannerRuntime { presentation.runtime }
     private let now: () -> Date
 
     let onAdded: (Capture) -> Void
@@ -32,7 +40,7 @@ package struct AskView: View {
     /// The chat's id from the first message on (the saved thread takes it), so Activity data events can point at it.
     @State private var threadID: UUID
     /// When the last message was sent / the last card appeared: latency and dwell time for Activity data.
-    @State private var turnStart = Date.now
+    @State private var turnStart: Date
     @State private var cardShownAt: Date?
     @State private var messages: [ChatMessage]
     @State private var draft = ""
@@ -45,7 +53,7 @@ package struct AskView: View {
 
     private static let endID = "chat-end"
     @Query(sort: \OneList.order) private var lists: [OneList]
-    @AppStorage(Preferences.askSuggestionsKey) private var showsSuggestions = Preferences.askSuggestions
+    @AppStorage private var showsSuggestions: Bool
     @State private var thinking = false
     @State private var captureTask: Task<Void, Never>?
     /// Diagnostic-only identity: production cancellation behavior stays unchanged when tracing is off.
@@ -109,14 +117,23 @@ package struct AskView: View {
     private func traceBackend(_ token: UUID, modelPath: Bool) {
         guard AIResponseTrace.enabled else { return }
         // Public AI APIs hide timeout/empty-result fallback, so availability is never claimed as model success.
-        AIResponseTrace.shared.backend(modelPath ? (AICapture.isAvailable ? "model_available_outcome_unobserved" : "fallback_model_unavailable") : "rules", token: token)
+        let backend: String
+        if !modelPath { backend = "rules" }
+        else {
+            switch intelligence.backend() {
+            case .onDevice: backend = "model_available_outcome_unobserved"
+            case .rules: backend = "fallback_model_unavailable"
+            case .scripted: backend = "development_scripted"
+            }
+        }
+        AIResponseTrace.shared.backend(backend, token: token)
     }
     @State private var plan: [(task: OneTask, start: Date)] = []
     /// The "Plan reminders into free time" grant, while one is active (the plan card then says so instead of offering it).
     @State private var planGrant: AIGrant?
     /// "Tidy overdue": a new date per overdue reminder, waiting for Apply.
     @State private var tidy: [TidyRow] = []
-    @State private var voice = VoiceInput()
+    @State private var voice: VoiceInput
     @State private var change: PendingChange?
     @State private var undoRow: UndoRow?
     /// What the last turn left open (a "which one?" with real items, or a "when?"), so the next message can answer it.
@@ -133,13 +150,22 @@ package struct AskView: View {
     /// Drags that start on the "which one?" chips scroll them instead of going back.
     @State private var choiceFrame: CGRect = .zero
 
-    package init(thread: ChatThread? = nil, calendar: CalendarSync, now: @escaping () -> Date,
+    package init(thread: ChatThread? = nil, calendar: any CalendarService, now: @escaping () -> Date,
+                 actions: PlannerActions, ledger: Ledger, activity: ActivityCenter,
+                 intelligence: AskIntelligence, voice: VoiceInput, presentation: PlannerPresentation,
+                 travel: any TravelTimeProviding, suggestionMemory: AskSuggestionMemory,
                  onBack: @escaping (Bool) -> Void, onAdded: @escaping (Capture) -> Void,
                  onOpenDay: @escaping (Date) -> Void,
                  onOpenTask: @escaping (OneTask, @escaping () -> Void) -> Void,
                  onOpenAlarm: @escaping (OneAlarm, @escaping () -> Void) -> Void) {
         self.calendarSync = calendar
         self.now = now
+        self.actions = actions; self.ledger = ledger; self.activity = activity
+        self.intelligence = intelligence; self.presentation = presentation
+        self.travel = travel; self.suggestionMemory = suggestionMemory
+        _voice = State(initialValue: voice)
+        _turnStart = State(initialValue: now())
+        _showsSuggestions = AppStorage(wrappedValue: Preferences.askSuggestions, Preferences.askSuggestionsKey, store: presentation.defaults)
         self.onOpenTask = onOpenTask
         self.onOpenAlarm = onOpenAlarm
         self.onAdded = onAdded
@@ -167,7 +193,7 @@ package struct AskView: View {
                 // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
                 if messages.isEmpty { focused = true }
                 refreshCardTitles()
-                Understander.prewarm()
+                intelligence.prewarm()
             }
             .onChange(of: emittedTurn) { _, token in
                 if AIResponseTrace.enabled, let token { AIResponseTrace.shared.stage("on_change_enter", token: token) }
@@ -176,10 +202,15 @@ package struct AskView: View {
                 responseTurn = token
             }
             .onDisappear {
+                captureTask?.cancel()
+                voice.stop()
                 closeOpenCards("ignored")
                 if AIResponseTrace.enabled { AIResponseTrace.shared.cancel(generationToken) }
             }
         }
+        .environment(actions)
+        .environment(presentation)
+        .defaultAppStorage(presentation.defaults)
         .background(Color(.systemBackground).ignoresSafeArea())
         // A soft edge on the left while the screen slides away, like the drawer's page.
         .background(alignment: .leading) {
@@ -315,11 +346,11 @@ package struct AskView: View {
         guard let first = messages.first(where: { $0.role == .user }) else { return }
         if let thread {
             thread.messages = messages
-            thread.updatedAt = .now
+            thread.updatedAt = now()
             // Continuing an archived conversation brings it back to the main list.
             thread.archived = false
         } else {
-            let created = ChatThread(title: ConversationHistory.title(from: first.text), messages: messages, id: threadID)
+            let created = ChatThread(title: ConversationHistory.title(from: first.text), messages: messages, createdAt: now(), updatedAt: now(), id: threadID)
             context.insert(created)
             thread = created
         }
@@ -330,7 +361,7 @@ package struct AskView: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("What do you want to plan?")
                 .font(.title2.bold())
-            if showsSuggestions { AskSuggestionList(calendar: calendarSync, now: now, onSend: send) }
+            if showsSuggestions { AskSuggestionList(calendar: calendarSync, now: now, presentation: presentation, travel: travel, activity: activity, intelligence: intelligence, memory: suggestionMemory, onSend: send) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -416,11 +447,15 @@ package struct AskView: View {
         }
         .onChange(of: voice.state) { _, state in
             switch state {
-            case .denied: messages.append(ChatMessage(role: .ai, text: "Microphone or speech access is off. Turn it on in Settings to dictate."))
-            case .unavailable: messages.append(ChatMessage(role: .ai, text: "Dictation isn't available here. It works on iPhone."))
+            case .denied: messages.append(reply( "Microphone or speech access is off. Turn it on in Settings to dictate."))
+            case .unavailable: messages.append(reply( "Dictation isn't available here. It works on iPhone."))
             default: break
             }
         }
+    }
+
+    private func reply(_ text: String) -> ChatMessage {
+        ChatMessage(role: .ai, text: text, timestamp: now())
     }
 
     private var isEmpty: Bool {
@@ -432,7 +467,7 @@ package struct AskView: View {
         guard !text.isEmpty else { return }
         let token = AIResponseTrace.enabled ? UUID() : generationToken
         if AIResponseTrace.enabled {
-            AIResponseTrace.shared.begin(token, modelAvailable: AICapture.isAvailable)
+            AIResponseTrace.shared.begin(token, modelAvailable: intelligence.backend() == .onDevice)
             generationToken = token
             emittedTurn = nil
             responseTurn = nil
@@ -445,7 +480,7 @@ package struct AskView: View {
         let turnContext = ConversationContext(turns: messages.map { .init(isUser: $0.role == .user, text: $0.text, timestamp: $0.timestamp) })
         let history = turnContext.prompt
         if AIResponseTrace.enabled { AIResponseTrace.shared.stage("context_complete", token: token) }
-        let sentAt = Date.now
+        let sentAt = now()
         messages.append(ChatMessage(role: .user, text: text, timestamp: sentAt))
         if AIResponseTrace.enabled {
             sentMessageID = messages.last?.id
@@ -453,17 +488,17 @@ package struct AskView: View {
         }
         turnStart = sentAt
         let intent = ChatRouting.intent(text)
-        if let resolved = CaptureConversation.resolve(text, context: turnContext, pending: pending) {
+        if let resolved = CaptureConversation.resolve(text, context: turnContext, pending: pending, now: now(), calendar: runtime.calendar) {
             recordTurn("answer", text)
             if pending != nil { pending = resolved }
             else { clearPreviews(); show([resolved]) }
             if resolved.hour == nil && resolved.ringsAsAlarm {
                 followup = .alarmTime
-                messages.append(ChatMessage(role: .ai, text: text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                messages.append(reply( text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
                     ? "闹钟要设在几点？确认添加后才会生效。" : "What time should the alarm ring? Nothing is added until you confirm."))
             } else {
                 followup = nil
-                messages.append(ChatMessage(role: .ai, text: text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                messages.append(reply( text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
                     ? "预览已更新，点 Add 后才会添加。" : "The preview is ready. Tap Add to create it."))
             }
             return
@@ -484,7 +519,7 @@ package struct AskView: View {
         if intent == .conversation {
             if ChatRouting.isAgendaQuestion(text) {
                 recordTurn("question", text)
-                messages.append(ChatMessage(role: .ai, text: todaySummary))
+                messages.append(reply( todaySummary))
             } else {
                 respond(text, context: turnContext, intent: intent)
             }
@@ -506,8 +541,8 @@ package struct AskView: View {
             proposePlan()
         } else if SentenceRoute.isReviewRequest(text) {
             recordTurn("review", text)
-            messages.append(ChatMessage(role: .ai, text: reviewSummary))
-        } else if Editing.looksLikeEdit(text, items: editCandidates().items) {
+            messages.append(reply( reviewSummary))
+        } else if Editing.looksLikeEdit(text, items: editCandidates().items, now: now(), calendar: runtime.calendar) {
             recordTurn("edit", text)
             clearPreviews()
             proposeEdit(text, history: history)
@@ -534,16 +569,16 @@ package struct AskView: View {
         recordTurn(initialIntent, text)
         if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("record_turn_after", token: generationToken) }
         if let reply = ChatRouting.contextReply(text, context: context) {
-            messages.append(ChatMessage(role: .ai, text: reply))
+            messages.append(reply( reply))
             return
         }
         thinking = true
         traceBackend(generationToken, modelPath: intent != .capture)
         let token = generationToken
-        if intent == .conversation && !AICapture.isAvailable {
+        if intent == .conversation && !intelligence.isAvailable() {
             if AIResponseTrace.enabled { AIResponseTrace.shared.localReply(.before, token: token) }
             thinking = false
-            messages.append(ChatMessage(role: .ai, text: ChatRouting.fallbackReply(text)))
+            messages.append(reply( ChatRouting.fallbackReply(text)))
             if AIResponseTrace.enabled { AIResponseTrace.shared.localReply(.after, token: token) }
             return
         }
@@ -551,7 +586,7 @@ package struct AskView: View {
             if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("task_enter", token: token) }
             defer { finishEmission(token) }
             if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("chat_response_await_before", token: token) }
-            let result = await ChatResponse.respond(text, history: history, intent: intent)
+            let result = await intelligence.respond(text, history, intent)
             if AIResponseTrace.enabled, intent == .conversation { AIResponseTrace.shared.stage("chat_response_await_after", token: token) }
             guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
@@ -560,7 +595,7 @@ package struct AskView: View {
                 clearPreviews()
                 propose(text, history: history)
             case .reply(let reply):
-                messages.append(ChatMessage(role: .ai, text: reply))
+                messages.append(reply( reply))
             }
         }
     }
@@ -583,19 +618,19 @@ package struct AskView: View {
     private func recordTurn(_ intent: String, _ text: String) {
         // This describes the initial routing decision, before any model response or extraction.
         let route = "rules"
-        ActivityCenter.record(ActivityEvents.aiTurn(intent: intent, route: route, text: text,
-                                                    keepText: ActivityCenter.shared.settings.keepChatText, thread: threadID))
+        activity.record(ActivityEvents.aiTurn(intent: intent, route: route, text: text,
+                                                    keepText: activity.settings.keepChatText, thread: threadID))
     }
 
     private func recordCard(shown card: String, items: Int) {
-        cardShownAt = .now
-        ActivityCenter.record(ActivityEvents.cardShown(card: card, items: items,
-                                                       latencyMs: Int(Date.now.timeIntervalSince(turnStart) * 1000), thread: threadID))
+        cardShownAt = now()
+        activity.record(ActivityEvents.cardShown(card: card, items: items,
+                                                       latencyMs: Int(now().timeIntervalSince(turnStart) * 1000), thread: threadID))
     }
 
     private func recordCard(resolved card: String, _ outcome: String, items: Int = 1, edits: [ActivityContent] = []) {
-        let dwell = cardShownAt.map { Int(Date.now.timeIntervalSince($0) * 1000) }
-        ActivityCenter.record(ActivityEvents.cardResolved(card: card, outcome: outcome, edits: edits, items: items, dwellMs: dwell, thread: threadID))
+        let dwell = cardShownAt.map { Int(now().timeIntervalSince($0) * 1000) }
+        activity.record(ActivityEvents.cardResolved(card: card, outcome: outcome, edits: edits, items: items, dwellMs: dwell, thread: threadID))
     }
 
     /// Cards still waiting for a tap when they go away (a new message, the screen closing) are recorded as ignored.
@@ -641,8 +676,8 @@ package struct AskView: View {
 
     /// Reads `text` as the answer to the previous turn. False means it is something new.
     private func answerOpenTurn(_ text: String, history: String) -> Bool {
-        let now = Date.now
-        let cal = Calendar.current
+        let now = now()
+        let cal = runtime.calendar
         switch followup {
         case .chooseItem(let original, let options):
             if let i = Dialogue.answerToWhichOne(text, from: options.map(\.title)) {
@@ -665,38 +700,38 @@ package struct AskView: View {
             if let capture = pending, case .updated(let c) = Dialogue.refine(capture, with: "alarm " + text, now: now, calendar: cal) {
                 followup = nil
                 pending = c
-                messages.append(ChatMessage(role: .ai, text: "Set as an alarm. Nothing is added until you confirm."))
+                messages.append(reply( "Set as an alarm. Nothing is added until you confirm."))
                 return true
             }
         case nil: break
         }
 
-        if Dialogue.refine(Capture(title: "_", day: .now, hasDay: false), with: text) == .dismissed, pending != nil || change != nil {
+        if Dialogue.refine(Capture(title: "_", day: now, hasDay: false), with: text, now: now, calendar: cal) == .dismissed, pending != nil || change != nil {
             clearPreviews()
             followup = nil
-            messages.append(ChatMessage(role: .ai, text: "OK, dropped it."))
+            messages.append(reply( "OK, dropped it."))
             return true
         }
         if let capture = pending {
             switch Dialogue.refine(capture, with: text, now: now, calendar: cal) {
             case .updated(let c):
                 pending = c
-                messages.append(ChatMessage(role: .ai, text: "Updated. Nothing is added until you confirm."))
+                messages.append(reply( "Updated. Nothing is added until you confirm."))
                 return true
             case .needsTime:
                 followup = .alarmTime
-                messages.append(ChatMessage(role: .ai, text: "What time should it ring?"))
+                messages.append(reply( "What time should it ring?"))
                 return true
             case .dismissed, .notARefinement:
                 break
             }
         }
-        if let current = change, !current.delete, Dialogue.isOnlyWhen(text),
+        if let current = change, !current.delete, Dialogue.isOnlyWhen(text, now: now, calendar: cal),
            let new = Dialogue.answerTime(text, keeping: current.newStart, now: now, calendar: cal) {
             var updated = current
             updated.newStart = new
             change = updated
-            messages.append(ChatMessage(role: .ai, text: "Updated. Nothing changes until you apply it."))
+            messages.append(reply( "Updated. Nothing changes until you apply it."))
             return true
         }
         return false
@@ -715,10 +750,10 @@ package struct AskView: View {
     private func choose(_ option: ChoiceOption, original: String, history: String) {
         let candidates = editCandidates()
         guard let item = fresh(option, in: candidates.items) else {
-            messages.append(ChatMessage(role: .ai, text: "“\(option.title)” isn't in your next week any more."))
+            messages.append(reply( "“\(option.title)” isn't in your next week any more."))
             return
         }
-        let d = Editing.decide(text: original, chosen: item, delete: false, now: .now, calendar: .current)
+        let d = Editing.decide(text: original, chosen: item, delete: false, now: now(), calendar: runtime.calendar)
         handle(d, text: original, plan: nil, candidates: candidates, history: history)
     }
 
@@ -737,7 +772,7 @@ package struct AskView: View {
         let anchor = turnStart
         captureTask = Task { @MainActor in
             defer { finishEmission(token) }
-            let capture = await Understander.parse(text, history: history, now: anchor)
+            let capture = await intelligence.parse(text, history, anchor, runtime.calendar)
             guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
             show([capture])
@@ -748,20 +783,20 @@ package struct AskView: View {
 
     /// Open tasks and the next week's events, with short ids the model can point at.
     private func editCandidates() -> (items: [EditItem], tasks: [String: OneTask], events: [String: OneEvent]) {
-        EditCandidates.build(events: events, tasks: tasks, calendarSync: calendarSync)
+        EditCandidates.build(events: events, tasks: tasks, calendarSync: calendarSync, now: now(), calendar: runtime.calendar)
     }
 
     /// Edit sentence → a ChangeCard, a question in the chat, or (not an edit after all) a capture. Nothing is written here.
     private func proposeEdit(_ text: String, history: String) {
         let candidates = editCandidates()
         // The words usually settle which item is meant; the model is asked only when they do not.
-        guard Editing.needsModel(text, items: candidates.items) else {
-            handle(Editing.decide(text: text, plan: nil, items: candidates.items, now: .now, calendar: .current, focus: focusItem(candidates.items)),
+        guard Editing.needsModel(text, items: candidates.items, now: now(), calendar: runtime.calendar) else {
+            handle(Editing.decide(text: text, plan: nil, items: candidates.items, now: now(), calendar: runtime.calendar, focus: focusItem(candidates.items)),
                    text: text, plan: nil, candidates: candidates, history: history)
             return
         }
-        guard Understanding.unavailableReason(localeID: Locale.current.identifier) == nil else {
-            messages.append(ChatMessage(role: .ai, text: "Apple Intelligence isn't available on this device, so I can't tell which item you mean from that sentence. Name the item, or open it to edit it."))
+        guard intelligence.unavailableReason(runtime.locale.identifier) == nil else {
+            messages.append(reply( "Apple Intelligence isn't available on this device, so I can't tell which item you mean from that sentence. Name the item, or open it to edit it."))
             return
         }
         thinking = true
@@ -770,14 +805,17 @@ package struct AskView: View {
         captureTask = Task { @MainActor in
             defer { finishEmission(token) }
             let items = candidates.items
-            let plan = await ModelTimeout.run(seconds: 20) { try? await Editing.plan(text, items: items, now: .now, calendar: .current, history: history) }
+            let modelPlan = intelligence.plan
+            let anchor = now()
+            let calendar = runtime.calendar
+            let plan = await ModelTimeout.run(seconds: 20) { try? await modelPlan(text, items, anchor, calendar, history) }
             guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
             if plan == nil {
-                messages.append(ChatMessage(role: .ai, text: "The on-device model didn't answer in time. Try again in a moment, or name the item."))
+                messages.append(reply( "The on-device model didn't answer in time. Try again in a moment, or name the item."))
                 return
             }
-            handle(Editing.decide(text: text, plan: plan?.pick, items: items, now: .now, calendar: .current, focus: focusItem(items)),
+            handle(Editing.decide(text: text, plan: plan?.pick, items: items, now: now(), calendar: runtime.calendar, focus: focusItem(items)),
                    text: text, plan: plan, candidates: candidates, history: history)
         }
     }
@@ -805,15 +843,15 @@ package struct AskView: View {
             let ids = d.reason.dropFirst("several items match:".count).split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
             let options = ids.compactMap { id in items.first { $0.id == id } }.prefix(5).map(option)
             followup = .chooseItem(text: text, options: Array(options))
-            messages.append(ChatMessage(role: .ai, text: "Which one do you mean?"))
+            messages.append(reply( "Which one do you mean?"))
         } else if d.reason == "no new time", let id = d.target, let item = items.first(where: { $0.id == id }) {
             followup = .needTime(option(item))
-            messages.append(ChatMessage(role: .ai, text: "When should I move “\(item.title)” to?"))
+            messages.append(reply( "When should I move “\(item.title)” to?"))
         } else if d.reason == "no item named", !items.isEmpty {
             followup = .chooseItem(text: text, options: items.prefix(5).map(option))
-            messages.append(ChatMessage(role: .ai, text: "Which item do you mean?"))
+            messages.append(reply( "Which item do you mean?"))
         } else {
-            messages.append(ChatMessage(role: .ai, text: clarifyQuestion(d, plan: plan, items: items)))
+            messages.append(reply( clarifyQuestion(d, plan: plan, items: items)))
         }
     }
 
@@ -828,7 +866,7 @@ package struct AskView: View {
     private func present(_ d: EditDecision, id: String, candidates: (items: [EditItem], tasks: [String: OneTask], events: [String: OneEvent])) {
         if let event = candidates.events[id] {
             guard event.repeatRule == nil else {
-                messages.append(ChatMessage(role: .ai, text: "“\(event.title)” repeats. Changing a single occurrence isn't supported yet. Open the event to edit it."))
+                messages.append(reply( "“\(event.title)” repeats. Changing a single occurrence isn't supported yet. Open the event to edit it."))
                 return
             }
             let audience = calendarSync.audience(externalID: event.externalID)
@@ -842,7 +880,7 @@ package struct AskView: View {
             notes.append("Meetings move only when you ask. This changes this one event.")
             lastTouched = event.title
             change = PendingChange(subject: .event(event), delete: d.op == .delete, title: event.title,
-                                   oldText: DayLabel.withTime(event.start), newStart: d.newStart, notes: notes,
+                                   oldText: plannerDayLabel(event.start, runtime: runtime), newStart: d.newStart, notes: notes,
                                    attendees: audience?.attendees ?? 0)
         } else if let task = candidates.tasks[id] {
             var notes: [String] = []
@@ -852,17 +890,17 @@ package struct AskView: View {
             }
             lastTouched = task.title
             change = PendingChange(subject: .task(task), delete: d.op == .delete, title: task.title,
-                                   oldText: task.plannedStart.map { DayLabel.withTime($0) } ?? "Not scheduled", newStart: d.newStart, notes: notes,
+                                   oldText: task.plannedStart.map { plannerDayLabel($0, runtime: runtime) } ?? "Not scheduled", newStart: d.newStart, notes: notes,
                                    attendees: 0)
         } else { return }
-        messages.append(ChatMessage(role: .ai, text: "Here's the change. Nothing changes until you apply it."))
+        messages.append(reply( "Here's the change. Nothing changes until you apply it."))
         recordCard(shown: "change", items: 1)
     }
 
     private func apply(_ c: PendingChange) {
-        recordCard(resolved: "change", "applied")
-        change = nil
-        show(AskNativeActions.applyChange(c, context: context, calendar: calendarSync), card: "change")
+        let feedback = AskNativeActions.applyChange(c, context: context, calendar: calendarSync, actions: actions, ledger: ledger, runtime: runtime)
+        if feedback.applied { recordCard(resolved: "change", "applied"); change = nil }
+        show(feedback, card: "change")
     }
 
     private func show(_ feedback: AskActionFeedback, card: String) {
@@ -873,7 +911,7 @@ package struct AskView: View {
     /// The app's toast sits behind this full-screen page, so Undo lives here.
     private func offerUndo(_ label: String, card: String, _ action: @escaping () -> Void) {
         undoRow = UndoRow(label: label, action: {
-            ActivityCenter.record(ActivityEvents.aiUndo(card: card, thread: threadID))
+            activity.record(ActivityEvents.aiUndo(card: card, thread: threadID))
             withAnimation { action() }
         })
     }
@@ -881,13 +919,7 @@ package struct AskView: View {
     /// One item per line: rules own scheduling, followed by kind classification and title-only refinement.
     /// A line that lists several things goes to the multi-item model path when it is available.
     private func propose(_ text: String, history: String = "") {
-        // UI tests only (`-uiTesting -uiTestingMultiCapture`): the simulator has no on-device model, so a line with ";"
-        // is split by the rule parser into several proposals, to exercise the multi-item card.
-        if ProcessInfo.processInfo.arguments.contains("-uiTestingMultiCapture"), text.contains(";") {
-            show(text.split(separator: ";").map { CaptureParser.parse(String($0).trimmingCharacters(in: .whitespaces)) })
-            return
-        }
-        if AICapture.isAvailable, text.range(of: #"[；;\n]|然后|另外还|\band then\b"#, options: [.regularExpression, .caseInsensitive]) != nil {
+        if intelligence.isAvailable(), text.range(of: #"[；;\n]|然后|另外还|\band then\b"#, options: [.regularExpression, .caseInsensitive]) != nil {
             proposeList(text)
         } else {
             understand(text, history: history)
@@ -896,8 +928,8 @@ package struct AskView: View {
 
     /// A line that lists several things: the multi-item Apple Intelligence path when the model is available, else the parser.
     private func proposeList(_ text: String) {
-        guard AICapture.isAvailable else {
-            show([CaptureParser.parse(text)])
+        guard intelligence.isAvailable() else {
+            show([CaptureParser.parse(text, now: now(), calendar: runtime.calendar)])
             return
         }
         thinking = true
@@ -905,15 +937,19 @@ package struct AskView: View {
         let token = generationToken
         captureTask = Task { @MainActor in
             defer { finishEmission(token) }
-            let proposed = await AICapture.propose(text)
+            let proposed = await intelligence.propose(text, now(), runtime.calendar)
             guard !Task.isCancelled, (!AIResponseTrace.enabled || token == generationToken) else { return }
             thinking = false
-            show(proposed ?? [CaptureParser.parse(text)])
+            show(proposed ?? [CaptureParser.parse(text, now: now(), calendar: runtime.calendar)])
         }
     }
 
     private func show(_ captures: [Capture]) {
-        let message = ChatMessage(role: .ai, text: captures.count == 1
+        guard !captures.isEmpty else {
+            messages.append(reply( "I couldn't prepare an item from that. Tell me what you'd like to add."))
+            return
+        }
+        let message = reply( captures.count == 1
             ? "Here's what I understood. Nothing is added until you confirm."
             : "I found \(captures.count) items. Add them one by one or all at once; nothing is added until you confirm.")
         let batch = UUID()
@@ -933,7 +969,7 @@ package struct AskView: View {
         let candidates = lists.map { list in
             ListGuess.Candidate(name: list.name, titles: tasks.filter { $0.listName == list.name }.suffix(300).map(\.title))
         }
-        c.listName = ListGuess.guess(c.title, lists: candidates).list ?? Preferences.newReminderList(existing: names) ?? ListGuess.inbox(in: names)
+        c.listName = ListGuess.guess(c.title, lists: candidates).list ?? Preferences.newReminderList(existing: names, presentation.defaults) ?? ListGuess.inbox(in: names)
         return c
     }
 
@@ -965,7 +1001,7 @@ package struct AskView: View {
         let decided = proposals.compactMap(\.stored).filter { $0.status != .open }
         guard thread.cards != decided else { return }
         thread.cards = decided
-        thread.updatedAt = .now
+        thread.updatedAt = now()
         try? context.save()
     }
 
@@ -985,8 +1021,14 @@ package struct AskView: View {
         let capture = proposals[i].capture
         guard capture.isReadyToAdd else { return nil }
         let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
+        let written: (id: PersistentIdentifier, entry: LedgerItem)
+        do {
+            written = try actions.insert(capture, into: context, actor: .todayAI, channel: .ask, approval: .asked)
+        } catch {
+            messages.append(reply( "Couldn't save “\(capture.title)”. The preview is still here; tap Add to retry."))
+            return nil
+        }
         recordCard(resolved: "capture", edits.isEmpty ? "applied" : "edited", edits: edits)
-        let written = capture.insertRecorded(into: context, actor: .todayAI, channel: .ask, approval: .asked)
         thread?.items.append(written.id)
         lastTouched = capture.title
         onAdded(capture)
@@ -1007,8 +1049,8 @@ package struct AskView: View {
     private func undo(_ id: UUID) {
         guard let i = proposals.firstIndex(where: { $0.id == id }), let next = proposals[i].status.after(.undo) else { return }
         let p = proposals[i]
-        guard CaptureUndo.undo(itemRef: p.itemRef, entryID: p.entryID, title: p.capture.title, context: context) else {
-            messages.append(ChatMessage(role: .ai, text: "Couldn't take “\(p.capture.title)” back from Calendar, so it was kept."))
+        guard actions.undoCapture(itemRef: p.itemRef, entryID: p.entryID, title: p.capture.title, context: context) else {
+            messages.append(reply( "Couldn't take “\(p.capture.title)” back from Calendar, so it was kept."))
             return
         }
         if let ref = p.itemRef, let pid = CaptureUndo.decode(ref) { thread?.items.removeAll { $0 == pid } }
@@ -1024,16 +1066,16 @@ package struct AskView: View {
         case .task(let task): onOpenTask(task, refreshCardTitles)
         case .alarm(let alarm): onOpenAlarm(alarm, refreshCardTitles)
         case .event(let event): onOpenDay(event.start)
-        case nil: messages.append(ChatMessage(role: .ai, text: "“\(p.capture.title)” isn't there any more."))
+        case nil: messages.append(reply( "“\(p.capture.title)” isn't there any more."))
         }
     }
 
     /// Save changes the existing item, then every card in this chat that refers to it.
     private func rename(_ id: UUID, to title: String) -> Bool {
         guard let p = proposals.first(where: { $0.id == id }), p.status == .added,
-              let old = CaptureUndo.title(p.itemRef, in: context) else { return false }
+              let old = actions.captureTitle(p.itemRef, in: context) else { return false }
         guard old != title else { refreshCardTitles(); return true }
-        guard CaptureUndo.rename(p.itemRef, to: title, in: context) else { return false }
+        guard actions.renameCapture(p.itemRef, to: title, in: context) else { return false }
         let task: OneTask?
         let kind: String
         switch CaptureUndo.resolve(p.itemRef, in: context) {
@@ -1042,14 +1084,14 @@ package struct AskView: View {
         case .event: task = nil; kind = "event"
         case nil: return false
         }
-        let entry = Ledger.record(.renamed, task: task, kind: kind, title: title,
+        let entry = ledger.record(.renamed, task: task, kind: kind, title: title,
                                   before: old, after: title, channel: .ask, context: context)
         refreshCardTitles()
         toast?.show("Changed title") {
             // Do not replace another edit made since this save, or resurrect an item deleted since.
-            guard CaptureUndo.title(p.itemRef, in: context) == title,
-                  CaptureUndo.rename(p.itemRef, to: old, in: context) else { return }
-            Ledger.recordUndo(of: entry, task: task, channel: .ask, context: context)
+            guard actions.captureTitle(p.itemRef, in: context) == title,
+                  actions.renameCapture(p.itemRef, to: old, in: context) else { return }
+            ledger.recordUndo(of: entry, task: task, channel: .ask, context: context)
             refreshCardTitles()
         }
         return true
@@ -1057,34 +1099,38 @@ package struct AskView: View {
 
     private func refreshCardTitles() {
         for i in proposals.indices where proposals[i].status == .added {
-            if let title = CaptureUndo.title(proposals[i].itemRef, in: context) { proposals[i].capture.title = title }
+            if let title = actions.captureTitle(proposals[i].itemRef, in: context) { proposals[i].capture.title = title }
         }
         persistCards()
+    }
+
+    private func isOverdue(_ task: OneTask) -> Bool {
+        !task.isDone && (task.due.map { $0 < runtime.calendar.startOfDay(for: now()) } ?? false)
     }
 
     private func isPlanRequest(_ text: String) -> Bool { SentenceRoute.isPlanRequest(text) }
 
     /// Proposes start times for today's flexible tasks around fixed events. Nothing moves until Apply.
     private func proposePlan() {
-        let cal = Calendar.current
+        let cal = runtime.calendar
         let now = now()
         guard let endOfDay = cal.date(bySettingHour: 21, minute: 0, second: 0, of: now), endOfDay > now else {
-            messages.append(ChatMessage(role: .ai, text: "It's late. Ask me to plan tomorrow instead."))
+            messages.append(reply( "It's late. Ask me to plan tomorrow instead."))
             return
         }
         let start = max(now, cal.date(bySettingHour: 8, minute: 0, second: 0, of: now) ?? now)
         let window = DateInterval(start: start, end: endOfDay)
         var busy = events.filter { !$0.isAllDay }.flatMap { e in
-            e.occurs(on: now).map { DateInterval(start: $0, duration: e.duration) }
+            askOccurrences(e, on: now, calendar: cal).map { DateInterval(start: $0, duration: e.duration) }
         }
         busy += calendarSync.events(on: now).filter { !$0.isAllDay }.map { DateInterval(start: $0.start, end: $0.end) }
         busy += tasks.compactMap { t in
-            guard !t.isDone, let s = t.plannedStart, cal.isDateInToday(s) else { return nil }
+            guard !t.isDone, let s = t.plannedStart, cal.isDate(s, inSameDayAs: now) else { return nil }
             return DateInterval(start: s, duration: TimeInterval(t.durationMinutes * 60))
         }
         func rank(_ t: OneTask) -> Int {
-            if t.isOverdue { return 0 }
-            if let d = t.due, cal.isDateInToday(d) { return 1 }
+            if isOverdue(t) { return 0 }
+            if let d = t.due, cal.isDate(d, inSameDayAs: now) { return 1 }
             if t.flagged { return 2 }
             return 3
         }
@@ -1093,18 +1139,20 @@ package struct AskView: View {
         let items = candidates.enumerated().map { DayPlanner.Item(id: $0.offset, minutes: $0.element.durationMinutes) }
         let result = DayPlanner.plan(items, busy: busy, window: window)
         plan = result.map { (candidates[$0.id], $0.start) }
-        planGrant = GrantStore.active(.planFreeTime, context: context, now: .now)
-        if planGrant != nil, !plan.isEmpty {
+        planGrant = GrantStore.active(.planFreeTime, context: context, now: now)
+        if planGrant != nil, ledger.activity.recordsChanges, !plan.isEmpty {
             // Under the grant, what the policy allows applies by itself; the rest (overdue, …) stays on the card.
             let grants = GrantStore.infos(context)
-            let protected = Ledger.protectedRefs(context, now: .now)
+            let protected = ledger.protectedRefs(context, now: now)
             let auto = plan.filter { p in
+                guard let due = p.task.due, cal.isDate(due, inSameDayAs: now),
+                      cal.dateComponents([.hour, .minute], from: due) == DateComponents(hour: 0, minute: 0) else { return false }
                 let ref = Ledger.ref(p.task.persistentModelID)
-                let change = ProposedChange(target: .reminder, operation: .setPlannedTime, isOverdue: p.task.isOverdue,
+                let change = ProposedChange(target: .reminder, operation: .setPlannedTime, isOverdue: isOverdue(p.task),
                                             isDone: p.task.isDone, ringsAsAlarm: p.task.ringsAsAlarm,
                                             aiChangedRecently: ref.map(protected.aiRecent.contains) ?? false,
                                             userChoseTime: ref.map(protected.userChose.contains) ?? false)
-                return AutonomyPolicy.decide(change, grants: grants, now: .now) == .auto
+                return AutonomyPolicy.decide(change, grants: grants, now: now) == .auto
             }
             if !auto.isEmpty {
                 let autoIDs = Set(auto.map { ObjectIdentifier($0.task) })
@@ -1114,13 +1162,13 @@ package struct AskView: View {
             }
         }
         if plan.isEmpty {
-            messages.append(ChatMessage(role: .ai, text: candidates.isEmpty
+            messages.append(reply( candidates.isEmpty
                 ? "Nothing urgent to place: no overdue, due-today or flagged tasks without a time."
                 : "Your day is full. Nothing fits before 9 PM."))
         } else {
             let skipped = candidates.count - plan.count
             recordCard(shown: "plan", items: plan.count)
-            messages.append(ChatMessage(role: .ai, text: "Here's a plan around your meetings. Meetings stay fixed; only tasks move. Nothing changes until you apply it."
+            messages.append(reply( "Here's a plan around your meetings. Meetings stay fixed; only tasks move. Nothing changes until you apply it."
                 + (skipped > 0 ? " \(skipped) task\(skipped == 1 ? "" : "s") didn't fit." : "")))
         }
     }
@@ -1128,38 +1176,40 @@ package struct AskView: View {
     /// Writes the plan's planned times (never deadlines) and records each in Activity. `rows` defaults to the card's.
     private func applyPlan(_ rows: [(task: OneTask, start: Date)]? = nil, approval: LedgerApproval = .asked) {
         if rows == nil { recordCard(resolved: "plan", "applied", items: plan.count) }
-        show(AskNativeActions.applyPlan(rows, plan: &plan, grant: planGrant, approval: approval, context: context), card: "plan")
+        show(AskNativeActions.applyPlan(rows, plan: &plan, grant: planGrant, approval: approval, context: context, actions: actions, ledger: ledger, runtime: runtime), card: "plan")
     }
 
     /// "Always for 7 days": applies this card now (the user's tap) and lets the same kind of change apply by itself for
     /// 7 days, under `AutonomyPolicy`. Revoke in Settings → AI → Automatic changes.
     private func applyPlanAlways() {
-        show(AskNativeActions.applyPlanAlways(plan: &plan, grant: &planGrant, context: context,
+        show(AskNativeActions.applyPlanAlways(plan: &plan, grant: &planGrant, context: context, actions: actions, ledger: ledger, runtime: runtime,
                                              onApproved: { count in recordCard(resolved: "plan", "applied", items: count) }), card: "plan")
     }
 
     /// Suggests a new date for every overdue reminder (see `OverdueTidy`). Nothing changes until Apply.
     private func proposeTidy() {
-        let overdue = tasks.filter(\.isOverdue)
+        let overdue = tasks.filter { isOverdue($0) }
         guard !overdue.isEmpty else {
-            messages.append(ChatMessage(role: .ai, text: "Nothing is overdue."))
+            messages.append(reply( "Nothing is overdue."))
             return
         }
         let items = overdue.enumerated().compactMap { i, t in
             t.due.map { OverdueTidy.Item(id: i, due: $0, flagged: t.flagged, repeats: t.repeats != nil) }
         }
-        tidy = OverdueTidy.suggest(items).compactMap { s in
+        tidy = OverdueTidy.suggest(items, now: now(), calendar: runtime.calendar).compactMap { s in
             overdue[s.id].due.map { TidyRow(task: overdue[s.id], oldDue: $0, choice: s.choice) }
         }
         let n = tidy.count
         recordCard(shown: "tidy", items: n)
-        messages.append(ChatMessage(role: .ai, text: "\(n) overdue reminder\(n == 1 ? "" : "s"). Flagged and recent ones first, three a day; "
+        messages.append(reply( "\(n) overdue reminder\(n == 1 ? "" : "s"). Flagged and recent ones first, three a day; "
             + "ones older than a month lose their date but stay in their list. Change any row, then Apply. Nothing changes until you do."))
     }
 
     private func applyTidy() {
-        recordCard(resolved: "tidy", "applied", items: tidy.filter { $0.choice != .keep }.count)
-        show(AskNativeActions.applyTidy(rows: &tidy, context: context), card: "tidy")
+        let count = tidy.filter { $0.choice != .keep }.count
+        let feedback = AskNativeActions.applyTidy(rows: &tidy, context: context, actions: actions, ledger: ledger, runtime: runtime)
+        if feedback.applied { recordCard(resolved: "tidy", "applied", items: count) }
+        show(feedback, card: "tidy")
     }
 
     /// "Review today": what got done against what the day held, and what is left. Read only; moving or dropping what is
@@ -1170,7 +1220,7 @@ package struct AskView: View {
             EveningReview.Item(id: $0.offset, isDone: $0.element.isDone, doneAt: $0.element.doneAt,
                                plannedStart: $0.element.plannedStart, due: $0.element.due, repeats: $0.element.repeats != nil)
         }
-        let summary = EveningReview.summary(items, now: now)
+        let summary = EveningReview.summary(items, now: now, calendar: runtime.calendar)
         var lines = [EveningReview.headline(summary) + "."]
         let left = summary.left.map { tasks[$0].title }
         if !left.isEmpty {
@@ -1178,23 +1228,24 @@ package struct AskView: View {
             lines += left.prefix(5).map { "· " + $0 }
             if left.count > 5 { lines.append("· and \(left.count - 5) more") }
         }
-        if EveningReview.shows(now: now), !left.isEmpty { lines.append("Open Review today on the Today tab to move or drop what's left.") }
+        if EveningReview.shows(now: now, eveningHour: Preferences.reviewStart(presentation.defaults), calendar: runtime.calendar), !left.isEmpty { lines.append("Open Review today on the Today tab to move or drop what's left.") }
         return lines.joined(separator: "\n")
     }
 
     private var todaySummary: String {
-        let cal = Calendar.current
+        let cal = runtime.calendar
+        let now = now()
         let open = tasks.filter { task in
             guard !task.isDone else { return false }
-            if task.isOverdue { return true }
-            if let s = task.plannedStart, cal.isDateInToday(s) { return true }
-            if let d = task.due, cal.isDateInToday(d) { return true }
+            if isOverdue(task) { return true }
+            if let s = task.plannedStart, cal.isDate(s, inSameDayAs: now) { return true }
+            if let d = task.due, cal.isDate(d, inSameDayAs: now) { return true }
             return false
         }
-        let todayEvents = events.compactMap { e in e.occurs(on: .now).first { $0 > .now }.map { (e, $0) } }
+        let todayEvents = events.compactMap { e in askOccurrences(e, on: now, calendar: cal).first { $0 > now }.map { (e, $0) } }
         var lines = ["Today: \(open.count) open task\(open.count == 1 ? "" : "s") and \(todayEvents.count) upcoming event\(todayEvents.count == 1 ? "" : "s")."]
         lines += open.prefix(5).map { "· " + $0.title }
-        lines += todayEvents.prefix(3).map { "· " + $0.1.formatted(date: .omitted, time: .shortened) + " " + $0.0.title }
+        lines += todayEvents.prefix(3).map { "· " + askTimeLabel($0.1, runtime: runtime) + " " + $0.0.title }
         return lines.joined(separator: "\n")
     }
 }
@@ -1271,6 +1322,7 @@ package struct TidyRow: Identifiable {
 
 /// "Tidy overdue" preview: a suggested date per reminder, each changeable from its menu; Apply writes them all.
 package struct TidyCard: View {
+    @Environment(PlannerPresentation.self) private var presentation
     @Binding package var rows: [TidyRow]
     package var onApply: () -> Void
     package var onCancel: () -> Void
@@ -1306,7 +1358,7 @@ package struct TidyCard: View {
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(row.task.title).font(.subheadline).lineLimit(1)
-                        Text("was " + DayLabel.withTime(row.oldDue)).font(.caption).foregroundStyle(.red)
+                        Text("was " + plannerDayLabel(row.oldDue, runtime: presentation.runtime)).font(.caption).foregroundStyle(.red)
                     }
                     Spacer(minLength: 8)
                     Menu {
@@ -1337,6 +1389,7 @@ package struct TidyCard: View {
 
 /// AI plan preview: proposed start times, applied only on tap.
 package struct PlanCard: View {
+    @Environment(PlannerPresentation.self) private var presentation
     package let plan: [(task: OneTask, start: Date)]
     /// Set while a "Plan reminders into free time" grant is active: the card then only offers Apply.
     package var grantUntil: Date? = nil
@@ -1352,7 +1405,7 @@ package struct PlanCard: View {
                 .foregroundStyle(.secondary)
             ForEach(Array(plan.enumerated()), id: \.offset) { _, p in
                 HStack(spacing: 10) {
-                    Text(p.start.formatted(date: .omitted, time: .shortened))
+                    Text(askTimeLabel(p.start, runtime: presentation.runtime))
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .frame(width: 64, alignment: .leading)
@@ -1363,7 +1416,7 @@ package struct PlanCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text(grantUntil.map { "Only Today's planned times change; deadlines stay. Automatic until \(DayLabel.text(for: $0))." }
+            Text(grantUntil.map { "Only Today's planned times change; deadlines stay. Automatic until \(plannerDayLabel($0, runtime: presentation.runtime, includeTime: false))." }
                  ?? "Only Today's planned times change; deadlines stay.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -1438,6 +1491,7 @@ package struct UndoRow: Identifiable {
 
 /// AI change preview: old → new, who is affected, applied only on tap.
 package struct ChangeCard: View {
+    @Environment(PlannerPresentation.self) private var presentation
     package let change: PendingChange
     package var onApply: () -> Void
     package var onCancel: () -> Void
@@ -1451,7 +1505,7 @@ package struct ChangeCard: View {
             if change.delete {
                 Text(change.oldText).font(.subheadline).foregroundStyle(.secondary)
             } else if let new = change.newStart {
-                Text("\(change.oldText) → \(DayLabel.withTime(new))")
+                Text("\(change.oldText) → \(plannerDayLabel(new, runtime: presentation.runtime))")
                     .font(.subheadline)
                     .accessibilityIdentifier("change-times")
             }
@@ -1490,6 +1544,7 @@ package struct ChangeCard: View {
 
 /// The items a "which one?" question offers. Each is a real item from the calendar or task list; tapping one answers the question.
 struct ChoiceBar: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let options: [AskView.ChoiceOption]
     var onPick: (AskView.ChoiceOption) -> Void
 
@@ -1501,7 +1556,7 @@ struct ChoiceBar: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(option.title).font(.subheadline).lineLimit(1)
                             if let when = option.when {
-                                Text(DayLabel.withTime(when)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(plannerDayLabel(when, runtime: presentation.runtime)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -1523,67 +1578,106 @@ struct ChoiceBar: View {
 package struct AskActionFeedback {
     package var messages: [ChatMessage] = []
     package var undo: UndoRow?
+    package var applied = true
 }
 
 /// Real approved Ask mutations. These functions never run while a proposal is merely being prepared.
 @MainActor
 package enum AskNativeActions {
-    package static func applyChange(_ c: PendingChange, context: ModelContext, calendar: CalendarSync) -> AskActionFeedback {
+    package static func applyChange(_ c: PendingChange, context: ModelContext, calendar: any CalendarService,
+                                    actions: PlannerActions, ledger: Ledger, runtime: PlannerRuntime) -> AskActionFeedback {
+        func reply(_ text: String) -> ChatMessage { ChatMessage(role: .ai, text: text, timestamp: runtime.now()) }
         var feedback = AskActionFeedback()
-        func offerUndo(_ label: String, card: String, _ action: @escaping () -> Void) {
-            feedback.undo = UndoRow(label: label, action: action)
-        }
-
         switch c.subject {
         case .task(let task):
+            guard !task.isDeleted, task.modelContext != nil else { feedback.applied = false; return feedback }
             if c.delete {
-                let backup = task.copy()
-                let entry = Ledger.record(.deleted, title: backup.title, actor: .todayAI, channel: .ask, approval: .asked,
-                                          snapshot: Ledger.snapshot(of: task), context: context)
-                withAnimation { context.delete(task) }
-                offerUndo("Deleted “\(backup.title)”.", card: "change") {
-                    context.insert(backup)
-                    Ledger.recordUndo(of: entry, channel: .ask, context: context)
+                // Use the real action, including reminder deletion tracking and its retained Undo.
+                let toast = UndoToast()
+                let undoManager = UndoManager()
+                toast.undoManager = undoManager
+                actions.delete(task, context: context, toast: toast, actor: .todayAI, channel: .ask)
+                if let label = toast.message {
+                    feedback.undo = UndoRow(label: label, action: { undoManager.undo() })
                 }
             } else if let new = c.newStart {
-                let old = task.plannedStart // `due` is never touched
-                let entry = TaskActions.setPlanned(task, to: new, context: context, actor: .todayAI, channel: .ask, approval: .asked)
-                feedback.messages.append(ChatMessage(role: .ai, text: "Moved “\(task.title)” to \(DayLabel.withTime(new))."))
-                offerUndo("Moved “\(task.title)”.", card: "change") {
-                    task.plannedStart = old
-                    if let entry { Ledger.recordUndo(of: entry, channel: .ask, context: context) }
+                if let entry = actions.setPlanned(task, to: new, context: context, actor: .todayAI, channel: .ask, approval: .asked) {
+                    feedback.messages.append(reply( "Moved “\(task.title)” to \(ledger.timeLabel(new))."))
+                    feedback.undo = UndoRow(label: "Moved “\(task.title)”.", action: { _ = actions.undo(entry, context: context) })
                 }
             }
         case .event(let event):
+            guard !event.isDeleted, event.modelContext != nil, event.repeatRule == nil,
+                  event.externalID == nil || calendar.canDelete(externalID: event.externalID) else {
+                feedback.applied = false
+                feedback.messages.append(reply( "This event can't be changed here. Open it in Calendar."))
+                return feedback
+            }
+            let linked = event.externalID != nil
             if c.delete {
                 let backup = event.copy()
                 guard calendar.delete(event, span: .thisEvent) else {
-                    feedback.messages.append(ChatMessage(role: .ai, text: "Couldn't delete the calendar event, so nothing changed."))
+                    feedback.applied = false
+                    feedback.messages.append(reply( "Couldn't delete the calendar event. The preview is still here."))
                     return feedback
                 }
-                Ledger.record(.deleted, kind: "event", title: backup.title, before: c.oldText, actor: .todayAI, channel: .ask,
-                              approval: .asked, context: context)
-                withAnimation { context.delete(event) }
-                feedback.messages.append(ChatMessage(role: .ai, text: "Deleted “\(backup.title)”."))
-                offerUndo("Deleted “\(backup.title)”." + recallNote(c), card: "change") {
-                    backup.externalID = calendar.save(backup, span: .thisEvent)
-                    context.insert(backup)
+                context.delete(event)
+                do { try context.save() } catch {
+                    if !linked {
+                        context.insert(event)
+                        feedback.applied = false
+                        feedback.messages.append(reply( "Couldn't save the deletion. The preview is still here."))
+                        return feedback
+                    }
+                    feedback.messages.append(reply( "Calendar accepted the deletion, but Today couldn't save its copy. Reopen Today to retry saving."))
                 }
+                let entry = ledger.record(.deleted, kind: "event", title: backup.title, before: c.oldText,
+                                          actor: .todayAI, channel: .ask, approval: .asked, context: context)
+                feedback.messages.append(reply( "Deleted “\(backup.title)”."))
+                feedback.undo = UndoRow(label: "Deleted “\(backup.title)”." + recallNote(c), action: {
+                    // Recreating a remote event is compensation, never an atomic recall of invitations.
+                    if linked {
+                        guard let id = calendar.save(backup, span: .thisEvent) else { return }
+                        backup.externalID = id
+                    }
+                    context.insert(backup)
+                    do { try context.save() } catch {
+                        if !linked { context.delete(backup) }
+                        return
+                    }
+                    ledger.recordUndo(of: entry, channel: .ask, context: context)
+                })
             } else if let new = c.newStart {
                 let old = event.start
                 event.start = new
-                if event.externalID != nil, calendar.isOn, calendar.save(event, span: .thisEvent) == nil {
+                if linked, calendar.save(event, span: .thisEvent) == nil {
                     event.start = old
-                    feedback.messages.append(ChatMessage(role: .ai, text: "Couldn't update the calendar event, so nothing changed."))
+                    feedback.applied = false
+                    feedback.messages.append(reply( "Couldn't update the calendar event. The preview is still here."))
                     return feedback
                 }
-                Ledger.record(.moved, kind: "event", title: event.title, before: DayLabel.withTime(old), after: DayLabel.withTime(new),
-                              actor: .todayAI, channel: .ask, approval: .asked, context: context)
-                feedback.messages.append(ChatMessage(role: .ai, text: "Moved “\(event.title)” to \(DayLabel.withTime(new))."))
-                offerUndo("Moved “\(event.title)”." + recallNote(c), card: "change") {
-                    event.start = old
-                    if event.externalID != nil { _ = calendar.save(event, span: .thisEvent) }
+                do { try context.save() } catch {
+                    if !linked {
+                        event.start = old
+                        feedback.applied = false
+                        feedback.messages.append(reply( "Couldn't save the change. The preview is still here."))
+                        return feedback
+                    }
+                    feedback.messages.append(reply( "Calendar accepted the change, but Today couldn't save its copy. Reopen Today to retry saving."))
                 }
+                let entry = ledger.record(.moved, kind: "event", title: event.title, before: ledger.timeLabel(old), after: ledger.timeLabel(new),
+                                          actor: .todayAI, channel: .ask, approval: .asked, context: context)
+                feedback.messages.append(reply( "Moved “\(event.title)” to \(ledger.timeLabel(new))."))
+                feedback.undo = UndoRow(label: "Moved “\(event.title)”." + recallNote(c), action: {
+                    guard !event.isDeleted, event.modelContext != nil, event.start == new else { return }
+                    event.start = old
+                    if linked, calendar.save(event, span: .thisEvent) == nil { event.start = new; return }
+                    do { try context.save() } catch {
+                        if !linked { event.start = new }
+                        return
+                    }
+                    ledger.recordUndo(of: entry, channel: .ask, context: context)
+                })
             }
         }
         return feedback
@@ -1595,64 +1689,104 @@ package enum AskNativeActions {
 
     package static func applyPlan(_ rows: [(task: OneTask, start: Date)]? = nil,
                                   plan: inout [(task: OneTask, start: Date)], grant: AIGrant?,
-                                  approval: LedgerApproval = .asked, context: ModelContext) -> AskActionFeedback {
+                                  approval: LedgerApproval = .asked, context: ModelContext, actions: PlannerActions, ledger: Ledger, runtime: PlannerRuntime) -> AskActionFeedback {
+        func reply(_ text: String) -> ChatMessage { ChatMessage(role: .ai, text: text, timestamp: runtime.now()) }
         var feedback = AskActionFeedback()
 
-        let applied = rows ?? plan
         let auto = approval == .autoUnderGrant
+        let anchor = runtime.now()
+        let cal = runtime.calendar
+        let protected = auto ? ledger.protectedRefs(context, now: anchor) : (aiRecent: Set<String>(), userChose: Set<String>())
+        let applied = (rows ?? plan).filter { row in
+            guard !row.task.isDeleted, row.task.modelContext != nil, !row.task.isDone else { return false }
+            guard auto else { return true }
+            guard ledger.activity.recordsChanges, row.task.plannedStart == nil,
+                  let due = row.task.due, cal.isDate(due, inSameDayAs: anchor),
+                  cal.isDate(row.start, inSameDayAs: anchor),
+                  cal.dateComponents([.hour, .minute], from: due) == DateComponents(hour: 0, minute: 0) else { return false }
+            let ref = Ledger.ref(row.task.persistentModelID)
+            let change = ProposedChange(target: .reminder, operation: .setPlannedTime,
+                                        isDone: row.task.isDone, ringsAsAlarm: row.task.ringsAsAlarm,
+                                        aiChangedRecently: ref.map(protected.aiRecent.contains) ?? false,
+                                        userChoseTime: ref.map(protected.userChose.contains) ?? false)
+            return AutonomyPolicy.decide(change, grants: GrantStore.infos(context), now: anchor) == .auto
+        }
         let entries = applied.compactMap { p in
-            TaskActions.setPlanned(p.task, to: p.start, context: context, actor: .todayAI,
+            actions.setPlanned(p.task, to: p.start, context: context, actor: .todayAI,
                                    channel: auto ? .automatic : .ask, approval: approval)
         }
         if rows == nil { plan = [] }
         let n = applied.count
         let label = auto ? LedgerFormat.autoPlanned(n) + "." : "Planned \(n) task\(n == 1 ? "" : "s")."
-        var text = auto ? label + " Automatic until \(DayLabel.text(for: grant?.expires ?? .now))."
+        var text = auto ? label + " Automatic until \(ledger.dayLabel(grant?.expires ?? runtime.now()))."
                         : "Planned \(n) task\(n == 1 ? "" : "s") for today."
         if auto, !plan.isEmpty { text += " \(plan.count) more need\(plan.count == 1 ? "s" : "") your OK." }
-        feedback.messages.append(ChatMessage(role: .ai, text: text))
+        feedback.messages.append(reply( text))
         feedback.undo = UndoRow(label: label, action: {
-            for p in applied where p.task.plannedStart == p.start { p.task.plannedStart = nil }
-            for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
+            for entry in entries {
+                guard let row = applied.first(where: { Ledger.ref($0.task.persistentModelID) == entry.itemRef }),
+                      !row.task.isDeleted, row.task.modelContext != nil, row.task.plannedStart == row.start else { continue }
+                _ = actions.undo(entry, context: context)
+            }
         })
         return feedback
     }
 
     package static func applyPlanAlways(plan: inout [(task: OneTask, start: Date)], grant: inout AIGrant?,
-                                        context: ModelContext, onApproved: (Int) -> Void) -> AskActionFeedback {
-        grant = GrantStore.grant(.planFreeTime, context: context)
+                                        context: ModelContext, actions: PlannerActions, ledger: Ledger, runtime: PlannerRuntime, onApproved: (Int) -> Void) -> AskActionFeedback {
+        func reply(_ text: String) -> ChatMessage { ChatMessage(role: .ai, text: text, timestamp: runtime.now()) }
+        grant = GrantStore.grant(.planFreeTime, context: context, ledger: ledger, runtime: runtime)
         onApproved(plan.count)
-        var feedback = applyPlan(plan: &plan, grant: grant, context: context)
-        feedback.messages.append(ChatMessage(role: .ai, text: "For the next 7 days I'll plan reminders due today into free time by myself "
+        var feedback = applyPlan(plan: &plan, grant: grant, context: context, actions: actions, ledger: ledger, runtime: runtime)
+        feedback.messages.append(reply( "For the next 7 days I'll plan reminders due today into free time by myself "
             + "and tell you each time. Only Today's planned times change. Revoke it in Settings."))
         return feedback
     }
 
-    package static func applyTidy(rows: inout [TidyRow], context: ModelContext) -> AskActionFeedback {
+    package static func applyTidy(rows: inout [TidyRow], context: ModelContext, actions: PlannerActions, ledger: Ledger, runtime: PlannerRuntime) -> AskActionFeedback {
+        func reply(_ text: String) -> ChatMessage { ChatMessage(role: .ai, text: text, timestamp: runtime.now()) }
         var feedback = AskActionFeedback()
 
-        let changes = rows.filter { $0.choice != .keep }
-        var entries: [LedgerItem] = []
-        withAnimation {
-            for r in changes {
-                let new = OverdueTidy.newDue(r.oldDue, r.choice)
-                r.task.due = new
-                entries.append(Ledger.record(.redated, task: r.task, title: r.task.title, before: LedgerFormat.time(r.oldDue, none: "No date"),
-                                             after: LedgerFormat.time(new, none: "No date"), beforeDate: r.oldDue, afterDate: new,
-                                             actor: .todayAI, channel: .ask, approval: .asked, context: context))
-            }
+        let changes = rows.filter { $0.choice != .keep && !$0.task.isDeleted && $0.task.due == $0.oldDue }
+        let anchor = runtime.now()
+        for r in changes { r.task.due = OverdueTidy.newDue(r.oldDue, r.choice, now: anchor, calendar: runtime.calendar) }
+        do { try context.save() } catch {
+            for r in changes { r.task.due = r.oldDue }
+            feedback.applied = false
+            feedback.messages.append(reply( "Couldn't save the new dates. The preview is still here."))
+            return feedback
         }
-        try? context.save()
+        var entries: [LedgerItem] = []
+        for r in changes {
+                let new = r.task.due
+                entries.append(ledger.record(.redated, task: r.task, title: r.task.title, before: ledger.timeLabel(r.oldDue, none: "No date"),
+                                             after: ledger.timeLabel(new, none: "No date"), beforeDate: r.oldDue, afterDate: new,
+                                             actor: .todayAI, channel: .ask, approval: .asked, context: context))
+        }
         rows = []
         let label = "Moved \(changes.count) reminder\(changes.count == 1 ? "" : "s")."
-        feedback.messages.append(ChatMessage(role: .ai, text: label))
+        feedback.messages.append(reply( label))
         feedback.undo = UndoRow(label: label, action: {
-            for r in changes { r.task.due = r.oldDue }
-            for e in entries { Ledger.recordUndo(of: e, channel: .ask, context: context) }
-            try? context.save()
+            for entry in entries {
+                guard let row = changes.first(where: { Ledger.ref($0.task.persistentModelID) == entry.itemRef }),
+                      !row.task.isDeleted, row.task.modelContext != nil, row.task.due == entry.afterDate else { continue }
+                _ = actions.undo(entry, context: context)
+            }
         })
         return feedback
     }
 }
 
+func askTimeLabel(_ date: Date, runtime: PlannerRuntime) -> String {
+    let formatter = DateFormatter()
+    formatter.calendar = runtime.calendar; formatter.timeZone = runtime.calendar.timeZone
+    formatter.locale = runtime.locale; formatter.dateStyle = .none; formatter.timeStyle = .short
+    return formatter.string(from: date)
+}
+
+/// Explicit-calendar projection while One's persistent model helpers retain compatibility defaults.
+func askOccurrences(_ event: OneEvent, on day: Date, calendar: Calendar) -> [Date] {
+    guard let interval = calendar.dateInterval(of: .day, for: day) else { return [] }
+    return Recurrence.occurrences(start: event.start, duration: event.duration, rule: event.repeats, in: interval, calendar: calendar)
+}
 #endif

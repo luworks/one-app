@@ -51,6 +51,7 @@ package struct CaptureProposal: Identifiable, Equatable {
 /// Every item from one line at once: a single item is the full preview card; several are compact rows with their own
 /// Add and Skip, one "Add all", and a tap to open a row for editing. Added items keep their place with a check, Undo and Open.
 package struct CaptureStack: View {
+    @Environment(PlannerPresentation.self) private var presentation
     @Binding package var proposals: [CaptureProposal]
     /// The user's Reminders lists, for the list menu on tasks.
     package let lists: [String]
@@ -145,7 +146,7 @@ package struct CaptureStack: View {
 
     private func binding(_ id: UUID) -> Binding<Capture> {
         Binding(
-            get: { proposals.first { $0.id == id }?.capture ?? Capture(title: "", day: .now, hasDay: false) },
+            get: { proposals.first { $0.id == id }?.capture ?? Capture(title: "", day: presentation.now, hasDay: false) },
             set: { new in
                 if let i = proposals.firstIndex(where: { $0.id == id }) { proposals[i].capture = new }
             })

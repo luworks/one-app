@@ -12,10 +12,11 @@ import FoundationModels
 ///
 /// Everything stays on the device. A fresh session for every call (the instructions carry the facts, no history is kept);
 /// temperature low; nil on any failure, a timeout, an unavailable model or the simulator (it has no model and would hang).
-enum AskSuggestionRanker {
-    struct Answer: Sendable {
-        var picks: [SuggestionPick]
-        var extra: String?
+package enum AskSuggestionRanker {
+    package struct Answer: Sendable {
+        package var picks: [SuggestionPick]
+        package var extra: String?
+        package init(picks: [SuggestionPick], extra: String?) { self.picks = picks; self.extra = extra }
     }
 
     /// The model is only a nicety: give up after this long and keep the rule chips.
@@ -24,11 +25,11 @@ enum AskSuggestionRanker {
     static var isAvailable: Bool { AICapture.isAvailable }
 
     /// The model's choice among `pool` for right now, or nil when the caller should keep the rule ranking.
-    static func rank(pool: [SuggestionCandidate], facts: [String], language: SuggestionLanguage, count: Int) async -> Answer? {
+    static func rank(pool: [SuggestionCandidate], facts: [String], language: SuggestionLanguage, count: Int, localeID: String) async -> Answer? {
         guard isAvailable, !pool.isEmpty else { return nil }
         #if canImport(FoundationModels)
         if #available(iOS 26, *) {
-            return await ModelTimeout.run(seconds: timeout) { await OnDeviceRanker.rank(pool: pool, facts: facts, language: language, count: count) }
+            return await ModelTimeout.run(seconds: timeout) { await OnDeviceRanker.rank(pool: pool, facts: facts, language: language, count: count, localeID: localeID) }
         }
         #endif
         return nil
@@ -39,7 +40,7 @@ enum AskSuggestionRanker {
         (facts + ["Suggestions (id | message | why now):"] + pool.map { "\($0.id) | \($0.text) | \($0.why)" }).joined(separator: "\n")
     }
 
-    static func instructions(language: SuggestionLanguage, count: Int, localeID: String = Locale.current.identifier) -> String {
+    static func instructions(language: SuggestionLanguage, count: Int, localeID: String) -> String {
         [
             "You choose what a day-planner app suggests to its user right now.",
             "The person's locale is \(localeID).",
@@ -72,9 +73,9 @@ private struct ChosenSuggestion {
 
 @available(iOS 26, *)
 private enum OnDeviceRanker {
-    static func rank(pool: [SuggestionCandidate], facts: [String], language: SuggestionLanguage, count: Int) async -> AskSuggestionRanker.Answer? {
+    static func rank(pool: [SuggestionCandidate], facts: [String], language: SuggestionLanguage, count: Int, localeID: String) async -> AskSuggestionRanker.Answer? {
         let session = LanguageModelSession(model: .default,
-                                           instructions: AskSuggestionRanker.instructions(language: language, count: count))
+                                           instructions: AskSuggestionRanker.instructions(language: language, count: count, localeID: localeID))
         var options = GenerationOptions()
         options.temperature = 0.2
         options.maximumResponseTokens = 250

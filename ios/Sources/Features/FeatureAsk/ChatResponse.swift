@@ -12,8 +12,8 @@ private struct ChatTurn {
 }
 
 /// A separate route from capture extraction: the model is allowed to say there is nothing to add.
-enum ChatResponse {
-    enum Result { case capture, reply(String) }
+package enum ChatResponse {
+    package enum Result: Sendable { case capture, reply(String) }
 
     static func respond(_ text: String, history: String, intent: ChatRouting.Intent) async -> Result {
         if intent == .capture { return .capture }
