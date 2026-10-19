@@ -34,8 +34,8 @@ package protocol SoundPreviewing: AnyObject {
 
 /// Plays a tone for a few seconds while the user is choosing one, and stops when it is told to or the screen goes.
 @MainActor
-package final class SoundPreview {
-    package static let shared = SoundPreview()
+package final class SoundPreview: SoundPreviewing {
+    package init() {}
     private var player: AVAudioPlayer?
 
     package func play(_ sound: AlarmSound) {
