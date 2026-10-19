@@ -26,6 +26,12 @@ package struct AlarmSound: Identifiable, Hashable {
     #endif
 }
 
+@MainActor
+package protocol SoundPreviewing: AnyObject {
+    func play(_ sound: AlarmSound)
+    func stop()
+}
+
 /// Plays a tone for a few seconds while the user is choosing one, and stops when it is told to or the screen goes.
 @MainActor
 package final class SoundPreview {
