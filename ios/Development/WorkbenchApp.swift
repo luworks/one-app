@@ -11,7 +11,7 @@ struct WorkbenchApp: App {
 
     init() {
         launch = Result { try SceneRegistry.configuration(arguments: ProcessInfo.processInfo.arguments) }
-        // Root integration supplies its isolated logger/services through this explicit runtime.
+        // Fail closed until root provides prepare/makeServices/dispose for the real sandbox.
         runtime = .isolatedFeatures
     }
 
@@ -82,8 +82,8 @@ struct WorkbenchRoot: View {
                     ForEach(SceneRegistry.all) { Text($0.title).tag($0.id) }
                 }.accessibilityIdentifier("workbench.scene")
                 Picker("Scenario", selection: $scenario) {
-                    // All states remain visible so unsupported configurations produce an explicit rejection.
-                    ForEach(SceneScenario.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    // Only genuine production states are offered; launch validation still rejects unsupported states.
+                    ForEach(SceneScenario.allCases.filter { SceneRegistry.descriptor(for: selected).scenarios.contains($0) }, id: \.self) { Text($0.rawValue).tag($0) }
                 }.accessibilityIdentifier("workbench.scenario")
                 Picker("Appearance", selection: $appearance) {
                     Text("System").tag("system"); Text("Light").tag("light"); Text("Dark").tag("dark")
@@ -100,6 +100,9 @@ struct WorkbenchRoot: View {
                 if let blocker = SceneRegistry.descriptor(for: selected).integrationBlocker {
                     Text(blocker).foregroundStyle(.secondary)
                 }
+            }
+            .onChange(of: selected) { _, value in
+                if !SceneRegistry.descriptor(for: value).scenarios.contains(scenario) { scenario = .normal }
             }
             .navigationTitle("Workbench")
             .toolbar {

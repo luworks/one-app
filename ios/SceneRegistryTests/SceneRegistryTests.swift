@@ -49,8 +49,14 @@ struct SceneRegistryTests {
         #expect(SceneRegistry.descriptor(for: .healthDetail).capabilities.contains(.mockHealth))
         #expect(!SceneRegistry.descriptor(for: .health).scenarios.contains(.denied))
         #expect(!SceneRegistry.descriptor(for: .reminderEditor).scenarios.contains(.dense))
-        #expect(SceneRegistry.descriptor(for: .settingsSmartLists).integrationBlocker != nil)
-        #expect(SceneRegistry.descriptor(for: .settingsToday).integrationBlocker != nil)
+        #expect(SceneRegistry.descriptor(for: .settingsSmartLists).integrationBlocker == nil)
+        #expect(SceneRegistry.descriptor(for: .settingsToday).integrationBlocker == nil)
+        #expect(SceneRegistry.descriptor(for: .settingsApple).capabilities.contains(.legacyEnvironment))
+        #expect(SceneRegistry.descriptor(for: .health).scenarios.contains(.error))
+        #expect(SceneRegistry.descriptor(for: .health).scenarios.contains(.unavailable))
+        #expect(!SceneRegistry.descriptor(for: .healthDetail).scenarios.contains(.error))
+        #expect(!SceneRegistry.descriptor(for: .healthPicker).scenarios.contains(.unavailable))
+        #expect(!SceneRegistry.descriptor(for: .health).scenarios.contains(.loading))
     }
 
     @Test func configurationRoundTripPreservesClockCalendarAndIdentity() throws {

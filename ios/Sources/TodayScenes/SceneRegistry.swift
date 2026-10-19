@@ -28,7 +28,7 @@ public enum TodaySceneID: String, CaseIterable, Codable, Sendable, Identifiable 
 }
 
 public enum SceneScenario: String, CaseIterable, Codable, Sendable {
-    case normal, empty, loading, error, denied, revoked, dense
+    case normal, empty, loading, error, denied, revoked, dense, unavailable
 }
 
 public enum SceneCapability: String, Hashable, Codable, Sendable {
@@ -81,7 +81,13 @@ public struct SceneConfiguration: Equatable, Codable, Sendable {
         guard TimeZone(identifier: timeZoneIdentifier) != nil else {
             throw SceneConfigurationError.invalidTimeZone(timeZoneIdentifier)
         }
-        guard Locale.availableIdentifiers.contains(localeIdentifier) else {
+        // Foundation may inventory zh_Hans_CN while saved launch configurations use zh_CN.
+        // Compare maximized language identities to accept the same supported regional locale.
+        let language = Locale.Language(identifier: localeIdentifier).maximalIdentifier
+        guard Locale.availableIdentifiers.contains(localeIdentifier) ||
+                Locale.availableIdentifiers.contains(where: {
+                    Locale.Language(identifier: $0).maximalIdentifier == language
+                }) else {
             throw SceneConfigurationError.invalidLocale(localeIdentifier)
         }
         guard SceneRegistry.descriptor(for: scene).scenarios.contains(scenario) else {
@@ -134,7 +140,7 @@ public enum SceneRegistry {
     public static func descriptor(for id: TodaySceneID) -> SceneDescriptor {
         var states: Set<SceneScenario> = [.normal]
         var capabilities: Set<SceneCapability> = [.nativeInteraction, .isolatedDefaults, .legacyEnvironment]
-        var blocker: String?
+
         switch id {
         case .today, .todayReview, .calendarWeek, .calendarMonth, .calendarYear,
              .reminders, .remindersToday, .remindersScheduled, .remindersAll, .remindersFlagged,
@@ -151,6 +157,10 @@ public enum SceneRegistry {
             capabilities.insert(.injectedClock)
         case .health, .healthDetail:
             states.insert(.empty)
+            if id == .health {
+                // HealthSource availability and stalled queries feed real HealthView/HealthModel states.
+                states.formUnion([.error, .unavailable])
+            }
             capabilities.insert(.mockHealth)
             // HealthModel.row and HealthView's pushed detail still read TodayClock.now.
             // Detail itself accepts a clock and is already independent.
@@ -161,23 +171,11 @@ public enum SceneRegistry {
         case .healthPicker:
             capabilities.remove(.legacyEnvironment)
             capabilities.insert(.mockHealth)
-        case .settingsAppearance, .settingsCalendar, .settingsAlarms, .settingsHolidays:
-            capabilities.remove(.legacyEnvironment)
-        case .settingsToday:
-            blocker = "SettingsView's complete Today section is inline/private; TodayTimelineSettings is only a subset."
-        case .settingsAI:
-            blocker = "SettingsView's complete AI section and AutomaticChangesToggle are private; expose the real section."
-        case .settingsApple:
-            blocker = "SettingsView's Apple permission section is private; extract an injected native section."
-        case .settingsSmartLists:
-            blocker = "SettingsView.smartListsSection is private; expose the real section."
-        case .settingsAbout:
-            blocker = "SettingsView's About section and version property are private; expose the real section."
         default: break
         }
-        // No fake loading/error/denied/revoked state: these need injectable production state machines.
+        // Loading is transient; HealthKit cannot distinguish read denial from an empty answer.
         return SceneDescriptor(id: id, title: id.rawValue, scenarios: states,
-                               capabilities: capabilities, integrationBlocker: blocker)
+                               capabilities: capabilities, integrationBlocker: nil)
     }
 
     public static func configuration(arguments: [String]) throws -> SceneConfiguration {

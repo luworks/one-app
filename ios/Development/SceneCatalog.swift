@@ -6,17 +6,50 @@ import TodayScenes
 import TodayTestSupport
 import FeatureClock
 import FeatureHealth
+import One
+import TodayData
+import TodayPlatform
+import TodayDesignSystem
+import TodayPlannerUI
+import FeatureToday
+import FeatureCalendar
+import FeatureReminders
+import FeatureAsk
+import FeatureSettings
+import FeatureActivity
+import FeatureSearch
 
 /// Root assembly supplies the legacy service sandbox. A fresh ModelContainer alone does not
 /// isolate ActivityCenter, EventKit, AlarmKit, widget writes or static UserDefaults readers.
 @MainActor
 struct SceneCatalogRuntime {
     var prepareLegacyEnvironment: ((SceneConfiguration, ModelContainer, UserDefaults) throws -> Void)?
-    /// Existing AskView owns these private handlers; root may expose them without copying their logic here.
+    /// Called only after prepareLegacyEnvironment succeeds; must return sandboxed concrete adapters.
+    var makeServices: ((SceneConfiguration, ModelContainer, UserDefaults) throws -> SceneCatalogServices)?
+    var disposeLegacyEnvironment: (() -> Void)?
+    /// Optional assembly overrides; otherwise the cards call the real AskNativeActions.
     var applyChange: ((PendingChange, ModelContext, UndoToast) -> Void)?
     var applyAlways: (([(task: OneTask, start: Date)], ModelContext, UndoToast) -> Void)?
     var applyTidy: (([TidyRow], ModelContext, UndoToast) -> Void)?
     static let isolatedFeatures = SceneCatalogRuntime()
+}
+
+/// Concrete production constructor dependencies. Root owns their system-write boundaries.
+@MainActor
+struct SceneCatalogServices {
+    let calendar: CalendarSync
+    let reminders: RemindersSync
+    let notifications: Reminders
+    let alarms: AlarmCenter
+    let timers: TimerController
+    let activity: ActivityCenter
+    let diagnostics: LocalDiagnostics
+    let requestReminderAccess: @MainActor () async -> Void
+    let activitySummary: @MainActor () -> ActivityCenter.Summary
+    let clearActivity: @MainActor () -> Void
+    let exportActivity: @MainActor (ActivityExportFormat) async throws -> URL
+    let shareDiagnostics: @MainActor (URL) -> AnyView
+    let reset: @MainActor (ModelContext) -> Void
 }
 
 @MainActor
@@ -26,6 +59,14 @@ final class SceneSession {
     let container: ModelContainer
     let defaults: UserDefaults
     let health: HealthModel
+    let healthLine: HealthLineModel?
+    private let preparedServices: SceneCatalogServices?
+    private var disposed = false
+
+    var services: SceneCatalogServices {
+        guard let preparedServices else { preconditionFailure("Scene was not prepared for legacy services.") }
+        return preparedServices
+    }
     let world: WorldClockStore
     let stopwatch: StopwatchModel
     let toast = UndoToast()
@@ -52,21 +93,25 @@ final class SceneSession {
             ChatThread.self, LedgerEntry.self, AIGrant.self, ShareImportReceipt.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         container.mainContext.autosaveEnabled = false
-        if configuration.scene == .askPlan, runtime.applyAlways == nil {
-            throw SceneConfigurationError.integrationRequired(configuration.scene, "Expose AskView's private applyPlanAlways handler through SceneCatalogRuntime.applyAlways.")
-        }
-        if configuration.scene == .askChange, runtime.applyChange == nil {
-            throw SceneConfigurationError.integrationRequired(configuration.scene, "Expose AskView's private change handler through SceneCatalogRuntime.applyChange.")
-        }
-        if configuration.scene == .askTidy, runtime.applyTidy == nil {
-            throw SceneConfigurationError.integrationRequired(configuration.scene, "Expose AskView's private tidy handler through SceneCatalogRuntime.applyTidy.")
-        }
         if descriptor.capabilities.contains(.legacyEnvironment) {
-            guard let prepare = runtime.prepareLegacyEnvironment else {
+            guard let prepare = runtime.prepareLegacyEnvironment, let makeServices = runtime.makeServices,
+                  runtime.disposeLegacyEnvironment != nil else {
                 throw SceneConfigurationError.integrationRequired(configuration.scene,
-                    "Root must inject an isolated legacy environment; no shared service was started.")
+                    "Root must supply prepareLegacyEnvironment, makeServices and disposeLegacyEnvironment for a real sandbox.")
             }
-            try prepare(configuration, container, defaults)
+            // No concrete singleton or view may be constructed before this gate.
+            do {
+                try prepare(configuration, container, defaults)
+                preparedServices = try makeServices(configuration, container, defaults)
+            } catch {
+                runtime.disposeLegacyEnvironment?()
+                throw error
+            }
+        } else { preparedServices = nil }
+        defer {
+            if !completed, descriptor.capabilities.contains(.legacyEnvironment) {
+                runtime.disposeLegacyEnvironment?()
+            }
         }
         if (configuration.scenario != .empty || configuration.scene == .remindersList),
            descriptor.capabilities.contains(.inMemoryModels) || Self.needsModelFixture(configuration.scene) {
@@ -94,7 +139,11 @@ final class SceneSession {
             try container.mainContext.save()
         }
         let selection = HealthSelectionStore(defaults: defaults, arguments: [])
-        health = HealthModel(source: SceneHealthSource(configuration: configuration), store: selection)
+        let baseHealth = SceneHealthSource(configuration: configuration)
+        let source: any HealthSource = configuration.scenario == .error
+            ? ScriptedHealthSource(base: baseHealth, stalledSeries: Set(HealthMetric.defaults)) : baseHealth
+        health = HealthModel(source: source, store: selection, timeout: configuration.scenario == .error ? 0.05 : HealthTimeout.seconds)
+        healthLine = preparedServices == nil ? nil : HealthLineModel(source: source)
         let cities = CityDatabase.shared
         world = WorldClockStore(database: cities, defaults: defaults,
                                 homeZoneIdentifier: configuration.timeZoneIdentifier, arguments: [])
@@ -127,7 +176,12 @@ final class SceneSession {
         return FileManager.default.fileExists(atPath: source.path) ? source : nil
     }
 
-    func dispose() { defaults.removePersistentDomain(forName: suiteName) }
+    func dispose() {
+        guard !disposed else { return }
+        disposed = true
+        if preparedServices != nil { runtime.disposeLegacyEnvironment?() }
+        defaults.removePersistentDomain(forName: suiteName)
+    }
 
     private static func needsModelFixture(_ id: TodaySceneID) -> Bool {
         switch id {
@@ -167,7 +221,7 @@ enum SceneSessionError: Error, CustomStringConvertible {
 
 private struct SceneHealthSource: HealthSource {
     let configuration: SceneConfiguration
-    var isAvailable: Bool { true }
+    var isAvailable: Bool { configuration.scenario != .unavailable }
     var isSample: Bool { true }
     func requestAccess(for metrics: [HealthMetric]) async {}
     func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric: HealthSeries] {
@@ -191,6 +245,10 @@ struct SceneCatalog: View {
     @State private var pushed = false
     @State private var shownMetrics: Set<HealthMetric> = Set(HealthMetric.defaults)
     @State private var sound = ""
+    @State private var opened: OpenedEntry?
+    @State private var afterEditor: (() -> Void)?
+    @State private var showsTimer = false
+    @State private var showsDay = false
 
     init(session: SceneSession) {
         self.session = session
@@ -204,27 +262,35 @@ struct SceneCatalog: View {
             .modelContainer(session.container)
             .defaultAppStorage(session.defaults)
             .environment(session.toast)
+            .environment(session.health)
             .environment(\.locale, Locale(identifier: session.configuration.localeIdentifier))
             .environment(\.layoutDirection,
                          Locale(identifier: session.configuration.localeIdentifier).language.characterDirection == .rightToLeft
                          ? .rightToLeft : .leftToRight)
             .environment(\.timeZone, session.configuration.calendar.timeZone)
             .environment(\.calendar, session.configuration.calendar)
+            .sheet(item: $opened, onDismiss: {
+                let completion = afterEditor; afterEditor = nil; completion?()
+            }) { editor($0) }
+            .sheet(isPresented: $showsTimer) { TimerSection(controller: session.services.timers, alarms: session.services.alarms) }
+            .sheet(isPresented: $showsDay) { NavigationStack { agenda } }
             .overlay(alignment: .bottom) { UndoToastView().environment(session.toast) }
     }
 
     @ViewBuilder private var content: some View {
         switch session.configuration.scene {
         case .today:
-            NavigationStack { DayAgenda(day: $day, showsWeekStrip: false) }
+            NavigationStack { agenda }
         case .todayReview:
             EveningReviewSheet(now: day, tomorrow: session.configuration.calendar.date(byAdding: .day, value: 1, to: day)!, peek: [])
         case .calendarWeek, .calendarMonth, .calendarYear:
-            NavigationStack { CalendarView(day: $day, mode: $mode, onOpenDay: { day = $0 }) }
+            NavigationStack { CalendarView(day: $day, mode: $mode, calendar: session.services.calendar,
+                onOpenTask: { opened = .task($0) }, onOpenAlarm: { opened = .alarm($0) },
+                onOpenDay: { day = $0; showsDay = true }) }
         case .calendarKey: YearKeySheet()
-        case .calendarSources: CalendarsSheet()
-        case .eventEditor: EventEditor(event: events.first, day: day)
-        case .reminders: RemindersView(isPushed: $pushed, path: $path)
+        case .calendarSources: CalendarsSheet(calendar: session.services.calendar)
+        case .eventEditor: EventEditor(event: events.first, day: day, calendar: session.services.calendar)
+        case .reminders: RemindersView(isPushed: $pushed, path: $path, sync: session.services.reminders, requestAccess: session.services.requestReminderAccess)
         case .remindersToday: reminderList(.smart(.today))
         case .remindersScheduled: reminderList(.smart(.scheduled))
         case .remindersAll: reminderList(.smart(.all))
@@ -235,28 +301,40 @@ struct SceneCatalog: View {
         case .reminderEditor: TaskEditor(task: tasks.first)
         case .reminderQuickAdd: QuickReminderSheet()
         case .reminderListEditor: ListEditor(list: lists.first)
-        case .clockAlarms: AlarmsView(section: $clock)
-        case .alarmEditor: AlarmEditor(alarm: alarms.first)
+        case .clockAlarms: AlarmsView(section: $clock, alarms: session.services.alarms, timers: session.services.timers, showUndo: session.toast.show)
+        case .alarmEditor: AlarmEditor(alarm: alarms.first, showUndo: session.toast.show)
         case .alarmSound: NavigationStack { SoundScreen(sound: $sound) }
         case .clockWorld:
             WorldClockView(store: session.world, now: { session.configuration.now }, showUndo: session.toast.show)
         case .cityPicker: CityPicker(store: session.world, now: { session.configuration.now })
         case .clockStopwatch: StopwatchView(model: session.stopwatch)
-        case .clockTimer: TimerSection()
-        case .ask: AskView(thread: chats.first)
+        case .clockTimer: TimerSection(controller: session.services.timers, alarms: session.services.alarms)
+        case .ask:
+            AskView(thread: chats.first, calendar: session.services.calendar, now: { session.configuration.now },
+                onBack: { _ in }, onAdded: { _ in }, onOpenDay: { day = $0; showsDay = true },
+                onOpenTask: { task, completion in afterEditor = completion; opened = .task(task) },
+                onOpenAlarm: { alarm, completion in afterEditor = completion; opened = .alarm(alarm) })
         case .askCapture, .askStack, .askPlan, .askChange, .askTidy:
             SceneAskCards(session: session)
-        case .activity: ActivityView()
-        case .search: SearchView()
-        case .settings: SettingsView()
-        case .settingsAppearance: NavigationStack { Form { AppearanceSettingsRow() }.navigationTitle("Appearance") }
-        case .settingsCalendar: NavigationStack { Form { CalendarSettingsSection() } }
-        case .settingsReminders: NavigationStack { Form { RemindersSettingsSection() } }
-        case .settingsAlarms: NavigationStack { Form { AlarmsSettingsSection() } }
+        case .activity:
+            ActivityView(activity: session.services.activity,
+                         flush: { Ledger.flush(session.container.mainContext) },
+                         undo: { Ledger.undo($0, context: session.container.mainContext) })
+        case .search: SearchView { editor($0) }
+        case .settings: settings(.all)
+        case .settingsAppearance: settings(.appearance)
+        case .settingsApple: settings(.apple)
+        case .settingsToday: settings(.today)
+        case .settingsCalendar: settings(.calendar)
+        case .settingsReminders: settings(.reminders)
+        case .settingsSmartLists: settings(.smartLists)
+        case .settingsAlarms: settings(.alarms)
+        case .settingsAI: settings(.ai)
+        case .settingsAbout: settings(.about)
         case .settingsAutomaticChanges: NavigationStack { AutomaticChangesView() }
-        case .settingsActivity: NavigationStack { ActivityDataView() }
+        case .settingsActivity: NavigationStack { activityData }
         case .settingsHolidays: NavigationStack { YearHolidaysSettingsView() }
-        case .settingsDelete: DeleteDataConfirmation(onConfirm: { DataReset.run(session.container.mainContext) })
+        case .settingsDelete: settings(.data)
         case .health: HealthView(model: session.health)
         case .healthDetail:
             HealthMetricDetail(metric: .steps,
@@ -265,11 +343,37 @@ struct SceneCatalog: View {
                                now: session.configuration.now, units: HealthUnits(locale: Locale(identifier: session.configuration.localeIdentifier)),
                                calendar: session.configuration.calendar)
         case .healthPicker: HealthMetricPicker(shown: $shownMetrics)
-        case .settingsApple, .settingsSmartLists, .settingsAbout, .settingsToday, .settingsAI:
-            // Session validation rejects these private subsections before this factory is entered.
-            SceneFailure(error: SceneConfigurationError.integrationRequired(session.configuration.scene,
-                SceneRegistry.descriptor(for: session.configuration.scene).integrationBlocker!))
         }
+    }
+
+    private var agenda: some View {
+        DayAgenda(day: $day, showsWeekStrip: false, openTask: { opened = .task($0) },
+                  openEvent: { opened = .local($0) }, openTimer: { showsTimer = true })
+            .environment(session.healthLine!)
+    }
+
+    @ViewBuilder private func editor(_ destination: OpenedEntry) -> some View {
+        switch destination {
+        case .task(let task): TaskEditor(task: task)
+        case .local(let event): EventEditor(event: event, calendar: session.services.calendar)
+        case .alarm(let alarm): AlarmEditor(alarm: alarm, showUndo: session.toast.show)
+        case .system(let id), .editSystem(let id): NativeEventSheet(identifier: id)
+        case .new(let start, let end): EventEditor(start: start, end: end, calendar: session.services.calendar)
+        }
+    }
+
+    private var activityData: some View {
+        ActivityDataView(summary: session.services.activitySummary, clear: session.services.clearActivity,
+            export: session.services.exportActivity,
+            legacyRowCount: { (try? session.container.mainContext.fetchCount(FetchDescriptor<LedgerEntry>())) ?? 0 })
+    }
+
+    private func settings(_ selection: SettingsView.Selection) -> some View {
+        SettingsView(selection: selection, calendar: session.services.calendar, reminders: session.services.reminders,
+            notifications: session.services.notifications, diagnostics: session.services.diagnostics,
+            calendars: { AnyView(CalendarsSheet(calendar: session.services.calendar)) },
+            holidays: { AnyView(YearHolidaysSettingsView()) }, activityData: { AnyView(activityData) },
+            shareDiagnostics: session.services.shareDiagnostics, reset: session.services.reset)
     }
 
     private func reminderList(_ target: ReminderTarget) -> some View {
@@ -278,12 +382,12 @@ struct SceneCatalog: View {
     private var tasks: [OneTask] { (try? session.container.mainContext.fetch(FetchDescriptor<OneTask>(sortBy: [SortDescriptor(\.createdAt)]))) ?? [] }
     private var events: [OneEvent] { (try? session.container.mainContext.fetch(FetchDescriptor<OneEvent>(sortBy: [SortDescriptor(\.start)]))) ?? [] }
     private var lists: [OneList] { (try? session.container.mainContext.fetch(FetchDescriptor<OneList>(sortBy: [SortDescriptor(\.order)]))) ?? [] }
-    private var alarms: [OneAlarm] { (try? session.container.mainContext.fetch(FetchDescriptor<OneAlarm>())) ?? [] }
-    private var chats: [ChatThread] { (try? session.container.mainContext.fetch(FetchDescriptor<ChatThread>())) ?? [] }
+    private var alarms: [OneAlarm] { (try? session.container.mainContext.fetch(FetchDescriptor<OneAlarm>(sortBy: [SortDescriptor(\.hour), SortDescriptor(\.minute), SortDescriptor(\.label)]))) ?? [] }
+    private var chats: [ChatThread] { (try? session.container.mainContext.fetch(FetchDescriptor<ChatThread>(sortBy: [SortDescriptor(\.title)]))) ?? [] }
 }
 
 /// Real product cards, with local selection state and existing creation/planning/undo APIs.
-/// Tidy/change handlers stay owned by app assembly rather than copying private AskView logic.
+/// Mutations call AskNativeActions; assembly may override the feedback host.
 @MainActor
 private struct SceneAskCards: View {
     let session: SceneSession
@@ -342,7 +446,13 @@ private struct SceneAskCards: View {
                                      onUndo: undo, onOpen: open)
                     case .askPlan:
                         PlanCard(plan: plan, onApply: applyPlan, onAlways: {
-                            session.runtime.applyAlways?(plan, session.container.mainContext, session.toast)
+                            if let apply = session.runtime.applyAlways { apply(plan, session.container.mainContext, session.toast) }
+                            else {
+                                var rows = plan
+                                var grant: AIGrant?
+                                feedback(AskNativeActions.applyPlanAlways(plan: &rows, grant: &grant,
+                                    context: session.container.mainContext, onApproved: { _ in }))
+                            }
                             resolved = true
                         }, onCancel: { resolved = true })
                     case .askChange:
@@ -351,13 +461,16 @@ private struct SceneAskCards: View {
                                                        oldText: "Current planned time", newStart: session.configuration.now,
                                                        notes: [], attendees: 0)
                             ChangeCard(change: change, onApply: {
-                                session.runtime.applyChange?(change, session.container.mainContext, session.toast)
+                                if let apply = session.runtime.applyChange { apply(change, session.container.mainContext, session.toast) }
+                                else { feedback(AskNativeActions.applyChange(change, context: session.container.mainContext,
+                                                                            calendar: session.services.calendar)) }
                                 resolved = true
                             }, onCancel: { resolved = true })
                         }
                     case .askTidy:
                         TidyCard(rows: $tidy, onApply: {
-                            session.runtime.applyTidy?(tidy, session.container.mainContext, session.toast)
+                            if let apply = session.runtime.applyTidy { apply(tidy, session.container.mainContext, session.toast) }
+                            else { feedback(AskNativeActions.applyTidy(rows: &tidy, context: session.container.mainContext)) }
                             resolved = true
                         }, onCancel: { resolved = true })
                     default: EmptyView() // This private host is constructed only for the five card IDs.
@@ -369,8 +482,8 @@ private struct SceneAskCards: View {
             .sheet(item: $opened) { item in
                 let model = session.container.mainContext.model(for: item.id)
                 if let task = model as? OneTask { TaskEditor(task: task) }
-                else if let event = model as? OneEvent { EventEditor(event: event) }
-                else if let alarm = model as? OneAlarm { AlarmEditor(alarm: alarm) }
+                else if let event = model as? OneEvent { EventEditor(event: event, calendar: session.services.calendar) }
+                else if let alarm = model as? OneAlarm { AlarmEditor(alarm: alarm, showUndo: session.toast.show) }
             }
         }
     }
@@ -397,19 +510,15 @@ private struct SceneAskCards: View {
         guard let entry = entries[id] else { return }
         if Ledger.undo(entry, context: session.container.mainContext) { update(id, status: .undone) }
     }
-    private func applyPlan() {
-        let entries = plan.compactMap {
-            TaskActions.setPlanned($0.task, to: $0.start, context: session.container.mainContext,
-                                   actor: .todayAI, channel: .ask, approval: .asked)
-        }
-        do { try session.container.mainContext.save() }
-        catch { session.toast.showNotice("Could not save: \(error.localizedDescription)"); return }
-        resolved = true
-        session.toast.show("Planned reminders") {
-            for entry in entries { _ = Ledger.undo(entry, context: session.container.mainContext) }
-            resolved = false
-        }
+    private func feedback(_ feedback: AskActionFeedback) {
+        if let undo = feedback.undo { session.toast.show(undo.label, undo: undo.action) }
     }
+    private func applyPlan() {
+        var rows = plan
+        feedback(AskNativeActions.applyPlan(plan: &rows, grant: nil, context: session.container.mainContext))
+        resolved = true
+    }
+
 }
 
 struct SceneFailure: View {
