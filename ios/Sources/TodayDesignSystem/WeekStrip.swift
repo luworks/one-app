@@ -5,9 +5,10 @@ import TodayCore
 package struct WeekStrip: View {
     package init(selected: Binding<Date>) { _selected = selected }
     @Binding package var selected: Date
+    @Environment(PlannerPresentation.self) private var presentation
 
     private var cal: Calendar {
-        var c = Calendar.current
+        var c = presentation.calendar
         c.firstWeekday = 2 // Monday
         return c
     }
@@ -18,6 +19,7 @@ package struct WeekStrip: View {
     }
 
     package var body: some View {
+        let now = presentation.now
         HStack(spacing: 2) {
             Button { shift(-7) } label: { Image(systemName: "chevron.left").padding(6) }
             ForEach(days, id: \.self) { d in
@@ -26,14 +28,14 @@ package struct WeekStrip: View {
                     selected = cal.startOfDay(for: d)
                 } label: {
                     VStack(spacing: 4) {
-                        Text(d.formatted(.dateTime.weekday(.narrow)))
+                        Text(d.formatted(Date.FormatStyle(locale: presentation.locale, calendar: cal, timeZone: cal.timeZone).weekday(.narrow)))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        Text("\(Calendar.current.component(.day, from: d))")
+                        Text("\(cal.component(.day, from: d))")
                             .font(.callout.weight(isSelected ? .bold : .regular))
                             .frame(width: 32, height: 32)
                             .background(isSelected ? Color.accentColor : Color.clear, in: Circle())
-                            .foregroundStyle(isSelected ? Color.white : (cal.isDateInToday(d) ? Color.accentColor : Color.primary))
+                            .foregroundStyle(isSelected ? Color.white : (cal.isDate(d, inSameDayAs: now) ? Color.accentColor : Color.primary))
                     }
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())

@@ -5,8 +5,9 @@ import TodayCore
 package struct TimeColumn: View {
     package init(date: Date) { self.date = date }
     package let date: Date
+    @Environment(PlannerPresentation.self) private var presentation
     package var body: some View {
-        Text(date.formatted(date: .omitted, time: .shortened))
+        Text(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: presentation.locale, calendar: presentation.calendar, timeZone: presentation.calendar.timeZone)))
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
             // Never wraps: at large text sizes the column widens instead of breaking "09:00" over three lines.
@@ -68,9 +69,10 @@ package struct CalendarBar: View {
 package struct NowRow: View {
     package init(date: Date) { self.date = date }
     package let date: Date
+    @Environment(PlannerPresentation.self) private var presentation
     package var body: some View {
         HStack(spacing: 8) {
-            Text("Now " + date.formatted(date: .omitted, time: .shortened))
+            Text("Now " + date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: presentation.locale, calendar: presentation.calendar, timeZone: presentation.calendar.timeZone)))
                 .font(.caption.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.red)
             Rectangle().fill(Color.red).frame(height: 1)

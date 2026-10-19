@@ -252,35 +252,35 @@ public struct HealthSelection: Equatable, Sendable {
     }
 }
 
-/// The saved selection (UserDefaults). UI tests start from the default (or from `-uiTestingHealthMetrics steps,weight`);
-/// a second launch that must see what the first one saved passes `-uiTestingKeepHealthMetrics`.
+/// The saved selection in a session's explicitly supplied preferences.
+/// Development assembly owns launch-argument parsing and may inject an initial selection.
 /// UI-owned preference state; Health queries pass immutable selections across tasks.
 @MainActor
 public final class HealthSelectionStore {
     public static let defaultsKey = "today.health.metrics"
-    /// Posted after every save, so the Today line follows a change made from Settings or the sheet.
+    /// Posted after every save with this store as the object. Subscribers must filter by their session's store.
     public static let didChange = Notification.Name("today.health.metrics.didChange")
-    public static let shared = HealthSelectionStore()
 
     private let defaults: UserDefaults
     public private(set) var selection: HealthSelection
 
-    public init(defaults: UserDefaults = .standard, arguments: [String] = ProcessInfo.processInfo.arguments) {
+    /// Production initialization only reads the supplied defaults; it never resets or seeds preferences.
+    public init(defaults: UserDefaults) {
         self.defaults = defaults
-        if arguments.contains("-uiTesting"), !arguments.contains("-uiTestingKeepHealthMetrics") {
-            defaults.removeObject(forKey: Self.defaultsKey)
-            if let i = arguments.firstIndex(of: "-uiTestingHealthMetrics"), i + 1 < arguments.count {
-                let seeded = HealthSelection(shown: arguments[i + 1].split(separator: ",").compactMap { HealthMetric(rawValue: String($0)) })
-                defaults.set(seeded.encoded(), forKey: Self.defaultsKey)
-            }
-        }
         selection = HealthSelection.decoded(defaults.data(forKey: Self.defaultsKey))
+    }
+
+    /// Explicit development seeding, without process arguments. Persists even an empty selection for relaunches.
+    public init(defaults: UserDefaults, initialSelection: HealthSelection) {
+        self.defaults = defaults
+        selection = initialSelection
+        defaults.set(initialSelection.encoded(), forKey: Self.defaultsKey)
     }
 
     public func save(_ selection: HealthSelection) {
         self.selection = selection
         defaults.set(selection.encoded(), forKey: Self.defaultsKey)
-        NotificationCenter.default.post(name: Self.didChange, object: nil)
+        NotificationCenter.default.post(name: Self.didChange, object: self)
     }
 }
 

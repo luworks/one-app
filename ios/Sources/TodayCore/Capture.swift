@@ -38,16 +38,25 @@ public struct Capture: Equatable, Codable, Sendable {
     public var isReadyToAdd: Bool { !ringsAsAlarm || hour != nil }
 
     public var plannedStart: Date? {
+        plannedStart(calendar: .current)
+    }
+
+    public func plannedStart(calendar: Calendar) -> Date? {
         guard let hour else { return nil }
-        return Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: day)
+        return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
     }
 
     /// The dates a reminder made from this capture is written with. A reminder that alerts at a time is written like the
     /// Quick Add sheet writes it: the time is its due time and the alert fires at it (reminderOffsetMinutes 0). Only working
     /// time (`isWorkBlock`) and alarms keep a planned time, so principle 3 holds: planned time is never the deadline.
     public var taskTiming: (plannedStart: Date?, due: Date?, alertMinutesBefore: Int?) {
-        if alertsAtTime { return (nil, plannedStart, 0) }
-        return (plannedStart, plannedStart == nil && hasDay ? day : nil, nil)
+        taskTiming(calendar: .current)
+    }
+
+    public func taskTiming(calendar: Calendar) -> (plannedStart: Date?, due: Date?, alertMinutesBefore: Int?) {
+        let start = plannedStart(calendar: calendar)
+        if alertsAtTime(calendar: calendar) { return (nil, start, 0) }
+        return (start, start == nil && hasDay ? day : nil, nil)
     }
 
     /// "New reminder", "New event", "New alarm": the card's first line.
@@ -66,28 +75,52 @@ public struct Capture: Equatable, Codable, Sendable {
 
     /// A reminder with a clock time that alerts at that time (see `makeTask`): not an event, not an alarm, not working time.
     public var alertsAtTime: Bool {
-        kind == .task && !ringsAsAlarm && !isWorkBlock && plannedStart != nil
+        alertsAtTime(calendar: .current)
+    }
+
+    public func alertsAtTime(calendar: Calendar) -> Bool {
+        kind == .task && !ringsAsAlarm && !isWorkBlock && plannedStart(calendar: calendar) != nil
     }
 
     /// What the card says will be created, in the words of the result: "Tomorrow 9:00 AM · alerts you", "Due Friday".
     public var summary: String {
+        summary(now: .now, calendar: .current, locale: .current)
+    }
+
+    /// The existing readiness policy depends only on whether an alarm has a chosen hour.
+    /// Accepts the same calendar as the explicit timing path without adding date-validity requirements.
+    public func isReadyToAdd(calendar: Calendar) -> Bool { isReadyToAdd }
+
+    public func summary(now: Date, calendar: Calendar, locale: Locale) -> String {
+        let plannedStart = plannedStart(calendar: calendar)
+        func dayText(_ date: Date) -> String {
+            if calendar.isDate(date, inSameDayAs: now) { return "Today" }
+            if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: tomorrow) { return "Tomorrow" }
+            if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) { return "Yesterday" }
+            return date.formatted(Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone).month().day())
+        }
+        func withTime(_ date: Date) -> String {
+            let parts = calendar.dateComponents([.hour, .minute], from: date)
+            if parts.hour == 0 && parts.minute == 0 { return dayText(date) }
+            return dayText(date) + " " + date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale, calendar: calendar, timeZone: calendar.timeZone))
+        }
         var parts: [String] = []
         switch kind {
         case .event where isAllDay:
-            parts.append(DayLabel.text(for: day) + " · All day")
+            parts.append(dayText(day) + " · All day")
         case .event:
             let start = plannedStart ?? day
-            parts.append(DayLabel.withTime(start))
+            parts.append(withTime(start))
             if let d = durationMinutes { parts.append(DurationLabel.text(minutes: d)) }
         case .task where ringsAsAlarm:
-            parts.append("Alarm " + (plannedStart.map { DayLabel.withTime($0) } ?? ""))
+            parts.append("Alarm " + (plannedStart.map { withTime($0) } ?? ""))
             if let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)) { parts.append(rule.label) }
         case .task:
-            if let start = plannedStart { parts.append((isWorkBlock ? "Planned " : "") + DayLabel.withTime(start)) }
-            else if hasDay { parts.append("Due " + DayLabel.text(for: day)) }
+            if let start = plannedStart { parts.append((isWorkBlock ? "Planned " : "") + withTime(start)) }
+            else if hasDay { parts.append("Due " + dayText(day)) }
             else { parts.append("No date") }
             if let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)) { parts.append(rule.label) }
-            if alertsAtTime { parts.append("alerts you") }
+            if alertsAtTime(calendar: calendar) { parts.append("alerts you") }
         }
         return parts.joined(separator: " · ")
     }
@@ -107,6 +140,17 @@ public struct Capture: Equatable, Codable, Sendable {
         self.listName = listName
         self.isWorkBlock = isWorkBlock
         self.notes = notes
+    }
+}
+
+public extension CardStatus {
+    /// Explicit presentation context for the existing spoken card label.
+    func accessibilityLabel(for capture: Capture, now: Date, calendar: Calendar, locale: Locale) -> String {
+        let summary = capture.summary(now: now, calendar: calendar, locale: locale)
+        switch self {
+        case .open: return capture.title + ", " + summary
+        default: return footerTitle + ": " + capture.title + ", " + summary
+        }
     }
 }
 
