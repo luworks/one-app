@@ -129,6 +129,7 @@ def _native_results(root, lane, output, report):
 
 def _test_results(root, lane, output, run, report):
     kind, expected = test_plan(root, lane)
+    source = contract.inventory(root) if kind == 'logic' else None
     report['missing'] = len(expected)
     if kind == 'logic':
         # Identical swift test authority to commands.test(unit), with no guessed filter.
@@ -147,7 +148,7 @@ def _test_results(root, lane, output, run, report):
     raw = Path(result.log).read_text()
     (output / 'command.log').write_text(Redactor()(raw))
     report['cancelled'] += int(result.reason == 'cancelled' or result.returncode in (130, -2, -15))
-    attempts = contract.log_attempts(raw, kind)
+    attempts = contract.log_attempts(raw, kind, source=source)
     report['failed'] = sum(a['status'] == 'failed' for a in attempts)
     if result.reason != 'exited':
         report['errors'].append('process_' + result.reason)
@@ -171,7 +172,9 @@ def _test_results(root, lane, output, run, report):
         # Reparse the retained xcresult tree, rather than trusting copied counters.
         tree = json.loads((output / 'runner/xcresult-tests.json').read_text())
         attempts = contract.xcresult_attempts(tree, kind)
-    authority = contract.report(expected, attempts, result.returncode, raw_log=raw)
+    authority = contract.report(expected, attempts, result.returncode, raw_log=raw,
+                                allowed_skips=['benchmark', 'export'] if kind == 'logic' else [],
+                                skip_rules=contract.load_manifest()['skip_rules'])
     atomic_json(output / 'test-report.json', authority)
     report['executed'] += authority['executed_count']
     report['failed'] = max(report['failed'], sum(a['status'] == 'failed' for a in authority['attempts']))

@@ -69,7 +69,14 @@ def completed_report(contract, expected, lane, data, exit_code, raw_log, parser_
         attempts = contract.xcresult_attempts(data, lane)
     except (ValueError, TypeError, KeyError) as error:
         parser_error = str(error)
-    report = contract.report(expected, attempts, exit_code=exit_code, raw_log=raw_log)
+    reasons = {a['test']: a['reason'] for a in contract.log_attempts(raw_log, lane)
+               if a['status'] == 'skipped' and a['reason']}
+    for attempt in attempts:
+        if attempt['status'] == 'skipped' and not attempt.get('reason'):
+            attempt['reason'] = reasons.get(attempt['test'], '')
+    report = contract.report(expected, attempts, exit_code=exit_code, raw_log=raw_log,
+                             allowed_skips=['benchmark', 'export'] if lane == 'unit' else [],
+                             skip_rules=contract.load_manifest()['skip_rules'])
     if parser_error:
         report['status'] = 'failed'
         report['coverage_status'] = 'incomplete'

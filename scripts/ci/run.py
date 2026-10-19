@@ -278,6 +278,23 @@ def stage(source, destination, sha, lane):
     destination.rename(published)
 
 
+def execute(argv, *, timeout=600, grace=30):
+    """Reuse the owned process runner so nested adapters can close on cancellation."""
+    from scripts.devtools.process import Evidence, Redactor, run_process
+
+    root = Path(__file__).resolve().parents[2]
+    raw = bytearray()
+    evidence = Evidence(root, 'ci-wrapper', Redactor())
+    try:
+        result = run_process(argv, cwd=root, evidence=evidence, timeout=timeout, grace=grace,
+                             output_observer=raw.extend)
+        completed = subprocess.CompletedProcess(argv, result.returncode, result.log.read_text())
+        completed.secret_found = secret_candidate(bytes(raw))
+        return completed
+    finally:
+        evidence.close()
+
+
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     lane = sys.argv[1]
@@ -298,20 +315,16 @@ def main():
                '--sha', sha, '--synthetic', '--no-distribute']
     transcript = []
     setup_failed = False
+    secret_found = False
     for argv in [*setup, command]:
         transcript.append('$ ' + ' '.join(argv) + '\n')
         try:
-            completed = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                       text=True, timeout=600)
-        except subprocess.TimeoutExpired as error:
-            captured = error.stdout or ''
-            if isinstance(captured, bytes):
-                captured = captured.decode('utf-8', errors='replace')
-            completed = subprocess.CompletedProcess(argv, 124, captured + '\ncommand timed out\n')
+            completed = execute(argv, timeout=600, grace=30)
         except OSError as error:
             # Exception text may include private paths; retain only its type.
             completed = subprocess.CompletedProcess(argv, 1, type(error).__name__ + '\n')
         transcript.append(completed.stdout or '')
+        secret_found |= getattr(completed, 'secret_found', False)
         if completed.returncode:
             setup_failed = argv != command
             break
@@ -327,6 +340,8 @@ def main():
         # Adapter receipts remain authoritative; never synthesize one for a
         # missing, malformed or unsuccessful adapter report.
         report = close_wrapper(output, sha, lane, text)
+        if secret_found:
+            raise ValueError('blocking secret candidate in wrapper output')
         print(sanitize(text))
         # A stopped failed run may still have useful synthetic diffs/crashes.
         stage(output, Path(os.environ['RUNNER_TEMP']) / ('today-artifacts-' + lane), sha, lane)

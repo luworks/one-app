@@ -131,7 +131,9 @@
               String($0).trimmingCharacters(in: .whitespaces), now: now, calendar: calendar)
           }
         }, refineTitle: { capture, _, _ in capture },
-        respond: { text, _, _ in .reply(ChatRouting.fallbackReply(text)) },
+        respond: { text, _, intent in
+          intent == .capture ? .capture : .reply(ChatRouting.fallbackReply(text))
+        },
         plan: { _, _, _, _, _ in EditPlan(op: .none, target: nil) },
         rank: { _, _, _, _ in nil }, prewarm: {}, isAvailable: { multiCapture },
         unavailableReason: { _ in "Unavailable on Simulator" })

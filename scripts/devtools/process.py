@@ -72,11 +72,12 @@ class ProcessResult:
     log: Path
 
 
-def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grace=1):
+def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grace=1, output_observer=None):
     """Execute argv without a shell; signal only the new session created here.
 
     Adapters acquire resource locks before calling. SIGINT/SIGTERM are converted
     to cancellation on the main thread, then prior handlers are restored.
+    An optional in-memory output observer can reject raw bytes before log redaction.
     """
     if not argv or timeout <= 0 or grace < 0:
         raise ValueError('argv and positive timeout required; grace must be nonnegative')
@@ -130,6 +131,8 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
                         selector.unregister(key.fileobj)
                         eof = True
                         continue
+                    if output_observer:
+                        output_observer(chunk)
                     if dropping_line:
                         if b'\n' not in chunk:
                             continue

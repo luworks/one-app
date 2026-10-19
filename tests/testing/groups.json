@@ -107,6 +107,26 @@
       "test": "JourneyTests/testJ6_addAlarmAndSeeItInToday",
       "category": "time",
       "reason": "the default alarm time is tomorrow"
+    },
+    {
+      "test": "TodayTests/ActivityReadPerformanceTests/testWarmPageReads",
+      "category": "benchmark",
+      "reason": "^set ACTIVITY_READ_BENCH=1$"
+    },
+    {
+      "test": "TodayTests/ActivityStoreTests/testBenchmarkLarge",
+      "category": "benchmark",
+      "reason": "^set ACTIVITY_BENCH_ROWS$"
+    },
+    {
+      "test": "TodayTests/CaptureTitleQualityExportTests/testExportDevelopmentFallbackObservations",
+      "category": "export",
+      "reason": "^Set frozen TitleQuality fixture and canonical evidence output paths to export observations$"
+    },
+    {
+      "test": "TodayTests/RecurringReminderExportTests/testExportDevelopmentRecurringObservations",
+      "category": "export",
+      "reason": "^Set recurring fixture and canonical evidence directory to export actual observations$"
     }
   ],
   "migration": {

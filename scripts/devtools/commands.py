@@ -12,14 +12,14 @@ from .core import (atomic_json, dd_lock, derived_data, fingerprint, host_lock,
 from .process import Evidence, Redactor, run_process
 
 
-def execute(root, command, *, timeout=600, heavy=False, env=None):
+def execute(root, command, *, timeout=600, heavy=False, env=None, grace=1):
     evidence = Evidence(root, 'dev-' + time.strftime('%Y%m%d-%H%M%S'), Redactor())
     try:
         if heavy:
             with host_lock(root), dd_lock(root):
-                result = run_process(command, cwd=root, evidence=evidence, timeout=timeout, env=env)
+                result = run_process(command, cwd=root, evidence=evidence, timeout=timeout, env=env, grace=grace)
         else:
-            result = run_process(command, cwd=root, evidence=evidence, timeout=timeout, env=env)
+            result = run_process(command, cwd=root, evidence=evidence, timeout=timeout, env=env, grace=grace)
         print(json.dumps({'exit': result.returncode, 'reason': result.reason,
                           'seconds': result.seconds, 'log': str(result.log)}))
         return result
@@ -112,7 +112,7 @@ def testing_contract(root):
     return contract
 
 
-def test(root, group, *, only=(), timeout=600, full=False, _locked=False):
+def test(root, group, *, only=(), timeout=600, full=False, allow_skips=(), _locked=False):
     from . import xcode_tests
     if full and (group not in ('ui', 'release') or only):
         raise ValueError('--full requires ui or release without --only')
@@ -128,7 +128,7 @@ def test(root, group, *, only=(), timeout=600, full=False, _locked=False):
             code = xcode_tests.run(root, testing_contract(root), ['ios-unit', 'integration', 'snapshot'],
                                    timeout=timeout, locked=True, reuse=True)
             first = first or code
-            code = test(root, 'ui', timeout=timeout, full=True, _locked=True)
+            code = test(root, 'ui', timeout=timeout, full=True, allow_skips=allow_skips, _locked=True)
             return first or code
     contract = testing_contract(root)
     if group in ('ios-unit', 'integration', 'snapshot'):
@@ -149,8 +149,8 @@ def test(root, group, *, only=(), timeout=600, full=False, _locked=False):
             command += ['--filter', '|'.join('/'.join(x.split('/')[1:]) for x in expected)]
         result = execute(root, command, timeout=timeout, heavy=not _locked)
         raw = result.log.read_text()
-        report = contract.report(expected, contract.log_attempts(raw, 'logic'), result.returncode,
-                                 raw_log=raw, allowed_skips=['benchmark'],
+        report = contract.report(expected, contract.log_attempts(raw, 'logic', source=source), result.returncode,
+                                 raw_log=raw, allowed_skips=['benchmark', 'export'],
                                  skip_rules=contract.load_manifest()['skip_rules'])
         path = result.log.with_suffix('.report.json')
         atomic_json(path, report)
@@ -179,7 +179,10 @@ def test(root, group, *, only=(), timeout=600, full=False, _locked=False):
             sys.executable, 'ios/Eval/run-e2e.py', '--group', group]
     command += ['--simulator-name', xcode_tests.simulator_name(root),
                 '--derived-data', str(derived_data(root))]
-    return execute(root, command, timeout=timeout, heavy=not _locked).returncode
+    for category in allow_skips:
+        command += ['--allow-skip', category]
+    # The nested runner needs up to 15 seconds to close Xcode and its owned device.
+    return execute(root, command, timeout=timeout, heavy=not _locked, grace=20).returncode
 
 
 def format_sources(root, *, check=False, timeout=600):

@@ -215,15 +215,6 @@
             todayDay = session.runtime.calendar.startOfDay(for: day)
           })
       }
-      .environment(toast)
-      .environment(session.actions)
-      .environment(presentation)
-      .defaultAppStorage(session.defaults)
-      .environment(\.calendar, session.runtime.calendar)
-      .environment(\.locale, session.runtime.locale)
-      .environment(\.timeZone, session.runtime.calendar.timeZone)
-      .onAppear { toast.undoManager = undoManager }
-      .onChange(of: undoManager) { _, new in toast.undoManager = new }
       .sheet(item: $editor) {
         PlannerEditor(destination: $0, toast: toast, composition: composition)
       }
@@ -235,6 +226,15 @@
           activity: session.activity, flush: { session.ledger.flush(context) },
           undo: { session.ledger.undo($0, context: context) })
       }
+      .environment(toast)
+      .environment(session.actions)
+      .environment(presentation)
+      .defaultAppStorage(session.defaults)
+      .environment(\.calendar, session.runtime.calendar)
+      .environment(\.locale, session.runtime.locale)
+      .environment(\.timeZone, session.runtime.calendar.timeZone)
+      .onAppear { toast.undoManager = undoManager }
+      .onChange(of: undoManager) { _, new in toast.undoManager = new }
       .task {
         // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.
         try? await Task.sleep(for: .seconds(1.5))

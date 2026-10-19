@@ -4,7 +4,6 @@ import io
 import json
 import os
 import shutil
-import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -154,7 +153,9 @@ class ProducerTests(unittest.TestCase):
             return SimpleNamespace(returncode=1, reason='exited', log=log)
 
         with patch.object(adapter, 'source_state', return_value='fixed'), patch.object(
-                adapter, 'test_plan', return_value=('logic', ['Tests/testA'])):
+                adapter, 'test_plan', return_value=('logic', ['TodayTests/Tests/testA'])), patch.object(
+                adapter.contract, 'inventory', return_value={'logic': [{'suite': 'Tests', 'target': 'TodayTests',
+                    'methods': [{'name': 'testA', 'framework': 'XCTest'}]}]}):
             self.assertEqual(adapter._main(root, 'business', selection=selection, output=self.output,
                                           sha=SHA, synthetic=True, no_distribute=True, runner=run), 1)
         report = json.loads((self.output / 'report.json').read_text())
@@ -194,7 +195,7 @@ class ProducerTests(unittest.TestCase):
     def wrapper(self, execute):
         with patch.object(sys, 'argv', ['run.py', 'business']), patch.object(
                 producer.subprocess, 'check_output', return_value=SHA), patch.object(
-                producer.subprocess, 'run', side_effect=execute), contextlib.redirect_stdout(io.StringIO()):
+                producer, 'execute', side_effect=execute), contextlib.redirect_stdout(io.StringIO()):
             return producer.main()
 
     def test_wrapper_orders_setup_before_selection_and_adapter(self):
@@ -204,7 +205,7 @@ class ProducerTests(unittest.TestCase):
         def execute(argv, **kwargs):
             calls.append(argv)
             self.assertEqual(kwargs['timeout'], 600)
-            self.assertEqual(kwargs['stderr'], subprocess.STDOUT)
+            self.assertEqual(kwargs['grace'], 30)
             if argv[0] == sys.executable:
                 self.write('selection.json', b'{}')
             if argv[:2] == ['./dev', 'ci']:
@@ -253,19 +254,37 @@ class ProducerTests(unittest.TestCase):
                 shutil.rmtree(target)
 
     def test_wrapper_setup_timeout_or_spawn_failure_retains_failure(self):
-        for error, code in ((subprocess.TimeoutExpired(['./dev', 'bootstrap'], 600,
-                                                     output=b'partial /Users/synthetic/fixture'), 124),
+        for error, code in ((None, 124),
                             (FileNotFoundError('private fixture path'), 1)):
             with self.subTest(error=type(error).__name__):
                 shutil.rmtree(self.output)
                 with patch.object(producer, 'close_wrapper', wraps=producer.close_wrapper) as close:
-                    self.assertEqual(self.wrapper(lambda *args, **kwargs: (_ for _ in ()).throw(error)), code)
+                    def execute(*args, **kwargs):
+                        if error:
+                            raise error
+                        return SimpleNamespace(returncode=124, stdout='partial /Users/synthetic/fixture\ncommand timed out\n')
+                    self.assertEqual(self.wrapper(execute), code)
                 close.assert_called_once()
                 target = self.base / 'today-artifacts-business'
                 report = json.loads((target / 'report.json').read_text())
                 self.assertEqual(report['errors'], ['setup_exit:' + str(code)])
                 self.assertNotIn('private fixture path', (target / 'wrapper-command.log').read_text())
                 shutil.rmtree(target)
+
+    def test_wrapper_rejects_secret_detected_before_process_redaction(self):
+        self.output.rmdir()
+        self.assertEqual(self.wrapper(lambda *args, **kwargs: SimpleNamespace(
+            returncode=31, stdout='token=[REDACTED]', secret_found=True)), 31)
+        self.assertFalse((self.base / 'today-artifacts-business').exists())
+
+    def test_owned_executor_retains_timeout_and_pre_redaction_secret_detection(self):
+        secret = producer.execute([sys.executable, '-c', "print('token=fixture-credential')"], timeout=5)
+        self.assertEqual(secret.returncode, 0)
+        self.assertTrue(secret.secret_found)
+        self.assertNotIn('fixture-credential', secret.stdout)
+        stopped = producer.execute([sys.executable, '-c', 'import time; time.sleep(10)'],
+                                   timeout=0.1, grace=0.1)
+        self.assertEqual(stopped.returncode, 124)
 
     def test_wrapper_setup_secret_candidate_never_publishes(self):
         self.output.rmdir()
