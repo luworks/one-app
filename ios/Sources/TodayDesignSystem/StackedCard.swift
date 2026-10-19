@@ -1,21 +1,23 @@
+#if os(iOS)
 import SwiftUI
 
 /// The wide, closely stacked card surface shared by World Clock and My Lists.
 /// Content and color belong to each screen; corners, inner padding and row gutters stay in one place.
-struct StackedCard<Fill: ShapeStyle, Content: View>: View {
+@MainActor
+public struct StackedCard<Fill: ShapeStyle, Content: View>: View {
     let fill: Fill
     let horizontalPadding: CGFloat
     let flat: Bool
     private let content: Content
 
-    init(fill: Fill, horizontalPadding: CGFloat = 16, flat: Bool = false, @ViewBuilder content: () -> Content) {
+    public init(fill: Fill, horizontalPadding: CGFloat = 16, flat: Bool = false, @ViewBuilder content: () -> Content) {
         self.fill = fill
         self.horizontalPadding = horizontalPadding
         self.flat = flat
         self.content = content()
     }
 
-    var body: some View {
+    public var body: some View {
         content
             .padding(.horizontal, horizontalPadding)
             .background {
@@ -29,9 +31,11 @@ struct StackedCard<Fill: ShapeStyle, Content: View>: View {
 
 extension View {
     /// Retains native List navigation, swipe actions and reordering around the shared card surface.
-    func stackedCardRow() -> some View {
+    @MainActor
+    public func stackedCardRow() -> some View {
         listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 1, leading: 15, bottom: 1, trailing: 15))
     }
 }
+#endif
