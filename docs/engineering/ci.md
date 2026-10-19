@@ -1,5 +1,20 @@
 # Today CI contract
 
+PR114 iteration 17 retains failed run `39327550472` at head `5aafe5e`,
+integrated SHA `420761b139f89bf378e63453b1e10f1473dc676b` (parents `43d2816`
+and `5aafe5e`). Native job `118317312991` rejected `./dev plan --scheme TodayCI`
+with exit 2 because the CLI plan choices omitted the shared scheme. This happened
+before native compilation or test execution; no native report, leaves, xcresult
+or artifact was produced. The required check failed. Host format/lint/business
+reports passed and their published file hashes were verified. The fix admits the
+existing TodayCI scheme to the read-only plan command, with a CLI cache-plan
+regression and unknown-scheme rejection retained. Helpers passed 146 tests and
+lint passed; no local native build or simulator ran. Raw first-failure evidence
+and journal hashes remain in primary `tests/results/ci-hillclimb-20261019/`.
+Creation to failed required completion was 328 seconds; native started after
+308 seconds, so this sample already exceeds the 300-second target before native
+work. Neither this repair nor helper success proves a performance improvement.
+
 `Today CI` runs on every pull-request and merge-group integrated ref, every main push and explicit manual dispatch. `./dev` is the engineering entry; `.github/actions/check` calls the thin `scripts/ci/run.py` wrapper, which prepares only consumed tools and invokes `./dev ci <lane>`. Product source, fixtures, test identities and baselines are unchanged by CI optimization.
 
 ## Required checks and cancellation

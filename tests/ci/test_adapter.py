@@ -1,4 +1,6 @@
 """Host-only CI regressions. No Swift, Xcode, simulator or full test execution."""
+from contextlib import redirect_stderr, redirect_stdout
+import io
 import json
 import os
 import shutil
@@ -114,6 +116,24 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(xcode_tests.test_scheme('snapshot'), 'TodayCI')
         with patch.dict(os.environ, {'TODAY_CI_NATIVE_BATCH': '0'}):
             self.assertEqual(core.ci_test_scheme('TodayMock'), 'TodayMock')
+
+    def test_batch_workflow_plan_accepts_shared_scheme_and_rejects_unknown_scheme(self):
+        from scripts.devtools import cli, core
+        environment = {'TODAY_CI_SYNTHETIC': '1', 'TODAY_CI_NATIVE_BATCH': '1', 'TODAY_LANE': 'build'}
+        output = io.StringIO()
+        with patch.dict(os.environ, environment), \
+                patch.object(cli, 'inventory', return_value={'toolchain': {}}), redirect_stdout(output):
+            self.assertEqual(cli.main(['plan', '--scheme', 'TodayCI', '--architecture', 'arm64'],
+                                      root=self.root), 0)
+            expected = core.fingerprint(self.root, scheme='TodayCI', architecture='arm64', tools={})
+            report = json.loads(output.getvalue())
+            self.assertEqual(report['fingerprint'], expected)
+            self.assertEqual(report['compiler_module_cache'], core.compiler_module_cache(self.root, expected))
+        with patch.object(cli, 'inventory') as inventory, redirect_stderr(io.StringIO()), \
+                self.assertRaises(SystemExit) as rejected:
+            cli.main(['plan', '--scheme', 'UnknownScheme'], root=self.root)
+        self.assertEqual(rejected.exception.code, 2)
+        inventory.assert_not_called()
 
     def test_real_finished_test_required_for_success(self):
         self.assertEqual(self.invoke(), 0)
