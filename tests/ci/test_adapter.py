@@ -1,5 +1,6 @@
 """Host-only CI regressions. No Swift, Xcode, simulator or full test execution."""
 import json
+import os
 import shutil
 from pathlib import Path
 import subprocess
@@ -77,6 +78,25 @@ class AdapterTests(unittest.TestCase):
             log.write_text(raw)
             return SimpleNamespace(returncode=code, reason=reason, log=log)
         return run
+
+    def test_routine_instrumentation_is_scoped_and_invalidates_product_provenance(self):
+        from scripts.devtools import core
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'core-ui'}):
+            routine = core.fingerprint(self.root, tools={})
+            self.assertEqual(core.native_test_options(), ['-enableCodeCoverage', 'NO'])
+            import runpy
+            ui = runpy.run_path(str(ROOT / 'ios/Eval/run-e2e.py'))
+            command = ui['ui_command'](['TodayUITests/JourneyTests/testJ3_completeAndUndo'],
+                                       'synthetic-device', Path('derived'), Path('output'))
+            self.assertEqual(command[command.index('-enableCodeCoverage') + 1], 'NO')
+            self.assertIn('-only-testing:TodayUITests/JourneyTests/testJ3_completeAndUndo', command)
+            self.assertEqual(command[command.index('-parallel-testing-enabled') + 1], 'NO')
+        for lane in ('extended', 'release', 'protected-release', ''):
+            with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': lane}):
+                self.assertEqual(core.native_test_options(), [])
+                self.assertNotEqual(routine, core.fingerprint(self.root, tools={}))
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '0', 'TODAY_LANE': 'core-ui'}):
+            self.assertEqual(core.native_test_options(), [])
 
     def test_real_finished_test_required_for_success(self):
         self.assertEqual(self.invoke(), 0)

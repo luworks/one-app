@@ -25,6 +25,9 @@ from journal import Journal, results_root, is_ui_operation
 sys.path.insert(0, str(ROOT / "scripts/testing"))
 import contract
 
+sys.path.insert(0, str(ROOT))
+from scripts.devtools.core import native_test_options
+
 CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
 
 
@@ -74,6 +77,7 @@ def ui_command(selected, simulator, derived, output, test_products=None):
             "-collect-test-diagnostics", "never",
             "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
             "-maximum-parallel-testing-workers", "1",
+            *native_test_options(), "-showBuildTimingSummary",
             *["-only-testing:" + value for value in selected]]
 
 
@@ -148,8 +152,11 @@ class RunJournal:
     def action(self, command, function, **kwargs):
         subject = uuid.uuid4().hex
         self.record("qa.command.started", shlex.join(command), status="started", subject=subject)
+        started = time.monotonic()
         try:
             value = function(command, **kwargs)
+            print(json.dumps({"qa_command": command[:3], "seconds": round(time.monotonic() - started, 3),
+                              "exit": getattr(value, "returncode", 0)}), flush=True)
             self.record("qa.command.completed", shlex.join(command), status="completed", subject=subject,
                         props={"exit_code": getattr(value, "returncode", 0)})
             return value

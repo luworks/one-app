@@ -159,6 +159,18 @@ def toolchain():
     return {'developer_dir': str(developer) if developer else None, 'xcode': version, 'sdks': sdks}
 
 
+def native_test_options():
+    """Routine synthetic CI needs test results, not unused coverage instrumentation.
+
+    Explicit extended/release collections retain their scheme coverage settings.
+    These options are part of build provenance so products cannot cross modes.
+    """
+    if (os.environ.get('TODAY_CI_SYNTHETIC') == '1'
+            and os.environ.get('TODAY_LANE') in ('integration', 'snapshots', 'core-ui')):
+        return ['-enableCodeCoverage', 'NO']
+    return []
+
+
 def fingerprint(root, *, sdk='iphonesimulator', architecture=None, configuration='Debug', tools=None, scheme='Today'):
     """Hash current source bytes (including dirty/untracked inputs), not just HEAD."""
     root = Path(root).resolve()
@@ -183,7 +195,7 @@ def fingerprint(root, *, sdk='iphonesimulator', architecture=None, configuration
         raise ValueError('Explicit nonempty scheme required')
     data = {'schema': 2, 'scheme': scheme, 'worktree': str(root), 'source_and_locks': files,
             'toolchain': toolchain() if tools is None else tools, 'sdk': sdk,
-            'architecture': architecture or platform.machine(), 'configuration': configuration}
+            'architecture': architecture or platform.machine(), 'configuration': configuration, 'test_options': native_test_options()}
     return {'sha256': hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest(), 'inputs': data}
 
 
@@ -357,7 +369,7 @@ def ensure_test_products(root, scheme, invoke, *, configuration='Debug', sdk='ip
                      '-scheme', scheme, '-configuration', configuration, '-sdk', sdk,
                      '-destination', 'generic/platform=iOS Simulator',
                      '-derivedDataPath', str(derived_data(root)), '-jobs', '2',
-                     'ARCHS=' + architecture, *flags])
+                     'ARCHS=' + architecture, *native_test_options(), '-showBuildTimingSummary', *flags])
     if result.returncode:
         raise NativeBuildError(result)
     if getattr(result, 'reason', 'exited') != 'exited':

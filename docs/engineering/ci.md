@@ -66,3 +66,40 @@ A focused replay of 20 existing completed Release link maps reproduced scanner r
 ## Artifact boundary
 
 Only explicit generated roots with a closed matching SHA/lane synthetic producer receipt may be staged. Existing symlink/path/secret checks, complete immutable xcresult inventory, text redaction, SHA-256 verification and atomic staging rename remain unchanged. No arbitrary workspace discovery, personal data, SQLite/product archives or stale images/results may enter publication. Binary evidence requires the existing no-secrets synthetic runner boundary. Whole completed bundles and failure evidence remain retained; uploads use pinned actions/upload-artifact, lane/SHA/attempt names and seven-day retention.
+
+### Native instrumentation hillclimb (2026-10-19)
+
+PR103 merged normally as `f76b106cde588968ccb463bbc67c4c782a378e64` after
+run [39283790269](https://github.com/luworks/one-app/actions/runs/39283790269).
+The exact tested merge ref was `6ae6eece3a3508faf716807e7e6454148625c16d`,
+parents `a02dd7f` and `d9cb76d`, with the same tree as the PR head. All seven
+closed lane reports passed (format 322, lint 3, business 678 plus four authorized
+skips, integration 13, snapshots 6, core UI 7, build 3); 216 published file
+sizes/hashes matched their manifests. The API retained stale in-progress
+integration/snapshot jobs, so their closed reports and successful aggregate log
+were checked as well. No test retry was dispatched.
+
+Workflow creation at 16:13:41 UTC to today-required completion at 16:34:49 was
+1,268 seconds. First job started at 16:13:45 (four seconds initial queue); the Mac
+prerequisite started at 16:13:53. Core UI waited eight seconds after job creation
+and ran 1,214 seconds. Its runner started at 16:15:16, first test at 16:29:25,
+last test ended at 16:34:04. Seven test bodies used 279.596 seconds; XCTest
+session overhead brought execution to 320.953 seconds. The 849 seconds before
+first test combines simulator/build/install work, not a proven compile duration.
+Integration and snapshot test sessions were about 48 and 50 seconds; their
+whole adapter commands took 770 and 713 seconds. Raw evidence is retained in
+`/Users/yuanlu/code/one-app/tests/results/ci-hillclimb-20261019/` and the QA journal.
+
+Iteration 1 disables coverage instrumentation only for synthetic routine
+integration/snapshots/core-ui, using Xcode's `-enableCodeCoverage NO`. These jobs
+have no coverage threshold or consumer; [Apple describes coverage as additional
+execution-frequency instrumentation](https://developer.apple.com/documentation/xcode/determining-how-much-code-your-tests-cover).
+ all selected tests, assertions, image
+baselines, completed-leaf parsing and failure gates remain unchanged. Local and
+explicit extended/release collection scheme coverage stays enabled. Build
+provenance includes these test options so instrumented and uninstrumented
+products cannot substitute. Native process durations and Xcode build timing
+summaries are retained to separate the next sample's build and test costs.
+This is a hypothesis under measurement, not a claimed speedup or a 300-second
+acceptance. Main Release run `39287295546` at merged `f76b106` is independently
+pending; the retained failed main receipt `39273400134` remains valid evidence.

@@ -4,10 +4,11 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import time
 import uuid
 
 from .core import (NativeBuildError, ResourceLock, atomic_json, dd_lock, derived_data,
-                   ensure_test_products, fingerprint, host_lock, provenance)
+                   ensure_test_products, fingerprint, host_lock, native_test_options, provenance)
 from .process import Evidence, Redactor, run_process
 
 SCHEMES = {'unit': 'TodayTests', 'integration': 'TodayTests', 'snapshot': 'TodaySnapshotTests'}
@@ -111,7 +112,11 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
         def invoke(command):
             # Each process owns a unique raw log, indexed by the existing QA helper.
             evidence.path = output / (uuid.uuid4().hex + '.log')
-            return run_process(command, cwd=root, evidence=evidence, timeout=timeout)
+            started = time.monotonic()
+            result = run_process(command, cwd=root, evidence=evidence, timeout=timeout)
+            print(json.dumps({'native_command': command[:2], 'seconds': round(time.monotonic() - started, 3),
+                              'exit': result.returncode, 'log': str(result.log)}))
+            return result
 
         def capture(command):
             result = invoke(command)
@@ -166,7 +171,7 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                                  '-jobs', '2', '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
                                  '-maximum-concurrent-test-simulator-destinations', '1',
                                  '-maximum-parallel-testing-workers', '1',
-                                 *flags, *['-only-testing:' + value for value in execution_selectors(contract, root, expected)]])
+                                 *native_test_options(), '-showBuildTimingSummary', *flags, *['-only-testing:' + value for value in execution_selectors(contract, root, expected)]])
                 raw = result.log.read_text()
                 data, error, summary = None, None, None
                 try:

@@ -86,6 +86,7 @@ def _native_results(root, lane, output, report):
     captured = io.StringIO()
     with contextlib.redirect_stdout(captured):
         code = commands.test(root, kind, timeout=600)
+    (output / 'command.log').write_text(Redactor()(captured.getvalue()))
     events = [json.loads(line) for line in captured.getvalue().splitlines() if line.startswith('{')]
     receipts = [event for event in events if isinstance(event, dict) and 'report' in event]
     if len(receipts) != 1 or set(receipts[0]) != {'report', 'status'}:
