@@ -1,0 +1,22 @@
+// Generated migration capture of the baseline settings; maintained hereafter.
+CODE_SIGN_ENTITLEMENTS = ShareExtension.entitlements
+CODE_SIGN_STYLE = Automatic
+CURRENT_PROJECT_VERSION = 1
+DEPLOYMENT_POSTPROCESSING = YES
+DEVELOPMENT_TEAM = J2T2UBD49R
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = ShareExtensionInfo.plist
+INFOPLIST_KEY_CFBundleDisplayName = Today
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @executable_path/../../Frameworks
+MARKETING_VERSION = 0.1
+PRODUCT_BUNDLE_IDENTIFIER = com.luworks.one.share
+PRODUCT_MODULE_NAME = ShareExtension
+PRODUCT_NAME = ShareExtension
+SKIP_INSTALL = YES
+STRIPFLAGS = $(inherited) -S
+STRIP_INSTALLED_PRODUCT = YES
+STRIP_STYLE = non-global
+STRIP_SWIFT_SYMBOLS = NO
+SWIFT_EMIT_LOC_STRINGS = YES
+SWIFT_VERSION = 5.0
+TARGETED_DEVICE_FAMILY = 1

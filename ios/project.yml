@@ -1,0 +1,143 @@
+{
+  "name": "Today",
+  "options": {
+    "minimumXcodeGenVersion": "2.46.0",
+    "settingPresets": "none",
+    "developmentLanguage": "en"
+  },
+  "configs": {
+    "Debug": "debug",
+    "Release": "release"
+  },
+  "configFiles": {
+    "Debug": "Config/Project-Debug.xcconfig",
+    "Release": "Config/Project-Release.xcconfig"
+  },
+  "targets": {
+    "Today": {
+      "type": "application",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/Today-Debug.xcconfig",
+        "Release": "Config/Today-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "One",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        },
+        {
+          "path": "Shared",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "TodayWidgets",
+          "embed": true
+        },
+        {
+          "target": "TodayShare",
+          "embed": true
+        }
+      ],
+      "productName": "One"
+    },
+    "TodayShare": {
+      "type": "app-extension",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayShare-Debug.xcconfig",
+        "Release": "Config/TodayShare-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "ShareExtension",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        },
+        {
+          "path": "Shared",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        }
+      ],
+      "productName": "ShareExtension"
+    },
+    "TodayUITests": {
+      "type": "bundle.ui-testing",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayUITests-Debug.xcconfig",
+        "Release": "Config/TodayUITests-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "OneUITests",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "Today"
+        }
+      ],
+      "productName": "OneUITests"
+    },
+    "TodayWidgets": {
+      "type": "app-extension",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayWidgets-Debug.xcconfig",
+        "Release": "Config/TodayWidgets-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "TodayWidgets",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        },
+        {
+          "path": "Shared",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        }
+      ]
+    }
+  },
+  "schemes": {
+    "Today": {
+      "build": {
+        "targets": {
+          "Today": "all"
+        }
+      },
+      "run": {
+        "config": "Debug"
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          "TodayUITests"
+        ],
+        "gatherCoverageData": false
+      },
+      "profile": {
+        "config": "Release"
+      },
+      "archive": {
+        "config": "Release"
+      }
+    }
+  }
+}
