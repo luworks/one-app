@@ -513,12 +513,13 @@
 
     /// The store and predicates stay on their owning actor. The callback copies EventKit rows
     /// immediately into Sendable values before resuming the actor's continuation.
+    /// Explicit Sendable callbacks avoid inheriting MainActor for EventKit's background delivery.
     private static func fetch(_ store: EKEventStore, _ predicate: NSPredicate, calendar: Calendar)
       async -> [Remote]
     {
       await withCheckedContinuation { c in
-        store.fetchReminders(matching: predicate) {
-          c.resume(returning: ($0 ?? []).map { Remote($0, calendar: calendar) })
+        store.fetchReminders(matching: predicate) { @Sendable reminders in
+          c.resume(returning: (reminders ?? []).map { Remote($0, calendar: calendar) })
         }
       }
     }
@@ -871,7 +872,7 @@
         let store = self.store
         let predicate = store.predicateForReminders(in: nil)
         return await withCheckedContinuation { continuation in
-          store.fetchReminders(matching: predicate) { reminders in
+          store.fetchReminders(matching: predicate) { @Sendable reminders in
             continuation.resume(returning: (reminders ?? []).map(\.calendarItemIdentifier))
           }
         }
@@ -962,8 +963,8 @@
         let calendar = runtime.calendar
         let predicate = verifyingStore.predicateForReminders(in: nil)
         let all: [Remote] = await withCheckedContinuation { c in
-          verifyingStore.fetchReminders(matching: predicate) {
-            c.resume(returning: ($0 ?? []).map { Remote($0, calendar: calendar) })
+          verifyingStore.fetchReminders(matching: predicate) { @Sendable reminders in
+            c.resume(returning: (reminders ?? []).map { Remote($0, calendar: calendar) })
           }
         }
         let apple = all.filter { $0.title.hasPrefix(prefix) }
