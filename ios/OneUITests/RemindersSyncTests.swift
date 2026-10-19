@@ -50,9 +50,18 @@ final class RemindersSyncTests: XCTestCase {
     app.buttons["Reminders"].firstMatch.tap()
     let all = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'All'")).firstMatch
     XCTAssertTrue(all.waitForExistence(timeout: 8))
+    let count = try XCTUnwrap(
+      all.label.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }.first)
     all.tap()
     let row = app.staticTexts[title]
-    for _ in 0..<8 where !row.exists { app.swipeUp() }
+    let scrollBar = app.collectionViews.firstMatch.otherElements.matching(
+      NSPredicate(format: "label BEGINSWITH 'Vertical scroll bar'")
+    ).firstMatch
+    // The system store retains earlier synthetic runs; traverse its actual size without deleting data.
+    for _ in 0..<count where !row.exists {
+      if scrollBar.exists, scrollBar.value as? String == "100%" { break }
+      app.swipeUp()
+    }
     XCTAssertTrue(
       row.waitForExistence(timeout: 5),
       "the reminder came back from Apple Reminders (looked for \(title))")
