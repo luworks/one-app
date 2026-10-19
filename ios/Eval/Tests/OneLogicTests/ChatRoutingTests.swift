@@ -5,6 +5,65 @@ import XCTest
 @testable import TodayData
 
 final class ChatRoutingTests: XCTestCase {
+  func testMonthOnlyBookingRequestPreservesActionWithoutInventingAppointment() async throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+    let now = try XCTUnwrap(
+      calendar.date(from: DateComponents(year: 2030, month: 10, day: 19, hour: 9)))
+    for (text, title) in [
+      ("明年8月 预约医生做 annual check", "2031年8月 预约医生做 annual check"),
+      (
+        "Next August book a doctor for an annual check",
+        "August 2031 book a doctor for an annual check"
+      ),
+    ] {
+      XCTAssertEqual(ChatRouting.intent(text), .capture, text)
+      let capture = CaptureConversation.parse(text, now: now, calendar: calendar)
+      XCTAssertEqual(capture.title, title)
+      XCTAssertEqual(capture.kind, .task)
+      XCTAssertTrue(CaptureParser.isBookingAction(text))
+      XCTAssertFalse(capture.hasDay)
+      XCTAssertNil(capture.hour)
+      XCTAssertNil(capture.taskTiming(calendar: calendar).due)
+      XCTAssertNil(capture.taskTiming(calendar: calendar).plannedStart)
+      XCTAssertTrue(capture.notes?.contains(text) == true)
+      XCTAssertTrue(capture.isReadyToAdd)
+      let action = try XCTUnwrap(
+        CaptureParser.leadingMonth(text, now: now, calendar: calendar)?.action)
+      let refined = await CaptureTitleRefinement.refine(capture, source: text, available: true) {
+        _ in action
+      }
+      XCTAssertEqual(refined.title, title, "Title generation cannot discard the anchored month")
+      XCTAssertEqual(refined.kind, .task)
+      XCTAssertNil(refined.taskTiming(calendar: calendar).due)
+      // A follow-up changes the preview only, retaining the requested month and original subject.
+      guard
+        case .updated(let renamed) = Dialogue.refine(
+          capture, with: "call it Book annual check", now: now, calendar: calendar)
+      else {
+        return XCTFail("Expected a preview refinement")
+      }
+      XCTAssertEqual(renamed.title, "Book annual check")
+      XCTAssertEqual(renamed.notes, capture.notes)
+      XCTAssertNil(renamed.taskTiming(calendar: calendar).due)
+    }
+  }
+
+  func testMonthContextDoesNotCreateFromReportsQuestionsOrRefusals() {
+    for text in [
+      "明年8月 我已经预约医生做 annual check 了",
+      "明年8月 预约好了医生做 annual check",
+      "明年8月 预约医生需要带什么？",
+      "明年8月 不要创建预约医生的提醒",
+      "Next August I already booked a doctor for an annual check",
+      "Next August how do I book a doctor?",
+      "Next August don't add a task to book a doctor",
+    ] {
+      XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
+      XCTAssertNil(ChatRouting.contextualTimeAnswer(text, hasTimeContext: true), text)
+    }
+  }
+
   func testConversationIsNotAnItemEvenWithPlannerWordsOrDates() {
     for text in [
       "我进行一个测试，然后看看我的 Activity 中是不是会选择显示",

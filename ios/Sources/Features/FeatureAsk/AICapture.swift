@@ -15,9 +15,7 @@
   enum AICapture {
     /// True when the on-device model can answer right now. Cheap; call it per request.
     static var isAvailable: Bool {
-      #if targetEnvironment(simulator)
-        return false  // the simulator has no on-device model; asking it would only hang
-      #elseif canImport(FoundationModels)
+      #if canImport(FoundationModels)
         if #available(iOS 26, *) { return OnDeviceCapture.isAvailable }
         return false
       #else
