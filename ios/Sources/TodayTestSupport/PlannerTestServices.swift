@@ -138,10 +138,14 @@
     }
     package func isRepeating(externalID: String?) -> Bool { event(externalID)?.repeats ?? false }
     package func audience(externalID: String?) -> (attendees: Int, isOrganizer: Bool)? { nil }
-    package func canDelete(externalID: String?) -> Bool { false }
+    package func canDelete(externalID: String?) -> Bool { !isDisposed && externalID == nil }
     package func save(_ event: OneEvent, span: EKSpan) -> String? { nil }
-    package func delete(_ event: OneEvent, span: EKSpan) -> Bool { false }
-    package func delete(externalID: String?, occurrence: Date?, span: EKSpan) -> Bool { false }
+    package func delete(_ event: OneEvent, span: EKSpan) -> Bool {
+      canDelete(externalID: event.externalID)
+    }
+    package func delete(externalID: String?, occurrence: Date?, span: EKSpan) -> Bool {
+      canDelete(externalID: externalID)
+    }
     package func removedMirrors(_ events: [OneEvent]) -> [OneEvent] { [] }
     package func title(externalID: String, occurrence: Date?) -> String? {
       event(externalID)?.title

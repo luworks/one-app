@@ -92,6 +92,40 @@
     }
 
     @Test
+    func localCalendarDeleteAndUndoKeepExternalWritesRefused() throws {
+      let a = try Session(seed: 1700)
+      defer { a.dispose() }
+      let start = a.clock.now().addingTimeInterval(3600)
+      let event = OneEvent(title: "Local rehearsal", start: start, durationMinutes: 45)
+      event.note = "Synthetic local note"
+      a.context.insert(event)
+      try a.context.save()
+      func deletion(_ event: OneEvent) -> AskActionFeedback {
+        AskNativeActions.applyChange(
+          PendingChange(
+            subject: .event(event), delete: true, title: event.title,
+            oldText: "", newStart: nil, notes: [], attendees: 0),
+          context: a.context, calendar: a.services.calendar, actions: a.services.actions,
+          ledger: a.services.ledger, runtime: a.runtime)
+      }
+      let feedback = deletion(event)
+      #expect(feedback.applied && a.services.calendar.canDelete(externalID: nil))
+      #expect(try a.context.fetchCount(FetchDescriptor<OneEvent>()) == 0)
+      try #require(feedback.undo).action()
+      let restored = try #require(try a.context.fetch(FetchDescriptor<OneEvent>()).first)
+      #expect(restored.title == "Local rehearsal" && restored.note == "Synthetic local note")
+      #expect(
+        restored.start == start && restored.durationMinutes == 45 && restored.externalID == nil)
+      #expect(try a.rows().filter { $0.actionValue == .undone }.count == 1)
+      restored.externalID = "read-only-external-fixture"
+      try a.context.save()
+      #expect(!a.services.calendar.canDelete(externalID: restored.externalID))
+      #expect(!deletion(restored).applied)
+      #expect(try a.context.fetchCount(FetchDescriptor<OneEvent>()) == 1)
+      #expect(restored.externalID == "read-only-external-fixture")
+    }
+
+    @Test
     func existentialObservationAndDisposalStayInsideTheirSession() async throws {
       let a = try Session(seed: 100)
       let b = try Session(seed: 200)
