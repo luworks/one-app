@@ -7,6 +7,7 @@
   import UserNotifications
   import TodayCore
   import TodayShared
+  import TodayData
 
   /// Model-bound compatibility contracts. Implementations are selected by executable composition.
   /// Persistent declarations remain in One; no feature resolves a live service implicitly.
@@ -27,6 +28,7 @@
     func setVisibleCalendars(_ selected: Set<String>)
     func events(in interval: DateInterval, excluding: Set<String>) -> [ExternalEvent]
     func events(on day: Date, excluding: Set<String>) -> [ExternalEvent]
+    func focusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution
     func calendar(forExternalID id: String?) -> SystemCalendar?
     func place(forExternalID id: String?) -> TravelPlace?
     func color(forExternalID id: String?) -> Color?
@@ -72,6 +74,7 @@
     func noteDeleted(list externalID: String?)
     func scheduleReconcile(after delay: Duration)
     func reconcile() async
+    func focusIdentity(_ task: OneTask) -> FocusIdentityResolution
     func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
       -> RemindersSync.Remote?
     func didPersistEdit(_ task: OneTask, accepted: RemindersSync.Remote?)

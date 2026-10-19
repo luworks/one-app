@@ -511,6 +511,26 @@
       return accepted
     }
 
+    /// Read-only identity lookup; it never connects, schedules reconciliation or requests access.
+    package func focusIdentity(_ task: OneTask) -> FocusIdentityResolution {
+      guard let id = task.externalID else { return .localOnly }
+      guard hasAccess else { return .permissionDenied }
+      guard isConnected else { return .unavailable }
+      guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder,
+        let source = reminder.calendar.source
+      else { return .notFound }
+      let repeating = reminder.hasRecurrenceRules
+      let due = reminder.dueDateComponents.flatMap {
+        Self.date(from: $0, calendar: runtime.calendar)
+      }
+      guard !repeating || due != nil else { return .unavailable }
+      return .available(
+        FocusIdentity(
+          provider: "apple.reminders", account: source.sourceIdentifier,
+          calendar: reminder.calendar.calendarIdentifier, item: reminder.calendarItemIdentifier,
+          occurrence: repeating ? due : nil))
+    }
+
     /// Keep the agreed completion fingerprint in step with the accepted user write. A repeating reminder
     /// that Apple advanced will differ and be pulled normally on the next pass.
     package func didPersistCompletion(_ task: OneTask, restoredDue: Bool = false) {

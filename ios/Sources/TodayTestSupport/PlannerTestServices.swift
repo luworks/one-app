@@ -86,6 +86,8 @@
     package var queryEvents: [ExternalEvent] = []
     package var hiddenCalendarIDs: Set<String> = []
     package private(set) var refreshCount = 0
+    package private(set) var deletionRequests: [String?] = []
+    package var deletionResult: Bool?
     package private(set) var enableRequests: [Bool] = []
     private let runtime: PlannerRuntime
     package init(runtime: PlannerRuntime) { self.runtime = runtime }
@@ -126,6 +128,11 @@
       guard isOn, let id else { return nil }
       return queryEvents.first { $0.eventIdentifier == id }
     }
+    package var focusResolutions: [String: FocusIdentityResolution] = [:]
+    package func focusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution {
+      guard let id = externalID else { return .localOnly }
+      return focusResolutions[id] ?? .unavailable
+    }
     package func calendar(forExternalID id: String?) -> SystemCalendar? {
       guard let e = event(id) else { return nil }
       return availableCalendars.first { $0.id == e.calendarID }
@@ -141,10 +148,11 @@
     package func canDelete(externalID: String?) -> Bool { !isDisposed && externalID == nil }
     package func save(_ event: OneEvent, span: EKSpan) -> String? { nil }
     package func delete(_ event: OneEvent, span: EKSpan) -> Bool {
-      canDelete(externalID: event.externalID)
+      delete(externalID: event.externalID, occurrence: event.start, span: span)
     }
     package func delete(externalID: String?, occurrence: Date?, span: EKSpan) -> Bool {
-      canDelete(externalID: externalID)
+      deletionRequests.append(externalID)
+      return deletionResult ?? canDelete(externalID: externalID)
     }
     package func removedMirrors(_ events: [OneEvent]) -> [OneEvent] { [] }
     package func title(externalID: String, occurrence: Date?) -> String? {
@@ -233,6 +241,11 @@
     package private(set) var editCalls = 0
     package private(set) var deletionCalls = 0
 
+    package var focusResolutions: [String: FocusIdentityResolution] = [:]
+    package func focusIdentity(_ task: OneTask) -> FocusIdentityResolution {
+      guard let id = task.externalID else { return .localOnly }
+      return focusResolutions[id] ?? .unavailable
+    }
     package func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
       -> RemindersSync.Remote?
     {

@@ -96,12 +96,25 @@
     @State private var now: Date
     /// A repeating system event whose Delete is waiting for "this event or the series?".
     @State private var pendingDelete: CalEntry?
+    @State private var deleteTarget: OneTask?
+    @State private var snoozeTarget: FocusTarget?
+    @State private var activeExpanded = true
+    @State private var snoozedExpanded = false
+    @State private var settledExpanded = false
+    @Environment(\.modelContext) private var context
+    @Environment(UndoToast.self) private var toast: UndoToast?
 
     package var body: some View {
       ScrollViewReader { proxy in
         list
-          .onAppear { scrollToNow(proxy) }
+          .onAppear {
+            now = presentation.now
+            scrollToNow(proxy)
+          }
           .onChange(of: day) { _, _ in scrollToNow(proxy) }
+      }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .active { now = presentation.now }
       }
       .environment(actions)
       .defaultAppStorage(presentation.defaults)
@@ -157,58 +170,83 @@
           .listRowSeparator(.hidden)
         }
 
-        if !items.allDay.isEmpty || !items.externalAllDay.isEmpty {
-          Section {
-            ForEach(items.allDay) {
-              EventRow(
-                event: $0, pendingDelete: $pendingDelete, open: openEvent, calendar: calendar,
-                travel: travel)
-            }
-            ForEach(items.externalAllDay) {
-              ExternalEventRow(
-                event: $0, pendingDelete: $pendingDelete, calendar: calendar, travel: travel)
-            }
-          } header: {
-            AgendaHeader(title: "All day")
+        if !showsWeekStrip {
+          focusHeader("Active", count: activeCount(items), id: "active", expanded: $activeExpanded)
+          if let error = actions.focus.errorMessage {
+            Text(error).font(.footnote).foregroundStyle(.secondary)
           }
         }
-        if cal.isDate(day, inSameDayAs: now), showsOverdue, !overdue.isEmpty {
-          Section {
-            Button {
-              withAnimation(.snappy) { showsAllOverdue.toggle() }
-            } label: {
-              HStack {
-                Text("\(overdue.count) overdue").font(.subheadline.weight(.semibold))
-                  .foregroundStyle(.red)
-                Spacer()
-                Image(systemName: "chevron.right")
-                  .font(.footnote.weight(.semibold))
-                  .foregroundStyle(.secondary)
-                  .rotationEffect(.degrees(showsAllOverdue ? 90 : 0))
+        if showsWeekStrip || activeExpanded {
+          if !items.allDay.isEmpty || !items.externalAllDay.isEmpty {
+            Section {
+              ForEach(items.allDay) {
+                EventRow(
+                  event: $0, pendingDelete: $pendingDelete, open: openEvent, calendar: calendar,
+                  travel: travel
+                )
+                .modifier(
+                  focusActions(
+                    target($0, start: $0.occurs(on: day, calendar: cal).first ?? $0.start)))
               }
-              .frame(minHeight: 44)
-              .contentShape(Rectangle())
+              ForEach(items.externalAllDay) {
+                ExternalEventRow(
+                  event: $0, pendingDelete: $pendingDelete, calendar: calendar, travel: travel
+                )
+                .modifier(focusActions(target($0)))
+              }
+            } header: {
+              AgendaHeader(title: "All day")
             }
-            .buttonStyle(.plain)
-            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-            .accessibilityHint(
-              showsAllOverdue ? "Hides the overdue tasks" : "Shows the overdue tasks")
-            if showsAllOverdue {
-              ForEach(overdue) { TaskRow(task: $0, compact: true, agendaDay: day, open: openTask) }
+          }
+          if cal.isDate(day, inSameDayAs: now), showsOverdue, !overdue.isEmpty {
+            Section {
+              Button {
+                withAnimation(.snappy) { showsAllOverdue.toggle() }
+              } label: {
+                HStack {
+                  Text("\(overdue.count) overdue").font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.red)
+                  Spacer()
+                  Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(showsAllOverdue ? 90 : 0))
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+              }
+              .buttonStyle(.plain)
+              .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+              .accessibilityHint(
+                showsAllOverdue ? "Hides the overdue tasks" : "Shows the overdue tasks")
+              if showsAllOverdue {
+                ForEach(overdue) { task in
+                  TaskRow(
+                    task: task, compact: true, agendaDay: day, onDelete: { requestDelete(task) },
+                    open: openTask
+                  )
+                  .modifier(focusActions(target(task)))
+                }
+              }
             }
+          }
+          // The Today tab names its day in the row at the top; the timeline needs no label of its own.
+          if showsWeekStrip {
+            Section {
+              timelineContent(items)
+            } header: {
+              AgendaHeader(
+                title: day.plannerFormatted(
+                  .dateTime.month().day().weekday(.wide), runtime: presentation.runtime))
+            }
+          } else {
+            Section { timelineContent(items) }
           }
         }
-        // The Today tab names its day in the row at the top; the timeline needs no label of its own.
-        if showsWeekStrip {
-          Section {
-            timelineContent(items)
-          } header: {
-            AgendaHeader(
-              title: day.plannerFormatted(
-                .dateTime.month().day().weekday(.wide), runtime: presentation.runtime))
-          }
-        } else {
-          Section { timelineContent(items) }
+        if !showsWeekStrip {
+          returnedSection(items)
+          focusSection(snoozed: true)
+          focusSection(snoozed: false)
         }
         if !showsWeekStrip, showsTomorrow, cal.isDate(day, inSameDayAs: now) {
           tomorrowSection(after: items)
@@ -220,6 +258,26 @@
       .listSectionSpacing(6)
       .scrollContentBackground(.hidden)
       .entryDeleteDialog($pendingDelete)
+      .confirmationDialog(
+        "Delete Repeating Reminder",
+        isPresented: Binding(
+          get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }),
+        titleVisibility: .visible
+      ) {
+        if let task = deleteTarget {
+          Button("Delete Reminder and Future Repeats", role: .destructive) { deleteConfirmed(task) }
+        }
+        Button("Cancel", role: .cancel) { deleteTarget = nil }
+      } message: {
+        Text(
+          "This deletes the repeating reminder from its source. Use Settle to hide only this occurrence in Today."
+        )
+      }
+      .sheet(item: $snoozeTarget) { target in
+        TodaySnoozeSheet(now: now, calendar: cal) { until in
+          changeFocus(.snoozed(until: until), target: target)
+        }
+      }
       .sheet(item: $review) { r in
         EveningReviewSheet(
           now: now, tomorrow: r.tomorrow, peek: r.peek, actions: actions, reminders: reminders,
@@ -239,7 +297,13 @@
       ForEach(items.timeline) { timelineRow($0, on: day) }
       if !items.anytime.isEmpty {
         AnytimeLabel(title: cal.isDate(day, inSameDayAs: now) ? "Anytime today" : "Anytime")
-        ForEach(items.anytime) { TaskRow(task: $0, compact: true, agendaDay: day, open: openTask) }
+        ForEach(items.anytime) { task in
+          TaskRow(
+            task: task, compact: true, agendaDay: day, onDelete: { requestDelete(task) },
+            open: openTask
+          )
+          .modifier(focusActions(target(task)))
+        }
       }
     }
 
@@ -249,18 +313,32 @@
       case .event(let event, let start):
         EventRow(
           event: event, start: start, pendingDelete: $pendingDelete, open: openEvent,
-          calendar: calendar, travel: travel)
+          calendar: calendar, travel: travel
+        )
+        .modifier(focusActions(target(event, start: start)))
       case .external(let e):
         ExternalEventRow(
-          event: e, pendingDelete: $pendingDelete, calendar: calendar, travel: travel)
+          event: e, pendingDelete: $pendingDelete, calendar: calendar, travel: travel
+        )
+        .modifier(focusActions(target(e)))
       case .task(let task):
-        TaskRow(task: task, showsTime: true, compact: true, agendaDay: rowDay, open: openTask)
+        TaskRow(
+          task: task, showsTime: true, compact: true, agendaDay: rowDay,
+          onDelete: { requestDelete(task) }, open: openTask
+        )
+        .modifier(focusActions(target(task)))
       case .due(let task):
         TaskRow(
           task: task, showsTime: true, time: task.due, compact: true, agendaDay: rowDay,
-          open: openTask)
+          onDelete: { requestDelete(task) }, open: openTask
+        )
+        .modifier(focusActions(target(task)))
       case .suggested(let task, let start):
-        TaskRow(task: task, compact: true, suggested: start, agendaDay: rowDay, open: openTask)
+        TaskRow(
+          task: task, compact: true, suggested: start, agendaDay: rowDay,
+          onDelete: { requestDelete(task) }, open: openTask
+        )
+        .modifier(focusActions(target(task)))
       case .alarm(let alarm, let date): AlarmMarkRow(alarm: alarm, date: date)
       case .gap(let free): FreeRow(free: free)
       case .nowMarker(let date): NowRow(date: date).id("now-line")
@@ -459,16 +537,303 @@
         timeline.append(.nowMarker(now))
       }
       return DayItems(
-        allDay: events.filter { $0.isAllDay && !$0.occurs(on: day, calendar: cal).isEmpty },
-        externalAllDay: external.filter(\.isAllDay),
+        allDay: events.filter {
+          $0.isAllDay && !$0.occurs(on: day, calendar: cal).isEmpty
+            && !isHidden(target($0, start: $0.occurs(on: day, calendar: cal).first ?? $0.start))
+        },
+        externalAllDay: external.filter { $0.isAllDay && !isHidden(target($0)) },
         // At the same minute the Now line comes first, so free time from now sits under it.
-        timeline: timeline.sorted { ($0.start, $0.isNow ? 0 : 1) < ($1.start, $1.isNow ? 0 : 1) },
-        anytime: anytime)
+        timeline: timeline.filter { !isHidden($0) }.sorted {
+          ($0.start, $0.isNow ? 0 : 1) < ($1.start, $1.isNow ? 0 : 1)
+        },
+        anytime: anytime.filter { !isHidden(target($0)) })
+    }
+
+    private func requestDelete(_ task: OneTask) {
+      if task.repeats != nil || target(task).identity?.occurrence != nil {
+        deleteTarget = task
+      } else {
+        deleteConfirmed(task)
+      }
+    }
+
+    private func deleteConfirmed(_ task: OneTask) {
+      do {
+        try actions.deleteConfirmed(task, context: context, toast: toast)
+        deleteTarget = nil
+      } catch {
+        toast?.showNotice(
+          "Couldn't delete this reminder. " + error.localizedDescription + " Try again.")
+      }
+    }
+
+    // MARK: Local attention overlay
+
+    private func target(_ task: OneTask) -> FocusTarget {
+      let ref = TodayFocus.reference(task.persistentModelID)
+      return FocusTarget(
+        identity: actions.focus.identity(
+          resolution: reminders.focusIdentity(task), localReference: ref, kind: "reminder",
+          occurrence: task.repeats == nil ? nil : (task.due ?? task.plannedStart)),
+        reference: ref, title: task.title)
+    }
+
+    private func target(_ event: OneEvent, start: Date) -> FocusTarget {
+      let ref = TodayFocus.reference(event.persistentModelID)
+      return FocusTarget(
+        identity: actions.focus.identity(
+          resolution: calendar.focusIdentity(externalID: event.externalID, occurrence: start),
+          localReference: ref, kind: "event", occurrence: event.repeats == nil ? nil : start),
+        reference: ref, title: event.title)
+    }
+
+    private func target(_ event: ExternalEvent) -> FocusTarget {
+      let ref = "eventkit:" + event.eventIdentifier
+      return FocusTarget(
+        identity: actions.focus.identity(
+          resolution: calendar.focusIdentity(
+            externalID: event.eventIdentifier, occurrence: event.start),
+          localReference: ref, kind: "event", occurrence: event.repeats ? event.start : nil),
+        reference: ref, title: event.title)
+    }
+
+    private func isHidden(_ target: FocusTarget) -> Bool {
+      !showsWeekStrip && actions.focus.state(for: target.identity, now: now) != nil
+    }
+
+    private func isHidden(_ item: TimelineItem) -> Bool {
+      switch item {
+      case .event(let event, let start): isHidden(target(event, start: start))
+      case .external(let event): isHidden(target(event))
+      case .task(let task), .due(let task), .suggested(let task, _): isHidden(target(task))
+      case .gap, .nowMarker, .alarm: false
+      }
+    }
+
+    private func focusActions(_ target: FocusTarget) -> TodayFocusRowActions {
+      TodayFocusRowActions(
+        enabled: !showsWeekStrip,
+        settle: { changeFocus(.settled, target: target) },
+        snooze: { snoozeTarget = target })
+    }
+
+    private func changeFocus(_ state: TodayFocusState?, target: FocusTarget) {
+      withAnimation(.snappy) {
+        _ = actions.focus.change(
+          state, identity: target.identity, localReference: target.reference,
+          title: target.title, context: context, toast: toast)
+      }
+    }
+
+    private func focusHeader(_ title: String, count: Int, id: String, expanded: Binding<Bool>)
+      -> some View
+    {
+      Button {
+        withAnimation(.snappy) { expanded.wrappedValue.toggle() }
+      } label: {
+        HStack {
+          Text("\(title) (\(count))").font(.subheadline.weight(.medium))
+          Rectangle().fill(.quaternary).frame(height: 1)
+          Image(systemName: expanded.wrappedValue ? "chevron.down" : "chevron.right")
+            .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(.secondary)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .listRowSeparator(.hidden)
+      .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+      .accessibilityIdentifier("focus." + id)
+      .accessibilityLabel("\(title) (\(count))")
+      .accessibilityValue(expanded.wrappedValue ? "Expanded" : "Collapsed")
+      .accessibilityHint("Changes visibility in Today only")
+    }
+
+    private func hiddenRecords(snoozed: Bool) -> [FocusRecord] {
+      actions.focus.records.filter {
+        guard let state = actions.focus.state(for: $0.identity, now: now) else { return false }
+        if case .snoozed = state { return snoozed }
+        return !snoozed
+      }
+    }
+
+    @ViewBuilder private func focusSection(snoozed: Bool) -> some View {
+      let records = hiddenRecords(snoozed: snoozed)
+      let expanded = snoozed ? $snoozedExpanded : $settledExpanded
+      focusHeader(
+        snoozed ? "Snoozed" : "Settled", count: records.count,
+        id: snoozed ? "snoozed" : "settled", expanded: expanded)
+      if expanded.wrappedValue {
+        ForEach(records, id: \.identity) { record in
+          let source = resolved(record)
+          let target =
+            source
+            ?? FocusTarget(
+              identity: record.identity, reference: record.localReference, title: "Unavailable item"
+            )
+          HStack {
+            VStack(alignment: .leading, spacing: 3) {
+              Text(target.title).foregroundStyle(.primary)
+              if case .snoozed(let until) = record.state {
+                Text("Returns " + ledger.timeLabel(until)).font(.caption).foregroundStyle(
+                  .secondary)
+              } else {
+                Text("Hidden in Today only").font(.caption).foregroundStyle(.secondary)
+              }
+            }
+            Spacer()
+            Button(source == nil ? "Clear choice" : "Restore") {
+              changeFocus(source == nil ? nil : .active, target: target)
+            }
+            .buttonStyle(.borderless)
+            .frame(minHeight: 44)
+            .accessibilityLabel(
+              source == nil ? "Clear unavailable Focus choice" : "Restore " + target.title)
+          }
+          .listRowSeparator(.hidden)
+        }
+      }
+    }
+
+    /// Resolve content from the current source, never from an overlay copy or a title match.
+    private func resolved(_ record: FocusRecord) -> FocusTarget? {
+      for task in tasks where !task.isDone {
+        let candidate = target(task)
+        if candidate.identity == record.identity { return candidate }
+      }
+      for event in events {
+        let start = record.identity.occurrence ?? event.start
+        if event.repeats != nil,
+          !event.occurrences(in: DateInterval(start: start, duration: 1)).contains(start)
+        {
+          continue
+        }
+        let candidate = target(event, start: start)
+        if candidate.identity == record.identity { return candidate }
+      }
+      if let ref = record.localReference, ref.hasPrefix("eventkit:") {
+        let id = String(ref.dropFirst("eventkit:".count))
+        if case .available(let identity) = calendar.focusIdentity(
+          externalID: id, occurrence: record.identity.occurrence),
+          identity == record.identity,
+          let title = calendar.title(externalID: id, occurrence: record.identity.occurrence)
+        {
+          return FocusTarget(identity: identity, reference: ref, title: title)
+        }
+      }
+      return nil
+    }
+
+    private func visibleIdentities(_ items: DayItems) -> Set<FocusIdentity> {
+      var identities = Set<FocusIdentity>()
+      for e in items.allDay {
+        if let id = target(e, start: e.occurs(on: day, calendar: cal).first ?? e.start).identity {
+          identities.insert(id)
+        }
+      }
+      for e in items.externalAllDay {
+        if let id = target(e).identity { identities.insert(id) }
+      }
+      for task in items.anytime + overdue {
+        if let id = target(task).identity { identities.insert(id) }
+      }
+      for item in items.timeline {
+        let identity: FocusIdentity?
+        switch item {
+        case .event(let e, let start): identity = target(e, start: start).identity
+        case .external(let e): identity = target(e).identity
+        case .task(let t), .due(let t), .suggested(let t, _): identity = target(t).identity
+        case .gap, .nowMarker, .alarm: identity = nil
+        }
+        if let identity { identities.insert(identity) }
+      }
+      return identities
+    }
+
+    /// A snoozed item returns to the attention inbox even if its original schedule is on an earlier day.
+    private func returned(_ items: DayItems) -> [FocusTarget] {
+      guard isTodayTab else { return [] }
+      let visible = visibleIdentities(items)
+      return actions.focus.records.compactMap { record in
+        guard !visible.contains(record.identity) else { return nil }
+        switch record.state {
+        case .active: return resolved(record)
+        case .snoozed(let until) where until <= now: return resolved(record)
+        default: return nil
+        }
+      }
+    }
+
+    @ViewBuilder private func returnedSection(_ items: DayItems) -> some View {
+      let returned = returned(items)
+      if activeExpanded, !returned.isEmpty {
+        Section {
+          ForEach(returned) { target in
+            HStack {
+              Button {
+                openAttentionItem(target)
+              } label: {
+                Text(target.title).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+              }
+              .buttonStyle(.plain)
+              .accessibilityLabel("Show details for " + target.title)
+              Spacer()
+              Button("Settle") { changeFocus(.settled, target: target) }
+                .accessibilityLabel("Settle " + target.title)
+                .buttonStyle(.borderless).frame(minHeight: 44)
+            }
+            .modifier(focusActions(target))
+            .listRowSeparator(.hidden)
+          }
+        } header: {
+          AgendaHeader(title: "Returned to Today")
+        }
+      }
+    }
+
+    private func openAttentionItem(_ target: FocusTarget) {
+      if let task = tasks.first(where: { self.target($0).identity == target.identity }) {
+        openTask(task)
+        return
+      }
+      if let event = events.first(where: {
+        self.target($0, start: target.identity?.occurrence ?? $0.start).identity == target.identity
+      }) {
+        openEvent(event)
+        return
+      }
+      if let ref = target.reference, ref.hasPrefix("eventkit:"),
+        let native = calendar as? any NativeCalendarService,
+        case .available(let identity) = calendar.focusIdentity(
+          externalID: String(ref.dropFirst("eventkit:".count)),
+          occurrence: target.identity?.occurrence),
+        identity == target.identity
+      {
+        native.edit(
+          identifier: String(ref.dropFirst("eventkit:".count)),
+          start: identity.occurrence ?? now, end: nil, fullOptions: false, onComplete: nil)
+      } else {
+        toast?.showNotice("This source is unavailable. Reconnect and try again.")
+      }
+    }
+
+    private func activeCount(_ items: DayItems) -> Int {
+      let timeline = items.timeline.filter {
+        switch $0 {
+        case .gap, .nowMarker, .alarm: false
+        default: true
+        }
+      }.count
+      return items.allDay.count + items.externalAllDay.count + items.anytime.count
+        + timeline + (cal.isDate(day, inSameDayAs: now) && showsOverdue ? overdue.count : 0)
+        + returned(items).count
     }
 
     /// Oldest deadline first.
     private var overdue: [OneTask] {
-      tasks.filter { plannerIsOverdue($0, now: now, calendar: cal) }.sorted {
+      tasks.filter { plannerIsOverdue($0, now: now, calendar: cal) && !isHidden(target($0)) }.sorted
+      {
         ($0.due ?? .distantPast) < ($1.due ?? .distantPast)
       }
     }
