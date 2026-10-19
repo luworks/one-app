@@ -237,6 +237,124 @@
         }
       ],
       "productName": "TodayMock"
+    },
+    "TodayTestHost": {
+      "type": "application",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayTestHost-Debug.xcconfig",
+        "Release": "Config/TodayTestHost-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "Development/TestHost"
+        }
+      ]
+    },
+    "TodayTests": {
+      "type": "bundle.unit-test",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayTests-Debug.xcconfig",
+        "Release": "Config/TodayTests-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "Eval/Tests/OneLogicTests",
+          "excludes": [
+            "*.json"
+          ]
+        },
+        {
+          "path": "SceneRegistryTests"
+        },
+        {
+          "path": "TodayIntegrationTests"
+        },
+        {
+          "path": "Eval/Tests/OneLogicTests/capture-cases.json",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Eval/Tests/OneLogicTests/conversation-journeys.json",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "../tests/fixtures/swiftdata-upgrade",
+          "type": "folder",
+          "buildPhase": "resources"
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "TodayTestHost"
+        },
+        {
+          "package": "TodayModules",
+          "product": "One"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayData"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayTestSupport"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayScenes"
+        }
+      ]
+    },
+    "TodaySnapshotTests": {
+      "type": "bundle.unit-test",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodaySnapshotTests-Debug.xcconfig",
+        "Release": "Config/TodaySnapshotTests-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "TodaySnapshotTests",
+          "excludes": [
+            "__Snapshots__"
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "TodayTestHost"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureClock"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayDesignSystem"
+        },
+        {
+          "package": "SnapshotTesting",
+          "product": "SnapshotTesting"
+        }
+      ]
     }
   },
   "schemes": {
@@ -251,7 +369,9 @@
       },
       "test": {
         "config": "Debug",
-        "targets": [],
+        "targets": [
+          "TodayTests"
+        ],
         "gatherCoverageData": false
       },
       "profile": {
@@ -277,11 +397,69 @@
         ],
         "gatherCoverageData": true
       }
+    },
+    "TodayTests": {
+      "build": {
+        "targets": {
+          "TodayTestHost": "all",
+          "TodayTests": [
+            "test"
+          ]
+        }
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          {
+            "name": "TodayTests",
+            "parallelizable": false
+          }
+        ],
+        "gatherCoverageData": true,
+        "commandLineArguments": {
+          "-AppleLocale en_US_POSIX": true,
+          "-AppleLanguages (en)": true
+        },
+        "environmentVariables": {
+          "TZ": "UTC"
+        }
+      }
+    },
+    "TodaySnapshotTests": {
+      "build": {
+        "targets": {
+          "TodayTestHost": "all",
+          "TodaySnapshotTests": [
+            "test"
+          ]
+        }
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          {
+            "name": "TodaySnapshotTests",
+            "parallelizable": false
+          }
+        ],
+        "gatherCoverageData": true,
+        "commandLineArguments": {
+          "-AppleLocale en_US_POSIX": true,
+          "-AppleLanguages (en)": true
+        },
+        "environmentVariables": {
+          "TZ": "UTC"
+        }
+      }
     }
   },
   "packages": {
     "TodayModules": {
       "path": "."
+    },
+    "SnapshotTesting": {
+      "url": "https://github.com/pointfreeco/swift-snapshot-testing.git",
+      "exactVersion": "1.19.6"
     }
   }
 }

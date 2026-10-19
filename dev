@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
-"""Today development entry point (Python standard library only)."""
+"""Today development entry point; bootstrap starts with the system standard library."""
+import os
+from pathlib import Path
 import sys
+
 sys.dont_write_bytecode = True
+root = Path(__file__).resolve().parent
+# Read-only entry points neither install tools nor ask mise to create runtime/cache state.
+readonly = len(sys.argv) < 2 or sys.argv[1] in ('help', 'doctor', 'inventory', 'plan', '-h', '--help')
+if not readonly and not os.environ.get('TODAY_RUNTIME_ACTIVE'):
+    from scripts.devtools.bootstrap import bootstrap
+    plan = bootstrap(root, tools=['mise'], plan=True)
+    mise = plan['tools'][0].get('executable')
+    runtime = root / '.dev-tools/runtime/installs/python'
+    if mise and runtime.is_dir():
+        from scripts.devtools.runtimes import environment
+        env = environment(root)
+        env['TODAY_RUNTIME_ACTIVE'] = '1'
+        os.execve(mise, [mise, 'exec', '--', 'python3', str(Path(__file__).resolve()), *sys.argv[1:]], env)
 from scripts.devtools.cli import main
 sys.exit(main())

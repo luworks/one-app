@@ -60,12 +60,22 @@ class FoundationTests(unittest.TestCase):
         self.assertTrue(probes)
         self.assertEqual(before, {p.relative_to(self.root) for p in self.root.rglob('*')})
 
-    def test_unknown_command_and_build_fail(self):
-        for command in ['nonexistent', 'build', 'test']:
-            with contextlib.redirect_stderr(io.StringIO()) as output, self.assertRaises(SystemExit) as caught:
-                main([command], self.root)
-            self.assertEqual(caught.exception.code, 2)
-            self.assertIn('invalid choice', output.getvalue())
+    def test_unknown_command_fails_without_execution(self):
+        with contextlib.redirect_stderr(io.StringIO()) as output, self.assertRaises(SystemExit) as caught:
+            main(['nonexistent'], self.root)
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn('invalid choice', output.getvalue())
+
+    def test_build_failure_reaches_caller(self):
+        with patch('scripts.devtools.commands.build', return_value=65) as build:
+            self.assertEqual(main(['build', 'Release'], self.root), 65)
+        build.assert_called_once_with(self.root, 'Release', scheme='Today')
+
+    def test_invalid_test_group_cannot_start_a_runner(self):
+        with patch('scripts.devtools.commands.test', side_effect=AssertionError('runner started')), \
+             contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+            main(['test', 'nonexistent'], self.root)
+        self.assertEqual(caught.exception.code, 2)
 
     def test_worktree_and_spaces_have_distinct_dd(self):
         other = self.root / 'other worktree'

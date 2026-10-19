@@ -11,7 +11,10 @@ def environment(root):
                 MISE_CACHE_DIR=str(root / '.dev-tools/runtime-cache'),
                 MISE_TRUSTED_CONFIG_PATHS=str(root),
                 BUNDLE_PATH=str(root / '.dev-tools/bundle'), BUNDLE_FROZEN='true',
-                BUNDLE_DEPLOYMENT='true', BUNDLE_IGNORE_CONFIG='1')
+                BUNDLE_DEPLOYMENT='true', BUNDLE_IGNORE_CONFIG='1',
+                FASTLANE_OPT_OUT_USAGE='1', FASTLANE_SKIP_UPDATE_CHECK='1',
+                FASTLANE_HIDE_CHANGELOG='1', FASTLANE_SKIP_DOCS='1',
+                FASTLANE_DISABLE_COLORS='1')
 
 
 def command(root, arguments):

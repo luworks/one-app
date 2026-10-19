@@ -5,3 +5,6 @@ build/
 .build/
 .swiftpm/
 Package.resolved
+
+# The generated workspace lock is restored from this versioned authority.
+!Dependencies/Package.resolved

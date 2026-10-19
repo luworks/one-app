@@ -1,0 +1,14 @@
+// Isolated development-only host; never linked or embedded by the production app.
+CODE_SIGN_STYLE = Automatic
+GENERATE_INFOPLIST_FILE = YES
+CURRENT_PROJECT_VERSION = 1
+MARKETING_VERSION = 0.1
+SWIFT_VERSION = 6.0
+TARGETED_DEVICE_FAMILY = 1
+PRODUCT_NAME = TodaySnapshotTests
+PRODUCT_MODULE_NAME = TodaySnapshotTests
+PRODUCT_BUNDLE_IDENTIFIER = com.luworks.one.development.todaysnapshottests
+TEST_HOST = $(BUILT_PRODUCTS_DIR)/TodayTestHost.app/TodayTestHost
+BUNDLE_LOADER = $(TEST_HOST)
+TEST_TARGET_NAME = TodayTestHost
+OTHER_SWIFT_FLAGS = $(inherited) -package-name ios

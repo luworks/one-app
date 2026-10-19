@@ -6,7 +6,7 @@ import Testing
 @testable import One
 
 /// Reads the finished baseline fixture using the actual production model module.
-/// This target must belong to package TodayModules to access package model members.
+/// This target must use the Swift package identity ios to access package model members.
 @MainActor
 struct StoreUpgradeTests {
     @Test
