@@ -204,7 +204,9 @@ class CoreUIExecutionTests(unittest.TestCase):
                             next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']))
             self.assertLess(next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']),
                             next(i for i, c in enumerate(calls) if c[:2] == ['xcodebuild', 'test-without-building']))
-            self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'bootstatus'] for c in calls))
+            ready = next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'bootstatus'])
+            test_index = next(i for i, c in enumerate(calls) if c[:2] == ['xcodebuild', 'test-without-building'])
+            self.assertLess(ready, test_index)
             test = next(c for c in calls if c[:2] == ['xcodebuild', 'test-without-building'])
             self.assertEqual(test[test.index('-xctestrun') + 1], str(products))
             self.assertIn('-only-testing:' + selected[0], test)

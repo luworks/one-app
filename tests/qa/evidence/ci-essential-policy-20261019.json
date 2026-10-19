@@ -1,14 +1,14 @@
 {
   "base": "1748a4a8565fd86f4bf5fe23d64b1ff010ee0d43",
   "policy": "essential-risk-selected",
-  "status": "pr119-entry-repaired-remote-pending",
+  "status": "pr119-v22-clock-readiness-repair-remote-pending",
   "local": {
-    "helpers": 142,
+    "helpers": "passed",
+    "helpers_seconds": 19.576257,
     "lint": "passed",
     "format": "passed",
-    "native": "not-run",
-    "phone": "not-run",
-    "helpers_seconds": 24.258
+    "native": "not-run-host-freeze",
+    "phone": "not-run"
   },
   "previous_failure": {
     "pr": 118,
@@ -145,6 +145,89 @@
     "not_execution_success": true,
     "evidence": "tests/results/ci-hillclimb-20261019/pr119-first-failure/audit.json"
   },
-  "repair": "Initialize repository package path before routine selection; subprocess regression preserves success and nonzero exit.",
-  "acceptance": "Remote risk-selected reports and fresh native leaves pending; five-minute ordinary Swift profile remains unqualified."
+  "repair": "Pin Journey app runtime to 09:41; execute J4/J6/Plan assertions without host-time guards/skips. Restore UI simulator bootstatus barrier before XCTest.",
+  "acceptance": "Remote risk-selected reports and fresh native leaves pending; five-minute ordinary Swift profile remains unqualified.",
+  "pr119_v21_failure": {
+    "head": "79a0de1b3ffa70fe098357ce9be6b019a88daec3",
+    "integrated_sha": "aa4225ac1fe4455a4f7d352ef7ddddc6db51ddcb",
+    "run": 39340347079,
+    "job": 118360038562,
+    "queue_seconds": 9.0,
+    "job_seconds": 1734.0,
+    "created_to_required_seconds": 1743.0,
+    "artifact_sha256": "276b5ff6c58c98b08ada6d194bf46745fdac867948b2a36d5db0e3eca96d5ea0",
+    "lanes": {
+      "lint": {
+        "status": "passed",
+        "executed": 3,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "business": {
+        "status": "passed",
+        "executed": 701,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "format": {
+        "status": "passed",
+        "executed": 337,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "core-ui": {
+        "status": "failed",
+        "executed": 19,
+        "failed": 2,
+        "cancelled": 0,
+        "missing": 1,
+        "errors": [
+          "runner_incomplete",
+          "runner_stage_failure",
+          "process_exit:65",
+          "log_failure",
+          "test_failure",
+          "unexpected_skip",
+          "command_exit:65"
+        ]
+      },
+      "integration": {
+        "status": "passed",
+        "executed": 23,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "build": {
+        "status": "passed",
+        "executed": 3,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "snapshots": {
+        "status": "passed",
+        "executed": 6,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      }
+    },
+    "failures": {
+      "AskSuggestionTests": "first app launch timed out before business assertions; readiness barrier absent; root cause not established",
+      "JourneyTests/testJ2_todayShowsWhatsLeft": "late-clock autoscroll leaves list at bottom (AX scrollbar 100%); Buy milk and Overdue (1) present; top overdue shortcut and date not realized",
+      "JourneyTests/testPlanMyDay": "host real clock >=18 triggered explicit skip; runner and simulator time zones differ"
+    },
+    "repair": "Pin Journey app runtime to 09:41; execute J4/J6/Plan assertions without host-time guards/skips. Restore UI simulator bootstatus barrier before XCTest.",
+    "remaining": "Remote proof pending; first-launch cause unresolved until fresh run. Wide config run is not an ordinary Swift <=300s qualification."
+  }
 }

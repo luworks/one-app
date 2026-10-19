@@ -11,7 +11,8 @@ final class JourneyTests: XCTestCase {
     await MainActor.run {
       continueAfterFailure = false
       app = XCUIApplication()
-      app.launchArguments = ["-uiTesting"]
+      // Keep day-dependent journeys independent of the runner clock and time zone.
+      app.launchArguments = ["-uiTesting", "-uiTestingNow", "09:41"]
       app.launch()
       taps = 0
     }
@@ -85,9 +86,8 @@ final class JourneyTests: XCTestCase {
     XCTAssertTrue(title.waitForExistence(timeout: 5))
     title.typeText("Design review")
     tap(app.buttons["Done"])
-    // The Month view lists the selected day's events under the grid; the new one starts at the next full hour today.
-    // (After 23:00 "the next full hour" is tomorrow, so only check the list before then.)
-    if Calendar.current.component(.hour, from: .now) < 23 {
+    // The pinned morning clock puts the default event in today's list.
+    do {
       let row = app.descendants(matching: .any).matching(
         NSPredicate(format: "label BEGINSWITH 'Design review'")
       ).firstMatch
@@ -119,10 +119,8 @@ final class JourneyTests: XCTestCase {
   }
 
   /// J6: add a real alarm, see it on the Alarms page and in Today's schedule.
-  func testJ6_addAlarmAndSeeItInToday() throws {
-    // A new alarm starts at the next quarter hour; in the last quarter hour of the day that is tomorrow.
-    let c = Calendar.current.dateComponents([.hour, .minute], from: .now)
-    try XCTSkipIf(c.hour! == 23 && c.minute! >= 45, "the default alarm time is tomorrow")
+  func testJ6_addAlarmAndSeeItInToday() {
+    // The pinned morning clock keeps the next-quarter-hour alarm in today.
     tab("Clock")
     tap(app.buttons["New"])  // + adds an alarm on the Alarms page
     tap(app.buttons["Save"])
@@ -192,10 +190,8 @@ final class JourneyTests: XCTestCase {
   }
 
   /// AI claim 9: plan my day is a preview; nothing moves until Apply.
-  func testPlanMyDay() throws {
-    // The planner only fills free time until 9 PM, so late in the evening there is nothing to place.
-    try XCTSkipIf(
-      Calendar.current.component(.hour, from: .now) >= 18, "needs free time before 9 PM")
+  func testPlanMyDay() {
+    // The pinned morning clock leaves free time for all three planned tasks.
     tap(app.buttons["Ask AI or add anything"])
     // The suggestion chips change with the data, so the sentence is typed, as a user would.
     let field =
