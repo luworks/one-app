@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "scripts/testing"))
 import contract
 
 sys.path.insert(0, str(ROOT))
-from scripts.devtools.core import (derived_data, ensure_test_products, native_test_options)
+from scripts.devtools.core import (ci_test_scheme, derived_data, ensure_test_products, native_test_options)
 from scripts.devtools.commands import execute
 
 CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
@@ -352,7 +352,7 @@ def main(argv=None):
                 summary["build_seconds"] = round(time.monotonic() - before, 3)
                 return result
 
-            args.test_products = ensure_test_products(ROOT, "TodayMock", build, flags=locked_arguments(ROOT))
+            args.test_products = ensure_test_products(ROOT, ci_test_scheme("TodayMock"), build, flags=locked_arguments(ROOT))
         if not boot_started:
             boot_started = True
             journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)

@@ -30,7 +30,7 @@ def main(argv=None, root=ROOT):
     sub.add_parser('doctor', help='read-only environment checks; no simulator boot')
     sub.add_parser('inventory', help='read-only worktree, locks and tools')
     plan = sub.add_parser('plan', help='read-only fingerprint and provenance; executes nothing')
-    plan.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench', 'TodayTests', 'TodaySnapshotTests'], default='Today')
+    plan.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench', 'TodayTests', 'TodaySnapshotTests', 'TodayCI'], default='Today')
     plan.add_argument('--sdk', default='iphonesimulator')
     plan.add_argument('--architecture')
     plan.add_argument('--configuration', choices=['Debug', 'Release'], default='Debug')

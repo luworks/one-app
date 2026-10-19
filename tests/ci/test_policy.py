@@ -70,7 +70,7 @@ class SelectionTests(unittest.TestCase):
             with patch.object(policy, 'capture', side_effect=[json.dumps(project), json.dumps(package)]) as probe:
                 nodes = policy.graph(root)
             self.assertIn('dump-package', probe.call_args_list[1].args[0])
-            self.assertEqual(policy.select(['ios/Domain/Sources/A.swift'], nodes)['targets'],
+            self.assertEqual(policy.select(['ios/Domain/Sources/Domain/A.swift'], nodes)['targets'],
                              ['ios/Domain:Domain', 'ios/Domain:DomainTests', 'xcode:App', 'xcode:Widget'])
 
     def test_missing_project_is_explicit(self):
@@ -88,10 +88,53 @@ class SelectionTests(unittest.TestCase):
                     policy.graph(root)
 
 
+class RiskExecutionTests(unittest.TestCase):
+    def setUp(self):
+        from scripts.testing import contract
+        self.contract = contract
+        self.source = contract.inventory(ROOT)
+        self.broad = contract.plan(['core'], self.source)['selectors']['ui']
+        self.selection = {'mode': 'affected', 'all_targets': False,
+                          'changed': ['ios/Sources/Features/FeatureClock/TimerView.swift'],
+                          'targets': ['ios:FeatureClock', 'ios:TodayShell', 'xcode:TodayMock']}
+
+    def selected(self, selection=None):
+        with patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'pull_request'}):
+            return policy.execution_selection(selection or self.selection, self.source, 'core-ui', self.broad)
+
+    def test_feature_runs_smoke_and_existing_feature_suites(self):
+        result = self.selected()
+        for test in self.contract.expand(policy.SMOKE, self.source, 'ui'):
+            self.assertIn(test, result)
+        for test in self.contract.expand(['TimerTests'], self.source, 'ui'):
+            self.assertIn(test, result)
+        self.assertFalse(any('/CalendarSyncTests/' in test for test in result))
+        self.assertEqual(len(result), len(set(result)))
+
+    def test_every_feature_mapping_resolves_actual_test_authorities(self):
+        for suites in policy.FEATURE_SUITES.values():
+            self.assertTrue(self.contract.expand(suites, self.source, 'ui'))
+
+    def test_config_missing_graph_unknown_path_and_main_do_not_narrow(self):
+        for selection in (dict(self.selection, all_targets=True),
+                          dict(self.selection, changed=['ios/Sources/TodayCore/Timer.swift']),
+                          dict(self.selection, targets=[]), dict(self.selection, changed=[])):
+            self.assertEqual(self.selected(selection), self.broad)
+        with patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'push'}):
+            self.assertEqual(policy.execution_selection(self.selection, self.source, 'core-ui', self.broad), self.broad)
+
+    def test_changed_feature_test_is_not_hidden_by_bounded_core(self):
+        selection = dict(self.selection, all_targets=True,
+                         changed=['ios/OneUITests/TimerTests.swift'])
+        selected = self.selected(selection)
+        for test in self.contract.expand(['TimerTests'], self.source, 'ui'):
+            self.assertIn(test, selected)
+
+
 class AggregateTests(unittest.TestCase):
     def needs(self, event='pull_request', ref='refs/pull/1/merge'):
         return {name: {'result': 'success' if name not in policy.LANES or policy.expected(event, ref, name) else 'skipped'}
-                for name in ('helpers', 'prerequisite', *policy.LANES)}
+                for name in ('helpers', 'host', 'native', 'release', *policy.MANUAL)}
 
     def test_pr_and_merge_queue_pass(self):
         for event in ('pull_request', 'merge_group'):
@@ -105,7 +148,7 @@ class AggregateTests(unittest.TestCase):
 
     def test_all_failure_states_rejected(self):
         for state in ('failure', 'cancelled', 'skipped', None, ''):
-            for name in ('helpers', 'prerequisite', 'format', 'business', 'snapshots'):
+            for name in ('helpers', 'host', 'native'):
                 needs = self.needs()
                 needs[name]['result'] = state
                 self.assertTrue(policy.aggregate(needs, 'pull_request', 'refs/pull/1/merge'), (name, state))
@@ -220,6 +263,36 @@ class PrerequisiteTests(unittest.TestCase):
 
 
 class SetupTests(unittest.TestCase):
+    @staticmethod
+    def finished(argv, **kwargs):
+        if 'select' in argv:
+            Path(argv[argv.index('--output') + 1]).write_text('{}')
+        return subprocess.CompletedProcess(argv, 0, '')
+
+    def test_batch_prepares_native_once_and_stops_on_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sha = 'd' * 40
+            report = {'sha': sha, 'lane': 'build', 'status': 'passed', 'executed': 1,
+                      'failed': 0, 'cancelled': 0, 'missing': 0, 'synthetic': True}
+            with (patch.dict(os.environ, {'GITHUB_SHA': sha, 'RUNNER_TEMP': directory}),
+                  patch.object(sys, 'argv', ['run.py', 'build', 'integration', 'snapshots', 'core-ui']),
+                  patch.object(runner.subprocess, 'check_output', return_value=sha),
+                  patch.object(runner, 'producer_boundary'),
+                  patch.object(runner, 'execute', side_effect=self.finished) as execute,
+                  patch.object(runner, 'close_wrapper', return_value=report),
+                  patch.object(runner, 'validate_report'), patch.object(runner, 'stage')):
+                self.assertEqual(runner.main(), 0)
+            commands = [call.args[0] for call in execute.call_args_list]
+            self.assertEqual(commands.count(['./dev', 'generate']), 1)
+            self.assertEqual(commands.count(['./dev', 'resolve']), 1)
+            self.assertEqual(sum('select' in command for command in commands), 1)
+            self.assertEqual([command[2] for command in commands if command[:2] == ['./dev', 'ci']],
+                             ['build', 'integration', 'snapshots', 'core-ui'])
+        with patch.object(runner, 'run_lane', return_value=1) as run, patch.object(
+                sys, 'argv', ['run.py', 'build', 'integration']):
+            self.assertEqual(runner.main(), 1)
+            self.assertEqual(run.call_count, 1)
+
     def test_only_consumed_tools_and_dependencies_are_prepared(self):
         for lane in policy.LANES:
             with self.subTest(lane=lane), tempfile.TemporaryDirectory() as directory:
@@ -230,8 +303,7 @@ class SetupTests(unittest.TestCase):
                       patch.object(sys, 'argv', ['run.py', lane]),
                       patch.object(runner.subprocess, 'check_output', return_value=sha),
                       patch.object(runner, 'producer_boundary'),
-                      patch.object(runner, 'execute', side_effect=lambda argv, **kw:
-                                   subprocess.CompletedProcess(argv, 0, '')) as execute,
+                      patch.object(runner, 'execute', side_effect=self.finished) as execute,
                       patch.object(runner, 'close_wrapper', return_value=report),
                       patch.object(runner, 'stage')):
                     self.assertEqual(runner.main(), 0)
@@ -268,7 +340,7 @@ class WorkflowTests(unittest.TestCase):
     def test_every_job_is_aggregated(self):
         text = (ROOT / '.github/workflows/today.yml').read_text()
         jobs = set(re.findall(r'^  ([a-z][a-z-]+):$', text.split('jobs:', 1)[1], re.M))
-        expected = {'helpers', 'prerequisite', *policy.LANES}
+        expected = {'helpers', 'host', 'native', 'release', *policy.MANUAL}
         self.assertEqual(jobs, expected | {'today-required'})
         aggregate = text.split('  today-required:', 1)[1]
         needs = re.search(r'needs: \[(.*?)\]', aggregate).group(1).split(', ')

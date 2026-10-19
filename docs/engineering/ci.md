@@ -1,5 +1,20 @@
 # Today CI contract
 
+PR114 iteration 17 retains failed run `39327550472` at head `5aafe5e`,
+integrated SHA `420761b139f89bf378e63453b1e10f1473dc676b` (parents `43d2816`
+and `5aafe5e`). Native job `118317312991` rejected `./dev plan --scheme TodayCI`
+with exit 2 because the CLI plan choices omitted the shared scheme. This happened
+before native compilation or test execution; no native report, leaves, xcresult
+or artifact was produced. The required check failed. Host format/lint/business
+reports passed and their published file hashes were verified. The fix admits the
+existing TodayCI scheme to the read-only plan command, with a CLI cache-plan
+regression and unknown-scheme rejection retained. Helpers passed 146 tests and
+lint passed; no local native build or simulator ran. Raw first-failure evidence
+and journal hashes remain in primary `tests/results/ci-hillclimb-20261019/`.
+Creation to failed required completion was 328 seconds; native started after
+308 seconds, so this sample already exceeds the 300-second target before native
+work. Neither this repair nor helper success proves a performance improvement.
+
 `Today CI` runs on every pull-request and merge-group integrated ref, every main push and explicit manual dispatch. `./dev` is the engineering entry; `.github/actions/check` calls the thin `scripts/ci/run.py` wrapper, which prepares only consumed tools and invokes `./dev ci <lane>`. Product source, fixtures, test identities and baselines are unchanged by CI optimization.
 
 ## Required checks and cancellation
@@ -65,7 +80,7 @@ A focused replay of 20 existing completed Release link maps reproduced scanner r
 
 ## Artifact boundary
 
-Only explicit generated roots with a closed matching SHA/lane synthetic producer receipt may be staged. Existing symlink/path/secret checks, complete immutable xcresult inventory, text redaction, SHA-256 verification and atomic staging rename remain unchanged. No arbitrary workspace discovery, personal data, SQLite/product archives or stale images/results may enter publication. Binary evidence requires the existing no-secrets synthetic runner boundary. Whole completed bundles and failure evidence remain retained; uploads use pinned actions/upload-artifact, lane/SHA/attempt names and seven-day retention.
+Only explicit generated roots with a closed matching SHA/lane synthetic producer receipt may be staged. Existing symlink/path/secret checks, complete immutable xcresult inventory, text redaction, SHA-256 verification and atomic staging rename remain unchanged. No arbitrary workspace discovery, personal data, SQLite/product archives or stale images/results may enter publication. Binary evidence requires the existing no-secrets synthetic runner boundary. Whole completed bundles and failure evidence remain retained; uploads use pinned actions/upload-artifact, job/SHA/attempt names (each lane remains a separate sealed subdirectory) and seven-day retention.
 
 ### Native instrumentation hillclimb (2026-10-19)
 
@@ -530,3 +545,72 @@ Verification: final `./dev test helpers` passed 138 host regressions;
 `./dev lint` and `git diff --check` passed. First diagnostic-fixture failure
 and both corrected runs are retained. This is helper evidence, not a native
 readiness or speed acceptance result; the next integrated CI run owns that gate.
+
+
+### Shared native producer and PR risk selection (2026-10-19 resume)
+
+The required DAG is now `helpers -> {host, native} -> today-required`.
+`host` runs format/lint/business sequentially; `native` runs build/integration/
+snapshots/core-ui sequentially. Prerequisites execute on each consuming Mac,
+instead of occupying a separate queued runner. Each lane still produces its own
+closed matching integrated-SHA receipt, manifest and raw artifacts. A failed
+lane stops the batch; unexecuted lanes cannot manufacture success. Main Release
+and explicit manual jobs remain dependencies of the required aggregate with
+only their original event skip exemptions. No branch protection or bypass policy
+changes are made. Report main Release and complete workflow waiting separately
+from PR push-to-required timing; nothing blocking the aggregate is excluded.
+
+`TodayCI` is a CI-only scheme assembling the production app/extensions and the
+existing Mock, native integration, snapshot and UI test targets. One fresh
+`build-for-testing` producer establishes worktree/source/toolchain/options/product
+hash provenance. All consumers use that scheme with identical instrumentation
+options and `test-without-building`, validating provenance before dispatch.
+Generate/resolve occur once in the wrapper; native consumers call the same
+completed-leaf authority without generating the project again. Tests/results are
+never cached. Each test authority still owns serial simulator lifecycle and
+completed raw xcresults; this revision does not claim a single warm simulator
+session or removal of XCTest's startup/install waiting. Compiler cache partitions
+include the new scheme, so the initial configuration run is a cold profile.
+
+The versioned risk mapping is `scripts/ci/policy.py::FEATURE_SUITES` and `SMOKE`.
+Only recognized feature Swift-only PR/merge-group diffs can narrow core UI.
+Actual evaluated SwiftPM target paths and XcodeGen dependency edges determine
+reverse consumer closure. Two fixed write/Undo smoke journeys plus every mapped
+affected feature suite run; integration and all six snapshots remain required.
+Focus, alarm-row and reminder-editor suites are included. High-risk feature
+checks are not filtered out for hardware/time/screenshot skip categories; the
+existing contract must validate any skip. Unknown/shared/schema/config/dependency
+changes retain broad core, logic, integration and snapshots; changed UI test
+files additionally require every method in those files. Such changes can exceed
+the ordinary 300-second target. Main retains the broad lane authorities; explicit
+extended/release-milestone collections retain their existing wider scope. There
+is no new full-suite run or automatic schedule. Accepted-selection artifacts
+record exact selected and deferred core identities; no deferred result is a pass.
+
+Closed PR110 run 39319312760 was created at 20:26:23 UTC and today-required
+completed at 21:04:01: **2,258 seconds including queue**. After prerequisite
+completed at 20:27:24, core UI started at 20:49:29 (1,325 seconds waiting) and
+finished at 21:03:54. Integration build was 71.122s; test command 334.191s
+versus session 39.004s. Snapshot build was 73.408s; test command 372.053s. Core build was
+125.687s, seven test bodies 302.629s (session 302.683s), and runner
+779.497s. All three module restores missed. Module saves took
+3.813/7.876/3.958s for integration/snapshots/core; artifact uploads took
+2.093/11.157s for integration/snapshots. No warm net saving is established.
+These closed results do not prove that bootstatus removal removed readiness
+waiting. PR110 is already merged; no audit, retry or merge is repeated here.
+Raw jobs and prior closed artifacts remain in primary
+`tests/results/ci-hillclimb-20261019/`.
+
+The next remote run validates this substantive CI configuration/source change.
+It cannot establish ordinary Swift-only push-to-required <=300s, a warm module
+cache hit, or config/dependency cold performance by extrapolation. A legitimate
+useful feature-owner Swift change is needed for the ordinary profile; product
+sources must not be edited merely to benchmark CI. Measure queue, setup/generate/
+resolve, actual build count, test commands/sessions/bodies, module restore/save
+and artifact upload separately. Goal remains incomplete until measured.
+
+Local verification: `./dev test helpers` passed 145 host regressions;
+`./dev lint` and `git diff --check` passed. Raw first failures (including the
+random double-underscore path bug and corrected missing import) and final logs
+are retained under the primary results directory. No local native build,
+simulator UI, full suite or phone validation was performed in this resume.

@@ -21,7 +21,7 @@ CONTRACT = commands.testing_contract(ROOT)
 
 class NativeProvenanceTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix='native provenance space ')
+        self.temporary = tempfile.TemporaryDirectory(prefix='native provenance __literal__ space ')
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         subprocess.run(['git', 'init', '-q', str(self.root)], check=True)

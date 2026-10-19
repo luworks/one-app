@@ -8,16 +8,18 @@ runs:
   using: composite
   steps:
     - name: Plan routine compiler module cache
-      if: inputs.lane == 'integration' || inputs.lane == 'snapshots' || inputs.lane == 'core-ui'
+      if: contains(inputs.lane, 'core-ui') || inputs.lane == 'integration' || inputs.lane == 'snapshots'
       id: modules
       shell: bash
       env:
-        TODAY_LANE: ${{ inputs.lane }}
+        TODAY_LANES: ${{ inputs.lane }}
       run: |
-        case "$TODAY_LANE" in
+        export TODAY_LANE="${TODAY_LANES%% *}"
+        case "$TODAY_LANES" in
           integration) scheme=TodayTests ;;
           snapshots) scheme=TodaySnapshotTests ;;
           core-ui) scheme=TodayMock ;;
+          "build integration snapshots core-ui") scheme=TodayCI ;;
         esac
         ./dev plan --scheme "$scheme" --architecture arm64 > "$RUNNER_TEMP/native-plan.json"
         python3 - <<'PY'
@@ -44,13 +46,15 @@ runs:
         lookup-only: false
     - shell: bash
       env:
-        TODAY_LANE: ${{ inputs.lane }}
-      run: python3 scripts/ci/run.py "$TODAY_LANE"
+        TODAY_LANES: ${{ inputs.lane }}
+      run: |
+        read -ra lanes <<< "$TODAY_LANES"
+        python3 scripts/ci/run.py "${lanes[@]}"
     - if: always()
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
-        name: today-${{ inputs.lane }}-${{ github.sha }}-${{ github.run_attempt }}
-        path: ${{ runner.temp }}/today-artifacts-${{ inputs.lane }}/
+        name: today-${{ github.job }}-${{ github.sha }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/today-artifacts-*/
         if-no-files-found: warn
         retention-days: 7
         include-hidden-files: true

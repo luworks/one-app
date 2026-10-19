@@ -9,7 +9,7 @@ import re
 import subprocess
 import sys
 
-from scripts.ci.policy import LANES, MANUAL, validate_report
+from scripts.ci.policy import LANES, MANUAL, validate_report, execution_selection
 from scripts.testing import contract
 from . import commands
 from .core import atomic_json, canonical_root, derived_data, fingerprint, probe
@@ -43,8 +43,7 @@ def selection_data(path):
             raise ValueError('Invalid selection ' + key)
     if data['all_targets'] != (data['mode'] == 'wide'):
         raise ValueError('Inconsistent selection mode')
-    # This bounded adapter conservatively runs whole authoritative groups. Targets
-    # are graph nodes, never XCTest selectors; do not guess tests from module names.
+    # Execution maps graph features to existing contract selectors, with wide fallback.
     return data
 
 
@@ -62,7 +61,7 @@ def safe_artifacts(source, destination, *, sha, lane):
     stage(source, destination, sha, lane)
 
 
-def test_plan(root, lane):
+def test_plan(root, lane, selection=None):
     source = contract.inventory(root)
     group = {'business': 'unit', 'integration': 'integration', 'snapshots': 'snapshot', 'core-ui': 'core', 'extended': 'ui'}[lane]
     plan = contract.plan([group], source=source)
@@ -73,27 +72,34 @@ def test_plan(root, lane):
         raise ValueError('Test authority has pending coverage: ' + '; '.join(plan['pending']))
     kind = {'business': 'logic', 'integration': 'integration', 'snapshots': 'snapshot'}.get(lane, 'ui')
     expected = plan['selectors'][kind]
+    if selection is not None:
+        expected = execution_selection(selection, source, lane, expected)
     if not expected:
         raise ValueError('Selected test authority contains zero tests')
     return kind, expected
 
 
-def _native_results(root, lane, output, report):
+def _native_results(root, lane, output, report, selection=None):
     """Consume the same completed authority as ./dev, never console-only counts."""
     from . import xcode_tests
-    kind, expected = test_plan(root, lane)
+    kind, expected = test_plan(root, lane, selection)
     report['missing'] = len(expected)
     captured = io.StringIO()
     try:
         with contextlib.redirect_stdout(captured):
-            code = commands.test(root, kind, timeout=600)
+            if os.environ.get('TODAY_CI_SYNTHETIC') == '1' and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1':
+                # The wrapper generated/resolved once before the shared producer.
+                # This authority still validates live source/products before each test.
+                code = xcode_tests.run(root, contract, [kind], only=expected, timeout=600, reuse=True)
+            else:
+                code = commands.test(root, kind, only=expected, timeout=600)
     finally:
         (output / 'command.log').write_text(Redactor()(captured.getvalue()))
     events = [json.loads(line) for line in captured.getvalue().splitlines() if line.startswith('{')]
     receipts = [event for event in events if isinstance(event, dict) and 'report' in event]
     if len(receipts) != 1 or set(receipts[0]) != {'report', 'status'}:
         raise ValueError('Missing or ambiguous native test receipt')
-    scheme = xcode_tests.SCHEMES[kind]
+    scheme = xcode_tests.test_scheme(kind)
     path = Path(receipts[0]['report'])
     evidence_root = canonical_root(root) / 'tests/results/devtools/logs'
     if (not path.is_absolute() or not path.resolve().is_relative_to(evidence_root.resolve())
@@ -133,8 +139,8 @@ def _native_results(root, lane, output, report):
     atomic_json(output / 'test-report.json', authority)
 
 
-def _test_results(root, lane, output, run, report):
-    kind, expected = test_plan(root, lane)
+def _test_results(root, lane, output, run, report, selection=None):
+    kind, expected = test_plan(root, lane, selection)
     source = contract.inventory(root) if kind == 'logic' else None
     report['missing'] = len(expected)
     if kind == 'logic':
@@ -215,7 +221,23 @@ def _checks(root, lane, output, run, report):
             maps = output / 'release-maps'
             maps.mkdir()
             argv += ['LD_GENERATE_MAP_FILE=YES', 'LD_MAP_FILE_PATH=' + str(maps / '$(TARGET_NAME)-$(PRODUCT_NAME).map')]
-        result = run(root, argv, timeout=600, heavy=True)
+        if lane == 'build' and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1':
+            from .core import ensure_test_products, host_lock, dd_lock
+            from .resolve import locked_arguments
+            results = []
+
+            def build(command):
+                result = run(root, command, timeout=600, heavy=False)
+                results.append(result)
+                return result
+
+            with host_lock(root), dd_lock(root):
+                ensure_test_products(root, 'TodayCI', build, flags=locked_arguments(root))
+            if len(results) != 1:
+                raise ValueError('Native batch requires one fresh build producer')
+            result = results[0]
+        else:
+            result = run(root, argv, timeout=600, heavy=True)
         (output / 'command.log').write_text(Redactor()(Path(result.log).read_text()))
         report['cancelled'] += int(result.reason == 'cancelled')
         if result.returncode or result.reason != 'exited':
@@ -322,7 +344,15 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
         if output.resolve().is_relative_to(root):
             raise ValueError('CI output must be outside the source workspace')
         selected = selection_data(selection)
-        atomic_json(output / 'accepted-selection.json', selected)
+        accepted = dict(selected)
+        if lane in ('business', 'integration', 'snapshots', 'core-ui', 'extended'):
+            kind, effective = test_plan(root, lane, selected)
+            _, broad = test_plan(root, lane)
+            accepted['execution'] = {'kind': kind, 'selected': effective,
+                                     'broad_group': broad,
+                                     'deferred_to': 'main broad core and explicit extended authority',
+                                     'deferred': [test for test in broad if test not in effective]}
+        atomic_json(output / 'accepted-selection.json', accepted)
         before = source_state(root, sha)
         report['source_sha256'] = before
         if lane in MANUAL and (os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch'
@@ -332,9 +362,9 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
             raise ValueError(UNSUPPORTED[lane])
         run = runner or commands.execute
         if lane in ('integration', 'snapshots'):
-            _native_results(root, lane, output, report)
+            _native_results(root, lane, output, report, selected)
         elif lane in ('business', 'core-ui', 'extended'):
-            _test_results(root, lane, output, run, report)
+            _test_results(root, lane, output, run, report, selected)
         else:
             _checks(root, lane, output, run, report)
         if source_state(root, sha) != before:
