@@ -322,7 +322,8 @@
         if actions.delete(alarm, context: context, toast: toast) {
           dismiss()
         } else {
-          errorMessage = "The alarm was not deleted. Check alarm access and try again."
+          errorMessage =
+            toast?.message ?? "The alarm could not be fully updated. Keep it open and retry."
         }
       } label: {
         Text("Delete Alarm")
@@ -344,6 +345,7 @@
       }
       saving = true
       let c = runtime.calendar.dateComponents([.hour, .minute], from: time)
+      let before = alarm?.snapshot()
       let target = alarm ?? pendingAlarm ?? OneAlarm(hour: 0, minute: 0)
       if alarm == nil { pendingAlarm = target }
       target.hour = c.hour ?? 7
@@ -365,7 +367,14 @@
         } catch {
           // A new unsaved row may have been removed after a failed disk write.
           // Retain its system identity, including when cancellation compensation failed.
-          if alarm == nil { pendingAlarm = target.snapshot() }
+          if let before {
+            // Also protect the visible row if reading its saved state failed.
+            let recoverySignature = target.alarmKitSignature
+            target.restoreSettings(from: before)
+            target.alarmKitSignature = recoverySignature
+          } else {
+            pendingAlarm = target.snapshot()
+          }
           errorMessage = error.localizedDescription
         }
       }
