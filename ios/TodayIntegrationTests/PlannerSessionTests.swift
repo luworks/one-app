@@ -81,6 +81,109 @@
     }
 
     @Test
+    func alarmCommitAndCancelErrorsKeepIdentityAndRetry() async throws {
+      let a = try Session(seed: 1900)
+      defer { a.dispose() }
+      let alarm = OneAlarm(hour: 17, minute: 15, label: "Same label")
+      let other = OneAlarm(hour: 17, minute: 15, label: "Same label")
+      a.context.insert(alarm)
+      a.context.insert(other)
+      try a.context.save()
+      try await a.services.alarms.commit(alarm, context: a.context)
+      let id = try #require(alarm.alarmKitID)
+      let reminder = try a.add("Independent reminder", due: a.day, rings: true)
+      let due = reminder.due
+      alarm.label = "Edited"
+      a.services.alarms.failsSchedule = true
+      do {
+        try await a.services.alarms.commit(alarm, context: a.context)
+        Issue.record("Expected schedule failure")
+      } catch {}
+      #expect(alarm.label == "Same label" && alarm.alarmKitID == id)
+      #expect(alarm.isOn && alarm.alarmKitSignature == nil)
+      #expect(
+        try ModelContext(a.context.container).fetch(FetchDescriptor<OneAlarm>()).first {
+          $0.alarmKitID == id
+        }?.alarmKitSignature == nil)
+      #expect(other.label == "Same label" && other.alarmKitID == nil)
+      alarm.label = "Edited"
+      a.services.alarms.failsSchedule = false
+      try await a.services.alarms.commit(alarm, context: a.context)
+      let reader = ModelContext(a.context.container)
+      #expect(
+        try reader.fetch(FetchDescriptor<OneAlarm>()).first { $0.alarmKitID == id }?.label
+          == "Edited")
+      a.services.alarms.failsCancel = true
+      #expect(throws: (any Error).self) {
+        try AlarmActions.remove(alarm, context: a.context, alarms: a.services.alarms)
+      }
+      #expect(!alarm.isDeleted && alarm.modelContext != nil)
+      a.services.alarms.failsCancel = false
+      let deleted = try AlarmActions.remove(alarm, context: a.context, alarms: a.services.alarms)
+      await a.services.alarms.sync(a.context)
+      #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 1)
+      #expect(try ModelContext(a.context.container).fetch(FetchDescriptor<OneAlarm>()).count == 1)
+      #expect(a.services.alarms.cancelledIDs == [id])
+      #expect(!reminder.isDone && reminder.due == due && reminder.plannedStart == nil)
+      a.services.alarms.failsSchedule = true
+      do {
+        try await a.services.alarms.commit(deleted, context: a.context)
+        Issue.record("Expected Undo schedule failure")
+      } catch {}
+      #expect(deleted.modelContext == nil)
+      a.services.alarms.failsSchedule = false
+      try await a.services.alarms.commit(deleted, context: a.context)
+      try await a.services.alarms.commit(deleted, context: a.context)
+      #expect(deleted.alarmKitID == id)
+      #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 2)
+    }
+
+    @Test
+    func newAlarmFailureRetryRetainsSystemID() async throws {
+      let a = try Session(seed: 1902)
+      defer { a.dispose() }
+      let draft = OneAlarm(hour: 17, minute: 15, label: "Retry new alarm")
+      a.services.alarms.failsSchedule = true
+      a.services.alarms.failsCancel = true
+      do {
+        try await a.services.alarms.commit(draft, context: a.context)
+        Issue.record("Expected schedule and compensation failure")
+      } catch {}
+      let id = try #require(draft.alarmKitID)
+      let retry = draft.snapshot()
+      a.services.alarms.failsSchedule = false
+      a.services.alarms.failsCancel = false
+      try await a.services.alarms.commit(retry, context: a.context)
+      #expect(retry.alarmKitID == id)
+      #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 1)
+      #expect(a.services.alarms.scheduledIDs == [id])
+    }
+
+    @Test
+    func alarmLocalSaveFailureCompensatesAndKeepsPreviousSettings() async throws {
+      let a = try Session(seed: 1901)
+      defer { a.dispose() }
+      let alarm = OneAlarm(hour: 17, minute: 15, label: "Original")
+      a.context.insert(alarm)
+      try a.context.save()
+      alarm.label = "Draft"
+      var systemLabels: [String] = []
+      do {
+        try await AlarmActions.persist(
+          alarm, context: a.context,
+          schedule: {
+            systemLabels.append($0.label)
+          }, cancel: { _ in }, save: { throw AlarmActions.Failure.unavailable })
+        Issue.record("Expected local save failure")
+      } catch {}
+      #expect(systemLabels == ["Draft", "Original"])
+      #expect(alarm.label == "Original")
+      #expect(
+        try ModelContext(a.context.container).fetch(FetchDescriptor<OneAlarm>()).first?.label
+          == "Original")
+    }
+
+    @Test
     func askPlanUndoRestoresOnlyUnchangedTasksAndRecordsOnce() throws {
       let a = try Session(seed: 1400)
       defer { a.dispose() }

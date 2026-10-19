@@ -96,6 +96,12 @@
     func state(of alarm: OneAlarm) -> AlarmLiveState?
     func requestAuthorization() async
     func sync(_ context: ModelContext) async
+    /// MainActor only. Commits an attached edited alarm (or a detached new alarm) to
+    /// AlarmKit, then saves its model. Failure restores the prior saved values and
+    /// attempts system compensation; a compensation failure is reported explicitly.
+    func commit(_ alarm: OneAlarm, context: ModelContext) async throws
+    /// Cancels only this app's stable AlarmKit ID. Does not delete or save the model.
+    func cancel(_ alarm: OneAlarm) throws
     func stop(_ id: UUID)
     func watch(context: ModelContext) async
   }
