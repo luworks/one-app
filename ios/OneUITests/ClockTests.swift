@@ -64,7 +64,8 @@ final class ClockTests: XCTestCase {
 
     section("stopwatch").tap()
     XCTAssertTrue(app.staticTexts["stopwatch.time"].waitForExistence(timeout: 3))
-    XCTAssertFalse(plus.exists, "no + on Stopwatch")
+    XCTAssertTrue(plus.exists, "creation stays available on Stopwatch")
+    XCTAssertEqual(plus.label, "Add an item")
 
     section("timer").tap()
     XCTAssertTrue(
@@ -74,7 +75,17 @@ final class ClockTests: XCTestCase {
     XCTAssertEqual(app.pickerWheels.count, 3, "hours, minutes and seconds")
     app.revealTimerControl(app.buttons["timer.start"].firstMatch)
     XCTAssertFalse(app.buttons["timer.start"].isEnabled, "the empty picker cannot start a timer")
-    XCTAssertFalse(plus.exists, "no + on Timer")
+    XCTAssertTrue(plus.exists, "creation stays available without starting a timer")
+    XCTAssertEqual(plus.label, "Add an item")
+    plus.tap()
+    XCTAssertTrue(app.buttons["New reminder"].waitForExistence(timeout: 3))
+    app.buttons["New reminder"].tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["quick.title"].firstMatch.waitForExistence(timeout: 5))
+    app.buttons["Cancel"].tap()
+    XCTAssertTrue(app.staticTexts["timer.title"].waitForExistence(timeout: 3))
+    XCTAssertFalse(
+      app.buttons["timer.start"].isEnabled, "+ did not change or start the empty timer")
 
     // The section is kept when you leave the tab and come back.
     app.buttons["Today"].firstMatch.tap()
@@ -82,7 +93,8 @@ final class ClockTests: XCTestCase {
     app.buttons["Clock"].firstMatch.tap()
     XCTAssertTrue(section("timer").waitForExistence(timeout: 3))
     XCTAssertTrue(section("timer").isSelected, "back on Timer")
-    XCTAssertFalse(plus.exists)
+    XCTAssertTrue(plus.exists)
+    XCTAssertEqual(plus.label, "Add an item")
   }
 
   func testAddAndDeleteCity() {

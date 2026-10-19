@@ -16,6 +16,7 @@
     private let ledger: Ledger
     private let alarms: any AlarmService
     private let activity: ActivityCenter
+    private let usesPreferredList: Bool
     @State private var saveError: String?
     @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.dismiss) private var dismiss
@@ -38,13 +39,15 @@
     @FocusState private var focused: Bool
 
     package init(
-      listName: String = "", actions: PlannerActions, ledger: Ledger, alarms: any AlarmService,
+      listName: String = "", usesPreferredList: Bool = true, actions: PlannerActions,
+      ledger: Ledger, alarms: any AlarmService,
       activity: ActivityCenter, presentation: PlannerPresentation
     ) {
       self.actions = actions
       self.ledger = ledger
       self.alarms = alarms
       self.activity = activity
+      self.usesPreferredList = usesPreferredList
       _when = State(
         initialValue: QuickTime.start(now: presentation.now, calendar: presentation.calendar))
       _openedAt = State(initialValue: presentation.now)
@@ -72,7 +75,7 @@
       .onAppear {
         focused = true
         // Settings > Reminders > "New reminders go to" (Auto leaves the list as it was opened).
-        if listName.isEmpty,
+        if usesPreferredList, listName.isEmpty,
           let chosen = Preferences.newReminderList(
             existing: lists.map(\.name), presentation.defaults)
         {

@@ -3,6 +3,115 @@ import XCTest
 /// Leaving a tab and coming back finds it where it was: the open list in Reminders, Week / Month / Year in Calendar.
 @MainActor
 final class TabMemoryTests: XCTestCase {
+  private func navigationApp(_ extra: [String] = []) -> XCUIApplication {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "13:13"] + extra
+    app.launch()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 10))
+    return app
+  }
+
+  private func capture(_ name: String) {
+    let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+    image.name = name
+    image.lifetime = .keepAlways
+    add(image)
+  }
+
+  func testTodayBottomControlsAndCreationMenuCancel() {
+    let app = navigationApp()
+    let today = app.buttons["Today"].firstMatch
+    let chat = app.buttons["Ask AI or add anything"]
+    let plus = app.buttons["New"]
+    XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == 'Today'")).count, 1)
+    XCTAssertTrue(today.isSelected)
+    XCTAssertEqual(chat.label, "Chat")
+    for button in [today, chat, plus] {
+      XCTAssertTrue(button.isHittable)
+      XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+      XCTAssertGreaterThan(button.frame.minY, app.frame.midY)
+    }
+    XCTAssertEqual(plus.label, "Add to Today")
+    capture("navigation-after-today")
+    for (choice, editor) in [
+      ("New alarm", "Add Alarm"), ("New reminder", "quick.title"), ("New event", "Title"),
+    ] {
+      plus.tap()
+      for name in ["New alarm", "New reminder", "New event"] {
+        XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 3))
+      }
+      XCTAssertFalse(
+        app.textFields["quick.title"].exists, "opening the menu does not open an editor")
+      if choice == "New alarm" { capture("navigation-after-add-menu") }
+      app.buttons[choice].tap()
+      XCTAssertTrue(app.descendants(matching: .any)[editor].firstMatch.waitForExistence(timeout: 5))
+      app.buttons["Cancel"].firstMatch.tap()
+      XCTAssertTrue(plus.waitForExistence(timeout: 5))
+      XCTAssertTrue(today.isSelected)
+    }
+    // Cancelling every creation route leaves the fixture's alarm rows unchanged.
+    app.buttons["Clock"].tap()
+    let before = app.buttons.matching(identifier: "alarm.row").count
+    plus.tap()
+    XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+    app.buttons["Cancel"].firstMatch.tap()
+    XCTAssertTrue(plus.waitForExistence(timeout: 5))
+    XCTAssertEqual(app.buttons.matching(identifier: "alarm.row").count, before)
+  }
+
+  func testContextualCreationKeepsListAndTabSwipes() {
+    let app = navigationApp([
+      "-appearance", "dark", "-uiTestingPrefs", "newReminderList=Work",
+      "-uiTestingAddReminder", "Unlisted navigation fixture",
+    ])
+    let today = app.buttons["Today"].firstMatch
+    let plus = app.buttons["New"]
+    app.buttons["Calendar"].tap()
+    XCTAssertFalse(today.isSelected)
+    XCTAssertEqual(plus.label, "New event")
+    plus.tap()
+    XCTAssertTrue(app.textFields["Title"].waitForExistence(timeout: 5))
+    app.buttons["Cancel"].tap()
+    app.buttons["Reminders"].tap()
+    plus.tap()
+    XCTAssertTrue(
+      app.buttons["List, Work"].waitForExistence(timeout: 5), "unspecified list uses Settings")
+    app.buttons["Cancel"].tap()
+    let home = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Home, '")).firstMatch
+    XCTAssertTrue(home.waitForExistence(timeout: 5))
+    home.tap()
+    XCTAssertEqual(plus.label, "New reminder")
+    plus.tap()
+    let title = app.descendants(matching: .any)["quick.title"].firstMatch
+    XCTAssertTrue(title.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["List, Home"].exists, "global + uses the open list")
+    title.tap()
+    title.typeText("Cancelled navigation reminder")
+    app.buttons["Cancel"].tap()
+    XCTAssertFalse(app.staticTexts["Cancelled navigation reminder"].exists)
+    XCTAssertTrue(app.staticTexts["Buy milk"].exists)
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    let defaultList = app.buttons["list.default"]
+    XCTAssertTrue(defaultList.waitForExistence(timeout: 5))
+    defaultList.tap()
+    plus.tap()
+    XCTAssertTrue(
+      app.buttons["List, Reminders"].waitForExistence(timeout: 5),
+      "explicit default list must not fall back to the Work preference")
+    app.buttons["Cancel"].tap()
+    today.tap()
+    XCTAssertTrue(today.isSelected)
+    // The bottom bar still traverses all four logical tabs after Today moved out of the top row.
+    let chat = app.buttons["Ask AI or add anything"]
+    let start = chat.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+    let end = today.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    start.press(forDuration: 0.05, thenDragTo: end)
+    XCTAssertTrue(app.buttons["Calendar"].isSelected)
+    XCTAssertEqual(plus.label, "New event")
+    capture("navigation-after-calendar-dark")
+  }
+
   func testTabsKeepTheirPlace() {
     continueAfterFailure = false
     let app = XCUIApplication()
