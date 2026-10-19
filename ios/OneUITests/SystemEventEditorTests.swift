@@ -100,9 +100,10 @@ final class SystemEventEditorTests: XCTestCase {
       deletes.count, 1,
       "exactly one Delete Event: \(deletes.allElementsBoundByIndex.map({ $0.label }))")
     // Close without changing anything. (The event stays in the simulator's own calendar, never a real one.)
-    let nativeCancel = app.buttons["Cancel"].firstMatch
-    XCTAssertTrue(nativeCancel.waitForExistence(timeout: 5))
-    nativeCancel.tap()
+    let nativeCancel = app.buttons.matching(NSPredicate(format: "label == 'Cancel'"))
+      .allElementsBoundByIndex.last
+    XCTAssertNotNil(nativeCancel, "the top system editor has Cancel")
+    nativeCancel?.tap()
     if hadQuickEditor {
       let returned = XCTNSPredicateExpectation(
         predicate: NSPredicate(format: "exists == true AND hittable == true"), object: fullOptions)
