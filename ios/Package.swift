@@ -1,27 +1,108 @@
-// swift-tools-version: 5.10
-// Eval harness (run from ios/: `swift test`): compiles the app's pure-logic files for macOS and runs them under `swift test`.
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
-    name: "OneEval",
-    platforms: [.macOS(.v14)],
-    targets: [
-        .target(
-            name: "OneLogic",
-            path: "One",
-            sources: ["Capture.swift", "Logic.swift", "ConversationHistory.swift", "Dialogue.swift", "ChatRouting.swift", "ListGuess.swift", "QuickTime.swift", "ReminderSuggest.swift", "NewReminderDraft.swift", "TimerDial.swift", "Pomodoro.swift", "IntentLogic.swift", "EventMatch.swift", "ClockLogic.swift", "CityDatabase.swift", "WorldClockLook.swift", "OverdueTidy.swift", "LedgerLogic.swift", "AutonomyPolicy.swift", "HealthLogic.swift", "EveningReview.swift", "EditingLogic.swift", "RowSubtitle.swift", "MessageCopy.swift", "AskSuggestions.swift", "AppearanceLogic.swift", "ActivityEvent.swift", "ActivityStore.swift", "ActivityRecorder.swift", "ActivityLedger.swift", "ActivityEvents.swift", "ActivityExport.swift", "TimerList.swift", "TimerRecents.swift", "TimerPhrase.swift", "CaptureLeadIn.swift", "CaptureCardState.swift", "CalendarAlarms.swift", "HealthMetrics.swift", "HealthSampleSeries.swift", "HealthLoading.swift", "Preferences.swift", "YearMarks.swift", "PillOrder.swift", "TabMemory.swift", "StopwatchLogic.swift", "ReminderCompletionFence.swift"]
-        ),
-        // Code shared by the app and the TodayWidgets extension (the widget snapshot and "next items" logic).
-        .target(
-            name: "OneShared",
-            path: "Shared",
-            sources: ["WidgetSnapshot.swift", "NextUpSpeech.swift", "TravelTime.swift", "ShareInbox.swift", "LockScreenNext.swift", "ActivityOutbox.swift"]
-        ),
-        .testTarget(
-            name: "OneLogicTests",
-            dependencies: ["OneLogic", "OneShared"],
-            path: "Eval/Tests/OneLogicTests",
-            resources: [.copy("capture-cases.json"), .copy("conversation-journeys.json")]
-        ),
-    ]
+  name: "TodayModules",
+  platforms: [.macOS(.v14), .iOS("27.0")],
+  products: [
+    .executable(name: "today-scenes", targets: ["TodaySceneInventory"]),
+    .library(name: "TodayCore", targets: ["TodayCore"]),
+    .library(name: "TodayShared", targets: ["TodayShared"]),
+    .library(name: "TodayData", targets: ["TodayData"]),
+    .library(name: "TodayPlatform", targets: ["TodayPlatform"]),
+    .library(name: "TodayDesignSystem", targets: ["TodayDesignSystem"]),
+    .library(name: "FeatureClock", targets: ["FeatureClock"]),
+    .library(name: "FeatureHealth", targets: ["FeatureHealth"]),
+    .library(name: "TodayTestSupport", targets: ["TodayTestSupport"]),
+    .library(name: "One", targets: ["One"]),
+    .library(name: "TodayPlannerUI", targets: ["TodayPlannerUI"]),
+    .library(name: "FeatureToday", targets: ["FeatureToday"]),
+    .library(name: "FeatureCalendar", targets: ["FeatureCalendar"]),
+    .library(name: "FeatureReminders", targets: ["FeatureReminders"]),
+    .library(name: "FeatureAsk", targets: ["FeatureAsk"]),
+    .library(name: "FeatureSettings", targets: ["FeatureSettings"]),
+    .library(name: "FeatureActivity", targets: ["FeatureActivity"]),
+    .library(name: "FeatureSearch", targets: ["FeatureSearch"]),
+    .library(name: "TodayShell", targets: ["TodayShell"]),
+    .library(name: "TodayScenes", targets: ["TodayScenes"]),
+  ],
+  targets: [
+    .executableTarget(name: "TodaySceneInventory", dependencies: ["TodayScenes"]),
+    .target(name: "TodayCore"),
+    .target(name: "TodayShared"),
+    .target(
+      name: "TodayData", dependencies: ["TodayCore", "TodayShared"],
+      linkerSettings: [.linkedLibrary("sqlite3")]),
+    .target(name: "TodayPlatform", dependencies: ["TodayCore", "TodayShared"]),
+    .target(name: "TodayDesignSystem", dependencies: ["TodayCore"]),
+    .target(name: "One", dependencies: ["TodayCore", "TodayShared", "TodayData", "TodayPlatform"]),
+    .target(
+      name: "TodayPlannerUI",
+      dependencies: ["One", "TodayCore", "TodayDesignSystem", "TodayPlatform"]),
+    .target(
+      name: "FeatureClock",
+      dependencies: ["One", "TodayCore", "TodayDesignSystem", "TodayPlatform"],
+      path: "Sources/Features/FeatureClock", exclude: ["README.md"]),
+    .target(
+      name: "FeatureHealth", dependencies: ["TodayCore", "TodayDesignSystem", "TodayPlatform"],
+      path: "Sources/Features/FeatureHealth"),
+    .target(
+      name: "TodayTestSupport",
+      dependencies: ["TodayCore", "TodayShared", "TodayData", "TodayPlatform", "One"]),
+    .target(
+      name: "FeatureToday",
+      dependencies: [
+        "One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform",
+        "TodayPlannerUI", "FeatureHealth",
+      ], path: "Sources/Features/FeatureToday"),
+    .target(
+      name: "FeatureCalendar",
+      dependencies: [
+        "One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform",
+        "TodayPlannerUI",
+      ], path: "Sources/Features/FeatureCalendar"),
+    .target(
+      name: "FeatureReminders",
+      dependencies: [
+        "One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform",
+        "TodayPlannerUI",
+      ], path: "Sources/Features/FeatureReminders"),
+    .target(
+      name: "FeatureAsk",
+      dependencies: [
+        "One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform",
+      ], path: "Sources/Features/FeatureAsk"),
+    .target(
+      name: "FeatureSettings",
+      dependencies: [
+        "One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform",
+        "FeatureHealth",
+      ], path: "Sources/Features/FeatureSettings"),
+    .target(
+      name: "FeatureActivity",
+      dependencies: [
+        "One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform",
+      ], path: "Sources/Features/FeatureActivity"),
+    .target(
+      name: "FeatureSearch",
+      dependencies: [
+        "One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform",
+      ], path: "Sources/Features/FeatureSearch"),
+    .target(name: "TodayScenes"),
+    .target(
+      name: "TodayShell",
+      dependencies: [
+        "One", "TodayCore", "TodayShared", "TodayData", "TodayPlatform", "TodayDesignSystem",
+        "TodayPlannerUI", "FeatureToday", "FeatureCalendar", "FeatureReminders", "FeatureAsk",
+        "FeatureSettings", "FeatureActivity", "FeatureSearch", "FeatureClock", "FeatureHealth",
+      ]),
+    .testTarget(
+      name: "SceneRegistryTests", dependencies: ["TodayScenes"], path: "SceneRegistryTests"),
+    .testTarget(
+      name: "TodayTests",
+      dependencies: ["TodayCore", "TodayShared", "TodayData", "TodayTestSupport"],
+      path: "Eval/Tests/OneLogicTests",
+      resources: [.copy("capture-cases.json"), .copy("conversation-journeys.json")]),
+  ],
+  swiftLanguageModes: [.v6]
 )

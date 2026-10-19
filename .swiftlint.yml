@@ -1,0 +1,15 @@
+# Compiler handles types/actors and swift-format handles layout. These rules check distinct risks.
+only_rules:
+  - force_cast
+  - force_try
+  - discarded_notification_center_observer
+  - unowned_variable_capture
+  - weak_delegate
+included:
+  - ios/Sources
+  - ios/One
+  - ios/TodayWidgets
+  - ios/ShareExtension
+excluded:
+  - ios/.build
+  - ios/Today.xcodeproj

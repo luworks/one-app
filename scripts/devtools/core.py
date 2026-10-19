@@ -1,0 +1,375 @@
+"""Read-only discovery, cross-process ownership, and build provenance."""
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import plistlib
+import subprocess
+import time
+import uuid
+
+
+def probe(argv, cwd=None):
+    """Run only explicit read probes; never invoke a shell or xcrun."""
+    env = dict(os.environ, GIT_OPTIONAL_LOCKS='0')
+    # Cold checkout enumeration can exceed five seconds on a loaded hosted Mac.
+    timeout = 30 if argv and argv[0] == 'git' else 5
+    return subprocess.check_output(argv, cwd=cwd, env=env, stderr=subprocess.PIPE,
+                                   timeout=timeout).decode().strip()
+
+
+def canonical_root(root):
+    root = Path(root).resolve()
+    dotgit = root / '.git'
+    if dotgit.is_file():
+        gitdir = (root / dotgit.read_text().split(':', 1)[1].strip()).resolve()
+        common = gitdir / 'commondir'
+        gitdir = (gitdir / common.read_text().strip()).resolve() if common.exists() else gitdir
+        return gitdir.parent if gitdir.name == '.git' else root
+    return root
+
+
+def worktree_id(root):
+    return hashlib.sha256(os.fsencode(Path(root).resolve())).hexdigest()[:20]
+
+
+def state_root(root):
+    return canonical_root(root) / 'tests/results/devtools'
+
+
+def derived_data(root):
+    return state_root(root) / 'derived-data' / worktree_id(root)
+
+
+def read_json(path):
+    try:
+        data = json.loads(Path(path).read_text())
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def atomic_json(path, data):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+    try:
+        with temporary.open('x') as stream:
+            json.dump(data, stream, sort_keys=True, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def inspect_lock(path):
+    """Kernel lock is authoritative; old PID metadata never authorizes a kill."""
+    path = Path(path)
+    try:
+        with path.open('r') as stream:
+            try:
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                held = True
+            else:
+                held = False
+                fcntl.flock(stream, fcntl.LOCK_UN)
+            try:
+                metadata = json.load(stream)
+            except ValueError:
+                metadata = None
+            return {'held': held, 'metadata': metadata}
+    except FileNotFoundError:
+        return {'held': False, 'metadata': None}
+
+
+class ResourceBusy(RuntimeError):
+    pass
+
+
+class ResourceLock:
+    """Persistent inode, nonblocking flock; never unlink a shared lock file."""
+    def __init__(self, path, owner):
+        self.path, self.owner, self.stream = Path(path), owner, None
+
+    def __enter__(self):
+        if self.stream is not None:
+            raise RuntimeError('Lock instance is already acquired')
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.stream = self.path.open('a+')
+        try:
+            fcntl.flock(self.stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self.stream.close()
+            self.stream = None
+            raise ResourceBusy(f'Resource locked: {self.path}') from None
+        try:
+            self.stream.seek(0)
+            self.stream.truncate()
+            json.dump({'pid': os.getpid(), 'host': platform.node(), 'owner': self.owner,
+                       'token': uuid.uuid4().hex, 'acquired': time.time()}, self.stream)
+            self.stream.flush()
+            os.fsync(self.stream.fileno())
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+        return self
+
+    def __exit__(self, *exc):
+        if self.stream:
+            fcntl.flock(self.stream, fcntl.LOCK_UN)
+            self.stream.close()
+            self.stream = None
+
+
+def host_lock(root):
+    # One conservative host-heavy slot shared by every worktree of this project.
+    return ResourceLock(state_root(root) / 'locks/host-heavy.lock', str(Path(root).resolve()))
+
+
+def dd_lock(root):
+    return ResourceLock(state_root(root) / 'locks' / (worktree_id(root) + '.lock'),
+                        str(Path(root).resolve()))
+
+
+def toolchain():
+    developer = os.environ.get('DEVELOPER_DIR')
+    if not developer:
+        try:
+            developer = probe(['/usr/bin/xcode-select', '-p'])
+        except (OSError, subprocess.SubprocessError):
+            developer = ''
+    developer = Path(developer).resolve() if developer else None
+    version = None
+    if developer:
+        try:
+            with (developer.parent / 'version.plist').open('rb') as stream:
+                version = plistlib.load(stream)
+        except (OSError, ValueError, plistlib.InvalidFileException):
+            pass
+    sdks = []
+    if developer:
+        for path in sorted({p.resolve() for p in developer.glob('Platforms/*.platform/Developer/SDKs/*.sdk')}):
+            settings = path / 'SDKSettings.plist'
+            sdks.append({'path': str(path.resolve()), 'settings_sha256':
+                         hashlib.sha256(settings.read_bytes()).hexdigest() if settings.is_file() else None})
+    return {'developer_dir': str(developer) if developer else None, 'xcode': version, 'sdks': sdks}
+
+
+def fingerprint(root, *, sdk='iphonesimulator', architecture=None, configuration='Debug', tools=None, scheme='Today'):
+    """Hash current source bytes (including dirty/untracked inputs), not just HEAD."""
+    root = Path(root).resolve()
+    names = probe(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], root).split('\0')
+    files = {}
+    for name in sorted(set(names)):
+        if not name or not (name.startswith(('ios/', 'scripts/', 'tests/fixtures/', '.github/')) or name == 'dev'
+                            or Path(name).name in ('Package.resolved', 'package-lock.json', 'yarn.lock',
+                                                   'pnpm-lock.yaml', 'uv.lock', 'requirements.txt', 'Gemfile.lock', 'Gemfile', 'mise.lock', '.mise.toml', '.swift-format', '.swiftlint.yml', 'ruff.toml', 'tool-pins.json')):
+            continue
+        if any(part in ('.build', '__pycache__', 'DerivedData') for part in Path(name).parts):
+            continue
+        path = root / name
+        if path.is_symlink():
+            # Include linked content as well as link identity in cache invalidation.
+            files[name] = {'link': os.readlink(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+        elif path.is_file():
+            files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        else:
+            files[name] = None  # Tracked deletion invalidates provenance as well.
+    if not isinstance(scheme, str) or not scheme.strip():
+        raise ValueError('Explicit nonempty scheme required')
+    data = {'schema': 2, 'scheme': scheme, 'worktree': str(root), 'source_and_locks': files,
+            'toolchain': toolchain() if tools is None else tools, 'sdk': sdk,
+            'architecture': architecture or platform.machine(), 'configuration': configuration}
+    return {'sha256': hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest(), 'inputs': data}
+
+
+def _provenance_path(root, current, kind):
+    inputs = current.get('inputs', {})
+    if (inputs.get('schema') != 2 or inputs.get('worktree') != str(Path(root).resolve())
+            or not inputs.get('scheme') or kind not in ('build', 'build-for-testing')):
+        raise ValueError('Scheme-aware fingerprint and supported build kind required')
+    digest = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+    if current.get('sha256') != digest:
+        raise ValueError('Invalid fingerprint digest')
+    key = hashlib.sha256((inputs['scheme'] + ':' + kind).encode()).hexdigest()[:20]
+    return derived_data(root) / ('dev-provenance-' + key + '.json')
+
+
+def _product_identity(root, product):
+    """Hash complete bundles, resources and signatures; never follow foreign links."""
+    owned = derived_data(root).absolute()
+    if any(p.is_symlink() for p in (owned, *owned.parents)):
+        raise ValueError('Symlink derived-data ancestry is unsafe')
+    base = owned.resolve()
+    path = Path(product).absolute()
+    if not path.resolve().is_relative_to(base) or path.resolve() == base:
+        raise ValueError('Build products must belong to this worktree derived-data directory')
+    if any(p.is_symlink() for p in (path, *path.parents) if p != base and p.is_relative_to(base)):
+        raise ValueError('Symlink build product is unsafe')
+    if path.is_file():
+        return {'file': hashlib.sha256(path.read_bytes()).hexdigest()}
+    if not path.is_dir():
+        raise ValueError('Missing build product: ' + str(path))
+    files = {}
+    for entry in sorted(path.rglob('*')):
+        if entry.is_symlink():
+            raise ValueError('Symlink in build product: ' + str(entry))
+        if entry.is_file():
+            files[str(entry.relative_to(path))] = hashlib.sha256(entry.read_bytes()).hexdigest()
+    if not files:
+        raise ValueError('Empty build product: ' + str(path))
+    return {'files': files}
+
+
+def xctestrun_products(root, path):
+    """Resolve both Xcode plist formats into exact local test/host product roots."""
+    path = Path(path).absolute()
+    products = (derived_data(root) / 'Build/Products').resolve()
+    if path.suffix != '.xctestrun' or path.parent.resolve() != products:
+        raise ValueError('xctestrun must belong to this worktree Build/Products')
+    _product_identity(root, path)
+    with path.open('rb') as stream:
+        data = plistlib.load(stream)
+    if not isinstance(data, dict):
+        raise ValueError('Malformed xctestrun')
+    if 'TestConfigurations' in data:
+        configs = data['TestConfigurations']
+        if not isinstance(configs, list) or not configs:
+            raise ValueError('Missing test configurations')
+        targets = []
+        for config in configs:
+            if not isinstance(config, dict) or not isinstance(config.get('TestTargets'), list):
+                raise ValueError('Malformed test targets')
+            targets.extend(config['TestTargets'])
+    else:
+        targets = [value for key, value in data.items() if not key.startswith('__')]
+    if not targets:
+        raise ValueError('Missing xctestrun targets')
+    found = {str(path)}
+
+    def resolve(value, host=None):
+        if not isinstance(value, str) or not value:
+            raise ValueError('Missing xctestrun product path')
+        value = value.replace('__TESTROOT__', str(products))
+        if host is not None:
+            value = value.replace('__TESTHOST__', str(host))
+        if '__' in value or not Path(value).is_absolute():
+            raise ValueError('Unresolved xctestrun product path: ' + value)
+        resolved = Path(value).resolve()
+        if not resolved.is_relative_to(products):
+            raise ValueError('Foreign xctestrun product: ' + value)
+        _product_identity(root, Path(value))
+        found.add(str(Path(value).absolute()))
+        return resolved
+
+    for target in targets:
+        if not isinstance(target, dict):
+            raise ValueError('Malformed xctestrun target')
+        host = resolve(target['TestHostPath']) if target.get('TestHostPath') else None
+        resolve(target.get('TestBundlePath'), host)
+        if target.get('UITargetAppPath'):
+            resolve(target['UITargetAppPath'], host)
+        dependencies = target.get('DependentProductPaths', [])
+        if not isinstance(dependencies, list):
+            raise ValueError('Malformed dependent products')
+        for dependency in dependencies:
+            resolve(dependency, host)
+    return sorted(found)
+
+
+def record_build(root, current, products, *, returncode, kind='build', xctestrun=None):
+    """Record only a completed successful build while the caller holds dd_lock.
+
+    Pass whole app directories for ordinary builds, and the actual xctestrun for
+    build-for-testing. The latter discovers and hashes every referenced product.
+    """
+    destination = _provenance_path(root, current, kind)
+    if returncode != 0 or not products:
+        raise ValueError('Successful build and explicit products required')
+    inputs = current['inputs']
+    if fingerprint(root, scheme=inputs['scheme'], sdk=inputs['sdk'], architecture=inputs['architecture'],
+                   configuration=inputs['configuration'], tools=inputs['toolchain']) != current:
+        raise ValueError('Source changed before provenance publication')
+    products = list(products)
+    if kind == 'build-for-testing':
+        if xctestrun is None or not Path(xctestrun).name.startswith(current['inputs']['scheme'] + '_'):
+            raise ValueError('Exact scheme xctestrun required')
+        products.extend(xctestrun_products(root, xctestrun))
+    elif xctestrun is not None:
+        raise ValueError('xctestrun requires build-for-testing provenance')
+    artifacts = {str(Path(p).absolute()): _product_identity(root, p) for p in products}
+    atomic_json(destination, {'schema': 2, 'kind': kind, 'worktree': str(Path(root).resolve()),
+                             'fingerprint': current, 'products': artifacts,
+                             'xctestrun': str(Path(xctestrun).absolute()) if xctestrun else None})
+
+
+def provenance(root, current, *, kind='build', xctestrun=None):
+    """Invalid, legacy, missing or unreadable provenance always means no reuse."""
+    try:
+        stored = read_json(_provenance_path(root, current, kind))
+        if not stored:
+            return {'valid': False, 'reason': 'missing provenance'}
+        if (stored.get('schema') != 2 or stored.get('kind') != kind
+                or stored.get('worktree') != str(Path(root).resolve()) or stored.get('fingerprint') != current):
+            return {'valid': False, 'reason': 'stale source, toolchain, scheme, options or worktree'}
+        products = stored.get('products', {})
+        if not isinstance(products, dict) or not products:
+            raise ValueError('Missing products')
+        if kind == 'build-for-testing':
+            actual = stored.get('xctestrun')
+            if not actual or (xctestrun is not None and str(Path(xctestrun).absolute()) != actual):
+                raise ValueError('xctestrun identity mismatch')
+            if not Path(actual).name.startswith(current['inputs']['scheme'] + '_'):
+                raise ValueError('xctestrun scheme mismatch')
+            if set(xctestrun_products(root, actual)) - set(products):
+                raise ValueError('Unrecorded xctestrun products')
+        for name, digest in products.items():
+            if _product_identity(root, name) != digest:
+                raise ValueError('Missing or modified product')
+        return {'valid': True, 'reason': 'fingerprint and products match', 'xctestrun': stored.get('xctestrun')}
+    except (OSError, ValueError, TypeError, KeyError, plistlib.InvalidFileException) as error:
+        return {'valid': False, 'reason': str(error)}
+
+
+class NativeBuildError(RuntimeError):
+    def __init__(self, result):
+        self.returncode = result.returncode
+        super().__init__('Native build failed; exit=' + str(result.returncode) + '; log=' + str(result.log))
+
+
+def ensure_test_products(root, scheme, invoke, *, configuration='Debug', sdk='iphonesimulator',
+                         architecture='arm64', flags=()):
+    """Caller owns host/DD locks; invoke returns an authoritative ProcessResult.
+
+    No test command is executed here. A cache miss rebuilds once; a failed,
+    cancelled or changing-source build never publishes reusable provenance.
+    """
+    options = dict(scheme=scheme, configuration=configuration, sdk=sdk, architecture=architecture)
+    current = fingerprint(root, **options)
+    cached = provenance(root, current, kind='build-for-testing')
+    if cached['valid']:
+        return Path(cached['xctestrun'])
+    result = invoke(['xcodebuild', 'build-for-testing', '-project', 'ios/Today.xcodeproj',
+                     '-scheme', scheme, '-configuration', configuration, '-sdk', sdk,
+                     '-destination', 'generic/platform=iOS Simulator',
+                     '-derivedDataPath', str(derived_data(root)), '-jobs', '2',
+                     'ARCHS=' + architecture, *flags])
+    if result.returncode:
+        raise NativeBuildError(result)
+    if getattr(result, 'reason', 'exited') != 'exited':
+        raise ValueError('Interrupted build cannot publish provenance')
+    if fingerprint(root, **options) != current:
+        raise ValueError('Source or toolchain changed during build; provenance rejected')
+    candidates = [p for p in (derived_data(root) / 'Build/Products').glob('*.xctestrun')
+                  if p.name.startswith(scheme + '_')]
+    if len(candidates) != 1:
+        raise ValueError('Expected exactly one scheme xctestrun; rebuild in a fresh owned cache')
+    path = candidates[0]
+    record_build(root, current, [path], returncode=0, kind='build-for-testing', xctestrun=path)
+    if not provenance(root, fingerprint(root, **options), kind='build-for-testing', xctestrun=path)['valid']:
+        raise ValueError('Build products changed before test dispatch')
+    return path

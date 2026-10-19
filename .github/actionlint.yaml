@@ -1,0 +1,6 @@
+# actionlint 1.7.12 predates GitHub's official hosted xcode-27 preview label.
+# This linter allowlist does not select or create a self-hosted runner.
+# https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+self-hosted-runner:
+  labels:
+    - xcode-27

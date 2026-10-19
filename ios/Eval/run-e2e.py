@@ -22,35 +22,25 @@ ROOT = IOS.parent
 sys.path.insert(0, str(ROOT / "tests/qa"))
 from journal import Journal, results_root, is_ui_operation
 
+sys.path.insert(0, str(ROOT / "scripts/testing"))
+import contract
+
 CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
 
 
 def inventory():
     """Source declarations, not XCTest discovery or a claim that tests ran."""
-    result = {}
-    for lane, directory in (("ui", IOS / "OneUITests"),
-                            ("logic", IOS / "Eval/Tests/OneLogicTests")):
-        suites = []
-        for path in sorted(directory.glob("*.swift")):
-            suite = None
-            for number, line in enumerate(path.read_text().splitlines(), 1):
-                match = re.search(r"\bclass\s+(\w+)\s*:\s*XCTestCase", line)
-                if match:
-                    suite = {"suite": match[1], "path": str(path.relative_to(ROOT)), "methods": []}
-                    suites.append(suite)
-                method = re.match(r"\s*func\s+(test\w+)\s*\(", line)
-                if method and suite is not None:
-                    suite["methods"].append({"name": method[1], "line": number})
-        result[lane] = suites
-    return result
+    return contract.inventory()
 
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--group", action="append", choices=list(contract.load_manifest()["groups"]), help="authoritative test group; repeat to combine")
     mode.add_argument("--full", action="store_true", help="run all OneUITests once; explicit owner authorization required")
     mode.add_argument("--only", action="append", metavar="SUITE[/METHOD]", help="narrow selection; repeat for related tests")
     mode.add_argument("--inventory", action="store_true", help="print current UI and logic source inventory as JSON; no tools run")
+    p.add_argument("--allow-skip", action="append", default=[], choices=["hardware", "screenshot", "time"], help="explicit opt-in: exact manifest test AND reason must match; skipped work remains visible")
     p.add_argument("--logic", action="store_true", help="first run swift test --jobs 2 (includes capture eval)")
     p.add_argument("--dry-run", action="store_true", help="print plan only; no subprocesses, devices, locks or files")
     p.add_argument("--simulator-name", default="Today-QA", help="owned simulator name; must start with Today-")
@@ -66,30 +56,24 @@ def parser():
 
 
 def selectors(args, source):
+    if args.group:
+        return contract.plan(args.group, source)["selectors"]["ui"]
     if args.full:
-        return ["OneUITests"]
-    known = {s["suite"]: {m["name"] for m in s["methods"]} for s in source["ui"]}
-    result = []
-    for value in args.only:
-        value = value.removeprefix("OneUITests/")
-        pieces = value.split("/")
-        if len(pieces) not in (1, 2) or pieces[0] not in known:
-            raise ValueError(f"Unknown UI selection: {value}; use --inventory")
-        if len(pieces) == 2 and pieces[1] not in known[pieces[0]]:
-            raise ValueError(f"Unknown UI method: {value}; use --inventory")
-        result.append("OneUITests/" + value)
-    return list(dict.fromkeys(result))
+        return [contract.TARGET]
+    return contract.expand(args.only, source, "ui")
 
 
 def ui_command(selected, simulator, derived, output, test_products=None):
     # Preserve project signing, including simulated App Group entitlements for Share.
     target = (["test-without-building", "-xctestrun", str(test_products)] if test_products else
-              ["test", "-project", "One.xcodeproj", "-scheme", "One"])
+              ["test", "-project", contract.SETTINGS["project"], "-scheme", contract.SETTINGS["scheme"]])
+    selected = [value.replace("OneUITests", "TodayUITests", 1) if value.startswith("OneUITests") else value for value in selected]
     return ["xcodebuild", *target, "-jobs", "2",
             "-destination", f"platform=iOS Simulator,id={simulator}",
             "-derivedDataPath", str(derived), "-resultBundlePath", str(output / "ui.xcresult"),
+            "-collect-test-diagnostics", "never",
             "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
-            "-maximum-parallel-testing-workers", "1", "-collect-test-diagnostics", "never",
+            "-maximum-parallel-testing-workers", "1",
             *["-only-testing:" + value for value in selected]]
 
 
@@ -219,6 +203,32 @@ def select_simulator(args, journal=None):
     return read(["xcrun", "simctl", "create", args.simulator_name, args.device_type, args.runtime])
 
 
+def read_xcresult(output, journal):
+    """Retain raw structured outputs before interpreting them; never retry a test."""
+    bundle = output / "ui.xcresult"
+    if not bundle.exists():
+        raise ValueError("Missing authoritative ui.xcresult")
+    def read(kind, extra=(), suffix=""):
+        dest = output / ("xcresult-" + kind + suffix + ".json")
+        with dest.open("w") as stream, dest.with_suffix(".log").open("w") as errors:
+            result = journal.action(["xcrun", "xcresulttool", "get", "test-results", kind,
+                "--path", str(bundle), *extra], subprocess.run, stdout=stream, stderr=errors)
+        if result.returncode:
+            raise ValueError("xcresulttool " + kind + " exit " + str(result.returncode))
+        return json.loads(dest.read_text())
+    totals = read("summary")
+    attempts = contract.xcresult_attempts(read("tests"))
+    if totals.get("failedTests", 0) and not any(a["status"] == "failed" for a in attempts):
+        raise ValueError("xcresult summary reports failures absent from execution tree")
+    for index, attempt in enumerate(attempts):
+        if attempt["status"] == "skipped" and not attempt["reason"]:
+            # Test-details carries skip reasons absent from the modern tree.
+            details = read("test-details", ("--test-id", attempt.get("result_id", attempt["test"].split("/", 1)[1])), "-" + str(index))
+            attempt["reason"] = json.dumps(details, sort_keys=True)
+        journal.record("qa.test.structured", json.dumps(attempt), status=attempt["status"], subject=attempt["test"])
+    return attempts
+
+
 def main(argv=None):
     p = parser()
     args = p.parse_args(argv)
@@ -232,15 +242,19 @@ def main(argv=None):
         selected = selectors(args, source)
     except ValueError as error:
         p.error(str(error))
+    group_plan = contract.plan(args.group, source) if args.group else None
+    run_logic = args.logic or bool(group_plan and group_plan["selectors"]["logic"])
+    expected_ui = contract.available(source, "ui") if args.full else selected
+    expected_logic = contract.available(source, "logic") if run_logic else []
     derived = (args.derived_data or IOS / ".build" / args.simulator_name).resolve()
     output = (args.output or results_root() / "runs" /
               ("today-qa-" + datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8])).resolve()
-    planned = [ui_command(selected, args.simulator_id or "<owned-simulator-udid>", derived, output, args.test_products)]
-    if args.logic:
+    planned = [ui_command(selected, args.simulator_id or "<owned-simulator-udid>", derived, output, args.test_products)] if selected else []
+    if run_logic:
         planned.insert(0, ["swift", "test", "--jobs", "2"])
     if args.dry_run:
         print(json.dumps({"cwd": str(IOS), "simulator_name": args.simulator_name,
-                          "derived_data": str(derived), "output": str(output), "commands": planned,
+                          "derived_data": str(derived), "output": str(output), "commands": planned, "plan": group_plan, "expected": {"logic": expected_logic, "ui": expected_ui},
                           "lifecycle": "lock name and cache; select/create owned shutdown simulator; boot; test; finally shutdown"}, indent=2))
         return 0
     # Locks cover separate checkouts using the same name or absolute cache path.
@@ -251,7 +265,9 @@ def main(argv=None):
     started = time.monotonic()
     summary = {"started_at": datetime.now(timezone.utc).isoformat(), "selection": selected,
                "derived_data": str(derived), "simulator_name": args.simulator_name,
-               "status": "incomplete", "stages": {}, "attempts": {}}
+               "status": "incomplete", "stages": {}, "attempts": {}, "reports": {},
+               "groups": args.group or [], "pending": group_plan["pending"] if group_plan else [],
+               "allowed_skip_categories": args.allow_skip}
     try:
         for key in sorted(["name:" + args.simulator_name, "cache:" + str(derived)]):
             lock = open(Path(tempfile.gettempdir()) / ("today-qa-lock-" + hashlib.sha256(key.encode()).hexdigest()), "a")
@@ -270,15 +286,23 @@ def main(argv=None):
         (output / "inventory.json").write_text(json.dumps(source, indent=2) + "\n")
         print(f"Evidence: {output}", flush=True)
         summary["commands"] = []
-        if args.logic:
+        if run_logic:
             command = ["swift", "test", "--jobs", "2"]
             summary["commands"].append(command)
             summary["attempts"]["logic"] = []
             code = run_logged(command, output / "logic.log", output / "progress.jsonl", summary["attempts"]["logic"], journal)
             summary["stages"]["logic"] = code
-            if code:
+            logical = contract.log_attempts((output / "logic.log").read_text(), "logic", source=source)
+            summary["reports"]["logic"] = contract.report(expected_logic, logical, code,
+                args.allow_skip, contract.load_manifest()["skip_rules"],
+                (output / "logic.log").read_text())
+            summary["attempts"]["logic"] = logical
+            if summary["reports"]["logic"]["status"] != "passed":
                 summary["status"] = "failed"
-                return code
+                return code or 1
+        if not selected:
+            summary["status"] = "passed"
+            return 0
         journal.record("qa.ui.operation", "Select owned simulator " + args.simulator_name, status="started")
         simulator = select_simulator(args, journal)
         summary["simulator_id"] = simulator
@@ -298,13 +322,20 @@ def main(argv=None):
         summary["attempts"]["ui"] = []
         code = run_logged(command, output / "ui.log", output / "progress.jsonl", summary["attempts"]["ui"], journal)
         summary["stages"]["ui"] = code
-        summary["status"] = "passed" if code == 0 else "failed"
-        if (output / "ui.xcresult").exists():
-            with (output / "xcresult-summary.json").open("w") as stream, (output / "xcresult-summary.log").open("w") as errors:
-                summary["stages"]["xcresult_summary"] = journal.action(
-                    ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(output / "ui.xcresult")], subprocess.run,
-                    stdout=stream, stderr=errors).returncode
-        return code
+        # Log events are progress only. The completed xcresult tree is authoritative.
+        try:
+            actual = read_xcresult(output, journal)
+            summary["attempts"]["ui_log"] = summary["attempts"]["ui"]
+            summary["attempts"]["ui"] = actual
+            summary["reports"]["ui"] = contract.report(expected_ui, actual, code,
+                args.allow_skip, contract.load_manifest()["skip_rules"],
+                (output / "ui.log").read_text() if (output / "ui.log").exists() else "",
+                summary["pending"])
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            summary["reports"]["ui"] = {"status": "failed", "errors": ["parser_error"], "detail": str(error)}
+        summary["status"] = summary["reports"]["ui"]["status"]
+        return code or (0 if summary["status"] == "passed" else 1)
+
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         summary["error"] = str(error)
         summary["status"] = "failed"

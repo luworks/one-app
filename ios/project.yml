@@ -1,0 +1,615 @@
+{
+  "name": "Today",
+  "options": {
+    "minimumXcodeGenVersion": "2.46.0",
+    "settingPresets": "none",
+    "developmentLanguage": "en"
+  },
+  "configs": {
+    "Debug": "debug",
+    "Release": "release"
+  },
+  "configFiles": {
+    "Debug": "Config/Project-Debug.xcconfig",
+    "Release": "Config/Project-Release.xcconfig"
+  },
+  "targets": {
+    "Today": {
+      "type": "application",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/Today-Debug.xcconfig",
+        "Release": "Config/Today-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "App"
+        },
+        {
+          "path": "One",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        },
+        {
+          "path": "PrivacyInfo.xcprivacy",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Sources/One/TodayShortcuts.swift"
+        },
+        {
+          "path": "../LICENSE",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Resources/ThirdPartyNotices.txt",
+          "buildPhase": "resources"
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "TodayWidgets",
+          "embed": true
+        },
+        {
+          "target": "TodayShare",
+          "embed": true
+        },
+        {
+          "package": "TodayModules",
+          "product": "One"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShell"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlatform"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        }
+      ],
+      "productName": "One"
+    },
+    "TodayShare": {
+      "type": "app-extension",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayShare-Debug.xcconfig",
+        "Release": "Config/TodayShare-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "ShareExtension",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        },
+        {
+          "path": "Sources/One/AlarmActivity.swift",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        }
+      ],
+      "productName": "ShareExtension",
+      "dependencies": [
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        }
+      ]
+    },
+    "TodayUITests": {
+      "type": "bundle.ui-testing",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayUITests-Debug.xcconfig",
+        "Release": "Config/TodayUITests-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "OneUITests",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "TodayMock"
+        }
+      ],
+      "productName": "OneUITests"
+    },
+    "TodayWidgets": {
+      "type": "app-extension",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayWidgets-Debug.xcconfig",
+        "Release": "Config/TodayWidgets-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "TodayWidgets",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        },
+        {
+          "path": "Sources/One/AlarmActivity.swift",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        }
+      ]
+    },
+    "TodayMock": {
+      "type": "application",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayMock-Debug.xcconfig",
+        "Release": "Config/TodayMock-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "App"
+        },
+        {
+          "path": "One",
+          "excludes": [
+            "**/.DS_Store"
+          ]
+        },
+        {
+          "path": "PrivacyInfo.xcprivacy",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Development/Support"
+        },
+        {
+          "path": "Sources/One/TodayShortcuts.swift"
+        },
+        {
+          "path": "../LICENSE",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Resources/ThirdPartyNotices.txt",
+          "buildPhase": "resources"
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "TodayWidgets",
+          "embed": true
+        },
+        {
+          "target": "TodayShare",
+          "embed": true
+        },
+        {
+          "package": "TodayModules",
+          "product": "One"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShell"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlatform"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayTestSupport"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayData"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayDesignSystem"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureReminders"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureCalendar"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureClock"
+        }
+      ],
+      "productName": "TodayMock"
+    },
+    "TodayTestHost": {
+      "type": "application",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayTestHost-Debug.xcconfig",
+        "Release": "Config/TodayTestHost-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "Development/TestHost"
+        }
+      ]
+    },
+    "TodayTests": {
+      "type": "bundle.unit-test",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayTests-Debug.xcconfig",
+        "Release": "Config/TodayTests-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "Eval/Tests/OneLogicTests",
+          "excludes": [
+            "*.json"
+          ]
+        },
+        {
+          "path": "SceneRegistryTests"
+        },
+        {
+          "path": "TodayIntegrationTests"
+        },
+        {
+          "path": "Eval/Tests/OneLogicTests/capture-cases.json",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Eval/Tests/OneLogicTests/conversation-journeys.json",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "../tests/fixtures/swiftdata-upgrade",
+          "type": "folder",
+          "buildPhase": "resources"
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "TodayTestHost"
+        },
+        {
+          "package": "TodayModules",
+          "product": "One"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayData"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayTestSupport"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayScenes"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureAsk"
+        }
+      ]
+    },
+    "TodaySnapshotTests": {
+      "type": "bundle.unit-test",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodaySnapshotTests-Debug.xcconfig",
+        "Release": "Config/TodaySnapshotTests-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "TodaySnapshotTests",
+          "excludes": [
+            "__Snapshots__"
+          ]
+        }
+      ],
+      "dependencies": [
+        {
+          "target": "TodayTestHost"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureClock"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayDesignSystem"
+        },
+        {
+          "package": "SnapshotTesting",
+          "product": "SnapshotTesting"
+        }
+      ]
+    },
+    "TodayWorkbench": {
+      "type": "application",
+      "platform": "iOS",
+      "configFiles": {
+        "Debug": "Config/TodayWorkbench-Debug.xcconfig",
+        "Release": "Config/TodayWorkbench-Release.xcconfig"
+      },
+      "sources": [
+        {
+          "path": "Development/SceneCatalog.swift"
+        },
+        {
+          "path": "Development/WorkbenchApp.swift"
+        },
+        {
+          "path": "Development/Support/TestDataset.swift"
+        },
+        {
+          "path": "One",
+          "excludes": [
+            "AppShortcuts.xcstrings"
+          ]
+        },
+        {
+          "path": "../tests/fixtures/today-dataset.json",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "../LICENSE",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Resources/ThirdPartyNotices.txt",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Development/SceneTestCapabilities.swift"
+        }
+      ],
+      "dependencies": [
+        {
+          "package": "TodayModules",
+          "product": "One"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShared"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayData"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlatform"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayDesignSystem"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlannerUI"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayTestSupport"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayScenes"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureToday"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureCalendar"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureReminders"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureClock"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureAsk"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureSettings"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureActivity"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureSearch"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        }
+      ]
+    }
+  },
+  "schemes": {
+    "Today": {
+      "build": {
+        "targets": {
+          "Today": "all"
+        }
+      },
+      "run": {
+        "config": "Debug"
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          "TodayTests"
+        ],
+        "gatherCoverageData": false
+      },
+      "profile": {
+        "config": "Release"
+      },
+      "archive": {
+        "config": "Release"
+      }
+    },
+    "TodayMock": {
+      "build": {
+        "targets": {
+          "TodayMock": "all"
+        }
+      },
+      "run": {
+        "config": "Debug"
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          "TodayUITests"
+        ],
+        "gatherCoverageData": true
+      }
+    },
+    "TodayTests": {
+      "build": {
+        "targets": {
+          "TodayTestHost": "all",
+          "TodayTests": [
+            "test"
+          ]
+        }
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          {
+            "name": "TodayTests",
+            "parallelizable": false
+          }
+        ],
+        "gatherCoverageData": true,
+        "commandLineArguments": {
+          "-AppleLocale en_US_POSIX": true,
+          "-AppleLanguages (en)": true
+        },
+        "environmentVariables": {
+          "TZ": "UTC"
+        }
+      }
+    },
+    "TodaySnapshotTests": {
+      "build": {
+        "targets": {
+          "TodayTestHost": "all",
+          "TodaySnapshotTests": [
+            "test"
+          ]
+        }
+      },
+      "test": {
+        "config": "Debug",
+        "targets": [
+          {
+            "name": "TodaySnapshotTests",
+            "parallelizable": false
+          }
+        ],
+        "gatherCoverageData": true,
+        "commandLineArguments": {
+          "-AppleLocale en_US_POSIX": true,
+          "-AppleLanguages (en)": true
+        },
+        "environmentVariables": {
+          "TZ": "UTC"
+        }
+      }
+    },
+    "TodayWorkbench": {
+      "build": {
+        "targets": {
+          "TodayWorkbench": "all"
+        }
+      },
+      "run": {
+        "config": "Debug",
+        "commandLineArguments": {
+          "-scene clock.stopwatch": true
+        },
+        "environmentVariables": {
+          "TZ": "UTC"
+        }
+      }
+    }
+  },
+  "packages": {
+    "TodayModules": {
+      "path": "."
+    },
+    "SnapshotTesting": {
+      "url": "https://github.com/pointfreeco/swift-snapshot-testing.git",
+      "exactVersion": "1.19.6"
+    }
+  }
+}

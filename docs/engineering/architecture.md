@@ -1,0 +1,51 @@
+# Linked-module architecture
+
+The native application assembles real linked SwiftPM products. [Package.swift](../../ios/Package.swift) owns target edges and sources; [project.yml](../../ios/project.yml) owns executable/extension membership and generated schemes. Tests import those production targets, without a second source whitelist or shadow model definitions. [CLAUDE.md](../../CLAUDE.md) remains the product authority; [ios/README.md](../../ios/README.md) owns `./dev` commands and troubleshooting.
+
+## Dependency and implementation boundaries
+
+- `TodayCore` (`ios/Sources/TodayCore/`): Foundation domain values, rules, AutonomyPolicy, preferences, and PlannerRuntime.
+- `TodayShared`: extension-safe widget snapshot, share inbox, Activity outbox, travel and speech values. Extensions never open app SwiftData or Activity SQLite.
+- `TodayData`: Activity SQLite, recorder, import/export, retention and value types; depends on Core/Shared, without model contexts or system permission requests.
+- `TodayPlatform`: model-free live adapters (Health, speech, travel, sound, diagnostics and measured instrumentation), depending on Core/Shared. Model-bound EventKit/AlarmKit services remain in One during the compatibility bridge.
+- `TodayDesignSystem`: semantic adaptive styles and reusable native components, depending on Core. Model-bound shared rows and entry/Undo presentation live in `TodayPlannerUI`, which explicitly depends on One/Core/DesignSystem/Platform.
+- `One`: the deliberate persistent-model and intent identity bridge. It depends on Core/Shared/Data/Platform and retains model-bound calendar/reminder/alarm/timer services, store opening, ServiceContracts, Ledger/GrantStore, PlannerActions and shared mutations. It has no feature dependency and owns no feature screen. This is wider than a model-only library because those operations already share model identity and cross-store ordering.
+- `FeatureToday`, `FeatureCalendar`, `FeatureReminders`, `FeatureClock`, `FeatureAsk`, `FeatureSettings`, `FeatureActivity`, `FeatureSearch`, `FeatureHealth` (`ios/Sources/Features/`): real screens and behavior. Dependencies name every directly used product; Today/Settings explicitly consume Health, and planner features use TodayPlannerUI where required. Editor/navigation callbacks cross feature seams through composition.
+- `TodayShell`: actual HomeView, sidebar, navigation, destinations and lifecycle above the features. `ios/App/OneApp.swift` constructs the executable composition and owns application lifecycle/resources/capabilities.
+- `TodayTestSupport`: deterministic service/Health implementations using the same real One actions and TodayData Activity store; test/development dependency only. `TodayScenes` holds Foundation registry metadata; `TodaySceneInventory` exposes it. `ios/Development/` owns Mock/Workbench/session assembly. SnapshotTesting is linked only by the snapshot test target.
+
+Package peers use package access (`-package-name ios` for executable consumers); public entry APIs are limited to actual external construction needs. Do not manufacture empty forwarding targets, a service locator or a view model per view to satisfy a graph. Swift 6 language mode is explicit: resolve isolation/Sendable errors at ownership boundaries, without blanket isolation or unchecked suppression. Main-actor model contexts never cross actors.
+
+## Explicit composition and runtime
+
+`PlannerRuntime` supplies required clock, UUID generation, calendar and locale. Composition chooses those values before fixture loading or observer construction. Consumers receive explicit adapter protocols and actions; they do not resolve process arguments, standard defaults or live singleton services. `PlannerSession` retains the selected container, defaults, runtime, service instances, ActivityCenter, Ledger and PlannerActions for composition; features receive narrow capabilities rather than the whole session. `ShellComposition` retains navigation-related presentation, World Clock, stopwatch, Ask intelligence, voice and suggestion memory.
+
+Live composition in `OneStore` constructs and retains the production service graph. One shared live Ringer drives both AlarmCenter and TimerController. Reminder/ledger attachment, notification handling, widget sinks/reload callbacks, inbox access and export destinations are explicit lifecycle seams. NativeCalendarService is a live-only refinement; a deterministic calendar must not pretend to provide an EventKit editor. Remote acceptance, local save, compensation/reconciliation and Undo ordering remain real operations, not an assumed cross-store transaction.
+
+Nested sheets, editors, navigation and UIKit hosting roots must receive the same retained action/presentation/toast/Health dependencies. SwiftUI's UndoManager environment is read-only; bind the host-provided manager to the session toast without writing a fabricated environment key. Constructor injection and narrow observable environments are complementary; a universal service environment is not a replacement for required dependencies.
+
+Unmount/cancel view-owned tasks before disposing their session. Dispose ledger before ActivityCenter, cancel owned observers/voice/cache/toast work, and remove only session-owned defaults/exports. Disappearance must not cancel another owner's AlarmKit schedules. Notifications and observers must be scoped to the retained instance/context.
+
+## Persistent and system identity
+
+The source identity of all nine persistent models remains module **One**: OneTask, OneEvent, OneAlarm, OneList, Habit, ChatThread, LedgerEntry, AIGrant and ShareImportReceipt. Preserve fields, defaults, encoded values and persistent references. Habit and LedgerEntry remain retired schema members. Preserve intent identities and explicitly shared AlarmActivity declarations; moving executable branding does not authorize renaming persisted types.
+
+Production identities remain `com.luworks.one`, `com.luworks.one.widgets`, `com.luworks.one.share`, App Group `group.com.luworks.one`, URL/preference/shortcut/background identifiers and existing database locations. The production executable module is TodayApp and product One.app. App Activity remains `Application Support/Activity/activity.sqlite`; extension snapshot/inbox/outbox files retain their formats. QA history under the primary checkout's `tests/results/` is separate from app Activity. Do not add a second ledger or delete stores on migration failure.
+
+[Storage compatibility](storage-compatibility.md) and [SwiftData upgrade characterization](swiftdata-upgrade.md) describe frozen writer/reader evidence and its limits. The One bridge exits only after real consumers no longer need model-bound helpers and an actual installed-data-compatible migration is proved. Host serialization or an old-writer reopen does not establish iOS upgrade acceptance.
+
+## Live, Mock and Workbench
+
+Debug/Release controls optimization; Mock/Live controls dependencies. Today links live production products in both configurations. TodayMock links TodayTestSupport through its separate developer assembly, with executable module TodayMockApp; UI tests target this graph. It retains the compatibility bundle ID only on its owned simulator and must not coexist there with Today or be installed on a phone. TodayWorkbench has development ID `com.luworks.one.workbench` and is absent from production archive membership. Graph separation must be checked through actual dependency/resource/link-map evidence, not DEBUG guards, symbol strings or dead stripping alone.
+
+The shared registry has **50 existing scene IDs** in `TodayScenes/SceneRegistry.swift`. `Development/SceneCatalog.swift` exhaustively routes them to actual feature pages, sections, editors and cards. SceneConfiguration owns the applicable scenario allowlist. Workbench, preview and capture reuse SceneSession and SceneCatalog; unsupported states fail rather than showing substitute screens.
+
+Each SceneSession owns a nine-model in-memory container, disposable defaults, deterministic runtime/IDs, real memory Activity store/Ledger/PlannerActions and PlannerTestServices. It supplies local calendar/reminder/alarm/timer/notification/travel/sound/inbox/widget capabilities and scripted Ask/speech/Health sources. It does not construct live EventKit, AlarmKit, location, audio, Foundation Models or OneStore adapters. Real Add/Apply/Undo, reset and export algorithms remain in production implementations; only their external effects are supplied locally. Exports use a session-selected destination. Disposal is idempotent and removes only that session's resources.
+
+[Scene-session integration](scene-session-integration.md), [service integration](session-services-integration.md) and [test services](test-session-services-integration.md) explain the seams and scoped evidence. Older handoffs describe their own historical bases; current source and the manifest govern integrated APIs. Scenario simulation is not OS permission, elapsed-time, native editor or real model evidence. Health remains read-only; no samples cannot distinguish denied access from empty data.
+
+## Verification and delivery boundaries
+
+Use `./dev` as the sole local/CI engineering entry, including focused test selection, native capture and guarded release commands. The integration host owner controls heavy runs; adapters retain shared host and worktree cache locks. Reuse the owned simulator and cache, and preserve complete finished logs/results through the existing QA journal. Loading coordination policy starts no workers or timers and introduces no mandatory approval step.
+
+Build, host logic, iOS integration, native snapshots, simulator UI, unsigned archive validation, signed validation and physical-device acceptance are distinct evidence. A successful Debug build does not establish the frozen final collection. Unsigned readiness reports signing unchecked and distribution unauthorized; missing signed-release or device prerequisites remain blocked. Do not claim any unrun pass or encode changing test counts as an architecture contract. [Migration plan](migration-plan.md) owns phase intent; [baseline](baseline.md) preserves historical evidence; neither replaces final integrated execution.

@@ -1,0 +1,161 @@
+# Release lanes never create certificates, profiles, accounts or signing settings.
+require 'json'
+require 'open3'
+require 'pathname'
+require 'tmpdir'
+require 'shellwords'
+require 'fileutils'
+
+ENV['FASTLANE_SKIP_UPDATE_CHECK'] = '1'
+ENV['FASTLANE_OPT_OUT_USAGE'] = '1'
+ENV['BUNDLE_FROZEN'] = 'true'
+ENV['FASTLANE_SKIP_DOCS'] = 'true'
+
+RELEASE_ROOT = File.expand_path('..', __dir__)
+# Keep Fastlane's own XML report in the shared durable QA results directory.
+common, _error, result = Open3.capture3('git', 'rev-parse', '--path-format=absolute',
+                                     '--git-common-dir', chdir: RELEASE_ROOT)
+raise 'Cannot locate canonical QA results' unless result.success?
+ENV['FL_REPORT_PATH'] = File.join(File.dirname(common.strip), 'tests/results')
+
+def release_check(action, options)
+  argv = ['python3', File.join(RELEASE_ROOT, 'scripts/release/release.py'), action]
+  %w[commit version build team archive ipa].each do |key|
+    value = options[key.to_sym]
+    argv += ["--#{key}", value.to_s] if value
+  end
+  out, _err, status = Open3.capture3(*argv, chdir: RELEASE_ROOT)
+  # Only the checker emits sanitized fixed-code JSON. Never relay subprocess errors.
+  report = JSON.parse(out)
+  UI.message(JSON.generate(report))
+  UI.user_error!("Release check blocked: #{action}") unless status.success? && report['status'] == 'ready'
+  report
+rescue JSON::ParserError
+  UI.user_error!('Release checker unavailable')
+end
+
+def release_archive_path(options)
+  UI.user_error!('An absolute .xcarchive path outside the checkout is required') unless options[:archive]
+  path = Pathname.new(options[:archive].to_s)
+  real = path.expand_path.to_s
+  UI.user_error!('Archive parent directory must already exist') unless File.directory?(File.dirname(real))
+  real = File.join(File.realpath(File.dirname(real)), File.basename(real))
+  inside = real == File.realpath(RELEASE_ROOT) || real.start_with?(File.realpath(RELEASE_ROOT) + '/')
+  UI.user_error!('An absolute .xcarchive path outside the checkout is required') unless
+    path.absolute? && real.end_with?('.xcarchive') && !inside
+  real
+end
+
+def archive_release(options, local: false)
+  # Signed archives require explicit authorization. Local archives use only the
+  # command-scoped unsigned setting and can never enter export/upload paths.
+  release_check('authorize-archive', options) unless local
+  release_check(local ? 'preflight-local' : 'preflight', options)
+  path = release_archive_path(options)
+  UI.user_error!('Archive destination already exists') if File.exist?(path)
+  maps = path + '.linkmaps'
+  UI.user_error!('Link map destination already exists') if File.exist?(maps)
+  FileUtils.mkdir(maps)
+  extra = ['-onlyUsePackageVersionsFromResolvedFile', 'LD_GENERATE_MAP_FILE=YES',
+           Shellwords.escape('LD_MAP_FILE_PATH=' + maps + '/$(TARGET_NAME)-$(PRODUCT_NAME).map')]
+  extra << 'CODE_SIGNING_ALLOWED=NO' if local
+  build_app(
+    project: File.join(RELEASE_ROOT, 'ios/Today.xcodeproj'), scheme: 'Today',
+    configuration: 'Release', destination: 'generic/platform=iOS', archive_path: path,
+    skip_package_ipa: true, skip_profile_detection: true,
+    skip_package_dependencies_resolution: true, disable_package_automatic_updates: true, skip_package_repository_fetches: true,
+    xcargs: extra.join(' '),
+    buildlog_path: path + '.logs', derived_data_path: options[:derived_data],
+    xcodebuild_formatter: '', result_bundle: true, result_bundle_path: path + '.xcresult'
+  )
+  evidence = File.join(path, 'ReleaseEvidence')
+  FileUtils.mkdir(evidence)
+  %w[One TodayWidgets ShareExtension].each do |product|
+    target = {'One' => 'Today', 'TodayWidgets' => 'TodayWidgets', 'ShareExtension' => 'TodayShare'}.fetch(product)
+    map = File.join(maps, target + '-' + product + '.map')
+    UI.user_error!('Required linker map missing') unless File.file?(map)
+    FileUtils.cp(map, File.join(evidence, product + '.map'))
+  end
+  release_check(local ? 'seal-local' : 'seal', options.merge(archive: path))
+  release_check(local ? 'validate-local' : 'validate', options.merge(archive: path))
+end
+
+def distribute_release(options)
+  # This token must be supplied by the user for this exact release. No default grants.
+  release_check('authorize-distribution', options)
+  path = release_archive_path(options)
+  release_check('validate', options.merge(archive: path))
+  export_file = options[:export_options]
+  UI.user_error!('Existing manual App Store export options are required') unless export_file && File.file?(export_file)
+  # Validate the plist privately, without logging signing identifiers or file contents.
+  out, _err, status = Open3.capture3('plutil', '-convert', 'json', '-o', '-', export_file.to_s)
+  UI.user_error!('Invalid export options') unless status.success?
+  export = JSON.parse(out)
+  expected_ids = %w[com.luworks.one com.luworks.one.widgets com.luworks.one.share]
+  profiles = export['provisioningProfiles'] || {}
+  UI.user_error!('Manual App Store export options required') unless
+    export['method'] == 'app-store-connect' && export['signingStyle'] == 'manual' &&
+    export['teamID'] == options[:team] && profiles.keys.sort == expected_ids.sort &&
+    profiles.values.all? { |v| v.is_a?(String) && !v.empty? } &&
+    export.fetch('manageAppVersionAndBuildNumber', true) == false &&
+    export.fetch('destination', 'export') == 'export' &&
+    (export.keys - %w[method signingStyle teamID provisioningProfiles manageAppVersionAndBuildNumber destination signingCertificate]).empty?
+  api_key = ENV['TODAY_APP_STORE_CONNECT_API_KEY_PATH']
+  UI.user_error!('Existing App Store Connect API key file required') unless api_key && File.file?(api_key)
+  # A temp directory avoids stale IPA selection. The exact archive is revalidated
+  # immediately before export; automatic provisioning is never enabled.
+  Dir.mktmpdir('today-authorized-export-') do |output|
+    ipa = build_app(
+      project: File.join(RELEASE_ROOT, 'ios/Today.xcodeproj'), scheme: 'Today',
+      configuration: 'Release', skip_build_archive: true, archive_path: path,
+      export_options: export_file.to_s, output_directory: output, output_name: 'One.ipa',
+      skip_profile_detection: true, skip_package_dependencies_resolution: true,
+      disable_package_automatic_updates: true, skip_package_repository_fetches: true,
+      buildlog_path: File.join(File.dirname(path), 'export-logs'), xcodebuild_formatter: ''
+    )
+    UI.user_error!('Export did not produce an IPA') unless ipa && File.file?(ipa)
+    release_check('validate-export', options.merge(archive: path, ipa: ipa))
+    # Internal TestFlight processing only: no external tester release or App Store submission.
+    upload_to_testflight(ipa: ipa, api_key_path: api_key, app_identifier: 'com.luworks.one',
+                         distribute_external: false, skip_submission: true,
+                         skip_waiting_for_build_processing: true)
+  end
+rescue JSON::ParserError
+  UI.user_error!('Invalid export options')
+end
+
+default_platform(:ios)
+platform :ios do
+  desc 'Read-only source and tools readiness without signing checks'
+  lane :preflight_local do |options|
+    release_check('preflight-local', options)
+  end
+  desc 'Local unsigned archive only; never export or upload'
+  lane :archive_local do |options|
+    archive_release(options, local: true)
+  end
+  desc 'Validate local unsigned archive; never distribution readiness'
+  lane :validate_local do |options|
+    release_check('validate-local', options)
+  end
+  desc 'Read-only local readiness; missing signing or tools blocks readiness'
+  lane :preflight do |options|
+    release_check('preflight', options)
+  end
+  desc 'Archive only after explicit archive authorization; never export or upload'
+  lane :archive do |options|
+    archive_release(options)
+  end
+  desc 'Validate an existing signed archive and local provenance'
+  lane :validate do |options|
+    release_check('validate', options)
+  end
+  desc 'Explicitly authorized TestFlight upload; default refuses'
+  lane :beta do |options|
+    distribute_release(options)
+  end
+  desc 'Alias for the same guarded TestFlight upload'
+  lane :distribute do |options|
+    distribute_release(options)
+  end
+end

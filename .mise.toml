@@ -1,0 +1,20 @@
+# Xcode supplies Swift and swift-format; doctor/bootstrap verifies its build identity.
+# Downloaded CLI pins and SHA-256 values are authoritative in docs/engineering/tool-pins.json.
+[env]
+_.path = [
+  "{{config_root}}/.dev-tools/xcodegen/2.46.0/bin",
+  "{{config_root}}/.dev-tools/swiftlint/0.65.1/bin",
+  "{{config_root}}/.dev-tools/mise/2026.10.14/bin",
+  "{{config_root}}/.dev-tools/ruff/0.17.1/bin",
+  "{{config_root}}/.dev-tools/actionlint/1.7.12/bin",
+]
+
+# Runtime ownership only. Bundler/fastlane remain locked by Gemfile.lock.
+[tools]
+"core:ruby" = "3.3.12"
+"core:python" = "3.14.8"
+
+[settings]
+lockfile = true
+ruby.compile = false
+python.compile = false

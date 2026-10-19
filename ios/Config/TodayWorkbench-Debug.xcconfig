@@ -1,0 +1,15 @@
+// Independent developer executable; absent from the production app dependency graph.
+CODE_SIGN_STYLE = Automatic
+GENERATE_INFOPLIST_FILE = YES
+CURRENT_PROJECT_VERSION = 1
+MARKETING_VERSION = 0.1
+SWIFT_VERSION = 6.0
+TARGETED_DEVICE_FAMILY = 1
+PRODUCT_NAME = TodayWorkbench
+PRODUCT_MODULE_NAME = TodayWorkbench
+PRODUCT_BUNDLE_IDENTIFIER = com.luworks.one.workbench
+INFOPLIST_KEY_CFBundleDisplayName = Today Workbench
+INFOPLIST_KEY_UILaunchScreen_Generation = YES
+INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEBUG TODAY_WORKBENCH
+OTHER_SWIFT_FLAGS = $(inherited) -package-name ios

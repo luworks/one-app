@@ -1,0 +1,210 @@
+name: Today CI
+on:
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: Explicit additional validation (release never distributes)
+        type: choice
+        required: true
+        options: [extended, sanitizer, performance, protected-release]
+permissions:
+  contents: read
+concurrency:
+  group: today-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+  TODAY_CI_SYNTHETIC: '1'
+jobs:
+  helpers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests/ci -p 'test_*.py' -v
+  prerequisite:
+    runs-on: xcode-27
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - run: python3 scripts/ci/prerequisite.py
+  format:
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: format
+  lint:
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: lint
+  business:
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: business
+  integration:
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: integration
+  build:
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: build
+  core-ui:
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: core-ui
+  snapshots:
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: snapshots
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: release
+  extended:
+    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'extended'
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: extended
+  sanitizer:
+    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'sanitizer'
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: sanitizer
+  performance:
+    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'performance'
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/check
+        with:
+          lane: performance
+  protected-release:
+    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'protected-release' && github.ref == 'refs/heads/main'
+    needs: [helpers, prerequisite]
+    runs-on: xcode-27
+    timeout-minutes: 45
+    environment: release-validation
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify configured release protection
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/release_guard.py
+      - uses: ./.github/actions/check
+        with:
+          lane: protected-release
+  today-required:
+    if: always()
+    needs: [helpers, prerequisite, format, lint, business, integration, build, core-ui, snapshots, release, extended, sanitizer, performance, protected-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Require every expected job result
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          MANUAL_LANE: ${{ inputs.lane }}
+        run: python3 scripts/ci/policy.py aggregate --needs-json "$NEEDS_JSON"

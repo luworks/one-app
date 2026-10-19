@@ -1,0 +1,411 @@
+{
+  "AIGrant" : [
+    {
+      "expires" : 814579200,
+      "granted" : 813974400,
+      "id" : "00000000-0000-4000-8000-000000000040",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "AIGrant",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/AIGrant\/p1"
+        }
+      },
+      "revoked" : null,
+      "scope" : "plan-free-time"
+    },
+    {
+      "expires" : 814579200,
+      "granted" : 813974400,
+      "id" : "00000000-0000-4000-8000-000000000041",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "AIGrant",
+          "isTemporary" : false,
+          "primaryKey" : "p2",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/AIGrant\/p2"
+        }
+      },
+      "revoked" : 813974500,
+      "scope" : "plan-free-time"
+    }
+  ],
+  "ChatThread" : [
+    {
+      "archived" : true,
+      "cardsData" : "W3siYmF0Y2hTaXplIjoxLCJjYXB0dXJlIjp7InRpdGxlIjoiU3ludGhldGljIHJlY3VycmluZyB3b3JrIiwicmluZ3NBc0FsYXJtIjpmYWxzZSwibWludXRlIjowLCJraW5kIjoidGFzayIsImxpc3ROYW1lIjoiU3ludGhldGljIFdvcmsiLCJpc1dvcmtCbG9jayI6ZmFsc2UsImRheSI6ODEzOTc0NDAwLCJpc0FsbERheSI6ZmFsc2UsImZyb21BcHBsZUludGVsbGlnZW5jZSI6ZmFsc2UsImhhc0RheSI6dHJ1ZSwiaG91ciI6MX0sImJhdGNoIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDY0IiwiaXRlbVJlZiI6IntcImltcGxlbWVudGF0aW9uXCI6e1wiaXNUZW1wb3JhcnlcIjpmYWxzZSxcInN0b3JlSWRlbnRpZmllclwiOlwiOEZEMjIwNDQtNkFCNy00MTAyLUExOTAtQTQzQUJCOTdDMUVFXCIsXCJwcmltYXJ5S2V5XCI6XCJwMVwiLFwiZW50aXR5TmFtZVwiOlwiT25lVGFza1wiLFwidXJpUmVwcmVzZW50YXRpb25cIjpcIngtY29yZWRhdGE6XFxcL1xcXC84RkQyMjA0NC02QUI3LTQxMDItQTE5MC1BNDNBQkI5N0MxRUVcXFwvT25lVGFza1xcXC9wMVwifX0iLCJzdGF0dXMiOiJhZGRlZCIsImVudHJ5SUQiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMzAiLCJpZCI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDA2MyIsImFuY2hvciI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDA2MSJ9XQ==",
+      "createdAt" : 813974400,
+      "id" : "00000000-0000-4000-8000-000000000062",
+      "itemsData" : "W3siaW1wbGVtZW50YXRpb24iOnsicHJpbWFyeUtleSI6InAxIiwic3RvcmVJZGVudGlmaWVyIjoiOEZEMjIwNDQtNkFCNy00MTAyLUExOTAtQTQzQUJCOTdDMUVFIiwiZW50aXR5TmFtZSI6Ik9uZVRhc2siLCJ1cmlSZXByZXNlbnRhdGlvbiI6IngtY29yZWRhdGE6XC9cLzhGRDIyMDQ0LTZBQjctNDEwMi1BMTkwLUE0M0FCQjk3QzFFRVwvT25lVGFza1wvcDEiLCJpc1RlbXBvcmFyeSI6ZmFsc2V9fSx7ImltcGxlbWVudGF0aW9uIjp7InN0b3JlSWRlbnRpZmllciI6IjhGRDIyMDQ0LTZBQjctNDEwMi1BMTkwLUE0M0FCQjk3QzFFRSIsInVyaVJlcHJlc2VudGF0aW9uIjoieC1jb3JlZGF0YTpcL1wvOEZEMjIwNDQtNkFCNy00MTAyLUExOTAtQTQzQUJCOTdDMUVFXC9PbmVFdmVudFwvcDIiLCJlbnRpdHlOYW1lIjoiT25lRXZlbnQiLCJpc1RlbXBvcmFyeSI6ZmFsc2UsInByaW1hcnlLZXkiOiJwMiJ9fSx7ImltcGxlbWVudGF0aW9uIjp7InN0b3JlSWRlbnRpZmllciI6IjhGRDIyMDQ0LTZBQjctNDEwMi1BMTkwLUE0M0FCQjk3QzFFRSIsInByaW1hcnlLZXkiOiJwMSIsImlzVGVtcG9yYXJ5IjpmYWxzZSwidXJpUmVwcmVzZW50YXRpb24iOiJ4LWNvcmVkYXRhOlwvXC84RkQyMjA0NC02QUI3LTQxMDItQTE5MC1BNDNBQkI5N0MxRUVcL09uZUFsYXJtXC9wMSIsImVudGl0eU5hbWUiOiJPbmVBbGFybSJ9fV0=",
+      "messagesData" : "W3sidGV4dCI6IlN5bnRoZXRpYyByZXF1ZXN0IiwiaWQiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwNjAiLCJyb2xlIjoidXNlciIsInRpbWVzdGFtcCI6ODEzOTc0NDAwfSx7InRleHQiOiJTeW50aGV0aWMgYXBwcm92ZWQgcHJldmlldyIsImlkIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDYxIiwicm9sZSI6ImFpIiwidGltZXN0YW1wIjo4MTM5NzQ0MDB9XQ==",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "ChatThread",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/ChatThread\/p1"
+        }
+      },
+      "title" : "Synthetic chat",
+      "updatedAt" : 813974400
+    }
+  ],
+  "counts" : [
+    3,
+    2,
+    2,
+    2,
+    1,
+    1,
+    2,
+    2,
+    1
+  ],
+  "Habit" : [
+    {
+      "checkins" : [
+        813974400,
+        813888000
+      ],
+      "createdAt" : 813974400,
+      "icon" : "leaf",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "Habit",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/Habit\/p1"
+        }
+      },
+      "reminderHour" : 8,
+      "reminderMinute" : 20,
+      "targetPerWeek" : 3,
+      "title" : "Synthetic retired habit"
+    }
+  ],
+  "LedgerEntry" : [
+    {
+      "action" : "created",
+      "actor" : "you",
+      "after" : "Synthetic after",
+      "afterDate" : 813978000,
+      "approval" : "asked",
+      "before" : "Synthetic before",
+      "beforeDate" : 813974400,
+      "channel" : "Today app",
+      "date" : 813974400,
+      "id" : "00000000-0000-4000-8000-000000000030",
+      "itemKind" : "task",
+      "itemRef" : "{\"implementation\":{\"primaryKey\":\"p1\",\"storeIdentifier\":\"8FD22044-6AB7-4102-A190-A43ABB97C1EE\",\"entityName\":\"OneTask\",\"uriRepresentation\":\"x-coredata:\\\/\\\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\\\/OneTask\\\/p1\",\"isTemporary\":false}}",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "LedgerEntry",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/LedgerEntry\/p1"
+        }
+      },
+      "snapshot" : "c3ludGhldGljLWxlZ2FjeS1zbmFwc2hvdA==",
+      "title" : "Synthetic recurring work",
+      "undoOf" : null
+    },
+    {
+      "action" : "undone",
+      "actor" : "you",
+      "after" : "",
+      "afterDate" : null,
+      "approval" : "user",
+      "before" : "",
+      "beforeDate" : null,
+      "channel" : "Today app",
+      "date" : 813974460,
+      "id" : "00000000-0000-4000-8000-000000000031",
+      "itemKind" : "task",
+      "itemRef" : null,
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "LedgerEntry",
+          "isTemporary" : false,
+          "primaryKey" : "p2",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/LedgerEntry\/p2"
+        }
+      },
+      "snapshot" : null,
+      "title" : "Synthetic recurring work",
+      "undoOf" : "00000000-0000-4000-8000-000000000030"
+    }
+  ],
+  "moduleTypes" : [
+    "One.OneTask",
+    "One.OneEvent",
+    "One.OneAlarm",
+    "One.OneList",
+    "One.Habit",
+    "One.ChatThread",
+    "One.LedgerEntry",
+    "One.AIGrant",
+    "One.ShareImportReceipt"
+  ],
+  "OneAlarm" : [
+    {
+      "alarmKitID" : "00000000-0000-4000-8000-000000000020",
+      "alarmKitSignature" : "synthetic-signature",
+      "createdAt" : 813974400,
+      "hour" : 7,
+      "isOn" : true,
+      "label" : "Synthetic wake",
+      "minute" : 15,
+      "note" : "Synthetic alarm",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneAlarm",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneAlarm\/p1"
+        }
+      },
+      "snooze" : false,
+      "snoozeMinutes" : 5,
+      "sound" : "radial",
+      "weekdays" : [
+        2,
+        4,
+        6
+      ]
+    },
+    {
+      "alarmKitID" : null,
+      "alarmKitSignature" : null,
+      "createdAt" : 813974400,
+      "hour" : 23,
+      "isOn" : false,
+      "label" : "Synthetic off",
+      "minute" : 59,
+      "note" : "",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneAlarm",
+          "isTemporary" : false,
+          "primaryKey" : "p2",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneAlarm\/p2"
+        }
+      },
+      "snooze" : true,
+      "snoozeMinutes" : 9,
+      "sound" : "",
+      "weekdays" : [
+
+      ]
+    }
+  ],
+  "OneEvent" : [
+    {
+      "calendarName" : "Local",
+      "durationMinutes" : 1440,
+      "externalID" : null,
+      "isAllDay" : true,
+      "note" : "",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneEvent",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneEvent\/p1"
+        }
+      },
+      "reminderOffsetMinutes" : null,
+      "repeatRule" : null,
+      "ringsAsAlarm" : false,
+      "start" : 813974400,
+      "title" : "Synthetic all day"
+    },
+    {
+      "calendarName" : "Synthetic Calendar",
+      "durationMinutes" : 60,
+      "externalID" : "synthetic-event-1",
+      "isAllDay" : false,
+      "note" : "Synthetic fixed event",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneEvent",
+          "isTemporary" : false,
+          "primaryKey" : "p2",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneEvent\/p2"
+        }
+      },
+      "reminderOffsetMinutes" : 10,
+      "repeatRule" : "weekly",
+      "ringsAsAlarm" : true,
+      "start" : 813985200,
+      "title" : "Synthetic meeting"
+    }
+  ],
+  "OneList" : [
+    {
+      "colorIndex" : 2,
+      "createdAt" : 813974400,
+      "externalID" : null,
+      "name" : "Synthetic Empty",
+      "order" : 2,
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneList",
+          "isTemporary" : false,
+          "primaryKey" : "p2",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneList\/p2"
+        }
+      },
+      "pinned" : false,
+      "symbol" : "list.bullet"
+    },
+    {
+      "colorIndex" : 4,
+      "createdAt" : 813974400,
+      "externalID" : "synthetic-list-1",
+      "name" : "Synthetic Work",
+      "order" : 1,
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneList",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneList\/p1"
+        }
+      },
+      "pinned" : true,
+      "symbol" : "briefcase"
+    }
+  ],
+  "OneTask" : [
+    {
+      "checklist" : [
+
+      ],
+      "createdAt" : 813974400,
+      "doneAt" : 813974400,
+      "due" : 813888000,
+      "durationMinutes" : 25,
+      "externalID" : null,
+      "flagged" : false,
+      "isDone" : true,
+      "listName" : "",
+      "note" : "",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneTask",
+          "isTemporary" : false,
+          "primaryKey" : "p2",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneTask\/p2"
+        }
+      },
+      "plannedStart" : null,
+      "reminderOffsetMinutes" : null,
+      "repeatRule" : null,
+      "ringsAsAlarm" : false,
+      "tags" : [
+
+      ],
+      "title" : "Synthetic completed"
+    },
+    {
+      "checklist" : [
+
+      ],
+      "createdAt" : 813974400,
+      "doneAt" : null,
+      "due" : null,
+      "durationMinutes" : 25,
+      "externalID" : null,
+      "flagged" : false,
+      "isDone" : false,
+      "listName" : "",
+      "note" : "",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneTask",
+          "isTemporary" : false,
+          "primaryKey" : "p3",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneTask\/p3"
+        }
+      },
+      "plannedStart" : null,
+      "reminderOffsetMinutes" : 0,
+      "repeatRule" : null,
+      "ringsAsAlarm" : false,
+      "tags" : [
+
+      ],
+      "title" : "Synthetic inbox"
+    },
+    {
+      "checklist" : [
+        {
+          "done" : true,
+          "id" : "00000000-0000-4000-8000-000000000010",
+          "title" : "Synthetic first"
+        },
+        {
+          "done" : false,
+          "id" : "00000000-0000-4000-8000-000000000011",
+          "title" : "Synthetic second"
+        }
+      ],
+      "createdAt" : 813974400,
+      "doneAt" : null,
+      "due" : 813981600,
+      "durationMinutes" : 45,
+      "externalID" : "synthetic-reminder-1",
+      "flagged" : true,
+      "isDone" : false,
+      "listName" : "Synthetic Work",
+      "note" : "Synthetic only\nUnicode: 测试",
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "OneTask",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/OneTask\/p1"
+        }
+      },
+      "plannedStart" : 813978000,
+      "reminderOffsetMinutes" : 15,
+      "repeatRule" : "weekdays",
+      "ringsAsAlarm" : true,
+      "tags" : [
+        "synthetic",
+        "work"
+      ],
+      "title" : "Synthetic recurring work"
+    }
+  ],
+  "ShareImportReceipt" : [
+    {
+      "persistentID" : {
+        "implementation" : {
+          "entityName" : "ShareImportReceipt",
+          "isTemporary" : false,
+          "primaryKey" : "p1",
+          "storeIdentifier" : "8FD22044-6AB7-4102-A190-A43ABB97C1EE",
+          "uriRepresentation" : "x-coredata:\/\/8FD22044-6AB7-4102-A190-A43ABB97C1EE\/ShareImportReceipt\/p1"
+        }
+      },
+      "sharedID" : "00000000-0000-4000-8000-000000000050"
+    }
+  ]
+}
