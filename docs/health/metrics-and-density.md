@@ -1,5 +1,7 @@
 # Health: which metrics, and a denser list
 
+> Current implementation: [global dashboard order](dashboard-redesign.md) and [public read coverage](public-read-coverage.md). The grouped ordering and ten-metric scope below are historical design notes, superseded by the user-approved October 19 dashboard redesign. Read-only, on-device processing and no medical advice remain constraints.
+
 **中文摘要。** Health 面板从「每个指标一张大卡片」改成「分组的紧凑列表」：每行 56–64pt，左边是指标名、最新值（大号数字 + 小号单位）和一个很淡的日期标签（Today / Yesterday / 日期），右边是最近 7 天的小迷你图（累计型用柱，点状型用点线）。点一行进入详情（7 / 30 / 90 天切换、一张干净的图、平均/最低/最高和与上一段的变化），不生成任何文字总结。默认只显示 3 项：步数、睡眠、体重（只靠 iPhone 就有数据）；其余（静息心率、活动能量、锻炼分钟、步行+跑步距离、体脂、正念分钟、日照时间）放在「Add metric」里让用户自己加。不提供站立小时、HRV、噪声暴露，以及任何临床指标（血氧、血压、血糖）。所有数据只读 Apple Health，只存「选了哪些、什么顺序」，健康数值不落盘。
 
 Status: design note for the compact metrics list (Health sheet). Product stance unchanged: no 5th tab, Today shows one quiet health line (can be switched off) that opens the Health sheet, Today only reads Apple Health, nothing leaves the device.

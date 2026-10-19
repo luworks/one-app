@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "provenance": "Entirely synthetic; never copied from HealthKit or a user account.",
+  "implementation": "Small inline DTO payload in ios/Sources/TodayTestSupport/HealthSources.swift; this target has no resource bundle. UI tests load this versioned fixture for expected labels.",
+  "referenceClock": "2026-10-19T09:41:00Z",
+  "timeConvention": "secondsAgo is an elapsed interval before the supplied now; record dates contain no locale-dependent parsing.",
+  "boundedDays": {"minimum": 1, "maximum": 90},
+  "families": {
+    "categories": {
+      "title": "Health Events",
+      "expectedLabels": ["Stand Hour", "Handwashing", "Toothbrushing", "High Heart Rate", "Low Heart Rate", "Irregular Rhythm"],
+      "records": [
+        {"identifier": "HKCategoryTypeIdentifierAppleStandHour", "title": "Stand Hour", "value": "Stood", "secondsAgo": 3600, "durationSeconds": 0},
+        {"identifier": "HKCategoryTypeIdentifierHandwashingEvent", "title": "Handwashing", "value": "Completed", "secondsAgo": 5400, "durationSeconds": 20},
+        {"identifier": "HKCategoryTypeIdentifierToothbrushingEvent", "title": "Toothbrushing", "value": "Completed", "secondsAgo": 7200, "durationSeconds": 120},
+        {"identifier": "HKCategoryTypeIdentifierHighHeartRateEvent", "title": "High Heart Rate", "value": "Recorded event", "secondsAgo": 10800, "durationSeconds": 0},
+        {"identifier": "HKCategoryTypeIdentifierLowHeartRateEvent", "title": "Low Heart Rate", "value": "Recorded event", "secondsAgo": 14400, "durationSeconds": 0},
+        {"identifier": "HKCategoryTypeIdentifierIrregularHeartRhythmEvent", "title": "Irregular Rhythm", "value": "Recorded event", "secondsAgo": 18000, "durationSeconds": 0}
+      ]
+    },
+    "workouts": {
+      "title": "Workouts",
+      "expectedLabels": ["Walking", "Running"],
+      "records": [
+        {"activityCode": 52, "title": "Walking", "secondsAgo": 7200, "durationSeconds": 1800},
+        {"activityCode": 37, "title": "Running", "secondsAgo": 172800, "durationSeconds": 2700}
+      ]
+    },
+    "bloodPressure": {
+      "title": "Blood Pressure",
+      "records": [{"systolic": 118, "diastolic": 76, "secondsAgo": 3600}]
+    },
+    "characteristics": {
+      "title": "Health Profile",
+      "records": [
+        {"field": "Date of Birth", "value": "1990-06-15"},
+        {"field": "Biological Sex", "value": "Female"},
+        {"field": "Blood Type", "value": "O+"},
+        {"field": "Wheelchair Use", "value": "No"},
+        {"field": "Skin Type", "value": "III"}
+      ]
+    }
+  },
+  "coverage": ["typed categories rather than fake numerical sparklines", "zero-duration category event", "duration-bearing hygiene event", "multiple heart notification types", "workout session durations", "one-day workout cutoff excludes two-day-old run", "paired blood-pressure values", "five characteristic fields", "duplicate family requests produce one dictionary entry"],
+  "notCovered": ["real HealthKit data or authorization", "restricted clinical records", "ECG waveforms", "workout routes", "source deduplication", "high-volume record paging", "all category values", "medical interpretation"]
+}

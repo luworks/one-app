@@ -143,6 +143,73 @@ final class HealthLoadingTests: XCTestCase {
     XCTAssertTrue(results.current.values.allSatisfy { $0 == .stalled })
   }
 
+  private actor QueryOccupancy {
+    var active = 0
+    var peak = 0
+    func enter() {
+      active += 1
+      peak = max(peak, active)
+    }
+    func leave() { active -= 1 }
+  }
+
+  private struct MeasuredSource: HealthSource {
+    let occupancy: QueryOccupancy
+    var isAvailable: Bool { true }
+    func requestAccess(for metrics: [HealthMetric]) async {}
+    func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric:
+      HealthSeries]
+    {
+      await occupancy.enter()
+      try? await Task.sleep(for: .milliseconds(15))
+      await occupancy.leave()
+      return Dictionary(uniqueKeysWithValues: metrics.map { ($0, .empty) })
+    }
+  }
+
+  func testLargeCatalogBoundsConcurrentQueriesAndDeliversEveryMetricOnce() async {
+    let occupancy = QueryOccupancy()
+    let source = MeasuredSource(occupancy: occupancy)
+    let delivered = Box<[HealthMetric]>([])
+    await HealthLoader.fetch(
+      HealthMetric.allCases + [.weight, .steps], source: source, days: 180, now: now, timeout: 1
+    ) { metric, _ in
+      delivered.update { $0.append(metric) }
+    }
+    let peak = await occupancy.peak
+    XCTAssertGreaterThan(peak, 1, "independent metrics still overlap")
+    XCTAssertLessThanOrEqual(peak, 4, "a large catalog must not fan out a query for every row")
+    XCTAssertEqual(delivered.current.count, HealthMetric.allCases.count)
+    XCTAssertEqual(Set(delivered.current), Set(HealthMetric.allCases))
+  }
+
+  func testActualQueryLimiterKeepsAbandonedTimedOutOperationsBounded() async {
+    let limiter = HealthQueryLimiter(limit: 4)
+    let occupancy = QueryOccupancy()
+    let completed = expectation(description: "all underlying operations eventually finish")
+    completed.expectedFulfillmentCount = 12
+    await withTaskGroup(of: Void.self) { group in
+      for _ in 0..<12 {
+        group.addTask {
+          _ = await HealthTimeout.race(
+            seconds: 0.01,
+            {
+              try? await limiter.run {
+                await occupancy.enter()
+                try? await Task.sleep(for: .milliseconds(40))
+                await occupancy.leave()
+                completed.fulfill()
+                return true
+              }
+            })
+        }
+      }
+    }
+    await fulfillment(of: [completed], timeout: 2)
+    let peak = await occupancy.peak
+    XCTAssertEqual(peak, 4, "UI timeouts must not bypass the limit on actual operations")
+  }
+
   // MARK: Access
 
   func testAccessThatNeverAnswersIsGivenUpOn() async {
@@ -227,6 +294,70 @@ final class HealthLoadingTests: XCTestCase {
     XCTAssertEqual(access, .unanswered)
     XCTAssertEqual(results.current[.steps], .loaded, "data that was already readable is shown")
     XCTAssertEqual(results.current[.restingHeartRate], .failed(.accessUnanswered))
+  }
+
+  private struct DiagnosticSource: HealthSource, HealthQuerySource {
+    var isAvailable: Bool { true }
+    func requestAccess(for metrics: [HealthMetric]) async {}
+    func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric:
+      HealthSeries]
+    {
+      // Optional diagnostic queries must not silently turn errors into empty results.
+      [:]
+    }
+    func query(_ metric: HealthMetric, days: Int, now: Date) async throws -> HealthSeries {
+      if metric == .steps { throw CocoaError(.fileReadUnknown) }
+      if metric == .weight { throw CancellationError() }
+      return .empty
+    }
+  }
+
+  func testDiagnosticErrorsDifferFromEmptyAndCancellationSettlesWithoutFailure() async {
+    let results = Box<[HealthMetric: HealthFetchResult]>([:])
+    await HealthLoader.fetch(
+      [.steps, .sleep, .weight], source: DiagnosticSource(), days: 7, now: now
+    ) { metric, result in
+      results.update { $0[metric] = result }
+    }
+    XCTAssertEqual(results.current[.steps], .queryFailed)
+    XCTAssertEqual(results.current[.sleep], .series(.empty))
+    XCTAssertEqual(results.current[.weight], .cancelled)
+    XCTAssertEqual(
+      HealthMetricState.settled(.queryFailed, access: .answered, hadData: false),
+      .failed(.queryFailed))
+    XCTAssertEqual(HealthMetricState.settled(.cancelled, access: .answered, hadData: false), .idle)
+    XCTAssertEqual(HealthMetricState.settled(.cancelled, access: .answered, hadData: true), .loaded)
+  }
+
+  private struct LateSource: HealthSource {
+    var isAvailable: Bool { true }
+    func requestAccess(for metrics: [HealthMetric]) async {}
+    func series(for metrics: [HealthMetric], days: Int, now: Date) async -> [HealthMetric:
+      HealthSeries]
+    {
+      // Model a native callback that cannot be stopped by task cancellation.
+      await withCheckedContinuation { continuation in
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { continuation.resume() }
+      }
+      return [.steps: HealthSeries(points: [HealthPoint(date: now, value: 1)])]
+    }
+  }
+
+  func testLateTimedOutQueryCannotOverwriteNewerResult() async {
+    let results = Box<[HealthMetric: HealthFetchResult]>([:])
+    await HealthLoader.fetch([.steps], source: LateSource(), days: 7, now: now, timeout: 0.01) {
+      metric, result in
+      results.update { $0[metric] = result }
+    }
+    XCTAssertEqual(results.current[.steps], .stalled)
+    let current = series(2)
+    await HealthLoader.fetch(
+      [.steps], source: FakeSource(data: [.steps: current]), days: 7, now: now
+    ) { metric, result in
+      results.update { $0[metric] = result }
+    }
+    try? await Task.sleep(for: .milliseconds(150))
+    XCTAssertEqual(results.current[.steps], .series(current))
   }
 
   // MARK: Row state

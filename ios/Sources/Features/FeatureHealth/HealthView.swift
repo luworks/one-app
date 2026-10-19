@@ -4,19 +4,16 @@
   import TodayDesignSystem
   import TodayPlatform
 
-  /// The Health sheet: a dense list of the metrics the user chose, one rounded container per group (Activity, Sleep &
-  /// Recovery, Body). Each row is the metric's name, its latest value with a quiet date label and a 7-day sparkline;
-  /// tapping opens the detail. Read-only: Today only reads Apple Health.
-  /// Editing has no Edit button, like everywhere in the app: swipe a row for Hide, long-press for Hide / Move Up /
-  /// Move Down, press, hold and drag to reorder inside a group, and Manage Metrics (also in the ··· menu)
-  /// offers visibility switches for every supported metric.
+  /// A globally ordered read-only dashboard. Customize uses native List dragging and accessible move actions.
   public struct HealthView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     private let model: HealthModel
     @State private var detail: HealthMetric?
     @State private var adding = false
-    @State private var visibleMetrics: Set<HealthMetric> = []
+    @State private var recordsPresented = false
+    @State private var draft = HealthSelection.default
+    @State private var customizing = false
 
     public init(model: HealthModel) {
       self.model = model
@@ -24,7 +21,7 @@
 
     private func manageMetrics() {
       PerformanceTrace.shared.beginPage("health.picker")
-      visibleMetrics = Set(model.selection.shown)
+      draft = model.selection
       adding = true
     }
 
@@ -33,13 +30,23 @@
         if !model.isAvailable {
           unavailable
         } else {
-          ForEach(model.selection.groups, id: \.group) { entry in
-            Section {
-              ForEach(entry.metrics) { metric in row(metric) }
-                .onMove { model.move(in: entry.group, from: $0, to: $1) }
-            } header: {
-              Text(entry.group.title)
+          Section {
+            ForEach(model.selection.ordered) { metric in row(metric) }
+              .onMove { model.move(from: $0, to: $1) }
+          } header: {
+            VStack(alignment: .leading, spacing: 4) {
+              Text(customizing ? "Your order" : "Your health")
+                .font(.headline.weight(.medium))
+                .foregroundStyle(.primary)
+              Text(
+                customizing
+                  ? "Drag any metric to any position."
+                  : "Measurements from Apple Health, in your order."
+              )
+              .font(.footnote)
+              .textCase(nil)
             }
+            .padding(.bottom, 6)
           }
           Section {
             if model.selection.shown.isEmpty {
@@ -59,31 +66,50 @@
             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
             .accessibilityIdentifier("health.add")
           }
+          if model.recordSource != nil {
+            Section {
+              Button {
+                recordsPresented = true
+              } label: {
+                Label("Browse Health Records", systemImage: "list.bullet.rectangle")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                  .frame(minHeight: 44)
+              }
+              .accessibilityIdentifier("health.records")
+            } footer: {
+              Text("Workouts, events, paired readings and profile. Choose what to read.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+          }
           footer
         }
       }
       .listStyle(.insetGrouped)
+      .environment(\.editMode, .constant(customizing ? .active : .inactive))
       .performanceDestination("health")
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
-          Menu {
-            Button {
-              manageMetrics()
-            } label: {
-              Label("Manage Metrics", systemImage: "slider.horizontal.3")
-            }
-          } label: {
-            Image(systemName: "ellipsis.circle")
+          Button(customizing ? "Finish" : "Customize") {
+            withAnimation(.snappy) { customizing.toggle() }
           }
-          .accessibilityLabel("More")
-          .accessibilityIdentifier("health.menu")
+          .font(.subheadline.weight(.medium))
+          .accessibilityLabel(customizing ? "Done Customizing" : "Customize")
+          .accessibilityIdentifier("health.customize")
         }
+
       }
       .task(id: scenePhase) {
         guard scenePhase == .active else { return }
         await model.load()
       }
       .refreshable { await model.load() }
+      .sheet(isPresented: $recordsPresented) {
+        if let source = model.recordSource {
+          HealthRecordsView(source: source, runtime: model.runtime)
+        }
+      }
       .sheet(item: $detail) { metric in
         HealthMetricDetail(
           metric: metric, series: model.series[metric] ?? .empty, now: model.runtime.now(),
@@ -92,18 +118,11 @@
       .sheet(
         isPresented: $adding,
         onDismiss: {
-          // Keep the order of existing rows; newly shown metrics append in catalog order.
-          for metric in model.selection.shown where !visibleMetrics.contains(metric) {
-            model.hide(metric)
-          }
-          let additions = HealthMetric.allCases.filter {
-            visibleMetrics.contains($0) && !model.selection.shown.contains($0)
-          }
-          guard !additions.isEmpty else { return }
-          Task { await model.add(additions) }
+          let next = draft
+          Task { await model.customize(next) }
         }
       ) {
-        HealthMetricPicker(shown: $visibleMetrics)
+        HealthMetricPicker(selection: $draft)
       }
     }
 
@@ -116,12 +135,14 @@
       if case .failed(let reason) = state { failure = reason }
       return VStack(alignment: .leading, spacing: 4) {
         Button {
+          guard !customizing else { return }
           PerformanceTrace.shared.beginPage("health.detail")
           detail = metric
         } label: {
           HealthRow(item: item, isLoading: state == .loading && item.value == nil)
         }
         .buttonStyle(.plain)
+        .disabled(customizing)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
           failure == nil ? item.accessibilityText : "\(item.accessibilityText). \(Self.cantRead)"
@@ -131,7 +152,7 @@
         if let failure {
           // A failed row says so quietly, once, and offers the one action that can help.
           HStack(spacing: 8) {
-            Text(Self.cantRead)
+            Text(failure == .queryFailed ? "Couldn't refresh. Try again." : Self.cantRead)
               .font(.footnote)
               .foregroundStyle(.secondary)
               .accessibilityIdentifier("health.note.\(metric.rawValue)")
@@ -157,7 +178,16 @@
         }
         .tint(Color(.systemGray))
       }
+      .accessibilityAction(named: "Move Up") { model.nudge(metric, by: -1) }
+      .accessibilityAction(named: "Move Down") { model.nudge(metric, by: 1) }
+      .accessibilityAction(named: "Move to Top") { model.moveToTop(metric) }
       .contextMenu {
+        Button {
+          model.moveToTop(metric)
+        } label: {
+          Label("Move to Top", systemImage: "arrow.up.to.line")
+        }
+        .disabled(model.selection.ordered.first == metric)
         Button {
           withAnimation(.snappy) { model.hide(metric) }
         } label: {
@@ -168,13 +198,13 @@
         } label: {
           Label("Move Up", systemImage: "arrow.up")
         }
-        .disabled(model.selection.metrics(in: metric.group).first == metric)
+        .disabled(model.selection.ordered.first == metric)
         Button {
           withAnimation(.snappy) { model.nudge(metric, by: 1) }
         } label: {
           Label("Move Down", systemImage: "arrow.down")
         }
-        .disabled(model.selection.metrics(in: metric.group).last == metric)
+        .disabled(model.selection.ordered.last == metric)
       }
     }
 
@@ -230,10 +260,18 @@
     var body: some View {
       HStack(spacing: 12) {
         VStack(alignment: .leading, spacing: 2) {
-          Text(item.metric.title)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(item.metric.title)
+              .font(.subheadline.weight(.medium))
+              .foregroundStyle(.primary)
+            if !typeSize.isAccessibilitySize {
+              Text(item.metric.group.title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+          }
+          .fixedSize(horizontal: false, vertical: true)
           HStack(alignment: .firstTextBaseline, spacing: 3) {
             if let value = item.value {
               ForEach(Array(value.parts.enumerated()), id: \.offset) { index, part in

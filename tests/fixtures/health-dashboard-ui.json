@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "provenance": "Synthetic HealthSampleSeries only; no user Health records.",
+  "clock": "09:41 on the test device calendar day; histories use calendar arithmetic relative to that day.",
+  "locale": "en_US_POSIX",
+  "timezone": "Test runner device timezone; no absolute-date assertions in these UI journeys.",
+  "generator": "ios/Sources/TodayTestSupport/HealthSampleSeries.swift, per-metric seed 42 + catalog index * 1000",
+  "scenarios": {
+    "crossGroupOrder": {
+      "launchArguments": ["-uiTestingHealthMetrics", "steps,sleep,weight"],
+      "initialOrder": ["steps", "sleep", "weight"],
+      "expectedOrderAfterNativeDrag": ["weight", "steps", "sleep"],
+      "coverage": ["native reorder across former Body and Activity sections", "dismiss and reopen", "process relaunch", "detail after reorder", "Manage Metrics shared order", "hidden metric search and visibility"]
+    },
+    "noReadableMetric": {
+      "launchArguments": ["-uiTestingHealthMetrics", "steps,mindfulMinutes"],
+      "emptyMetric": "mindfulMinutes",
+      "readableMetric": "steps",
+      "coverage": ["missing value remains distinct from zero", "empty 30 and 90 day detail", "no read-denial inference", "other metrics remain readable"]
+    },
+    "largeType": {
+      "launchArguments": ["-uiTestingHealthMetrics", "steps,sleep,weight", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"],
+      "coverage": ["Customize and Done controls reachable", "minimum 44 point row", "detail disabled while customizing", "detail reachable after customization"]
+    }
+  },
+  "notCovered": ["physical-device HealthKit authorization or samples", "large public-type catalog query semantics", "all-source overlap aggregation", "DST numeric aggregation", "all Dynamic Type sizes", "drag autoscroll beyond viewport"]
+}

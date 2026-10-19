@@ -52,6 +52,11 @@
         ScrollView {
           VStack(alignment: .leading, spacing: 20) {
             header
+            if HealthCatalog.quantities[metric]?.aggregation == .dailyAverage {
+              Text("Daily averages · Missing days are not counted as zero.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
             PillSwitcher(
               items: [7, 30, 90], selection: $days,
               title: { "\($0) Days" }, identifier: { "health.range.\($0)" })
