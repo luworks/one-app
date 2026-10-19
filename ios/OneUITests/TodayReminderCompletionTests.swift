@@ -22,9 +22,10 @@ final class TodayReminderCompletionTests: XCTestCase {
     return app
   }
 
-  private func connect() {
+  private func connect(includeCalendar: Bool = false) {
     let app = XCUIApplication()
     app.launchArguments = ["-uiTesting", "-uiTestingRemindersSync"]
+    if includeCalendar { app.launchArguments += ["-uiTestingCalendarSync"] }
     app.launch()
     app.openSidebar()
     app.buttons["Settings"].firstMatch.tap()
@@ -44,6 +45,21 @@ final class TodayReminderCompletionTests: XCTestCase {
       XCTWaiter.wait(
         for: [expectation(for: NSPredicate(format: "value == '1'"), evaluatedWith: sync)],
         timeout: 8), .completed)
+    if includeCalendar {
+      let calendar = app.switches["Apple Calendar"]
+      XCTAssertTrue(calendar.waitForExistence(timeout: 5))
+      if calendar.value as? String != "1" {
+        calendar.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for name in ["Allow Full Access", "Allow"] {
+          if springboard.buttons[name].waitForExistence(timeout: 3) {
+            springboard.buttons[name].tap()
+            break
+          }
+        }
+      }
+      XCTAssertEqual(calendar.value as? String, "1")
+    }
     app.terminate()
   }
 
@@ -65,6 +81,48 @@ final class TodayReminderCompletionTests: XCTestCase {
       contentsOf: URL(fileURLWithPath: TestData.fixturePath("today-reminder-completion.json")))
     let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     return try XCTUnwrap((object["reminders"] as? [[String: Any]])?.first?["title"] as? String)
+  }
+
+  /// Actual simulator EventKit imports exercise the production adapters, not empty/local-only Mock rows.
+  func testImportedTimelineNavigationAndCancelledEditorsStayResponsive() throws {
+    connect(includeCalendar: true)
+    let data = try Data(
+      contentsOf: URL(fileURLWithPath: TestData.fixturePath("phone-freeze-navigation.json")))
+    let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+    let suffix = String(UUID().uuidString.prefix(8))
+    let title = try XCTUnwrap(fixture["reminderTitle"]) + " " + suffix
+    let eventTitle = try XCTUnwrap(fixture["eventTitle"]) + " " + suffix
+    let app = launch(
+      title: title, store: "freeze-navigation-" + suffix, seed: true,
+      extra: ["-uiTestingCalendarSync", "-debugCreateSystemEvent", eventTitle])
+    assertState(app, done: false)
+    XCTAssertTrue(app.staticTexts[title].firstMatch.waitForExistence(timeout: 8))
+    let event = app.descendants(matching: .any).matching(
+      NSPredicate(format: "label BEGINSWITH %@", eventTitle)
+    ).firstMatch
+    XCTAssertTrue(event.waitForExistence(timeout: 8), "native Calendar import is rendered")
+    let started = Date()
+    app.staticTexts[title].firstMatch.tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 5))
+    app.buttons["Cancel"].firstMatch.tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
+    XCTAssertLessThan(
+      Date().timeIntervalSince(started), 10,
+      "editor opens and cancels without a scene watchdog stall")
+    for tab in ["Calendar", "Reminders", "Clock", "Today"] {
+      app.buttons[tab].firstMatch.tap()
+      XCTAssertTrue(app.buttons["Ask AI or add anything"].firstMatch.waitForExistence(timeout: 5))
+    }
+    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    app.buttons["Ask AI or add anything"].firstMatch.tap()
+    let field =
+      app.textFields["Ask AI or add anything"].firstMatch.exists
+      ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.typeText(try XCTUnwrap(fixture["chatDraft"]))
+    app.buttons["Close"].firstMatch.tap()
+    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    assertState(app, done: false)
   }
 
   func testCompactEditorEditAndDeleteFailuresRetryAcrossInFlightSync() throws {

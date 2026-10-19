@@ -13,6 +13,96 @@
   @MainActor
   extension PlannerSessionTests {
     @Test
+    func importedFocusRenderingNeverOpensNativeStoreAndWritesStillRevalidate() throws {
+      let suite = "FocusRenderCache.\(UUID().uuidString)"
+      let defaults = try #require(UserDefaults(suiteName: suite))
+      defer { defaults.removePersistentDomain(forName: suite) }
+      defaults.set(true, forKey: "today.remindersSync.enabled")
+      defaults.set(true, forKey: "one.calendarSync.enabled")
+      let now = Date(timeIntervalSince1970: 1_792_314_000)
+      let runtime = PlannerRuntime(
+        now: { now }, nextID: { UUID() }, calendar: Calendar(identifier: .gregorian),
+        locale: Locale(identifier: "en_US_POSIX"))
+      var access = EKAuthorizationStatus.fullAccess
+      var nativeStoreCalls = 0
+      // An unavailable native backend must never be consulted for any display lookup, including misses.
+      let reminders = RemindersSync(
+        defaults: defaults, runtime: runtime, arguments: [],
+        makeStore: {
+          nativeStoreCalls += 1
+          return EKEventStore()
+        },
+        authorizationStatus: { access })
+      let calendar = CalendarSync(
+        defaults: defaults, runtime: runtime, arguments: [],
+        makeStore: {
+          nativeStoreCalls += 1
+          return EKEventStore()
+        },
+        authorizationStatus: { access })
+      defer {
+        reminders.dispose()
+        calendar.dispose()
+      }
+      let task = OneTask(title: "Synthetic imported reminder")
+      task.externalID = "native-reminder"
+      task.due = now
+      let remote = RemindersSync.Remote(
+        id: "native-reminder", title: task.title, notes: "", isDone: false, doneAt: nil,
+        due: now, listID: "native-list", listTitle: "Fixture", flagged: false,
+        repeatRule: nil, repeats: true, accountID: "native-account")
+      let reminderID = try #require(remote.focusIdentity)
+      #expect(reminders.focusIdentity(task) == .unavailable)
+      reminders.acceptFocusSnapshot([remote])
+      let eventID = FocusIdentity(
+        provider: "apple.calendar", account: "native-account", calendar: "native-calendar",
+        item: "native-event", occurrence: now)
+      let event = ExternalEvent(
+        id: "fixture-occurrence", eventIdentifier: "native-event", title: "Synthetic event",
+        start: now, end: now.addingTimeInterval(1800), isAllDay: false,
+        calendarTitle: "Fixture", color: .blue, repeats: true)
+      calendar.acceptFocusSnapshot(event, identity: eventID, canDelete: true)
+      let start = ContinuousClock.now
+      for _ in 0..<1000 {
+        #expect(reminders.focusIdentity(task) == .available(reminderID))
+        #expect(
+          calendar.cachedFocusIdentity(externalID: "native-event", occurrence: now)
+            == .available(eventID))
+        #expect(calendar.cachedEvent(externalID: "native-event", occurrence: now)?.id == event.id)
+        #expect(calendar.cachedCanDelete(externalID: "native-event"))
+        #expect(
+          calendar.cachedFocusIdentity(externalID: "unknown", occurrence: now) == .unavailable)
+        #expect(!calendar.cachedCanDelete(externalID: "unknown"))
+      }
+      #expect(start.duration(to: .now) < .seconds(2))
+      #expect(nativeStoreCalls == 0)
+      access = .denied
+      #expect(reminders.focusIdentity(task) == .permissionDenied)
+      #expect(
+        calendar.cachedFocusIdentity(externalID: "native-event", occurrence: now)
+          == .permissionDenied)
+      #expect(!calendar.cachedCanDelete(externalID: "native-event"))
+      // Even a previously writable cached identity cannot authorize a source write after access changes.
+      #expect(throws: (any Error).self) {
+        try reminders.commitDeletion(task, expected: Ledger.snapshot(of: task))
+      }
+      #expect(!calendar.delete(externalID: "native-event", occurrence: now, span: .thisEvent))
+      #expect(nativeStoreCalls == 0)
+      access = .fullAccess
+      #expect(reminders.focusIdentity(task) == .available(reminderID))
+      #expect(
+        calendar.cachedFocusIdentity(
+          externalID: "native-event", occurrence: now.addingTimeInterval(86400)) == .unavailable)
+      calendar.refresh()
+      #expect(
+        calendar.cachedFocusIdentity(externalID: "native-event", occurrence: now) == .unavailable)
+      #expect(!calendar.cachedCanDelete(externalID: "native-event"))
+      reminders.acceptFocusSnapshot([])
+      #expect(reminders.focusIdentity(task) == .unavailable)
+      #expect(nativeStoreCalls == 0)
+    }
+
+    @Test
     func focusPausedOrDisabledActivityDoesNotOwnFocusOrItsUndo() async throws {
       for paused in [true, false] {
         let a = try FocusSession()

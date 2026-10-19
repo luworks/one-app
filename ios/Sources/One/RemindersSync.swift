@@ -45,6 +45,8 @@
         ) { [weak self] _ in
           Task { @MainActor in
             guard let self, !self.disposed else { return }
+            self.focusIdentities.removeAll()
+            self.version += 1
             self.scheduleReconcile()
           }
         })
@@ -58,6 +60,8 @@
     @ObservationIgnored private var running = false
     @ObservationIgnored private var again = false
     @ObservationIgnored private var completionFence = ReminderCompletionFence()
+    // Display-only scalar identities from the accepted import. A miss is not a deletion.
+    @ObservationIgnored private var focusIdentities: [String: FocusIdentity] = [:]
 
     /// Session-only Undo payload; no app model or persistence schema is extended.
     private struct DeletedReminderPayload {
@@ -142,7 +146,7 @@
     /// the test that needs it passes `-uiTestingRemindersSync`.
     package private(set) var enabled: Bool
 
-    package var hasAccess: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
+    package var hasAccess: Bool { authorizationStatus() == .fullAccess }
     /// True once the user allowed access to Apple Reminders and sync is on.
     package var isConnected: Bool { !disposed && enabled && hasAccess }
 
@@ -150,17 +154,22 @@
     @ObservationIgnored private let runtime: PlannerRuntime
     @ObservationIgnored private let arguments: [String]
     @ObservationIgnored private let makeStore: () -> EKEventStore
+    @ObservationIgnored private let authorizationStatus: () -> EKAuthorizationStatus
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var disposed = false
 
     package init(
       defaults: UserDefaults, runtime: PlannerRuntime, arguments: [String],
-      makeStore: @escaping () -> EKEventStore
+      makeStore: @escaping () -> EKEventStore,
+      authorizationStatus: @escaping () -> EKAuthorizationStatus = {
+        EKEventStore.authorizationStatus(for: .reminder)
+      }
     ) {
       self.defaults = defaults
       self.runtime = runtime
       self.arguments = arguments
       self.makeStore = makeStore
+      self.authorizationStatus = authorizationStatus
       enabled =
         defaults.bool(forKey: Self.enabledKey)
         && (!arguments.contains("-uiTesting") || arguments.contains("-uiTestingRemindersSync"))
@@ -169,6 +178,7 @@
     package func dispose() {
       disposed = true
       generation += 1
+      focusIdentities.removeAll()
       observers.forEach(NotificationCenter.default.removeObserver)
       observers.removeAll()
       debounce?.cancel()
@@ -269,6 +279,7 @@
     /// Forget the linkage (not the data). Call before wiping local data so the wipe is never mirrored to Apple.
     package func forgetLink() {
       generation += 1
+      focusIdentities.removeAll()
       debounce?.cancel()
       debounce = nil
       again = false
@@ -385,6 +396,7 @@
         }
         accepted = Remote(reminder, calendar: runtime.calendar)
       }
+      if let accepted { focusIdentities[accepted.id] = accepted.focusIdentity }
       return accepted
     }
 
@@ -463,6 +475,7 @@
           accepted = Remote(reminder, calendar: runtime.calendar)
           deletedReminderPayloads.removeValue(forKey: token)
         }
+        if let accepted { focusIdentities[accepted.id] = accepted.focusIdentity }
         return accepted
       }
     }
@@ -508,27 +521,25 @@
         }
         accepted = Remote(reminder, calendar: runtime.calendar)
       }
+      if let accepted { focusIdentities[accepted.id] = accepted.focusIdentity }
       return accepted
     }
 
-    /// Read-only identity lookup; it never connects, schedules reconciliation or requests access.
+    /// Rendering must never synchronously query ReminderKit. Confirmed writes still revalidate the native row.
     package func focusIdentity(_ task: OneTask) -> FocusIdentityResolution {
+      _ = version
       guard let id = task.externalID else { return .localOnly }
       guard hasAccess else { return .permissionDenied }
       guard isConnected else { return .unavailable }
-      guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder,
-        let source = reminder.calendar.source
-      else { return .notFound }
-      let repeating = reminder.hasRecurrenceRules
-      let due = reminder.dueDateComponents.flatMap {
-        Self.date(from: $0, calendar: runtime.calendar)
-      }
-      guard !repeating || due != nil else { return .unavailable }
-      return .available(
-        FocusIdentity(
-          provider: "apple.reminders", account: source.sourceIdentifier,
-          calendar: reminder.calendar.calendarIdentifier, item: reminder.calendarItemIdentifier,
-          occurrence: repeating ? due : nil))
+      guard let identity = focusIdentities[id] else { return .unavailable }
+      return .available(identity)
+    }
+
+    /// Called only with scalar rows copied by the import callback, after its generation/fence checks.
+    package func acceptFocusSnapshot(_ remote: [Remote]) {
+      focusIdentities = Dictionary(
+        remote.compactMap { row in row.focusIdentity.map { (row.id, $0) } },
+        uniquingKeysWith: { first, _ in first })
     }
 
     /// Keep the agreed completion fingerprint in step with the accepted user write. A repeating reminder
@@ -570,6 +581,7 @@
     /// A reminder as read from EventKit (plain values, safe to pass around).
     package struct Remote: Sendable {
       package let id: String
+      package let accountID: String?
       package let title: String
       package let notes: String
       package let isDone: Bool
@@ -584,9 +596,11 @@
 
       package init(
         id: String, title: String, notes: String, isDone: Bool, doneAt: Date?, due: Date?,
-        listID: String, listTitle: String, flagged: Bool, repeatRule: String?, repeats: Bool
+        listID: String, listTitle: String, flagged: Bool, repeatRule: String?, repeats: Bool,
+        accountID: String? = nil
       ) {
         self.id = id
+        self.accountID = accountID
         self.title = title
         self.notes = notes
         self.isDone = isDone
@@ -601,6 +615,7 @@
 
       init(_ r: EKReminder, calendar: Calendar) {
         id = r.calendarItemIdentifier
+        accountID = r.calendar.source?.sourceIdentifier
         title = r.title ?? ""
         notes = r.notes ?? ""
         isDone = r.isCompleted
@@ -611,6 +626,13 @@
         flagged = r.priority == 1
         repeatRule = RemindersSync.repeatRule(from: r.recurrenceRules)?.rawValue
         repeats = !(r.recurrenceRules ?? []).isEmpty
+      }
+
+      package var focusIdentity: FocusIdentity? {
+        guard let accountID, !repeats || due != nil else { return nil }
+        return FocusIdentity(
+          provider: "apple.reminders", account: accountID, calendar: listID, item: id,
+          occurrence: repeats ? due : nil)
       }
 
       package var fingerprint: String {
@@ -932,6 +954,7 @@
         again = true
         return
       }
+      acceptFocusSnapshot(remote)
       let remoteByID = Dictionary(remote.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
       var tasks = try context.fetch(FetchDescriptor<OneTask>())
       var base = loadSet(Self.baseKey)

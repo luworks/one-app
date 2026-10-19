@@ -238,3 +238,5 @@ partitioning, routine-only scope and primary-checkout paths for linked worktrees
 - `health-dashboard-ui.json`: deterministic launch scenarios consumed by `HealthMetricsTests`, including cross-category drag/relaunch, no-readable data and large type.
 - `health-records.json`: synthetic category events, workout sessions, paired blood pressure and profile values mirrored by the small inline `MockHealthSource` payload. Production never selects this source. These fixtures do not prove live HealthKit authorization, device coverage or every possible record combination.
 - `ios/Sources/TodayTestSupport/HealthSampleSeries.swift` (package-bound inline generator): seeded 180-day series for the entire numeric catalog; missing mindful values and stale body-fat readings are deliberate. `HealthCatalogTests` covers canonical units, daily sums versus averages, category codes, overlap union and calendar-day/DST splitting.
+
+- `phone-freeze-navigation.json`: synthetic native Calendar/Reminders import titles and unsent Chat draft for `TodayReminderCompletionTests/testImportedTimelineNavigationAndCancelledEditorsStayResponsive`; production adapters on the owned simulator only.

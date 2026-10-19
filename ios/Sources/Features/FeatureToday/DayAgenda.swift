@@ -551,7 +551,7 @@
       let ref = TodayFocus.reference(event.persistentModelID)
       return FocusTarget(
         identity: actions.focus.identity(
-          resolution: calendar.focusIdentity(externalID: event.externalID, occurrence: start),
+          resolution: calendar.cachedFocusIdentity(externalID: event.externalID, occurrence: start),
           localReference: ref, kind: "event", occurrence: event.repeats == nil ? nil : start),
         reference: ref, title: event.title)
     }
@@ -560,7 +560,7 @@
       let ref = "eventkit:" + event.eventIdentifier
       return FocusTarget(
         identity: actions.focus.identity(
-          resolution: calendar.focusIdentity(
+          resolution: calendar.cachedFocusIdentity(
             externalID: event.eventIdentifier, occurrence: event.start),
           localReference: ref, kind: "event", occurrence: event.repeats ? event.start : nil),
         reference: ref, title: event.title)
@@ -773,10 +773,11 @@
       }
       if let ref = record.localReference, ref.hasPrefix("eventkit:") {
         let id = String(ref.dropFirst("eventkit:".count))
-        if case .available(let identity) = calendar.focusIdentity(
+        if case .available(let identity) = calendar.cachedFocusIdentity(
           externalID: id, occurrence: record.identity.occurrence),
           identity == record.identity,
-          let title = calendar.title(externalID: id, occurrence: record.identity.occurrence)
+          let title = calendar.cachedEvent(externalID: id, occurrence: record.identity.occurrence)?
+            .title
         {
           return FocusTarget(identity: identity, reference: ref, title: title)
         }
@@ -868,7 +869,7 @@
       }
       if let ref = target.reference, ref.hasPrefix("eventkit:"),
         let native = calendar as? any NativeCalendarService,
-        case .available(let identity) = calendar.focusIdentity(
+        case .available(let identity) = calendar.cachedFocusIdentity(
           externalID: String(ref.dropFirst("eventkit:".count)),
           occurrence: target.identity?.occurrence),
         identity == target.identity
@@ -907,14 +908,14 @@
           id: "r\(event.persistentModelID.hashValue)@\(start.timeIntervalSince1970)",
           source: .local(event), title: event.title, start: start,
           end: start.addingTimeInterval(event.duration), isAllDay: event.isAllDay,
-          color: calendar.color(forExternalID: event.externalID) ?? .blue,
+          color: calendar.cachedEvent(
+            externalID: event.externalID ?? "", occurrence: start)?.color ?? .blue,
           repeats: event.repeats != nil)
       }
       if let ref = target.reference, ref.hasPrefix("eventkit:"),
-        let event = calendar.events(on: identity.occurrence ?? day).first(where: {
-          $0.eventIdentifier == String(ref.dropFirst("eventkit:".count))
-            && self.target($0).identity == identity
-        })
+        let event = calendar.cachedEvent(
+          externalID: String(ref.dropFirst("eventkit:".count)), occurrence: identity.occurrence),
+        self.target(event).identity == identity
       {
         return CalEntry(
           id: event.id, source: .system(event.eventIdentifier), title: event.title,
@@ -934,8 +935,8 @@
         }
       case .alarm: true
       case .local(let event):
-        event.externalID == nil || calendar.canDelete(externalID: event.externalID)
-      case .system(let id): calendar.canDelete(externalID: id)
+        event.externalID == nil || calendar.cachedCanDelete(externalID: event.externalID)
+      case .system(let id): calendar.cachedCanDelete(externalID: id)
       }
     }
 

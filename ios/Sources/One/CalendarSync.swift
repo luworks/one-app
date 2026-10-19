@@ -110,7 +110,7 @@
     /// (UI tests start with every calendar shown, so an earlier run can't hide events from a later one.)
     package private(set) var hiddenCalendarIDs: Set<String>
 
-    package var hasAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
+    package var hasAccess: Bool { authorizationStatus() == .fullAccess }
     package var isOn: Bool { !disposed && enabled && hasAccess }
 
     /// Apple's own event editor is used when Calendar access is on. UI tests keep the in-app editor (no permission prompts).
@@ -120,17 +120,22 @@
     @ObservationIgnored private let runtime: PlannerRuntime
     @ObservationIgnored private let arguments: [String]
     @ObservationIgnored private let makeStore: () -> EKEventStore
+    @ObservationIgnored private let authorizationStatus: () -> EKAuthorizationStatus
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var disposed = false
 
     package init(
       defaults: UserDefaults, runtime: PlannerRuntime, arguments: [String],
-      makeStore: @escaping () -> EKEventStore
+      makeStore: @escaping () -> EKEventStore,
+      authorizationStatus: @escaping () -> EKAuthorizationStatus = {
+        EKEventStore.authorizationStatus(for: .event)
+      }
     ) {
       self.defaults = defaults
       self.runtime = runtime
       self.arguments = arguments
       self.makeStore = makeStore
+      self.authorizationStatus = authorizationStatus
       enabled =
         defaults.bool(forKey: Self.enabledKey)
         && (!arguments.contains("-uiTesting") || arguments.contains("-uiTestingCalendarSync"))
@@ -263,9 +268,8 @@
       let predicate = store.predicateForEvents(
         withStart: interval.start, end: interval.end, calendars: visible)
       return store.events(matching: predicate)
-        .filter { !exclude.contains($0.eventIdentifier ?? "") }
         .map { e in
-          ExternalEvent(
+          let value = ExternalEvent(
             id: (e.eventIdentifier ?? UUID().uuidString) + "@\(e.startDate.timeIntervalSince1970)",
             eventIdentifier: e.eventIdentifier ?? "",
             title: e.title ?? "Untitled", location: e.location ?? "",
@@ -280,12 +284,78 @@
             isBirthday: e.calendar.type == .birthday,
             isHoliday: YearEventMarks.isHolidayCalendar(
               isSubscription: e.calendar.type == .subscription, title: e.calendar.title))
+          let identity = e.calendar.source.map {
+            FocusIdentity(
+              provider: "apple.calendar", account: $0.sourceIdentifier,
+              calendar: e.calendar.calendarIdentifier, item: e.calendarItemIdentifier,
+              occurrence: e.hasRecurrenceRules || e.isDetached ? e.occurrenceDate : nil)
+          }
+          acceptFocusSnapshot(
+            value, identity: identity, canDelete: e.calendar.allowsContentModifications)
+          return value
         }
+        .filter { !exclude.contains($0.eventIdentifier) }
     }
 
     package func events(on day: Date, excluding exclude: Set<String> = []) -> [ExternalEvent] {
       guard let interval = runtime.calendar.dateInterval(of: .day, for: day) else { return [] }
       return events(in: interval, excluding: exclude)
+    }
+
+    private struct FocusSnapshot {
+      let event: ExternalEvent
+      let identity: FocusIdentity?
+      let canDelete: Bool
+    }
+    @ObservationIgnored private var focusSnapshots: [String: [FocusSnapshot]] = [:]
+    @ObservationIgnored private var focusSnapshotVersion = -1
+
+    /// Import scalar values on the adapter's actor; never retain or transfer an EKEvent.
+    package func acceptFocusSnapshot(
+      _ event: ExternalEvent, identity: FocusIdentity?, canDelete: Bool
+    ) {
+      if focusSnapshotVersion != version {
+        focusSnapshots.removeAll()
+        focusSnapshotVersion = version
+      }
+      var rows = focusSnapshots[event.eventIdentifier] ?? []
+      rows.removeAll { $0.event.start == event.start }
+      rows.append(FocusSnapshot(event: event, identity: identity, canDelete: canDelete))
+      focusSnapshots[event.eventIdentifier] = rows
+    }
+
+    private func focusSnapshot(_ id: String, occurrence: Date?) -> FocusSnapshot? {
+      guard isOn, focusSnapshotVersion == version else { return nil }
+      return focusSnapshots[id]?.first {
+        if let occurrence {
+          return $0.event.start == occurrence || $0.identity?.occurrence == occurrence
+        }
+        return $0.identity?.occurrence == nil
+      }
+    }
+
+    package func cachedFocusIdentity(externalID: String?, occurrence: Date?)
+      -> FocusIdentityResolution
+    {
+      _ = version
+      guard let id = externalID else { return .localOnly }
+      guard hasAccess else { return .permissionDenied }
+      guard let identity = focusSnapshot(id, occurrence: occurrence)?.identity else {
+        return .unavailable
+      }
+      return .available(identity)
+    }
+
+    package func cachedEvent(externalID: String, occurrence: Date?) -> ExternalEvent? {
+      _ = version
+      return focusSnapshot(externalID, occurrence: occurrence)?.event
+    }
+
+    package func cachedCanDelete(externalID: String?) -> Bool {
+      _ = version
+      guard let id = externalID else { return true }
+      guard isOn, focusSnapshotVersion == version else { return false }
+      return focusSnapshots[id]?.contains { $0.canDelete } ?? false
     }
 
     /// Only immutable identifiers leave the adapter. Source IDs are device-local EventKit sources.

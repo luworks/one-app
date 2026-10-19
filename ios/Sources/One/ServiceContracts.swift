@@ -29,6 +29,10 @@
     func events(in interval: DateInterval, excluding: Set<String>) -> [ExternalEvent]
     func events(on day: Date, excluding: Set<String>) -> [ExternalEvent]
     func focusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution
+    /// Display-only import snapshots. These never query EventKit and never authorize a write.
+    func cachedFocusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution
+    func cachedEvent(externalID: String, occurrence: Date?) -> ExternalEvent?
+    func cachedCanDelete(externalID: String?) -> Bool
     func calendar(forExternalID id: String?) -> SystemCalendar?
     func place(forExternalID id: String?) -> TravelPlace?
     func color(forExternalID id: String?) -> Color?

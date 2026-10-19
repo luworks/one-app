@@ -34,7 +34,7 @@
     /// Whether Delete needs a question first: any repeating event, local or in Apple's calendar.
     private var isRepeating: Bool {
       switch entry.source {
-      case .system(let id): calendar.isRepeating(externalID: id)
+      case .system: entry.repeats
       case .local(let e): e.repeats != nil
       case .task, .alarm: false
       }
@@ -116,9 +116,9 @@
     private var canDelete: Bool {
       guard attention?.canDelete != false else { return false }
       switch entry.source {
-      case .system(let id): return calendar.canDelete(externalID: id)
+      case .system(let id): return calendar.cachedCanDelete(externalID: id)
       case .local(let event):
-        return event.externalID == nil || calendar.canDelete(externalID: event.externalID)
+        return event.externalID == nil || calendar.cachedCanDelete(externalID: event.externalID)
       case .task, .alarm: return true
       }
     }
