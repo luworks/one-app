@@ -1,13 +1,22 @@
-# one.
+# Today
 
-Interactive iOS prototype of **one.** — calendar on top, AI conversation below, everything else in a swipe-in drawer.
+Today (formerly "one.") is the native iPhone planner for calendar, reminders and alarms. Data stays local; AI proposes changes with Add/Apply and Undo. The HTML prototype in `src/` is an older design reference.
 
-```bash
-python3 scripts/build.py   # build dist/
-node scripts/serve.mjs     # preview at http://localhost:8787
+Start with [product principles](CLAUDE.md), [iOS development and troubleshooting](ios/README.md), and the [linked-module architecture](docs/engineering/architecture.md). [AGENTS.md](AGENTS.md) defines contribution and verification rules.
+
+Run all local/CI engineering commands through `./dev` from this repository root:
+
+```sh
+./dev help
+./dev doctor
+./dev bootstrap
+./dev generate
+./dev resolve
+./dev build Debug
+./dev test unit
 ```
 
-See `CLAUDE.md` for the product principles, architecture, tests and deploy steps.
+`doctor` is read-only; bootstrap installs pinned worktree-local tools and runtimes. Builds, simulator journeys, unsigned archives, signed releases and physical-device acceptance are separate evidence. See the iOS guide before using shared host resources or release commands.
 
 ## License
 

@@ -1,30 +1,62 @@
 # Today — iOS app (SwiftUI)
 
-The native app (formerly "one."). It puts calendar, reminders and alarms in one place. Direction: AI-native, data stays on the device, Apple Calendar and Apple Reminders are the source of truth (EventKit), alarms use AlarmKit. The HTML prototype in `src/` is the older design reference; the iOS app is now ahead of it. See `docs/goal-and-rubric.md` for the goal, roadmap and eval.
+The native app (formerly "one."). It puts calendar, reminders and alarms in one place. Direction: AI-native, data stays on the device, Apple Calendar and Apple Reminders are the source of truth (EventKit), alarms use AlarmKit. The HTML prototype in `src/` is the older design reference; the iOS app is now ahead of it. See [the goal and rubric](../docs/goal-and-rubric.md) for the goal, roadmap and eval.
 
-Requires Xcode 27 and iOS 27.
+## Development entry
 
-The display name is **Today**. The bundle id (`com.luworks.one`), the Xcode project and the target names (`One`, `OneUITests`) are unchanged.
+Run `./dev` from the repository root for all local/CI engineering operations. The executable parser in [cli.py](../scripts/devtools/cli.py) is the command authority; underlying scripts are adapters, not alternative workflows. The generated project is `ios/Today.xcodeproj`, specified by [project.yml](project.yml) and `Config/*.xcconfig`; do not hand-edit generated project files. The display name remains **Today**. Production identity remains `com.luworks.one`, model/intent module `One`, products `One.app`, `TodayWidgets.appex` and `ShareExtension.appex`.
+
+```sh
+./dev help
+./dev doctor
+./dev inventory
+./dev bootstrap
+./dev generate
+./dev resolve
+./dev plan --scheme Today --configuration Debug
+./dev build Debug
+./dev build Debug --scheme TodayMock
+./dev build Debug --scheme TodayWorkbench
+./dev build Release
+./dev test unit
+./dev test ui --only TodayUITests/<Suite>/<Method>
+./dev format --check
+./dev lint
+```
+
+Replace selector placeholders with discovered method IDs; repeat `--only` for a small representative set. Legacy `OneUITests/...` selectors are translated to `TodayUITests/...`. `test ios-unit`, `test integration` and `test snapshot` route to the actual Xcode test targets; `test core` and `test accessibility` select bounded UI journeys. The source inventory and expected/executed reconciliation belong to [the test contract](../scripts/testing/contract.py) and [groups.json](../tests/testing/groups.json). Missing execution, missing baselines and parser errors are failures, not passes. Only an explicitly authorized frozen final revision uses `./dev test release --full` for the complete collection, alone. Do not infer that collection ran from a Debug build.
+
+CI uses the same entry: `./dev ci <lane> --selection <selection.json> --output <fresh-directory> --sha <integrated-sha> --synthetic --no-distribute`. Read [CI adapter integration](../docs/engineering/ci-native-integration.md) for execution and artifact boundaries. Local success does not establish hosted CI acceptance.
+
+## Pinned tools and host ownership
+
+Xcode **27.1 / 27A9275** supplies Swift **6.4** and Apple swift-format; Swift language mode is **6**, deployment iOS **27.0**. The [tool pins](../docs/engineering/tool-pins.json) own downloaded CLI versions/checksums: XcodeGen 2.46.0, SwiftLint 0.65.1, mise 2026.10.14, Ruff 0.17.1 and actionlint 1.7.12. [.mise.toml](../.mise.toml) and [mise.lock](../mise.lock) pin Ruby 3.3.12 and Python 3.14.8; [Gemfile.lock](../Gemfile.lock) owns Bundler 4.0.16 and fastlane 2.241.1. [Package.resolved](Dependencies/Package.resolved) is the SwiftPM lock authority; SnapshotTesting 1.19.6 is test-only. Pins describe requirements, not proof that tools are installed. `./dev bootstrap` verifies/downloads local tools and installs locked runtimes; do not substitute global versions.
+
+Debug/Release controls optimization. Mock/Live selects a separate dependency graph: Today is live in both configurations; TodayMock and TodayWorkbench link TodayTestSupport. UI journeys use TodayMock. TodayMock shares the production bundle ID for compatibility and must only use its owned simulator; never install both variants together or put Mock on a phone. Workbench has its own development identity.
+
+`./dev inventory` reports shared host and worktree derived-data locks. The adapter owns one named simulator and reuses its cache under the primary checkout's `tests/results/devtools/`. Coordinate with the integration/performance host owner before heavy work; a lock is mutual exclusion, not permission to kill another owner's process or delete its lock. Reuse the owned simulator/cache, then shut down the simulator after the related batch. Do not use a hard-coded shared UDID or cold-boot extra runners.
+
+## Troubleshooting
+
+- Missing or mismatched tools: read `./dev doctor`, then use `./dev bootstrap`; keep the exact Xcode build and locked runtime selection. Do not install a global fallback.
+- Busy host/cache: inspect `./dev inventory`, coordinate with the current owner and continue independent work. Do not delete lock files, kill a runner or reuse its simulator.
+- Dependency or generated-project drift: use `./dev generate` and `./dev resolve` against the tracked pins. A workspace lock copy must match `Dependencies/Package.resolved`; do not update dependencies to hide a mismatch.
+- Unknown selector, no tests or missing snapshot baseline: check current source discovery and the selected group in the shared test contract. Preserve the failure and fix selection or record/review the actual baseline; a successful build cannot replace execution.
+- Native capture failure: use a registered scene/scenario and a new `.png` path with no existing adjacent `.json` receipt. Retain the failed command evidence; do not relabel stale output as a current capture.
+
+`./dev report <retained-report-path>` reads existing evidence. Generated logs, screenshots and complete finished xcresults belong in the primary checkout's `tests/results/`, indexed through `tests/qa/journal.py`. This is the existing QA history, separate from app Activity. Preserve raw artifacts and distinguish build, logic, simulator and device results in handoff.
 
 ## Test environment
 
-One named simulator per session that runs tests (`Today-<purpose>`, iPhone 18 Pro Max, iOS 27) with its own
-`-derivedDataPath`, so nobody queues; never run tests on another session's simulator. **Today-Dogfood**
-(`341B8786-E55B-4ECE-8720-BF1F2DF73899`) is the main session's; the commands below use it.
-
 The test dataset lives in `tests/fixtures/today-dataset.json`: lists, reminders (flagged, overdue, completed, repeating,
 one that rings), events (repeating, all-day, across the week), alarms (on, off, repeating, once) and chats (one archived).
-Dates are relative to the day it loads. Load it into a fresh in-memory store (Apple Calendar / Reminders sync stays off):
+Dates are relative to the day it loads. TodayMock's test composition loads it into an isolated store with live sync off. Use the `./dev test` adapters to select and launch journeys on the owned simulator.
 
-```bash
-xcrun simctl launch 341B8786-E55B-4ECE-8720-BF1F2DF73899 com.luworks.one -uiTesting -dataset "$PWD/tests/fixtures/today-dataset.json"
-```
-
-UI tests use it with `app.launchArguments = TestData.launchArguments`.
+UI tests use it with `app.launchArguments = TestData.launchArguments`. The launch arguments below belong to TodayMock test composition, not to Live dependency selection.
 
 Tests that need Apple Calendar (`CalendarSyncTests`, `CalendarDeleteSyncTests`, `CalendarRecurringDeleteTests`) add
 `-uiTestingCalendarSync` and use the simulator's own calendar, never a real one. Debug-only launch hooks for them
-(handled in `HomeView`'s launch task, implemented in `CalendarSync`):
+(routed by development composition to the explicit calendar adapter):
 
 - `-debugCreateSystemEvent <title>` — a one-off event at the top of the current hour, as if made in the Calendar app.
 - `-debugCreateRepeatingEvent <title>` — a daily event at the top of the current hour, starting yesterday.
@@ -32,26 +64,23 @@ Tests that need Apple Calendar (`CalendarSyncTests`, `CalendarDeleteSyncTests`, 
   Calendar app. Tests also use it to clean up.
 - `-uiTestingStore <name>` — keeps the test store in a file, so a second launch sees what the first saved.
 
-## SwiftUI visual development
+## Native visual development
 
-Use `python3 scripts/swiftui_preview.py` from the repository root for the pinned
-axe three-screen gallery and strict Health detail watch. See
-[`docs/swiftui-preview-workflow.md`](../docs/swiftui-preview-workflow.md) for
-ownership, setup, cleanup, known limitations and worktree use, and
-[`docs/qa/swiftui-preview.md`](../docs/qa/swiftui-preview.md) for measured evidence.
-Obtain the host's shared-resource window before building or booting a simulator.
+```sh
+./dev ui open --scene clock.stopwatch --scenario normal
+./dev ui capture --scene clock.stopwatch --scenario normal --output /absolute/fresh/capture.png
+./dev ui gallery
+```
 
-## Run it on your iPhone (free Apple ID, no paid account)
+The 50-ID [scene registry](Sources/TodayScenes/SceneRegistry.swift) owns valid scene/scenario pairs. Workbench, previews and native captures use the real feature constructors through `SceneSession`; unsupported states fail validation. See [gallery](../docs/engineering/gallery.md), [visual testing](../docs/engineering/visual-testing.md) and [scene session boundaries](../docs/engineering/scene-session-integration.md). The older [axe workflow](../docs/swiftui-preview-workflow.md) retains measured history and limitations; use the `./dev ui` entry for current work. Functional acceptance still requires the focused native journey.
 
-1. Open `ios/One.xcodeproj` in Xcode.
-2. Xcode → Settings → Accounts → add your Apple ID.
-3. Select the **One** target → Signing & Capabilities → Team: pick your "(Personal Team)".
-   If Xcode says the bundle identifier is taken, change `com.luworks.one` to something unique, e.g. `com.<yourname>.one`.
-4. Plug in the iPhone, unlock it and tap Trust. On the phone turn on Settings → Privacy & Security → Developer Mode (it restarts).
-5. Pick the iPhone as the run destination at the top of Xcode and press ⌘R.
-6. First launch only: on the phone go to Settings → General → VPN & Device Management → your Apple ID → Trust.
+## Release and physical-device states
 
-With a free account the install expires after 7 days; just press ⌘R again with the phone connected.
+`./dev release preflight-local --commit <full-sha> --version <version> --build <integer>` checks unsigned local readiness. `./dev release archive-local` forwards fastlane key/value options (`commit:`, `version:`, `build:`, `archive:`, `derived_data:`); `./dev release validate-local` uses the preflight options plus `--archive <path>`. Use a fresh archive outside the checkout and the owned cache. See [release integration](../docs/engineering/release-integration.md) and [release tooling](../scripts/release/README.md) for exact arguments and retained maps/provenance.
+
+Unsigned source readiness, an unsigned device archive, signed archive validation, export/upload and Apple acceptance are separate states. Local readiness reports `signing=not_checked` and `distribution=not_authorized`. Signed commands require existing matching signing material and release-specific authorization enforced by the tooling. Current automatic signing settings do not establish signed readiness; missing manual distribution prerequisites remain blocked. Do not change accounts, certificates, profiles or signing settings as troubleshooting.
+
+Phone installation and capability checks require an explicit device task. Without an authorized device, trust/signing prerequisites and a completed run, report device verification as blocked or not run. Simulator builds do not prove real AlarmKit ringing, Health permissions, Apple Intelligence, installed Shortcuts or old-install upgrade behavior. This guide records no final-collection or device pass; retain actual results in the existing QA journal rather than adding a status ledger here.
 
 ## What's in the app
 
@@ -72,32 +101,25 @@ Four tabs: **Today · Calendar · Reminders · Clock** as pills on top (swipe si
 - **Settings, continued** — in this order: Appearance; Apple Calendar, Apple Reminders and Alarms (switches, the calendars list, permissions); **Today** (show overdue, show alarms, scroll to now, Show Tomorrow, Evening starts at 17:00 / 18:00 / 19:00 / 20:00 / Off, Show free time, Suggest times for reminders, Travel time, Health summary and metrics); **Calendar** (Dim past days, First day of the week System / Sunday / Monday, Show week numbers, Open Calendar on Last used / Week / Month / Year); **Reminders** (New reminders go to Auto or one list: used by Ask when no list clearly fits, by the + quick add and by Share; existing reminders never move) and Smart Lists; **Alarms** (snooze length and sound a new alarm starts with); **AI** (Automatic changes, Suggestions on the Ask page, Archive finished chats); Activity → Activity data (what is recorded and where, pause, a switch per category, how long changes are kept, export, clear); About; Delete All Data (two confirmations; never touches Apple Calendar or Apple Reminders). Every default is what the app did before the choice existed. The new choices live in `Preferences.swift` (keys, defaults, plain readers; unit-tested in `PreferencesTests`) and are read with `@AppStorage`; their rows are in `SettingsRows.swift`. UI tests start from the defaults (`-uiTesting` clears these keys; `-uiTestingPrefs dimPastDays=0,firstWeekday=monday,eveningHour=-1` sets some up front; `-uiTestingKeepPreferences` keeps them across a relaunch); `SettingsChoicesTests` flips the real switches and compares screen pixels for the dimming and the missing weekend tint.
 - **Habits are gone.** No tab, chips or streaks. The `Habit` model remains in the SwiftData schema, unused, so existing installs migrate without losing data.
 
-## Files (`ios/One/`)
+## Source map
 
-- `OneApp.swift` — app entry; builds the SwiftData container (`OneTask`, `OneEvent`, `OneAlarm`, `OneList`, `ChatThread`, `Habit`); `-uiTesting` uses an in-memory store, `-dataset <path>` fills it from the test dataset (`TestDataset.swift`).
-- `Models.swift` — `OneTask` (planned time flexes, `due` never moves) and `OneEvent` (fixed). `OneList.swift` — reminder lists and their palette; `ListActions.swift`, `ListEditor.swift` — create, rename, delete, color and symbol.
-- `OneAlarm.swift` — `OneAlarm` model (with its stable AlarmKit id). `AlarmEditor.swift` — the Clock-style row and the Add/Edit Alarm sheet. `AlarmCenter.swift` — live AlarmKit state. `AlarmSounds.swift` — bundled tones. `TimerSection.swift`, `TimerPicker.swift`, `TimerCard.swift`, `TimerDial.swift`, `TimerController.swift`, `TimerList.swift`, `TimerRecents.swift`, `TimerRows.swift`, `TimerPhrase.swift` — the timers.
-- `Habits.swift` — retired `Habit` model, kept only for schema migration.
-- `Logic.swift` — pure logic with no SwiftUI/SwiftData so it is unit-testable: repeat rules, recurrence, day labels, `DayPlanner`, `ReminderPlan`, `AlarmPlan`. Also pure: `ConversationHistory.swift`, `Dialogue.swift`, `QuickTime.swift`, `TimerDial.swift`.
-- `HomeView.swift` — app shell: tab pills, menu button, bottom bar (Ask AI, +), sidebar drawer, each tab's kept place. `Drawer.swift` — the drawer drag/slide mechanics.
-- `YearMarks.swift` (pure, in `swift test`) and `YearMarksView.swift` — what the Calendar's Year view marks: holiday day numbers computed from rules (US, China, International sets; Settings → Holidays in Year), "unusually busy" days (own one-off items only, top tenth of the user's active days, at least 3) and today. Design and plan: `docs/design/year-view.md`.
-- `DayAgenda.swift` — the day view used by Today. `CalendarView.swift` — Week, Month and Year; `CalendarEntries.swift` — merges system events, own events and planned tasks for it.
-- `RemindersView.swift` — the Reminders tab (smart lists, My Lists, Edit). `ReminderListScreen.swift` — one list with the inline New Reminder row (`NewReminderDraft.swift`). `QuickReminderSheet.swift` — Due-style quick add; `ReminderSuggest.swift` — its guesses; `ListGuess.swift` — which list a new reminder belongs to. `AlarmsView.swift` — the Alarms tab.
-- `Rows.swift` — event and task rows with the swipe and long-press gestures; `RowActions.swift` — the shared swipe buttons; `EntryActions.swift` — the same gestures on calendar entries; `TaskActions.swift` — complete, delete, Undo toast and shake to undo.
-- `Editors.swift` — task and event editors. `SearchView.swift` — search across reminders, events and alarms. `SettingsView.swift` — Settings. `FirstRun.swift` — first-run access to Calendar, Reminders and alarms.
-- `Capture.swift` (rule parser), `Understanding.swift` and `AICapture.swift` (on-device model), `CaptureStack.swift` (several items from one line), `Editing.swift` (move / delete existing items), `Dialogue.swift` (follow-ups). `AskView.swift` — the AI page; `VoiceInput.swift` — dictation.
-- `CalendarSync.swift` — EventKit bridge for Apple Calendar events, plus wrappers for Apple's own event editor, viewer and calendar chooser. Debug builds accept `-seedCalendarDemo` (`CalendarDemoSeed.swift`). `RemindersSync.swift` — two-way sync with Apple Reminders; debug-only hooks `-uiTestingAppleOp`, `-uiTestingAppOp` and `-uiTestingSyncDump` let `RemindersSyncBothWaysTests` change either side and read both back. `OverdueTidy.swift` — the tidy-overdue suggestions (unit-tested).
-- `Ledger.swift` — `Ledger` (record, batched write into the Activity store, prune, Undo, `protectedRefs`), `LedgerMigration` (the one-time import), `GrantStore`, `AutoPlan`, the `AIGrant` model, and the old `LedgerEntry` model (kept in the schema, unused since the store took over, like `Habit`). `LedgerLogic.swift` (actors, filters, formatting, undo rules) and `AutonomyPolicy.swift` (what a grant may cover) are pure and unit-tested. `ActivityView.swift` — the Activity screen. UI tests: `LedgerTests` (`-uiTestingGrant` starts with the grant; screenshots in `docs/qa/ledger/`), `ActivityDataTests`.
-- Activity data store — see "Activity data" below. Pure (compiled into `swift test`): `ActivityEvent.swift`, `ActivityStore.swift`, `ActivityRecorder.swift`, `ActivityLedger.swift`, `ActivityEvents.swift`, `ActivityExport.swift`; `Shared/ActivityOutbox.swift` (the only file extensions use). App side: `ActivityCenter.swift`, `ActivityDataView.swift`.
-- `Reminders.swift` — local notifications (Done / Snooze / Tomorrow actions, overdue badge). Despite the name this is not Apple Reminders. `Ringer.swift` — AlarmKit scheduling for alarms and "Ring as alarm" items.
-- `Sidebar.swift` (search, chats, New chat, Settings), `ChatThread.swift` (saved AI conversations, text only), `ChatAutoArchive.swift`, `QuickActions.swift` (Home Screen quick actions), `WidgetFeed.swift` (writes the widget snapshot), `LaunchTimer.swift`, `SampleData.swift` (first-launch items), `DevImport.swift` (debug-only import of a private export).
+[Architecture](../docs/engineering/architecture.md) owns the dependency contract. [Package.swift](Package.swift) owns actual links and source membership; production tests import these same implementations.
 
-## Widgets (`ios/TodayWidgets/`, `ios/Shared/`)
+- `App/OneApp.swift`: executable assembly; `Sources/TodayShell/`: navigation, destinations and lifecycle.
+- `Sources/TodayCore/`: Foundation domain rules, policies, preferences, runtime and contracts. `Sources/TodayShared/`: extension-safe widget/inbox/outbox/speech formats.
+- `Sources/TodayData/`: real Activity SQLite, recorder, import/export and retention. `Sources/TodayPlatform/`: model-free system adapters and instrumentation. `Sources/TodayDesignSystem/`: adaptive native components.
+- `Sources/One/`: persistent models, model-bound services/actions, ledger/grants, store and intent compatibility bridge. Planned time remains separate from deadline; `Habit` and `LedgerEntry` stay in the schema.
+- `Sources/TodayPlannerUI/`: shared model-bound rows/actions presentation. `Sources/Features/Feature{Today,Calendar,Reminders,Clock,Ask,Settings,Activity,Search,Health}/`: actual screens and behavior.
+- `Sources/TodayTestSupport/`: deterministic services/Health sources, outside production. `Development/`: Mock/Workbench composition, fixtures and SceneSession. `Sources/TodayScenes/`: Foundation registry metadata.
+- `One/`: bundled resources (including cities and sounds), not the old source directory. `TodayWidgets/` and `ShareExtension/`: extension entries. `Sources/One/AlarmActivity.swift` retains explicit identity-sensitive extension membership.
+- `Eval/Tests/OneLogicTests/`, `SceneRegistryTests/`, `TodayIntegrationTests/`, `TodaySnapshotTests/` and `OneUITests/`: host logic, registry, iOS disk reader, native snapshots and UI journeys. Run through `./dev test`.
+
+## Widgets (`ios/TodayWidgets/`, `ios/Sources/TodayShared/`)
 
 One widget, **Next Up**: the next three things today (events, reminders with a time, alarms), merged and sorted by time,
 all-day first. Lock Screen: rectangular (the next item only, readable at half width: a bold "15:00 · in 24:59" line with a live
 timer, "Now · until 16:00", "Leave 14:20" or "All day", and a small "+2" for what else is left, then the title on up to two lines;
-words in `Shared/LockScreenNext.swift`; or "Nothing else today" plus tomorrow's first item),
+words in `Sources/TodayShared/LockScreenNext.swift`; or "Nothing else today" plus tomorrow's first item),
 circular (next time in a ring of how much of today is done) and inline (above the clock). Home Screen: small (next item,
 "in 2 hr") and medium (next three, each row opens Today on its day via `today://today?day=YYYY-MM-DD`).
 
@@ -113,7 +135,7 @@ circular (next time in a ring of how much of today is done) and inline (above th
 - Background refresh (`com.luworks.one.widgetRefresh`, a `BGAppRefreshTask` booked when the app goes to the background and
   re-booked by each run, about every three hours and never later than just after midnight): pulls Apple Reminders and rewrites the snapshot without the app being opened. iOS decides
   when it actually runs.
-- `Shared/WidgetSnapshot.swift` is compiled into both targets (and into `swift test` as `OneShared`): the snapshot model,
+- `Sources/TodayShared/WidgetSnapshot.swift` is compiled into both targets (and tested through `./dev test unit` as `TodayShared`): the snapshot model,
   `NextItems` (selection, order, tomorrow fallback, live merge, timeline and reload dates), `WidgetItem.eventRows` and
   `WidgetLink`.
 - Add it: long-press the Lock Screen → Customize → Lock Screen → tap the widget area under the clock (or the date line
@@ -123,7 +145,7 @@ circular (next time in a ring of how much of today is done) and inline (above th
 
 Share → **Today** from Safari or any app that shares text: the page title (or the text's first line) becomes the title, the
 link and the rest of the text the note; pick No Date / Today / Tomorrow / Next Week; nothing is added until you tap Add.
-The extension never opens SwiftData: it appends to `share-inbox.json` in the App Group (`Shared/ShareInbox.swift`, with a
+The extension never opens SwiftData: it appends to `share-inbox.json` in the App Group (`Sources/TodayShared/ShareInbox.swift`, with a
 file coordinator), and the app takes everything there when it becomes active, adds the reminders (which sync to Apple
 Reminders when that is on) and shows an Undo toast. Tests: `ShareInboxTests` (logic), `ShareImportTests` (the app side,
 via `-uiTestingShare <title>`) and `ShareSheetTests` (end to end through Safari's real Share sheet; skips without network).
@@ -133,10 +155,10 @@ Debug persistence journeys use `-uiTestingStore <unique-name> -uiTestingShareID 
 uses a deterministic share ID, and exposes `shareImport.testState` (committed matching task/receipt and pending-inbox counts).
 Only the first launch adds `-uiTestingShare <title>`; later launches use `-uiTestingShareInbox` without reseeding.
 `-uiTestingShareFailAcknowledgment` leaves the inbox pending; `-uiTestingShareFailSave` explicitly throws before
-SwiftData save and rolls back the import context. Both are DEBUG-only injections, not evidence of spontaneous storage failures.
+SwiftData save and rolls back the import context. Both are developer test injections, not evidence of spontaneous storage failures.
 
 
-## Activity data (`One/Activity*.swift`, `Shared/ActivityOutbox.swift`)
+## Activity data (`Sources/TodayData/`, `Sources/One/ActivityCenter.swift`, `Sources/TodayShared/ActivityOutbox.swift`)
 
 One app-private SQLite file, `Application Support/Activity/activity.sqlite` (system `SQLite3`, no dependency, WAL, `PRAGMA user_version` migrations), holds everything Today records about its own use. Research, schema reasons and numbers: `docs/research/activity-data-store.md`. It is the home of the Activity ledger (tier 1) and of the AI, usage and system events around it.
 
@@ -150,9 +172,9 @@ One app-private SQLite file, `Application Support/Activity/activity.sqlite` (sys
 - The old SwiftData `LedgerEntry` rows are copied into the store once at launch (`LedgerMigration` → `LedgerImport`: batches of 500, keyed on the entry's UUID, so it is idempotent and resumes after a crash; the flag `ledger_migrated` is set only when every old row is in the store). The old rows are deleted only in a later launch than the verified copy. The model stays in the schema, unused, so existing installs migrate. A file SQLite cannot read is moved aside (`.damaged-<time>`), never deleted.
 - Settings → Activity → Activity data: what is recorded and where, pause, a switch per category, keep chat text, retention, Export (JSON Lines: every field including snapshots and card diffs; CSV: one flat row per event, RFC 4180) through the share sheet, Clear (names the count; also the old rows). Delete All Data clears it too. The Activity screen carries one line saying it is stored only on this iPhone.
 
-**Tests.** `swift test` from `ios/`: `ActivityStoreTests` (schema and migrations, paging, filters, search incl. Chinese, retention and rollups, snapshots, export formats, query plans, corrupt file), `ActivityRecorderTests` (buffering, settings, event shapes, outbox round trip across the extension/app boundary), `ActivityLedgerTests` (mapping, import, dry run, resume). UI: `ActivityDataTests` (Settings page, pause, Clear, paging 400 rows, export sheet, paused ⇒ no automatic changes, and the real import of old `LedgerEntry` rows across two launches) and `LedgerTests`. Debug launch hooks: `-uiTestingActivityRows <n>` (n synthetic changes), `-uiTestingLegacyLedgerRows <n>` (n old SwiftData ledger rows, to test the import), `-uiTestingActivityPaused`, and `-uiTestingStore <name>` also keeps `<name>.activity.sqlite` in the temp folder.
+**Tests.** `./dev test unit`: `ActivityStoreTests` (schema and migrations, paging, filters, search incl. Chinese, retention and rollups, snapshots, export formats, query plans, corrupt file), `ActivityRecorderTests` (buffering, settings, event shapes, outbox round trip across the extension/app boundary), `ActivityLedgerTests` (mapping, import, dry run, resume). UI: `ActivityDataTests` (Settings page, pause, Clear, paging 400 rows, export sheet, paused ⇒ no automatic changes, and the real import of old `LedgerEntry` rows across two launches) and `LedgerTests`. Debug launch hooks: `-uiTestingActivityRows <n>` (n synthetic changes), `-uiTestingLegacyLedgerRows <n>` (n old SwiftData ledger rows, to test the import), `-uiTestingActivityPaused`, and `-uiTestingStore <name>` also keeps `<name>.activity.sqlite` in the temp folder.
 
-**Speed.** `ACTIVITY_BENCH_ROWS=100000 swift test --filter testBenchmarkLarge` prints insert and query timings on the Mac. On a phone, debug builds have Settings → Activity data → "Run speed test (100,000 rows)", which does the same in a throwaway file and shows SQLite's version, whether FTS5 and the JSON functions exist, and the timings. Mac numbers (Apple Silicon, `swift test` debug build, 100,000 rows, including building the events in Swift): insert about 42,000 rows/s (2.4 s, 47 MB file), newest page of 150 in 1.8 ms, a page 10,000 rows down in 1.6 ms, a one-day count in 0.1 ms, a `LIKE` search over titles in 29 ms; SQLite 3.51, FTS5 and the JSON functions present. The research document's release-build figure for raw inserts was 270,000 rows/s. No iPhone number exists yet: it needs a Debug install on a phone.
+**Speed.** `ACTIVITY_BENCH_ROWS=100000 ./dev test unit --only TodayTests/ActivityStoreTests/testBenchmarkLarge` prints insert and query timings on the Mac. On a phone, debug builds have Settings → Activity data → "Run speed test (100,000 rows)", which does the same in a throwaway file and shows SQLite's version, whether FTS5 and the JSON functions exist, and the timings. Mac numbers (Apple Silicon, host debug build, 100,000 rows, including building the events in Swift): insert about 42,000 rows/s (2.4 s, 47 MB file), newest page of 150 in 1.8 ms, a page 10,000 rows down in 1.6 ms, a one-day count in 0.1 ms, a `LIKE` search over titles in 29 ms; SQLite 3.51, FTS5 and the JSON functions present. The research document's release-build figure for raw inserts was 270,000 rows/s. No iPhone number exists yet: it needs a Debug install on a phone.
 
 **Export formats.** One event per JSONL line: `uid, device, ts` (unix ms), `tz` (minutes east), `day`, `tier`, `kind`, `actor`, `channel`, `session`, `thread`, `subject_kind`, `subject_ref`, `approval`, `undo_of`, `title`, `before_txt`, `after_txt`, `before_ts`, `after_ts`, `props` (object), `v`, plus `snapshot` (base64) and `content` (`[{field, before, after}]`). Unknown keys are ignored when reading.
 
@@ -161,15 +183,15 @@ One app-private SQLite file, `Application Support/Activity/activity.sqlite` (sys
 - **Redacted upload to the product team.** A separate pipeline that does not exist: our own backend, `ActivityEvent.redacted()` (drops titles, text, thread, refs; coarsens time to the hour) shown to the user before sending, explicit opt-in, and a rewording of "data stays local" in `CLAUDE.md`. Decision deferred (document §7.3).
 - Phase 3 to 5 of the document: coalescing and a rollup job beyond what prune does, local learning loops (chip ranking from tap history, "Save as eval case" for edited cards), a diagnostics export with preview.
 
-## Siri, Spotlight and Shortcuts (`One/AppIntents.swift`)
+## Siri, Spotlight and Shortcuts (`Sources/One/AppIntents.swift`)
 
 App Shortcuts, English phrases in code and Simplified Chinese in `One/AppShortcuts.xcstrings`: **Add Reminder**
 (a title or one sentence, read by `CaptureParser`; always a reminder), **Start Timer** ("Start a timer in Today", "Set a
 Today timer": Siri asks "How long?" and `TimerPhrase` reads "ten minutes", "an hour and a half", "十分钟", "半小时"),
 **Start Timer for…** ("Start a timer in Today for 10 minutes": the length is one of a few presets so Siri hears it in one
 breath), **What's Next Today** (the Next Up widget's three items, spoken plus a snippet) and
-**Open Today** (the `today://today` link). They run in the app's process on the app's store (`OneStore` in `OneApp.swift`).
-Pure parts: `One/IntentLogic.swift`, `Shared/NextUpSpeech.swift` (tested in `IntentTests`).
+**Open Today** (the `today://today` link). They run in the app's process on the app's store (`OneStore` in `Sources/One/OneStore.swift`).
+Pure parts: `Sources/TodayCore/IntentLogic.swift`, `Sources/TodayShared/NextUpSpeech.swift` (tested in `IntentTests`).
 
 **Timers** (`TimerController.swift`, `TimerList.swift`, `TimerRows.swift`, `TimerIntents.swift`): every timer Today starts is a
 real AlarmKit countdown, as many as you like (one Focus/break preset timer at a time alongside other timers).
@@ -177,13 +199,13 @@ They show on the Today tab as up to two live rows at the top (`Text(timerInterva
 Pause/Resume/Stop, tap to open the Timer tab, "+N more") and as running ring cards above the Timer picker. End times live in
 `TimerStore` (UserDefaults), because AlarmKit has no fire date; `TimerController.refresh()` lines them up with
 `AlarmManager.alarms` on launch, foreground and every AlarmKit update (`TimerList.reconcile`), so a timer started by Siri
-while the app was closed is there at once. Debug UI tests: `-uiTestingTimers 600:Pasta,1500,300:Tea:paused` seeds timers and
-swaps AlarmKit for a fake (the simulator denies AlarmKit); see `TodayTimerTests`. Also adopts the iOS 27 **Clock schema**
+while the app was closed is there at once. TodayMock UI tests: `-uiTestingTimers 600:Pasta,1500,300:Tea:paused` seeds timers and
+uses the development TimerService instead of the live AlarmKit driver; see `TodayTimerTests`. Also adopts the iOS 27 **Clock schema**
 (`@AppIntent(schema: .clock.createTimer / pauseTimer / resumeTimer / cancelTimer`, `.clock.timer` entity) so Siri can hand
 "set a timer" to Today. What iOS allows and what it does not (timers made in the Clock app or by Siri's built-in "set a
 timer" cannot be read by any app): `docs/research/timer-siri-sync.md`.
 
-Tests: `ios/Eval/` (logic unit tests, NL-capture eval, `run-eval.sh`, `cold-start.sh`) and `ios/OneUITests/` (XCUITest journeys). Run `ios/Eval/run-eval.sh` or `ios/Eval/run-eval.sh --ui`.
+Tests: `ios/Eval/Tests/OneLogicTests/` and `ios/OneUITests/`; use `./dev test unit` and focused `./dev test ui --only TodayUITests/<Suite>/<Method>`. Historical eval scripts are not a second entry.
 
 ## Next
 
