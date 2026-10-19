@@ -42,6 +42,103 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(r.preflight(self.f.root, self.f.args, self.f.env).data['status'], 'ready')
         self.assertTrue(all('-allowProvisioningUpdates' not in a and 'archive' not in a for a in self.f.calls))
 
+    def test_today_app_module_is_required_while_product_remains_one(self):
+        original = self.f.run
+        def wrong_module(argv, root):
+            raw = original(argv, root)
+            if '-showBuildSettings' in argv:
+                rows = json.loads(raw)
+                rows[0]['buildSettings']['PRODUCT_MODULE_NAME'] = 'One'
+                return json.dumps(rows).encode()
+            return raw
+        r.run.side_effect = wrong_module
+        self.blocked('release_signing_settings_mismatch', lambda: r.check_signing(self.f.root, self.f.args.team, self.f.env))
+
+    def test_workspace_lock_is_equal_but_never_a_tracked_authority(self):
+        path = self.f.root / 'ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
+        path.parent.mkdir(parents=True)
+        path.write_bytes((self.f.root / 'ios/Dependencies/Package.resolved').read_bytes())
+        r.check_git(self.f.root, self.f.args.commit)
+        self.assertNotIn(str(path.relative_to(self.f.root)), r.lock_hashes(self.f.root))
+        self.assertFalse(any(str(path.relative_to(self.f.root)) in call for call in self.f.calls))
+        path.write_text('drift')
+        self.blocked('workspace_package_lock_mismatch', lambda: r.lock_hashes(self.f.root))
+
+    def test_transitive_development_graph_is_blocked(self):
+        self.f.package['targets'][0]['dependencies'] = [{'byName': ['TodayScenes', None]}]
+        self.blocked('development_dependency_in_release_graph', lambda: r.check_project(self.f.root))
+
+    def test_release_graph_rejects_fixture_source_membership(self):
+        self.f.project['targets']['Today']['sources'].append({'path': '../tests/fixtures'})
+        self.blocked('development_source_in_release_graph', lambda: r.check_project(self.f.root))
+
+    def test_local_state_does_not_query_identity_or_accept_distribution(self):
+        self.f.args.team = ''
+        result = r.local_preflight(self.f.root, self.f.args).data
+        self.assertEqual(result['status'], 'ready')
+        self.assertEqual(result['readiness'], 'unsigned_local')
+        self.assertEqual(result['evidence'], 'source_checks_only')
+        self.assertFalse(any(call[0] in ('security', 'codesign') for call in self.f.calls))
+        receipt = self.f.args.archive / 'release-provenance.json'
+        receipt.unlink()
+        r.seal(self.f.root, self.f.args, local=True)
+        r.validate_archive(self.f.root, self.f.args, local=True)
+        self.blocked('archive_readiness_mode_mismatch', self.validate)
+        self.assertFalse(any(call[0] in ('security', 'codesign') for call in self.f.calls))
+
+    def test_missing_privacy_license_and_development_link_object_block(self):
+        app = self.f.args.archive / 'Products/Applications/One.app'
+        for file, code in [('PrivacyInfo.xcprivacy', 'required_privacy_manifest_missing'),
+                           ('LICENSE', 'app_license_missing_or_changed'),
+                           ('ThirdPartyNotices.txt', 'resource_license_notice_missing')]:
+            path = app / file
+            data = path.read_bytes()
+            path.unlink()
+            self.f.reseal()
+            self.blocked(code, self.validate)
+            path.write_bytes(data)
+        link = self.f.args.archive / 'ReleaseEvidence/One.map'
+        original = link.read_text()
+        # Harmless symbol/source strings outside the object table are ignored.
+        link.write_text(original.replace('/build/One.build', '/Users/example/tests/results/Build/One.build') + '# Symbols:\n0x0 TodayTestSupport harmless string\n')
+        self.f.reseal()
+        self.validate()
+        link.write_text(original.replace('/build/One.build/Models.o', '/build/TodayTestSupport.build/TestClock.o'))
+        self.f.reseal()
+        self.blocked('development_object_in_archive', self.validate)
+
+    def test_local_archive_cli_reports_its_own_readiness(self):
+        (self.f.args.archive / 'release-provenance.json').unlink()
+        r.seal(self.f.root, self.f.args, local=True)
+        with patch.object(r, 'ROOT', self.f.root), contextlib.redirect_stdout(io.StringIO()) as output:
+            code = r.main(['validate-local', '--commit', self.f.args.commit,
+                           '--version', '1.2.3', '--build', '42', '--archive', str(self.f.args.archive)])
+        data = json.loads(output.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(data['readiness'], 'unsigned_local')
+        self.assertEqual(data['evidence'], 'unsigned_archive_checks_only')
+        self.assertEqual(data['distribution'], 'not_authorized')
+        self.assertEqual(data['signing'], 'not_checked')
+
+    def test_unrelated_link_map_uuid_and_fixture_resource_are_rejected(self):
+        link = self.f.args.archive / 'ReleaseEvidence/One.map'
+        original = link.read_text()
+        link.write_text(original.replace('00000001-1111', '99999999-1111'))
+        self.f.reseal()
+        self.blocked('link_map_executable_uuid_mismatch', self.validate)
+        link.write_text(original)
+        resource = self.f.args.archive / 'Products/Applications/One.app/fixtures/example.json'
+        resource.parent.mkdir()
+        resource.write_text('{}')
+        self.f.reseal()
+        self.blocked('development_artifact_in_archive', self.validate)
+
+    def test_missing_local_executable_or_dsym_still_blocks(self):
+        binary = self.f.args.archive / 'Products/Applications/One.app/One'
+        binary.unlink()
+        self.f.reseal()
+        self.blocked('executable_missing', lambda: r.validate_archive(self.f.root, self.f.args, local=False))
+
     def test_distribution_default_refuses_and_token_is_release_bound(self):
         for env in ({}, {'TODAY_RELEASE_ENVIRONMENT': 'production'},
                     {'TODAY_RELEASE_ENVIRONMENT': 'testflight', 'TODAY_DISTRIBUTION_AUTHORIZATION': 'wrong'}):
@@ -228,6 +325,44 @@ class ReleaseTests(unittest.TestCase):
 
 
 class FastfileGuardTests(unittest.TestCase):
+    def test_local_archive_lane_scopes_unsigned_setting_and_never_exports(self):
+        driver = r"""
+module UI
+  def self.message(_); end
+  def self.user_error!(message); raise message; end
+end
+$lanes = {}
+def default_platform(*); end
+def platform(*); yield; end
+def desc(*); end
+def lane(name, &block); $lanes[name] = block; end
+def upload_to_testflight(*); abort 'UPLOAD_CALLED'; end
+load ARGV[0]
+$checks = []
+def release_check(action, _)
+  $checks << action
+end
+def build_app(**options)
+  raise 'ipa enabled' unless options[:skip_package_ipa]
+  raise 'bad signing override' unless options[:xcargs].split.include?('CODE_SIGNING_ALLOWED=NO')
+  raise 'provisioning allowed' if options[:xcargs].include?('allowProvisioning')
+  raise 'package resolution allowed' unless options[:skip_package_dependencies_resolution]
+  path = options[:archive_path]
+  FileUtils.mkdir(path)
+  %w[One TodayWidgets ShareExtension].each do |name|
+    File.write(File.join(path + '.linkmaps', name + '.map'), 'synthetic')
+  end
+end
+$lanes[:archive_local].call(commit: 'a' * 40, version: '1.2.3', build: '42', archive: ARGV[1])
+raise 'wrong checks' unless $checks == %w[preflight-local seal-local validate-local]
+raise 'global signing changed' if ENV.key?('CODE_SIGNING_ALLOWED')
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {k: v for k, v in os.environ.items() if k != 'CODE_SIGNING_ALLOWED'}
+            result = subprocess.run(['ruby', '-e', driver, str(r.ROOT / 'fastlane/Fastfile'),
+                                     str(Path(tmp) / 'Synthetic.xcarchive')], capture_output=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+
     def test_every_mutating_lane_defaults_to_refusal_before_build_or_upload(self):
         # Fake DSL only: actual Fastlane, Xcode and Apple services never run.
         fastfile = r.ROOT / 'fastlane/Fastfile'

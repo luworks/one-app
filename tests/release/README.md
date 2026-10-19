@@ -18,3 +18,14 @@ and stubs archive/export/upload methods to abort if reached without authorizatio
 Run `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/release -v`.
 These are tooling unit tests, not Swift logic, Xcode builds, real signing, simulator
 UI, device, actual Fastlane build/export, or Apple-service acceptance evidence.
+
+The reconstruction fixtures also copy versioned source configuration and lock
+inputs into their temporary synthetic repository, mock the evaluated package and
+XcodeGen graph, and generate privacy/license resources plus UUID-bound linker maps.
+Additional checks cover TodayApp versus One, transitive development target/source
+membership, exact workspace lock equality without tracking generated copies,
+unsigned readiness/receipt separation, no identity calls in local mode, missing
+privacy/licenses, fixture resources and linker object exclusion. Irrelevant symbol
+strings and the canonical tests/results parent path do not trigger exclusion.
+The Ruby local-archive DSL harness captures build arguments and writes only dummy
+maps/directories; no real Fastlane build runs. See evidence.md for the final run.

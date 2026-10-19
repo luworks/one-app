@@ -25,10 +25,25 @@ class Fixture:
         self.uuid = {}
         self.env = {}
         self.calls = []
-        for file in ('Gemfile', 'Gemfile.lock', 'scripts/release/tool-lock.json'):
+        for file in ('Gemfile', 'Gemfile.lock', 'scripts/release/tool-lock.json', 'ios/Dependencies/Package.resolved',
+                     'ios/project.yml', 'ios/Package.swift', 'ios/PrivacyInfo.xcprivacy', 'LICENSE'):
             target = root / file
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(release.ROOT / file, target)
+        shutil.copytree(release.ROOT / 'ios/Config', root / 'ios/Config')
+        # Evaluated manifest data, not a hand-parsed Swift declaration.
+        self.package = {'targets': [{'name': 'One', 'type': 'regular', 'dependencies': []},
+                         {'name': 'TodayShared', 'type': 'regular', 'dependencies': []}],
+                        'products': []}
+        self.project = json.loads((root / 'ios/project.yml').read_text())
+        for target in self.project['targets'].values():
+            for dep in target.get('dependencies', []):
+                if dep.get('package') == 'TodayModules':
+                    name = dep['product']
+                    if not any(t['name'] == name for t in self.package['targets']):
+                        self.package['targets'].append({'name': name, 'type': 'regular', 'dependencies': []})
+                    if not any(t['name'] == name for t in self.package['products']):
+                        self.package['products'].append({'name': name, 'targets': [name]})
         project = root / 'ios/Today.xcodeproj'
         (project / 'xcshareddata/xcschemes').mkdir(parents=True)
         (project / 'project.pbxproj').write_text('// Synthetic project; never build')
@@ -39,6 +54,7 @@ class Fixture:
             source = {'com.apple.security.application-groups': [release.GROUP]}
             if name == 'One':
                 source['com.apple.developer.healthkit'] = True
+                source['com.apple.developer.healthkit.access'] = []
             plist(root / f'ios/{name}.entitlements', source)
             ent = dict(source, **{'application-identifier': self.args.team + '.' + bundle_id,
                                  'com.apple.developer.team-identifier': self.args.team,
@@ -72,6 +88,13 @@ class Fixture:
         plist(archive / 'Info.plist', {'ApplicationProperties': {
             'ApplicationPath': 'Applications/One.app', 'CFBundleIdentifier': 'com.luworks.one',
             'CFBundleShortVersionString': '1.2.3', 'CFBundleVersion': '42'}})
+        shutil.copyfile(root / 'ios/PrivacyInfo.xcprivacy', app / 'PrivacyInfo.xcprivacy')
+        shutil.copyfile(root / 'LICENSE', app / 'LICENSE')
+        (app / 'ThirdPartyNotices.txt').write_text('GeoNames https://www.geonames.org https://creativecommons.org/licenses/by/4.0/ Today transforms data.')
+        for index, name in enumerate(release.PRODUCTS, 1):
+            target = archive / f'ReleaseEvidence/{name}.map'
+            target.parent.mkdir(exist_ok=True)
+            target.write_text(f'# UUID: {index:08X}-1111-2222-3333-444444444444\n# Object files:\n[  0] linker synthesized\n[  1] /build/One.build/Models.o\n# Sections:\n')
         self.reseal()
 
     def reseal(self):
@@ -104,6 +127,10 @@ class Fixture:
         if argv[:3] == ['xcrun', 'dwarfdump', '--uuid']:
             uid = self.uuid.get(argv[-1])
             return f'UUID: {uid} (arm64) ignored-path'.encode() if uid else b''
+        if argv[:2] == ['ruby', '-ryaml']:
+            return json.dumps(self.project).encode()
+        if argv[:2] == ['swift', 'package']:
+            return json.dumps(self.package).encode()
         if argv[0] == 'git':
             return (self.args.commit + '\n').encode() if argv[1:3] == ['rev-parse', 'HEAD'] else b''
         lock = json.loads((self.root / 'scripts/release/tool-lock.json').read_text())
@@ -118,7 +145,7 @@ class Fixture:
             rows = []
             for name, bundle_id in self.release.PRODUCTS.items():
                 rows.append({'buildSettings': {'PRODUCT_NAME': name, 'PRODUCT_BUNDLE_IDENTIFIER': bundle_id,
-                             'PRODUCT_MODULE_NAME': name,
+                             'PRODUCT_MODULE_NAME': 'TodayApp' if name == 'One' else name,
                              'DEVELOPMENT_TEAM': self.args.team, 'CODE_SIGN_STYLE': 'Manual',
                              'CODE_SIGNING_ALLOWED': 'YES', 'PROVISIONING_PROFILE_SPECIFIER': name,
                              'CODE_SIGN_IDENTITY': 'Apple Distribution', 'MARKETING_VERSION': '1.2.3',

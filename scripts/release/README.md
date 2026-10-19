@@ -1,11 +1,13 @@
 # Guarded local release tooling
 
-This lane owns only `scripts/release/`, `tests/release/`, `fastlane/`, `Gemfile`
-and `Gemfile.lock`. Integration owns generation, package/configuration, production
+This continuation owns only `scripts/release/`, `tests/release/`,
+`fastlane/Fastfile` and `docs/engineering/release-integration.md`. Existing Gemfile
+and tool pins are unchanged. Integration owns generation, package/configuration, production
 sources and `dev`. No signing settings, identities, profiles or accounts are created
 or changed here. The generated entry point is `ios/Today.xcodeproj`, shared scheme
 `Today`, Release, generic iOS device. Compatibility products remain `One.app`,
-`TodayWidgets.appex`, `ShareExtension.appex`, module `One`, bundle identifiers
+`TodayWidgets.appex`, `ShareExtension.appex`, executable module `TodayApp`,
+model/intent module `One`, bundle identifiers
 `com.luworks.one`, `.widgets`, `.share`, app group `group.com.luworks.one`.
 
 ## Tool installation and locks
@@ -23,8 +25,8 @@ BUNDLE_FROZEN=true bundle _4.0.16_ install
 by Bundler 4.0.16 on Ruby 3.3.12 with `bundle lock`, including RubyGems checksums,
 on arm64-darwin-25. It was not manually resolved. The lock is not proof that this
 checkout has installed all gems. Preflight requires `bundle check` and verifies
-the installed locked Fastlane version. Existing SwiftPM `Package.resolved` files
-are tracked and hashed too; package updates/resolution are disabled for builds.
+the installed locked Fastlane version. The authoritative `ios/Dependencies/Package.resolved` is tracked and hashed;
+generated workspace copies must match exactly without being tracked; package updates/resolution are disabled for builds.
 There is no fallback to system/global Fastlane or to an older gem version.
 
 Official research checked 2026-10-19 UTC:
@@ -44,6 +46,14 @@ Official research checked 2026-10-19 UTC:
 A temporary extracted Homebrew Ruby bottle was used only to execute Bundler's
 resolver; no host Ruby installation, global gem or signing state was changed.
 That temporary environment is not a runtime prerequisite and is not versioned.
+
+## Unsigned local archive
+
+See [release integration](../../docs/engineering/release-integration.md) for the
+separate `preflight-local`, `archive_local` and `validate-local` APIs, root-owned
+commands, retained linker maps and current resource blockers. Only the archive
+command receives `CODE_SIGNING_ALLOWED=NO`; no signing configuration is changed.
+This readiness never authorizes signed export or distribution.
 
 ## Read-only preflight
 

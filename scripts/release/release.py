@@ -12,6 +12,11 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+import importlib.util
+
+_graph_spec = importlib.util.spec_from_file_location("release_graph", Path(__file__).with_name("graph.py"))
+graph = importlib.util.module_from_spec(_graph_spec)
+_graph_spec.loader.exec_module(graph)
 
 ROOT = Path(__file__).resolve().parents[2]
 PRODUCTS = {'One': 'com.luworks.one', 'TodayWidgets': 'com.luworks.one.widgets',
@@ -58,8 +63,14 @@ def require(ok, code):
 
 def lock_hashes(root):
     paths = ['Gemfile', 'Gemfile.lock', 'scripts/release/tool-lock.json']
-    # Include every existing SwiftPM lock; never silently resolve dependencies.
-    paths += sorted(str(p.relative_to(root)) for p in (root / 'ios').rglob('Package.resolved'))
+    # Only the versioned authority is required to be tracked. Xcode generates an
+    # ignored workspace copy; it must match bytes, but is not a tracked input.
+    authority = 'ios/Dependencies/Package.resolved'
+    paths.append(authority)
+    for duplicate in (root / 'ios').rglob('Package.resolved'):
+        if duplicate == root / authority or any(p in duplicate.parts for p in ('.build', 'checkouts')):
+            continue
+        require(duplicate.read_bytes() == (root / authority).read_bytes(), 'workspace_package_lock_mismatch')
     return {p: sha(root / p) for p in paths}
 
 
@@ -98,7 +109,11 @@ def check_project(root):
     for name in PRODUCTS:
         ent = load_plist(root / f'ios/{name}.entitlements')
         require(ent.get('com.apple.security.application-groups') == [GROUP], 'source_app_group_mismatch')
-    return 'generated_project_present'
+        expected = {'com.apple.security.application-groups': [GROUP]}
+        if name == 'One':
+            expected.update({'com.apple.developer.healthkit': True, 'com.apple.developer.healthkit.access': []})
+        require(ent == expected, 'source_capabilities_mismatch')
+    return graph.check(root, run, require)
 
 
 def profile(path, name, team, root, identities=None, leaf_certificate=None):
@@ -153,7 +168,7 @@ def check_signing(root, team, env, version=None, build=None):
         data = plistlib.loads(run(['security', 'cms', '-D', '-i', env[PROFILES[name]]], root))
         require((version is None or b.get('MARKETING_VERSION') == version) and
                 (build is None or str(b.get('CURRENT_PROJECT_VERSION')) == build) and
-                (name != 'One' or b.get('PRODUCT_MODULE_NAME') == 'One') and
+                (name != 'One' or b.get('PRODUCT_MODULE_NAME') == 'TodayApp') and
                 b.get('PRODUCT_BUNDLE_IDENTIFIER') == bundle_id and
                 b.get('DEVELOPMENT_TEAM') == team and b.get('CODE_SIGN_STYLE') == 'Manual' and
                 b.get('CODE_SIGNING_ALLOWED') == 'YES' and
@@ -190,10 +205,11 @@ def preflight(root, args, env):
     return report
 
 
-def metadata(args):
+def metadata(args, local=False):
     require(bool(re.fullmatch(r'\d+\.\d+(?:\.\d+)?', args.version)), 'version_required')
     require(bool(re.fullmatch(r'[1-9]\d*', args.build)), 'build_required')
-    require(bool(re.fullmatch(r'[A-Z0-9]{10}', args.team)), 'signing_team_required')
+    if not local:
+        require(bool(re.fullmatch(r'[A-Z0-9]{10}', args.team)), 'signing_team_required')
 
 
 def inventory(archive):
@@ -208,13 +224,14 @@ def inventory(archive):
     return result
 
 
-def seal(root, args):
-    # Local provenance, not an attestation. The validator still verifies Apple signatures
-    # and real Mach-O UUIDs. Called only after the archive command exits successfully.
+def seal(root, args, local=False):
+    # Local provenance, not an attestation. Both modes verify Mach-O UUIDs; only
+    # distribution mode verifies Apple signatures. Seal after archive exit only.
     check_git(root, args.commit)
     check_tools(root)
     data = {'schema': 1, 'commit': args.commit, 'version': args.version, 'build': args.build,
-            'tool_locks': lock_hashes(root), 'files': inventory(args.archive)}
+            'tool_locks': lock_hashes(root), 'files': inventory(args.archive),
+            'mode': 'unsigned_local' if local else 'signed_distribution'}
     target = args.archive / 'release-provenance.json'
     with target.open('x') as f:
         json.dump(data, f, sort_keys=True)
@@ -228,13 +245,15 @@ def uuids(path, root):
     return {(u.upper(), arch) for u, arch in rows}
 
 
-def validate_archive(root, args):
+def validate_archive(root, args, local=False):
     archive = args.archive
     actual = inventory(archive)
     receipt = json.loads((archive / 'release-provenance.json').read_text())
     require(receipt.get('schema') == 1 and receipt['commit'] == args.commit and
             receipt['version'] == args.version and receipt['build'] == args.build and
             receipt['tool_locks'] == lock_hashes(root), 'archive_provenance_mismatch')
+    require(receipt.get('mode', 'signed_distribution') ==
+            ('unsigned_local' if local else 'signed_distribution'), 'archive_readiness_mode_mismatch')
     require(receipt['files'] == actual, 'archive_content_changed')
     apps = list((archive / 'Products/Applications').glob('*.app'))
     require(len(apps) == 1 and apps[0].name == 'One.app', 'app_product_mismatch')
@@ -244,10 +263,12 @@ def validate_archive(root, args):
             info.get('CFBundleIdentifier') == PRODUCTS['One'] and
             info.get('CFBundleShortVersionString') == args.version and
             str(info.get('CFBundleVersion')) == args.build, 'archive_metadata_mismatch')
-    validate_products(root, args, archive, app)
+    validate_resources(root, app)
+    validate_products(root, args, archive, app, local=local)
+    validate_link_maps(root, args, actual)
 
 
-def validate_products(root, args, archive, app):
+def validate_products(root, args, archive, app, local=False):
     extensions = list((app / 'PlugIns').glob('*'))
     require({p.name for p in extensions} == {'TodayWidgets.appex', 'ShareExtension.appex'}, 'extension_embeds_mismatch')
     require(not list(app.rglob('*.app')) and len(list(app.rglob('*.appex'))) == 2, 'unexpected_nested_product')
@@ -269,29 +290,30 @@ def validate_products(root, args, archive, app):
         if name != 'One':
             expected = 'com.apple.widgetkit-extension' if name == 'TodayWidgets' else 'com.apple.share-services'
             require(p.get('NSExtension', {}).get('NSExtensionPointIdentifier') == expected, 'extension_point_mismatch')
-        requirement = ('anchor apple generic and certificate leaf[subject.CN] = "Apple Distribution:"* '
-                       'and certificate leaf[subject.OU] = "' + args.team + '"')
-        run(['codesign', '--verify', '--deep', '--strict', '-R', requirement, str(bundle)], root)
-        ent = plistlib.loads(run(['codesign', '-d', '--entitlements', '-', str(bundle)], root))
-        with tempfile.TemporaryDirectory(prefix='today-signature-check-') as tmp:
-            prefix = str(Path(tmp) / 'certificate')
-            run(['codesign', '-d', '--extract-certificates', prefix, str(bundle)], root)
-            allowed = profile(bundle / 'embedded.mobileprovision', name, args.team, root,
-                              leaf_certificate=Path(prefix + '0'))
-        expected = load_plist(root / f'ios/{name}.entitlements')
-        expected.update({'application-identifier': args.team + '.' + PRODUCTS[name],
-                         'com.apple.developer.team-identifier': args.team, 'get-task-allow': False})
-        require(all(ent.get(k) == v for k, v in expected.items()), 'signed_entitlements_mismatch')
-        # Reject unexpected capabilities as well as missing ones. Only signing-generated
-        # keychain groups and beta-reports-active may supplement source entitlements.
-        require(set(ent) <= set(expected) | {'keychain-access-groups', 'beta-reports-active'}, 'unexpected_entitlement')
-        for k, v in ent.items():
-            if k == 'keychain-access-groups':
-                own_group = args.team + '.' + PRODUCTS[name]
-                require(v == [own_group] and any(pattern in (own_group, args.team + '.*')
-                        for pattern in allowed.get(k, [])), 'signed_keychain_group_not_in_profile')
-            else:
-                require(allowed.get(k) == v, 'signed_entitlement_not_in_profile')
+        if not local:
+            requirement = ('anchor apple generic and certificate leaf[subject.CN] = "Apple Distribution:"* '
+                           'and certificate leaf[subject.OU] = "' + args.team + '"')
+            run(['codesign', '--verify', '--deep', '--strict', '-R', requirement, str(bundle)], root)
+            ent = plistlib.loads(run(['codesign', '-d', '--entitlements', '-', str(bundle)], root))
+            with tempfile.TemporaryDirectory(prefix='today-signature-check-') as tmp:
+                prefix = str(Path(tmp) / 'certificate')
+                run(['codesign', '-d', '--extract-certificates', prefix, str(bundle)], root)
+                allowed = profile(bundle / 'embedded.mobileprovision', name, args.team, root,
+                                  leaf_certificate=Path(prefix + '0'))
+            expected = load_plist(root / f'ios/{name}.entitlements')
+            expected.update({'application-identifier': args.team + '.' + PRODUCTS[name],
+                             'com.apple.developer.team-identifier': args.team, 'get-task-allow': False})
+            require(all(ent.get(k) == v for k, v in expected.items()), 'signed_entitlements_mismatch')
+            # Reject unexpected capabilities as well as missing ones. Only signing-generated
+            # keychain groups and beta-reports-active may supplement source entitlements.
+            require(set(ent) <= set(expected) | {'keychain-access-groups', 'beta-reports-active'}, 'unexpected_entitlement')
+            for k, v in ent.items():
+                if k == 'keychain-access-groups':
+                    own_group = args.team + '.' + PRODUCTS[name]
+                    require(v == [own_group] and any(pattern in (own_group, args.team + '.*')
+                            for pattern in allowed.get(k, [])), 'signed_keychain_group_not_in_profile')
+                else:
+                    require(allowed.get(k) == v, 'signed_entitlement_not_in_profile')
         binaries.append(bundle / name)
     for framework in app.rglob('*.framework'):
         p = load_plist(framework / 'Info.plist')
@@ -305,6 +327,54 @@ def validate_products(root, args, archive, app):
         require(not seen & ids and ids <= symbols.keys(), 'executable_dsym_uuid_mismatch')
         seen |= ids
     require(seen == symbols.keys(), 'orphan_dsym_uuid')
+
+
+
+def validate_resources(root, app):
+    manifest = app / 'PrivacyInfo.xcprivacy'
+    require(manifest.is_file(), 'required_privacy_manifest_missing')
+    require(load_plist(manifest) == load_plist(root / 'ios/PrivacyInfo.xcprivacy'), 'privacy_manifest_mismatch')
+    require((app / 'LICENSE').is_file() and sha(app / 'LICENSE') == sha(root / 'LICENSE'), 'app_license_missing_or_changed')
+    notice = app / 'ThirdPartyNotices.txt'
+    require(not notice.is_symlink() and notice.is_file(), 'resource_license_notice_missing')
+    text = notice.read_text()
+    require(all(value in text for value in ('GeoNames', 'https://www.geonames.org',
+            'https://creativecommons.org/licenses/by/4.0/', 'transform')), 'geonames_attribution_incomplete')
+    for path in app.rglob('*'):
+        require(not graph.development_path(path.relative_to(app)), 'development_artifact_in_archive')
+
+
+def validate_link_maps(root, args, inventory_files):
+    # Sealed maps are retained inside the archive by the local archive lane.
+    # Parse only the linker object-file section; strings/symbols are not evidence
+    # of development dependencies and are deliberately not searched.
+    for name in PRODUCTS:
+        relative = f'ReleaseEvidence/{name}.map'
+        require(relative in inventory_files, 'link_map_missing')
+        lines = (args.archive / relative).read_text().splitlines()
+        bundle = args.archive / 'Products/Applications/One.app'
+        if name != 'One':
+            bundle = bundle / f'PlugIns/{name}.appex'
+        map_ids = [line.removeprefix('# UUID: ').upper() for line in lines if line.startswith('# UUID: ')]
+        require(len(map_ids) == 1 and map_ids[0] in {uid for uid, _ in uuids(bundle / name, root)},
+                'link_map_executable_uuid_mismatch')
+        require('# Object files:' in lines and '# Sections:' in lines, 'invalid_link_map')
+        objects = lines[lines.index('# Object files:') + 1:lines.index('# Sections:')]
+        require(bool(objects), 'empty_link_map')
+        for line in objects:
+            match = re.fullmatch(r'\[\s*\d+\]\s+(.+)', line)
+            require(match is not None, 'invalid_link_map_object')
+            require(not graph.development_path(match[1], object_input=True), 'development_object_in_archive')
+
+
+def local_preflight(root, args):
+    report = Report('preflight-local')
+    report.data.update(readiness='unsigned_local', evidence='source_checks_only', signing='not_checked')
+    report.check('release_metadata', lambda: metadata(args, local=True))
+    report.check('git_commit_clean', lambda: check_git(root, args.commit))
+    report.check('locked_tools', lambda: check_tools(root))
+    report.check('release_source_graph', lambda: check_project(root))
+    return report
 
 
 def validate_export(root, args):
@@ -357,7 +427,7 @@ def authorize(args, env, action):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['preflight', 'validate', 'seal', 'authorize-archive', 'authorize-distribution', 'validate-export'])
+    p.add_argument('action', choices=['preflight', 'validate', 'seal', 'authorize-archive', 'authorize-distribution', 'validate-export', 'preflight-local', 'seal-local', 'validate-local'])
     p.add_argument('--commit', default='')
     p.add_argument('--version', default='')
     p.add_argument('--build', default='')
@@ -366,7 +436,15 @@ def main(argv=None):
     p.add_argument('--ipa', type=Path)
     args = p.parse_args(argv)
     report = Report(args.action)
-    if args.action.startswith('authorize-'):
+    if args.action.endswith('-local'):
+        report = local_preflight(ROOT, args)
+        report.data['action'] = args.action
+        if args.action == 'seal-local' and report.data['status'] == 'ready':
+            report.check('provenance', lambda: seal(ROOT, args, local=True))
+        elif args.action == 'validate-local':
+            report.check('unsigned_archive_integrity', lambda: validate_archive(ROOT, args, local=True))
+            report.data['evidence'] = 'unsigned_archive_checks_only'
+    elif args.action.startswith('authorize-'):
         report.check('authorization', lambda: authorize(args, os.environ, args.action.split('-')[1]))
     elif args.action == 'preflight':
         report = preflight(ROOT, args, os.environ)
