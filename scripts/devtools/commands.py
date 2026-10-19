@@ -68,16 +68,29 @@ def generate(root, timeout=600, *, _locked=False):
 
 
 def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=False):
+    if timeout <= 0:
+        raise ValueError('Positive build timeout required')
     operation = 'build-for-testing' if testing else 'build'
     command = ['xcodebuild', operation, '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
                '-configuration', configuration, '-destination', 'generic/platform=iOS Simulator',
-               '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64']
+               '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64',
+               '-showBuildTimingSummary']
     with host_lock(root), dd_lock(root):
         code = generate(root, timeout, _locked=True)
         if code:
             return code
-        current = fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64')
         from .resolve import locked_arguments
+        if testing:
+            from .core import NativeBuildError, ensure_test_products
+            try:
+                path = ensure_test_products(
+                    root, scheme, lambda argv: execute(root, argv, timeout=timeout),
+                    configuration=configuration, flags=locked_arguments(root))
+            except NativeBuildError as error:
+                return error.returncode
+            print(json.dumps({'test_products': str(path), 'tests_executed': 0}))
+            return 0
+        current = fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64')
         command += locked_arguments(root)
         maps = None
         if configuration == 'Release' and scheme == 'Today':
