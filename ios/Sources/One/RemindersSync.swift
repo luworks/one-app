@@ -210,6 +210,11 @@
 
     package func scheduleReconcile(after delay: Duration = .milliseconds(1200)) {
       guard !disposed, isConnected else { return }
+      // Saves during a pass request another pass; they must not cancel their own reconciliation.
+      if running {
+        again = true
+        return
+      }
       debounce?.cancel()
       debounce = Task { @MainActor in
         try? await Task.sleep(for: delay)

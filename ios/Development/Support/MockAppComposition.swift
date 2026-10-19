@@ -64,7 +64,6 @@
       if arguments.contains("-uiTestingRemindersSync") {
         let native = RemindersSync(
           defaults: defaults, runtime: runtime, arguments: arguments, makeStore: { EKEventStore() })
-        native.configure(container, ledger: services.ledger)
         reminders = native
       } else {
         reminders = services.reminders
