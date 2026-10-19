@@ -87,7 +87,7 @@ package enum CaptureUndo {
 
 
 /// A title-only edit never copies a stale Capture back over dates, recurrence or alarm state.
-package extension CaptureUndo {
+extension CaptureUndo {
     package static func title(_ ref: String?, in context: ModelContext) -> String? {
         switch resolve(ref, in: context) {
         case .task(let task): return task.title

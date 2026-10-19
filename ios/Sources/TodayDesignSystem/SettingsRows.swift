@@ -8,7 +8,7 @@ import SwiftUI
 @MainActor
 public struct ExplainedToggle: View {
     package let title: String
-    package @Binding var isOn: Bool
+    @Binding package var isOn: Bool
     package var caption: String?
 
     public init(title: String, isOn: Binding<Bool>, caption: String? = nil) {
@@ -36,7 +36,7 @@ public struct ExplainedToggle: View {
 public struct PillChoiceRow<Item: Hashable>: View {
     package let title: String
     package let items: [Item]
-    package @Binding var selection: Item
+    @Binding package var selection: Item
     package var caption: String?
     package let label: (Item) -> String
     package let identifier: (Item) -> String
@@ -71,10 +71,10 @@ public struct PillChoiceRow<Item: Hashable>: View {
 @MainActor
 public struct MenuChoiceRow<Value: Hashable, Options: View>: View {
     package let title: String
-    package @Binding var selection: Value
+    @Binding package var selection: Value
     package var caption: String?
     package var identifier: String
-    package @ViewBuilder var options: Options
+    @ViewBuilder package var options: Options
 
     public init(title: String, selection: Binding<Value>, caption: String? = nil,
                 identifier: String, @ViewBuilder options: () -> Options) {

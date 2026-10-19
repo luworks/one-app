@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import TodayCore
 import FoundationModels
@@ -38,3 +39,5 @@ enum ChatResponse {
         return .reply(reply.isEmpty ? fallback : reply)
     }
 }
+
+#endif

@@ -2,7 +2,7 @@
 import SwiftUI
 import TodayCore
 
-package extension RowAction {
+extension RowAction {
     /// Stop a timer (cancel while it counts down, dismiss while it rings). Red and rightmost, like Delete.
     package static func timerStop(_ action: @escaping () -> Void) -> some View {
         Button(action: action) { Label("Stop", systemImage: "stop.fill").labelStyle(.iconOnly) }

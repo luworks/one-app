@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import TodayCore
 import FoundationModels
@@ -372,3 +373,5 @@ enum Understanding {
         LanguageModelSession(instructions: kindOnlyInstructions(localeID: localeID)).prewarm()
     }
 }
+
+#endif

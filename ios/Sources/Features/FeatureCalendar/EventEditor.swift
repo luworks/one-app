@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayPlatform
 import One
@@ -159,3 +160,5 @@ package struct EventEditor: View {
         dismiss()
     }
 }
+
+#endif

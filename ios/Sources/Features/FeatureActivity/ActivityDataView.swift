@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayData
 import TodayPlatform
@@ -200,3 +201,5 @@ package struct ActivityDataView: View {
     }
     #endif
 }
+
+#endif

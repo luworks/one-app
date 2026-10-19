@@ -3,7 +3,8 @@ import SwiftUI
 import TodayCore
 
 package struct WeekStrip: View {
-    package @Binding var selected: Date
+    package init(selected: Binding<Date>) { _selected = selected }
+    @Binding package var selected: Date
 
     private var cal: Calendar {
         var c = Calendar.current

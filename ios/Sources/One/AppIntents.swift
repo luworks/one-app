@@ -12,23 +12,23 @@ import SwiftUI
 // (`OneStore`); only Open Today brings the app forward. Phrases in Chinese: AppShortcuts.xcstrings.
 
 /// "Add a reminder in Today": a title or one sentence ("call Mom tomorrow at 6pm"), read by `CaptureParser`.
-package struct AddReminderIntent: AppIntent {
-    package static let title: LocalizedStringResource = "Add Reminder"
-    package static let description = IntentDescription("Adds a reminder. Say it in one sentence, like “Call Mom tomorrow at 6pm”.")
-    package static let openAppWhenRun = false
+struct AddReminderIntent: AppIntent {
+    static let title: LocalizedStringResource = "Add Reminder"
+    static let description = IntentDescription("Adds a reminder. Say it in one sentence, like “Call Mom tomorrow at 6pm”.")
+    static let openAppWhenRun = false
 
     @Parameter(title: "Reminder", requestValueDialog: "What’s the reminder?")
-    package var text: String
+    var text: String
 
     @Parameter(title: "Date")
-    package var date: Date?
+    var date: Date?
 
-    package static var parameterSummary: some ParameterSummary {
+    static var parameterSummary: some ParameterSummary {
         Summary("Add \(\.$text)") { \.$date }
     }
 
     @MainActor
-    package func perform() async throws -> some IntentResult & ProvidesDialog {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let capture = IntentReminder.capture(text: text, date: date) else {
             throw $text.needsValueError("What’s the reminder?")
         }
@@ -43,13 +43,13 @@ package struct AddReminderIntent: AppIntent {
 }
 
 /// "What's next in Today": the next three items today (or tomorrow's first), as the Next Up widget picks them.
-package struct WhatsNextIntent: AppIntent {
-    package static let title: LocalizedStringResource = "What’s Next Today"
-    package static let description = IntentDescription("Tells you the next three things today: events, reminders with a time, and alarms.")
-    package static let openAppWhenRun = false
+struct WhatsNextIntent: AppIntent {
+    static let title: LocalizedStringResource = "What’s Next Today"
+    static let description = IntentDescription("Tells you the next three things today: events, reminders with a time, and alarms.")
+    static let openAppWhenRun = false
 
     @MainActor
-    package func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let context = OneStore.start().mainContext
         let now = Date.now
         let next = NextItems.select(from: IntentSupport.widgetItems(context, now: now), now: now)
@@ -59,19 +59,19 @@ package struct WhatsNextIntent: AppIntent {
 }
 
 /// "Show my day in Today": opens the Today tab on today, through the same link the widgets use.
-package struct OpenTodayIntent: AppIntent {
-    package static let title: LocalizedStringResource = "Open Today"
-    package static let description = IntentDescription("Opens the Today tab on today.")
-    package static let openAppWhenRun = false
+struct OpenTodayIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Today"
+    static let description = IntentDescription("Opens the Today tab on today.")
+    static let openAppWhenRun = false
 
     @MainActor
-    package func perform() async throws -> some IntentResult & OpensIntent {
+    func perform() async throws -> some IntentResult & OpensIntent {
         .result(opensIntent: OpenURLIntent(WidgetLink.url()))
     }
 }
 
-package struct TodayShortcuts: AppShortcutsProvider {
-    package static var appShortcuts: [AppShortcut] {
+struct TodayShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: AddReminderIntent(), phrases: [
             "Add a reminder in \(.applicationName)",
             "Remind me with \(.applicationName)",
@@ -100,23 +100,23 @@ package struct TodayShortcuts: AppShortcutsProvider {
 }
 
 /// An error Siri reads out as is.
-package struct IntentMessage: Error, CustomLocalizedStringResourceConvertible {
-    package let text: String
-    package init(_ text: String) { self.text = text }
-    package var localizedStringResource: LocalizedStringResource { "\(text)" }
+struct IntentMessage: Error, CustomLocalizedStringResourceConvertible {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var localizedStringResource: LocalizedStringResource { "\(text)" }
 }
 
 @MainActor
-package enum IntentSupport {
+enum IntentSupport {
     /// The widget's items for today and tomorrow, from the store and Apple Calendar.
-    package static func widgetItems(_ context: ModelContext, now: Date) -> [WidgetItem] {
+    static func widgetItems(_ context: ModelContext, now: Date) -> [WidgetItem] {
         CalendarSync.shared.prepare()
         let (tasks, events, alarms) = fetch(context)
         return WidgetFeed.items(tasks: tasks, events: events, alarms: alarms, now: now, calendar: .current)
     }
 
     /// After a change made with the app closed, the widgets still show it.
-    package static func refreshWidgets(_ context: ModelContext) {
+    static func refreshWidgets(_ context: ModelContext) {
         CalendarSync.shared.prepare()
         let (tasks, events, alarms) = fetch(context)
         WidgetFeed.update(tasks: tasks, events: events, alarms: alarms)

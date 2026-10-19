@@ -1,7 +1,6 @@
 #if os(iOS)
 import TodayCore
 import TodayShared
-import TodayPlatform
 import SwiftUI
 import UIKit
 

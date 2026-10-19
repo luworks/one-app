@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayDesignSystem
 import One
 import TodayCore
@@ -241,3 +242,5 @@ package struct ListEditor: View {
         dismiss()
     }
 }
+
+#endif

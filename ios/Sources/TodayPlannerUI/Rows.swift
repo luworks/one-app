@@ -13,7 +13,7 @@ package struct EventRow: View {
     package let event: OneEvent
     package var start: Date? = nil
     /// The list that holds this row asks "this event or the series?" for a repeating one (see `entryDeleteDialog`).
-    package @Binding var pendingDelete: CalEntry?
+    @Binding package var pendingDelete: CalEntry?
     package let open: @MainActor (OneEvent) -> Void
     @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
@@ -252,6 +252,7 @@ package struct TaskRow: View {
 
 /// An alarm in the day's schedule, so the whole day reads in one list.
 package struct AlarmMarkRow: View {
+    package init(alarm: OneAlarm, date: Date) { self.alarm = alarm; self.date = date }
     package let alarm: OneAlarm
     package let date: Date
 

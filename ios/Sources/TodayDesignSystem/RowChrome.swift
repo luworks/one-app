@@ -3,6 +3,7 @@ import SwiftUI
 import TodayCore
 
 package struct TimeColumn: View {
+    package init(date: Date) { self.date = date }
     package let date: Date
     package var body: some View {
         Text(date.formatted(date: .omitted, time: .shortened))
@@ -18,9 +19,10 @@ package struct TimeColumn: View {
 /// A row's title with its detail caption. Both sit on one line when they fit; otherwise the detail drops below.
 /// Long titles stop at `titleLines` so one item can't fill the screen (the full title is in Show Details).
 package struct TitleDetail<Detail: View>: View {
+    package init(title: Text, titleLines: Int? = 2, @ViewBuilder detail: () -> Detail) { self.title = title; self.titleLines = titleLines; self.detail = detail() }
     package let title: Text
     package var titleLines: Int? = 2
-    package @ViewBuilder var detail: Detail
+    @ViewBuilder package var detail: Detail
 
     package var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -38,6 +40,7 @@ package struct TitleDetail<Detail: View>: View {
 
 /// The travel-time line under an event with a location: "Drive 18 min · Leave by 14:20".
 package struct TravelLine: View {
+    package init(text: String) { self.text = text }
     @Environment(\.dynamicTypeSize) private var typeSize
     package let text: String
     package var body: some View {
@@ -52,6 +55,7 @@ package struct TravelLine: View {
 
 /// The calendar color bar beside an event; it stretches to the height of the row's text.
 package struct CalendarBar: View {
+    package init(color: Color) { self.color = color }
     package let color: Color
     package var body: some View {
         RoundedRectangle(cornerRadius: 2)
@@ -62,6 +66,7 @@ package struct CalendarBar: View {
 }
 
 package struct NowRow: View {
+    package init(date: Date) { self.date = date }
     package let date: Date
     package var body: some View {
         HStack(spacing: 8) {

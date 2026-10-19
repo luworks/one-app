@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import FeatureToday
 import FeatureCalendar
@@ -46,8 +47,8 @@ enum HomeTab: String, CaseIterable, Identifiable {
 /// opens from the avatar or a swipe from the left edge.
 public struct HomeView: View {
     private let diagnostics: LocalDiagnostics
-    private let prepareData: (@MainActor (ModelContext) -> Bool)?
-    public init(diagnostics: LocalDiagnostics, prepareData: (@MainActor (ModelContext) -> Bool)? = nil) {
+    private let prepareData: (@MainActor (ModelContext) async -> Bool)?
+    public init(diagnostics: LocalDiagnostics, prepareData: (@MainActor (ModelContext) async -> Bool)? = nil) {
         self.diagnostics = diagnostics; self.prepareData = prepareData
     }
     @State private var editor: OpenedEntry?
@@ -360,7 +361,7 @@ public struct HomeView: View {
         .task {
             if PerformanceTrace.enabled { PerformanceTrace.shared.mark("bootstrap_start") }
             if let prepareData {
-                guard prepareData(context) else { return }
+                guard await prepareData(context) else { return }
             } else { SampleData.insertIfNeeded(context) }
             ListActions.ensureLists(in: context)
             #if DEBUG
@@ -763,4 +764,6 @@ private struct ShareImportUITesting {
         } catch { return "probe-failed" }
     }
 }
+#endif
+
 #endif

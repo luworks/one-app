@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayPlannerUI
 import TodayCore
@@ -13,7 +14,7 @@ import SwiftData
 /// due at a time, alarms, and suggested times for reminders due that day without one.
 /// Today shows the current day, followed by a short look at tomorrow (see `TomorrowPreview`);
 /// the Calendar tab adds the week strip to pick a day.
-struct DayAgenda: View {
+package struct DayAgenda: View {
     @Binding var day: Date
     var showsWeekStrip: Bool
     /// Opens the Timer tab (a tap on a running timer's row).
@@ -51,7 +52,7 @@ struct DayAgenda: View {
     /// A repeating system event whose Delete is waiting for "this event or the series?".
     @State private var pendingDelete: CalEntry?
 
-    var body: some View {
+    package var body: some View {
         ScrollViewReader { proxy in
             list
                 .onAppear { scrollToNow(proxy) }
@@ -442,7 +443,7 @@ enum TimelineItem: Identifiable {
 /// The day this page shows, in the system's own style ("Saturday, Oct 17"); the first row of the Today tab.
 struct DateTitle: View {
     let day: Date
-    var body: some View {
+    package var body: some View {
         Text(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
             .font(.subheadline.weight(.bold))
             .listRowSeparator(.hidden)
@@ -454,7 +455,7 @@ struct DateTitle: View {
 
 struct AgendaHeader: View {
     let title: String
-    var body: some View {
+    package var body: some View {
         Text(title)
             .font(.footnote.weight(.semibold))
             // secondaryLabel, not .secondary: a list header is already dimmed, and .secondary on top read too faint.
@@ -467,7 +468,7 @@ struct AgendaHeader: View {
 /// Starts the reminders that are due this day with no time and no free gap to suggest.
 struct AnytimeLabel: View {
     let title: String
-    var body: some View {
+    package var body: some View {
         Text(title)
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
@@ -479,7 +480,7 @@ struct AnytimeLabel: View {
 /// Free time between items: one quiet line, aligned with the titles.
 struct FreeRow: View {
     let free: DateInterval
-    var body: some View {
+    package var body: some View {
         Text(DaySchedule.freeLabel(free.duration))
             .font(.caption)
             .foregroundStyle(.tertiary)
@@ -490,3 +491,5 @@ struct FreeRow: View {
             .accessibilityLabel(DaySchedule.freeLabel(free.duration) + " from " + free.start.formatted(date: .omitted, time: .shortened))
     }
 }
+
+#endif

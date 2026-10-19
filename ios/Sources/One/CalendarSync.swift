@@ -115,12 +115,6 @@ package final class CalendarSync {
 
     /// On the first launch show iOS's own Calendar permission prompt. Does nothing afterwards.
     package func connectIfFirstRun() async {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-seedCalendarDemo") {
-            await seedDemo()
-            return
-        }
-        #endif
         guard !ProcessInfo.processInfo.arguments.contains("-uiTesting"),
               EKEventStore.authorizationStatus(for: .event) == .notDetermined else { return }
         await setEnabled(true)
@@ -518,7 +512,7 @@ package enum NativeEvents {
             }
         }
 
-        func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+        package func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
             print("NativeEvents: editor completed \(action.rawValue)")
             NativeEvents.log.info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
             Task { @MainActor in
@@ -689,6 +683,7 @@ private struct ExistingCalendarEventEditor: View {
 /// Delete Event are all editable at once, Done saves. Apple's read-only viewer made you tap Edit first and drew its own
 /// Delete, so it is not used.
 package struct NativeEventSheet: View {
+    package init(identifier: String) { self.identifier = identifier }
     package let identifier: String
 
     package var body: some View {
@@ -699,6 +694,7 @@ package struct NativeEventSheet: View {
 /// Apple's own event editor (EventKitUI), for a new event or an existing one. Saving, cancelling and deleting
 /// (with Apple's "This event only / all future events" prompts) are all Apple's.
 package struct NativeEventEditor: UIViewControllerRepresentable {
+    package init(identifier: String? = nil, start: Date = .now) { self.identifier = identifier; self.start = start }
     /// nil = a new event.
     package var identifier: String?
     /// Where a new event starts (ignored when editing).
@@ -729,7 +725,7 @@ package struct NativeEventEditor: UIViewControllerRepresentable {
     package final class Coordinator: NSObject, EKEventEditViewDelegate {
         let dismiss: () -> Void
         init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
-        func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+        package func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
             Logger(subsystem: "com.luworks.one", category: "calendar").info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
             Task { @MainActor in CalendarSync.shared.refresh() }
             dismiss()

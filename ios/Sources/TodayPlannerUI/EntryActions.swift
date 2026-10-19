@@ -1,11 +1,10 @@
 #if os(iOS)
+import One
 import TodayCore
 import TodayShared
 import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import os
 import SwiftUI
 import SwiftData
@@ -22,7 +21,7 @@ package struct EntryActions: ViewModifier {
 
     package let entry: CalEntry
     /// Set when Delete needs the "this event or the series" question; the container shows it.
-    package @Binding var pendingDelete: CalEntry?
+    @Binding package var pendingDelete: CalEntry?
     package var open: (CalEntry) -> Void
     package var edit: (CalEntry) -> Void
     /// Rows in a list get the swipe; blocks on the week grid only get the long-press menu.
@@ -75,7 +74,7 @@ package struct EntryActions: ViewModifier {
 package struct EntryDeleteDialog: ViewModifier {
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
-    package @Binding var pending: CalEntry?
+    @Binding package var pending: CalEntry?
 
     package func body(content: Content) -> some View {
         content.confirmationDialog(
@@ -122,7 +121,7 @@ private struct SwipeIfRows: ViewModifier {
     }
 }
 
-package extension View {
+extension View {
     /// Swipe and long-press actions on a calendar entry (see `EntryActions`).
     package func entryActions(_ entry: CalEntry, pendingDelete: Binding<CalEntry?>, open: @escaping (CalEntry) -> Void,
                       edit: @escaping (CalEntry) -> Void, swipes: Bool = true) -> some View {

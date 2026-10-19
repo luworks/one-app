@@ -11,7 +11,7 @@ import SwiftUI
 @Observable
 public final class HealthLineModel {
     private let source: any HealthSource
-    private(set) var line: String?
+    package private(set) var line: String?
     @ObservationIgnored nonisolated(unsafe) private var observer: NSObjectProtocol?
 
     public init(source: any HealthSource) {
@@ -31,7 +31,7 @@ public final class HealthLineModel {
 
     /// Never hangs and never blanks the line on a stall: the access request and each metric's query are bounded
     /// (`HealthLoader`), and a load where nothing answered leaves the line as it was.
-    func load() async {
+    package func load() async {
         guard source.isAvailable else { return }
         let selection = HealthSelectionStore.shared.selection
         let metrics = HealthLine.metrics(for: selection)

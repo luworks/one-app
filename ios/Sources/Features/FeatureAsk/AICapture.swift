@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import TodayCore
 #if canImport(FoundationModels)
@@ -150,5 +151,7 @@ private enum OnDeviceCapture {
                      repeatWeekdays: item.repeatWeekdays)
     }
 }
+
+#endif
 
 #endif

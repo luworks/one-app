@@ -4,7 +4,10 @@ import TodayCore
 
 /// AI preview: what will be created. The user can switch reminder / event / alarm before tapping Add.
 package struct CaptureCard: View {
-    package @Binding var capture: Capture
+    package init(capture: Binding<Capture>, lists: [String] = [], status: CardStatus = .open, onAdd: @escaping () -> Void, onCancel: @escaping () -> Void, cancelTitle: String = "Cancel", onUndo: @escaping () -> Void = {}, onOpen: @escaping () -> Void = {}, onRename: @escaping (String) -> Bool = { _ in false }) {
+        _capture = capture; self.lists = lists; self.status = status; self.onAdd = onAdd; self.onCancel = onCancel; self.cancelTitle = cancelTitle; self.onUndo = onUndo; self.onOpen = onOpen; self.onRename = onRename
+    }
+    @Binding package var capture: Capture
     /// The user's Reminders lists; when given, a task shows which one it goes to, changeable with one tap.
     package var lists: [String] = []
     /// Open until the user decides. The card stays in the conversation afterwards (see `CardFooter`).
@@ -119,6 +122,7 @@ private struct DecidedCardLabel: ViewModifier {
 }
 
 package struct CaptureTitleButton: View {
+    package init(title: String, editable: Bool = true, onSave: @escaping (String) -> Bool) { self.title = title; self.editable = editable; self.onSave = onSave }
     package let title: String
     package var editable = true
     package var onSave: (String) -> Bool
@@ -182,6 +186,7 @@ private struct CaptureTitleEditor: View {
 /// The bottom line of a card once it is decided: a green check "Added" with Undo and Open, "Undone" with Add again, or a
 /// quiet "Dropped" with nothing to tap. The same on the full card and on a row of a list.
 package struct CardFooter: View {
+    package init(status: CardStatus, compact: Bool = false, onAdd: @escaping () -> Void = {}, onUndo: @escaping () -> Void = {}, onOpen: @escaping () -> Void = {}) { self.status = status; self.compact = compact; self.onAdd = onAdd; self.onUndo = onUndo; self.onOpen = onOpen }
     package let status: CardStatus
     package var compact = false
     package var onAdd: () -> Void = {}
@@ -239,7 +244,8 @@ package struct CardFooter: View {
 
 /// Where a task will be filed. One tap opens the user's lists.
 package struct ListMenu: View {
-    package @Binding var capture: Capture
+    package init(capture: Binding<Capture>, lists: [String]) { _capture = capture; self.lists = lists }
+    @Binding package var capture: Capture
     package let lists: [String]
 
     package var body: some View {

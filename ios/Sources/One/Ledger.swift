@@ -54,7 +54,7 @@ package final class LedgerEntry {
     }
 }
 
-package extension LedgerEntry {
+extension LedgerEntry {
     package var legacyRow: LegacyLedgerRow {
         LegacyLedgerRow(id: id, date: date, actor: actor, channel: channel, action: action, itemKind: itemKind, itemRef: itemRef,
                         title: title, before: before, after: after, approval: approval, beforeDate: beforeDate, afterDate: afterDate,

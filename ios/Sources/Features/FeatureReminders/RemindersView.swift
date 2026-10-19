@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayPlatform
@@ -536,3 +537,5 @@ extension SmartList {
         }
     }
 }
+
+#endif

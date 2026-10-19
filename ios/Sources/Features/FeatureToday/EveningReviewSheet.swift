@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayPlannerUI
 import TodayCore
@@ -10,8 +11,9 @@ import SwiftUI
 import SwiftData
 
 /// One of tomorrow's first items, as a plain line in the review (time and title, nothing to tap).
-struct ReviewPeek: Identifiable {
-    let id: AnyHashable
+package struct ReviewPeek: Identifiable {
+    package init(id: AnyHashable, time: Date?, title: String) { self.id = id; self.time = time; self.title = title }
+    package let id: AnyHashable
     let time: Date?
     let title: String
 }
@@ -19,7 +21,8 @@ struct ReviewPeek: Identifiable {
 /// "Review today" (Today tab, from 18:00): what got done against what was planned, what is left with a choice per item
 /// (Keep / Tomorrow / Later / Drop, see `EveningReview`), and tomorrow's first items. Items first, no commentary.
 /// Choices are a preview: nothing changes until Apply, and one Undo reverts them all. `due` is never changed.
-struct EveningReviewSheet: View {
+package struct EveningReviewSheet: View {
+    package init(now: Date, tomorrow: Date, peek: [ReviewPeek]) { self.now = now; self.tomorrow = tomorrow; self.peek = peek }
     let now: Date
     let tomorrow: Date
     let peek: [ReviewPeek]
@@ -35,7 +38,7 @@ struct EveningReviewSheet: View {
 
     private var changed: Int { choices.values.filter { $0 != .keep }.count }
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             List {
                 if let s = snapshot {
@@ -195,3 +198,5 @@ struct EveningReviewSheet: View {
 private extension String {
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
+
+#endif

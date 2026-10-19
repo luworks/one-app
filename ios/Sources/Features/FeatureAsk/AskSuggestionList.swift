@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import SwiftData
 import One
@@ -143,3 +144,5 @@ struct AskSuggestionList: View {
         withAnimation(.easeInOut(duration: 0.3)) { revision += 1 }
     }
 }
+
+#endif

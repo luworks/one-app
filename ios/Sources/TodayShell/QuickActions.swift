@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayShared
@@ -44,3 +45,5 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         completionHandler(true)
     }
 }
+
+#endif

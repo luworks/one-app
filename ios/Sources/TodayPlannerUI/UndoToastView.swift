@@ -3,6 +3,7 @@ import One
 import SwiftUI
 
 package struct UndoToastView: View {
+    package init() {}
     @Environment(UndoToast.self) private var toast
 
     package var body: some View {

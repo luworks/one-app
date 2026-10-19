@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayData
@@ -300,3 +301,5 @@ package struct QuickReminderSheet: View {
         dismiss()
     }
 }
+
+#endif

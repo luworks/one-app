@@ -116,9 +116,12 @@ package final class ActivityCenter {
     // MARK: Numbers for Settings
 
     package struct Summary {
-        var perTier: [ActivityTier: Int] = [:]
-        var fileBytes: Int64 = 0
-        var total: Int { perTier.values.reduce(0, +) }
+        package init(perTier: [ActivityTier: Int] = [:], fileBytes: Int64 = 0) {
+            self.perTier = perTier; self.fileBytes = fileBytes
+        }
+        package var perTier: [ActivityTier: Int] = [:]
+        package var fileBytes: Int64 = 0
+        package var total: Int { perTier.values.reduce(0, +) }
     }
 
     package static func summary() -> Summary {

@@ -7,10 +7,11 @@ import TodayDesignSystem
 
 /// Row for a system calendar event (read-only, opens nothing).
 package struct ExternalEventRow: View {
+    package init(event: ExternalEvent, pendingDelete: Binding<CalEntry?>) { self.event = event; _pendingDelete = pendingDelete }
     @Environment(\.dynamicTypeSize) private var typeSize
     package let event: ExternalEvent
     /// The list that holds this row asks "this event or the series?" (see `entryDeleteDialog`).
-    package @Binding var pendingDelete: CalEntry?
+    @Binding package var pendingDelete: CalEntry?
     @AppStorage(SettingsKey.travelTime) private var travelOn = true
 
     /// The same swipe and long-press actions as in the Calendar tab.

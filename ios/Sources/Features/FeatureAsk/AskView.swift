@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayData
@@ -1649,3 +1650,5 @@ package enum AskNativeActions {
         return feedback
     }
 }
+
+#endif

@@ -3,6 +3,7 @@ import SwiftUI
 import TodayCore
 
 package struct CircleButton: View {
+    package init(systemImage: String, label: String, size: CGFloat = 50, action: @escaping () -> Void) { self.systemImage = systemImage; self.label = label; self.size = size; self.action = action }
     package let systemImage: String
     package let label: String
     package var size: CGFloat = 50
@@ -24,7 +25,7 @@ package struct CircleButton: View {
 /// 0.97 press scale with a light haptic.
 
 
-package extension View {
+extension View {
     /// Liquid Glass on iOS 26+, material on older systems.
     @ViewBuilder
     package func glassCapsule() -> some View {

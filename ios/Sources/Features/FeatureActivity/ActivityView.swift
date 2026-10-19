@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayData
@@ -199,3 +200,5 @@ private struct ActivityRow: View {
         return parts.joined(separator: " · ")
     }
 }
+
+#endif

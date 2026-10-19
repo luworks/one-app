@@ -1,5 +1,6 @@
 import TodayShared
 import EventKit
+import os
 import SwiftUI
 import WidgetKit
 
@@ -68,31 +69,34 @@ struct NextUpProvider: TimelineProvider {
     }
 
     /// One store for the extension's lifetime: creating an EKEventStore is slow.
-    private static let store = EKEventStore()
+    // All EventKit access is serialized; only immutable WidgetItem values leave this lock.
+    private static let eventStore = OSAllocatedUnfairLock(uncheckedState: EKEventStore())
 
     /// Apple Calendar events for the snapshot's days, read the way the app reads them (same visible calendars).
     /// nil when the widget can't or shouldn't read them: an app build that doesn't say how, Apple Calendar off in Today,
     /// or no full access for the extension. Then the snapshot's copies are used.
     static func liveEvents(settings: WidgetSnapshot.CalendarSettings?, now: Date, calendar: Calendar = .current) -> [WidgetItem]? {
         guard let settings, settings.isOn, EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return nil }
-        let today = calendar.startOfDay(for: now)
-        let days = (0..<WidgetSnapshot.days).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
-        guard let end = calendar.date(byAdding: .day, value: WidgetSnapshot.days, to: today) else { return nil }
-        let hidden = Set(settings.hiddenCalendarIDs)
-        var visible: [EKCalendar]?
-        if !hidden.isEmpty {
-            visible = store.calendars(for: .event).filter { !hidden.contains($0.calendarIdentifier) }
-            if visible?.isEmpty == true { return [] }
-        }
-        let predicate = store.predicateForEvents(withStart: today, end: end, calendars: visible)
-        return store.events(matching: predicate).flatMap { e -> [WidgetItem] in
-            let id = e.eventIdentifier ?? UUID().uuidString
-            var end: Date = e.endDate
-            // EventKit ends an all-day event on its last day; make the end exclusive, as the app does.
-            if e.isAllDay { end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: e.endDate)) ?? e.endDate }
-            return WidgetItem.eventRows(id: "\(id)@\(e.startDate.timeIntervalSince1970)", title: e.title ?? "Untitled",
-                                        start: e.startDate, end: end, isAllDay: e.isAllDay, externalID: id,
-                                        days: days, calendar: calendar)
+        return eventStore.withLock { store in
+            let today = calendar.startOfDay(for: now)
+            let days = (0..<WidgetSnapshot.days).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+            guard let end = calendar.date(byAdding: .day, value: WidgetSnapshot.days, to: today) else { return nil }
+            let hidden = Set(settings.hiddenCalendarIDs)
+            var visible: [EKCalendar]?
+            if !hidden.isEmpty {
+                visible = store.calendars(for: .event).filter { !hidden.contains($0.calendarIdentifier) }
+                if visible?.isEmpty == true { return [] }
+            }
+            let predicate = store.predicateForEvents(withStart: today, end: end, calendars: visible)
+            return store.events(matching: predicate).flatMap { e -> [WidgetItem] in
+                let id = e.eventIdentifier ?? UUID().uuidString
+                var end: Date = e.endDate
+                // EventKit ends an all-day event on its last day; make the end exclusive, as the app does.
+                if e.isAllDay { end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: e.endDate)) ?? e.endDate }
+                return WidgetItem.eventRows(id: "\(id)@\(e.startDate.timeIntervalSince1970)", title: e.title ?? "Untitled",
+                                            start: e.startDate, end: end, isAllDay: e.isAllDay, externalID: id,
+                                            days: days, calendar: calendar)
+            }
         }
     }
 

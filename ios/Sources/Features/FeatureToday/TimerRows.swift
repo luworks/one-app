@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayPlannerUI
 import TodayCore
@@ -15,7 +16,7 @@ struct TimerLine: View {
     let timer: RunningTimer
     let isRinging: Bool
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 10) {
             Image(systemName: isRinging ? "bell.fill" : (timer.isPaused ? "pause.circle" : "timer"))
                 .foregroundStyle(Color.orange)
@@ -57,11 +58,11 @@ struct TimerLine: View {
 
 /// The running timers at the top of the Today tab: up to two quiet rows with the time left, then "+N more".
 /// Tap opens the Timer tab; swipe right to left (or long-press) for Pause/Resume and Stop. Nothing when no timer runs.
-struct TodayTimerRows: View {
+package struct TodayTimerRows: View {
     var open: () -> Void
     @State private var controller = TimerController.shared
 
-    var body: some View {
+    package var body: some View {
         let split = TimerList.rows(controller.timers, ringing: controller.ringing, now: .now)
         ForEach(split.shown) { timer in
             let ringing = controller.ringing.contains(timer.id)
@@ -110,3 +111,5 @@ struct TodayTimerRows: View {
         }
     }
 }
+
+#endif

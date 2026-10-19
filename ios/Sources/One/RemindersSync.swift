@@ -663,7 +663,7 @@ package final class RemindersSync {
 /// - `-uiTestingAppOp complete|rename|delete|repeat` runs on the app's reminder after the first pass, through the
 ///   same `TaskActions` the screens use.
 /// - `-uiTestingSyncDump <prefix>` shows both sides as hidden labels (`SyncDumpProbe`).
-package extension RemindersSync {
+extension RemindersSync {
     private static func debugOps(_ flag: String) -> [(op: String, title: String, value: String)] {
         let args = ProcessInfo.processInfo.arguments
         guard args.contains("-uiTesting") else { return [] }

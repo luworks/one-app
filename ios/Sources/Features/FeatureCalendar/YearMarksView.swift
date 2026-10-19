@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayPlatform
 import TodayDesignSystem
@@ -88,3 +89,5 @@ struct YearKeySheet: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+#endif

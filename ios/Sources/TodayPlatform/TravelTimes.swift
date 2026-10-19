@@ -1,7 +1,6 @@
 #if os(iOS)
 import TodayCore
 import TodayShared
-import TodayPlatform
 import CoreLocation
 import MapKit
 import Observation
@@ -18,6 +17,8 @@ import os
 @Observable
 package final class TravelTimes: NSObject, CLLocationManagerDelegate {
     package static let shared = TravelTimes()
+    /// Composition receives completed estimates without a dependency on the persistence/widget layer.
+    @ObservationIgnored package var didUpdateEstimate: (@MainActor () -> Void)?
 
     /// Bumped when an estimate lands or location permission changes, so rows redraw.
     package private(set) var version = 0
@@ -117,7 +118,7 @@ package final class TravelTimes: NSObject, CLLocationManagerDelegate {
                 self.cache[key] = TravelEstimate(seconds: seconds, computedAt: .now)
                 self.save()
                 self.version += 1
-                WidgetFeed.rewriteFromStore()
+                self.didUpdateEstimate?()
                 self.pump()
             }
         }
@@ -180,7 +181,7 @@ package final class TravelTimes: NSObject, CLLocationManagerDelegate {
     package nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 }
 
-package extension TravelTimes {
+extension TravelTimes {
     /// The row line for an occurrence ("Drive 18 min · Leave by 14:20"), or nil.
     package func label(eventID: String, start: Date, isAllDay: Bool, place: TravelPlace?, now: Date = .now) -> String? {
         guard let s = seconds(eventID: eventID, start: start, isAllDay: isAllDay, place: place, now: now) else { return nil }

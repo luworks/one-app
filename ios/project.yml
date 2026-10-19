@@ -23,17 +23,17 @@
       },
       "sources": [
         {
-          "path": "One",
-          "excludes": [
-            "**/.DS_Store",
-            "PreviewFixtures.swift"
-          ]
+          "path": "App"
         },
         {
-          "path": "Shared",
+          "path": "One",
           "excludes": [
             "**/.DS_Store"
           ]
+        },
+        {
+          "path": "PrivacyInfo.xcprivacy",
+          "buildPhase": "resources"
         }
       ],
       "dependencies": [
@@ -47,27 +47,19 @@
         },
         {
           "package": "TodayModules",
+          "product": "One"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShell"
+        },
+        {
+          "package": "TodayModules",
           "product": "TodayCore"
         },
         {
           "package": "TodayModules",
-          "product": "TodayShared"
-        },
-        {
-          "package": "TodayModules",
-          "product": "TodayData"
-        },
-        {
-          "package": "TodayModules",
           "product": "TodayPlatform"
-        },
-        {
-          "package": "TodayModules",
-          "product": "TodayDesignSystem"
-        },
-        {
-          "package": "TodayModules",
-          "product": "FeatureClock"
         },
         {
           "package": "TodayModules",
@@ -91,7 +83,7 @@
           ]
         },
         {
-          "path": "Shared",
+          "path": "Sources/One/AlarmActivity.swift",
           "excludes": [
             "**/.DS_Store"
           ]
@@ -142,7 +134,7 @@
           ]
         },
         {
-          "path": "Shared",
+          "path": "Sources/One/AlarmActivity.swift",
           "excludes": [
             "**/.DS_Store"
           ]
@@ -164,22 +156,54 @@
       },
       "sources": [
         {
+          "path": "App"
+        },
+        {
           "path": "One",
           "excludes": [
             "**/.DS_Store"
           ]
         },
         {
-          "path": "Shared",
-          "excludes": [
-            "**/.DS_Store"
-          ]
+          "path": "PrivacyInfo.xcprivacy",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Development/Support"
         }
       ],
       "dependencies": [
         {
+          "target": "TodayWidgets",
+          "embed": true
+        },
+        {
+          "target": "TodayShare",
+          "embed": true
+        },
+        {
+          "package": "TodayModules",
+          "product": "One"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayShell"
+        },
+        {
           "package": "TodayModules",
           "product": "TodayCore"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayPlatform"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayTestSupport"
         },
         {
           "package": "TodayModules",
@@ -191,23 +215,19 @@
         },
         {
           "package": "TodayModules",
-          "product": "TodayPlatform"
-        },
-        {
-          "package": "TodayModules",
           "product": "TodayDesignSystem"
         },
         {
           "package": "TodayModules",
+          "product": "FeatureReminders"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureCalendar"
+        },
+        {
+          "package": "TodayModules",
           "product": "FeatureClock"
-        },
-        {
-          "package": "TodayModules",
-          "product": "FeatureHealth"
-        },
-        {
-          "package": "TodayModules",
-          "product": "TodayTestSupport"
         }
       ],
       "productName": "TodayMock"

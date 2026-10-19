@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -535,3 +536,5 @@ package struct AutomaticChangesView: View {
         "Anything that notifies other people",
     ]
 }
+
+#endif

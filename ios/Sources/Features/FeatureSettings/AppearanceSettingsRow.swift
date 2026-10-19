@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import TodayCore
 import TodayDesignSystem
@@ -20,3 +21,5 @@ package struct AppearanceSettingsRow: View {
         .pickerStyle(.menu)
     }
 }
+
+#endif

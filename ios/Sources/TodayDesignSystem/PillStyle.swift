@@ -100,7 +100,7 @@ public struct PillSwitcher<Item: Hashable>: View {
     public enum Distribution { case leading, equal }
 
     package let items: [Item]
-    package @Binding var selection: Item
+    @Binding package var selection: Item
     package var distribution: Distribution = .leading
     package let title: (Item) -> String
     package var icon: ((Item) -> String?)? = nil
@@ -148,7 +148,7 @@ public struct PillChip<Leading: View>: View {
     package var count: Int? = nil
     package var accessibilityText: String? = nil
     package var identifier: String? = nil
-    package @ViewBuilder var leading: () -> Leading
+    @ViewBuilder package var leading: () -> Leading
     package var action: () -> Void
 
     public init(title: String, count: Int? = nil, accessibilityText: String? = nil,
@@ -199,7 +199,7 @@ public struct PillChip<Leading: View>: View {
 @MainActor
 public struct PillChipRow<Content: View>: View {
     package var inset: CGFloat = 20
-    package @ViewBuilder var content: () -> Content
+    @ViewBuilder package var content: () -> Content
 
     public init(inset: CGFloat = 20, @ViewBuilder content: @escaping () -> Content) {
         self.inset = inset

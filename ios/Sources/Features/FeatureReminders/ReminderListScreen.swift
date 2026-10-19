@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayPlatform
@@ -559,3 +560,5 @@ private struct NewReminderRow: View {
         return true
     }
 }
+
+#endif

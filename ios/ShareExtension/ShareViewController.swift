@@ -10,7 +10,8 @@ import UniformTypeIdentifiers
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             let input = await loadInput()
             let draft = ShareInbox.draft(text: input.text, url: input.url, pageTitle: input.pageTitle)
             let sheet = ShareSheet(title: draft.title, note: draft.note,
@@ -40,6 +41,38 @@ final class ShareViewController: UIViewController {
         }
     }
 
+    private func readURL(_ provider: NSItemProvider) async -> URL? {
+        if provider.canLoadObject(ofClass: NSURL.self) {
+            let url: URL? = await withCheckedContinuation { continuation in
+                _ = provider.loadObject(ofClass: NSURL.self) { value, _ in
+                    continuation.resume(returning: value as? URL)
+                }
+            }
+            if let url { return url }
+        }
+        return await withCheckedContinuation { continuation in
+            _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.url.identifier) { data, _ in
+                continuation.resume(returning: data.flatMap { URL(dataRepresentation: $0, relativeTo: nil) })
+            }
+        }
+    }
+
+    private func readText(_ provider: NSItemProvider) async -> String? {
+        if provider.canLoadObject(ofClass: NSString.self) {
+            let text: String? = await withCheckedContinuation { continuation in
+                _ = provider.loadObject(ofClass: NSString.self) { value, _ in
+                    continuation.resume(returning: value as? String)
+                }
+            }
+            if let text { return text }
+        }
+        return await withCheckedContinuation { continuation in
+            _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.plainText.identifier) { data, _ in
+                continuation.resume(returning: data.flatMap { String(data: $0, encoding: .utf8) })
+            }
+        }
+    }
+
     /// The first text, link and page title among the shared items.
     private func loadInput() async -> (text: String?, url: URL?, pageTitle: String?) {
         var text: String?, url: URL?, pageTitle: String?
@@ -47,11 +80,11 @@ final class ShareViewController: UIViewController {
             if pageTitle == nil, let t = item.attributedContentText?.string, !t.isEmpty { pageTitle = t }
             for provider in item.attachments ?? [] {
                 if url == nil, provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
-                   let value = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) {
-                    url = (value as? URL) ?? (value as? Data).flatMap { URL(dataRepresentation: $0, relativeTo: nil) }
+                   let value = await readURL(provider) {
+                    url = value
                 } else if text == nil, provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
-                          let value = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) {
-                    text = (value as? String) ?? (value as? Data).flatMap { String(data: $0, encoding: .utf8) }
+                          let value = await readText(provider) {
+                    text = value
                 }
             }
         }

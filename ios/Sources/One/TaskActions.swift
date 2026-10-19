@@ -15,7 +15,7 @@ package final class UndoToast {
     private var token = UUID()
     /// The window's undo manager: every undoable change is registered there too, so shaking the iPhone offers
     /// the system's "Undo ..." prompt for it, like in any other app. Set by `HomeView`.
-    package @ObservationIgnored var undoManager: UndoManager?
+    @ObservationIgnored package var undoManager: UndoManager?
 
     package func show(_ message: String, undo: @escaping () -> Void) {
         let t = UUID()

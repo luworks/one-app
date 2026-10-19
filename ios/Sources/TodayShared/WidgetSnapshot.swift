@@ -4,8 +4,8 @@ import Foundation
 // Foundation only: no SwiftData, SwiftUI or WidgetKit, so `swift test` can cover it on macOS.
 
 /// One thing on the widget: an event, a reminder with a time, or an alarm.
-public struct WidgetItem: Codable, Hashable, Identifiable {
-    public enum Kind: String, Codable { case event, reminder, alarm }
+public struct WidgetItem: Codable, Hashable, Identifiable, Sendable {
+    public enum Kind: String, Codable, Sendable { case event, reminder, alarm }
 
     public var id: String
     public var title: String
@@ -60,14 +60,14 @@ public struct WidgetItem: Codable, Hashable, Identifiable {
 
 /// What the app hands the widget: the items of the next `WidgetSnapshot.days` days (so the "Tomorrow" line still has data
 /// after midnight), written as JSON into the App Group container.
-public struct WidgetSnapshot: Codable, Equatable {
+public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var generatedAt: Date
     public var items: [WidgetItem]
     /// The app's Apple Calendar settings, which the widget needs to read EventKit the way the app does:
     /// nil in snapshots from older builds (then the widget shows the snapshot as it is).
     public var calendar: CalendarSettings?
 
-    public struct CalendarSettings: Codable, Equatable {
+    public struct CalendarSettings: Codable, Equatable, Sendable {
         /// Apple Calendar is on in Today and access is granted.
         public var isOn: Bool
         /// Calendars turned off in the Calendars list.

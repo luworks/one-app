@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import SwiftUI
 import EventKit
@@ -9,7 +10,7 @@ package struct NativeCalendarChooser: UIViewControllerRepresentable {
     package init(calendar: CalendarSync) { self.calendar = calendar }
     @Environment(\.dismiss) private var dismiss
 
-    func makeUIViewController(context: Context) -> UINavigationController {
+    package func makeUIViewController(context: Context) -> UINavigationController {
         let sync = calendar
         let store = sync.eventStore
         let chooser = EKCalendarChooser(selectionStyle: .multiple, displayStyle: .allCalendars, entityType: .event, eventStore: store)
@@ -22,20 +23,22 @@ package struct NativeCalendarChooser: UIViewControllerRepresentable {
         return UINavigationController(rootViewController: chooser)
     }
 
-    func updateUIViewController(_ controller: UINavigationController, context: Context) {}
+    package func updateUIViewController(_ controller: UINavigationController, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
+    package func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
 
     @MainActor
-    final class Coordinator: NSObject, @MainActor EKCalendarChooserDelegate {
+    package final class Coordinator: NSObject, @MainActor EKCalendarChooserDelegate {
         let dismiss: () -> Void
         init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
 
-        func calendarChooserSelectionDidChange(_ chooser: EKCalendarChooser) {
+        package func calendarChooserSelectionDidChange(_ chooser: EKCalendarChooser) {
             let ids = Set(chooser.selectedCalendars.map(\.calendarIdentifier))
             Task { @MainActor in CalendarSync.shared.setVisibleCalendars(ids) }
         }
-        func calendarChooserDidFinish(_ chooser: EKCalendarChooser) { dismiss() }
-        func calendarChooserDidCancel(_ chooser: EKCalendarChooser) { dismiss() }
+        package func calendarChooserDidFinish(_ chooser: EKCalendarChooser) { dismiss() }
+        package func calendarChooserDidCancel(_ chooser: EKCalendarChooser) { dismiss() }
     }
 }
+
+#endif

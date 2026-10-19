@@ -54,7 +54,8 @@ struct OneApp: App {
     }
 
     #if TODAY_MOCK
-    private func prepareMockData(_ context: ModelContext) -> Bool {
+    private func prepareMockData(_ context: ModelContext) async -> Bool {
+        if ProcessInfo.processInfo.arguments.contains("-seedCalendarDemo") { await CalendarSync.shared.seedDemo() }
         if let path = DevImport.requestedPath {
             do { _ = try DevImport.run(path: path, into: context); ListActions.ensureLists(in: context) }
             catch { print("IMPORT failed code: \((error as NSError).code)") }

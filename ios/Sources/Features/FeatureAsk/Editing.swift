@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import TodayCore
 import FoundationModels
@@ -59,3 +60,5 @@ extension Editing {
 private extension Array {
     func appending(_ other: [Element]) -> [Element] { self + other }
 }
+
+#endif

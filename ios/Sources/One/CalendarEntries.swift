@@ -9,6 +9,13 @@ import SwiftData
 /// One thing on the Calendar tab, whatever it came from: a system event (Apple Calendar, Google, …), an event
 /// Today created itself, or a task planned for a time. The views draw these; they never care where they came from.
 package struct CalEntry: Identifiable {
+    package init(id: String, source: Source, title: String, location: String = "", start: Date, end: Date, isAllDay: Bool, color: Color, calendarTitle: String = "", repeats: Bool = false, isBackground: Bool = false, isBirthday: Bool = false, isHoliday: Bool = false) {
+        self.id = id; self.source = source; self.title = title; self.location = location
+        self.start = start; self.end = end; self.isAllDay = isAllDay; self.color = color
+        self.calendarTitle = calendarTitle; self.repeats = repeats; self.isBackground = isBackground
+        self.isBirthday = isBirthday; self.isHoliday = isHoliday
+    }
+
     package enum Source {
         case system(String)       // EKEvent identifier
         case local(OneEvent)

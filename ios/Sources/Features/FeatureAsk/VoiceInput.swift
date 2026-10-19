@@ -1,3 +1,4 @@
+#if os(iOS)
 import AVFoundation
 import Speech
 import SwiftUI
@@ -89,3 +90,5 @@ final class VoiceInput {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
+
+#endif

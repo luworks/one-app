@@ -23,6 +23,7 @@ package enum WidgetFeed {
 
     package static func configure(_ container: ModelContainer) {
         self.container = container
+        TravelTimes.shared.didUpdateEstimate = { WidgetFeed.rewriteFromStore() }
     }
 
     package static func update(tasks: [OneTask], events: [OneEvent], alarms: [OneAlarm], now: Date = .now, calendar: Calendar = .current) {

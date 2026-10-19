@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import SwiftData
 import One
@@ -90,3 +91,5 @@ enum AskSuggestionContextBuilder {
             .map(TravelTime.minutes)
     }
 }
+
+#endif

@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayPlatform
@@ -205,3 +206,5 @@ package struct TaskEditor: View {
     }
 }
 
+
+#endif

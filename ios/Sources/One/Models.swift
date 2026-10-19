@@ -201,7 +201,7 @@ package final class OneEvent {
     }
 }
 
-package extension Capture {
+extension Capture {
     package func makeTask() -> OneTask {
         let timing = taskTiming
         let t = OneTask(title: title, plannedStart: timing.plannedStart, durationMinutes: durationMinutes ?? 25, due: timing.due)

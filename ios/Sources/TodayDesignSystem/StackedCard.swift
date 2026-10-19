@@ -29,7 +29,7 @@ public struct StackedCard<Fill: ShapeStyle, Content: View>: View {
     }
 }
 
-package extension View {
+extension View {
     /// Retains native List navigation, swipe actions and reordering around the shared card surface.
     @MainActor
     public func stackedCardRow() -> some View {

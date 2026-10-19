@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayShared
 import TodayData
@@ -130,3 +131,5 @@ package struct AskSuggestionsSettingRow: View {
                         caption: "The few ideas under “What do you want to plan?”. They are made on this iPhone from your own plans.")
     }
 }
+
+#endif

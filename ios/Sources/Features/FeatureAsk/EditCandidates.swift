@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import One
 import TodayCore
@@ -34,3 +35,5 @@ enum EditCandidates {
         return (items, taskByID, eventByID)
     }
 }
+
+#endif

@@ -80,6 +80,7 @@ package enum DrawerDragKind {
 }
 
 package struct DrawerDrag: ViewModifier {
+    package init(model: DrawerModel, width: CGFloat, kind: DrawerDragKind, enabled: Bool = true) { self.model = model; self.width = width; self.kind = kind; self.enabled = enabled }
     package let model: DrawerModel
     package let width: CGFloat
     package let kind: DrawerDragKind
@@ -132,6 +133,7 @@ package enum DrawerLayout {
 
 /// The page: slides right by the sidebar's width, with rounded corners and a dim layer that fade in as it moves.
 package struct DrawerMainSlide: ViewModifier {
+    package init(model: DrawerModel, width: CGFloat, size: CGSize = .zero, insets: EdgeInsets = EdgeInsets()) { self.model = model; self.width = width; self.size = size; self.insets = insets }
     package let model: DrawerModel
     package let width: CGFloat
     /// The screen's size and safe-area insets, so the rounded corners are the screen's own, not the safe area's.
@@ -161,6 +163,7 @@ package struct DrawerMainSlide: ViewModifier {
 
 /// The sidebar: follows the page with a small parallax, so it settles at 0 when fully open.
 package struct DrawerSidebarSlide: ViewModifier {
+    package init(model: DrawerModel, width: CGFloat) { self.model = model; self.width = width }
     package let model: DrawerModel
     package let width: CGFloat
 

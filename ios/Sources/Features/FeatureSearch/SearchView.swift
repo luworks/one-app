@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayShared
@@ -348,3 +349,5 @@ private enum Recents {
         UserDefaults.standard.set(Array(list), forKey: key)
     }
 }
+
+#endif

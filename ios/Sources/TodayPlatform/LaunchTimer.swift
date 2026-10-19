@@ -1,29 +1,28 @@
 #if os(iOS)
 import TodayCore
 import TodayShared
-import TodayPlatform
 import Foundation
 import Darwin
 
 /// Cold start time: process start (from the kernel) to Today's first appearance.
 @MainActor
-package enum LaunchTimer {
-    package private(set) static var milliseconds: Int?
+public enum LaunchTimer {
+    public private(set) static var milliseconds: Int?
 
-    package static func markFirstFrame() {
+    public static func markFirstFrame() {
         guard milliseconds == nil else { return }
         milliseconds = elapsedMs()
         mark("first frame")
     }
 
     /// Debug breadcrumbs for where launch time goes.
-    package static func mark(_ label: String) {
+    public static func mark(_ label: String) {
         #if DEBUG
         print("LAUNCH \(label): \(elapsedMs() ?? -1)ms")
         #endif
     }
 
-    package static func elapsedMs() -> Int? {
+    public static func elapsedMs() -> Int? {
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]

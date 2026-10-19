@@ -2,7 +2,7 @@
 import SwiftUI
 import TodayCore
 
-package extension SmartList {
+extension SmartList {
     package var color: Color {
         switch self {
         case .today: Color(.systemBlue)

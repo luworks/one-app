@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayPlatform
 import TodayDesignSystem
@@ -1428,3 +1429,5 @@ enum CalendarIDs {
         return String(format: "miniMonth.%04d-%02d", c.year ?? 0, c.month ?? 0)
     }
 }
+
+#endif

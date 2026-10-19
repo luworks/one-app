@@ -1,3 +1,4 @@
+#if os(iOS)
 import One
 import TodayCore
 import TodayShared
@@ -343,3 +344,5 @@ struct SidebarRow: View {
         .padding(.horizontal, 6)
     }
 }
+
+#endif

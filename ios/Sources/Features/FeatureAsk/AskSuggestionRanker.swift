@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import TodayCore
 #if canImport(FoundationModels)
@@ -87,5 +88,7 @@ private enum OnDeviceRanker {
         }
     }
 }
+
+#endif
 
 #endif

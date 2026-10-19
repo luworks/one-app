@@ -1,3 +1,4 @@
+#if os(iOS)
 import TodayCore
 import TodayDesignSystem
 import SwiftUI
@@ -223,3 +224,5 @@ struct CompactCaptureRow: View {
     }
 }
 
+
+#endif
