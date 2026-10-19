@@ -2,6 +2,7 @@
 import One
 import TodayCore
 import TodayPlatform
+import TodayDesignSystem
 import SwiftUI
 import SwiftData
 
@@ -16,13 +17,16 @@ extension View {
 struct AlarmRow: View {
     @Bindable var alarm: OneAlarm
     var state: AlarmLiveState?
+    let alarms: any AlarmService
+    @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.modelContext) private var context
     var onEdit: () -> Void
 
     @ScaledMetric(relativeTo: .largeTitle) private var timeSize = 48
     @ScaledMetric(relativeTo: .title) private var suffixSize = 26
 
     private var parts: (time: String, suffix: String?) {
-        AlarmPlan.timeParts(hour: alarm.hour, minute: alarm.minute)
+        AlarmPlan.timeParts(hour: alarm.hour, minute: alarm.minute, locale: presentation.locale)
     }
 
     private var isRinging: Bool { state == .ringing }
@@ -52,13 +56,18 @@ struct AlarmRow: View {
             .accessibilityIdentifier("alarm.row")
 
             if isRinging {
-                Button("Stop") { if let id = alarm.alarmKitID { Ringer.stop(id) } }
+                Button("Stop") { if let id = alarm.alarmKitID { alarms.stop(id) } }
                     .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.capsule)
                     .tint(.orange)
                     .accessibilityIdentifier("alarm.stop")
             } else {
-                Toggle("Alarm on", isOn: Binding(get: { alarm.isOn }, set: { alarm.setOn($0) }))
+                Toggle("Alarm on", isOn: Binding(get: { alarm.isOn }, set: { on in
+                    if on && !alarm.isOn { alarm.createdAt = presentation.now; alarm.alarmKitSignature = nil }
+                    alarm.isOn = on
+                    try? context.save()
+                    Task { await alarms.sync(context) }
+                }))
                     .labelsHidden()
                     .tint(Color(.systemGreen))
                     .switchOnRowMargin()
@@ -72,10 +81,11 @@ struct AlarmRow: View {
 
     /// "Alarm, Every day"; says so while the alarm rings or is snoozing.
     private var subtitle: String {
+        let text = AlarmPlan.rowSubtitle(label: alarm.label, weekdays: alarm.weekdays, calendar: presentation.calendar)
         switch state {
-        case .ringing: alarm.subtitle + ", Ringing"
-        case .snoozing: alarm.subtitle + ", Snoozed"
-        default: alarm.subtitle
+        case .ringing: return text + ", Ringing"
+        case .snoozing: return text + ", Snoozed"
+        default: return text
         }
     }
 }
@@ -86,7 +96,12 @@ struct AlarmRow: View {
 package struct AlarmEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
-    private let showUndo: (String, @escaping () -> Void) -> Void
+    @Environment(PlannerActions.self) private var actions
+    @Environment(UndoToast.self) private var toast
+    private let alarms: any AlarmService
+    private let soundPreview: any SoundPreviewing
+    private let runtime: PlannerRuntime
+    private let onCreated: (OneAlarm, ModelContext) -> Void
     let alarm: OneAlarm?
 
     @State private var time: Date
@@ -99,17 +114,22 @@ package struct AlarmEditor: View {
     static let snoozeChoices = AlarmPlan.snoozeChoices
 
     package init(alarm: OneAlarm? = nil,
-                 showUndo: @escaping (String, @escaping () -> Void) -> Void) {
+                 alarms: any AlarmService, soundPreview: any SoundPreviewing,
+                 runtime: PlannerRuntime, defaults: UserDefaults,
+                 onCreated: @escaping (OneAlarm, ModelContext) -> Void) {
         self.alarm = alarm
-        self.showUndo = showUndo
+        self.alarms = alarms
+        self.soundPreview = soundPreview
+        self.runtime = runtime
+        self.onCreated = onCreated
         // A new alarm starts at the next quarter hour (10:56 → 11:00), so it still rings today when saved straight away.
-        _time = State(initialValue: alarm?.timeToday ?? AlarmPlan.nextQuarterHour(after: TodayClock.now))
+        _time = State(initialValue: alarm.map { runtime.calendar.date(bySettingHour: $0.hour, minute: $0.minute, second: 0, of: runtime.now()) ?? runtime.now() } ?? AlarmPlan.nextQuarterHour(after: runtime.now(), calendar: runtime.calendar))
         _label = State(initialValue: alarm?.label ?? "")
         _weekdays = State(initialValue: Set(alarm?.weekdays ?? []))
         _snooze = State(initialValue: alarm?.snooze ?? true)
         // A new alarm starts with the sound and snooze length chosen in Settings > Alarms; an existing one keeps its own.
-        _sound = State(initialValue: alarm?.sound ?? Preferences.newAlarmSoundName())
-        _snoozeMinutes = State(initialValue: AlarmPlan.snoozeMinutes(nearest: alarm?.snoozeMinutes ?? Preferences.newAlarmSnoozeMinutes()))
+        _sound = State(initialValue: alarm?.sound ?? Preferences.newAlarmSoundName(defaults))
+        _snoozeMinutes = State(initialValue: AlarmPlan.snoozeMinutes(nearest: alarm?.snoozeMinutes ?? Preferences.newAlarmSnoozeMinutes(defaults)))
     }
 
     package var body: some View {
@@ -134,6 +154,9 @@ package struct AlarmEditor: View {
             .background(Color(.systemGroupedBackground))
             .toolbar(.hidden, for: .navigationBar)
         }
+        .environment(\.calendar, runtime.calendar)
+        .environment(\.locale, runtime.locale)
+        .environment(\.timeZone, runtime.calendar.timeZone)
         .presentationDetents([.large])
     }
 
@@ -179,7 +202,7 @@ package struct AlarmEditor: View {
             Row {
                 Text("Repeat")
                 Spacer()
-                Text(AlarmPlan.repeatValue(weekdays: weekdays.sorted())).foregroundStyle(.secondary)
+                Text(AlarmPlan.repeatValue(weekdays: weekdays.sorted(), calendar: runtime.calendar)).foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("alarm.repeat")
@@ -212,7 +235,7 @@ package struct AlarmEditor: View {
             }
             Divider().padding(.horizontal, 18)
             NavigationLink {
-                SoundScreen(sound: $sound).performanceDestination("alarm.sound")
+                SoundScreen(sound: $sound, preview: soundPreview).performanceDestination("alarm.sound")
             } label: {
                 Row {
                     Text("Sound").foregroundStyle(.primary)
@@ -256,15 +279,7 @@ package struct AlarmEditor: View {
 
     private func deleteButton(_ alarm: OneAlarm) -> some View {
         Button(role: .destructive) {
-            let backup = alarm.copy()
-            Ledger.record(.deleted, kind: "alarm", title: alarmTitle(backup), context: context)
-            context.delete(alarm)
-            Task { await Ringer.sync(context) }
-            showUndo("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
-                withAnimation(.snappy) { context.insert(backup) }
-                try? context.save()
-                Task { await Ringer.sync(context) }
-            }
+            actions.delete(alarm, context: context, toast: toast)
             dismiss()
         } label: {
             Text("Delete Alarm")
@@ -276,7 +291,7 @@ package struct AlarmEditor: View {
     }
 
     private func save() {
-        let c = Calendar.current.dateComponents([.hour, .minute], from: time)
+        let c = runtime.calendar.dateComponents([.hour, .minute], from: time)
         let target = alarm ?? OneAlarm(hour: 0, minute: 0)
         target.hour = c.hour ?? 7
         target.minute = c.minute ?? 0
@@ -286,16 +301,19 @@ package struct AlarmEditor: View {
         target.sound = sound
         target.snoozeMinutes = snoozeMinutes
         target.isOn = true
-        target.createdAt = .now   // a one-time alarm counts from the last save
+        target.createdAt = runtime.now()   // a one-time alarm counts from the last save
         target.alarmKitSignature = nil   // forces a reschedule of exactly this alarm
         if alarm == nil {
             context.insert(target)
-            Ledger.record(.created, kind: "alarm", title: alarmTitle(target), context: context)
         }
         // Saved now so the new alarm's id is final: the list opens its editor by that id, and an autosave that
         // changed it while the editor was open would close the editor and drop the edits.
-        try? context.save()
-        Task { await Ringer.sync(context) }
+        do { try context.save() } catch {
+            if alarm == nil { context.delete(target) }
+            return
+        }
+        if alarm == nil { onCreated(target, context) }
+        Task { await alarms.sync(context) }
         dismiss()
     }
 }
@@ -324,14 +342,15 @@ private struct Row<Content: View>: View {
 
 /// A weekday circle: gray, orange when the alarm repeats that day. Reads as "Every Monday".
 private struct DayCircle: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let day: Int
     let isOn: Bool
     let action: () -> Void
 
     var body: some View {
-        let name = "Every " + Calendar.current.weekdaySymbols[day - 1]
+        let name = "Every " + presentation.calendar.weekdaySymbols[day - 1]
         Button(action: action) {
-            Text(Calendar.current.veryShortWeekdaySymbols[day - 1])
+            Text(presentation.calendar.veryShortWeekdaySymbols[day - 1])
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(isOn ? Color.white : Color.primary)
                 .frame(width: 32, height: 32)
@@ -351,7 +370,10 @@ package struct SoundScreen: View {
     @Binding var sound: String
     @Environment(\.dismiss) private var dismiss
 
-    package init(sound: Binding<String>) {
+    private let preview: any SoundPreviewing
+
+    package init(sound: Binding<String>, preview: any SoundPreviewing) {
+        self.preview = preview
         _sound = sound
     }
 
@@ -368,13 +390,13 @@ package struct SoundScreen: View {
         }
         .navigationTitle("Sound")
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear { SoundPreview.shared.stop() }
+        .onDisappear { preview.stop() }
     }
 
     private func row(title: String, value: String, subtitle: String?) -> some View {
         Button {
             sound = value
-            if let tone = AlarmSound.named(value) { SoundPreview.shared.play(tone) } else { SoundPreview.shared.stop() }
+            if let tone = AlarmSound.named(value) { preview.play(tone) } else { preview.stop() }
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {

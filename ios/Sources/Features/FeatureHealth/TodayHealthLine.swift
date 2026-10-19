@@ -11,15 +11,25 @@ import SwiftUI
 @Observable
 public final class HealthLineModel {
     private let source: any HealthSource
+    private let store: HealthSelectionStore
+    private let defaults: UserDefaults
+    private let runtime: PlannerRuntime
+    private let gate: HealthAccessGate
     package private(set) var line: String?
     @ObservationIgnored nonisolated(unsafe) private var observer: NSObjectProtocol?
 
-    public init(source: any HealthSource) {
+    public init(source: any HealthSource, store: HealthSelectionStore, defaults: UserDefaults, runtime: PlannerRuntime, gate: HealthAccessGate) {
         self.source = source
+        self.store = store
+        self.defaults = defaults
+        self.runtime = runtime
+        self.gate = gate
         // The line follows a changed choice of metrics (from the sheet or Settings), unless the line is switched off.
         observer = NotificationCenter.default.addObserver(forName: HealthSelectionStore.didChange, object: nil, queue: .main) { [weak self] _ in
-            guard UserDefaults.standard.object(forKey: SettingsKey.healthSummary) as? Bool ?? true else { return }
-            Task { @MainActor in await self?.load() }
+            Task { @MainActor in
+                guard let self, self.defaults.object(forKey: SettingsKey.healthSummary) as? Bool ?? true else { return }
+                await self.load()
+            }
         }
     }
 
@@ -27,28 +37,35 @@ public final class HealthLineModel {
 
     /// Answers that arrived during the current load (a stalled metric simply has none).
     private var arrived: [HealthMetric: HealthSeries] = [:]
-    private func note(_ metric: HealthMetric, _ series: HealthSeries) { arrived[metric] = series }
+    private var generation = 0
+    private func note(_ metric: HealthMetric, _ series: HealthSeries, token: Int) {
+        guard !Task.isCancelled, generation == token else { return }
+        arrived[metric] = series
+    }
 
     /// Never hangs and never blanks the line on a stall: the access request and each metric's query are bounded
     /// (`HealthLoader`), and a load where nothing answered leaves the line as it was.
     package func load() async {
-        guard source.isAvailable else { return }
-        let selection = HealthSelectionStore.shared.selection
+        guard !Task.isCancelled, source.isAvailable else { return }
+        generation += 1
+        let token = generation
+        let selection = store.selection
         let metrics = HealthLine.metrics(for: selection)
         guard !metrics.isEmpty else { line = nil; return }
-        let now = TodayClock.now
+        let now = runtime.now()
         arrived = [:]
         await HealthLoader.load(
-            metrics, source: source, days: HealthSpark.days, now: now,
+            metrics, source: source, gate: gate, days: HealthSpark.days, now: now,
             onLateAccess: { [weak self] in Task { @MainActor in await self?.load() } },
             onResult: { [weak self] metric, result, _ in
-                if case .series(let series) = result { await self?.note(metric, series) }
+                if case .series(let series) = result { await self?.note(metric, series, token: token) }
             })
-        guard !arrived.isEmpty else { return }
+        guard !Task.isCancelled, generation == token, !arrived.isEmpty else { return }
         let source = source
         let units: HealthUnits?
         if case .value(let preferred) = await HealthTimeout.race({ await source.preferredUnits() }) { units = preferred } else { units = nil }
-        line = HealthLine.text(selection: selection, series: arrived, now: now, units: units ?? HealthUnits())
+        guard !Task.isCancelled, generation == token else { return }
+        line = HealthLine.text(selection: selection, series: arrived, now: now, calendar: runtime.calendar, units: units ?? HealthUnits(locale: runtime.locale), locale: runtime.locale)
     }
 }
 

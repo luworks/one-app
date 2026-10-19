@@ -1,5 +1,6 @@
 #if os(iOS)
 import TodayCore
+import TodayDesignSystem
 import SwiftUI
 import UIKit
 
@@ -74,6 +75,7 @@ struct TimerRoundButton: View {
 /// name under it, and a round pause / resume button and cancel X. While it rings the ring is gone and X says Stop.
 /// The time comes from `RunningTimer` (TimerDial.swift); what the controller does is in TimerController.swift.
 struct RunningTimerCard: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let timer: RunningTimer
     let isRinging: Bool
     let onPauseResume: () -> Void
@@ -83,8 +85,8 @@ struct RunningTimerCard: View {
     private let lineWidth: CGFloat = 6
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let left = timer.remaining(now: context.date)
+        TimelineView(.periodic(from: presentation.now, by: 1)) { context in
+            let left = timer.remaining(now: presentation.now)
             let fraction = timer.total > 0 && !isRinging ? left / Double(timer.total) : 0
             HStack(spacing: 12) {
                 ZStack {
@@ -101,7 +103,7 @@ struct RunningTimerCard: View {
                             .minimumScaleFactor(0.5)
                             .lineLimit(1)
                             .contentTransition(.numericText(countsDown: true))
-                            .accessibilityLabel(TimerList.spokenRemaining(timer, ringing: isRinging, now: context.date))
+                            .accessibilityLabel(TimerList.spokenRemaining(timer, ringing: isRinging, now: presentation.now))
                             .accessibilityIdentifier("timer.remaining")
                         Text(isRinging ? "Time's up" : TimerList.title(timer))
                             .font(.footnote)

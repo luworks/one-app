@@ -19,18 +19,23 @@ public final class HealthModel {
     private let source: any HealthSource
     private let store: HealthSelectionStore
     private let timeout: Double
+    public let runtime: PlannerRuntime
+    private let gate: HealthAccessGate
     public private(set) var selection: HealthSelection
     public private(set) var series: [HealthMetric: HealthSeries] = [:]
     /// Per metric: waiting, answered, or failed. A metric not listed has not started yet and counts as waiting.
     public private(set) var states: [HealthMetric: HealthMetricState] = [:]
     /// lb or kg, mi or km: what Apple Health is set to (the region until it has answered).
-    public private(set) var units = HealthUnits()
+    public private(set) var units: HealthUnits
     /// The latest fetch started for each metric; an older fetch that answers late must not overwrite a newer answer.
     @ObservationIgnored private var generation: [HealthMetric: Int] = [:]
 
     /// App assembly owns one model for the Today line and every Health sheet. Workbench supplies its own source.
-    public init(source: any HealthSource, store: HealthSelectionStore = .shared, timeout: Double = HealthTimeout.seconds) {
+    public init(source: any HealthSource, store: HealthSelectionStore, runtime: PlannerRuntime, gate: HealthAccessGate, timeout: Double = HealthTimeout.seconds) {
         self.source = source
+        self.runtime = runtime
+        self.gate = gate
+        self.units = HealthUnits(locale: runtime.locale)
         self.store = store
         self.timeout = timeout
         selection = store.selection
@@ -45,7 +50,7 @@ public final class HealthModel {
     /// Opening the sheet, pull to refresh, and the app becoming active again (which also asks again for access that
     /// was never answered).
     public func load() async {
-        guard source.isAvailable else { return }
+        guard !Task.isCancelled, source.isAvailable else { return }
         async let preferred: Void = refreshUnits()
         await run(selection.shown)
         await preferred
@@ -68,7 +73,7 @@ public final class HealthModel {
 
     /// Requests access (once per new batch of types), then reads each metric on its own.
     private func run(_ metrics: [HealthMetric]) async {
-        guard !metrics.isEmpty else { return }
+        guard !Task.isCancelled, !metrics.isEmpty else { return }
         for metric in metrics where states[metric] == nil { states[metric] = .loading }
         var tokens: [HealthMetric: Int] = [:]
         for metric in metrics {
@@ -77,7 +82,7 @@ public final class HealthModel {
         }
         let tokenSnapshot = tokens
         await HealthLoader.load(
-            metrics, source: source, days: Self.days, now: TodayClock.now, timeout: timeout,
+            metrics, source: source, gate: gate, days: Self.days, now: runtime.now(), timeout: timeout,
             onLateAccess: { [weak self] in
                 // The permission sheet answered after the timeout: read what it allowed.
                 Task { @MainActor in await self?.run(metrics) }
@@ -88,7 +93,7 @@ public final class HealthModel {
     }
 
     private func apply(_ metric: HealthMetric, _ result: HealthFetchResult, access: HealthAccessOutcome, token: Int) {
-        guard generation[metric] == token else { return }
+        guard !Task.isCancelled, generation[metric] == token else { return }
         if case .series(let s) = result { series[metric] = s }
         let hadData = series[metric].map { !$0.points.isEmpty } ?? false
         states[metric] = HealthMetricState.settled(result, access: access, hadData: hadData)
@@ -97,6 +102,7 @@ public final class HealthModel {
     private func refreshUnits() async {
         let source = source
         if case .value(let preferred) = await HealthTimeout.race(seconds: timeout, { await source.preferredUnits() }), let preferred {
+            guard !Task.isCancelled else { return }
             units = preferred
         }
     }
@@ -118,7 +124,7 @@ public final class HealthModel {
     }
 
     public func row(for metric: HealthMetric) -> HealthRowModel {
-        HealthRowModel(metric: metric, series: series[metric], now: TodayClock.now, units: units)
+        HealthRowModel(metric: metric, series: series[metric], now: runtime.now(), calendar: runtime.calendar, units: units, locale: runtime.locale)
     }
 }
 #endif

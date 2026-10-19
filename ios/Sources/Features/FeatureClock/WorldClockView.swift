@@ -4,28 +4,17 @@ import TodayCore
 import TodayDesignSystem
 import TodayPlatform
 
-public extension CityDatabase {
-    /// The bundled list (`cities.json`). Empty if the file is missing, so the tab still opens.
-    @MainActor static let shared: CityDatabase = {
-        guard let url = Bundle.main.url(forResource: "cities", withExtension: "json"),
-              let data = try? Data(contentsOf: url), let db = try? CityDatabase.decode(data) else { return CityDatabase(cities: []) }
-        return db
-    }()
-}
-
 private extension Color {
     init(_ rgb: WorldClock.RGB) { self.init(red: rgb.r / 255, green: rgb.g / 255, blue: rgb.b / 255) }
 }
 
 /// The saved World Clock cities (city keys, in the user's order), kept in UserDefaults. Old installs saved time zone
 /// identifiers; they are converted to cities when loaded (`CityDatabase.migrate`). The home city (the device's time
-/// zone, mapped to a named city) is not stored: it is always shown first. The shared production store survives leaving the tab.
-/// UI tests start empty (or from `-uiTestingCities Europe/London,g1816670`) and can pin the home zone with
-/// `-uiTestingHomeZone America/Los_Angeles`.
+/// zone, mapped to a named city) is not stored: it is always shown first. Root composition retains the store when leaving the tab.
+/// Development composition supplies explicit initial keys and a home zone or city.
 @MainActor
 @Observable
 public final class WorldClockStore {
-    public static let shared = WorldClockStore()
     public static let defaultsKey = "today.worldClock.cities"
 
     public private(set) var keys: [String]
@@ -34,34 +23,19 @@ public final class WorldClockStore {
     public let database: CityDatabase
     private let defaults: UserDefaults
     private let homeZoneIdentifier: String
-    /// An injected home city, or the UI-test override (`-uiTestingHomeCity g5392171`).
+    /// An explicitly injected home city.
     private var homeOverride: CityRecord?
 
-    public init(database: CityDatabase = .shared, defaults: UserDefaults = .standard,
-                homeZoneIdentifier: String = TimeZone.current.identifier, homeCity: CityRecord? = nil,
-                arguments: [String] = ProcessInfo.processInfo.arguments) {
+    public init(database: CityDatabase, defaults: UserDefaults,
+                homeZoneIdentifier: String, homeCity: CityRecord? = nil,
+                initialKeys: [String]? = nil) {
         self.database = database
         self.defaults = defaults
         self.homeOverride = homeCity
-        let args = arguments
-        let db = database
-        if args.contains("-uiTesting") {
-            defaults.removeObject(forKey: Self.defaultsKey)
-            if let i = args.firstIndex(of: "-uiTestingCities"), i + 1 < args.count {
-                keys = db.migrate(args[i + 1].split(separator: ",").map(String.init))
-            } else {
-                keys = []
-            }
-            if let i = args.firstIndex(of: "-uiTestingHomeZone"), i + 1 < args.count { self.homeZoneIdentifier = args[i + 1] }
-            else { self.homeZoneIdentifier = homeZoneIdentifier }
-            if let i = args.firstIndex(of: "-uiTestingHomeCity"), i + 1 < args.count { homeOverride = db.city(forKey: args[i + 1]) }
-        } else {
-            let stored = defaults.stringArray(forKey: Self.defaultsKey)
-            let migrated = db.migrate(stored)
-            if migrated != (stored ?? []) { defaults.set(migrated, forKey: Self.defaultsKey) }
-            keys = migrated
-            self.homeZoneIdentifier = homeZoneIdentifier
-        }
+        self.homeZoneIdentifier = homeZoneIdentifier
+        let stored = initialKeys ?? defaults.stringArray(forKey: Self.defaultsKey)
+        keys = database.migrate(stored)
+        if initialKeys == nil, keys != (stored ?? []) { defaults.set(keys, forKey: Self.defaultsKey) }
     }
 
     /// The starred first card: the city that stands for the device's time zone.
@@ -103,6 +77,7 @@ public final class WorldClockStore {
 /// No Edit button: a long press on a city offers Move Up / Move Down and Delete, press, hold and drag reorders
 /// (the sideways swipe belongs to scrubbing). + adds a city.
 public struct WorldClockView: View {
+    @Environment(\.locale) private var locale
     private let now: () -> Date
     private let showUndo: (String, @escaping () -> Void) -> Void
     @Environment(\.colorScheme) private var colorScheme
@@ -114,7 +89,7 @@ public struct WorldClockView: View {
     @State private var rubber: CGFloat = 0
 
     /// The app supplies its existing Undo toast; Workbench can capture and exercise the same undo action.
-    public init(store: WorldClockStore = .shared, now: @escaping () -> Date = { TodayClock.now },
+    public init(store: WorldClockStore, now: @escaping () -> Date,
                 showUndo: @escaping (String, @escaping () -> Void) -> Void) {
         _store = State(initialValue: store)
         self.now = now
@@ -240,9 +215,9 @@ public struct WorldClockView: View {
     }
 
     private func overlapSentence(home: CityRecord, others: [CityRecord], date: Date) -> some View {
-        let hm = WorldClock.hourMinute(zone: home.timeZone ?? .current, at: date)
-        let parts = AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute)
-        let segments = WorldClock.overlapSegments(cities: others.map { db.displayName($0) }, home: db.displayName(home),
+        let hm = WorldClock.hourMinute(zone: home.timeZone ?? TimeZone(secondsFromGMT: 0)!, at: date)
+        let parts = AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute, locale: locale)
+        let segments = WorldClock.overlapSegments(cities: others.map { db.displayName($0, locale: locale) }, home: db.displayName(home, locale: locale),
                                                   time: parts.time + (parts.suffix.map { " " + $0 } ?? ""), offset: scrub)
         var text = AttributedString()
         for s in segments {
@@ -295,7 +270,7 @@ public struct WorldClockView: View {
     private func remove(_ city: CityRecord) {
         guard let index = store.others.firstIndex(of: city) else { return }
         withAnimation(.snappy) { store.remove(city) }
-        showUndo("Removed \(db.displayName(city))") {
+        showUndo("Removed \(db.displayName(city, locale: locale))") {
             withAnimation(.snappy) { store.insert(city, at: index) }
         }
     }
@@ -356,16 +331,17 @@ private struct CityCard: View {
     let db: CityDatabase
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
 
-    private var zone: TimeZone { city.timeZone ?? .current }
-    private var homeZone: TimeZone { home.timeZone ?? .current }
-    private var name: String { db.displayName(city) }
+    private var zone: TimeZone { city.timeZone ?? TimeZone(secondsFromGMT: 0)! }
+    private var homeZone: TimeZone { home.timeZone ?? TimeZone(secondsFromGMT: 0)! }
+    private var name: String { db.displayName(city, locale: locale) }
     private var colors: WorldClock.CardColors { WorldClock.Look.card(zone: zone, at: date) }
     private var offset: String { WorldClock.offsetBadge(zone: zone, home: homeZone, at: date) }
-    private var dateText: String { WorldClock.longDate(zone: zone, at: date) }
+    private var dateText: String { WorldClock.longDate(zone: zone, at: date, locale: locale) }
     private var parts: (time: String, suffix: String?) {
         let hm = WorldClock.hourMinute(zone: zone, at: date)
-        return AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute)
+        return AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute, locale: locale)
     }
 
     var body: some View {
@@ -468,10 +444,11 @@ private struct WaveBackground: View {
 public struct CityPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var store: WorldClockStore
+    @Environment(\.locale) private var locale
     private let now: () -> Date
     @State private var query = ""
 
-    public init(store: WorldClockStore = .shared, now: @escaping () -> Date = { TodayClock.now }) {
+    public init(store: WorldClockStore, now: @escaping () -> Date) {
         _store = State(initialValue: store)
         self.now = now
     }
@@ -517,13 +494,13 @@ public struct CityPicker: View {
     }
 
     private func row(_ city: CityRecord, db: CityDatabase, added: Bool, now: Date) -> some View {
-        let zone = city.timeZone ?? .current
+        let zone = city.timeZone ?? TimeZone(secondsFromGMT: 0)!
         let hm = WorldClock.hourMinute(zone: zone, at: now)
-        let time = AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute)
-        let country = CityDatabase.countryName(city.cc)
+        let time = AlarmPlan.timeParts(hour: hm.hour, minute: hm.minute, locale: locale)
+        let country = CityDatabase.countryName(city.cc, locale: locale)
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(db.displayName(city) + (country.isEmpty ? "" : ", " + country))
+                Text(db.displayName(city, locale: locale) + (country.isEmpty ? "" : ", " + country))
                     .foregroundStyle(added ? .secondary : .primary)
                     .lineLimit(1)
                 Text(WorldClock.utcOffsetText(zone: zone, at: now))

@@ -16,15 +16,18 @@ import SwiftUI
 package struct TimerSection: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
-    @State private var controller: TimerController
-    private let alarms: AlarmCenter
+    private let controller: any TimerService
+    private let alarms: any AlarmService
+    private let soundPreview: any SoundPreviewing
+    @Environment(PlannerPresentation.self) private var presentation
     /// What the wheel shows; starts at the last timer you started.
     @State private var seconds: Int
     @State private var label = ""
     @State private var showsSound = false
 
-    package init(controller: TimerController, alarms: AlarmCenter) {
-        _controller = State(initialValue: controller)
+    package init(controller: any TimerService, alarms: any AlarmService, soundPreview: any SoundPreviewing) {
+        self.controller = controller
+        self.soundPreview = soundPreview
         self.alarms = alarms
         _seconds = State(initialValue: controller.recents.first?.seconds ?? 0)
     }
@@ -63,7 +66,7 @@ package struct TimerSection: View {
             .scrollDismissesKeyboard(.interactively)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showsSound) {
-                SoundScreen(sound: Binding(get: { controller.sound }, set: { controller.sound = $0 }))
+                SoundScreen(sound: Binding(get: { controller.sound }, set: { controller.sound = $0 }), preview: soundPreview)
                     .performanceDestination("timer.sound")
             }
         }
@@ -75,7 +78,7 @@ package struct TimerSection: View {
     // MARK: Running timers
 
     @ViewBuilder private var runningCards: some View {
-        ForEach(TimerList.ordered(controller.timers, ringing: controller.ringing, now: .now)) { timer in
+        ForEach(TimerList.ordered(controller.timers, ringing: controller.ringing, now: presentation.now)) { timer in
             RunningTimerCard(
                 timer: timer,
                 isRinging: controller.ringing.contains(timer.id),
@@ -114,7 +117,7 @@ package struct TimerSection: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("timer.message")
-                if Ringer.isDenied {
+                if alarms.authorization == .denied {
                     Button("Open Settings") {
                         if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                     }

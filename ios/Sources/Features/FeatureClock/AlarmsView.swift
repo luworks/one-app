@@ -26,15 +26,38 @@ package struct AlarmsView: View {
     @State private var notificationStatus: UNAuthorizationStatus = .authorized
     @State private var editing: OneAlarm?
     @State private var adding = false
-    @State private var center: AlarmCenter
-    private let timers: TimerController
+    private let center: any AlarmService
+    private let timers: any TimerService
+    @Environment(PlannerActions.self) private var actions
+    @Environment(PlannerPresentation.self) private var presentation
+    @Environment(UndoToast.self) private var toast
+    private let notifications: any NotificationService
+    private let soundPreview: any SoundPreviewing
+    private let worldClock: WorldClockStore
+    private let stopwatch: StopwatchModel
+    private let now: () -> Date
+    private let defaults: UserDefaults
+    private let arguments: [String]
+    private let onAlarmCreated: (OneAlarm, ModelContext) -> Void
     private let showUndo: (String, @escaping () -> Void) -> Void
 
-    package init(section: Binding<ClockSection>, alarms: AlarmCenter, timers: TimerController,
+    package init(section: Binding<ClockSection>, alarms: any AlarmService, timers: any TimerService,
+                 notifications: any NotificationService, soundPreview: any SoundPreviewing,
+                 worldClock: WorldClockStore, stopwatch: StopwatchModel, now: @escaping () -> Date,
+                 defaults: UserDefaults, arguments: [String],
+                 onAlarmCreated: @escaping (OneAlarm, ModelContext) -> Void,
                  showUndo: @escaping (String, @escaping () -> Void) -> Void) {
         _section = section
-        _center = State(initialValue: alarms)
+        center = alarms
         self.timers = timers
+        self.notifications = notifications
+        self.soundPreview = soundPreview
+        self.worldClock = worldClock
+        self.stopwatch = stopwatch
+        self.now = now
+        self.defaults = defaults
+        self.arguments = arguments
+        self.onAlarmCreated = onAlarmCreated
         self.showUndo = showUndo
     }
 
@@ -47,23 +70,23 @@ package struct AlarmsView: View {
             Group {
                 switch section {
                 case .alarms: alarmsList
-                case .worldClock: WorldClockView(showUndo: showUndo)
-                case .stopwatch: StopwatchView()
-                case .timer: TimerSection(controller: timers, alarms: center)
+                case .worldClock: WorldClockView(store: worldClock, now: now, showUndo: showUndo)
+                case .stopwatch: StopwatchView(model: stopwatch)
+                case .timer: TimerSection(controller: timers, alarms: center, soundPreview: soundPreview)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .performanceDestination("clock.\(section.rawValue)")
         }
         .background(Color(.systemBackground))
-        .sheet(item: $editing) { AlarmEditor(alarm: $0, showUndo: showUndo) }
-        .sheet(isPresented: $adding) { AlarmEditor(showUndo: showUndo) }
+        .sheet(item: $editing) { AlarmEditor(alarm: $0, alarms: center, soundPreview: soundPreview, runtime: presentation.runtime, defaults: defaults, onCreated: onAlarmCreated) }
+        .sheet(isPresented: $adding) { AlarmEditor(alarms: center, soundPreview: soundPreview, runtime: presentation.runtime, defaults: defaults, onCreated: onAlarmCreated) }
         .task { await center.watch(context: context) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
-            await FirstRun.alarms()
-            notificationStatus = await Reminders.shared.authorizationStatus()
-            await Ringer.sync(context)
+            await FirstRun.alarms(center, notifications: notifications, arguments: arguments)
+            notificationStatus = await notifications.authorizationStatus()
+            await center.sync(context)
         }
     }
 
@@ -74,7 +97,7 @@ package struct AlarmsView: View {
             Section {
                 if alarms.isEmpty { emptyState }
                 ForEach(alarms) { alarm in
-                    AlarmRow(alarm: alarm, state: center.state(of: alarm)) { editing = alarm }
+                    AlarmRow(alarm: alarm, state: center.state(of: alarm), alarms: center) { editing = alarm }
                         .contextMenu {
                             Button { editing = alarm } label: { Label("Edit", systemImage: "pencil") }
                             Button(role: .destructive) { delete(alarm) } label: { Label("Delete", systemImage: "trash") }
@@ -118,32 +141,24 @@ package struct AlarmsView: View {
 
     /// Items that will ring as an alarm, soonest first.
     private var ringing: [Ringing] {
-        let now = Date.now
+        let now = presentation.now
         let t = tasks.filter { $0.ringsAsAlarm && !$0.isDone }.compactMap { task in
-            task.reminderDate.map { Ringing(id: "t\(task.persistentModelID.hashValue)", title: task.title, fire: $0) }
+            plannerReminderDate(task, runtime: presentation.runtime).map { Ringing(id: "t\(task.persistentModelID.hashValue)", title: task.title, fire: $0) }
         }
         let e = events.filter(\.ringsAsAlarm).compactMap { event in
-            event.reminderDate.map { Ringing(id: "e\(event.persistentModelID.hashValue)", title: event.title, fire: $0) }
+            plannerReminderDate(event, runtime: presentation.runtime).map { Ringing(id: "e\(event.persistentModelID.hashValue)", title: event.title, fire: $0) }
         }
         return (t + e).filter { $0.fire > now }.sorted { $0.fire < $1.fire }
     }
 
     /// "Next alarm in 7 hr 12 min" while at least one alarm is on.
     private var nextAlarmHint: String? {
-        let now = Date.now
-        return AlarmPlan.nextAlarmText(rings: alarms.compactMap { $0.nextRing(now: now) }, now: now)
+        let now = presentation.now
+        return AlarmPlan.nextAlarmText(rings: alarms.compactMap { $0.isOn ? AlarmPlan.nextRing(hour: $0.hour, minute: $0.minute, weekdays: $0.weekdays, switchedOn: $0.createdAt, now: now, calendar: presentation.calendar) : nil }, now: now)
     }
 
     private func delete(_ alarm: OneAlarm) {
-        let backup = alarm.copy()
-        Ledger.record(.deleted, kind: "alarm", title: alarmTitle(backup), context: context)
-        withAnimation(.snappy) { context.delete(alarm) }
-        Task { await Ringer.sync(context) }
-        showUndo("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
-            withAnimation(.snappy) { context.insert(backup) }
-            try? context.save()
-            Task { await Ringer.sync(context) }
-        }
+        actions.delete(alarm, context: context, toast: toast)
     }
 
     private var emptyState: some View {
@@ -220,8 +235,8 @@ package struct AlarmsView: View {
         Task {
             if alarmsUndecided { await center.requestAuthorization() }
             if notificationsUndecided {
-                await Reminders.shared.requestPermission()
-                notificationStatus = await Reminders.shared.authorizationStatus()
+                await notifications.requestPermission()
+                notificationStatus = await notifications.authorizationStatus()
             }
         }
     }
@@ -262,13 +277,14 @@ private struct SectionTitle: View {
 
 /// A task or event that rings as an alarm: read-only, it is edited where it lives.
 private struct ItemAlarmRow: View {
+    @Environment(PlannerPresentation.self) private var presentation
     let item: AlarmsView.Ringing
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
-                Text("Rings " + DayLabel.withTime(item.fire))
+                Text("Rings " + plannerDayLabel(item.fire, runtime: presentation.runtime))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

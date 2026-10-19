@@ -9,8 +9,6 @@ import TodayPlatform
 @MainActor
 @Observable
 public final class StopwatchModel {
-    public static let shared = StopwatchModel()
-
     public private(set) var state: StopwatchState
     /// The face shown: digital or analog. Kept across launches.
     public var page: StopwatchPage {
@@ -18,51 +16,29 @@ public final class StopwatchModel {
     }
 
     private let defaults: UserDefaults
-    private let now: (() -> Date)?
+    private let now: () -> Date
 
-    /// An injected clock also drives the rendered faces and current lap. Nil keeps production's live timeline dates.
-    public init(defaults: UserDefaults = .standard, now: (() -> Date)? = nil,
-                arguments: [String] = ProcessInfo.processInfo.arguments) {
+    /// Root composition selects persistence and any explicit development starting values.
+    public init(defaults: UserDefaults, now: @escaping () -> Date,
+                initialState: StopwatchState? = nil, initialPage: StopwatchPage? = nil) {
         self.defaults = defaults
         self.now = now
-        let args = arguments
-        if args.contains("-uiTesting") {
-            defaults.removeObject(forKey: StopwatchState.defaultsKey)
-            defaults.removeObject(forKey: StopwatchPage.defaultsKey)
-            state = StopwatchState()
-            page = .analog
-            #if DEBUG
-            // A frozen frame for screenshots: `-uiTestingStopwatch 5.75` is stopped at 5.75 s;
-            // `-uiTestingStopwatchLaps 4.2,6.5,5.1` adds finished laps (the time then continues from their sum).
-            if let i = args.firstIndex(of: "-uiTestingStopwatch"), i + 1 < args.count, let seconds = Double(args[i + 1]) {
-                var laps: [TimeInterval] = []
-                if let j = args.firstIndex(of: "-uiTestingStopwatchLaps"), j + 1 < args.count {
-                    laps = args[j + 1].split(separator: ",").compactMap { Double($0) }
-                }
-                state = StopwatchState(startedAt: nil, accumulated: seconds + laps.reduce(0, +), laps: laps)
-            }
-            if let i = args.firstIndex(of: "-uiTestingStopwatchPage"), i + 1 < args.count, let p = StopwatchPage(rawValue: args[i + 1]) {
-                page = p
-            }
-            #endif
-        } else {
-            state = StopwatchState.load(from: defaults)
-            page = StopwatchPage.load(from: defaults)
-        }
+        state = initialState ?? StopwatchState.load(from: defaults)
+        page = initialPage ?? StopwatchPage.load(from: defaults)
     }
 
     public func startStop() {
-        let date = date(at: .now)
+        let date = now()
         update { $0.isRunning ? $0.stop(at: date) : $0.start(at: date) }
     }
 
     /// Lap while running, Reset while stopped.
     public func lapReset() {
-        let date = date(at: .now)
+        let date = now()
         update { $0.isRunning ? $0.lap(at: date) : $0.reset() }
     }
 
-    fileprivate func date(at timelineDate: Date) -> Date { now?() ?? timelineDate }
+    fileprivate func date(at _: Date) -> Date { now() }
 
     private func update(_ change: (inout StopwatchState) -> Void) {
         change(&state)
@@ -77,7 +53,7 @@ public struct StopwatchView: View {
     @State private var model: StopwatchModel
     @State private var scrolledPage: StopwatchPage?
 
-    public init(model: StopwatchModel = .shared) {
+    public init(model: StopwatchModel) {
         _model = State(initialValue: model)
         _scrolledPage = State(initialValue: model.page)
     }

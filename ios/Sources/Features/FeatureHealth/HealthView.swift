@@ -79,7 +79,7 @@ public struct HealthView: View {
         }
         .refreshable { await model.load() }
         .sheet(item: $detail) { metric in
-            HealthMetricDetail(metric: metric, series: model.series[metric] ?? .empty, now: TodayClock.now, units: model.units)
+            HealthMetricDetail(metric: metric, series: model.series[metric] ?? .empty, now: model.runtime.now(), units: model.units, calendar: model.runtime.calendar, locale: model.runtime.locale)
         }
         .sheet(isPresented: $adding, onDismiss: {
             // Keep the order of existing rows; newly shown metrics append in catalog order.

@@ -11,19 +11,21 @@ public struct HealthMetricDetail: View {
     let metric: HealthMetric
     let series: HealthSeries
     let now: Date
-    var units = HealthUnits()
-    var calendar = Calendar.current
+    let units: HealthUnits
+    let calendar: Calendar
+    let locale: Locale
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var days = 30
 
-    public init(metric: HealthMetric, series: HealthSeries, now: Date, units: HealthUnits = HealthUnits(), calendar: Calendar = .current) {
+    public init(metric: HealthMetric, series: HealthSeries, now: Date, units: HealthUnits, calendar: Calendar, locale: Locale) {
         self.metric = metric
         self.series = series
         self.now = now
         self.units = units
         self.calendar = calendar
+        self.locale = locale
     }
 
     private var latest: HealthPoint? { series.latest }
@@ -57,6 +59,9 @@ public struct HealthMetricDetail: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("health.detail.done") } }
         }
+        .environment(\.calendar, calendar)
+        .environment(\.locale, locale)
+        .environment(\.timeZone, calendar.timeZone)
         .presentationDetents([.fraction(0.72), .large])
         .presentationDragIndicator(.visible)
     }
@@ -66,7 +71,7 @@ public struct HealthMetricDetail: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let latest {
-                let value = HealthFormat.value(metric, latest.value, units: units)
+                let value = HealthFormat.value(metric, latest.value, units: units, locale: locale)
                 ForEach(Array(value.parts.enumerated()), id: \.offset) { index, part in
                     Text(part.number)
                         .font(.system(size: 44, weight: .semibold, design: .rounded))
@@ -74,7 +79,7 @@ public struct HealthMetricDetail: View {
                         .padding(.leading, index > 0 ? 4 : 0)
                     Text(part.unit).font(.title3).foregroundStyle(.secondary)
                 }
-                Text(HealthFormat.dateLabel(latest.date, now: now, calendar: calendar))
+                Text(HealthFormat.dateLabel(latest.date, now: now, calendar: calendar, locale: locale))
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
                     .padding(.leading, 4)
@@ -86,7 +91,7 @@ public struct HealthMetricDetail: View {
         .lineLimit(1)
         .minimumScaleFactor(0.6)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(latest.map { "\(HealthFormat.value(metric, $0.value, units: units).text), \(HealthFormat.dateLabel($0.date, now: now, calendar: calendar))" } ?? "No data")
+        .accessibilityLabel(latest.map { "\(HealthFormat.value(metric, $0.value, units: units, locale: locale).text), \(HealthFormat.dateLabel($0.date, now: now, calendar: calendar, locale: locale))" } ?? "No data")
         .accessibilityIdentifier("health.detail.value")
     }
 
@@ -148,13 +153,13 @@ public struct HealthMetricDetail: View {
                 .chartXAxis {
                     AxisMarks(values: HealthStats.axisTicks(days: days, now: now, calendar: calendar)) { _ in
                         AxisGridLine(stroke: dotted)
-                        AxisValueLabel(format: .dateTime.month(.abbreviated).day(), anchor: .top)
+                        AxisValueLabel(format: Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone).month(.abbreviated).day(), anchor: .top)
                     }
                 }
                 .chartYAxis {
                     AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
                         AxisGridLine(stroke: dotted)
-                        AxisValueLabel { if let v = value.as(Double.self) { Text(HealthFormat.axisLabel(v) + axisUnit) } }
+                        AxisValueLabel { if let v = value.as(Double.self) { Text(HealthFormat.axisLabel(v, locale: locale) + axisUnit) } }
                     }
                 }
                 .frame(height: 220)
@@ -199,7 +204,7 @@ public struct HealthMetricDetail: View {
             }
             if !metric.isCumulative { trend }
             if let change = stats?.change {
-                Text("Average \(HealthFormat.change(metric, change, units: units)) vs previous \(days) days")
+                Text("Average \(HealthFormat.change(metric, change, units: units, locale: locale)) vs previous \(days) days")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("health.detail.change")
@@ -211,12 +216,12 @@ public struct HealthMetricDetail: View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Trend").font(.footnote).foregroundStyle(.secondary)
             if let latest = averages.last {
-                Text(HealthFormat.value(metric, latest.value, units: units).text)
+                Text(HealthFormat.value(metric, latest.value, units: units, locale: locale).text)
                     .font(.headline).monospacedDigit()
-                Text("\(averageDays)-day average · \(HealthFormat.dateLabel(latest.date, now: now, calendar: calendar))")
+                Text("\(averageDays)-day average · \(HealthFormat.dateLabel(latest.date, now: now, calendar: calendar, locale: locale))")
                     .font(.footnote).foregroundStyle(.secondary)
                 if let first = averages.first, first.date != latest.date {
-                    Text("\(HealthFormat.change(metric, latest.value - first.value, units: units)) over \(days) days")
+                    Text("\(HealthFormat.change(metric, latest.value - first.value, units: units, locale: locale)) over \(days) days")
                         .font(.footnote).foregroundStyle(.secondary)
                 } else {
                     Text("Not enough averages to compare this range.")
@@ -234,7 +239,7 @@ public struct HealthMetricDetail: View {
     private func fact(_ title: String, _ value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.footnote).foregroundStyle(.secondary)
-            Text(value.map { HealthFormat.value(metric, $0, units: units).text } ?? "—")
+            Text(value.map { HealthFormat.value(metric, $0, units: units, locale: locale).text } ?? "—")
                 .font(.headline)
                 .monospacedDigit()
                 .lineLimit(1)
