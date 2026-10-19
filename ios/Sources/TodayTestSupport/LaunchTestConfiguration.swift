@@ -57,9 +57,14 @@ public enum LaunchTestConfiguration {
   /// test would leak into the next), then `-uiTestingPrefs key=value,key=value` sets what a test needs
   /// (`dimPastDays=0`). Keys are the part after `today.setting.`. `-uiTestingKeepPreferences` skips the reset (the relaunch check).
   public static func applyPreferenceOverrides(arguments: [String], defaults: UserDefaults) {
-    guard arguments.contains("-uiTesting"), !arguments.contains("-uiTestingKeepPreferences") else {
-      return
+    guard arguments.contains("-uiTesting") else { return }
+    // Pill choices have a separate relaunch flag, matching the original UI-test launch contract.
+    if !arguments.contains("-uiTestingKeepReminderPills") {
+      for key in [SmartListLayout.orderKey, SmartListLayout.hiddenKey, "reminders.listsReordered"] {
+        defaults.removeObject(forKey: key)
+      }
     }
+    guard !arguments.contains("-uiTestingKeepPreferences") else { return }
     for key in allKeys { defaults.removeObject(forKey: key) }
     guard let i = arguments.firstIndex(of: "-uiTestingPrefs"), i + 1 < arguments.count else {
       return

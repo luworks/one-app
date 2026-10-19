@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import TodayCore
 import TodayData
 import TodayTestSupport
 
@@ -38,4 +39,31 @@ struct LaunchActivityTests {
       #expect(try store.page(ActivityQuery()).isEmpty)
     }
   }
+
+  @Test func reminderPillIsolationPreservesNormalAndExplicitRelaunchChoices() throws {
+    let name = "LaunchActivityTests.\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    for arguments in [
+      [], ["-uiTesting", "-uiTestingKeepReminderPills"],
+      ["-uiTesting"], ["-uiTesting", "-uiTestingKeepPreferences"],
+    ] {
+      defaults.set("scheduled,today", forKey: SmartListLayout.orderKey)
+      defaults.set("flagged", forKey: SmartListLayout.hiddenKey)
+      defaults.set(true, forKey: "reminders.listsReordered")
+      defaults.set("Keep this preference", forKey: "unrelated")
+      LaunchTestConfiguration.applyPreferenceOverrides(arguments: arguments, defaults: defaults)
+      let layout = SmartListLayout(
+        order: defaults.string(forKey: SmartListLayout.orderKey) ?? "",
+        hidden: defaults.string(forKey: SmartListLayout.hiddenKey) ?? "")
+      let preserves =
+        !arguments.contains("-uiTesting")
+        || arguments.contains("-uiTestingKeepReminderPills")
+      #expect(layout.visible.first == (preserves ? .scheduled : .today))
+      #expect(layout.hidden.contains(.flagged) == preserves)
+      #expect(defaults.bool(forKey: "reminders.listsReordered") == preserves)
+      #expect(defaults.string(forKey: "unrelated") == "Keep this preference")
+    }
+  }
+
 }
