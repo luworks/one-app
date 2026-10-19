@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Today development entry point (Python standard library only)."""
+import sys
+sys.dont_write_bytecode = True
+from scripts.devtools.cli import main
+sys.exit(main())
