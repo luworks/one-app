@@ -40,7 +40,7 @@ def main(argv=None, root=ROOT):
     build_parser.add_argument('configuration', nargs='?', choices=['Debug', 'Release'], default='Debug')
     build_parser.add_argument('--scheme', choices=['Today', 'TodayMock'], default='Today')
     test_parser = sub.add_parser('test', help='run an authoritative test group')
-    test_parser.add_argument('group', choices=['unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
+    test_parser.add_argument('group', choices=['unit', 'ios-unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
     test_parser.add_argument('--only', action='append', default=[])
     test_parser.add_argument('--full', action='store_true', help='only for an explicitly authorized frozen final revision')
     format_parser = sub.add_parser('format', help='Apple swift-format only')

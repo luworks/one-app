@@ -83,39 +83,73 @@ def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=F
 
 
 def testing_contract(root):
-    sys.path.insert(0, str(root / 'scripts/testing'))
-    import contract
+    import importlib.util
+    path = Path(root) / 'scripts/testing/contract.py'
+    spec = importlib.util.spec_from_file_location('devtools_testing_contract', path)
+    contract = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(contract)
     return contract
 
 
-def test(root, group, *, only=(), timeout=600, full=False):
+def test(root, group, *, only=(), timeout=600, full=False, _locked=False):
+    from . import xcode_tests
+    if full and (group not in ('ui', 'release') or only):
+        raise ValueError('--full requires ui or release without --only')
+    if group == 'release':
+        if not full:
+            raise ValueError('release collection requires explicit --full')
+        # One host-heavy owner for the whole frozen final collection. Never retry.
+        with host_lock(root), dd_lock(root):
+            first = test(root, 'unit', timeout=timeout, _locked=True)
+            code = xcode_tests.run(root, testing_contract(root), ['ios-unit', 'integration', 'snapshot'],
+                                   timeout=timeout, locked=True)
+            first = first or code
+            code = test(root, 'ui', timeout=timeout, full=True, _locked=True)
+            return first or code
     contract = testing_contract(root)
+    if group in ('ios-unit', 'integration', 'snapshot'):
+        return xcode_tests.run(root, contract, [group], only=only, timeout=timeout, locked=_locked)
     if group == 'unit':
-        plan = contract.plan(['unit'])
+        source = contract.inventory(root)
+        plan = contract.plan(['unit'], source)
         expected = plan['selectors']['logic']
         command = ['swift', 'test', '--package-path', 'ios', '--jobs', '2']
         if only:
-            expected = contract.expand(only, contract.inventory(), 'logic')
+            expected = contract.expand(only, source, 'logic')
             command += ['--filter', '|'.join('/'.join(x.split('/')[1:]) for x in expected)]
-        result = execute(root, command, timeout=timeout, heavy=True)
+        result = execute(root, command, timeout=timeout, heavy=not _locked)
         raw = result.log.read_text()
         report = contract.report(expected, contract.log_attempts(raw, 'logic'), result.returncode,
                                  raw_log=raw, allowed_skips=['benchmark'],
                                  skip_rules=contract.load_manifest()['skip_rules'])
         path = result.log.with_suffix('.report.json')
         atomic_json(path, report)
+        evidence = Evidence(root, 'dev-unit-report-' + path.stem, Redactor())
+        try:
+            evidence.journal.artifact(evidence.session, path)
+        finally:
+            evidence.close()
         print(json.dumps({'report': str(path), 'status': report['status'],
                           'executed': report['executed_count'], 'missing': len(report['missing'])}))
         return result.returncode or (0 if report['status'] == 'passed' else 1)
-    command = [sys.executable, 'ios/Eval/run-e2e.py', '--full'] if full else [
-        sys.executable, 'ios/Eval/run-e2e.py', '--group', group]
+    if group not in ('ui', 'core', 'accessibility'):
+        raise ValueError('Unknown test group: ' + group)
+    # Validate before launching the existing UI authority; it owns UI parsing/lifecycle.
+    source = contract.inventory(root)
     if only:
+        selected = contract.expand(only, source, 'ui')
+        allowed = contract.plan([group], source)['selectors']['ui']
+        if set(selected) - set(allowed):
+            raise ValueError('Selection outside requested UI group')
         command = [sys.executable, 'ios/Eval/run-e2e.py']
-        for value in only:
+        for value in selected:
             command += ['--only', value]
-    command += ['--simulator-name', 'Today-Dev-' + derived_data(root).name[:8],
+    else:
+        command = [sys.executable, 'ios/Eval/run-e2e.py', '--full'] if full else [
+            sys.executable, 'ios/Eval/run-e2e.py', '--group', group]
+    command += ['--simulator-name', xcode_tests.simulator_name(root),
                 '--derived-data', str(derived_data(root))]
-    return execute(root, command, timeout=timeout, heavy=True).returncode
+    return execute(root, command, timeout=timeout, heavy=not _locked).returncode
 
 
 def format_sources(root, *, check=False, timeout=600):
