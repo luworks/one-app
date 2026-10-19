@@ -171,6 +171,7 @@
           }
           .padding(.bottom, 30)
         }
+        .disabled(saving)
         .scrollBounceBehavior(.basedOnSize)
         .background(Color(.systemGroupedBackground))
         .toolbar(.hidden, for: .navigationBar)
