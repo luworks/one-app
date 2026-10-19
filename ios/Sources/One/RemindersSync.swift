@@ -20,8 +20,7 @@ import os
 /// - "Planned time" and duration are Today-only concepts: they stay local, never overwrite Apple's due date.
 @MainActor
 @Observable
-package final class RemindersSync {
-    package static let shared = RemindersSync()
+package final class RemindersSync: ReminderService {
     @ObservationIgnored private let log = Logger(subsystem: "com.luworks.one", category: "reminders-sync")
 
     private static let enabledKey = "today.remindersSync.enabled"
@@ -35,14 +34,18 @@ package final class RemindersSync {
 
     /// Created on first use: EKEventStore is slow to set up.
     @ObservationIgnored private lazy var store: EKEventStore = {
-        let s = EKEventStore()
-        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: s, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.scheduleReconcile() }
-        }
+        let s = makeStore()
+        observers.append(NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: s, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, !self.disposed else { return }; self.scheduleReconcile()
+            }
+        })
         return s
     }()
 
     @ObservationIgnored private var container: ModelContainer?
+    @ObservationIgnored private weak var ledger: Ledger?
+    @ObservationIgnored private var generation = 0
     @ObservationIgnored private var debounce: Task<Void, Never>?
     @ObservationIgnored private var running = false
     @ObservationIgnored private var again = false
@@ -60,14 +63,34 @@ package final class RemindersSync {
     #endif
     /// UI tests start with Apple Reminders off (a saved "on" from an earlier run would upload and pull test data);
     /// the test that needs it passes `-uiTestingRemindersSync`.
-    package private(set) var enabled = UserDefaults.standard.bool(forKey: RemindersSync.enabledKey)
-        && (!ProcessInfo.processInfo.arguments.contains("-uiTesting") || ProcessInfo.processInfo.arguments.contains("-uiTestingRemindersSync"))
+    package private(set) var enabled: Bool
 
     package var hasAccess: Bool { EKEventStore.authorizationStatus(for: .reminder) == .fullAccess }
     /// True once the user allowed access to Apple Reminders and sync is on.
-    package var isConnected: Bool { enabled && hasAccess }
+    package var isConnected: Bool { !disposed && enabled && hasAccess }
 
-    private init() {}
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let runtime: PlannerRuntime
+    @ObservationIgnored private let arguments: [String]
+    @ObservationIgnored private let makeStore: () -> EKEventStore
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private var disposed = false
+
+    package init(defaults: UserDefaults, runtime: PlannerRuntime, arguments: [String],
+                 makeStore: @escaping () -> EKEventStore) {
+        self.defaults = defaults; self.runtime = runtime; self.arguments = arguments; self.makeStore = makeStore
+        enabled = defaults.bool(forKey: Self.enabledKey)
+            && (!arguments.contains("-uiTesting") || arguments.contains("-uiTestingRemindersSync"))
+    }
+
+    package func dispose() {
+        disposed = true
+        generation += 1
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
+        debounce?.cancel(); debounce = nil
+        container = nil
+    }
 
     /// Titles are personal: they are only logged in debug builds.
     private func debugLog(_ message: String) {
@@ -79,11 +102,16 @@ package final class RemindersSync {
     // MARK: Lifecycle
 
     /// Call once at launch. Starts watching local saves; syncs right away when already connected.
-    package func configure(_ container: ModelContainer) {
+    package func configure(_ container: ModelContainer, ledger: Ledger) {
+        guard !disposed else { return }
+        guard self.container == nil else { return }
         self.container = container
-        NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.scheduleReconcile() }
-        }
+        self.ledger = ledger
+        observers.append(NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: container.mainContext, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, !self.disposed else { return }; self.scheduleReconcile()
+            }
+        })
         if isConnected { scheduleReconcile(after: .seconds(2)) }
     }
 
@@ -95,13 +123,14 @@ package final class RemindersSync {
 
     /// The first time the Reminders tab opens, show iOS's own permission prompt. Does nothing afterwards.
     package func connectIfFirstRun() async {
-        guard !ProcessInfo.processInfo.arguments.contains("-uiTesting"),
+        guard !arguments.contains("-uiTesting"),
               EKEventStore.authorizationStatus(for: .reminder) == .notDetermined else { return }
         await connect()
     }
 
     /// Asks for access (the first time) and turns sync on.
     package func connect() async {
+        guard !disposed else { return }
         if !hasAccess {
             do {
                 let granted = try await store.requestFullAccessToReminders()
@@ -111,11 +140,12 @@ package final class RemindersSync {
             }
         }
         log.info("reminders authorization status: \(EKEventStore.authorizationStatus(for: .reminder).rawValue)")
+        guard !disposed else { return }
         enabled = hasAccess
-        UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
+        defaults.set(enabled, forKey: Self.enabledKey)
         guard enabled else { return }
-        if UserDefaults.standard.object(forKey: Self.uploadFromKey) == nil {
-            UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.uploadFromKey)
+        if defaults.object(forKey: Self.uploadFromKey) == nil {
+            defaults.set(runtime.now().timeIntervalSince1970, forKey: Self.uploadFromKey)
         }
         await reconcile()
     }
@@ -124,13 +154,15 @@ package final class RemindersSync {
     package func disconnect() {
         enabled = false
         forgetLink()
-        UserDefaults.standard.set(false, forKey: Self.enabledKey)
+        defaults.set(false, forKey: Self.enabledKey)
     }
 
     /// Forget the linkage (not the data). Call before wiping local data so the wipe is never mirrored to Apple.
     package func forgetLink() {
+        generation += 1
+        debounce?.cancel(); debounce = nil; again = false
         for k in [Self.baseKey, Self.listBaseKey, Self.fpKey, Self.uploadFromKey, Self.pendingKey, Self.pendingListsKey] {
-            UserDefaults.standard.removeObject(forKey: k)
+            defaults.removeObject(forKey: k)
         }
     }
 
@@ -150,7 +182,7 @@ package final class RemindersSync {
     }
 
     package func scheduleReconcile(after delay: Duration = .milliseconds(1200)) {
-        guard isConnected else { return }
+        guard !disposed, isConnected else { return }
         debounce?.cancel()
         debounce = Task { @MainActor in
             try? await Task.sleep(for: delay)
@@ -173,23 +205,23 @@ package final class RemindersSync {
             }
             guard reminder.calendar.allowsContentModifications else { throw CompletionError.readOnly }
             if let expected {
-                let current = Remote(reminder)
+                let current = Remote(reminder, calendar: runtime.calendar)
                 guard current.isDone == expected.isDone, current.due == expected.due,
                       current.doneAt == expected.doneAt else { throw CompletionError.changedOutside }
             }
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-uiTestingFailReminderCompletion") {
+            if arguments.contains("-uiTestingFailReminderCompletion") {
                 throw CompletionError.injected
             }
             #endif
             // Already completed externally is success; never reopen it as a side effect of completing.
             if reminder.isCompleted != done || restoresDue {
                 reminder.isCompleted = done
-                if restoresDue { reminder.dueDateComponents = restoringDue.map(Self.components(for:)) }
+                if restoresDue { reminder.dueDateComponents = restoringDue.map { Self.components(for: $0, calendar: runtime.calendar) } }
                 do { try store.save(reminder, commit: true) }
                 catch { reminder.reset(); throw error }
             }
-            accepted = Remote(reminder)
+            accepted = Remote(reminder, calendar: runtime.calendar)
         }
         return accepted
     }
@@ -225,26 +257,33 @@ package final class RemindersSync {
 
     /// A reminder as read from EventKit (plain values, safe to pass around).
     package struct Remote: Sendable {
-        let id: String
-        let title: String
-        let notes: String
-        let isDone: Bool
-        let doneAt: Date?
-        let due: Date?
-        let listID: String
-        let listTitle: String
-        let flagged: Bool
-        let repeatRule: String?
+        package let id: String
+        package let title: String
+        package let notes: String
+        package let isDone: Bool
+        package let doneAt: Date?
+        package let due: Date?
+        package let listID: String
+        package let listTitle: String
+        package let flagged: Bool
+        package let repeatRule: String?
         /// Repeats in Apple Reminders, also with a rule the app has no name for (every 2 weeks): it rolls forward when completed.
-        let repeats: Bool
+        package let repeats: Bool
 
-        init(_ r: EKReminder) {
+        package init(id: String, title: String, notes: String, isDone: Bool, doneAt: Date?, due: Date?,
+                     listID: String, listTitle: String, flagged: Bool, repeatRule: String?, repeats: Bool) {
+            self.id = id; self.title = title; self.notes = notes; self.isDone = isDone
+            self.doneAt = doneAt; self.due = due; self.listID = listID; self.listTitle = listTitle
+            self.flagged = flagged; self.repeatRule = repeatRule; self.repeats = repeats
+        }
+
+        init(_ r: EKReminder, calendar: Calendar) {
             id = r.calendarItemIdentifier
             title = r.title ?? ""
             notes = r.notes ?? ""
             isDone = r.isCompleted
             doneAt = r.completionDate
-            due = r.dueDateComponents.flatMap { RemindersSync.date(from: $0) }
+            due = r.dueDateComponents.flatMap { RemindersSync.date(from: $0, calendar: calendar) }
             listID = r.calendar.calendarIdentifier
             listTitle = r.calendar.title
             flagged = r.priority == 1
@@ -252,7 +291,7 @@ package final class RemindersSync {
             repeats = !(r.recurrenceRules ?? []).isEmpty
         }
 
-        var fingerprint: String {
+        package var fingerprint: String {
             [title, notes, isDone ? "1" : "0", due.map { String(Int($0.timeIntervalSince1970)) } ?? "-", listTitle,
              flagged ? "1" : "0", repeatRule ?? "-"].joined(separator: "\u{1F}")
         }
@@ -268,14 +307,13 @@ package final class RemindersSync {
     // MARK: Date / recurrence mapping
 
     /// A due date with no time of day is stored as midnight, like everywhere else in the app.
-    package nonisolated static func date(from c: DateComponents) -> Date? {
+    package nonisolated static func date(from c: DateComponents, calendar: Calendar) -> Date? {
         var comps = c
         if comps.hour == nil { comps.hour = 0; comps.minute = 0 }
-        return (comps.calendar ?? Calendar.current).date(from: comps)
+        return (comps.calendar ?? calendar).date(from: comps)
     }
 
-    package static func components(for due: Date) -> DateComponents {
-        let cal = Calendar.current
+    package static func components(for due: Date, calendar cal: Calendar) -> DateComponents {
         let t = cal.dateComponents([.hour, .minute], from: due)
         let hasTime = !(t.hour == 0 && t.minute == 0)
         return cal.dateComponents(hasTime ? [.year, .month, .day, .hour, .minute] : [.year, .month, .day], from: due)
@@ -334,19 +372,21 @@ package final class RemindersSync {
     // MARK: Reconcile
 
     package func reconcile() async {
-        guard isConnected, let container else { return }
+        guard !disposed, !Task.isCancelled, isConnected, let container else { return }
         if running { again = true; return }
         running = true
         defer {
             running = false
             if again { again = false; scheduleReconcile() }
         }
+        let syncGeneration = generation
         do {
             #if DEBUG
             let firstPass = !debugOpsDone
             if firstPass { await debugRunAppleOps() }
             #endif
             try await pass(container.mainContext)
+            guard !disposed, !Task.isCancelled, generation == syncGeneration else { return }
             #if DEBUG
             if firstPass { debugOpsDone = true; debugRunAppOps(container.mainContext) }
             await debugRefreshDump(container.mainContext)
@@ -359,38 +399,40 @@ package final class RemindersSync {
         version += 1
     }
 
-    private func loadSet(_ key: String) -> Set<String> { Set(UserDefaults.standard.stringArray(forKey: key) ?? []) }
-    private func saveSet(_ s: Set<String>, _ key: String) { UserDefaults.standard.set(Array(s), forKey: key) }
+    private func loadSet(_ key: String) -> Set<String> { Set(defaults.stringArray(forKey: key) ?? []) }
+    private func saveSet(_ s: Set<String>, _ key: String) { defaults.set(Array(s), forKey: key) }
     private var storedFP: [String: String] {
-        get { (UserDefaults.standard.dictionary(forKey: Self.fpKey) as? [String: String]) ?? [:] }
-        set { UserDefaults.standard.set(newValue, forKey: Self.fpKey) }
+        get { (defaults.dictionary(forKey: Self.fpKey) as? [String: String]) ?? [:] }
+        set { defaults.set(newValue, forKey: Self.fpKey) }
     }
 
     private func fetchRemote() async -> [Remote] {
         let store = self.store
         let cals = store.calendars(for: .reminder)
         let open = store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: cals)
-        let since = Calendar.current.date(byAdding: .day, value: -30, to: .now)
-        let done = store.predicateForCompletedReminders(withCompletionDateStarting: since, ending: .now, calendars: cals)
-        let incomplete = await Self.fetch(store, open)
-        let completed = await Self.fetch(store, done)
+        let since = runtime.calendar.date(byAdding: .day, value: -30, to: runtime.now())
+        let done = store.predicateForCompletedReminders(withCompletionDateStarting: since, ending: runtime.now(), calendars: cals)
+        let incomplete = await Self.fetch(store, open, calendar: runtime.calendar)
+        let completed = await Self.fetch(store, done, calendar: runtime.calendar)
         return incomplete + completed
     }
 
     /// The store and predicates stay on their owning actor. The callback copies EventKit rows
     /// immediately into Sendable values before resuming the actor's continuation.
-    private static func fetch(_ store: EKEventStore, _ predicate: NSPredicate) async -> [Remote] {
+    private static func fetch(_ store: EKEventStore, _ predicate: NSPredicate, calendar: Calendar) async -> [Remote] {
         await withCheckedContinuation { c in
-            store.fetchReminders(matching: predicate) { c.resume(returning: ($0 ?? []).map(Remote.init)) }
+            store.fetchReminders(matching: predicate) { c.resume(returning: ($0 ?? []).map { Remote($0, calendar: calendar) }) }
         }
     }
 
     private func pass(_ context: ModelContext) async throws {
+        guard !disposed, let ledger else { return }
+        let passGeneration = generation
         // Only items created after connecting are uploaded. A missing mark (e.g. after forgetLink) means "from now".
-        if UserDefaults.standard.object(forKey: Self.uploadFromKey) == nil {
-            UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.uploadFromKey)
+        if defaults.object(forKey: Self.uploadFromKey) == nil {
+            defaults.set(runtime.now().timeIntervalSince1970, forKey: Self.uploadFromKey)
         }
-        let uploadFrom = Date(timeIntervalSince1970: UserDefaults.standard.double(forKey: Self.uploadFromKey))
+        let uploadFrom = Date(timeIntervalSince1970: defaults.double(forKey: Self.uploadFromKey))
         var fp = storedFP
 
         // ---- Lists ----
@@ -447,6 +489,7 @@ package final class RemindersSync {
                 let isDefault = cal.calendarIdentifier == store.defaultCalendarForNewReminders()?.calendarIdentifier
                 let o = OneList(name: cal.title, colorIndex: Self.colorIndex(for: cal.cgColor), symbol: "list.bullet",
                                 order: isDefault ? (lists.map(\.order).min() ?? 0) - 1 : (lists.map(\.order).max() ?? -1) + 1)
+                o.createdAt = runtime.now()
                 o.externalID = id
                 context.insert(o)
                 lists.append(o)
@@ -481,6 +524,7 @@ package final class RemindersSync {
         // ---- Reminders ----
         let completionRevision = completionFence.revision
         let remote = await fetchRemote()
+        guard !disposed, !Task.isCancelled, passGeneration == generation else { return }
         // A completion can commit while EventKit is fetching. This snapshot predates that write;
         // do not apply it or publish its old fingerprints as the next conflict baseline.
         guard completionFence.accepts(snapshot: completionRevision) else { again = true; return }
@@ -516,7 +560,7 @@ package final class RemindersSync {
                 let local = Self.fingerprint(of: t)
                 if agreed == nil || r.fingerprint != agreed {
                     // Apple changed (or Apple and the app both did: Apple wins).
-                    if let agreed, local != agreed { ActivityCenter.record(ActivityEvents.syncConflict(source: "reminders")) }
+                    if let agreed, local != agreed { ledger.activity.record(ActivityEvents.syncConflict(source: "reminders", at: runtime.now())) }
                     apply(r, to: t)
                     fp[r.id] = r.fingerprint
                 } else if local != agreed {
@@ -542,6 +586,7 @@ package final class RemindersSync {
                 // New in Apple, or missing locally for any other reason (e.g. a rebuilt local store): bring it in.
                 debugLog("pull \(r.title)")
                 let t = OneTask(title: r.title)
+                t.createdAt = runtime.now()
                 t.externalID = r.id
                 apply(r, to: t)
                 context.insert(t)
@@ -557,15 +602,15 @@ package final class RemindersSync {
             if let ek = store.calendarItem(withIdentifier: id) as? EKReminder {
                 if t.isDone == false, ek.isCompleted {
                     t.isDone = true
-                    t.doneAt = ek.completionDate ?? .now
+                    t.doneAt = ek.completionDate ?? runtime.now()
                     fp[id] = Self.fingerprint(of: t)
                 } else if !t.isDone, !ek.isCompleted {
-                    let r = Remote(ek)
+                    let r = Remote(ek, calendar: runtime.calendar)
                     apply(r, to: t)
                     fp[id] = r.fingerprint
                 }
             } else if base.contains(id) {
-                Ledger.record(.deleted, title: t.title, actor: .agent("Apple Reminders"), channel: .sync, approval: .observed,
+                ledger.record(.deleted, title: t.title, actor: .agent("Apple Reminders"), channel: .sync, approval: .observed,
                               context: context)
                 context.delete(t)
                 base.remove(id)
@@ -613,11 +658,11 @@ package final class RemindersSync {
         if t.note != r.notes { t.note = r.notes }
         if r.isDone != t.isDone {
             t.isDone = r.isDone
-            t.doneAt = r.isDone ? (r.doneAt ?? .now) : nil
+            t.doneAt = r.isDone ? (r.doneAt ?? runtime.now()) : nil
         }
         if t.due != r.due {
             // Apple rolled a repeating reminder to its next occurrence: the finished one's plan does not follow (see RepeatAdvance).
-            let plan = RepeatAdvance.plannedStart(t.plannedStart, dueMovedFrom: t.due, to: r.due, repeats: r.repeats, isDone: r.isDone)
+            let plan = RepeatAdvance.plannedStart(t.plannedStart, dueMovedFrom: t.due, to: r.due, repeats: r.repeats, isDone: r.isDone, now: runtime.now(), calendar: runtime.calendar)
             if t.plannedStart != plan { t.plannedStart = plan }
             t.due = r.due
         }
@@ -639,9 +684,9 @@ package final class RemindersSync {
         ek.title = t.title
         ek.notes = t.note.isEmpty ? nil : t.note
         if ek.isCompleted != t.isDone { ek.isCompleted = t.isDone }
-        ek.dueDateComponents = t.due.map(Self.components(for:))
+        ek.dueDateComponents = t.due.map { Self.components(for: $0, calendar: runtime.calendar) }
         // Apple only alerts when the reminder has an alarm: a timed due date gets one at that time.
-        let timed = t.due.map { Self.components(for: $0).hour != nil } ?? false
+        let timed = t.due.map { Self.components(for: $0, calendar: runtime.calendar).hour != nil } ?? false
         ek.alarms?.filter { $0.absoluteDate != nil }.forEach { ek.removeAlarm($0) }
         if timed, let due = t.due { ek.addAlarm(EKAlarm(absoluteDate: due)) }
         ek.priority = t.flagged ? 1 : (ek.priority == 1 ? 0 : ek.priority)
@@ -664,15 +709,15 @@ package final class RemindersSync {
 ///   same `TaskActions` the screens use.
 /// - `-uiTestingSyncDump <prefix>` shows both sides as hidden labels (`SyncDumpProbe`).
 extension RemindersSync {
-    private static func debugOps(_ flag: String) -> [(op: String, title: String, value: String)] {
-        let args = ProcessInfo.processInfo.arguments
+    private func debugOps(_ flag: String) -> [(op: String, title: String, value: String)] {
+        let args = arguments
         guard args.contains("-uiTesting") else { return [] }
         return args.indices.filter { args[$0] == flag && $0 + 3 < args.count }
             .map { (args[$0 + 1], args[$0 + 2], args[$0 + 3]) }
     }
 
-    private static var debugPrefix: String? {
-        let args = ProcessInfo.processInfo.arguments
+    private var debugPrefix: String? {
+        let args = arguments
         guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingSyncDump"), i + 1 < args.count else { return nil }
         return args[i + 1]
     }
@@ -688,7 +733,7 @@ extension RemindersSync {
     }
 
     fileprivate func debugRunAppleOps() async {
-        let ops = Self.debugOps("-uiTestingAppleOp")
+        let ops = debugOps("-uiTestingAppleOp")
         guard !ops.isEmpty else { return }
         for op in ops {
             let ids = await debugAllReminderIDs()
@@ -705,9 +750,9 @@ extension RemindersSync {
             let ek = EKReminder(eventStore: store)
             ek.calendar = cal
             ek.title = op.title
-            let tomorrow = Calendar.current.date(byAdding: .day, value: op.op == "addToday" ? 0 : 1, to: .now) ?? .now
-            let due = Calendar.current.date(bySettingHour: op.op == "addToday" ? 12 : 9, minute: op.op == "addToday" ? 30 : 0, second: 0, of: tomorrow) ?? tomorrow
-            ek.dueDateComponents = Self.components(for: due)
+            let tomorrow = runtime.calendar.date(byAdding: .day, value: op.op == "addToday" ? 0 : 1, to: runtime.now()) ?? runtime.now()
+            let due = runtime.calendar.date(bySettingHour: op.op == "addToday" ? 12 : 9, minute: op.op == "addToday" ? 30 : 0, second: 0, of: tomorrow) ?? tomorrow
+            ek.dueDateComponents = Self.components(for: due, calendar: runtime.calendar)
             if op.op == "addToday" { ek.notes = "Keep the water cup and documents together." }
             if let rule = RepeatRule(rawValue: op.value) { ek.addRecurrenceRule(Self.recurrence(for: rule)) }
             try? store.save(ek, commit: true)
@@ -723,15 +768,15 @@ extension RemindersSync {
     }
 
     fileprivate func debugRunAppOps(_ context: ModelContext) {
-        let ops = Self.debugOps("-uiTestingAppOp")
-        guard !ops.isEmpty else { return }
+        let ops = debugOps("-uiTestingAppOp")
+        guard !ops.isEmpty, let ledger else { return }
         let tasks = (try? context.fetch(FetchDescriptor<OneTask>())) ?? []
         for op in ops {
             guard let t = tasks.first(where: { $0.title == op.title && !$0.isDone }) else { continue }
             switch op.op {
-            case "complete": TaskActions.toggleDone(t, context: context, toast: nil)
+            case "complete": TaskActions.toggleDone(t, context: context, toast: nil, reminders: self, ledger: ledger, runtime: runtime)
             case "rename": t.title = op.value
-            case "delete": TaskActions.delete(t, context: context, toast: nil)
+            case "delete": TaskActions.delete(t, context: context, toast: nil, reminders: self, ledger: ledger, runtime: runtime)
             case "repeat": t.repeatRule = RepeatRule(rawValue: op.value)?.rawValue
             default: break
             }
@@ -740,7 +785,7 @@ extension RemindersSync {
     }
 
     fileprivate func debugRefreshDump(_ context: ModelContext) async {
-        guard let prefix = Self.debugPrefix else { return }
+        guard let prefix = debugPrefix else { return }
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HH:mm"
@@ -748,10 +793,11 @@ extension RemindersSync {
             "\(title)|\(done ? "done" : "open")|\(due.map(f.string(from:)) ?? "-")|\(rule ?? "-")"
         }
         // A fresh EventKit store verifies the committed backend, not the object just mutated by the action.
-        let verifyingStore = EKEventStore()
+        let verifyingStore = makeStore()
+        let calendar = runtime.calendar
         let predicate = verifyingStore.predicateForReminders(in: nil)
         let all: [Remote] = await withCheckedContinuation { c in
-            verifyingStore.fetchReminders(matching: predicate) { c.resume(returning: ($0 ?? []).map(Remote.init)) }
+            verifyingStore.fetchReminders(matching: predicate) { c.resume(returning: ($0 ?? []).map { Remote($0, calendar: calendar) }) }
         }
         let apple = all.filter { $0.title.hasPrefix(prefix) }
         debugAppleDump = apple.map { line($0.title, $0.isDone, $0.due, $0.repeatRule) }.sorted().joined(separator: ";")
@@ -768,8 +814,8 @@ extension RemindersSync {
 
 /// Hidden labels a UI test reads: `syncDump.apple` and `syncDump.app`.
 package struct SyncDumpProbe: View {
-    package init() {}
-    private let sync = RemindersSync.shared
+    package init(sync: RemindersSync) { self.sync = sync }
+    private let sync: RemindersSync
 
     package var body: some View {
         VStack {

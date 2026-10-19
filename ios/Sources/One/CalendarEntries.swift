@@ -43,13 +43,13 @@ package struct CalEntry: Identifiable {
     package var isTask: Bool { if case .task = source { true } else { false } }
     package var isAlarm: Bool { if case .alarm = source { true } else { false } }
 
-    package func overlaps(_ day: Date, calendar: Calendar = .current) -> Bool {
+    package func overlaps(_ day: Date, calendar: Calendar) -> Bool {
         CalendarEntryDates.overlaps(start: start, end: end, day: day, calendar: calendar)
     }
 
     /// How the entry reads on `day`: all-day rows, or a start/end clipped to that day.
     /// A timed event that spans the whole day (the middle of a multi-day event) reads as all-day.
-    package func span(on day: Date, calendar: Calendar = .current) -> (start: Date, end: Date, allDay: Bool) {
+    package func span(on day: Date, calendar: Calendar) -> (start: Date, end: Date, allDay: Bool) {
         guard let interval = calendar.dateInterval(of: .day, for: day) else { return (start, end, isAllDay) }
         if isAllDay { return (interval.start, interval.end, true) }
         let s = max(start, interval.start), e = min(end, interval.end)
@@ -73,8 +73,8 @@ package enum CalendarEntries {
     /// Events hidden in the Calendars list are left out. Pass `alarms` (already empty when "Show alarms in the day" is off)
     /// to add their rings by the same rule as the Today timeline (see `CalendarAlarms`); reminders that ring as alarms stay reminders.
     package static func make(in interval: DateInterval, events: [OneEvent], tasks: [OneTask], alarms: [OneAlarm] = [],
-                     now: Date = TodayClock.now, calendar: Calendar = .current, forYearMarks: Bool = false) -> [CalEntry] {
-        let sync = CalendarSync.shared
+                     calendarService: any CalendarService, now: Date, calendar: Calendar, forYearMarks: Bool = false) -> [CalEntry] {
+        let sync = calendarService
         var result: [CalEntry] = []
 
         var mirrors = Set<String>()
@@ -82,7 +82,7 @@ package enum CalendarEntries {
             if let id = e.externalID { mirrors.insert(id) }
             if sync.isHidden(externalID: e.externalID) { continue }
             let mirror = sync.calendar(forExternalID: e.externalID)
-            for start in e.occurrences(in: interval) {
+            for start in Recurrence.occurrences(start: e.start, duration: e.duration, rule: e.repeats, in: interval, calendar: calendar) {
                 let end = forYearMarks
                     ? YearEventMarks.localEnd(start: start, durationMinutes: e.durationMinutes,
                                               isAllDay: e.isAllDay, calendar: calendar)
@@ -122,7 +122,7 @@ package enum CalendarEntries {
     }
 
     /// The entries on one day, in Apple's order: all-day first, then by start time.
-    package static func on(_ day: Date, in entries: [CalEntry], calendar: Calendar = .current) -> [CalEntry] {
+    package static func on(_ day: Date, in entries: [CalEntry], calendar: Calendar) -> [CalEntry] {
         entries
             .filter { $0.overlaps(day, calendar: calendar) }
             .sorted {

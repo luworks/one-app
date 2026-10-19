@@ -30,6 +30,16 @@ package struct ExternalEvent: Identifiable, Hashable {
     package var isBirthday = false
     package var isHoliday = false
 
+    package init(id: String, eventIdentifier: String, title: String, location: String = "",
+                 start: Date, end: Date, isAllDay: Bool, calendarID: String = "", calendarTitle: String,
+                 color: Color, place: TravelPlace? = nil, repeats: Bool = false,
+                 isBackground: Bool = false, isBirthday: Bool = false, isHoliday: Bool = false) {
+        self.id = id; self.eventIdentifier = eventIdentifier; self.title = title; self.location = location
+        self.start = start; self.end = end; self.isAllDay = isAllDay; self.calendarID = calendarID
+        self.calendarTitle = calendarTitle; self.color = color; self.place = place; self.repeats = repeats
+        self.isBackground = isBackground; self.isBirthday = isBirthday; self.isHoliday = isHoliday
+    }
+
     package var durationMinutes: Int { max(1, Int(end.timeIntervalSince(start) / 60)) }
 }
 
@@ -41,21 +51,28 @@ package struct SystemCalendar: Identifiable, Hashable {
     package let color: Color
     package var isBirthday = false
     package var isHoliday = false
+    package init(id: String, title: String, sourceTitle: String, color: Color,
+                 isBirthday: Bool = false, isHoliday: Bool = false) {
+        self.id = id; self.title = title; self.sourceTitle = sourceTitle; self.color = color
+        self.isBirthday = isBirthday; self.isHoliday = isHoliday
+    }
+
 }
 
 /// EventKit bridge: shows system calendar events in Today / Calendar, and can save new events there.
 @MainActor
 @Observable
-package final class CalendarSync {
-    package static let shared = CalendarSync()
+package final class CalendarSync: NativeCalendarService {
     @ObservationIgnored private let log = Logger(subsystem: "com.luworks.one", category: "calendar")
 
     /// Created on first use: EKEventStore is slow to set up and most launches don't need it.
     @ObservationIgnored private lazy var store: EKEventStore = {
-        let s = EKEventStore()
-        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: s, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.version += 1 }
-        }
+        let s = makeStore()
+        observers.append(NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: s, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, !self.disposed else { return }; self.version += 1
+            }
+        })
         return s
     }()
     private static let enabledKey = "one.calendarSync.enabled"
@@ -65,24 +82,44 @@ package final class CalendarSync {
     package private(set) var version = 0
     /// UI tests start with Apple Calendar off (a saved "on" from an earlier run would leak test events into the
     /// system calendar); the tests that need it pass `-uiTestingCalendarSync`.
-    package private(set) var enabled = UserDefaults.standard.bool(forKey: CalendarSync.enabledKey)
-        && (!ProcessInfo.processInfo.arguments.contains("-uiTesting") || ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSync"))
+    package private(set) var enabled: Bool
     /// Calendars turned off in the Calendars list. Stored as "hidden" so new calendars show by default, like Apple's.
     /// (UI tests start with every calendar shown, so an earlier run can't hide events from a later one.)
-    package private(set) var hiddenCalendarIDs: Set<String> = ProcessInfo.processInfo.arguments.contains("-uiTesting")
-        ? [] : Set(UserDefaults.standard.stringArray(forKey: CalendarSync.hiddenKey) ?? [])
+    package private(set) var hiddenCalendarIDs: Set<String>
 
     package var hasAccess: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
-    package var isOn: Bool { enabled && hasAccess }
+    package var isOn: Bool { !disposed && enabled && hasAccess }
 
     /// Apple's own event editor is used when Calendar access is on. UI tests keep the in-app editor (no permission prompts).
-    package var usesNativeEditor: Bool { isOn && !ProcessInfo.processInfo.arguments.contains("-uiTesting") }
+    package var usesNativeEditor: Bool { isOn && !arguments.contains("-uiTesting") }
 
-    private init() {}
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let runtime: PlannerRuntime
+    @ObservationIgnored private let arguments: [String]
+    @ObservationIgnored private let makeStore: () -> EKEventStore
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private var disposed = false
+
+    package init(defaults: UserDefaults, runtime: PlannerRuntime, arguments: [String],
+                 makeStore: @escaping () -> EKEventStore) {
+        self.defaults = defaults; self.runtime = runtime; self.arguments = arguments; self.makeStore = makeStore
+        enabled = defaults.bool(forKey: Self.enabledKey)
+            && (!arguments.contains("-uiTesting") || arguments.contains("-uiTestingCalendarSync"))
+        hiddenCalendarIDs = arguments.contains("-uiTesting") ? [] : Set(defaults.stringArray(forKey: Self.hiddenKey) ?? [])
+    }
+
+    package func dispose() {
+        disposed = true
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
+        warmTask?.cancel(); warmTask = nil
+        nativePresenter.dispose()
+    }
 
     /// The store is created just after launch so the first frame never waits for EventKit.
     @ObservationIgnored private var storeReady = false
     @ObservationIgnored private var warming = false
+    @ObservationIgnored private var warmTask: Task<Void, Never>?
 
     /// False while Apple Calendar is on but the store is still warming up (events read now would come back empty).
     package var isReady: Bool { !isOn || storeReady }
@@ -98,11 +135,12 @@ package final class CalendarSync {
     private func warmUp() {
         guard !warming else { return }
         warming = true
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(300))
-            _ = store
-            storeReady = true
-            version += 1
+        warmTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+            guard let self, !self.disposed else { return }
+            _ = self.store
+            self.storeReady = true
+            self.version += 1
         }
     }
 
@@ -115,19 +153,21 @@ package final class CalendarSync {
 
     /// On the first launch show iOS's own Calendar permission prompt. Does nothing afterwards.
     package func connectIfFirstRun() async {
-        guard !ProcessInfo.processInfo.arguments.contains("-uiTesting"),
+        guard !arguments.contains("-uiTesting"),
               EKEventStore.authorizationStatus(for: .event) == .notDetermined else { return }
         await setEnabled(true)
     }
 
     /// Turns sync on (asking for access the first time) or off.
     package func setEnabled(_ on: Bool) async {
+        guard !disposed else { return }
         if on && !hasAccess {
             _ = try? await store.requestFullAccessToEvents()
         }
+        guard !disposed else { return }
         storeReady = true
         enabled = on && hasAccess
-        UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
+        defaults.set(enabled, forKey: Self.enabledKey)
         version += 1
     }
 
@@ -152,7 +192,7 @@ package final class CalendarSync {
     package func setVisibleCalendars(_ selected: Set<String>) {
         let all = Set(store.calendars(for: .event).map(\.calendarIdentifier))
         hiddenCalendarIDs = all.subtracting(selected)
-        UserDefaults.standard.set(Array(hiddenCalendarIDs), forKey: Self.hiddenKey)
+        defaults.set(Array(hiddenCalendarIDs), forKey: Self.hiddenKey)
         version += 1
     }
 
@@ -200,7 +240,7 @@ package final class CalendarSync {
     }
 
     package func events(on day: Date, excluding exclude: Set<String> = []) -> [ExternalEvent] {
-        guard let interval = Calendar.current.dateInterval(of: .day, for: day) else { return [] }
+        guard let interval = runtime.calendar.dateInterval(of: .day, for: day) else { return [] }
         return events(in: interval, excluding: exclude)
     }
 
@@ -372,8 +412,8 @@ package final class CalendarSync {
     package func debugDeleteSystemEvents(titled title: String) {
         guard isOn else { return }
         storeReady = true
-        let predicate = store.predicateForEvents(withStart: .now.addingTimeInterval(-30 * 86_400), end: .now.addingTimeInterval(30 * 86_400), calendars: nil)
-        let cleanupPair = ProcessInfo.processInfo.arguments.contains("-uiTestingCleanupEventSave")
+        let predicate = store.predicateForEvents(withStart: runtime.now().addingTimeInterval(-30 * 86_400), end: runtime.now().addingTimeInterval(30 * 86_400), calendars: nil)
+        let cleanupPair = arguments.contains("-uiTestingCleanupEventSave")
         for e in store.events(matching: predicate).filter({ $0.title == title || (cleanupPair && $0.title == title + " updated") }).sorted(by: { $0.startDate < $1.startDate }) {
             try? store.remove(e, span: .futureEvents)
         }
@@ -387,19 +427,19 @@ package final class CalendarSync {
     package func debugCreateSystemEvent(titled title: String, repeating: Bool) {
         guard isOn, let calendar = store.defaultCalendarForNewEvents else { return }
         storeReady = true
-        let cal = Calendar.current
-        let hour = cal.dateInterval(of: .hour, for: .now)?.start ?? .now
+        let cal = runtime.calendar
+        let hour = cal.dateInterval(of: .hour, for: runtime.now())?.start ?? runtime.now()
         let e = EKEvent(eventStore: store)
         e.calendar = calendar
         e.title = title
         e.startDate = repeating ? cal.date(byAdding: .day, value: -1, to: hour) ?? hour : hour
         e.endDate = e.startDate.addingTimeInterval(1800)
-        if ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSaveAllDay") {
+        if arguments.contains("-uiTestingCalendarSaveAllDay") {
             // Convert the existing same-day timed interval using EventKit. Setting
             // the end again after allDay rounded the fixture into a second day.
             e.isAllDay = true
         }
-        if ProcessInfo.processInfo.arguments.contains("-uiTestingCalendarSaveMetadata") {
+        if arguments.contains("-uiTestingCalendarSaveMetadata") {
             e.notes = "Preserve event notes"
             e.url = URL(string: "https://example.com/calendar-save")
             e.alarms = [EKAlarm(relativeOffset: -1800), EKAlarm(relativeOffset: -300)]
@@ -421,29 +461,61 @@ package final class CalendarSync {
         guard isOn, storeReady, let id = externalID, let ek = store.event(withIdentifier: id) else { return nil }
         return (ek.attendees?.count ?? 0, ek.organizer?.isCurrentUser ?? true)
     }
+    fileprivate var simulatesSaveFailure: Bool {
+        #if DEBUG
+        arguments.contains("-uiTestingEventSaveFailure")
+        #else
+        false
+        #endif
+    }
+
+    @ObservationIgnored private lazy var nativePresenter = NativeEvents(sync: self)
+
+    package func edit(identifier: String?, start: Date, end: Date?, fullOptions: Bool,
+                      onComplete: ((EKEventEditViewAction) -> Void)?) {
+        nativePresenter.edit(identifier: identifier, start: start, end: end,
+                             fullOptions: fullOptions, onComplete: onComplete)
+    }
+
+    package func title(externalID: String, occurrence: Date?) -> String? {
+        nativeEvent(identifier: externalID, occurrence: occurrence)?.0.title
+    }
+
+    package func rename(externalID: String, occurrence: Date?, to title: String) -> Bool {
+        guard let (event, store) = nativeEvent(identifier: externalID, occurrence: occurrence),
+              event.calendar.allowsContentModifications else { return false }
+        let old = event.title
+        event.title = title
+        do { try store.save(event, span: .thisEvent); refresh(); return true }
+        catch { event.title = old; return false }
+    }
+
 }
 
 /// Shows Apple's event editor the way UIKit expects: presented over the top screen, not embedded in a SwiftUI sheet.
 /// Embedded, its Delete Event confirmation closed without deleting anything (reproduced in the simulator), and a sheet
 /// attached to each row of a long list could open the wrong event. One presenter for every place that opens it.
 @MainActor
-package enum NativeEvents {
-    private static var delegate: Delegate?
-    private static let log = Logger(subsystem: "com.luworks.one", category: "calendar")
+package final class NativeEvents {
+    private unowned let sync: CalendarSync
+    private var watchTask: Task<Void, Never>?
+    package init(sync: CalendarSync) { self.sync = sync }
+    package func dispose() { watchTask?.cancel(); watchTask = nil; delegate = nil }
+    private var delegate: Delegate?
+    private let log = Logger(subsystem: "com.luworks.one", category: "calendar")
 
     /// `identifier` nil = a new event starting at `start`.
     /// `start`: for an existing event, the start of the occurrence that was tapped; for a new event, when it starts.
     /// `end`: for a new event, when it ends (default one hour after `start`).
-    package static func edit(identifier: String? = nil, start: Date = .now, end: Date? = nil,
-                     fullOptions: Bool = false, onComplete: ((EKEventEditViewAction) -> Void)? = nil) {
-        let sync = CalendarSync.shared
+    package func edit(identifier: String?, start: Date, end: Date?,
+                     fullOptions: Bool, onComplete: ((EKEventEditViewAction) -> Void)?) {
         // iOS 27's remote editor disables Done for an unchanged existing event.
         // Keep completion and explicit EventKit errors under our control; new events
         // and the full system options still use Apple's editor.
         if #available(iOS 27, *), !fullOptions, let identifier,
            let (event, store) = sync.nativeEvent(identifier: identifier, occurrence: start),
-           let top = topViewController() {
-            let host = UIHostingController(rootView: ExistingCalendarEventEditor(event: event, store: store))
+           let top = Self.topViewController() {
+            let host = UIHostingController(rootView: ExistingCalendarEventEditor(event: event, store: store, sync: sync, simulateSaveFailure: sync.simulatesSaveFailure, onComplete: onComplete))
             top.present(host, animated: true)
             return
         }
@@ -462,11 +534,11 @@ package enum NativeEvents {
             event.calendar = sync.eventStore.defaultCalendarForNewEvents
             vc.event = event
         }
-        let d = Delegate(onComplete: onComplete)
+        let d = Delegate(owner: self, onComplete: onComplete)
         delegate = d
         vc.editViewDelegate = d
         vc.presentationController?.delegate = d
-        guard let top = topViewController() else { return }
+        guard let top = Self.topViewController() else { return }
         top.present(vc, animated: true)
         if let identifier { watch(vc, identifier: identifier, occurrence: start) }
     }
@@ -474,22 +546,24 @@ package enum NativeEvents {
     /// iOS 27's editor deletes the event but may not call its delegate, so it stays on screen and the list keeps the row,
     /// which looks like the delete failed (reproduced in the simulator: the event was gone from the calendar database).
     /// While the editor is up, check whether the event still exists; once it is gone, close the editor and refresh.
-    private static func watch(_ vc: EKEventEditViewController, identifier: String, occurrence: Date) {
-        Task { @MainActor [weak vc] in
+    private func watch(_ vc: EKEventEditViewController, identifier: String, occurrence: Date) {
+        watchTask?.cancel()
+        watchTask = Task { @MainActor [weak self, weak vc] in
+            guard let self else { return }
             while let vc, vc.presentingViewController != nil {
-                try? await Task.sleep(for: .milliseconds(400))
+                do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+                guard !Task.isCancelled else { return }
                 // Gone: the whole event, or (a repeating one) just the occurrence that was open.
-                let sync = CalendarSync.shared
-                if sync.eventStore.event(withIdentifier: identifier) == nil || sync.occurrence(identifier, at: occurrence) == nil {
+                if self.sync.eventStore.event(withIdentifier: identifier) == nil || self.sync.occurrence(identifier, at: occurrence) == nil {
                     log.info("editor: event is gone, closing")
-                    CalendarSync.shared.refresh()
-                    let completion = delegate?.onComplete
+                    self.sync.refresh()
+                    let completion = self.delegate?.onComplete
                     vc.dismiss(animated: true) { completion?(.deleted) }
-                    delegate = nil
+                    self.delegate = nil
                     return
                 }
             }
-            CalendarSync.shared.refresh()
+            self.sync.refresh()
         }
     }
 
@@ -503,22 +577,25 @@ package enum NativeEvents {
 
     private final class Delegate: NSObject, @MainActor EKEventEditViewDelegate, UIAdaptivePresentationControllerDelegate {
         let onComplete: ((EKEventEditViewAction) -> Void)?
-        init(onComplete: ((EKEventEditViewAction) -> Void)?) { self.onComplete = onComplete }
+        weak var owner: NativeEvents?
+        init(owner: NativeEvents, onComplete: ((EKEventEditViewAction) -> Void)?) {
+            self.owner = owner; self.onComplete = onComplete
+        }
         /// Swiped down: nothing to save; refetch in case something changed meanwhile.
         func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
             Task { @MainActor in
-                CalendarSync.shared.refresh()
-                NativeEvents.delegate = nil
+                self.owner?.sync.refresh()
+                self.owner?.delegate = nil
             }
         }
 
         package func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
             print("NativeEvents: editor completed \(action.rawValue)")
-            NativeEvents.log.info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
+            self.owner?.log.info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
             Task { @MainActor in
-                CalendarSync.shared.refresh()
+                self.owner?.sync.refresh()
                 controller.dismiss(animated: true) { self.onComplete?(action) }
-                NativeEvents.delegate = nil
+                self.owner?.delegate = nil
             }
         }
     }
@@ -530,6 +607,9 @@ package enum NativeEvents {
 private struct ExistingCalendarEventEditor: View {
     let event: EKEvent
     let store: EKEventStore
+    let sync: any NativeCalendarService
+    let onComplete: ((EKEventEditViewAction) -> Void)?
+    let simulateSaveFailure: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var start: Date
@@ -557,7 +637,9 @@ private struct ExistingCalendarEventEditor: View {
         }
     }
 
-    init(event: EKEvent, store: EKEventStore) {
+    init(event: EKEvent, store: EKEventStore, sync: any NativeCalendarService, simulateSaveFailure: Bool, onComplete: ((EKEventEditViewAction) -> Void)?) {
+        self.simulateSaveFailure = simulateSaveFailure
+        self.sync = sync; self.onComplete = onComplete
         self.event = event
         self.store = store
         let draft = Draft(event)
@@ -610,9 +692,10 @@ private struct ExistingCalendarEventEditor: View {
                         .accessibilityIdentifier("event.alerts")
                     if let url = event.url { Text(url.absoluteString) }
                     Button("More Options…") {
-                        NativeEvents.edit(identifier: event.eventIdentifier, start: event.startDate, fullOptions: true) { action in
+                        sync.edit(identifier: event.eventIdentifier, start: event.startDate, end: nil, fullOptions: true, onComplete: { action in
+                            onComplete?(action)
                             if action == .saved || action == .deleted { dismiss() }
-                        }
+                        })
                     }
                         .disabled(changed)
                 } footer: {
@@ -629,7 +712,7 @@ private struct ExistingCalendarEventEditor: View {
             .navigationTitle("Edit Event")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { onComplete?(.canceled); dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         if changed && event.hasRecurrenceRules { chooseScope = true }
@@ -649,7 +732,7 @@ private struct ExistingCalendarEventEditor: View {
 
     private func save(span: EKSpan) {
         // Completing an unchanged event must not write metadata or notify invitees.
-        guard changed else { dismiss(); return }
+        guard changed else { onComplete?(.saved); dismiss(); return }
         guard writable else { error = "This calendar is read-only."; return }
         // Refetch before applying only the fields the user changed. Concurrent edits
         // to other fields remain Apple's source of truth.
@@ -664,13 +747,14 @@ private struct ExistingCalendarEventEditor: View {
         if notes != original.notes { event.notes = notes }
         do {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-uiTestingEventSaveFailure") {
+            if simulateSaveFailure {
                 throw NSError(domain: "EventSaveTest", code: 1,
                               userInfo: [NSLocalizedDescriptionKey: "Calendar is temporarily unavailable."])
             }
             #endif
             try store.save(event, span: span, commit: true)
-            CalendarSync.shared.refresh()
+            sync.refresh()
+            onComplete?(.saved)
             dismiss()
         } catch {
             event.reset() // Discard failed pending writes; the user's draft stays in State.
@@ -683,29 +767,36 @@ private struct ExistingCalendarEventEditor: View {
 /// Delete Event are all editable at once, Done saves. Apple's read-only viewer made you tap Edit first and drew its own
 /// Delete, so it is not used.
 package struct NativeEventSheet: View {
-    package init(identifier: String) { self.identifier = identifier }
+    package init(identifier: String, start: Date, calendar: any NativeCalendarService) {
+        self.identifier = identifier; self.start = start; self.calendar = calendar
+    }
+    private let start: Date
+    private let calendar: any NativeCalendarService
     package let identifier: String
 
     package var body: some View {
-        NativeEventEditor(identifier: identifier).ignoresSafeArea()
+        NativeEventEditor(identifier: identifier, start: start, calendar: calendar).ignoresSafeArea()
     }
 }
 
 /// Apple's own event editor (EventKitUI), for a new event or an existing one. Saving, cancelling and deleting
 /// (with Apple's "This event only / all future events" prompts) are all Apple's.
 package struct NativeEventEditor: UIViewControllerRepresentable {
-    package init(identifier: String? = nil, start: Date = .now) { self.identifier = identifier; self.start = start }
+    package init(identifier: String?, start: Date, calendar: any NativeCalendarService) {
+        self.identifier = identifier; self.start = start; self.calendar = calendar
+    }
+    private let calendar: any NativeCalendarService
     /// nil = a new event.
     package var identifier: String?
     /// Where a new event starts (ignored when editing).
-    package var start: Date = .now
+    package var start: Date
     @Environment(\.dismiss) private var dismiss
 
     package func makeUIViewController(context: Context) -> EKEventEditViewController {
-        let sync = CalendarSync.shared
+        let sync = calendar
         let vc = EKEventEditViewController()
         vc.eventStore = sync.eventStore
-        if let identifier, let (existing, _) = sync.nativeEvent(identifier: identifier) {
+        if let identifier, let (existing, _) = sync.nativeEvent(identifier: identifier, occurrence: start) {
             vc.event = existing
         } else {
             let event = EKEvent(eventStore: sync.eventStore)
@@ -720,14 +811,15 @@ package struct NativeEventEditor: UIViewControllerRepresentable {
 
     package func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
 
-    package func makeCoordinator() -> Coordinator { Coordinator(dismiss: { dismiss() }) }
+    package func makeCoordinator() -> Coordinator { Coordinator(calendar: calendar, dismiss: { dismiss() }) }
 
     package final class Coordinator: NSObject, EKEventEditViewDelegate {
+        let calendar: any CalendarService
         let dismiss: () -> Void
-        init(dismiss: @escaping () -> Void) { self.dismiss = dismiss }
+        init(calendar: any CalendarService, dismiss: @escaping () -> Void) { self.calendar = calendar; self.dismiss = dismiss }
         package func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
             Logger(subsystem: "com.luworks.one", category: "calendar").info("apple editor done: \(action == .deleted ? "deleted" : action == .saved ? "saved" : "cancelled", privacy: .public)")
-            Task { @MainActor in CalendarSync.shared.refresh() }
+            Task { @MainActor in self.calendar.refresh() }
             dismiss()
         }
     }

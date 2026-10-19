@@ -10,35 +10,33 @@ import Foundation
 /// and the user can switch it off in Settings afterwards.
 @MainActor
 package enum FirstRun {
-    private static var testing: Bool { ProcessInfo.processInfo.arguments.contains("-uiTesting") }
-    private static let defaults = UserDefaults.standard
 
-    package static func calendar() async {
-        guard !testing else { return }
-        if CalendarSync.shared.hasAccess, !CalendarSync.shared.isOn, defaults.object(forKey: "today.firstRun.calendar") == nil {
+    package static func calendar(_ calendar: any CalendarService, defaults: UserDefaults, arguments: [String]) async {
+        guard !arguments.contains("-uiTesting") else { return }
+        if calendar.hasAccess, !calendar.isOn, defaults.object(forKey: "today.firstRun.calendar") == nil {
             defaults.set(true, forKey: "today.firstRun.calendar")
-            await CalendarSync.shared.setEnabled(true)
+            await calendar.setEnabled(true)
         } else {
-            await CalendarSync.shared.connectIfFirstRun()
+            await calendar.connectIfFirstRun()
         }
     }
 
-    package static func reminders() async {
-        guard !testing else { return }
-        if RemindersSync.shared.hasAccess, !RemindersSync.shared.isConnected, defaults.object(forKey: "today.firstRun.reminders") == nil {
+    package static func reminders(_ reminders: any ReminderService, defaults: UserDefaults, arguments: [String]) async {
+        guard !arguments.contains("-uiTesting") else { return }
+        if reminders.hasAccess, !reminders.isConnected, defaults.object(forKey: "today.firstRun.reminders") == nil {
             defaults.set(true, forKey: "today.firstRun.reminders")
-            await RemindersSync.shared.connect()
+            await reminders.connect()
         } else {
-            await RemindersSync.shared.connectIfFirstRun()
+            await reminders.connectIfFirstRun()
         }
     }
 
     /// Opening the Alarms tab asks for what alarms need: AlarmKit access, then notifications. iOS shows each prompt only
     /// once (and only the user can tap Allow); after a "Don't Allow" nothing is shown and Settings explains how to turn it on.
-    package static func alarms() async {
-        guard !testing else { return }
-        if Ringer.authorization == .notDetermined { await Ringer.requestAuthorization() }
-        if await Reminders.shared.authorizationStatus() == .notDetermined { await Reminders.shared.requestPermission() }
+    package static func alarms(_ alarms: any AlarmService, notifications: any NotificationService, arguments: [String]) async {
+        guard !arguments.contains("-uiTesting") else { return }
+        if alarms.authorization == .notDetermined { await alarms.requestAuthorization() }
+        if await notifications.authorizationStatus() == .notDetermined { await notifications.requestPermission() }
     }
 }
 #endif

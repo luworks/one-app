@@ -15,7 +15,7 @@ package enum ListActions {
 
     /// Every distinct non-empty `listName` gets an `OneList` (imports and older installs have names only).
     /// Safe to call on every launch: lists that exist are left alone.
-    package static func ensureLists(in context: ModelContext) {
+    package static func ensureLists(in context: ModelContext, runtime: PlannerRuntime) {
         let lists = (try? context.fetch(FetchDescriptor<OneList>())) ?? []
         let tasks = (try? context.fetch(FetchDescriptor<OneTask>())) ?? []
         let known = Set(lists.map(\.name))
@@ -23,7 +23,9 @@ package enum ListActions {
         guard !missing.isEmpty else { return }
         var order = (lists.map(\.order).max() ?? -1) + 1
         for name in missing {
-            context.insert(OneList(name: name, colorIndex: autoColors[(order) % autoColors.count], symbol: "list.bullet", order: order))
+            let list = OneList(name: name, colorIndex: autoColors[(order) % autoColors.count], symbol: "list.bullet", order: order)
+            list.createdAt = runtime.now()
+            context.insert(list)
             order += 1
         }
         try? context.save()
@@ -41,20 +43,22 @@ package enum ListActions {
 
     /// Creates a list at the end of My Lists. Returns nil (and creates nothing) when the name is empty or taken.
     @discardableResult
-    package static func create(name: String, colorIndex: Int, symbol: String, in context: ModelContext) -> OneList? {
+    package static func create(name: String, colorIndex: Int, symbol: String, in context: ModelContext, ledger: Ledger, runtime: PlannerRuntime) -> OneList? {
         let existing = (try? context.fetch(FetchDescriptor<OneList>())) ?? []
         guard nameProblem(name, existing: existing) == nil else { return nil }
         let order = (existing.map(\.order).max() ?? -1) + 1
         let list = OneList(name: name.trimmingCharacters(in: .whitespacesAndNewlines), colorIndex: colorIndex, symbol: symbol, order: order)
+        list.createdAt = runtime.now()
         context.insert(list)
         try? context.save()
+        ledger.record(.created, kind: "list", title: list.name, context: context)
         return list
     }
 
     /// Renames a list and moves all of its tasks (open and done) to the new name.
     /// Returns false (and changes nothing) when the name is empty or taken by another list.
     @discardableResult
-    package static func rename(_ list: OneList, to name: String, in context: ModelContext) -> Bool {
+    package static func rename(_ list: OneList, to name: String, in context: ModelContext, ledger: Ledger) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let existing = (try? context.fetch(FetchDescriptor<OneList>())) ?? []
         guard nameProblem(trimmed, existing: existing, excluding: list) == nil else { return false }
@@ -63,14 +67,15 @@ package enum ListActions {
         for task in tasks(in: old, context: context) { task.listName = trimmed }
         list.name = trimmed
         try? context.save()
+        ledger.record(.renamed, kind: "list", title: trimmed, before: old, after: trimmed, context: context)
         return true
     }
 
     /// Deletes the list (the UI asks first, with the count). Its reminders are deleted with it, or, with
     /// `keepingTasks`, moved to the default list.
-    package static func delete(_ list: OneList, keepingTasks: Bool = false, in context: ModelContext) {
+    package static func delete(_ list: OneList, keepingTasks: Bool = false, in context: ModelContext, reminders: any ReminderService, ledger: Ledger, runtime: PlannerRuntime) {
         guard !list.isDeleted else { return }
-        RemindersSync.shared.noteDeleted(list: list.externalID)
+        reminders.noteDeleted(list: list.externalID)
         for task in tasks(in: list.name, context: context) {
             if keepingTasks {
                 task.listName = ""
@@ -78,12 +83,13 @@ package enum ListActions {
                 // in Apple's default list instead of following their old link into the deleted list.
                 if list.externalID != nil, task.externalID != nil {
                     task.externalID = nil
-                    task.createdAt = .now
+                    task.createdAt = runtime.now()
                 }
             } else {
                 context.delete(task)
             }
         }
+        ledger.record(.deleted, kind: "list", title: list.name, context: context)
         context.delete(list)
         try? context.save()
     }

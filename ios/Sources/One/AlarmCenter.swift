@@ -28,10 +28,14 @@ package enum AlarmLiveState: Equatable {
 /// made in Apple's Clock app.
 @MainActor
 @Observable
-package final class AlarmCenter {
-    package static let shared = AlarmCenter()
+package final class AlarmCenter: AlarmService {
+    private let driver: Ringer
+    package init(driver: Ringer) { self.driver = driver; authorization = driver.authorization }
+    package var isAvailable: Bool { driver.isAvailable }
+    package func sync(_ context: ModelContext) async { await driver.sync(context); refreshStates() }
+    package func stop(_ id: UUID) { driver.stop(id); refreshStates() }
 
-    package private(set) var authorization: AlarmAuthorization = Ringer.authorization
+    package private(set) var authorization: AlarmAuthorization
     /// Keyed by `OneAlarm.alarmKitID` (and the ids of items that ring as alarms).
     package private(set) var states: [UUID: AlarmLiveState] = [:]
 
@@ -40,30 +44,31 @@ package final class AlarmCenter {
     }
 
     package func requestAuthorization() async {
-        await Ringer.requestAuthorization()
-        authorization = Ringer.authorization
+        await driver.requestAuthorization()
+        authorization = driver.authorization
     }
 
     @MainActor
     private final class WatchSession {
         private let context: ModelContext
-        init(context: ModelContext) { self.context = context }
+        private let driver: Ringer
+        init(context: ModelContext, driver: Ringer) { self.context = context; self.driver = driver }
         func synchronize() async {
             guard !Task.isCancelled else { return }
-            await Ringer.sync(context)
+            await driver.sync(context)
         }
         #if canImport(AlarmKit)
         func watchAlarms(center: AlarmCenter) async {
-            for await _ in AlarmManager.shared.alarmUpdates {
+            for await _ in driver.manager.alarmUpdates {
                 guard !Task.isCancelled else { return }
                 center.refreshStates()
                 await synchronize()
             }
         }
         func watchAuthorization(center: AlarmCenter) async {
-            for await _ in AlarmManager.shared.authorizationUpdates {
+            for await _ in driver.manager.authorizationUpdates {
                 guard !Task.isCancelled else { return }
-                center.authorization = Ringer.authorization
+                center.authorization = driver.authorization
                 await synchronize()
             }
         }
@@ -75,9 +80,9 @@ package final class AlarmCenter {
     package func watch(context: ModelContext) async {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
-        authorization = Ringer.authorization
+        authorization = driver.authorization
         refreshStates()
-        let session = WatchSession(context: context)
+        let session = WatchSession(context: context, driver: driver)
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await session.watchAlarms(center: self) }
             group.addTask { await session.watchAuthorization(center: self) }
@@ -89,7 +94,7 @@ package final class AlarmCenter {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
         var next: [UUID: AlarmLiveState] = [:]
-        for alarm in (try? AlarmManager.shared.alarms) ?? [] {
+        for alarm in (try? driver.manager.alarms) ?? [] {
             switch alarm.state {
             case .scheduled: next[alarm.id] = .scheduled
             case .countdown: next[alarm.id] = .snoozing

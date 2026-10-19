@@ -19,83 +19,38 @@ import AlarmKit
 /// `Ringer.sync` keeps those ids when it cancels leftovers. The pure parts are in TimerList.swift.
 @MainActor
 @Observable
-package final class TimerController {
-    package static let shared = TimerController()
+package final class TimerController: TimerService {
 
     /// All running timers, in the order they were started.
     package private(set) var timers: [RunningTimer]
     /// Ids that are ringing right now.
     package private(set) var ringing: Set<UUID> = []
     /// Today's Pomodoro rounds (UserDefaults, starts over at midnight).
-    package private(set) var log: PomodoroLog = TimerController.initialLog()
+    package private(set) var log: PomodoroLog
     /// The Recents under the picker: what was started, newest first (UserDefaults; `TimerRecents`).
     package private(set) var recents: [RecentTimer]
     /// The tone new timers ring with: a name from `AlarmSound.all`, empty for the system alarm sound.
-    package var sound: String { didSet { if !Self.isUITesting { UserDefaults.standard.set(sound, forKey: Self.soundKey) } } }
+    package var sound: String { didSet { defaults.set(sound, forKey: Self.soundKey) } }
     /// A short line under the controls, e.g. when alarms are not allowed.
     package var message: String?
 
     private static let soundKey = "timer.sound"
 
-    package init() {
-        let (seeded, rings) = Self.seededTimers()
-        timers = seeded ?? (Self.isUITesting ? [] : TimerStore.load())
-        ringing = rings
-        recents = Self.seededRecents() ?? (Self.isUITesting ? [] : TimerRecentsStore.load())
-        sound = Self.isUITesting ? "" : (UserDefaults.standard.string(forKey: Self.soundKey) ?? "")
+    private let defaults: UserDefaults
+    private let runtime: PlannerRuntime
+    private let driver: Ringer
+    private let donate: (Int) -> Void
+    private var starting = false
+
+    package init(defaults: UserDefaults, runtime: PlannerRuntime, driver: Ringer,
+                 donate: @escaping (Int) -> Void) {
+        self.defaults = defaults; self.runtime = runtime; self.driver = driver; self.donate = donate
+        driver.requireTimerDefaults(defaults)
+        timers = TimerStore.load(defaults)
+        recents = TimerRecentsStore.load(defaults)
+        sound = defaults.string(forKey: Self.soundKey) ?? ""
+        log = PomodoroLog.load(defaults, now: runtime.now(), calendar: runtime.calendar)
     }
-
-    // MARK: Test seams (debug builds)
-
-    private static var isUITesting: Bool { ProcessInfo.processInfo.arguments.contains("-uiTesting") }
-
-    /// UI tests only: `-uiTestingTimers 600:Pasta,1500,300:Tea:paused,60:Eggs:ringing` seeds voice timers
-    /// (seconds[:label][:paused|:ringing]) and replaces AlarmKit with a fake: Start, Pause, Resume and Stop only change
-    /// the list. The simulator denies AlarmKit, so this is the only way a test can run a timer.
-    private static func seededTimers() -> ([RunningTimer]?, Set<UUID>) {
-        #if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        guard let i = args.firstIndex(of: "-uiTestingTimers"), i + 1 < args.count else { return (nil, []) }
-        var list: [RunningTimer] = []
-        var rings = Set<UUID>()
-        for part in args[i + 1].split(separator: ",") {
-            let fields = part.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-            guard let seconds = Int(fields[0]) else { continue }
-            var timer = RunningTimer.start(id: UUID(), seconds: seconds, now: .now, label: fields.count > 1 && !fields[1].isEmpty ? fields[1] : nil, source: .voice)
-            if fields.contains("paused") { timer = timer.paused(now: .now) }
-            if fields.contains("ringing") { rings.insert(timer.id) }
-            list.append(timer)
-        }
-        return (list, rings)
-        #else
-        return (nil, [])
-        #endif
-    }
-
-    /// UI tests only: `-uiTestingRecents 420,1200,1200:go to lion market,3600:have a rest` seeds the Recents
-    /// (seconds[:label], newest first).
-    private static func seededRecents() -> [RecentTimer]? {
-        #if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        guard let i = args.firstIndex(of: "-uiTestingRecents"), i + 1 < args.count else { return nil }
-        return args[i + 1].split(separator: ",").compactMap { part in
-            let fields = part.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
-            guard let seconds = Int(fields[0]) else { return nil }
-            return RecentTimer(seconds: seconds, label: fields.count > 1 ? fields[1] : nil)
-        }
-        #else
-        return nil
-        #endif
-    }
-
-    /// True when a test replaced AlarmKit with the fake (see `seededTimers`).
-    private static let usesFakeAlarms: Bool = {
-        #if DEBUG
-        ProcessInfo.processInfo.arguments.contains("-uiTestingTimers")
-        #else
-        false
-        #endif
-    }()
 
     // MARK: Start, pause, resume, stop
 
@@ -104,44 +59,46 @@ package final class TimerController {
     /// previous one. `byHand`: the user set it on the Timer tab, which teaches Siri the phrase.
     @discardableResult
     package func start(seconds: Int, label: String? = nil, byHand: Bool = false) async -> RunningTimer? {
+        guard !starting, seconds > 0 else { return nil }
+        starting = true
+        defer { starting = false }
         message = nil
-        guard seconds > 0 else { return nil }
         let seconds = min(seconds, TimerDial.maxSeconds)
         let label = IntentTimer.label(label)
         let phase = Pomodoro.preset(seconds: seconds, label: label)
         if phase != nil { setLog { $0.pending = nil } }
-        let id = UUID()
-        let timer = RunningTimer.start(id: id, seconds: seconds, now: .now, phase: phase ?? .focus, label: label,
+        let id = runtime.nextID()
+        let timer = RunningTimer.start(id: id, seconds: seconds, now: runtime.now(), phase: phase ?? .focus, label: label,
                                        source: phase == nil ? .voice : .card)
         let previous = phase == nil ? nil : timers.first { $0.isCard }
-        if Self.usesFakeAlarms {
-            if let previous { ringing.remove(previous.id) }
-            set(TimerList.adding(timer, to: timers))
-            remember(seconds, label)
-            return timer
-        }
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { message = "Timers need iOS 26 or later."; return nil }
-        let manager = AlarmManager.shared
-        if manager.authorizationState == .notDetermined { await Ringer.requestAuthorization() }
+        let manager = driver.manager
+        if manager.authorizationState == .notDetermined { await driver.requestAuthorization() }
         guard manager.authorizationState == .authorized else {
             message = "Timers need alarm access. Allow alarms for Today in Settings."
             return nil
         }
         if let previous { try? manager.cancel(id: previous.id) }
         // Saved before scheduling so a sync that runs on the AlarmKit update keeps it.
-        let before = timers
+        driver.claimTimer(id)
+        defer { driver.releaseTimer(id) }
         set(TimerList.adding(timer, to: timers))
         do {
             _ = try await manager.schedule(id: id, configuration: Self.configuration(for: timer, sound: sound))
+            guard !Task.isCancelled, timers.contains(where: { $0.id == id }) else {
+                try? manager.cancel(id: id)
+                set(timers.filter { $0.id != id })
+                return nil
+            }
             AlarmScheduler.log.info("timer scheduled \(seconds)s")
             remember(seconds, label)
             // Starting by hand teaches Siri the phrase: it can then suggest "Start a timer in Today" for this length.
-            if byHand { TimerIntentSupport.donate(seconds: seconds) }
+            if byHand { donate(seconds) }
             return timer
         } catch {
             AlarmScheduler.log.error("timer failed \((error as NSError).code, privacy: .public)")
-            set(before.filter { $0.id != id })
+            set(timers.filter { $0.id != id })
             message = "Couldn't start the timer."
             return nil
         }
@@ -153,35 +110,35 @@ package final class TimerController {
 
     package func pause(_ id: UUID) {
         guard let timer = timers.first(where: { $0.id == id }), !timer.isPaused else { return }
-        if !Self.usesFakeAlarms {
+        do {
             #if canImport(AlarmKit)
             guard #available(iOS 26, *) else { return }
-            do { try AlarmManager.shared.pause(id: id) } catch { message = "Couldn't pause the timer."; return }
+            do { try driver.manager.pause(id: id) } catch { message = "Couldn't pause the timer."; return }
             #endif
         }
-        replace(timer.paused(now: .now))
+        replace(timer.paused(now: runtime.now()))
     }
 
     package func resume(_ id: UUID) {
         guard let timer = timers.first(where: { $0.id == id }), timer.isPaused else { return }
-        if !Self.usesFakeAlarms {
+        do {
             #if canImport(AlarmKit)
             guard #available(iOS 26, *) else { return }
-            do { try AlarmManager.shared.resume(id: id) } catch { message = "Couldn't resume the timer."; return }
+            do { try driver.manager.resume(id: id) } catch { message = "Couldn't resume the timer."; return }
             #endif
         }
-        replace(timer.resumed(now: .now))
+        replace(timer.resumed(now: runtime.now()))
     }
 
     /// Cancel while counting down (no round), or Stop while ringing (the round already counted when it rang).
     package func cancel(_ id: UUID) {
         guard let timer = timers.first(where: { $0.id == id }) else { return }
         if ringing.contains(id), timer.isCard { complete(timer) }
-        if !Self.usesFakeAlarms {
+        do {
             #if canImport(AlarmKit)
             if #available(iOS 26, *) {
-                if ringing.contains(id) { try? AlarmManager.shared.stop(id: id) }
-                try? AlarmManager.shared.cancel(id: id)
+                if ringing.contains(id) { try? driver.manager.stop(id: id) }
+                try? driver.manager.cancel(id: id)
             }
             #endif
         }
@@ -200,7 +157,7 @@ package final class TimerController {
 
     private func setRecents(_ list: [RecentTimer]) {
         recents = list
-        if !Self.isUITesting { TimerRecentsStore.save(list) }
+        TimerRecentsStore.save(list, defaults)
     }
 
     /// Lines the list up with AlarmKit (`TimerList.reconcile`): a timer it no longer has (rang and was stopped, or
@@ -209,20 +166,20 @@ package final class TimerController {
     /// A Focus round counts only when its countdown ran out: seen ringing, or gone at or after its end time
     /// (stopped from the Lock Screen while the app was closed). Gone early means cancelled: no round.
     package func refresh() {
+        guard !starting else { return }
         setLog { _ in }  // midnight reset
-        if Self.usesFakeAlarms || Self.isUITesting { return }
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { ringing = []; return }
-        let stored = TimerStore.load()
+        let stored = TimerStore.load(defaults)
         var live: [UUID: LiveTimerState] = [:]
-        for alarm in (try? AlarmManager.shared.alarms) ?? [] {
+        for alarm in (try? driver.manager.alarms) ?? [] {
             switch alarm.state {
             case .alerting: live[alarm.id] = .ringing
             case .paused: live[alarm.id] = .paused
             default: live[alarm.id] = .running
             }
         }
-        let result = TimerList.reconcile(local: stored, live: live, now: .now)
+        let result = TimerList.reconcile(local: stored, live: live, now: runtime.now())
         for timer in result.finished where timer.isCard { complete(timer) }
         if result.ringing != ringing { ringing = result.ringing }
         if result.timers != timers || result.timers != stored { set(result.timers) }
@@ -235,39 +192,25 @@ package final class TimerController {
     /// or is paused on the Lock Screen, shows up on whatever tab is open.
     package func watch() async {
         refresh()
-        if Self.usesFakeAlarms || Self.isUITesting { return }
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
-        for await _ in AlarmManager.shared.alarmUpdates { refresh() }
+        for await _ in driver.manager.alarmUpdates {
+            guard !Task.isCancelled else { return }; refresh()
+        }
         #endif
     }
 
     private func complete(_ timer: RunningTimer) {
-        setLog { $0 = $0.completing(timer.pomodoroPhase, id: timer.id, now: .now) }
+        setLog { $0 = $0.completing(timer.pomodoroPhase, id: timer.id, now: runtime.now(), calendar: runtime.calendar) }
     }
 
     private func setLog(_ change: (inout PomodoroLog) -> Void) {
-        var next = log.current(.now)
+        var next = log.current(runtime.now(), calendar: runtime.calendar)
         change(&next)
         if next != log {
             log = next
-            PomodoroLog.save(next)
+            PomodoroLog.save(next, defaults)
         }
-    }
-
-    private static func initialLog() -> PomodoroLog {
-        let args = ProcessInfo.processInfo.arguments
-        #if DEBUG
-        // UI tests: `-pomodoroRounds N` starts the day with N finished Focus rounds, the last one just ended.
-        if let i = args.firstIndex(of: "-pomodoroRounds"), i + 1 < args.count, let n = Int(args[i + 1]) {
-            var log = PomodoroLog.empty(.now)
-            log.rounds = n
-            log.pending = n > 0 ? .focus : nil
-            return log
-        }
-        #endif
-        if args.contains("-uiTesting") { return .empty(.now) }
-        return PomodoroLog.load()
     }
 
     private func replace(_ timer: RunningTimer) {
@@ -276,7 +219,7 @@ package final class TimerController {
 
     private func set(_ list: [RunningTimer]) {
         timers = list
-        if !Self.isUITesting { TimerStore.save(list) }
+        TimerStore.save(list, defaults)
     }
 
     // MARK: AlarmKit configuration

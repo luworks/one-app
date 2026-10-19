@@ -12,8 +12,7 @@ import UserNotifications
 /// (AlarmKit) gets no notification from us. Snoozing only moves the reminder, never the task;
 /// stopping a reminder never completes the task (only Done does).
 @MainActor
-package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
-    package static let shared = Reminders()
+package final class Reminders: NSObject, NotificationService, UNUserNotificationCenterDelegate {
 
     package static let taskCategory = "ONE_TASK"
     package static let eventCategory = "ONE_EVENT"
@@ -23,10 +22,29 @@ package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     package static let maxPending = 60
     private static let snoozePrefix = "snooze-"
 
-    private let center = UNUserNotificationCenter.current()
+    private let center: UNUserNotificationCenter
+    private let alarms: any AlarmService
+    private let reminders: any ReminderService
+    private let ledger: Ledger
+    private let runtime: PlannerRuntime
+
+    package init(center: UNUserNotificationCenter, alarms: any AlarmService, reminders: any ReminderService,
+                 ledger: Ledger, runtime: PlannerRuntime) {
+        self.center = center; self.alarms = alarms; self.reminders = reminders
+        self.ledger = ledger; self.runtime = runtime
+        super.init()
+    }
+
+    package func dispose() {
+        disposed = true
+        if center.delegate === self { center.delegate = nil }
+        container = nil
+    }
     private var container: ModelContainer?
+    private var disposed = false
 
     package func configure(_ container: ModelContainer) {
+        guard !disposed, self.container == nil else { return }
         self.container = container
         center.delegate = self
         let done = UNNotificationAction(identifier: Action.done.rawValue, title: "Done", options: [])
@@ -47,6 +65,7 @@ package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
 
     @discardableResult
     package func requestPermission() async -> Bool {
+        guard !disposed else { return false }
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         await resync()
         return granted
@@ -56,29 +75,30 @@ package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
 
     /// Rebuilds all pending reminders from the current data. Cheap; call after any change.
     package func resync() async {
-        guard let context = container?.mainContext else { return }
+        guard !disposed, let context = container?.mainContext else { return }
         let status = await authorizationStatus()
         guard status == .authorized || status == .provisional else { return }
 
-        let now = Date.now
+        let now = runtime.now()
+        guard !disposed, !Task.isCancelled else { return }
         let horizon = now.addingTimeInterval(14 * 24 * 3600)
         let tasks = (try? context.fetch(FetchDescriptor<OneTask>(predicate: #Predicate { !$0.isDone }))) ?? []
         let events = (try? context.fetch(FetchDescriptor<OneEvent>())) ?? []
 
         // "Ring as alarm" replaces the notification when AlarmKit can ring it; otherwise the notification is the fallback.
-        let rings = Ringer.authorization == .authorized
+        let rings = alarms.authorization == .authorized
         var requests: [(Date, UNNotificationRequest)] = []
         for task in tasks {
-            guard let fire = task.reminderDate, fire > now, fire < horizon else { continue }
+            guard let fire = plannerReminderDate(task, runtime: runtime), fire > now, fire < horizon else { continue }
             if rings, task.ringsAsAlarm { continue }
             // A synced reminder with only a due time is alerted by Apple Reminders itself; ours would be a duplicate.
             if task.externalID != nil, task.plannedStart == nil { continue }
             let id = Self.key(task.persistentModelID)
-            let when = task.plannedStart.map { DayLabel.withTime($0) } ?? task.due.map { "Due " + DayLabel.withTime($0) } ?? ""
+            let when = task.plannedStart.map { plannerDayLabel($0, runtime: runtime) } ?? task.due.map { "Due " + plannerDayLabel($0, runtime: runtime) } ?? ""
             requests.append((fire, request(id: "\(id)#0", title: task.title, body: when, category: Self.taskCategory, key: id, at: fire)))
         }
         for event in events {
-            guard let fire = event.reminderDate, fire > now, fire < horizon else { continue }
+            guard let fire = plannerReminderDate(event, runtime: runtime), fire > now, fire < horizon else { continue }
             if rings, event.ringsAsAlarm { continue }
             let id = Self.key(event.persistentModelID)
             let body = event.start.formatted(date: .omitted, time: .shortened) + " · \(event.durationMinutes) min"
@@ -91,7 +111,7 @@ package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         for (_, r) in requests.sorted(by: { $0.0 < $1.0 }).prefix(max(0, Self.maxPending - snoozed.count)) {
             try? await center.add(r)
         }
-        try? await center.setBadgeCount(tasks.filter(\.isOverdue).count)
+        try? await center.setBadgeCount(tasks.filter { $0.due.map { $0 < runtime.calendar.startOfDay(for: now) } ?? false }.count)
     }
 
     private func request(id: String, title: String, body: String, category: String, key: String, at date: Date) -> UNNotificationRequest {
@@ -103,7 +123,7 @@ package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         content.threadIdentifier = key
         content.userInfo = ["key": key]
         content.interruptionLevel = .timeSensitive
-        let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        let parts = runtime.calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         return UNNotificationRequest(identifier: id, content: content,
                                      trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false))
     }
@@ -135,24 +155,28 @@ package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func handle(action: String, key: String, title: String, body: String, category: String) async {
-        if let fire = ReminderPlan.snoozed(action, now: .now) {
-            let r = request(id: Self.snoozePrefix + UUID().uuidString, title: title, body: body, category: category, key: key, at: fire)
+        guard !disposed else { return }
+        if let fire = ReminderPlan.snoozed(action, now: runtime.now()) {
+            let r = request(id: Self.snoozePrefix + runtime.nextID().uuidString, title: title, body: body, category: category, key: key, at: fire)
             try? await center.add(r)
             await clearDelivered(key: key)
             return
         }
 
-        guard let context = container?.mainContext, let id = Self.identifier(from: key) else { return }
+        guard !disposed, let context = container?.mainContext, let id = Self.identifier(from: key) else { return }
         guard let task = context.model(for: id) as? OneTask else { return }
         switch Action(rawValue: action) {
         case .done:
-            if !task.isDone { TaskActions.toggleDone(task, context: context, toast: nil, channel: .notification) }
+            if !task.isDone { TaskActions.toggleDone(task, context: context, toast: nil, reminders: reminders, ledger: ledger, runtime: runtime, channel: .notification) }
         case .tomorrow:
             let old = task.plannedStart
-            task.moveToTomorrow()
-            let new = task.plannedStart
-            task.plannedStart = old
-            TaskActions.setPlanned(task, to: new, context: context, channel: .notification)
+            let cal = runtime.calendar
+            let new: Date?
+            if let old { new = cal.date(byAdding: .day, value: 1, to: old) }
+            else if let tomorrow = cal.date(byAdding: .day, value: 1, to: runtime.now()) {
+                new = cal.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)
+            } else { new = nil }
+            TaskActions.setPlanned(task, to: new, context: context, ledger: ledger, channel: .notification)
         default:
             return
         }
@@ -175,6 +199,28 @@ package final class Reminders: NSObject, UNUserNotificationCenterDelegate {
             .filter { $0.content.userInfo["key"] as? String == key }
             .map(\.identifier))
     }
+}
+
+/// Runtime-aware equivalents of the persisted models' notification projections. No schema is changed.
+@MainActor
+package func plannerReminderDate(_ task: OneTask, runtime: PlannerRuntime) -> Date? {
+    guard let offset = task.reminderOffsetMinutes else { return nil }
+    let timedDue = task.due.flatMap { due -> Date? in
+        runtime.calendar.dateComponents([.hour, .minute], from: due) == DateComponents(hour: 0, minute: 0) ? nil : due
+    }
+    return (task.plannedStart ?? timedDue)?.addingTimeInterval(TimeInterval(-offset * 60))
+}
+
+@MainActor
+package func plannerReminderDate(_ event: OneEvent, runtime: PlannerRuntime) -> Date? {
+    guard let offset = event.reminderOffsetMinutes else { return nil }
+    let now = runtime.now()
+    let start = now.addingTimeInterval(-60)
+    let interval = DateInterval(start: start, duration: 400 * 86400)
+    guard var next = Recurrence.occurrences(start: event.start, duration: event.duration, rule: event.repeats,
+                                          in: interval, calendar: runtime.calendar).first(where: { $0 > start }) else { return nil }
+    if event.isAllDay { next = runtime.calendar.date(bySettingHour: 9, minute: 0, second: 0, of: next) ?? next }
+    return next.addingTimeInterval(TimeInterval(-offset * 60))
 }
 
 #endif

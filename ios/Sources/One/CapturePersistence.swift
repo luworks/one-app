@@ -18,9 +18,8 @@ extension Capture {
 
     /// An alarm request becomes a real alarm (Alarms tab) when it can be one: it rings within the next day, or repeats
     /// daily / on selected weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
-    package func makeAlarm(now: Date = .now) -> OneAlarm? {
+    package func makeAlarm(now: Date, calendar cal: Calendar) -> OneAlarm? {
         guard kind == .task, ringsAsAlarm, let start = plannedStart else { return nil }
-        let cal = Calendar.current
         let weekdays: [Int]
         switch repeatRule.flatMap(RepeatRule.init(rawValue:)) {
         case nil:
@@ -35,11 +34,12 @@ extension Capture {
         let c = cal.dateComponents([.hour, .minute], from: start)
         let alarm = OneAlarm(hour: c.hour ?? 0, minute: c.minute ?? 0, label: title, weekdays: weekdays)
         alarm.note = notes ?? ""
+        alarm.createdAt = now
         return alarm
     }
 
-    package func makeEvent() -> OneEvent {
-        let start = plannedStart ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
+    package func makeEvent(calendar: Calendar) -> OneEvent {
+        let start = plannedStart ?? calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
         let e = OneEvent(title: title, start: isAllDay ? day : start, durationMinutes: isAllDay ? 1440 : durationMinutes ?? 60)
         e.note = notes ?? ""
         e.isAllDay = isAllDay
@@ -52,24 +52,28 @@ extension Capture {
     /// Recorded in Activity as made by `actor` through `channel`.
     @MainActor @discardableResult
     package func insert(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
-                approval: LedgerApproval = .userMade) -> PersistentIdentifier {
-        insertRecorded(into: context, actor: actor, channel: channel, approval: approval).id
+                approval: LedgerApproval = .userMade, ledger: Ledger, runtime: PlannerRuntime) throws -> PersistentIdentifier {
+        try insertRecorded(into: context, actor: actor, channel: channel, approval: approval, ledger: ledger, runtime: runtime).id
     }
 
     /// `insert`, and the Activity entry that recorded it (so Undo can be recorded against it).
     @MainActor
     package func insertRecorded(into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
-                        approval: LedgerApproval = .userMade) -> (id: PersistentIdentifier, entry: LedgerItem) {
+                        approval: LedgerApproval = .userMade, ledger: Ledger, runtime: PlannerRuntime) throws -> (id: PersistentIdentifier, entry: LedgerItem) {
         let model: any PersistentModel
         switch kind {
         case .task:
-            if let alarm = makeAlarm() { model = alarm } else { model = makeTask() }
-        case .event: model = makeEvent()
+            if let alarm = makeAlarm(now: runtime.now(), calendar: runtime.calendar) { model = alarm } else { model = makeTask() }
+        case .event: model = makeEvent(calendar: runtime.calendar)
         }
+        if let task = model as? OneTask { task.createdAt = runtime.now() }
         context.insert(model)
-        try? context.save()   // a new model's id only becomes final on save; rows and sheets key on it
+        do { try context.save() } catch {
+            context.delete(model)
+            throw error
+        } // A new model's id only becomes final on save; rows and sheets key on it.
         let kind = model is OneAlarm ? "alarm" : (model is OneEvent ? "event" : "task")
-        let entry = Ledger.record(.created, task: model as? OneTask, kind: kind, title: title, after: summary,
+        let entry = ledger.record(.created, task: model as? OneTask, kind: kind, title: title, after: summary,
                                   actor: actor, channel: channel, approval: approval, context: context)
         return (model.persistentModelID, entry)
     }

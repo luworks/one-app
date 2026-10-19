@@ -29,16 +29,37 @@ package enum AlarmAuthorization: Equatable {
 /// - The alert sound is the system default or a sound file bundled in the app; Apple's ringtones are not available.
 /// - Snooze is a secondary button with `.countdown` behaviour and a post-alert duration.
 @MainActor
-package enum Ringer {
-    package static var isAvailable: Bool {
+package final class Ringer {
+    private let defaults: UserDefaults
+    package let runtime: PlannerRuntime
+    private var schedulingTimers: Set<UUID> = []
+
+    /// The one AlarmKit owner shared by AlarmCenter and TimerController in live composition.
+    package init(defaults: UserDefaults, runtime: PlannerRuntime) {
+        self.defaults = defaults; self.runtime = runtime
+    }
+
+    package func requireTimerDefaults(_ defaults: UserDefaults) {
+        precondition(self.defaults === defaults, "TimerController and Ringer must share the same defaults instance")
+    }
+
+    package var timerIDs: Set<UUID> { Set(TimerStore.load(defaults).map(\.id)).union(schedulingTimers) }
+    package func claimTimer(_ id: UUID) { schedulingTimers.insert(id) }
+    package func releaseTimer(_ id: UUID) { schedulingTimers.remove(id) }
+
+    #if canImport(AlarmKit)
+    @available(iOS 26, *)
+    package var manager: AlarmManager { AlarmManager.shared }
+    #endif
+    package var isAvailable: Bool {
         if #available(iOS 26, *) { return true }
         return false
     }
 
-    package static var authorization: AlarmAuthorization {
+    package var authorization: AlarmAuthorization {
         #if canImport(AlarmKit)
         if #available(iOS 26, *) {
-            switch AlarmManager.shared.authorizationState {
+            switch manager.authorizationState {
             case .notDetermined: return .notDetermined
             case .denied: return .denied
             case .authorized: return .authorized
@@ -50,14 +71,14 @@ package enum Ringer {
     }
 
     /// True when the user turned alarms off for Today in Settings.
-    package static var isDenied: Bool { authorization == .denied }
+    package var isDenied: Bool { authorization == .denied }
 
     /// Shows iOS's own "Would Like to Schedule Alarms" prompt (only the first time).
-    package static func requestAuthorization() async {
+    package func requestAuthorization() async {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
         do {
-            let state = try await AlarmManager.shared.requestAuthorization()
+            let state = try await manager.requestAuthorization()
             AlarmScheduler.log.info("auth result \(String(describing: state))")
         } catch {
             AlarmScheduler.log.error("auth failed \((error as NSError).code, privacy: .public)")
@@ -67,8 +88,8 @@ package enum Ringer {
 
     // Syncs can be requested faster than they finish (edit, toggle, an AlarmKit update). They run one at a time,
     // and a request that arrives mid-run makes the running one go around again.
-    private static var isSyncing = false
-    private static var syncAgain = false
+    private var isSyncing = false
+    private var syncAgain = false
 
     /// Brings AlarmKit in line with the data, changing only what differs:
     /// - an alarm on the Alarms tab has its own id; it is scheduled, rescheduled (only if edited) or cancelled by that id,
@@ -76,7 +97,7 @@ package enum Ringer {
     /// - items marked "Ring as alarm" get an id derived from their title and time,
     /// - anything else this app scheduled earlier is cancelled, except an alarm that is ringing right now
     ///   and the countdown timers (`TimerStore`, see TimerController.swift).
-    package static func sync(_ context: ModelContext) async {
+    package func sync(_ context: ModelContext) async {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
         if isSyncing { syncAgain = true; return }
@@ -84,16 +105,16 @@ package enum Ringer {
         defer { isSyncing = false }
         repeat {
             syncAgain = false
-            await AlarmScheduler.reconcile(context)
+            await AlarmScheduler.reconcile(context, driver: self)
         } while syncAgain
         #endif
     }
 
     /// Stops a ringing alarm (the Stop button on the row). Never completes a task.
-    package static func stop(_ id: UUID) {
+    package func stop(_ id: UUID) {
         #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
-        try? AlarmManager.shared.stop(id: id)
+        try? manager.stop(id: id)
         #endif
     }
 }
@@ -113,32 +134,37 @@ package enum AlarmScheduler {
         let date: Date
     }
 
-    package static func reconcile(_ context: ModelContext) async {
-        let now = Date.now
+    package static func reconcile(_ context: ModelContext, driver: Ringer) async {
+        let now = driver.runtime.now()
         let alarms = (try? context.fetch(FetchDescriptor<OneAlarm>())) ?? []
         let tasks = (try? context.fetch(FetchDescriptor<OneTask>(predicate: #Predicate { $0.ringsAsAlarm && !$0.isDone }))) ?? []
         let events = (try? context.fetch(FetchDescriptor<OneEvent>(predicate: #Predicate { $0.ringsAsAlarm }))) ?? []
-        let due: [(String, Date)] = tasks.compactMap { t in t.reminderDate.map { (t.title, $0) } }
-            + events.compactMap { e in e.reminderDate.map { (e.title, $0) } }
+        let due: [(String, Date)] = tasks.compactMap { t in plannerReminderDate(t, runtime: driver.runtime).map { (t.title, $0) } }
+            + events.compactMap { e in plannerReminderDate(e, runtime: driver.runtime).map { (e.title, $0) } }
         let items = due.filter { $0.1 > now }.sorted { $0.1 < $1.1 }.prefix(30).map {
             ItemAlarm(id: stableID(title: $0.0, date: $0.1), title: $0.0, date: $0.1)
         }
 
         // A one-time alarm whose time has passed is done, whatever AlarmKit says (it also covers a denied state).
-        for alarm in alarms { alarm.retireIfRung(now: now) }
-        for alarm in alarms where alarm.alarmKitID == nil { alarm.alarmKitID = UUID() }
+        for alarm in alarms where alarm.isOn && alarm.weekdays.isEmpty {
+            if let fire = AlarmPlan.nextFire(hour: alarm.hour, minute: alarm.minute, weekdays: [],
+                                             after: alarm.createdAt, calendar: driver.runtime.calendar), fire < now {
+                alarm.isOn = false
+            }
+        }
+        for alarm in alarms where alarm.alarmKitID == nil { alarm.alarmKitID = driver.runtime.nextID() }
 
-        let manager = AlarmManager.shared
+        let manager = driver.manager
         let wantsAnything = alarms.contains(where: \.isOn) || !items.isEmpty
         log.info("sync: \(alarms.count) alarm(s), \(items.count) item(s), auth \(String(describing: manager.authorizationState))")
-        if manager.authorizationState == .notDetermined, wantsAnything { await Ringer.requestAuthorization() }
+        if manager.authorizationState == .notDetermined, wantsAnything { await driver.requestAuthorization() }
         guard manager.authorizationState == .authorized else { return }
 
         var existing: [UUID: Alarm] = [:]
         for alarm in (try? manager.alarms) ?? [] { existing[alarm.id] = alarm }
         var keep = Set<UUID>()
         // The countdown timers (the Timer tab, and the ones made by voice) are not in the data; never cancel them as leftovers.
-        for timer in TimerStore.load() { keep.insert(timer.id) }
+        keep.formUnion(driver.timerIDs)
 
         for alarm in alarms {
             guard let id = alarm.alarmKitID else { continue }
@@ -161,7 +187,7 @@ package enum AlarmScheduler {
                 keep.remove(id)
                 continue
             }
-            let ok = await schedule(id: id, title: alarm.label.isEmpty ? AlarmPlan.defaultLabel : alarm.label,
+            let ok = await schedule(driver: driver, id: id, title: alarm.label.isEmpty ? AlarmPlan.defaultLabel : alarm.label,
                                     schedule: schedule(hour: alarm.hour, minute: alarm.minute, weekdays: alarm.weekdays),
                                     snooze: alarm.snooze, sound: alarm.sound, snoozeMinutes: alarm.snoozeMinutes)
             alarm.alarmKitSignature = ok ? signature : nil
@@ -170,11 +196,12 @@ package enum AlarmScheduler {
         for item in items {
             keep.insert(item.id)
             if existing[item.id] == nil {
-                _ = await schedule(id: item.id, title: item.title, schedule: .fixed(item.date), snooze: false)
+                _ = await schedule(driver: driver, id: item.id, title: item.title, schedule: .fixed(item.date), snooze: false)
             }
         }
 
         // Leftovers: alarms deleted in the app, items that moved or finished, ids from older versions.
+        keep.formUnion(driver.timerIDs)
         for (id, live) in existing where !keep.contains(id) && live.state != .alerting {
             try? manager.cancel(id: id)
             log.info("cancelled stale alarm")
@@ -198,7 +225,7 @@ package enum AlarmScheduler {
         return UUID(uuid: (b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]))
     }
 
-    private static func schedule(id: UUID, title: String, schedule: Alarm.Schedule, snooze: Bool,
+    private static func schedule(driver: Ringer, id: UUID, title: String, schedule: Alarm.Schedule, snooze: Bool,
                                  sound: String = "", snoozeMinutes: Int = 9) async -> Bool {
         let resource = LocalizedStringResource(stringLiteral: title)
         let snoozeButton = AlarmButton(text: "Snooze", textColor: .white, systemImageName: "zzz")
@@ -222,7 +249,7 @@ package enum AlarmScheduler {
             attributes: attributes,
             sound: AlarmSound.named(sound)?.alertSound ?? .default)
         do {
-            _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
+            _ = try await driver.manager.schedule(driver: driver, id: id, configuration: configuration)
             log.info("alarm scheduled")
             return true
         } catch {
