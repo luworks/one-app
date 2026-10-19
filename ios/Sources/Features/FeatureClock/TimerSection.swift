@@ -1,10 +1,8 @@
+#if os(iOS)
+import One
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 
 /// The Timer section of the Clock tab, copied from the Timers screen of Apple's Clock app (iPhone, 440 pt wide):
@@ -15,17 +13,20 @@ import SwiftUI
 /// Differences from Apple on purpose: no Edit button (Recents are deleted by swiping, like every list in the app);
 /// the three Pomodoro presets (25:00 Focus, 5:00 Short break, 15:00 Long break) fill Recents until you start your own.
 /// Logic: TimerRecents.swift, TimerList.swift, Pomodoro.swift; the countdowns: TimerController.swift.
-struct TimerSection: View {
+package struct TimerSection: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
-    @State private var controller = TimerController.shared
+    @State private var controller: TimerController
+    private let alarms: AlarmCenter
     /// What the wheel shows; starts at the last timer you started.
     @State private var seconds: Int
     @State private var label = ""
     @State private var showsSound = false
 
-    init() {
-        _seconds = State(initialValue: TimerController.shared.recents.first?.seconds ?? 0)
+    package init(controller: TimerController, alarms: AlarmCenter) {
+        _controller = State(initialValue: controller)
+        self.alarms = alarms
+        _seconds = State(initialValue: controller.recents.first?.seconds ?? 0)
     }
 
     /// Apple's screen insets: the title 20 pt, the buttons and card 26 pt, Recents 30 pt (28 on the right).
@@ -35,7 +36,7 @@ struct TimerSection: View {
         static let recents: CGFloat = 30
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             List {
                 Text("Timers")
@@ -67,7 +68,7 @@ struct TimerSection: View {
             }
         }
         .onAppear { controller.refresh() }
-        .onChange(of: AlarmCenter.shared.states) { controller.refresh() }
+        .onChange(of: alarms.states) { controller.refresh() }
         .onChange(of: scenePhase) { _, phase in if phase == .active { controller.refresh() } }
     }
 
@@ -263,3 +264,4 @@ private extension View {
             .listRowInsets(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
     }
 }
+#endif

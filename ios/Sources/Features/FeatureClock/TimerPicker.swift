@@ -1,10 +1,4 @@
-import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
+#if os(iOS)
 import SwiftUI
 import UIKit
 
@@ -147,3 +141,4 @@ final class TimerWheelView: UIView {
         }
     }
 }
+#endif

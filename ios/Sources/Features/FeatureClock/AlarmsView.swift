@@ -1,10 +1,8 @@
+#if os(iOS)
+import One
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
 import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
 import UserNotifications
@@ -17,21 +15,30 @@ import UserNotifications
 /// Like Clock, the tab has four sections (Alarms · World Clock · Stopwatch · Timer), picked from a quiet switcher under
 /// the top bar. The section lives in `HomeView`, so leaving the tab and coming back finds the same one.
 /// The Timer section (`TimerSection`) is a copy of Apple's Timers screen: wheel picker, Recents, running timers (AlarmKit countdowns).
-struct AlarmsView: View {
+package struct AlarmsView: View {
     @Binding var section: ClockSection
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
-    @Environment(UndoToast.self) private var toast: UndoToast?
     @Query(sort: [SortDescriptor(\OneAlarm.hour), SortDescriptor(\OneAlarm.minute)]) private var alarms: [OneAlarm]
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
     @State private var notificationStatus: UNAuthorizationStatus = .authorized
     @State private var editing: OneAlarm?
     @State private var adding = false
-    @State private var center = AlarmCenter.shared
+    @State private var center: AlarmCenter
+    private let timers: TimerController
+    private let showUndo: (String, @escaping () -> Void) -> Void
 
-    var body: some View {
+    package init(section: Binding<ClockSection>, alarms: AlarmCenter, timers: TimerController,
+                 showUndo: @escaping (String, @escaping () -> Void) -> Void) {
+        _section = section
+        _center = State(initialValue: alarms)
+        self.timers = timers
+        self.showUndo = showUndo
+    }
+
+    package var body: some View {
         VStack(spacing: 0) {
             ClockSectionBar(selection: $section.performanceAction { "clock.\($0.rawValue)" })
                 .padding(.horizontal, 20)
@@ -40,17 +47,17 @@ struct AlarmsView: View {
             Group {
                 switch section {
                 case .alarms: alarmsList
-                case .worldClock: WorldClockView(showUndo: { message, undo in toast?.show(message, undo: undo) })
+                case .worldClock: WorldClockView(showUndo: showUndo)
                 case .stopwatch: StopwatchView()
-                case .timer: TimerSection()
+                case .timer: TimerSection(controller: timers, alarms: center)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .performanceDestination("clock.\(section.rawValue)")
         }
         .background(Color(.systemBackground))
-        .sheet(item: $editing) { AlarmEditor(alarm: $0) }
-        .sheet(isPresented: $adding) { AlarmEditor() }
+        .sheet(item: $editing) { AlarmEditor(alarm: $0, showUndo: showUndo) }
+        .sheet(isPresented: $adding) { AlarmEditor(showUndo: showUndo) }
         .task { await center.watch(context: context) }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -132,7 +139,7 @@ struct AlarmsView: View {
         Ledger.record(.deleted, kind: "alarm", title: alarmTitle(backup), context: context)
         withAnimation(.snappy) { context.delete(alarm) }
         Task { await Ringer.sync(context) }
-        toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
+        showUndo("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
             withAnimation(.snappy) { context.insert(backup) }
             try? context.save()
             Task { await Ringer.sync(context) }
@@ -272,3 +279,4 @@ private struct ItemAlarmRow: View {
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 }
+#endif

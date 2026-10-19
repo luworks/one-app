@@ -1,10 +1,7 @@
+#if os(iOS)
+import One
 import TodayCore
-import TodayShared
-import TodayData
 import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
 import SwiftData
 
@@ -86,10 +83,10 @@ struct AlarmRow: View {
 /// Add Alarm / Edit Alarm, copied from Clock's sheet: a round close button, the title and an orange round check; a full-width
 /// wheel; a card with Repeat and the seven weekday circles; a card with Label, Sound, Snooze and Snooze Duration; and a red
 /// Delete Alarm when editing.
-struct AlarmEditor: View {
+package struct AlarmEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
-    @Environment(UndoToast.self) private var toast: UndoToast?
+    private let showUndo: (String, @escaping () -> Void) -> Void
     let alarm: OneAlarm?
 
     @State private var time: Date
@@ -101,8 +98,10 @@ struct AlarmEditor: View {
 
     static let snoozeChoices = AlarmPlan.snoozeChoices
 
-    init(alarm: OneAlarm? = nil) {
+    package init(alarm: OneAlarm? = nil,
+                 showUndo: @escaping (String, @escaping () -> Void) -> Void) {
         self.alarm = alarm
+        self.showUndo = showUndo
         // A new alarm starts at the next quarter hour (10:56 → 11:00), so it still rings today when saved straight away.
         _time = State(initialValue: alarm?.timeToday ?? AlarmPlan.nextQuarterHour(after: TodayClock.now))
         _label = State(initialValue: alarm?.label ?? "")
@@ -113,7 +112,7 @@ struct AlarmEditor: View {
         _snoozeMinutes = State(initialValue: AlarmPlan.snoozeMinutes(nearest: alarm?.snoozeMinutes ?? Preferences.newAlarmSnoozeMinutes()))
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
@@ -261,7 +260,7 @@ struct AlarmEditor: View {
             Ledger.record(.deleted, kind: "alarm", title: alarmTitle(backup), context: context)
             context.delete(alarm)
             Task { await Ringer.sync(context) }
-            toast?.show("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
+            showUndo("Deleted alarm \(backup.timeToday.formatted(date: .omitted, time: .shortened))") {
                 withAnimation(.snappy) { context.insert(backup) }
                 try? context.save()
                 Task { await Ringer.sync(context) }
@@ -348,11 +347,15 @@ private struct DayCircle: View {
 }
 
 /// Sound: the system alarm sound and the app's own tones, with a check mark on the chosen one. Tapping a tone plays it.
-struct SoundScreen: View {
+package struct SoundScreen: View {
     @Binding var sound: String
     @Environment(\.dismiss) private var dismiss
 
-    var body: some View {
+    package init(sound: Binding<String>) {
+        _sound = sound
+    }
+
+    package var body: some View {
         List {
             Section {
                 row(title: "Default", value: "", subtitle: "The standard alarm sound")
@@ -389,3 +392,4 @@ struct SoundScreen: View {
     }
 }
 
+#endif

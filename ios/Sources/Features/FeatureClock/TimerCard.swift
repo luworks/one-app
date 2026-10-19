@@ -1,11 +1,7 @@
+#if os(iOS)
 import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
 import SwiftUI
+import UIKit
 
 /// The look of Apple's Timers screen, measured from its screenshots (440 pt wide): a dark-green round play button with a
 /// light-green triangle, a gray round X, light gray numerals. All adaptive: the same colors read as Clock's light look
@@ -136,3 +132,4 @@ struct RunningTimerCard: View {
         .accessibilityIdentifier("timer.card")
     }
 }
+#endif
