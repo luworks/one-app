@@ -41,6 +41,7 @@ class AdapterTests(unittest.TestCase):
         for selector in adapter.CORE_EXTRA + (
                 'JourneyTests/testJ1_addTimedTaskFromOneLine', 'JourneyTests/testJ3_completeAndUndo',
                 'CalendarAlarmTests/testWeekLateAlarmOpensItsEditorWithoutOtherEntries',
+                'TodayReminderCompletionTests/testImportedTimelineNavigationAndCancelledEditorsStayResponsive',
                 'AskSuggestionTests/testPolitePlanRequestPreservesPreviewThroughOperationQuestionsUntilApply'):
             suite, method = selector.split('/')
             path = 'ios/OneUITests/' + suite + '.swift'
@@ -222,7 +223,7 @@ class AdapterTests(unittest.TestCase):
             return self.runner(raw="Test Case '-[CalendarSyncTests testRoundTrip]' failed\n")(root, argv, **options)
         self.assertEqual(self.invoke(lane='core-ui', runner=run), 1)
         self.assertEqual(self.report()['failed'], 1)
-        self.assertEqual(self.report()['executed'], 7)
+        self.assertEqual(self.report()['executed'], 8)
         self.assertEqual(len(self.calls), 1)
 
     def test_ui_uses_structured_leaf_results(self):
@@ -237,7 +238,7 @@ class AdapterTests(unittest.TestCase):
                 {'nodeType': 'Test Case', 'nodeIdentifier': test, 'result': 'Passed'} for test in expected]))
             return self.runner(raw='UI session completed\n')(root, argv, **options)
         self.assertEqual(self.invoke(lane='core-ui', runner=run), 0)
-        self.assertEqual(self.report()['executed'], 7)
+        self.assertEqual(self.report()['executed'], 8)
         self.assertNotIn('--full', self.calls[0][0])
         self.assertEqual(self.calls[0][1], {'timeout': 1200, 'heavy': True, 'grace': 20})
 

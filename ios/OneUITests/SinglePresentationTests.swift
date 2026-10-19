@@ -81,7 +81,16 @@ final class SinglePresentationTests: XCTestCase {
   func testTappingAReminderOpensOneEditor() {
     let row = app.staticTexts["Buy milk"].firstMatch
     XCTAssertTrue(row.waitForExistence(timeout: 5))
-    assertOpensOneEditor("today-reminder") { row.tap() }
+    row.tap()
+    let editor = app.textFields["task.title"]
+    XCTAssertTrue(editor.waitForExistence(timeout: 5), "the compact reminder editor opens")
+    XCTAssertEqual(
+      app.textFields.matching(identifier: "task.title").count, 1, "exactly one reminder editor")
+    XCTAssertEqual(editor.value as? String, "Buy milk")
+    app.buttons["Cancel"].firstMatch.tap()
+    XCTAssertTrue(editor.waitForNonExistence(timeout: 5), "one Cancel closes every reminder editor")
+    XCTAssertFalse(app.buttons["Cancel"].exists, "no second editor remains underneath")
+    XCTAssertTrue(row.isHittable, "the original Today row accepts input again")
   }
 
   func testTappingAReminderInAListOpensOneEditor() {

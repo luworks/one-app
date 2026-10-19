@@ -46,19 +46,15 @@ final class TodayReminderCompletionTests: XCTestCase {
         for: [expectation(for: NSPredicate(format: "value == '1'"), evaluatedWith: sync)],
         timeout: 8), .completed)
     if includeCalendar {
-      let calendar = app.switches["Apple Calendar"]
-      XCTAssertTrue(calendar.waitForExistence(timeout: 5))
-      if calendar.value as? String != "1" {
-        calendar.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        for name in ["Allow Full Access", "Allow"] {
-          if springboard.buttons[name].waitForExistence(timeout: 3) {
-            springboard.buttons[name].tap()
-            break
-          }
-        }
-      }
-      XCTAssertEqual(calendar.value as? String, "1")
+      app.buttons["Done"].tap()
+      app.closeSidebar()
+      enableCalendarSync(app)
+      // Reopening Settings reads the adapter state, not the toggle's optimistic local value.
+      app.openSidebar()
+      app.buttons["Settings"].firstMatch.tap()
+      XCTAssertEqual(app.switches["Apple Calendar"].value as? String, "1")
+      app.buttons["Done"].tap()
+      app.closeSidebar()
     }
     app.terminate()
   }
@@ -111,7 +107,14 @@ final class TodayReminderCompletionTests: XCTestCase {
       "editor opens and cancels without a scene watchdog stall")
     for tab in ["Calendar", "Reminders", "Clock", "Today"] {
       app.buttons[tab].firstMatch.tap()
-      XCTAssertTrue(app.buttons["Ask AI or add anything"].firstMatch.waitForExistence(timeout: 5))
+      let destination: XCUIElement
+      switch tab {
+      case "Calendar": destination = app.descendants(matching: .any)["calendar.weekGrid"]
+      case "Reminders": destination = app.staticTexts["My Lists"]
+      case "Clock": destination = app.buttons["World Clock"]
+      default: destination = app.staticTexts["todayDate"]
+      }
+      XCTAssertTrue(destination.waitForExistence(timeout: 5), "the tap presents " + tab)
     }
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     app.buttons["Ask AI or add anything"].firstMatch.tap()
