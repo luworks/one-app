@@ -11,6 +11,7 @@
   @MainActor
   @Observable
   package final class PlannerActions {
+    package let focus: TodayFocus
     private let calendar: any CalendarService
     private let reminders: any ReminderService
     private let alarms: any AlarmService
@@ -21,6 +22,7 @@
       calendar: any CalendarService, reminders: any ReminderService,
       alarms: any AlarmService, ledger: Ledger, runtime: PlannerRuntime
     ) {
+      focus = TodayFocus(ledger: ledger, runtime: runtime)
       self.calendar = calendar
       self.reminders = reminders
       self.alarms = alarms

@@ -126,6 +126,11 @@
       guard isOn, let id else { return nil }
       return queryEvents.first { $0.eventIdentifier == id }
     }
+    package var focusResolutions: [String: FocusIdentityResolution] = [:]
+    package func focusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution {
+      guard let id = externalID else { return .localOnly }
+      return focusResolutions[id] ?? .unavailable
+    }
     package func calendar(forExternalID id: String?) -> SystemCalendar? {
       guard let e = event(id) else { return nil }
       return availableCalendars.first { $0.id == e.calendarID }
@@ -231,6 +236,11 @@
     package var editFailure: Failure?
     package private(set) var editCalls = 0
 
+    package var focusResolutions: [String: FocusIdentityResolution] = [:]
+    package func focusIdentity(_ task: OneTask) -> FocusIdentityResolution {
+      guard let id = task.externalID else { return .localOnly }
+      return focusResolutions[id] ?? .unavailable
+    }
     package func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
       -> RemindersSync.Remote?
     {

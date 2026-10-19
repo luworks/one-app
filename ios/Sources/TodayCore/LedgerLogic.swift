@@ -108,6 +108,7 @@ public enum LedgerChannel: String, CaseIterable {
 /// What happened.
 public enum LedgerAction: String {
   case created, completed, reopened, deleted
+  case settled, snoozed, restored
   /// A planned time was given to something that had none.
   case planned
   /// A planned time (or an event's start) changed.
@@ -125,6 +126,9 @@ public enum LedgerAction: String {
     case .completed: "Completed"
     case .reopened: "Reopened"
     case .deleted: "Deleted"
+    case .settled: "Settled"
+    case .snoozed: "Snoozed"
+    case .restored: "Restored"
     case .planned: "Planned"
     case .moved: "Moved"
     case .unscheduled: "Unscheduled"
@@ -249,7 +253,7 @@ public enum LedgerFormat {
     case .deleted: return hasSnapshot
     case .completed, .reopened, .planned, .moved, .unscheduled, .redated, .renamed, .created:
       return hasItem
-    case .undone, .granted, .revoked: return false
+    case .undone, .granted, .revoked, .settled, .snoozed, .restored: return false
     }
   }
 

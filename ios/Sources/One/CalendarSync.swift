@@ -288,6 +288,37 @@
       return events(in: interval, excluding: exclude)
     }
 
+    /// Only immutable identifiers leave the adapter. Source IDs are device-local EventKit sources.
+    package func focusIdentity(externalID: String?, occurrence requested: Date?)
+      -> FocusIdentityResolution
+    {
+      guard let id = externalID else { return .localOnly }
+      guard hasAccess else { return .permissionDenied }
+      guard isOn, storeReady else { return .unavailable }
+      let event: EKEvent?
+      if let requested {
+        if let exact = occurrence(id, at: requested) {
+          event = exact
+        } else if let candidate = store.event(withIdentifier: id),
+          candidate.occurrenceDate == requested || candidate.startDate == requested
+        {
+          event = candidate
+        } else {
+          event = nil
+        }
+      } else {
+        event = store.event(withIdentifier: id)
+      }
+      guard let event, let source = event.calendar.source else { return .notFound }
+      let repeating = event.hasRecurrenceRules || event.isDetached
+      guard !repeating || event.occurrenceDate != nil else { return .unavailable }
+      return .available(
+        FocusIdentity(
+          provider: "apple.calendar", account: source.sourceIdentifier,
+          calendar: event.calendar.calendarIdentifier, item: event.calendarItemIdentifier,
+          occurrence: repeating ? event.occurrenceDate : nil))
+    }
+
     /// The calendar a mirrored event (one Today created) lives in: its color, and whether the Calendars list hides it.
     package func calendar(forExternalID id: String?) -> SystemCalendar? {
       mirror(id)?.calendar
