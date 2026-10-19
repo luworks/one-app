@@ -140,8 +140,9 @@ final class AskCardStaysTests: XCTestCase {
 
     // The card is still there, now confirmed; there is no separate "Added …" text line.
     XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "the card shows Added")
-    XCTAssertTrue(
-      app.staticTexts["Order printer paper"].exists, "same card: the title is still there")
+    XCTAssertEqual(
+      app.buttons["capture-title"].label, "Order printer paper",
+      "same card: the title is still there")
     XCTAssertTrue(
       app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'alerts you'")).firstMatch
         .exists, "and the time line")
