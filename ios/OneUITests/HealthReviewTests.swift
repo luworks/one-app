@@ -25,9 +25,15 @@ final class HealthReviewTests: XCTestCase {
     return line
   }
 
-  private func scrollToReview(_ app: XCUIApplication) -> XCUIElement {
+  private func scrollToReview(
+    _ app: XCUIApplication, expectingReview: Bool = false
+  ) -> XCUIElement {
     let header = app.buttons["tomorrowHeader"]
-    for _ in 0..<8 where !(header.exists && header.isHittable) { app.swipeUp() }
+    let target = expectingReview ? app.buttons["reviewToday"] : header
+    let viewport = app.collectionViews.firstMatch.frame
+    for _ in 0..<8 where !(target.exists && target.isFullyVisible(in: viewport)) {
+      app.swipeUp()
+    }
     XCTAssertTrue(header.waitForExistence(timeout: 5), "Today ends with a Tomorrow section")
     return app.buttons["reviewToday"]
   }
@@ -110,7 +116,7 @@ final class HealthReviewTests: XCTestCase {
   func testEveningReviewMovesAndDropsWithOneUndo() {
     let app = launch(at: "19:30")
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    let review = scrollToReview(app)
+    let review = scrollToReview(app, expectingReview: true)
     XCTAssertTrue(
       review.waitForExistence(timeout: 3), "the Tomorrow section offers Review today in the evening"
     )
@@ -144,7 +150,7 @@ final class HealthReviewTests: XCTestCase {
     XCTAssertTrue(toast.waitForNonExistence(timeout: 3))
 
     // Undo put both back: open the review again and find them still left today.
-    let again = scrollToReview(app)
+    let again = scrollToReview(app, expectingReview: true)
     XCTAssertTrue(again.waitForExistence(timeout: 3))
     again.tap()
     XCTAssertTrue(app.buttons["review.choice.Reply to Sam"].waitForExistence(timeout: 5))
@@ -179,7 +185,7 @@ final class HealthReviewTests: XCTestCase {
 
     // Evening: Review today in the Tomorrow section, then the review with two choices made.
     app = launch(at: "19:30")
-    let review = scrollToReview(app)
+    let review = scrollToReview(app, expectingReview: true)
     XCTAssertTrue(review.waitForExistence(timeout: 3))
     let bottom = app.windows.firstMatch.frame.maxY - 200
     for _ in 0..<6 where review.frame.maxY > bottom { app.swipeUp() }
