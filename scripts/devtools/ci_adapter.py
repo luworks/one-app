@@ -1,0 +1,273 @@
+"""Bounded CI execution using the dev process and shared test-result authority."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+from scripts.ci.policy import LANES, MANUAL, validate_report
+from scripts.testing import contract
+from . import commands
+from .core import atomic_json, derived_data, fingerprint, probe
+from .process import Redactor
+
+# These lanes lack an executable acceptance authority in the current dev contract.
+# Do not substitute screenshot attachments, a Debug build, or discovery for them.
+UNSUPPORTED = {
+    'snapshots': 'Reviewed scene baselines and image-comparison authority are not implemented',
+    'release': 'Unsigned Release graph, link-map and resource acceptance authority is not implemented',
+    'sanitizer': 'Supported sanitizer execution and result authority is not implemented',
+    'performance': 'Stable benchmark and budget acceptance authority is not implemented',
+    'protected-release': 'Guarded unsigned archive acceptance authority is not implemented',
+}
+CORE_EXTRA = (
+    'SinglePresentationTests/testLongPressOnAnEventShowsOnlyItsMenu',
+    'SinglePresentationTests/testDraggingATaskDoesNotMakeAnEvent',
+    'ShareImportTests/testPersistedShareIsVisibleAndReplayDoesNotDuplicate',
+)
+TEXT_ARTIFACTS = {'.log', '.txt', '.json', '.jsonl', '.crash', '.ips'}
+
+
+def selection_data(path):
+    data = json.loads(Path(path).read_text())
+    if not isinstance(data, dict) or type(data.get('version')) is not int or data['version'] != 1:
+        raise ValueError('Unsupported selection version')
+    if data.get('mode') not in ('wide', 'affected') or not isinstance(data.get('reason'), str):
+        raise ValueError('Invalid selection mode/reason')
+    for key in ('changed', 'targets'):
+        if not isinstance(data.get(key), list) or any(not isinstance(x, str) or not x for x in data[key]):
+            raise ValueError('Invalid selection ' + key)
+    for key in ('all_targets', 'snapshots'):
+        if type(data.get(key)) is not bool:
+            raise ValueError('Invalid selection ' + key)
+    if data['all_targets'] != (data['mode'] == 'wide'):
+        raise ValueError('Inconsistent selection mode')
+    # This bounded adapter conservatively runs whole authoritative groups. Targets
+    # are graph nodes, never XCTest selectors; do not guess tests from module names.
+    return data
+
+
+def source_state(root, sha):
+    if not re.fullmatch(r'[0-9a-f]{40}', sha) or probe(['git', 'rev-parse', 'HEAD'], root) != sha:
+        raise ValueError('Checkout must match the full integrated SHA')
+    if probe(['git', 'status', '--porcelain', '--untracked-files=normal'], root):
+        raise ValueError('CI requires a clean checkout, including untracked source')
+    return fingerprint(root, tools={})['sha256']
+
+
+def safe_artifacts(source, destination, *, sha, lane):
+    """Copy only explicitly supplied synthetic runner evidence, never a workspace."""
+    source, destination = Path(source), Path(destination)
+    receipt = json.loads((source / 'report.json').read_text())
+    if receipt.get('synthetic') is not True or receipt.get('sha') != sha or receipt.get('lane') != lane:
+        raise ValueError('Artifact provenance mismatch')
+    if source.is_symlink() or destination.exists() or destination.resolve().is_relative_to(source.resolve()):
+        raise ValueError('Unsafe artifact destination/source')
+    paths = sorted(source.rglob('*'))
+    if any(p.is_symlink() for p in paths):
+        raise ValueError('Symlink artifact rejected')
+    destination.mkdir(parents=True)
+    files = []
+    redact = Redactor()
+    for path in paths:
+        rel = path.relative_to(source)
+        if not path.is_file() or any(p.startswith('.') for p in rel.parts):
+            continue
+        if path.suffix not in TEXT_ARTIFACTS | {'.png'} and not any(p.endswith('.xcresult') for p in rel.parts):
+            continue
+        data = path.read_bytes()
+        if path.suffix in TEXT_ARTIFACTS:
+            data = redact(data.decode('utf-8')).encode()
+            data = re.sub(rb'/Users/[^/\s]+', b'/Users/REDACTED', data)
+        target = destination / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        files.append({'path': rel.as_posix(), 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
+    atomic_json(destination / 'manifest.json', {'sha': sha, 'lane': lane, 'synthetic': True, 'files': files})
+
+
+def test_plan(root, lane):
+    source = contract.inventory(root)
+    group = {'business': 'unit', 'integration': 'integration', 'core-ui': 'core', 'extended': 'ui'}[lane]
+    plan = contract.plan([group], source=source)
+    if lane == 'core-ui':
+        plan['selectors']['ui'] += contract.expand(CORE_EXTRA, source, 'ui')
+        plan['selectors']['ui'] = list(dict.fromkeys(plan['selectors']['ui']))
+    if plan['pending']:
+        raise ValueError('Test authority has pending coverage: ' + '; '.join(plan['pending']))
+    kind = 'logic' if lane == 'business' else 'ui'
+    expected = plan['selectors'][kind]
+    if not expected:
+        raise ValueError('Selected test authority contains zero tests')
+    return kind, expected
+
+
+def _test_results(root, lane, output, run, report):
+    kind, expected = test_plan(root, lane)
+    report['missing'] = len(expected)
+    if kind == 'logic':
+        # Identical swift test authority to commands.test(unit), with no guessed filter.
+        argv = ['swift', 'test', '--package-path', 'ios', '--jobs', '2']
+    else:
+        # The same serial runner as commands.test; output is explicit and fresh so
+        # evidence cannot be confused with a previous run in the canonical journal.
+        argv = [sys.executable, 'ios/Eval/run-e2e.py']
+        for value in expected:
+            argv += ['--only', value]
+        argv += ['--simulator-name', 'Today-Dev-' + derived_data(root).name[:8],
+                 '--derived-data', str(derived_data(root)), '--output', str(output / 'runner')]
+    result = run(root, argv, timeout=600, heavy=True)
+    raw = Path(result.log).read_text()
+    (output / 'command.log').write_text(Redactor()(raw))
+    report['cancelled'] += int(result.reason == 'cancelled' or result.returncode in (130, -2, -15))
+    attempts = contract.log_attempts(raw, kind)
+    report['failed'] = sum(a['status'] == 'failed' for a in attempts)
+    if result.reason != 'exited':
+        report['errors'].append('process_' + result.reason)
+    if kind == 'ui':
+        summary = json.loads((output / 'runner/summary.json').read_text())
+        if not isinstance(summary, dict):
+            raise ValueError('Malformed runner summary')
+        if summary.get('head') != report['sha']:
+            raise ValueError('Runner SHA mismatch')
+        if summary.get('selection') != expected:
+            raise ValueError('Runner selection mismatch')
+        if summary.get('status') != 'passed' or summary.get('journal_errors') or summary.get('shutdown_error'):
+            report['errors'].append('runner_incomplete')
+        stages = summary.get('stages', {})
+        if not isinstance(stages, dict) or stages.get('ui') != 0 or stages.get('shutdown') != 0 or any(
+                value != 0 for value in stages.values()):
+            report['errors'].append('runner_stage_failure')
+        # Reparse the retained xcresult tree, rather than trusting copied counters.
+        tree = json.loads((output / 'runner/xcresult-tests.json').read_text())
+        attempts = contract.xcresult_attempts(tree, kind)
+    authority = contract.report(expected, attempts, result.returncode, raw_log=raw)
+    atomic_json(output / 'test-report.json', authority)
+    report['executed'] += authority['executed_count']
+    report['failed'] = max(report['failed'], sum(a['status'] == 'failed' for a in authority['attempts']))
+    report['missing'] = len(authority['missing']) + len(authority['unexpected_skips'])
+    report['errors'].extend(authority['errors'])
+    if any(a['test'] not in expected for a in authority['attempts']):
+        report['errors'].append('unexpected_test')
+    if result.returncode:
+        report['errors'].append('command_exit:' + str(result.returncode))
+
+
+def _checks(root, lane, output, run, report):
+    if lane == 'build':
+        # Extend the shared dev build recipe only with explicit no-signing flags.
+        argv = ['xcodebuild', 'build', '-project', 'ios/Today.xcodeproj', '-scheme', 'Today',
+                '-configuration', 'Debug', '-destination', 'generic/platform=iOS Simulator',
+                '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64',
+                'CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO']
+        result = run(root, argv, timeout=600, heavy=True)
+        (output / 'command.log').write_text(Redactor()(Path(result.log).read_text()))
+        report['cancelled'] += int(result.reason == 'cancelled')
+        if result.returncode or result.reason != 'exited':
+            report['errors'].append('command_exit:' + str(result.returncode))
+            return
+        products = derived_data(root) / 'Build/Products/Debug-iphonesimulator/One.app'
+        for relative in ('One', 'PlugIns/TodayWidgets.appex/TodayWidgets', 'PlugIns/ShareExtension.appex/ShareExtension'):
+            path = products / relative
+            if not path.is_file() or path.is_symlink() or not path.stat().st_size:
+                report['missing'] += 1
+                report['errors'].append('missing_product:' + relative)
+            else:
+                report['executed'] += 1
+        return
+    # Keep pinned tool resolution, exact flags and path scope in commands.py.
+    # Its execute() prints JSON receipts carrying the real retained log paths.
+    import contextlib
+    import io
+    if lane == 'format' and not format_inputs(root):
+        raise ValueError('Zero Swift format inputs')
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
+        code = commands.format_sources(root, check=True) if lane == 'format' else commands.lint(root)
+    receipts = [json.loads(line) for line in captured.getvalue().splitlines() if line.startswith('{')]
+    logs = [Path(r['log']).read_text() for r in receipts if 'log' in r]
+    (output / 'command.log').write_text(Redactor()('\n'.join(logs)))
+    if not receipts or not logs:
+        raise ValueError('Dev command did not retain execution receipts')
+    report['cancelled'] += sum(r.get('reason') == 'cancelled' for r in receipts)
+    if code or any(r.get('exit') != 0 or r.get('reason') != 'exited' for r in receipts):
+        report['errors'].append('dev_check_failure')
+        return
+    # swift-format receives this explicit file set in commands.format_sources.
+    if lane == 'format':
+        report['executed'] += len(format_inputs(root))
+    else:
+        # Count actual successful tool invariants, not an invented count of files
+        # that SwiftLint may have excluded through its configuration.
+        expected = 3 if (root / '.github/workflows').is_dir() else 2
+        if len(receipts) != expected:
+            raise ValueError('Missing lint tool receipts')
+        if not any(re.search(r'in [1-9][0-9]* files?', log) for log in logs):
+            raise ValueError('SwiftLint did not confirm a positive checked-file count')
+        report['executed'] += expected
+
+
+def format_inputs(root):
+    return [p for folder in ('ios/Sources', 'ios/One', 'ios/Development', 'ios/TodayWidgets',
+            'ios/ShareExtension', 'ios/OneUITests', 'ios/Eval/Tests')
+            for p in (root / folder).rglob('*.swift') if p.is_file()]
+
+
+def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runner=None):
+    """Runner injection is for host regressions, never a CI simulation/success mode."""
+    root, output = Path(root).resolve(), Path(output).absolute()
+    report = {'sha': sha, 'lane': lane, 'status': 'failed', 'executed': 0, 'failed': 0,
+              'cancelled': 0, 'missing': 0, 'synthetic': synthetic is True, 'errors': []}
+    # Never replace a previous report or accept pre-seeded results. The CI wrapper
+    # creates the output directory and selection.json before invoking this API.
+    try:
+        if output.is_symlink() or (output.exists() and any(
+                p.name != 'selection.json' or p.is_symlink() for p in output.iterdir())):
+            raise ValueError('output must be fresh (only selection.json is allowed)')
+        output.mkdir(parents=True, exist_ok=True)
+    except (OSError, ValueError) as error:
+        print('ci: ' + Redactor()(str(error)), file=sys.stderr)
+        return 1
+    try:
+        if lane not in LANES:
+            raise ValueError('Unknown CI lane')
+        if synthetic is not True or no_distribute is not True:
+            raise ValueError('CI requires synthetic=True and no_distribute=True')
+        selected = selection_data(selection)
+        atomic_json(output / 'accepted-selection.json', selected)
+        before = source_state(root, sha)
+        report['source_sha256'] = before
+        if lane in MANUAL and (os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch'
+                               or os.environ.get('MANUAL_LANE') != lane):
+            raise ValueError('Manual lane requires explicit matching workflow dispatch')
+        if lane in UNSUPPORTED:
+            raise ValueError(UNSUPPORTED[lane])
+        run = runner or commands.execute
+        if lane in ('business', 'integration', 'core-ui', 'extended'):
+            _test_results(root, lane, output, run, report)
+        else:
+            _checks(root, lane, output, run, report)
+        if source_state(root, sha) != before:
+            raise ValueError('Source changed during CI execution')
+        if not report['errors'] and report['executed'] > 0 and not any(report[k] for k in ('failed', 'cancelled', 'missing')):
+            validate_report(dict(report, status='passed'), sha, lane)
+            report['status'] = 'passed'
+    except KeyboardInterrupt:
+        report['cancelled'] += 1
+        report['errors'].append('cancelled')
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        report['errors'].append(Redactor()(type(error).__name__ + ': ' + str(error)))
+    finally:
+        if report['status'] != 'passed' and not report['failed'] and not report['cancelled'] and not report['missing']:
+            report['failed'] = 1
+        report['errors'] = list(dict.fromkeys(report['errors']))
+        atomic_json(output / 'report.json', report)
+    return 0 if report['status'] == 'passed' else 1
+
+
+def main(root, lane, *, selection, output, sha, synthetic, no_distribute):
+    """Run one CI lane. CLI wiring is owned by integration."""
+    return _main(root, lane, selection=selection, output=output, sha=sha,
+                 synthetic=synthetic, no_distribute=no_distribute)
