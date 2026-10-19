@@ -3,6 +3,7 @@ import XCTest
 /// "Tidy overdue" on the AI page: a new date per overdue reminder, changeable per row, written only on Apply, with Undo.
 /// The dataset has two overdue reminders: "Pay studio invoice" (yesterday 17:00) and "Renew parking permit" (3 days ago,
 /// planned for today).
+@MainActor
 final class TidyOverdueTests: XCTestCase {
     func testTidyOverdueMovesTheDateOnlyOnApplyAndUndoBringsItBack() {
         continueAfterFailure = false

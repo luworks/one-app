@@ -3,15 +3,18 @@ import XCTest
 /// The inline "New Reminder" row in a list, like Apple Reminders: type a title, set a date and a flag
 /// with the round buttons under it, press Return, and the reminder is added with them.
 /// Runs against the test dataset (tests/fixtures/today-dataset.json), which has a "Home" list.
+@MainActor
 final class InlineNewReminderTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments
-        app.launch()
-        app.buttons["Reminders"].firstMatch.tap()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments
+            app.launch()
+            app.buttons["Reminders"].firstMatch.tap()
+        }
     }
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }

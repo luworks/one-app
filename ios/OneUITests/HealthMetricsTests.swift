@@ -3,6 +3,7 @@ import XCTest
 /// The Health sheet as a compact metrics list (sample Health data under `-uiTesting`): the default rows, the detail with
 /// its 7 / 30 / 90 day switch, Add Metric, Hide and the order surviving a relaunch. The clock is pinned with `-uiTestingNow`.
 /// Mindful Minutes has no data in the sample (the "—" row) and Body Fat was last measured 12 days ago (a stale date).
+@MainActor
 final class HealthMetricsTests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         continueAfterFailure = false

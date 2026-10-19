@@ -5,6 +5,7 @@ import UIKit
 /// where Calendar opens, the Today choices (Tomorrow, evening hour, free time, suggested times), and new-item defaults.
 /// `-uiTesting` starts every launch from the defaults; `-uiTestingPrefs key=value,...` sets what a test needs up front,
 /// and the tests that say "in Settings" flip the real switches.
+@MainActor
 final class SettingsChoicesTests: XCTestCase {
     private var app: XCUIApplication!
     private let cal = Calendar.current
@@ -75,6 +76,7 @@ final class SettingsChoicesTests: XCTestCase {
 
     // MARK: Pixels (XCUITest cannot read colors, so look at the screen)
 
+    @MainActor
     private struct Pixels {
         let image: CGImage
         let scale: CGFloat
@@ -237,7 +239,7 @@ final class SettingsChoicesTests: XCTestCase {
         XCTAssertTrue(numbers.firstMatch.waitForExistence(timeout: 5), "a number for each row of the month")
         XCTAssertGreaterThanOrEqual(numbers.count, 4)
         let week = cal.component(.weekOfYear, from: dayInMonth(weekday: 4))
-        XCTAssertTrue(numbers.allElementsBoundByIndex.map(\.label).contains("Week \(week)"), "the row of the 5th-11th shows its week number")
+        XCTAssertTrue(numbers.allElementsBoundByIndex.map({ $0.label }).contains("Week \(week)"), "the row of the 5th-11th shows its week number")
 
         app.buttons["calendar.mode.week"].tap()
         let header = element("calendar.weekNumber")

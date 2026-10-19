@@ -5,28 +5,33 @@ import XCTest
 /// calendar), "Delete All Future Events" keeps the past, and Delete Event in Apple's editor closes the editor (iOS 27
 /// deletes without telling its delegate). Uses the simulator's own calendar, never a real one: the events are made by the
 /// app's debug hooks (-debugCreateRepeatingEvent / -debugCreateSystemEvent) as if in the Calendar app, and removed after.
+@MainActor
 final class CalendarRecurringDeleteTests: XCTestCase {
     private var title = ""
     private let cal = Calendar.current
     private var yesterday: Date { cal.date(byAdding: .day, value: -1, to: .now)! }
     private var tomorrow: Date { cal.date(byAdding: .day, value: 1, to: .now)! }
 
-    override func setUp() {
-        continueAfterFailure = false
-        // The events start at the top of the current hour, so they are today's at any time of day.
-        title = "Repeat check \(Int(Date.now.timeIntervalSince1970) % 100000)"
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            // The events start at the top of the current hour, so they are today's at any time of day.
+            title = "Repeat check \(Int(Date.now.timeIntervalSince1970) % 100000)"
+        }
     }
 
-    override func tearDown() {
-        // Remove what the test made (the whole series, past occurrences included).
-        // A slow simulator can fail the relaunch ("Failed to terminate"); that is not the test's result.
-        XCTExpectFailure("cleanup only", options: .nonStrict()) {
-            let app = launch(["-debugDeleteSystemEvent", title])
-            _ = app.staticTexts["todayDate"].waitForExistence(timeout: 10)
-            sleep(2)
-            app.terminate()
+    override func tearDown() async throws {
+        await MainActor.run {
+            // Remove what the test made (the whole series, past occurrences included).
+            // A slow simulator can fail the relaunch ("Failed to terminate"); that is not the test's result.
+            XCTExpectFailure("cleanup only", options: .nonStrict()) {
+                let app = launch(["-debugDeleteSystemEvent", title])
+                _ = app.staticTexts["todayDate"].waitForExistence(timeout: 10)
+                sleep(2)
+                app.terminate()
+            }
+            super.tearDown()
         }
-        super.tearDown()
     }
 
     private func launch(_ extra: [String] = []) -> XCUIApplication {

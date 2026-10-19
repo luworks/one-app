@@ -2,13 +2,16 @@ import XCTest
 
 /// Automation-inclusive latency samples, not touch-to-photon or shipping-device benchmarks.
 /// Source fixtures are shared with normal journeys; no real Apple accounts or stores are used.
+@MainActor
 final class PerformanceBaselineTests: XCTestCase {
     private var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "09:41", "-today.setting.healthSummary", "YES"]
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "09:41", "-today.setting.healthSummary", "YES"]
+        }
     }
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }

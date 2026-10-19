@@ -2,6 +2,7 @@ import XCTest
 
 /// Simulator fallback baseline only. Each repetition restores identical fixture and chat history.
 /// XCTest interaction time is never used as AI latency; raw app-side monotonic endpoints are retained.
+@MainActor
 final class AIResponsePerformanceTests: XCTestCase {
     private var app: XCUIApplication!
     private let stages: Set<String> = [
@@ -9,15 +10,19 @@ final class AIResponsePerformanceTests: XCTestCase {
         "ai_ready_to_response_layout", "ai_turn_to_response_layout"
     ]
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments + ["-performanceTrace", "-uiTestingNow", "09:41"]
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments + ["-performanceTrace", "-uiTestingNow", "09:41"]
+        }
     }
 
-    override func tearDown() {
-        app.terminate()
-        super.tearDown()
+    override func tearDown() async throws {
+        await MainActor.run {
+            app.terminate()
+            super.tearDown()
+        }
     }
 
     private func freshAsk(journey: String, repetition: Int) {
@@ -35,7 +40,7 @@ final class AIResponsePerformanceTests: XCTestCase {
             }
         }, object: nil)
         XCTAssertEqual(XCTWaiter().wait(for: [opened], timeout: 10), .completed, "Ask content layout endpoint")
-        guard let report = reports.allElementsBoundByIndex.map(\.label).first(where: {
+        guard let report = reports.allElementsBoundByIndex.map({ $0.label }).first(where: {
             $0.contains(";name=page.ai;") && $0.contains(";route=ai;")
         }) else { XCTFail("Missing modal page.ai report"); return }
         let values = fields(report)

@@ -2,16 +2,19 @@ import XCTest
 
 /// Core journeys (J1–J7 in docs/goal-and-rubric.md), run against a fresh in-memory store with sample data.
 /// Each test counts the taps it needs from the home screen; the budgets can only go down.
+@MainActor
 final class JourneyTests: XCTestCase {
     var app: XCUIApplication!
     var taps = 0
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
-        app.launch()
-        taps = 0
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting"]
+            app.launch()
+            taps = 0
+        }
     }
 
     private func tap(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {

@@ -5,6 +5,7 @@ import XCTest
 /// `-uiTestingAppOp`, see `RemindersSync`), so nothing is typed, and reads both sides from hidden labels
 /// (`-uiTestingSyncDump`). Needs Reminders access on the simulator (allowed on the first run, or
 /// `xcrun simctl privacy <udid> grant reminders com.luworks.one`).
+@MainActor
 final class RemindersSyncBothWaysTests: XCTestCase {
     private let stamp = Int(Date.now.timeIntervalSince1970) % 100000
 

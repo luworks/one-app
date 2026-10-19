@@ -3,15 +3,18 @@ import XCTest
 /// Several items from one line on the AI page: all shown at once, each with its own Add / Skip plus "Add all", an added
 /// item turns into a check and then leaves, and a task is filed into the list it clearly belongs to.
 /// The simulator has no on-device model, so `-uiTestingMultiCapture` splits a line on ";" with the rule parser.
+@MainActor
 final class AskMultiCaptureTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting", "-uiTestingMultiCapture"]
-        app.launch()
-        app.buttons["Ask AI or add anything"].tap()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting", "-uiTestingMultiCapture"]
+            app.launch()
+            app.buttons["Ask AI or add anything"].tap()
+        }
     }
 
     private var field: XCUIElement {

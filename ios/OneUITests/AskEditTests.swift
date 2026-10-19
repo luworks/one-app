@@ -3,15 +3,18 @@ import XCTest
 /// AI page flows on the sample data: capture sentences become preview cards, edit sentences become ChangeCards
 /// (Apply / Undo) or a question. Uses the on-device model when the simulator has one (slow on the first call).
 /// Screenshots are attached to the result bundle.
+@MainActor
 final class AskEditTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
-        app.launch()
-        app.buttons["Ask AI or add anything"].tap()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting"]
+            app.launch()
+            app.buttons["Ask AI or add anything"].tap()
+        }
     }
 
     private func shot(_ name: String) {

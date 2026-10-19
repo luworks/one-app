@@ -3,6 +3,7 @@ import XCTest
 /// End to end through the system Share sheet: share a page from Safari to Today, check the New Reminder sheet, Add,
 /// and find the reminder in the app. Slow and depends on Safari's UI, so it is its own test case. It skips
 /// when Safari cannot load the page (no network on the simulator).
+@MainActor
 final class ShareSheetTests: XCTestCase {
     func testShareAPageFromSafariAddsAReminder() throws {
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")

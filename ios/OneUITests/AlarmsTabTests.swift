@@ -3,18 +3,21 @@ import XCTest
 /// The Alarms section of the Clock tab, a copy of Clock's Alarms tab: add, edit (time, repeat, label), switch, delete.
 /// Run against a fresh in-memory store (no alarms to start with). The simulator denies AlarmKit,
 /// so these check the list and the editor, not the ringing.
+@MainActor
 final class AlarmsTabTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
-        app.launch()
-        let alarms = app.buttons["Clock"].firstMatch
-        XCTAssertTrue(alarms.waitForExistence(timeout: 5))
-        alarms.tap()
-        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5), "the app-wide + is there to add an alarm")
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting"]
+            app.launch()
+            let alarms = app.buttons["Clock"].firstMatch
+            XCTAssertTrue(alarms.waitForExistence(timeout: 5))
+            alarms.tap()
+            XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5), "the app-wide + is there to add an alarm")
+        }
     }
 
     /// Set TEST_RUNNER_ALARM_SHOTS=<folder> to save screenshots of each step (for design review).
@@ -176,6 +179,7 @@ final class AlarmsTabTests: XCTestCase {
 }
 
 /// Add Alarm opens on the next quarter hour of Today's clock (pinned to 10:56, so 11:00), not on a whole hour.
+@MainActor
 final class AlarmDefaultTimeTests: XCTestCase {
     func testAddAlarmOpensOnTheNextQuarterHour() {
         continueAfterFailure = false

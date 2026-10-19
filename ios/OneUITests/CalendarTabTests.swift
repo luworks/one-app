@@ -2,16 +2,19 @@ import XCTest
 
 /// The Calendar tab (modeled on Apple Calendar): Month grid with the day's list, paging, Year, Week, and the Calendars filter.
 /// Launched with -uiTesting: a fresh in-memory store with sample data (events today and tomorrow, "Team offsite" in two days).
+@MainActor
 final class CalendarTabTests: XCTestCase {
     var app: XCUIApplication!
     private let cal = Calendar.current
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting", "-uiTestingCalendarSync"]
-        app.launch()
-        app.buttons["Calendar"].firstMatch.tap()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting", "-uiTestingCalendarSync"]
+            app.launch()
+            app.buttons["Calendar"].firstMatch.tap()
+        }
     }
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
@@ -33,7 +36,7 @@ final class CalendarTabTests: XCTestCase {
     func testWeekIsTheDefault() {
         XCTAssertTrue(modeButton("Week").waitForExistence(timeout: 5))
         let pills = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'calendar.mode.'"))
-        XCTAssertEqual(pills.allElementsBoundByIndex.map(\.label), ["Week", "Month", "Year"],
+        XCTAssertEqual(pills.allElementsBoundByIndex.map({ $0.label }), ["Week", "Month", "Year"],
                        "one switcher: Week / Month / Year (Day is the Today tab)")
         XCTAssertFalse(app.segmentedControls.buttons["Month"].exists, "pills, not a segmented control")
         XCTAssertTrue(modeButton("Week").isSelected, "Week is selected when the tab opens")

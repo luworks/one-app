@@ -1,6 +1,7 @@
 import XCTest
 
 /// Leaving a tab and coming back finds it where it was: the open list in Reminders, Week / Month / Year in Calendar.
+@MainActor
 final class TabMemoryTests: XCTestCase {
     func testTabsKeepTheirPlace() {
         continueAfterFailure = false

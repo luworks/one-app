@@ -3,15 +3,18 @@ import XCTest
 /// The preview card stays in the conversation after Add and Cancel: Added (Undo, Open), Undone (Add again) and Dropped,
 /// and the final state is there when the chat is reopened from the sidebar. Runs on the test dataset; the simulator has no
 /// on-device model, so the rule parser reads the sentence.
+@MainActor
 final class AskCardStaysTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments
-        app.launch()
-        app.buttons["Ask AI or add anything"].tap()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments
+            app.launch()
+            app.buttons["Ask AI or add anything"].tap()
+        }
     }
 
     private var field: XCUIElement {

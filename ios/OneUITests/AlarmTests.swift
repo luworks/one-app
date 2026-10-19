@@ -2,6 +2,7 @@ import XCTest
 
 /// Alarms claim 7: an item marked "Ring as alarm" rings as a system alarm (AlarmKit) at its time.
 /// Slow (waits for the alarm), so it is its own test case.
+@MainActor
 final class AlarmTests: XCTestCase {
     func testRingAsAlarmFires() throws {
         guard #available(iOS 26, *) else { throw XCTSkip("AlarmKit needs iOS 26") }

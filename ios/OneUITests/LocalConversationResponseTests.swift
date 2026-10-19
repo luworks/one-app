@@ -1,6 +1,7 @@
 import XCTest
 
 /// Trace-disabled regression for the simulator's unavailable-model conversation path.
+@MainActor
 final class LocalConversationResponseTests: XCTestCase {
     func testLocalReplyAndUserMessageSurviveReopeningThread() {
         continueAfterFailure = false

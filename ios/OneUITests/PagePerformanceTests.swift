@@ -5,15 +5,18 @@ import XCTest
 /// Each method launches once, then runs first_cycle_plus_two_revisits in an isolated in-memory dataset.
 /// Preserve raw seq/route_visit order; candidate runs must match this exact journey sequence.
 /// The first visit and revisits are descriptive samples, not a homogeneous warm/cold baseline.
+@MainActor
 final class PagePerformanceTests: XCTestCase {
     private var app: XCUIApplication!
     private var lastReport = ""
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments + ["-performanceTrace", "-performancePageRevisits", "-uiTestingNow", "09:41",
-                                                        "-today.setting.healthSummary", "YES"]
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments + ["-performanceTrace", "-performancePageRevisits", "-uiTestingNow", "09:41",
+                                                            "-today.setting.healthSummary", "YES"]
+        }
     }
 
     private func element(_ id: String) -> XCUIElement {
@@ -39,7 +42,7 @@ final class PagePerformanceTests: XCTestCase {
         }
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: 10),
                        .completed, "App destination endpoint: \(route)")
-        guard let report = reports.allElementsBoundByIndex.map(\.label).first(where: {
+        guard let report = reports.allElementsBoundByIndex.map({ $0.label }).first(where: {
             $0 != prior && $0.contains(";name=\(name);") && $0.contains(";route=\(route);")
         }) else { XCTFail("No fresh destination report"); return }
         let fields = Dictionary(uniqueKeysWithValues: report.split(separator: ";").compactMap { field -> (String, String)? in

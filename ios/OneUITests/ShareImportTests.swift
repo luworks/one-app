@@ -3,6 +3,7 @@ import XCTest
 /// A reminder added from the Share sheet waits in the App Group inbox and comes in when the app opens.
 /// The Share sheet itself runs in another app's process, so the test puts the item in the inbox with
 /// `-uiTestingShare` and checks the app side: it arrives once and lands in Tomorrow. (The Undo toast is short-lived; ShareSheetTests checks it.)
+@MainActor
 final class ShareImportTests: XCTestCase {
     func testSharedReminderArrivesOnce() {
         let title = "Shared \(Int(Date.now.timeIntervalSince1970) % 100000)"

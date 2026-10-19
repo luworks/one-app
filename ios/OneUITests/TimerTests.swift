@@ -6,6 +6,7 @@ import XCTest
 /// Recents shows the three Pomodoro presets.
 /// The simulator denies AlarmKit, so most launches pass `-uiTestingTimers`, which replaces AlarmKit with a fake (the list
 /// changes, nothing rings); `-uiTestingRecents` seeds Recents. Ringing is checked on a phone.
+@MainActor
 final class TimerTests: XCTestCase {
     var app: XCUIApplication!
 

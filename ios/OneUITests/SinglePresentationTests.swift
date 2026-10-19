@@ -4,14 +4,17 @@ import XCTest
 /// (A sheet on the row plus one on the list, or a tap handler plus a menu action, would stack two.)
 /// Also: long-press an empty slot on the Week grid to make an event there, like Apple Calendar.
 /// Uses the test dataset (tests/fixtures/today-dataset.json). Set TEST_RUNNER_PRESENT_SHOTS=<folder> for screenshots.
+@MainActor
 final class SinglePresentationTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments
-        app.launch()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments
+            app.launch()
+        }
     }
 
     private func shot(_ name: String) {

@@ -1,14 +1,17 @@
 import XCTest
 
+@MainActor
 final class AskConversationTests: XCTestCase {
     private var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting", "-uiTestingMultiCapture"]
-        app.launch()
-        app.buttons["Ask AI or add anything"].tap()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting", "-uiTestingMultiCapture"]
+            app.launch()
+            app.buttons["Ask AI or add anything"].tap()
+        }
     }
 
     private func send(_ text: String) {

@@ -3,14 +3,17 @@ import UIKit
 
 /// Settings → Appearance: System / Light / Dark apply at once to the whole app and are remembered across launches.
 /// UI tests start on System (`-uiTesting`); `-uiTestingKeepAppearance` keeps what the last launch saved.
+@MainActor
 final class AppearanceUITests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
-        app.launch()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting"]
+            app.launch()
+        }
     }
 
     private func openSettings() {

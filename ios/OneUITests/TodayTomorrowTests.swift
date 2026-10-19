@@ -4,6 +4,7 @@ import XCTest
 /// The clock is pinned with `-uiTestingNow`, so the tests behave the same at any time of day.
 /// Tomorrow's items come from tests/fixtures/today-dataset.json (Weekly review 10:00, Weekly sync 11:00,
 /// Design review 14:00, plus Standup and alarms on weekdays).
+@MainActor
 final class TodayTomorrowTests: XCTestCase {
     private func launch(at time: String) -> XCUIApplication {
         continueAfterFailure = false

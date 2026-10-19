@@ -3,12 +3,15 @@ import XCTest
 /// The Activity ledger and automatic changes under a grant. Runs on the test dataset with the clock pinned at 09:41,
 /// so "Buy milk" and "Water the plants" (due today, no time) have free time to go into.
 /// Set TEST_RUNNER_LEDGER_SHOTS=<folder> (and TEST_RUNNER_LEDGER_SHOTS_SUFFIX=light / dark) for `testScreenshots`.
+@MainActor
 final class LedgerTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+        }
     }
 
     private func launch(_ extra: [String] = []) {

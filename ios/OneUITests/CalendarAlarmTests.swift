@@ -3,6 +3,7 @@ import XCTest
 /// Alarms in the Calendar tab: Month's day list and grid marks, the Week grid's markers, and Settings → "Show alarms in
 /// Today and Calendar". Launched with the test dataset (alarms: 06:30 Wake up weekdays, 08:30 Weekend run off,
 /// 13:00 Take medicine once, 22:30 Wind down Sun-Thu) and the clock pinned at 09:00, so "Take medicine" rings today.
+@MainActor
 final class CalendarAlarmTests: XCTestCase {
     var app: XCUIApplication!
     private let cal = Calendar.current
@@ -11,9 +12,11 @@ final class CalendarAlarmTests: XCTestCase {
     /// so a run that left it off can't break them. The setting test launches without the pin and puts the switch back.
     private static let pinAlarmsOn = ["-today.setting.showAlarmsInToday", "YES"]
 
-    override func setUp() {
-        continueAfterFailure = false
-        launch(pinned: !name.contains("testTheSettingHides"))
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            launch(pinned: !name.contains("testTheSettingHides"))
+        }
     }
 
     private func launch(pinned: Bool) {
@@ -144,7 +147,7 @@ final class CalendarAlarmTests: XCTestCase {
             XCTAssertLessThanOrEqual(block.frame.maxX, alarmFrame.minX,
                                      "even a dense block must stay outside the alarm lane: \(block.frame)")
         }
-        let sortedFrames = eventFrames.map(\.frame).sorted { $0.minX < $1.minX }
+        let sortedFrames = eventFrames.map({ $0.frame }).sorted { $0.minX < $1.minX }
         for (left, right) in zip(sortedFrames, sortedFrames.dropFirst()) {
             XCTAssertLessThanOrEqual(left.maxX, right.minX + 0.5, "adjacent blocks stay within their assigned columns")
         }

@@ -2,27 +2,32 @@ import XCTest
 
 /// Deleting an event stays in step with Apple Calendar, both ways. Uses the simulator's own calendar (never a real one).
 /// A test store file (-uiTestingStore) lets a second launch see what the first one saved, like a real phone does.
+@MainActor
 final class CalendarDeleteSyncTests: XCTestCase {
     private let store = "deletesync-\(Int(Date.now.timeIntervalSince1970))"
     private var title = ""
 
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-        // A new event starts at the next full hour; in the last hour of the day that is tomorrow, not in today's list.
-        try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 23, "the default event time is tomorrow")
-        title = "Sync check \(Int(Date.now.timeIntervalSince1970) % 100000)"
+    override func setUp() async throws {
+        try await MainActor.run {
+            continueAfterFailure = false
+            // A new event starts at the next full hour; in the last hour of the day that is tomorrow, not in today's list.
+            try XCTSkipIf(Calendar.current.component(.hour, from: .now) >= 23, "the default event time is tomorrow")
+            title = "Sync check \(Int(Date.now.timeIntervalSince1970) % 100000)"
+        }
     }
 
-    override func tearDown() {
-        // Leave nothing behind in the simulator's calendar.
-        // A slow simulator can fail the relaunch ("Failed to terminate"); that is not the test's result.
-        XCTExpectFailure("cleanup only", options: .nonStrict()) {
-            let app = launch(["-debugDeleteSystemEvent", title])
-            _ = app.staticTexts["todayDate"].waitForExistence(timeout: 10)
-            sleep(2)
-            app.terminate()
+    override func tearDown() async throws {
+        await MainActor.run {
+            // Leave nothing behind in the simulator's calendar.
+            // A slow simulator can fail the relaunch ("Failed to terminate"); that is not the test's result.
+            XCTExpectFailure("cleanup only", options: .nonStrict()) {
+                let app = launch(["-debugDeleteSystemEvent", title])
+                _ = app.staticTexts["todayDate"].waitForExistence(timeout: 10)
+                sleep(2)
+                app.terminate()
+            }
+            super.tearDown()
         }
-        super.tearDown()
     }
 
     private func launch(_ extra: [String] = []) -> XCUIApplication {

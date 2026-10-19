@@ -1,6 +1,7 @@
 import XCTest
 
 /// Calendar claim 10: events saved to the system calendar come back as system events after a fresh start.
+@MainActor
 final class CalendarSyncTests: XCTestCase {
     func testEventRoundTripsThroughSystemCalendar() throws {
         // A new event starts at the next full hour; in the last hour of the day that is tomorrow, not in today's list.

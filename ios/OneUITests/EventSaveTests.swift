@@ -1,6 +1,7 @@
 import XCTest
 
 /// Save is a completion action even when an existing event has no edits.
+@MainActor
 final class EventSaveTests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 

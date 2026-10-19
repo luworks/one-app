@@ -4,6 +4,7 @@ import XCTest
 /// by swiping the row, tap to open the Timer tab. The simulator denies AlarmKit, so these launches pass
 /// `-uiTestingTimers`, which seeds timers and replaces AlarmKit with a fake (the list changes, nothing rings).
 /// The countdown itself is drawn by the system (`Text(timerInterval:)`); ringing is checked on a phone.
+@MainActor
 final class TodayTimerTests: XCTestCase {
     private var app: XCUIApplication!
 

@@ -5,18 +5,21 @@ import XCTest
 /// Own tiny dataset (one daily reminder due 07:00, planned 09:00 today), so the shared fixture stays as it is.
 /// The Apple Reminders side (Apple rolls the reminder, the app drops the finished occurrence's plan) is covered by
 /// `RepeatAdvanceTests` in the logic package; Apple Reminders sync is off in these runs.
+@MainActor
 final class RepeatingReminderTests: XCTestCase {
     private var app: XCUIApplication!
     private let title = "Clean the drain filter"
     private let dueLine = "Due 07:00 · ↻"
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.fixtureArguments("repeating-reminder-daily-home.json")
-            + ["-uiTestingNow", "09:41"]
-        app.launch()
-        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.fixtureArguments("repeating-reminder-daily-home.json")
+                + ["-uiTestingNow", "09:41"]
+            app.launch()
+            XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+        }
     }
 
     private var circle: XCUIElement { app.buttons["Complete \(title)"] }

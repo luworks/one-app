@@ -3,6 +3,7 @@ import XCTest
 /// Opening an event from the system calendar goes straight to Apple's editor: no "Edit" to tap first, one Delete Event, and
 /// the start / end / all-day / alert rows are there to change. Uses the simulator's own calendar (never a real one).
 /// Set TEST_RUNNER_EVENT_SHOTS=<folder> to save screenshots.
+@MainActor
 final class SystemEventEditorTests: XCTestCase {
     private func shot(_ name: String) {
         guard let dir = ProcessInfo.processInfo.environment["EVENT_SHOTS"] else { return }
@@ -69,9 +70,9 @@ final class SystemEventEditorTests: XCTestCase {
                           "the editor has a \(name) row")
         }
         let alerts = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Alert, '"))
-        XCTAssertEqual(alerts.count, 1, "one Alert row until one is set: \(alerts.allElementsBoundByIndex.map(\.label))")
+        XCTAssertEqual(alerts.count, 1, "one Alert row until one is set: \(alerts.allElementsBoundByIndex.map({ $0.label }))")
         let deletes = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Delete Event'"))
-        XCTAssertEqual(deletes.count, 1, "exactly one Delete Event: \(deletes.allElementsBoundByIndex.map(\.label))")
+        XCTAssertEqual(deletes.count, 1, "exactly one Delete Event: \(deletes.allElementsBoundByIndex.map({ $0.label }))")
         // Close without changing anything. (The event stays in the simulator's own calendar, never a real one.)
         app.buttons["Cancel"].firstMatch.tap()
         XCTAssertTrue(navTitle.waitForNonExistence(timeout: 8))

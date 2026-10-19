@@ -2,6 +2,7 @@ import XCTest
 
 /// Your messages and AI answers with content have a copy button (it confirms with a check mark); the app's own status
 /// sentences ("Here's what I understood…") do not.
+@MainActor
 final class MessageCopyTests: XCTestCase {
     func testEachMessageHasACopyButtonThatConfirms() {
         continueAfterFailure = false

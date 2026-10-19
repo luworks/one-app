@@ -4,6 +4,7 @@ import XCTest
 /// get it back by pulling it from the system, so finding it after another relaunch proves the round trip.
 /// Slow and tied to the simulator's Reminders permission, so it is its own test case. It avoids typing
 /// (simulator keyboard focus is flaky): the reminder is added through the `-uiTestingAddReminder` launch argument.
+@MainActor
 final class RemindersSyncTests: XCTestCase {
     private func launch(adding title: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()

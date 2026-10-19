@@ -1,6 +1,7 @@
 import XCTest
 
 /// Native app-target metrics are distinct from app layout proxies and sampled RSS.
+@MainActor
 final class PageScrollResourceTests: XCTestCase {
     func testYearNativeScrollResources() throws {
         continueAfterFailure = false

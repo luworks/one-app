@@ -3,16 +3,19 @@ import XCTest
 /// Create, read, update and delete on everything the app manages, the way a person would do it, starting from the
 /// test dataset (tests/fixtures/today-dataset.json): reminders and lists, local calendar events, alarms, chats, and Search.
 /// Every test launches a fresh in-memory store, so they are independent. Apple Calendar / Reminders sync is off.
+@MainActor
 final class CRUDTests: XCTestCase {
     var app: XCUIApplication!
     private let cal = Calendar.current
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments
-        app.launch()
-        XCTAssertTrue(app.buttons["Ask AI or add anything"].waitForExistence(timeout: 10), "the app is up")
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments
+            app.launch()
+            XCTAssertTrue(app.buttons["Ask AI or add anything"].waitForExistence(timeout: 10), "the app is up")
+        }
     }
 
     // MARK: - Helpers

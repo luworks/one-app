@@ -2,15 +2,18 @@ import XCTest
 
 /// The AI page keeps its context between messages: a follow-up edits the preview or answers the last question,
 /// and the options a question offers are real items that work the same way whether tapped or typed.
+@MainActor
 final class AskMultiTurnTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
-        app.launch()
-        app.buttons["Ask AI or add anything"].tap()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting"]
+            app.launch()
+            app.buttons["Ask AI or add anything"].tap()
+        }
     }
 
     private var field: XCUIElement {

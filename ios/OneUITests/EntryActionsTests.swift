@@ -2,14 +2,17 @@ import XCTest
 
 /// Calendar entries behave like tasks: long-press for a menu, swipe from the right to delete; and a task completed on
 /// Today leaves the day. Runs on the in-memory sample data (the system calendar is never touched).
+@MainActor
 final class EntryActionsTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
-        app.launch()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting"]
+            app.launch()
+        }
     }
 
     private func row(_ title: String) -> XCUIElement {

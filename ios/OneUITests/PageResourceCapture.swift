@@ -1,6 +1,7 @@
 import XCTest
 
 /// Shared raw resource validation; latency and functional assertions remain in each journey.
+@MainActor
 extension XCTestCase {
     func capturePageResourceWindow(app: XCUIApplication, sequence: Int, start: UInt64, layout: UInt64, route: String) -> String? {
         let reports = app.staticTexts.matching(identifier: "performance.trace")
@@ -12,7 +13,7 @@ extension XCTestCase {
         }
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: 5),
                        .completed, "Same-sequence resource window: \(route)")
-        guard let report = reports.allElementsBoundByIndex.map(\.label).first(where: {
+        guard let report = reports.allElementsBoundByIndex.map({ $0.label }).first(where: {
             $0.hasPrefix(prefix) && $0.contains(";resource_b64=")
         }), let encoded = report.components(separatedBy: ";resource_b64=").last,
               let data = Data(base64Encoded: encoded), let json = String(data: data, encoding: .utf8),

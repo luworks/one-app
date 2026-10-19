@@ -4,19 +4,22 @@ import XCTest
 /// Each method launches once: first_cycle_plus_two_revisits, in the exact order below.
 /// Keep ordered raw samples; compare candidates with the same sequence, not a pooled warm/cold baseline.
 /// Endpoints describe destination geometry + two display-link callbacks, not async readiness or presentation.
+@MainActor
 final class PageSecondaryPerformanceTests: XCTestCase {
     private var app: XCUIApplication!
     private var lastSequence = 0
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments + ["-performanceTrace", "-performancePageRevisits",
-                                                        "-uiTestingNow", "09:41"]
-        // No -uiTestingCalendarSync: the existing test hook keeps EventKit sync off.
-        XCTAssertFalse(app.launchArguments.contains("-uiTestingCalendarSync"))
-        app.launch()
-        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments + ["-performanceTrace", "-performancePageRevisits",
+                                                            "-uiTestingNow", "09:41"]
+            // No -uiTestingCalendarSync: the existing test hook keeps EventKit sync off.
+            XCTAssertFalse(app.launchArguments.contains("-uiTestingCalendarSync"))
+            app.launch()
+            XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+        }
     }
 
     private func sample(_ route: String, visit: Int) {
@@ -31,7 +34,7 @@ final class PageSecondaryPerformanceTests: XCTestCase {
         }
         XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: nil)], timeout: 10),
                        .completed, "Fresh app endpoint: \(route), visit \(visit)")
-        guard let report = reports.allElementsBoundByIndex.map(\.label).first(where: {
+        guard let report = reports.allElementsBoundByIndex.map({ $0.label }).first(where: {
             $0.contains(";name=\(name);") && $0.contains(";route=\(route);") && $0.hasSuffix(expectedVisit)
         }) else { XCTFail("Missing destination report"); return }
         let fields = Dictionary(uniqueKeysWithValues: report.split(separator: ";").compactMap { field -> (String, String)? in

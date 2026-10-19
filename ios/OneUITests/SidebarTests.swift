@@ -2,14 +2,17 @@ import XCTest
 
 /// The left sidebar is the history of conversations with the AI (like ChatGPT / Claude), not a second tab bar.
 /// Each test runs against a fresh in-memory store, so there are no conversations to start with.
+@MainActor
 final class SidebarTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["-uiTesting"]
-        app.launch()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = ["-uiTesting"]
+            app.launch()
+        }
     }
 
     /// Talks to the AI once and returns to the main page. A question gets a local answer, so no model or preview is involved.

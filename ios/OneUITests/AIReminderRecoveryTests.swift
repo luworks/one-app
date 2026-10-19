@@ -1,16 +1,19 @@
 import XCTest
 
 /// Real production fallback journeys, including stored mistaken assistant replies.
+@MainActor
 final class AIReminderRecoveryTests: XCTestCase {
     private var app: XCUIApplication!
     private let title = "做一次 auto turbotax repo"
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.fixtureArguments("ai-reminder-recovery-ui.json")
-        app.launch()
-        app.openSidebar()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.fixtureArguments("ai-reminder-recovery-ui.json")
+            app.launch()
+            app.openSidebar()
+        }
     }
 
     func testSuffixReminderHasDateOnlyPreviewAndAddPersistsWithUndo() {

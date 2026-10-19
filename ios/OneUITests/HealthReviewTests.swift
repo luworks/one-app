@@ -4,6 +4,7 @@ import XCTest
 /// and the evening "Review today" from the Tomorrow section. The clock is pinned with `-uiTestingNow`.
 /// Today's reminders come from tests/fixtures/today-dataset.json: "Reply to Sam" planned 17:00, "Buy milk" due today,
 /// "Take out the trash" 21:00, and three reminders completed when the dataset loads.
+@MainActor
 final class HealthReviewTests: XCTestCase {
     /// Settings survive between launches, so every test but the settings one pins "Health summary" on (argument domain).
     private func launch(at time: String, healthOn: Bool = true) -> XCUIApplication {

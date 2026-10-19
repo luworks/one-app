@@ -1,18 +1,21 @@
 import XCTest
 
 /// Production rule fallback, never scripted model output or physical-device evidence.
+@MainActor
 final class AIAlarmContextTests: XCTestCase {
     private var app: XCUIApplication!
     private var loadedAt: Date!
     private let question = "... 你可以看到我上面的 context 吗"
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.fixtureArguments("ai-alarm-context-ui.json")
-        loadedAt = Date()
-        app.launch()
-        app.openSidebar()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.fixtureArguments("ai-alarm-context-ui.json")
+            loadedAt = Date()
+            app.launch()
+            app.openSidebar()
+        }
     }
 
     func testMixedRelativeAlarmPreviewContextQuestionAddAndUndo() {
@@ -20,12 +23,12 @@ final class AIAlarmContextTests: XCTestCase {
         let sentAt = Date()
         send("提醒 烘干衣服 45min 后 alarm")
         assertAlarm(minutesFrom: sentAt, offset: 45)
-        let originalTime = preview.staticTexts.allElementsBoundByIndex.map(\.label)
+        let originalTime = preview.staticTexts.allElementsBoundByIndex.map({ $0.label })
         send("make a alarm")
         assertAlarm(minutesFrom: sentAt, offset: 45)
         send(question)
         assertContextAnswer()
-        XCTAssertEqual(preview.staticTexts.allElementsBoundByIndex.map(\.label), originalTime)
+        XCTAssertEqual(preview.staticTexts.allElementsBoundByIndex.map({ $0.label }), originalTime)
         keepScreenshot("IMG6815 three turns - complete alarm preview and truthful context answer")
         // Only the real Add creates the alarm; Undo remains available afterwards.
         preview.buttons["Add"].tap()
@@ -42,10 +45,10 @@ final class AIAlarmContextTests: XCTestCase {
         open("Dryer full wrong chat")
         send("make a alarm")
         assertAlarm(minutesFrom: loadedAt, offset: 35)
-        let originalTime = preview.staticTexts.allElementsBoundByIndex.map(\.label)
+        let originalTime = preview.staticTexts.allElementsBoundByIndex.map({ $0.label })
         send(question)
         assertContextAnswer()
-        XCTAssertEqual(preview.staticTexts.allElementsBoundByIndex.map(\.label), originalTime)
+        XCTAssertEqual(preview.staticTexts.allElementsBoundByIndex.map({ $0.label }), originalTime)
         app.buttons["Close"].firstMatch.tap()
         app.buttons["Activity"].tap()
         XCTAssertTrue(app.staticTexts["No activity yet"].waitForExistence(timeout: 5), "No planner writes before Add")

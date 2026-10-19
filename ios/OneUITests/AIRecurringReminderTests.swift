@@ -1,18 +1,21 @@
 import XCTest
 
 /// Three production fallback journeys. No Foundation Models result is injected or claimed.
+@MainActor
 final class AIRecurringReminderTests: XCTestCase {
     private var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.fixtureArguments("ai-context-ui.json")
-        app.launch()
-        app.openSidebar()
-        let newChat = app.buttons["New chat"]
-        XCTAssertTrue(newChat.waitForExistence(timeout: 5))
-        newChat.tap()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.fixtureArguments("ai-context-ui.json")
+            app.launch()
+            app.openSidebar()
+            let newChat = app.buttons["New chat"]
+            XCTAssertTrue(newChat.waitForExistence(timeout: 5))
+            newChat.tap()
+        }
     }
 
     func testDirectChineseSundayPreparesReminderWithoutWriting() {

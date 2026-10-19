@@ -1,12 +1,15 @@
 import XCTest
 
 /// Settings → Activity data (what is recorded, pause, export, clear) and the Activity screen's paging on the Activity store.
+@MainActor
 final class ActivityDataTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+        }
     }
 
     private func launch(_ extra: [String] = []) {

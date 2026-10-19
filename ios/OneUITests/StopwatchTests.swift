@@ -2,6 +2,7 @@ import XCTest
 
 /// The Stopwatch section of the Clock tab: the analog dial (default) and the big digital face, the dots between the
 /// buttons, Start / Lap / Stop / Reset, and the lap list.
+@MainActor
 final class StopwatchTests: XCTestCase {
     private var app: XCUIApplication!
 

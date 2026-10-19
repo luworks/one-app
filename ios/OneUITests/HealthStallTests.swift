@@ -3,6 +3,7 @@ import XCTest
 /// Add Metric must never leave the Health sheet on a spinner, even when Apple Health stalls. The mock source can hang on
 /// purpose: `-uiTestingHealthStall <ids>` (those metrics' queries never answer), `-uiTestingHealthAuthStall <ids>`
 /// (asking for access to them never answers: Apple's permission sheet that cannot show). Each call is cut off after 8 s.
+@MainActor
 final class HealthStallTests: XCTestCase {
     private func launch(_ extra: [String]) -> XCUIApplication {
         continueAfterFailure = false

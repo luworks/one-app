@@ -3,21 +3,24 @@ import XCTest
 /// The Reminders tab's home: compact smart-list pills, My Lists and Add List, with no Edit button. Editing works as
 /// everywhere else: press and hold a list for Rename / Color & Icon / Pin / Delete, press, hold and drag to reorder,
 /// swipe from the right for Delete / Info / Pin. Runs against the test dataset (lists: Reminders, Home, Work).
+@MainActor
 final class RemindersListsTests: XCTestCase {
     var app: XCUIApplication!
     private var reorderStore: String?
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments
-        if name.contains("testLongPressDragReordersLists") {
-            let store = "list-reorder-\(UUID().uuidString)"
-            reorderStore = store
-            app.launchArguments += ["-uiTestingStore", store]
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments
+            if name.contains("testLongPressDragReordersLists") {
+                let store = "list-reorder-\(UUID().uuidString)"
+                reorderStore = store
+                app.launchArguments += ["-uiTestingStore", store]
+            }
+            app.launch()
+            app.buttons["Reminders"].firstMatch.tap()
         }
-        app.launch()
-        app.buttons["Reminders"].firstMatch.tap()
     }
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }

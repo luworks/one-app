@@ -3,12 +3,15 @@ import XCTest
 /// The Ask page's suggestion chips are guesses made from the day's real data, not a fixed list: two or three chips, different
 /// at different times, and a tap sends the chip's text like typed text. Runs on the test dataset with the clock pinned
 /// (`-uiTestingNow`), and without a model (the simulator has none), so these are the rule-based chips.
+@MainActor
 final class AskSuggestionTests: XCTestCase {
     var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+        }
     }
 
     private func launch(at time: String) {

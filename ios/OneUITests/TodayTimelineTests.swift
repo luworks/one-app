@@ -3,15 +3,18 @@ import XCTest
 /// Today is one timeline: reminders due at a time sit at that time, reminders due today with no time get a
 /// suggested free time (saved only on Plan), and overdue reminders stay in the overdue line.
 /// The clock is pinned to 09:41 so the suggestions are the same at any time of day (see tests/fixtures/today-dataset.json).
+@MainActor
 final class TodayTimelineTests: XCTestCase {
     private var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "09:41"]
-        app.launch()
-        XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "09:41"]
+            app.launch()
+            XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+        }
     }
 
     private func element(_ label: String) -> XCUIElement {

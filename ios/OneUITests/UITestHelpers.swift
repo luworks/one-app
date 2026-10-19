@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 extension XCUIApplication {
     /// There is no avatar button: the sidebar opens with a swipe from the left edge, like in ChatGPT or Claude.
     func openSidebar() {
@@ -168,6 +169,7 @@ private extension CGRect {
     }
 }
 
+@MainActor
 extension XCUIElement {
     /// Check geometry before isHittable: XCTest can throw while deriving an off-screen element's activation point.
     func isFullyVisible(in viewport: CGRect) -> Bool {
@@ -207,6 +209,7 @@ enum TestData {
     static var launchArguments: [String] { fixtureArguments("today-dataset.json") }
 }
 
+@MainActor
 extension XCTestCase {
     /// Turns on Apple Calendar in Settings (sidebar > Settings), answering the access prompt the first time. Does nothing
     /// when it is already on. Leaves the sidebar closed.

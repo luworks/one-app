@@ -1,15 +1,18 @@
 import XCTest
 
 /// Exercises the production fallback on the simulator with -uiTesting, without a scripted model response.
+@MainActor
 final class AIContextJourneyTests: XCTestCase {
     private var app: XCUIApplication!
     private let storedThread = "Dinner alarm context"
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.fixtureArguments("ai-context-ui.json")
-        app.launch()
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.fixtureArguments("ai-context-ui.json")
+            app.launch()
+        }
     }
 
     func testChineseScreenshotSequencePreservesDinnerAlarmContext() {

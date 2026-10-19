@@ -2,6 +2,7 @@ import XCTest
 
 /// The test dataset (tests/fixtures/today-dataset.json): the same data every launch, to try every screen in a simulator.
 /// It loads with -uiTesting only, so Apple Calendar and Reminders sync stay off and the simulator's own calendar can't change it.
+@MainActor
 final class DevDataTests: XCTestCase {
     func testDatasetFillsChatsAlarmsAndReminders() {
         continueAfterFailure = false

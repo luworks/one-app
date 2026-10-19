@@ -2,13 +2,16 @@ import XCTest
 
 /// Run identically on frozen source and candidate with Debug + SWIFT_OPTIMIZATION_LEVEL=-O.
 /// XCTest drives journeys; only the app's monotonic samples measure operation latency.
+@MainActor
 final class PerformanceClimbTests: XCTestCase {
     private var app: XCUIApplication!
 
-    override func setUp() {
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = TestData.launchArguments + ["-performanceTrace", "-uiTestingNow", "09:41"]
+    override func setUp() async throws {
+        await MainActor.run {
+            continueAfterFailure = false
+            app = XCUIApplication()
+            app.launchArguments = TestData.launchArguments + ["-performanceTrace", "-uiTestingNow", "09:41"]
+        }
     }
 
     private func element(_ id: String) -> XCUIElement {
@@ -16,7 +19,7 @@ final class PerformanceClimbTests: XCTestCase {
     }
 
     private func reports() -> Set<String> {
-        Set(app.staticTexts.matching(identifier: "performance.trace").allElementsBoundByIndex.map(\.label))
+        Set(app.staticTexts.matching(identifier: "performance.trace").allElementsBoundByIndex.map({ $0.label }))
     }
 
     @discardableResult

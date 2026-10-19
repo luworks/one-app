@@ -2,6 +2,7 @@ import XCTest
 
 /// Clock's sections inside the Clock tab: the switcher, World Clock (add / delete a city) and the Stopwatch.
 /// Set TEST_RUNNER_CLOCK_SHOTS=<folder> to save light and dark screenshots of each section (`testScreenshots`).
+@MainActor
 final class ClockTests: XCTestCase {
     var app: XCUIApplication!
 
@@ -130,7 +131,7 @@ final class ClockTests: XCTestCase {
         XCTAssertTrue(pill.exists, "the pill is always there")
         XCTAssertEqual(pill.label, "NOW")
         XCTAssertFalse(app.buttons["worldClock.overlap"].exists, "no Overlap capsule")
-        let before = clocks.map(\.label)
+        let before = clocks.map({ $0.label })
 
         // Start inside the card, clear of the sidebar's reserved 44pt edge: every city advances into the future.
         tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5))
@@ -144,7 +145,7 @@ final class ClockTests: XCTestCase {
         XCTAssertTrue(pill.isFullyVisible(in: app.frame))
         pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertEqual(pill.label, "NOW", "tapping the pill goes back to NOW")
-        XCTAssertEqual(clocks.map(\.label), before)
+        XCTAssertEqual(clocks.map({ $0.label }), before)
 
         // Drag left from Now: every city moves into the past.
         tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
@@ -156,7 +157,7 @@ final class ClockTests: XCTestCase {
         XCTAssertTrue(pill.isFullyVisible(in: app.frame))
         pill.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertEqual(pill.label, "NOW")
-        XCTAssertEqual(clocks.map(\.label), before)
+        XCTAssertEqual(clocks.map({ $0.label }), before)
     }
 
     /// The graph is one icon next to the pill (no capsule): the cards flatten, the sentence appears, the icon swaps back.
