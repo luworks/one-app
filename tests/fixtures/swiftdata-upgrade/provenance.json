@@ -1,0 +1,63 @@
+{
+  "baseline": "e022a7a46a4aa0d0a604886c139a7dd2c050fed1",
+  "copyValidation": {
+    "integrityCheck": "ok (immutable read-only main database)",
+    "openHandles": "lsof found none before copy",
+    "reason": "Finished writer and verifier exited; empty WAL contains no transactions, SHM is transient coordination only. Main database bytes copied unchanged; canonical source was never checkpointed or rewritten.",
+    "tableCounts": {
+      "ZAIGRANT": 2,
+      "ZCHATTHREAD": 1,
+      "ZHABIT": 1,
+      "ZLEDGERENTRY": 2,
+      "ZONEALARM": 2,
+      "ZONEEVENT": 2,
+      "ZONELIST": 2,
+      "ZONETASK": 3,
+      "ZSHAREIMPORTRECEIPT": 1,
+      "Z_METADATA": 1,
+      "Z_MODELCACHE": 1,
+      "Z_PRIMARYKEY": 12
+    },
+    "walBytes": 0
+  },
+  "driver": {
+    "bytes": 14004,
+    "sha256": "22504d1adb594026c78a4250fae8189cc3d0d053116713f7915b85e2f1828529"
+  },
+  "files": {
+    "LICENSE": {
+      "bytes": 1064,
+      "sha256": "8481f29447b82962139ece59f47dee56284f9a403f28ae5137b2eb2a8f707680"
+    },
+    "expected.json": {
+      "bytes": 13963,
+      "sha256": "81c687e1bb70aed37f93bd85f809799db5ad37c87a647ecf99da317629c5b64a"
+    },
+    "old.store": {
+      "bytes": 122880,
+      "sha256": "c7ff329418508d67f1c7acd6d4eac44c45daec80a39282433cf049d2eeba751b"
+    }
+  },
+  "license": "MIT; see LICENSE",
+  "module": "One",
+  "omittedSidecars": {
+    "old.store-shm": {
+      "bytes": 32768,
+      "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+    },
+    "old.store-wal": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "seed": "tests/swiftdata-migration/OldWriter.swift; synthetic only; fixed epoch 1792281600 and UUID suffixes; generated persistent IDs retained",
+  "sourceManifest": {
+    "bytes": 8877,
+    "sha256": "af2a50a5155a2fc57182171f75df905ae7c5cc09857895f909095ef124910548"
+  },
+  "sourceResult": {
+    "bytes": 11811,
+    "sha256": "eb5b1340713336014f71115730ad4a2911443141974aefb9528781a6a196ed19"
+  },
+  "sourceRun": "/Users/yuanlu/code/one-app/tests/results/reconstruction/swiftdata-old/baseline-e022a7a-05"
+}
