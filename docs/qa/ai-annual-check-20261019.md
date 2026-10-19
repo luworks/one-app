@@ -71,3 +71,53 @@ on every other simulator host.
 
 Focused command receipts and complete UI results are recorded by `./dev` in the
 primary results journal. No full suite or remote CI result is inferred.
+
+## Executed native gate
+
+`./dev test ui --only TodayUITests/AIAnnualCheckTests/testExactBookingMonthRequiresAddAndSupportsUndo`
+passed one actual xcresult leaf in
+`tests/results/runs/today-qa-20261019-105046-1b1dcb6f/`. It verifies the original
+sentence, task kind, anchored month, no date, no Added/Undo before Add, the created
+task's title/notes and disabled Deadline, then Undo and Add again availability.
+The runner shut down its simulator successfully. The other two new UI methods
+were not executed; bilingual and negative logic are checked separately.
+
+Earlier completed evidence remains intact:
+
+- `today-qa-20261019-104141-7dd176e9`: zero executions, correctly failed closed.
+  The new test file was not in the previously generated project; `./dev generate`
+  registered it. No runner or manifest was changed.
+- `today-qa-20261019-104552-a890e74f`: TextView-only composer lookup failed before
+  input. The test now uses the same TextField/TextView fallback as existing AI tests.
+- `today-qa-20261019-104819-6b889dac`: Add/Open and saved title/Deadline passed;
+  the populated Notes field lookup failed with a recorded native AX type mismatch
+  (`SwiftUI.VerticalTextView`, legacy TextField versus modern TextView). Matching
+  its actual saved original-request value fixed the selector without weakening
+  the notes assertion. Only the representative method was rerun.
+
+Production changes are in commit `4479a4399d95633a0fedbae4b1ca0e587c45fb4c`.
+Live captures were made from its working-tree implementation before commit;
+later changes only repair test selectors and update evidence. PR:
+https://github.com/luworks/one-app/pull/105.
+
+Final focused logic command passed 11 tests, zero missing executions:
+
+```sh
+./dev test unit \
+  --only TodayTests/ChatRoutingTests/testMonthOnlyBookingRequestPreservesActionWithoutInventingAppointment \
+  --only TodayTests/ChatRoutingTests/testMonthContextDoesNotCreateFromReportsQuestionsOrRefusals \
+  --only TodayTests/CaptureEvalTests \
+  --only TodayTests/CaptureTitleCleanupTests
+```
+
+Receipt: `tests/results/devtools/logs/fc46e136068c46f989df82291a178d99.report.json`.
+This includes an injected title-only generation check for retaining the anchored
+month; it is logic evidence, distinct from actual model generation screenshots.
+The earlier English booking-title failure remains in
+`84e6d5b9ec55484b8c166a500cb0655b.log`; preserving the booking verb repaired it.
+The two new route/calendar tests also passed in the focused
+`cd505cf1a97f46ebb8d57dd1691aa51b.report.json` run before the final broader check.
+
+At handoff both named simulators are Shutdown and live `./dev inventory` reports
+the host-heavy and owned derived-data locks unheld. No further UI/build work is
+scheduled by this lane.

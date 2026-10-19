@@ -53,7 +53,11 @@ final class AIAnnualCheckTests: XCTestCase {
     // The compact editor may lead to the existing full form after the editor branch integrates.
     if app.buttons["task.more"].exists { app.buttons["task.more"].tap() }
     XCTAssertEqual(app.switches["Deadline"].value as? String, "0")
-    let notes = app.textFields["Notes"].exists ? app.textFields["Notes"] : app.textViews["Notes"]
+    // SwiftUI's populated vertical field exposes inconsistent TextField/TextView types.
+    // Match the original request in its actual value rather than the empty placeholder.
+    let notes = app.descendants(matching: .any).matching(
+      NSPredicate(format: "value CONTAINS %@", "明年8月 预约医生做 annual check")
+    ).firstMatch
     XCTAssertTrue((notes.value as? String ?? "").contains("明年8月 预约医生做 annual check"))
     app.buttons["Cancel"].tap()
     app.buttons["capture-undo"].tap()
