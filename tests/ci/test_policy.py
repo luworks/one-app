@@ -150,19 +150,29 @@ class ReportTests(unittest.TestCase):
             with self.subTest(missing=key), self.assertRaises(ValueError):
                 policy.validate_report(report, 'abc', 'business')
 
+    def closed_receipt(self, source, files, bundles):
+        report = dict(self.report(), sha='c' * 40)
+        report['artifact_provenance'] = {
+            'version': 1, 'owner': 'today-ci', 'run_id': source.name,
+            'sha': report['sha'], 'lane': 'business', 'closed': True,
+            'synthetic': True, 'secrets_available': False, 'bundles': bundles,
+            'files': [{'path': path, **runner.artifact_digest((source / path).read_bytes())}
+                      for path in files]}
+        (source / 'report.json').write_text(json.dumps(report))
+
     def test_sanitized_sha_linked_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:
             source, dest = Path(directory) / 'raw', Path(directory) / 'staged'
             source.mkdir()
-            (source / 'report.json').write_text(json.dumps(self.report()))
             (source / 'command.log').write_text('token=secretvalue /Users/example/data ghp_example')
             (source / 'private.sqlite').write_text('excluded')
             (source / 'crash.crash').write_text('synthetic crash')
             (source / 'test.xcresult').mkdir()
             (source / 'test.xcresult/data').write_bytes(b'synthetic bundle')
-            runner.stage(source, dest, 'abc', 'business')
+            self.closed_receipt(source, ['command.log', 'crash.crash', 'test.xcresult/data'], ['test.xcresult'])
+            runner.stage(source, dest, 'c' * 40, 'business')
             manifest = json.loads((dest / 'manifest.json').read_text())
-            self.assertEqual(manifest['sha'], 'abc')
+            self.assertEqual(manifest['sha'], 'c' * 40)
             self.assertEqual(len(manifest['files']), 4)
             self.assertFalse((dest / 'private.sqlite').exists())
             self.assertNotIn('secretvalue', (dest / 'command.log').read_text())
@@ -172,10 +182,13 @@ class ReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'raw'
             source.mkdir()
-            (source / 'report.json').write_text(json.dumps(self.report()))
+            self.closed_receipt(source, [], [])
             (source / 'leak.log').symlink_to(source / 'report.json')
+            report = json.loads((source / 'report.json').read_text())
+            report['artifact_provenance']['files'].append({'path': 'leak.log', 'bytes': 0, 'sha256': '0' * 64})
+            (source / 'report.json').write_text(json.dumps(report))
             with self.assertRaisesRegex(ValueError, 'symlink'):
-                runner.stage(source, Path(directory) / 'dest', 'abc', 'business')
+                runner.stage(source, Path(directory) / 'dest', 'c' * 40, 'business')
 
     def test_private_artifacts_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

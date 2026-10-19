@@ -2,7 +2,6 @@
 import contextlib
 import io
 import shutil
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -28,7 +27,6 @@ CORE_EXTRA = (
     'SinglePresentationTests/testDraggingATaskDoesNotMakeAnEvent',
     'ShareImportTests/testPersistedShareIsVisibleAndReplayDoesNotDuplicate',
 )
-TEXT_ARTIFACTS = {'.log', '.txt', '.json', '.jsonl', '.crash', '.ips'}
 
 
 def selection_data(path):
@@ -59,35 +57,9 @@ def source_state(root, sha):
 
 
 def safe_artifacts(source, destination, *, sha, lane):
-    """Copy only explicitly supplied synthetic runner evidence, never a workspace."""
-    source, destination = Path(source), Path(destination)
-    receipt = json.loads((source / 'report.json').read_text())
-    if receipt.get('synthetic') is not True or receipt.get('sha') != sha or receipt.get('lane') != lane:
-        raise ValueError('Artifact provenance mismatch')
-    if source.is_symlink() or destination.exists() or destination.resolve().is_relative_to(source.resolve()):
-        raise ValueError('Unsafe artifact destination/source')
-    paths = sorted(source.rglob('*'))
-    if any(p.is_symlink() for p in paths):
-        raise ValueError('Symlink artifact rejected')
-    destination.mkdir(parents=True)
-    files = []
-    redact = Redactor()
-    for path in paths:
-        rel = path.relative_to(source)
-        in_bundle = any(p.endswith('.xcresult') for p in rel.parts)
-        if not path.is_file() or (not in_bundle and any(p.startswith('.') for p in rel.parts)):
-            continue
-        if path.suffix not in TEXT_ARTIFACTS | {'.png'} and not any(p.endswith('.xcresult') for p in rel.parts):
-            continue
-        data = path.read_bytes()
-        if path.suffix in TEXT_ARTIFACTS and not in_bundle:
-            data = redact(data.decode('utf-8')).encode()
-            data = re.sub(rb'/Users/[^/\s]+', b'/Users/REDACTED', data)
-        target = destination / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
-        files.append({'path': rel.as_posix(), 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
-    atomic_json(destination / 'manifest.json', {'sha': sha, 'lane': lane, 'synthetic': True, 'files': files})
+    """Use the shared closed-receipt publisher; never discover workspace files."""
+    from scripts.ci.run import stage
+    stage(source, destination, sha, lane)
 
 
 def test_plan(root, lane):
@@ -169,6 +141,8 @@ def _test_results(root, lane, output, run, report):
             argv += ['--only', value]
         argv += ['--simulator-name', 'Today-Dev-' + derived_data(root).name[:8],
                  '--derived-data', str(derived_data(root)), '--output', str(output / 'runner')]
+    if kind == 'ui':
+        report['artifact_writers_closed'] = False
     result = run(root, argv, timeout=600, heavy=True)
     raw = Path(result.log).read_text()
     (output / 'command.log').write_text(Redactor()(raw))
@@ -188,6 +162,9 @@ def _test_results(root, lane, output, run, report):
         if summary.get('status') != 'passed' or summary.get('journal_errors') or summary.get('shutdown_error'):
             report['errors'].append('runner_incomplete')
         stages = summary.get('stages', {})
+        report['artifact_writers_closed'] = (
+            result.reason == 'exited' and isinstance(stages, dict)
+            and stages.get('shutdown') == 0 and not summary.get('shutdown_error'))
         if not isinstance(stages, dict) or stages.get('ui') != 0 or stages.get('shutdown') != 0 or any(
                 value != 0 for value in stages.values()):
             report['errors'].append('runner_stage_failure')
@@ -228,8 +205,34 @@ def _checks(root, lane, output, run, report):
                 report['errors'].append('missing_product:' + relative)
             else:
                 report['executed'] += 1
-        if lane == 'release':
-            report['errors'].append('release_exclusion_authority_unavailable: actual Release graph, resources and artifact inspection API required')
+        if lane == 'release' and not report['missing']:
+            from scripts.release import graph
+
+            graph_logs = output / 'release-graph'
+            graph_logs.mkdir()
+
+            def graph_run(argv, cwd):
+                result = run(cwd, argv, timeout=60, heavy=False)
+                raw = Path(result.log).read_text()
+                (graph_logs / (str(len(list(graph_logs.iterdir()))) + '.log')).write_text(Redactor()(raw))
+                if result.returncode or result.reason != 'exited':
+                    raise ValueError('Release graph command failed')
+                return raw
+
+            def require(ok, code):
+                if not ok:
+                    raise ValueError(code)
+
+            atomic_json(output / 'release-graph.json', graph.check(root, graph_run, require))
+            from scripts.release import release
+            try:
+                release.validate_resources(root, products)
+            except release.Blocked as error:
+                raise ValueError('Release artifact resources rejected: ' + str(error)) from None
+            # The archive validator requires iPhoneOS archive structure, dSYMs,
+            # resources and executable-UUID-bound maps. Simulator product presence
+            # cannot satisfy it, and this lane does not authorize an archive.
+            report['errors'].append('release_exclusion_authority_unavailable: actual Release archive resources and UUID-bound link maps required')
         return
     # Keep pinned tool resolution, exact flags and path scope in commands.py.
     # Its execute() prints JSON receipts carrying the real retained log paths.
@@ -289,6 +292,10 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
             raise ValueError('Unknown CI lane')
         if synthetic is not True or no_distribute is not True:
             raise ValueError('CI requires synthetic=True and no_distribute=True')
+        from scripts.ci.run import producer_boundary
+        producer_boundary(sha, lane, output)
+        if output.resolve().is_relative_to(root):
+            raise ValueError('CI output must be outside the source workspace')
         selected = selection_data(selection)
         atomic_json(output / 'accepted-selection.json', selected)
         before = source_state(root, sha)
@@ -319,7 +326,19 @@ def _main(root, lane, *, selection, output, sha, synthetic, no_distribute, runne
         if report['status'] != 'passed' and not report['failed'] and not report['cancelled'] and not report['missing']:
             report['failed'] = 1
         report['errors'] = list(dict.fromkeys(report['errors']))
-        atomic_json(output / 'report.json', report)
+        try:
+            from scripts.ci.run import close_producer
+            if report.get('artifact_writers_closed') is False:
+                raise ValueError('runner writers or owned simulator shutdown not closed')
+            close_producer(output, report, roots=(
+                'selection.json', 'accepted-selection.json', 'command.log',
+                'test-report.json', 'native', 'runner', 'release-graph.json', 'release-graph'))
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            report.pop('artifact_provenance', None)
+            report['status'] = 'failed'
+            report['failed'] = max(1, report['failed'])
+            report['errors'].append('producer_close_rejected:' + type(error).__name__)
+            atomic_json(output / 'report.json', report)
     return 0 if report['status'] == 'passed' else 1
 
 

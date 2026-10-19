@@ -53,6 +53,11 @@ class AdapterTests(unittest.TestCase):
         self.selection.write_text(json.dumps({'version': 1, 'mode': 'wide', 'reason': 'synthetic regression',
                                              'changed': [], 'targets': [], 'all_targets': True, 'snapshots': True}))
         self.calls = []
+        # These host-injected execution fixtures exercise result authority. The
+        # production workflow boundary is covered without mocks in test_producer.
+        boundary = patch('scripts.ci.run.producer_boundary')
+        boundary.start()
+        self.addCleanup(boundary.stop)
 
     def invoke(self, *, runner=None, lane='business', **kwargs):
         options = dict(selection=self.selection, output=self.output, sha=self.sha, synthetic=True, no_distribute=True)
@@ -196,6 +201,7 @@ class AdapterTests(unittest.TestCase):
             store = directory / (scheme + '.xcresult') / 'Data'
             store.mkdir(parents=True)
             (store / 'binary').write_bytes(b'\x00opaque\xff')
+            (store.parent / '.metadata.json').write_bytes(b'{"path":"/Users/example/synthetic"}')
         tree = [{'nodeType': 'Test Case', 'nodeIdentifier': test, 'result': status}
                 for test in expected for status in statuses]
         native = xcode_tests.completed_report(adapter.contract, expected, kind, tree, 0, diagnostic)
@@ -208,6 +214,7 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(group, kind)
             self.assertEqual(kwargs, {'timeout': 600})
             print(json.dumps({'report': str(path), 'status': native['status']}))
+            (directory / 'shutdown.log').write_text('owned simulator shutdown finished')
             return code
         # Result storage is ignored by real repositories, including hosted CI.
         with patch.object(adapter, 'source_state', return_value='fixed'), patch.object(
@@ -226,6 +233,9 @@ class AdapterTests(unittest.TestCase):
                 self.assertEqual(self.report()['executed'], 1)
                 copied = next((self.output / 'native').glob('*.xcresult/Data/binary'))
                 self.assertEqual(copied.read_bytes(), b'\x00opaque\xff')
+                entries = {entry['path'] for entry in self.report()['artifact_provenance']['files']}
+                self.assertIn('native/shutdown.log', entries)
+                self.assertIn('native/' + copied.parent.parent.name + '/.metadata.json', entries)
 
     def test_native_failure_skip_zero_unknown_and_first_failure_fail_closed(self):
         for index, statuses in enumerate((('Failed', 'Passed'), ('Skipped',), (), ('Unknown',))):
@@ -259,7 +269,6 @@ class AdapterTests(unittest.TestCase):
     def test_bundle_staging_preserves_bytes_and_indexes_hashes(self):
         self.assertEqual(self.native(), 0)
         bundle = next((self.output / 'native').glob('*.xcresult'))
-        (bundle / '.metadata.json').write_bytes(b'{"path":"/Users/example/synthetic"}')
         target = Path(self.temporary.name) / 'staged'
         adapter.safe_artifacts(self.output, target, sha=self.sha, lane='integration')
         original = bundle / '.metadata.json'
@@ -299,10 +308,36 @@ class AdapterTests(unittest.TestCase):
                 path = products / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b'mocked executable')
-            self.assertEqual(self.invoke(lane='release'), 1)
+            with patch('scripts.release.graph.check', return_value={'model_module': 'One'}) as graph_check:
+                self.assertEqual(self.invoke(lane='release'), 1)
+            graph_check.assert_called_once()
         self.assertEqual(self.report()['executed'], 3)
         self.assertIn('Release', self.calls[0][0])
-        self.assertIn('release_exclusion_authority_unavailable', ' '.join(self.report()['errors']))
+        self.assertIn('Release artifact resources rejected: required_privacy_manifest_missing', ' '.join(self.report()['errors']))
+
+    def test_release_source_and_resources_cannot_replace_actual_archive_link_maps(self):
+        import plistlib
+        dd = Path(self.temporary.name) / 'dd'
+        products = dd / 'Build/Products/Release-iphonesimulator/One.app'
+        privacy = plistlib.dumps({'NSPrivacyTracking': False})
+        (self.root / 'LICENSE').write_text('synthetic license')
+        (self.root / 'ios/PrivacyInfo.xcprivacy').write_bytes(privacy)
+        for relative in ('One', 'PlugIns/TodayWidgets.appex/TodayWidgets', 'PlugIns/ShareExtension.appex/ShareExtension'):
+            path = products / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'synthetic executable')
+        (products / 'LICENSE').write_text('synthetic license')
+        (products / 'PrivacyInfo.xcprivacy').write_bytes(privacy)
+        (products / 'ThirdPartyNotices.txt').write_text(
+            'GeoNames https://www.geonames.org https://creativecommons.org/licenses/by/4.0/ transform')
+        with patch.object(adapter, 'derived_data', return_value=dd), patch.object(
+                adapter, 'source_state', return_value='fixed'), patch(
+                'scripts.release.graph.check', return_value={'model_module': 'One'}):
+            self.assertEqual(self.invoke(lane='release'), 1)
+        self.assertIn('release_exclusion_authority_unavailable', str(self.report()['errors']))
+        self.assertTrue((self.output / 'release-graph.json').is_file())
+        self.assertIn('protected-release', adapter.UNSUPPORTED)
+        self.assertFalse(any('archive' in argv for argv, _ in self.calls))
 
     def test_existing_report_never_overwritten(self):
         self.output.mkdir()
@@ -341,10 +376,13 @@ class AdapterTests(unittest.TestCase):
         target = Path(self.temporary.name) / 'artifacts'
         adapter.safe_artifacts(self.output, target, sha=self.sha, lane='business')
         self.assertFalse((target / 'private.sqlite').exists())
-        self.assertNotIn('secretvalue', (target / 'secret.log').read_text())
-        self.assertNotIn('/Users/example', (target / 'secret.log').read_text())
+        self.assertFalse((target / 'secret.log').exists())
+        self.assertIn('command.log', [e['path'] for e in json.loads((target / 'manifest.json').read_text())['files']])
         (self.output / 'leak.log').symlink_to(self.output / 'report.json')
-        with self.assertRaisesRegex(ValueError, 'Symlink'):
+        report = self.report()
+        report['artifact_provenance']['files'].append({'path': 'leak.log', 'bytes': 0, 'sha256': '0' * 64})
+        (self.output / 'report.json').write_text(json.dumps(report))
+        with self.assertRaisesRegex(ValueError, 'symlink'):
             adapter.safe_artifacts(self.output, target.with_name('other'), sha=self.sha, lane='business')
         with self.assertRaisesRegex(ValueError, 'provenance'):
             adapter.safe_artifacts(self.output, target.with_name('wrong'), sha='wrong', lane='business')

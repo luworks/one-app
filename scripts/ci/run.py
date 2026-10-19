@@ -8,7 +8,10 @@ import re
 import subprocess
 import sys
 
-from policy import LANES, validate_report
+try:
+    from .policy import LANES, validate_report
+except ImportError:  # Direct workflow entry point.
+    from policy import LANES, validate_report
 
 
 def sanitize(text):
@@ -45,6 +48,122 @@ def bundle_secret(data):
         rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|'
         rb"(?:token|password|passwd|secret|authorization|api[_-]?key|credential)[\"']?\s*[:=]\s*[^\s]+|"
         rb'Bearer\s+[^\s]+)', data) is not None
+
+
+def secret_candidate(data):
+    # Redacted logs are expected; placeholders carry no credential. Everything
+    # else matching the blocking scanner rejects closure without showing bytes.
+    data = re.sub(rb"(?i)(?:token|password|passwd|secret|authorization|api[_-]?key|credential)"
+                  rb"[\"']?\s*[:=]\s*[\"']?\[REDACTED\]", b'', data)
+    data = re.sub(rb'(?i)Bearer\s+\[REDACTED\]', b'', data)
+    return bundle_secret(data)
+
+
+def producer_boundary(sha, lane, output, env=None):
+    """Trust the fixed no-secrets workflow, never a caller's synthetic flag.
+
+    GitHub context identifies the configured boundary; it is not authentication.
+    The workflow owner must keep secrets unavailable to checkout/test code.
+    """
+    env = os.environ if env is None else env
+    if any(p.is_symlink() for p in [Path(output), *Path(output).parents]):
+        raise ValueError('symlink producer output rejected')
+    if any(value and (re.search(r'secret|token|password|passwd|api[_-]?key|authorization|credential', key, re.I)
+                      or bundle_secret(value.encode())) for key, value in env.items()):
+        raise ValueError('secret-bearing environment rejected')
+    if (env.get('GITHUB_ACTIONS') != 'true' or env.get('GITHUB_WORKFLOW') != 'Today CI'
+            or env.get('TODAY_CI_SYNTHETIC') != '1'
+            or env.get('GITHUB_EVENT_NAME') not in ('pull_request', 'merge_group', 'push', 'workflow_dispatch')
+            or env.get('GITHUB_SHA') != sha or not re.fullmatch(r'[0-9a-f]{40}', sha)
+            or lane not in LANES
+            or not env.get('RUNNER_TEMP')
+            or Path(output).absolute() != Path(env['RUNNER_TEMP']).absolute() / ('today-' + lane)):
+        raise ValueError('trusted synthetic workflow boundary required')
+
+
+def close_producer(output, report, *, roots):
+    """Seal explicit generated roots only after their synchronous writers return.
+
+    The adapter owns a fresh output directory; roots never come from CLI input.
+    Bundles are immutable. External logs are redacted before their final hashes.
+    """
+    from scripts.devtools.core import atomic_json
+    output = Path(output)
+    producer_boundary(report['sha'], report['lane'], output)
+    if output.is_symlink() or report.get('synthetic') is not True:
+        raise ValueError('unsafe producer output')
+    files, bundles = [], []
+    for relative in roots:
+        path = artifact_path(output, relative)
+        if not path.exists():
+            continue
+        paths = [path]
+        if path.is_dir():
+            paths += sorted(path.rglob('*'))
+        for candidate in paths:
+            rel = candidate.relative_to(output).as_posix()
+            artifact_path(output, rel)
+            if candidate.is_dir():
+                if candidate.suffix == '.xcresult':
+                    bundles.append(rel)
+                continue
+            if not candidate.is_file():
+                raise ValueError('unsupported producer entry')
+            in_bundle = any(part.endswith('.xcresult') for part in candidate.relative_to(output).parts)
+            if not in_bundle and (candidate.suffix not in ('.log', '.txt', '.json', '.jsonl', '.crash', '.ips', '.png')
+                                  or any(part.startswith('.') for part in Path(rel).parts)):
+                raise ValueError('unexpected generated artifact')
+            data = candidate.read_bytes()
+            # Reject candidates before redaction; do not manufacture a no-secret
+            # receipt from contaminated runner evidence.
+            if bundle_secret(data) if in_bundle else secret_candidate(data):
+                raise ValueError('blocking secret candidate in producer evidence')
+            if not in_bundle and candidate.suffix != '.png':
+                data = sanitize(data.decode('utf-8')).encode()
+                candidate.write_bytes(data)
+            files.append({'path': rel, **artifact_digest(data)})
+    if len({entry['path'] for entry in files}) != len(files):
+        raise ValueError('overlapping producer roots')
+    for bundle in bundles:
+        if not any(entry['path'].startswith(bundle + '/') for entry in files):
+            raise ValueError('empty producer bundle')
+    report['artifact_provenance'] = {
+        'version': 1, 'owner': 'today-ci', 'run_id': output.name,
+        'sha': report['sha'], 'lane': report['lane'], 'closed': True,
+        'synthetic': True, 'secrets_available': False,
+        'bundles': sorted(bundles), 'files': sorted(files, key=lambda entry: entry['path'])}
+    atomic_json(output / 'report.json', report)
+
+
+def close_wrapper(output, sha, lane, text):
+    """Append only the wrapper's closed log without rehashing producer evidence."""
+    from scripts.devtools.core import atomic_json
+    output = Path(output)
+    producer_boundary(sha, lane, output)
+    data = sanitize(text).encode()
+    path = output / 'wrapper-command.log'
+    with path.open('xb') as stream:
+        stream.write(data)
+    if secret_candidate(text.encode()):
+        raise ValueError('blocking secret candidate in wrapper output')
+    report = json.loads(artifact_path(output, 'report.json').read_bytes())
+    if not isinstance(report, dict):
+        raise ValueError('invalid producer report')
+    receipt = report.get('artifact_provenance', {})
+    if (not isinstance(receipt, dict) or receipt.get('version') != 1
+            or report.get('synthetic') is not True or report.get('sha') != sha or report.get('lane') != lane
+            or receipt.get('owner') != 'today-ci' or receipt.get('run_id') != output.name
+            or receipt.get('sha') != sha or receipt.get('lane') != lane
+            or receipt.get('closed') is not True or receipt.get('synthetic') is not True
+            or receipt.get('secrets_available') is not False):
+        raise ValueError('closed producer receipt required')
+    for entry in receipt['files']:
+        if artifact_digest(artifact_path(output, entry['path']).read_bytes()) != {
+                key: entry[key] for key in ('bytes', 'sha256')}:
+            raise ValueError('closed producer bytes changed before wrapper exit')
+    receipt['files'].append({'path': path.name, **artifact_digest(data)})
+    atomic_json(output / 'report.json', report)
+    return report
 
 
 def stage(source, destination, sha, lane):
@@ -160,6 +279,7 @@ def stage(source, destination, sha, lane):
 
 
 def main():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     lane = sys.argv[1]
     if lane not in LANES:
         raise ValueError('unknown lane')
@@ -167,25 +287,24 @@ def main():
     if sha != os.environ['GITHUB_SHA']:
         raise ValueError('checkout does not match integrated GITHUB_SHA')
     output = Path(os.environ['RUNNER_TEMP']) / ('today-' + lane)
+    producer_boundary(sha, lane, output)
     output.mkdir(exist_ok=False)
     selection = output / 'selection.json'
     subprocess.run([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)], check=True)
-    # Integration owns this future adapter. Unknown commands must fail, not become a no-op.
+    # The adapter owns execution and its initial closed receipt.
     command = ['./dev', 'ci', lane, '--selection', str(selection), '--output', str(output),
                '--sha', sha, '--synthetic', '--no-distribute']
     completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    log = sanitize(completed.stdout)
-    print(log)
-    (output / 'command.log').write_text(log)
     try:
-        report = json.loads((output / 'report.json').read_text())
+        report = close_wrapper(output, sha, lane, completed.stdout)
+        print(sanitize(completed.stdout))
         # A stopped failed run may still have useful synthetic diffs/crashes.
         stage(output, Path(os.environ['RUNNER_TEMP']) / ('today-artifacts-' + lane), sha, lane)
         validate_report(report, sha, lane)
-    except (OSError, ValueError) as error:
-        print('::error::CI adapter report rejected: ' + str(error) +
-              '. Integration must implement ./dev ci and emit nonzero authoritative results; see docs/engineering/ci.md.')
-        return 1
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print('::error::CI adapter report rejected (' + type(error).__name__ +
+              '); retained closed evidence requires a valid producer receipt. See docs/engineering/ci-artifact-producer.md.')
+        return completed.returncode or 1
     return completed.returncode
 
 
