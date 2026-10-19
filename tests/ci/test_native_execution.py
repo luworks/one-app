@@ -1,5 +1,8 @@
 """Reuse the native authority's host regressions in the bounded CI helper gate."""
 import importlib.util
+import contextlib
+import io
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -8,8 +11,63 @@ import unittest
 from unittest.mock import Mock, patch
 
 
+class BuildDiagnosticsTests(unittest.TestCase):
+    def test_activity_keeps_only_owned_build_tree(self):
+        from scripts.devtools.process import build_activity
+        raw = ('10 1 1.0 100 00:01 xcodebuild build\n'
+               '20 10 90.0 200 00:01 swift-frontend fixture.swift\n'
+               '30 20 20.0 300 00:01 clang\n'
+               '40 1 80.0 400 00:01 unrelated-user-build\n')
+        with patch('scripts.devtools.process.subprocess.run', return_value=SimpleNamespace(stdout=raw)):
+            result = build_activity(10)
+        self.assertEqual(len(result['processes']), 3)
+        self.assertFalse(any('unrelated' in row for row in result['processes']))
+        self.assertIn('90.0 200', result['processes'][1])
+
+    def test_timeout_preserves_phase_time_activity_and_redaction(self):
+        from scripts.devtools.process import Evidence, Redactor, run_process
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary:
+            executable = Path(temporary) / 'xcodebuild'
+            executable.write_text('#!/bin/sh\n'
+                                  'echo "SwiftCompile normal arm64 fixture-secret.swift"\n'
+                                  'sleep 10\n')
+            executable.chmod(0o755)
+            evidence = Evidence(root, 'build-profile-regression', Redactor(secrets=['fixture-secret']))
+            self.addCleanup(evidence.close)
+            with patch('scripts.devtools.process.build_activity', return_value={'cpu_count': 3, 'processes': []}):
+                result = run_process([str(executable), 'build-for-testing'], cwd=root,
+                                     evidence=evidence, timeout=0.3, grace=0.1)
+            self.assertEqual((result.returncode, result.reason), (124, 'timeout'))
+            raw = result.log.read_text()
+            self.assertNotIn('fixture-secret', raw)
+            phases = [json.loads(line.removeprefix('DEV_BUILD_PHASE '))
+                      for line in raw.splitlines() if line.startswith('DEV_BUILD_PHASE ')]
+            self.assertEqual(len(phases), 1)
+            self.assertGreaterEqual(phases[0]['seconds'], 0)
+            self.assertIn('[REDACTED].swift', phases[0]['phase'])
+            self.assertIn('DEV_BUILD_ACTIVITY', raw)
+
+    def test_prepare_only_preserves_build_failure_without_publishing_or_running_tests(self):
+        from scripts.devtools import commands
+        from scripts.devtools.core import NativeBuildError
+        root = Path(__file__).resolve().parents[2]
+        failure = NativeBuildError(SimpleNamespace(returncode=124, log=Path('failure.log')))
+        with patch.object(commands, 'host_lock', return_value=contextlib.nullcontext()), \
+                patch.object(commands, 'dd_lock', return_value=contextlib.nullcontext()), \
+                patch.object(commands, 'generate', return_value=0), \
+                patch.object(commands, 'fingerprint', return_value={}), \
+                patch('scripts.devtools.resolve.locked_arguments', return_value=[]), \
+                patch('scripts.devtools.core.ensure_test_products', side_effect=failure), \
+                patch.object(commands, 'record_build') as publish, \
+                patch.object(commands, 'test') as tests, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(commands.build(root, scheme='TodayMock', testing=True), 124)
+        publish.assert_not_called()
+        tests.assert_not_called()
+
+
 class CoreUIExecutionTests(unittest.TestCase):
-    def test_boot_overlaps_one_provenance_build_then_executes_fresh_leaves(self):
+    def test_cold_boot_follows_provenance_build_then_executes_fresh_leaves(self):
         self.run_ci_ui()
 
     def test_failed_build_preserves_logs_and_shutdown_without_dispatching_tests(self):
@@ -24,7 +82,10 @@ class CoreUIExecutionTests(unittest.TestCase):
     def test_cached_products_still_boot_once_and_execute_fresh_tests(self):
         self.run_ci_ui(cached=True)
 
-    def run_ci_ui(self, build_code=0, inventory_error=False, cached=False):
+    def test_process_error_preserves_partial_build_log_and_fails_before_tests(self):
+        self.run_ci_ui(process_error=True)
+
+    def run_ci_ui(self, build_code=0, inventory_error=False, cached=False, process_error=False):
         path = Path(__file__).resolve().parents[2] / 'ios/Eval/run-e2e.py'
         spec = importlib.util.spec_from_file_location('ci_ui_runner', path)
         runner = importlib.util.module_from_spec(spec)
@@ -67,6 +128,10 @@ class CoreUIExecutionTests(unittest.TestCase):
                 self.assertEqual(timeout, 600)
                 log = base / 'owned-build.log'
                 logged(command, log)
+                if process_error:
+                    error = PermissionError(1, 'Operation not permitted')
+                    error.process_log = log
+                    raise error
                 return SimpleNamespace(returncode=build_code, reason='timeout' if build_code == 124 else 'exited', log=log)
 
             with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'core-ui'}), \
@@ -82,8 +147,11 @@ class CoreUIExecutionTests(unittest.TestCase):
                 code = runner.main(['--only', selected[0], '--derived-data', str(base / 'dd'),
                                     '--output', str(base / 'output'), '--simulator-name', 'Today-CI-Unit'])
             build.assert_called_once()
-            if not inventory_error:
+            if not (inventory_error or process_error or build_code):
                 self.assertEqual(calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+            else:
+                self.assertFalse(any(c[:3] in (['xcrun', 'simctl', 'boot'],
+                                              ['xcrun', 'simctl', 'shutdown']) for c in calls))
             if inventory_error:
                 self.assertEqual(code, 1)
                 summary = (base / 'output/summary.json').read_text()
@@ -98,6 +166,14 @@ class CoreUIExecutionTests(unittest.TestCase):
                 self.assertEqual(sum(c[:3] == ['xcrun', 'simctl', 'boot'] for c in calls), 1)
                 self.assertFalse(any(c[:2] == ['xcodebuild', 'build-for-testing'] for c in calls))
                 return
+            if process_error:
+                self.assertEqual(code, 1)
+                summary = (base / 'output/summary.json').read_text()
+                self.assertIn('"build_reason": "process_error"', summary)
+                self.assertIn('"build": 1', summary)
+                self.assertEqual((base / 'output/build.log').read_text(), 'synthetic process completed')
+                self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in calls))
+                return
             if build_code:
                 self.assertEqual(code, 1)
                 summary = (base / 'output/summary.json').read_text()
@@ -108,9 +184,9 @@ class CoreUIExecutionTests(unittest.TestCase):
                 self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in calls))
                 return
             self.assertEqual(code, 0)
-            self.assertLess(next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']),
-                            next(i for i, c in enumerate(calls) if c[:2] == ['xcodebuild', 'build-for-testing']))
             self.assertLess(next(i for i, c in enumerate(calls) if c[:2] == ['xcodebuild', 'build-for-testing']),
+                            next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']))
+            self.assertLess(next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']),
                             next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'bootstatus']))
             test = next(c for c in calls if c[:2] == ['xcodebuild', 'test-without-building'])
             self.assertEqual(test[test.index('-xctestrun') + 1], str(products))
@@ -122,6 +198,7 @@ def load_tests(loader, tests, pattern):
     # Native provenance and lifecycle are CI dependencies. Reuse their existing
     # synthetic-process tests without launching Xcode or duplicating fixtures.
     suite = unittest.TestSuite()
+    suite.addTests(loader.loadTestsFromTestCase(BuildDiagnosticsTests))
     suite.addTests(loader.loadTestsFromTestCase(CoreUIExecutionTests))
     for name in ('test_native_provenance', 'test_xcode_tests'):
         path = Path(__file__).resolve().parents[1] / 'devtools' / (name + '.py')
@@ -129,4 +206,12 @@ def load_tests(loader, tests, pattern):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         suite.addTests(loader.loadTestsFromModule(module))
+    path = Path(__file__).resolve().parents[1] / 'devtools/test_foundation.py'
+    spec = importlib.util.spec_from_file_location('ci_process_regressions', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for name in ('test_group_permission_failure_retains_syscall_log_and_reaps_owned_child',
+                 'test_timeout_kills_owned_descendant_and_leaves_unrelated_child',
+                 'test_spawn_failure_is_recorded_and_handler_restored'):
+        suite.addTest(module.FoundationTests(name))
     return suite

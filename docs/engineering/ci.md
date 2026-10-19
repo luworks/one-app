@@ -25,7 +25,7 @@ Checkout retains the event's integrated `github.sha`, never an explicit PR head.
 
 The existing `./dev bootstrap --tool` verifies exact version/checksum receipts. No lane above calls Ruby, Bundler or Fastlane, so full local-environment bootstrap has been removed from CI. Their pins and the full local `./dev bootstrap` remain intact for callers that consume them. The wrapper and helpers already use hosted system Python; these stdlib-only dev adapters now do so too, without installing a second Python or Ruby environment. Downloaded tool versions/checksums and Xcode build checks have not been relaxed.
 
-Business uses the local Swift package and does not require resolving the separate Xcode snapshot dependency. Native lanes still generate and resolve the versioned `ios/Dependencies/Package.resolved` authority. Existing native build-for-testing/test-without-building reuse remains gated by source bytes, locks, scheme, configuration, SDK, Xcode and architecture, with fresh results. No cross-job DerivedData transport/cache, new service, runner platform or dependency was added. Independent native jobs stay parallel: their schemes differ, and no measured common build savings justify serializing them.
+Business uses the local Swift package and does not require resolving the separate Xcode snapshot dependency. Native lanes still generate and resolve the versioned `ios/Dependencies/Package.resolved` authority. Existing native build-for-testing/test-without-building reuse remains gated by source bytes, locks, scheme, configuration, SDK, Xcode and architecture, with fresh results. Iteration 7 below adds compiler-module-only transport; products, provenance and results remain local to each job. Independent native jobs stay parallel: their schemes differ, and no measured common build savings justify serializing them.
 
 `prerequisite` still verifies hosted arm64, exact Xcode build 27A9275, iOS 27.1 SDKs and available iOS 27.0 runtime before native work. `xcode-27` remains an operational preview-image dependency. Each VM owns one adapter-created simulator/DD directory; existing lock/shutdown rules apply.
 
@@ -270,3 +270,189 @@ module candidate remains intact pending those results. No rerun, cancellation,
 merge or 300-second success is claimed. Raw ZIPs, manifests, helper first/final
 logs and this iteration's checkpoint remain under the primary checkout's
 `tests/results/ci-hillclimb-20261019/`, indexed in the QA journal.
+
+### Iteration 6 closure and main adoption
+
+[Run 39300192458](https://github.com/luworks/one-app/actions/runs/39300192458)
+completed successfully at head `06a80248e05c3150594f40906678485c8a82303c`.
+Closed reports identify actual integrated SHA
+`34db5eeefe390c129a148f59546740b311bfef24`, parents `f76b106` and `06a8024`.
+All ten required workflow jobs succeeded; five event-defined optional jobs
+skipped (not passed). Seven reports retain format 322, lint 3, business 678
+plus four authorized skips, integration 13/13, snapshots 6/6, core UI 7/7 and
+build three products. Failed, missing, cancelled, unexpected skips and errors
+are zero. All 207 published manifest file hashes/sizes and full bundle membership
+matched downloaded closed evidence; no native rerun was used for closure.
+
+Created 18:09:36 UTC to required completion 18:27:29 is **1,073 seconds**.
+First job started after three seconds; core UI started 274 seconds after workflow
+creation, so its queue and dependencies remain material. Native build processes
+were integration 461.242s, snapshots 493.545s and core UI 442.585s. Fresh native
+test commands were 58.889s and 58.993s; core UI session was 273.709s, including
+248.333s in seven test bodies. Core prebuild validation was 0.041s; its complete
+runner was 742.229s. Retained first selected-test suite timestamps are integration
+18:19:29.061 UTC, snapshots 18:23:39.344 and core UI 18:22:51.604. Compiler
+timing sums overlap and are not wall time: core
+SwiftCompile totaled 236.361s and SwiftEmitModule 116.710s. These are measured
+phases, not an isolated compiler/boot optimization speedup. The historical
+PR103 1,268s comparator had different queues and cold conditions. **300s remains
+unachieved**, even a hypothetical zero-cost core build leaves almost no budget
+for queue/setup/test-session overhead.
+
+PR104 merged normally as `b87f94424c3a86a6ff8a0d4b59287b98b79ad2aa`.
+Its parents are current main `58099876ac5912c1357f44ee1d7c5c70ffc956b1` (AI PR105)
+and `06a8024`; the independently computed clean merge tree is
+`ff96c24fdddaa33ac88ac3ea24889d4b46c9a400`. That AI-integrated tree differs
+from the tested PR merge tree. The changes are disjoint and GitHub reported
+CLEAN/MERGEABLE with all applicable checks successful; adoption does not imply
+that the old green run tested the new AI integration. Main run **39303615647**
+at `b87f944` was queued at handoff. Existing main run **39301994256** at `5809987`
+is separate and was left running. Neither is PR104 proof or formal Release,
+accessibility, physical-device or signing acceptance. All previous failed runs
+and their original evidence remain retained.
+
+### Iteration 7: bounded compiler module transport experiment
+
+The existing check composite now restores/saves only `ModuleCache.noindex`
+`.pcm` and `.swiftmodule` leaves for routine integration, snapshots and core UI.
+There is no new job, service, build scheduler or test selector. Product builds
+and fresh tests still run on every new job; Build/Products, build databases,
+provenance, xcresult, session-validation sentinels and test results are excluded.
+A source mismatch still invokes the real build authority before test dispatch.
+
+`./dev plan` exposes transport keys derived from its existing canonical
+fingerprint. Exact keys include all source bytes. A fallback partitions by the
+full toolchain (Xcode identity and SDK settings hashes), SDK, arm64, Debug,
+worktree, exact lane/scheme, test options, dependency locks, Package.swift and
+all non-Swift configuration/input bytes. Only Swift-source edits can share a
+fallback partition; compiler imports still validate modules against current
+inputs. [Clang's module authority](https://clang.llvm.org/docs/Modules.html)
+owns implicit module compatibility/rebuild checks, while repository product
+provenance remains the stricter full-source authority. Lock/toolchain/SDK/config/
+architecture/scheme mismatches cannot restore a compatible transport entry.
+
+Pinned [actions/cache v5.0.5](https://github.com/actions/cache/tree/27d5ce7f107fe9357f9df03efb73ab90386fccae)
+provides transport, not result authority. Cache save requires successful fresh
+lane execution and artifact closure. GitHub's [cache scope rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)
+confine PR writes to their merge ref; trusted main cannot restore PR entries.
+Release, protected-release, ordinary product builds, extended collections and
+signing/distribution paths do not restore or save these modules. No secrets,
+product archives or personal data are cached. Corrupt/incompatible modules must
+fail or rebuild through the compiler; a cache hit cannot satisfy a check.
+
+This deliberately keeps the measured implicit compiler path. Apple's
+[compilation caching](https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes)
+requires explicit Swift modules in the [build-system implementation](https://github.com/swiftlang/swift-build/blob/main/Sources/SWBCore/SpecImplementations/Tools/SwiftCompiler.swift).
+Enabling it while keeping explicit modules off would not provide Swift caching;
+switching back also reintroduces the previously observed cold module expansion.
+Full shared-build transport was not selected: it adds dependency/serialization
+and product relocation costs without a retained product-size or transfer sample.
+
+Three independent cold builds currently cost 443–494 seconds each. Module-only
+transport is a bounded experiment against that cost, not a claimed saving or a
+300-second solution. The first hosted execution must retain actual cache byte
+size/save cost and native phase timing; a compatible subsequent source revision
+must establish restore cost and compiler validation before any warm benefit is
+claimed. If transfer/setup costs consume the avoided module work, remove this
+experiment. No cache-hit skips, assertions, valid tests, tolerances or optional
+lane exemptions were added. Core UI's 274-second test session and runner queues
+remain independent next constraints. Risk-based selection needs an explicit
+coverage mapping and always-smoke/unknown-wide behavior before adoption; this
+iteration runs the same complete groups.
+
+Raw closure, manifests, completed bundles, first/final helper logs and next-head
+checkpoint remain in the primary `tests/results/ci-hillclimb-20261019/` directory
+and Activity-style QA journal. Local helper coverage uses the existing synthetic
+fixtures in `tests/devtools/test_native_provenance.py`, included by the helper
+gate; it proves transport-key invalidation and real rebuild on Swift edits, not
+hosted cache compatibility, native execution or physical-device behavior.
+
+Verification: `./dev test helpers` passed **127 tests** in 10.290s after the
+focused review fixed a linked-worktree path assumption; `./dev lint` and diff
+checks passed. A read-only routine `./dev plan` also resolved the actual primary
+DD path from the linked worktree. The first helper failure was a misplaced test
+method tail (`NameError`), fixed without weakening assertions; its raw log is
+retained. One focused cache trust review is complete with no unresolved finding.
+No local native build/simulator, full collection or physical-device run occurred.
+
+### Iteration 8: preserve process-failure attribution
+
+[Run 39304181194](https://github.com/luworks/one-app/actions/runs/39304181194)
+completed **failure** at integrated SHA `d693deb8c7ef6519bb1bd400c227de610b36f4e8`.
+Creation to failed required completion was **1,658 seconds**, including queue.
+Core UI executed zero tests with all seven missing; no UI assertion failed.
+Its 629.229-second runner records boot, a prebuild command and successful owned
+simulator shutdown, but no completed build stage or compiler log. The reported
+`[Errno 1] Operation not permitted` has no syscall traceback. Neither compiler
+failure nor cache causality is established by this receipt. The original
+43,756-byte ZIP, command logs and closed reports remain in primary results.
+
+Integration passed 13/13 and snapshots 6/6; their cold build processes took
+423.251s and 484.377s, fresh test commands 55.949s and 57.850s. Ordinary product
+build passed three products (82.314s process). All three module restores missed:
+core UI therefore restored no cache bytes. Integration saved 95,649,777 compressed
+bytes in 3.343s; snapshots saved 152,204,713 bytes in 9.591s. Planning/restore
+steps took respectively 0.881/0.518s, 0.427/0.384s and 0.396/0.412s for
+integration, snapshots and core UI. No warm restore benefit or net saving exists
+yet; the experiment must still justify its cost before adoption.
+
+A reproduced runner defect could replace an original process failure with a
+cleanup exception, bypass journal indexing and omit the partial build log from
+the closed failure artifact. Process cleanup now preserves the first exception,
+redacted traceback, owned process PID, elapsed time, reason and child exit;
+`killpg` errors identify the exact group/signal. A denied group signal remains
+a failure. Cleanup may kill/reap only the exact Popen child it created and waits
+boundedly; it does not ignore EPERM, discover other PIDs or elevate permissions.
+Core UI retains this partial log and failed build stage before shutdown, with
+no test dispatch or reuse authorization. This repairs evidence loss and bounded
+cleanup, **not a proven repair of the remote EPERM trigger**. The next integrated
+run must provide its actual syscall attribution if the failure recurs.
+
+`./dev test helpers` passed 131 host regressions in 10.950s; `./dev lint` and
+diff checks passed. Coverage includes injected EPERM with a real owned Python
+child, unrelated-process survival, timeout cleanup, spawn failure and runner
+partial-log retention. The first new regression caught use of Python 3.11-only
+exception notes on the supported hosted-system Python 3.9 path; the diagnostic
+now uses compatible OSError context. First and final logs are retained. No local
+native build, simulator, axe or physical-device work ran. Product, AI, selectors,
+assertions, baseline and timeout authorities are unchanged. The <=300s goal and
+current integrated-head acceptance remain open; PR104's earlier green run does
+not validate this candidate or newer main changes.
+
+
+### Iteration 9: bounded source inventory
+
+PR108 snapshot run `39305997798`, integrated SHA
+`e349cf0ed3a252568a4f85f48fdf453e36d1f9bc`, retained artifact `12214982002`
+(3,793 bytes, SHA-256 `1f03ae27e9fccda9e85eb08f52b15c59aed10febaf8d76e02e2efecaae115208`).
+It executed zero tests with six missing because Git source inventory timed out
+at 30 seconds. The transcript has simulator operations but no native build or
+pixel comparison; the last simulator operation took 116.693 seconds. This does
+not establish a post-build load problem or a product regression. The remote
+blocked syscall remains unknown; no strace is installed locally.
+
+Index-only enumeration and untracked traversal now use separate Git operations.
+Fingerprint untracked discovery is scoped to existing source/test/tool roots and
+literal root config paths, retaining tracked nested config/locks and ignored
+tracked inputs. Generated evidence and build trees are pruned before traversal.
+All test source now participates in identity. Every fingerprint still reads live
+source bytes and freshly discovers untracked source. No old test result or
+cached clean status substitutes for execution. The immediate duplicate scan after
+record_build is removed: that authority revalidates live source before publishing,
+and the native caller revalidates before dispatch. Git timeout evidence identifies
+the operation, owned PID, elapsed time, cwd and redacted stderr; only that child
+is killed and reaped. The 30-second limit is unchanged.
+
+Host regressions reproduce the old unscoped walk blocking on an unrelated FIFO,
+then prove scoped inventory completes. They also cover a thousand ignored generated
+files, newly added test source/config/requirements, tracked ignored modifications,
+existing lock/deletion/build-change invalidations, and real timeout cleanup.
+`./dev test helpers`: 134 passed in 11.329 seconds; `./dev lint` passed.
+The first fixture failure and its corrected result remain retained: adding test
+source to identity initially included generated QA output when fixture repositories
+lacked .gitignore; explicit generated-evidence pruning repairs that shared cause.
+No native build, simulator or physical-device acceptance was run locally.
+PR107 v8 run `39308893134` remains owned by the parent watch; this change must not
+cancel its first result. New integrated checks are required before merge and before
+PR108 adopts the common CI fix. The 300-second goal and warm-cache benefit remain
+unproven. Raw evidence stays in primary `tests/results/ci-hillclimb-20261019/`.

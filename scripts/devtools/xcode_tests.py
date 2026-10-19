@@ -142,8 +142,6 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                 simulator = capture(['xcrun', 'simctl', 'create', simulator_name(root), DEVICE, RUNTIME]).strip()
             # Validate before passing a captured identifier back into platform commands.
             uuid.UUID(simulator)
-            owned = True
-            capture(['xcrun', 'simctl', 'boot', simulator])
             for scheme, batch in batches.items():
                 bundle = output / (scheme + '.xcresult')
                 expected = list(dict.fromkeys(batch['expected']))
@@ -175,8 +173,11 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                     # Legacy direct test always builds; it never consumes cached provenance.
                     command = ['xcodebuild', 'test', '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
                                '-configuration', 'Debug', '-sdk', 'iphonesimulator']
-                # simctl boot starts asynchronously. Compile while it starts,
-                # then require readiness before dispatching any tests.
+                # A cold simulator can saturate small hosted runners. Complete
+                # the trusted build before boot, then require test readiness.
+                if not owned:
+                    owned = True
+                    capture(['xcrun', 'simctl', 'boot', simulator])
                 capture(['xcrun', 'simctl', 'bootstatus', simulator, '-b'])
                 result = invoke([*command,
                                  '-destination', 'platform=iOS Simulator,id=' + simulator,

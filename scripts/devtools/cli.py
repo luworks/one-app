@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .core import (derived_data, fingerprint, inspect_lock, provenance,
+from .core import (compiler_module_cache, derived_data, fingerprint, inspect_lock, provenance,
                    state_root, toolchain, worktree_id)
 from .process import Redactor
 
@@ -53,6 +53,8 @@ def main(argv=None, root=ROOT):
     build_parser = sub.add_parser('build', help='build the real app and embedded extensions')
     build_parser.add_argument('configuration', nargs='?', choices=['Debug', 'Release'], default='Debug')
     build_parser.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench'], default='Today')
+    build_parser.add_argument('--for-testing', action='store_true', help='prepare authoritative test products without booting a device or running tests')
+    build_parser.add_argument('--timeout', type=float, default=None, help='per-process seconds; default 600')
     test_parser = sub.add_parser('test', help='run an authoritative test group')
     test_parser.add_argument('group', choices=['helpers', 'unit', 'ios-unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
     test_parser.add_argument('--only', action='append', default=[])
@@ -148,7 +150,10 @@ def main(argv=None, root=ROOT):
             if args.command == 'generate':
                 return commands.generate(root)
             if args.command == 'build':
-                return commands.build(root, args.configuration, scheme=args.scheme)
+                options = {} if args.timeout is None else {'timeout': args.timeout}
+                if args.for_testing:
+                    options['testing'] = True
+                return commands.build(root, args.configuration, scheme=args.scheme, **options)
             if args.command == 'test':
                 if args.full and args.group not in ('ui', 'release'):
                     raise ValueError('--full requires ui or release collection')
@@ -175,6 +180,7 @@ def main(argv=None, root=ROOT):
             current = fingerprint(root, sdk=args.sdk, architecture=args.architecture,
                                   configuration=args.configuration, tools=data['toolchain'], scheme=args.scheme)
             data.update({'fingerprint': current, 'provenance': provenance(root, current),
+                         'compiler_module_cache': compiler_module_cache(root, current),
                          'execution_supported': True,
                          'next': './dev generate; ./dev resolve; ./dev build Debug'})
             code = 0
