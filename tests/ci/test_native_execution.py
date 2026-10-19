@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -35,9 +36,24 @@ class BuildDiagnosticsTests(unittest.TestCase):
             executable.chmod(0o755)
             evidence = Evidence(root, 'build-profile-regression', Redactor(secrets=['fixture-secret']))
             self.addCleanup(evidence.close)
-            with patch('scripts.devtools.process.build_activity', return_value={'cpu_count': 3, 'processes': []}):
+            # Arm the synthetic deadline only after output arrives. A loaded
+            # host may take longer than 300ms to launch even this shell fixture.
+            clock = [0.0]
+            real_clock = time.monotonic
+            started = real_clock()
+
+            def emitted(chunk):
+                if b'SwiftCompile' in chunk:
+                    clock[0] = 1.0
+
+            def deadline_clock():
+                elapsed = real_clock() - started
+                return clock[0] + elapsed if clock[0] or elapsed > 3 else 0.0
+
+            with patch('scripts.devtools.process.build_activity', return_value={'cpu_count': 3, 'processes': []}), \
+                    patch('scripts.devtools.process.time.monotonic', side_effect=deadline_clock):
                 result = run_process([str(executable), 'build-for-testing'], cwd=root,
-                                     evidence=evidence, timeout=0.3, grace=0.1)
+                                     evidence=evidence, timeout=0.3, grace=0.1, output_observer=emitted)
             self.assertEqual((result.returncode, result.reason), (124, 'timeout'))
             raw = result.log.read_text()
             self.assertNotIn('fixture-secret', raw)
@@ -187,7 +203,8 @@ class CoreUIExecutionTests(unittest.TestCase):
             self.assertLess(next(i for i, c in enumerate(calls) if c[:2] == ['xcodebuild', 'build-for-testing']),
                             next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']))
             self.assertLess(next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'boot']),
-                            next(i for i, c in enumerate(calls) if c[:3] == ['xcrun', 'simctl', 'bootstatus']))
+                            next(i for i, c in enumerate(calls) if c[:2] == ['xcodebuild', 'test-without-building']))
+            self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'bootstatus'] for c in calls))
             test = next(c for c in calls if c[:2] == ['xcodebuild', 'test-without-building'])
             self.assertEqual(test[test.index('-xctestrun') + 1], str(products))
             self.assertIn('-only-testing:' + selected[0], test)

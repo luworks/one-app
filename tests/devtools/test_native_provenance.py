@@ -436,6 +436,18 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertLess(ready_index, test_index)
         self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
 
+    def test_routine_ci_uses_xctest_readiness_and_still_rejects_missing_results(self):
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_LANE': 'integration'}):
+            code, reports, _ = self.run_adapter()
+            self.assertEqual(code, 0)
+            self.assertEqual(reports[0]['executed_count'], 1)
+            self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'bootstatus'] for c in self.calls))
+            code, reports, _ = self.run_adapter(leaves=[])
+            self.assertNotEqual(code, 0)
+            self.assertEqual(reports[0]['executed_count'], 0)
+            self.assertTrue(reports[0]['missing'])
+            self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
+
     def test_adapter_zero_parser_timeout_and_source_changes_stay_failed(self):
         for options in ({'leaves': []}, {'parser_error': True}, {'test_code': 124}, {'change_source': True}):
             with self.subTest(options=options):
