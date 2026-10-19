@@ -1,5 +1,6 @@
 import Foundation
 import TodayCore
+import TodayData
 
 #if os(iOS)
   import SwiftData
@@ -9,6 +10,37 @@ import TodayCore
 /// Developer launch compatibility, kept outside the production dependency graph.
 /// Callers supply arguments and defaults explicitly; construction has no side effects.
 public enum LaunchTestConfiguration {
+  /// Preserve the existing UI launch contract without touching production stores or preferences.
+  public static func applyActivityOverrides(
+    arguments: [String], defaults: UserDefaults, store: ActivityStore, now: Date
+  ) throws {
+    guard arguments.contains("-uiTesting") else { return }
+    if !arguments.contains("-uiTestingKeepActivitySettings") {
+      for key in [
+        ActivitySettings.pausedKey, ActivitySettings.retentionKey, ActivitySettings.keepChatTextKey,
+      ] + ActivityTier.allCases.map(ActivitySettings.tierKey) {
+        defaults.removeObject(forKey: key)
+      }
+      if arguments.contains("-uiTestingActivityPaused") {
+        defaults.set(true, forKey: ActivitySettings.pausedKey)
+      }
+    }
+    guard let i = arguments.firstIndex(of: "-uiTestingActivityRows"), i + 1 < arguments.count,
+      let count = Int(arguments[i + 1]), count > 0
+    else { return }
+    let base = now.addingTimeInterval(-3600)
+    let events = (0..<count).map { index -> ActivityEvent in
+      var event = ActivityEvent(
+        kind: "change.completed", tier: .changes, actor: "you", channel: "app",
+        at: base.addingTimeInterval(-Double(index) * 60))
+      event.title = "Synthetic \(index)"
+      event.subjectKind = "task"
+      event.approval = "user"
+      return event
+    }
+    _ = try store.insert(events)
+  }
+
   /// UI tests: `-appearance light|dark|system` sets the choice at launch; without it a `-uiTesting` run starts on System,
   /// unless `-uiTestingKeepAppearance` is passed (the relaunch check of the saved choice). Returns the value to store, if any.
   public static func appearanceOverride(arguments: [String]) -> Appearance? {

@@ -50,6 +50,8 @@
       let services = try PlannerTestServices(
         container: container, defaults: defaults, runtime: runtime,
         arguments: arguments, activityStore: activityStore)
+      try LaunchTestConfiguration.applyActivityOverrides(
+        arguments: arguments, defaults: defaults, store: services.activityStore, now: runtime.now())
       self.services = services
       let calendar: any CalendarService
       let reminders: any ReminderService

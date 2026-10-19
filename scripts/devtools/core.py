@@ -14,8 +14,10 @@ import uuid
 def probe(argv, cwd=None):
     """Run only explicit read probes; never invoke a shell or xcrun."""
     env = dict(os.environ, GIT_OPTIONAL_LOCKS='0')
+    # Cold checkout enumeration can exceed five seconds on a loaded hosted Mac.
+    timeout = 30 if argv and argv[0] == 'git' else 5
     return subprocess.check_output(argv, cwd=cwd, env=env, stderr=subprocess.PIPE,
-                                   timeout=5).decode().strip()
+                                   timeout=timeout).decode().strip()
 
 
 def canonical_root(root):

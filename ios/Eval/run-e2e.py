@@ -71,6 +71,7 @@ def ui_command(selected, simulator, derived, output, test_products=None):
     return ["xcodebuild", *target, "-jobs", "2",
             "-destination", f"platform=iOS Simulator,id={simulator}",
             "-derivedDataPath", str(derived), "-resultBundlePath", str(output / "ui.xcresult"),
+            "-collect-test-diagnostics", "never",
             "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
             "-maximum-parallel-testing-workers", "1",
             *["-only-testing:" + value for value in selected]]
@@ -291,7 +292,7 @@ def main(argv=None):
             summary["attempts"]["logic"] = []
             code = run_logged(command, output / "logic.log", output / "progress.jsonl", summary["attempts"]["logic"], journal)
             summary["stages"]["logic"] = code
-            logical = contract.log_attempts((output / "logic.log").read_text(), "logic")
+            logical = contract.log_attempts((output / "logic.log").read_text(), "logic", source=source)
             summary["reports"]["logic"] = contract.report(expected_logic, logical, code,
                 args.allow_skip, contract.load_manifest()["skip_rules"],
                 (output / "logic.log").read_text())
