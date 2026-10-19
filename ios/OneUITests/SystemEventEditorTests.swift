@@ -100,10 +100,15 @@ final class SystemEventEditorTests: XCTestCase {
       deletes.count, 1,
       "exactly one Delete Event: \(deletes.allElementsBoundByIndex.map({ $0.label }))")
     // Close without changing anything. (The event stays in the simulator's own calendar, never a real one.)
-    let nativeCancel = app.buttons.matching(NSPredicate(format: "label == 'Cancel'"))
-      .allElementsBoundByIndex.last
-    XCTAssertNotNil(nativeCancel, "the top system editor has Cancel")
-    nativeCancel?.tap()
+    // The unchanged native editor has disabled Done; the quick editor keeps Done enabled.
+    let nativeBar = app.navigationBars.containing(
+      NSPredicate(
+        format: "elementType == %ld AND label == 'Done' AND enabled == false",
+        Int(XCUIElement.ElementType.button.rawValue))
+    ).firstMatch
+    XCTAssertTrue(
+      nativeBar.waitForExistence(timeout: 5), "the native navigation bar is identifiable")
+    nativeBar.buttons["Cancel"].tap()
     if hadQuickEditor {
       let returned = XCTNSPredicateExpectation(
         predicate: NSPredicate(format: "exists == true AND hittable == true"), object: fullOptions)
