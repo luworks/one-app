@@ -85,6 +85,29 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertTrue(all(command[1] == 'build-for-testing' for command in self.calls))
         self.assertEqual(self.calls[0][self.calls[0].index('-derivedDataPath') + 1], str(core.derived_data(self.root)))
 
+    def test_product_reads_are_deduplicated_per_validation_but_never_between_dispatches(self):
+        path, app, bundle = self.products()
+        current = self.fp()
+        inspect = core._product_identity
+        expected = {str(p.absolute()) for p in (path, app, bundle)}
+        with patch.object(core, '_product_identity', wraps=inspect) as reads:
+            core.record_build(self.root, current, [path], returncode=0,
+                              kind='build-for-testing', xctestrun=path)
+            self.assertEqual({str(Path(c.args[1]).absolute()) for c in reads.call_args_list}, expected)
+            self.assertEqual(reads.call_count, len(expected))
+            for _ in range(2):
+                reads.reset_mock()
+                self.assertTrue(core.provenance(self.root, current, kind='build-for-testing')['valid'])
+                self.assertEqual(reads.call_count, len(expected))
+        # Keep file size and timestamp unchanged: only a fresh content hash can
+        # reject this modification on the next dispatch.
+        resource = bundle / 'resource.txt'
+        before = resource.stat()
+        resource.write_text('resource two')
+        os.utime(resource, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.assertEqual(resource.stat().st_size, before.st_size)
+        self.assertFalse(core.provenance(self.root, current, kind='build-for-testing')['valid'])
+
     def test_routine_compiler_mode_rebuilds_existing_products_and_reuses_only_same_mode(self):
         self.ensure()
         ordinary = self.fp()
