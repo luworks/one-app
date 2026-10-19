@@ -7,6 +7,7 @@
   import UserNotifications
   import TodayCore
   import TodayShared
+  import TodayData
 
   /// Model-bound compatibility contracts. Implementations are selected by executable composition.
   /// Persistent declarations remain in One; no feature resolves a live service implicitly.
@@ -27,6 +28,7 @@
     func setVisibleCalendars(_ selected: Set<String>)
     func events(in interval: DateInterval, excluding: Set<String>) -> [ExternalEvent]
     func events(on day: Date, excluding: Set<String>) -> [ExternalEvent]
+    func focusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution
     func calendar(forExternalID id: String?) -> SystemCalendar?
     func place(forExternalID id: String?) -> TravelPlace?
     func color(forExternalID id: String?) -> Color?
@@ -52,6 +54,12 @@
       onComplete: ((EKEventEditViewAction) -> Void)?)
   }
 
+  package enum ReminderDeletionReceipt {
+    case localOnly
+    case confirmed(RemindersSync.Remote, token: UUID)
+    case alreadyAbsent(String)
+  }
+
   @MainActor
   package protocol ReminderService: AnyObject {
     var hasAccess: Bool { get }
@@ -66,9 +74,13 @@
     func noteDeleted(list externalID: String?)
     func scheduleReconcile(after delay: Duration)
     func reconcile() async
+    func focusIdentity(_ task: OneTask) -> FocusIdentityResolution
     func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
       -> RemindersSync.Remote?
     func didPersistEdit(_ task: OneTask, accepted: RemindersSync.Remote?)
+    func commitDeletion(_ task: OneTask, expected: TaskSnapshot) throws -> ReminderDeletionReceipt
+    func restoreDeletion(_ task: OneTask, receipt: ReminderDeletionReceipt) throws -> RemindersSync
+      .Remote?
     func commitCompletion(
       _ task: OneTask, done: Bool, restoringDue: Date?, restoresDue: Bool,
       expected: RemindersSync.Remote?
@@ -84,6 +96,12 @@
     func state(of alarm: OneAlarm) -> AlarmLiveState?
     func requestAuthorization() async
     func sync(_ context: ModelContext) async
+    /// MainActor only. Commits an attached edited alarm (or a detached new alarm) to
+    /// AlarmKit, then saves its model. Failure restores the prior saved values and
+    /// attempts system compensation; a compensation failure is reported explicitly.
+    func commit(_ alarm: OneAlarm, context: ModelContext) async throws
+    /// Cancels only this app's stable AlarmKit ID. Does not delete or save the model.
+    func cancel(_ alarm: OneAlarm) throws
     func stop(_ id: UUID)
     func watch(context: ModelContext) async
   }

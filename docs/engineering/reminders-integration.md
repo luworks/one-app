@@ -122,3 +122,44 @@ and retries the same object. This is not a cross-store atomic transaction.
 
 The original full native editor is retained in this layer. Compact Due styling
 and strict deletion/Undo are isolated in the following change.
+
+
+## Compact reminder editor and explicit deletion follow-up
+
+The same draft now has a compact sheet: title, selected Deadline/Planned time,
+shared QuickTime grid and real native actions. More retains the original notes,
+checklist, plan/duration, deadline, recurrence/custom weekdays, notification/alarm,
+list, tags and flag controls. Opening or cancelling never commits the draft.
+
+Additional exact package signatures:
+
+```swift
+func commitDeletion(_ task: OneTask, expected: TaskSnapshot) throws -> ReminderDeletionReceipt
+func restoreDeletion(_ task: OneTask, receipt: ReminderDeletionReceipt) throws -> RemindersSync.Remote?
+PlannerActions.deleteConfirmed(_:context:toast:) throws
+TaskActions.deleteConfirmed(_:context:toast:reminders:ledger:runtime:) throws
+```
+
+RemindersSync and TestReminderService implement these methods. TaskEditor.delete
+calls PlannerActions.deleteConfirmed, which forwards to TaskActions. It confirms
+system deletion before deleting locally or recording a successful deletion. The
+old queued/background deletion callers are unchanged.
+
+ReminderDeletionReceipt is localOnly, confirmed(Remote, token: UUID), or
+alreadyAbsent(String). Confirmed deletion Undo first checks that the original
+Apple ID is still absent and its list writable; it restores a bounded,
+service-private session payload of all EventKit writable fields, including copied
+native recurrence rules/alarms, original date components, timezone, priority,
+URL/location, notes and completion state. It does not reconstruct Apple data from
+the lossy Today projection. Expired receipts refuse compensation.
+
+Linked editor deletion offers receipt-checked toast/shake Undo; its Activity row
+omits the old recreation snapshot because that payload has no external receipt.
+Already-absent removals offer no resurrection Undo. Local-only Activity Undo stays.
+No new database schema, model identity, service, repository or event bus is added.
+
+Calendar task/reminder editing already opens TaskEditor, so it reuses this exact
+selected-field grid. Native Calendar events continue through Apple's editor;
+fixed meetings, event duration/start/end, all-day/exclusive ends, calendar,
+invitations and recurrence retain their existing paths. This is not an event
+editor replacement or a redesign of Calendar/home/search/All Reminders.

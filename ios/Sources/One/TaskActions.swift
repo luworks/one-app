@@ -235,6 +235,76 @@
       }
     }
 
+    /// The editor waits for the system acknowledgement before removing its local object.
+    /// Existing background/batch deletion keeps the separate queued path above.
+    package static func deleteConfirmed(
+      _ task: OneTask, context: ModelContext, toast: UndoToast?, reminders: any ReminderService,
+      ledger: Ledger, runtime: PlannerRuntime
+    ) throws {
+      guard !task.isDeleted, task.modelContext != nil else { throw EditorDeletionError.unavailable }
+      let snapshot = Ledger.snapshot(of: task)
+      let detail = deletedDetail(task, runtime: runtime)
+      let backup = task.copy()
+      let receipt = try reminders.commitDeletion(task, expected: snapshot)
+      if task.externalID != nil { backup.createdAt = runtime.now() }
+      let externalID = task.externalID
+      context.delete(task)
+      do { try context.save() } catch {
+        // Apple may already have accepted the deletion. Keep its known link and pending
+        // tombstone: a failed local save must never upload this object as a new reminder.
+        context.insert(task)
+        if externalID != nil { reminders.noteDeleted(reminder: externalID) }
+        throw EditorDeletionError.localSave(systemConfirmed: externalID != nil)
+      }
+      if externalID != nil { reminders.noteDeleted(reminder: externalID) }
+      // Activity's historical snapshot has no external deletion receipt. Only local-only
+      // deletions can safely use that unguarded recreation path; linked deletes use the
+      // receipt-checked toast/shake compensation below.
+      let activitySnapshot: TaskSnapshot?
+      if case .localOnly = receipt { activitySnapshot = snapshot } else { activitySnapshot = nil }
+      let entry = ledger.record(
+        .deleted, title: backup.title, before: detail,
+        snapshot: activitySnapshot, context: context)
+      if case .alreadyAbsent = receipt {
+        toast?.showNotice("Removed the local copy. It was already deleted in Apple Reminders.")
+        return
+      }
+      var restored = false
+      toast?.show("Deleted “\(backup.title)”") {
+        guard !restored, backup.modelContext == nil else { return }
+        do {
+          let accepted = try reminders.restoreDeletion(backup, receipt: receipt)
+          if let accepted { backup.externalID = accepted.id }
+          context.insert(backup)
+          restored = true
+          do { try context.save() } catch {
+            reminders.scheduleReconcile(after: .milliseconds(50))
+            toast?.showNotice(
+              "The reminder was restored, but Today couldn’t save its copy. Reopen Today to retry.")
+            return
+          }
+          reminders.didPersistEdit(backup, accepted: accepted)
+          ledger.recordUndo(of: entry, context: context)
+        } catch {
+          toast?.showNotice("Couldn’t undo the deletion. " + error.localizedDescription)
+        }
+      }
+    }
+
+    private enum EditorDeletionError: LocalizedError {
+      case unavailable
+      case localSave(systemConfirmed: Bool)
+      var errorDescription: String? {
+        switch self {
+        case .unavailable: "This reminder is no longer available. Close and reopen Reminders."
+        case .localSave(let systemConfirmed):
+          systemConfirmed
+            ? "Apple Reminders confirmed deletion, but Today couldn’t save its copy. Refresh or retry; Undo is not yet available."
+            : "Today couldn’t save the deletion. Please try again."
+        }
+      }
+    }
+
     /// Sets or clears the planned time (never the deadline) and records it: Plan, Today, Tomorrow, Unschedule, drag.
     @discardableResult
     package static func setPlanned(

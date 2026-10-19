@@ -11,6 +11,7 @@
   @MainActor
   @Observable
   package final class PlannerActions {
+    package let focus: TodayFocus
     private let calendar: any CalendarService
     private let reminders: any ReminderService
     private let alarms: any AlarmService
@@ -21,6 +22,7 @@
       calendar: any CalendarService, reminders: any ReminderService,
       alarms: any AlarmService, ledger: Ledger, runtime: PlannerRuntime
     ) {
+      focus = TodayFocus(ledger: ledger, runtime: runtime)
       self.calendar = calendar
       self.reminders = reminders
       self.alarms = alarms
@@ -46,7 +48,14 @@
         ledger: ledger, runtime: runtime, actor: actor, channel: channel)
     }
 
-    package func delete(_ alarm: OneAlarm, context: ModelContext, toast: UndoToast?) {
+    package func deleteConfirmed(_ task: OneTask, context: ModelContext, toast: UndoToast?) throws {
+      try TaskActions.deleteConfirmed(
+        task, context: context, toast: toast, reminders: reminders, ledger: ledger, runtime: runtime
+      )
+    }
+
+    @discardableResult
+    package func delete(_ alarm: OneAlarm, context: ModelContext, toast: UndoToast?) -> Bool {
       AlarmActions.delete(
         alarm, context: context, toast: toast, alarms: alarms, ledger: ledger, runtime: runtime)
     }

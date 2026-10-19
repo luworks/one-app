@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "about": "Synthetic Today alarm action journeys; repeating alarms keep the fixture visible across relaunches.",
+  "lists": [{ "name": "Reminders", "color": 0 }],
+  "reminders": [{ "title": "Keep reminder deadline", "due": { "day": 0, "time": "15:00" } }],
+  "events": [],
+  "alarms": [
+    { "time": "13:00", "label": "Timeline alarm", "weekdays": [1, 2, 3, 4, 5, 6, 7] },
+    { "time": "14:00", "label": "Keep this alarm", "weekdays": [1, 2, 3, 4, 5, 6, 7] }
+  ],
+  "chats": []
+}

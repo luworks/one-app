@@ -327,7 +327,7 @@
       case .created:
         reminders.noteDeleted(reminder: t.externalID)
         context.delete(t)
-      case .deleted, .undone, .granted, .revoked:
+      case .deleted, .undone, .granted, .revoked, .settled, .snoozed, .restored:
         return false
       }
       do { try context.save() } catch {

@@ -14,6 +14,176 @@
   @MainActor
   struct PlannerSessionTests {
     @Test
+    func confirmedEditorDeleteFailurePreservesIdentityThenRetryAndUndoCommitOnce() async throws {
+      let a = try Session(seed: 1900)
+      defer { a.dispose() }
+      await a.services.reminders.connect()
+      let task = try a.add("Editor deletion")
+      task.externalID = "editor-delete-id"
+      task.note = "Retain this note"
+      task.plannedStart = a.clock.now().addingTimeInterval(3600)
+      try a.context.save()
+      let identity = task.persistentModelID
+      let original = Ledger.snapshot(of: task)
+      a.services.reminders.currentRemote = RemindersSync.Remote(
+        id: "editor-delete-id",
+        title: task.title, notes: task.note, isDone: false, doneAt: nil, due: task.due,
+        listID: "test-list", listTitle: task.listName, flagged: false, repeatRule: nil,
+        repeats: false)
+      a.services.reminders.deletionFailure = .injected
+      #expect(throws: TestReminderService.Failure.self) {
+        try a.services.actions.deleteConfirmed(task, context: a.context, toast: a.toast)
+      }
+      #expect(!task.isDeleted && task.persistentModelID == identity)
+      #expect(try a.tasks().count == 1 && Ledger.snapshot(of: task) == original)
+      #expect(try a.rows().filter { $0.actionValue == .deleted }.isEmpty)
+      #expect(!a.toast.canUndo)
+      a.services.reminders.deletionFailure = nil
+      try a.services.actions.deleteConfirmed(task, context: a.context, toast: a.toast)
+      #expect(try a.tasks().isEmpty && a.toast.canUndo)
+      #expect(try a.rows().filter { $0.actionValue == .deleted }.count == 1)
+      a.toast.performUndo()
+      a.toast.performUndo()
+      let restored = try #require(try a.tasks().first)
+      #expect(try a.tasks().count == 1)
+      #expect(restored.note == original.note && restored.plannedStart == original.plannedStart)
+      #expect(restored.due == original.due)
+      #expect(restored.externalID == a.services.reminders.currentRemote?.id)
+      #expect(restored.externalID != "editor-delete-id")
+      #expect(try a.rows().filter { $0.actionValue == .undone }.count == 1)
+    }
+
+    @Test
+    func confirmedEditorDeleteCannotResurrectExternalRemovalOrReappearance() async throws {
+      for alreadyAbsent in [false, true] {
+        let a = try Session(seed: alreadyAbsent ? 1902 : 1901)
+        defer { a.dispose() }
+        await a.services.reminders.connect()
+        let task = try a.add("Guarded editor Undo")
+        task.externalID = "guarded-delete-id"
+        try a.context.save()
+        let remote = RemindersSync.Remote(
+          id: "guarded-delete-id", title: task.title,
+          notes: task.note, isDone: false, doneAt: nil, due: task.due,
+          listID: "test-list", listTitle: task.listName, flagged: false, repeatRule: nil,
+          repeats: false)
+        a.services.reminders.currentRemote = alreadyAbsent ? nil : remote
+        try a.services.actions.deleteConfirmed(task, context: a.context, toast: a.toast)
+        if alreadyAbsent {
+          #expect(!a.toast.canUndo)
+        } else {
+          a.services.reminders.currentRemote = remote
+        }
+        a.toast.performUndo()
+        #expect(try a.tasks().isEmpty)
+        #expect(try a.rows().filter { $0.actionValue == .undone }.isEmpty)
+      }
+    }
+
+    @Test
+    func alarmCommitAndCancelErrorsKeepIdentityAndRetry() async throws {
+      let a = try Session(seed: 1900)
+      defer { a.dispose() }
+      let alarm = OneAlarm(hour: 17, minute: 15, label: "Same label")
+      let other = OneAlarm(hour: 17, minute: 15, label: "Same label")
+      a.context.insert(alarm)
+      a.context.insert(other)
+      try a.context.save()
+      try await a.services.alarms.commit(alarm, context: a.context)
+      let id = try #require(alarm.alarmKitID)
+      let reminder = try a.add("Independent reminder", due: a.day, rings: true)
+      let due = reminder.due
+      alarm.label = "Edited"
+      a.services.alarms.failsSchedule = true
+      do {
+        try await a.services.alarms.commit(alarm, context: a.context)
+        Issue.record("Expected schedule failure")
+      } catch {}
+      #expect(alarm.label == "Same label" && alarm.alarmKitID == id)
+      #expect(alarm.isOn && alarm.alarmKitSignature == nil)
+      #expect(
+        try ModelContext(a.context.container).fetch(FetchDescriptor<OneAlarm>()).first {
+          $0.alarmKitID == id
+        }?.alarmKitSignature == nil)
+      #expect(other.label == "Same label" && other.alarmKitID == nil)
+      alarm.label = "Edited"
+      a.services.alarms.failsSchedule = false
+      try await a.services.alarms.commit(alarm, context: a.context)
+      let reader = ModelContext(a.context.container)
+      #expect(
+        try reader.fetch(FetchDescriptor<OneAlarm>()).first { $0.alarmKitID == id }?.label
+          == "Edited")
+      a.services.alarms.failsCancel = true
+      #expect(throws: (any Error).self) {
+        try AlarmActions.remove(alarm, context: a.context, alarms: a.services.alarms)
+      }
+      #expect(!alarm.isDeleted && alarm.modelContext != nil)
+      a.services.alarms.failsCancel = false
+      let deleted = try AlarmActions.remove(alarm, context: a.context, alarms: a.services.alarms)
+      await a.services.alarms.sync(a.context)
+      #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 1)
+      #expect(try ModelContext(a.context.container).fetch(FetchDescriptor<OneAlarm>()).count == 1)
+      #expect(a.services.alarms.cancelledIDs == [id])
+      #expect(!reminder.isDone && reminder.due == due && reminder.plannedStart == nil)
+      a.services.alarms.failsSchedule = true
+      do {
+        try await a.services.alarms.commit(deleted, context: a.context)
+        Issue.record("Expected Undo schedule failure")
+      } catch {}
+      #expect(deleted.modelContext == nil)
+      a.services.alarms.failsSchedule = false
+      try await a.services.alarms.commit(deleted, context: a.context)
+      try await a.services.alarms.commit(deleted, context: a.context)
+      #expect(deleted.alarmKitID == id)
+      #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 2)
+    }
+
+    @Test
+    func newAlarmFailureRetryRetainsSystemID() async throws {
+      let a = try Session(seed: 1902)
+      defer { a.dispose() }
+      let draft = OneAlarm(hour: 17, minute: 15, label: "Retry new alarm")
+      a.services.alarms.failsSchedule = true
+      a.services.alarms.failsCancel = true
+      do {
+        try await a.services.alarms.commit(draft, context: a.context)
+        Issue.record("Expected schedule and compensation failure")
+      } catch {}
+      let id = try #require(draft.alarmKitID)
+      let retry = draft.snapshot()
+      a.services.alarms.failsSchedule = false
+      a.services.alarms.failsCancel = false
+      try await a.services.alarms.commit(retry, context: a.context)
+      #expect(retry.alarmKitID == id)
+      #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 1)
+      #expect(a.services.alarms.scheduledIDs == [id])
+    }
+
+    @Test
+    func alarmLocalSaveFailureCompensatesAndKeepsPreviousSettings() async throws {
+      let a = try Session(seed: 1901)
+      defer { a.dispose() }
+      let alarm = OneAlarm(hour: 17, minute: 15, label: "Original")
+      a.context.insert(alarm)
+      try a.context.save()
+      alarm.label = "Draft"
+      var systemLabels: [String] = []
+      do {
+        try await AlarmActions.persist(
+          alarm, context: a.context,
+          schedule: {
+            systemLabels.append($0.label)
+          }, cancel: { _ in }, save: { throw AlarmActions.Failure.unavailable })
+        Issue.record("Expected local save failure")
+      } catch {}
+      #expect(systemLabels == ["Draft", "Original"])
+      #expect(alarm.label == "Original")
+      #expect(
+        try ModelContext(a.context.container).fetch(FetchDescriptor<OneAlarm>()).first?.label
+          == "Original")
+    }
+
+    @Test
     func askPlanUndoRestoresOnlyUnchangedTasksAndRecordsOnce() throws {
       let a = try Session(seed: 1400)
       defer { a.dispose() }

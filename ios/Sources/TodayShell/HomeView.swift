@@ -42,9 +42,8 @@
     }
   }
 
-  /// App shell, laid out like Notion mobile: avatar + tab pills on top, content in the middle,
-  /// and a bottom bar (search, Ask AI, new) that is always visible. A left drawer (like ChatGPT/Claude)
-  /// opens from the avatar or a swipe from the left edge.
+  /// App shell with secondary tabs above the page and Today, Chat and contextual creation below.
+  /// The menu and left-edge swipe open conversation history in the sidebar.
   public struct HomeView: View {
     private let composition: ShellComposition
     private var session: PlannerSession { composition.session }
@@ -400,7 +399,7 @@
           case .today:
             DayAgenda(
               day: $todayDay, showsWeekStrip: false, openTask: { editor = .task($0) },
-              openEvent: { editor = .local($0) },
+              openEvent: { editor = .local($0) }, openAlarm: { editor = .alarm($0) },
               openTimer: {
                 clockSection = .timer
                 withAnimation(.snappy) { tab = .clock }
@@ -472,6 +471,7 @@
         switch item {
         case .task:
           QuickReminderSheet(
+            listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
             actions: session.actions, ledger: session.ledger, alarms: session.alarms,
             // Due-style quick add; editing a reminder opens TaskEditor
             activity: session.activity, presentation: presentation)
@@ -714,7 +714,7 @@
 
     private var pills: some View {
       HStack(spacing: PillStyle.spacing) {
-        ForEach(HomeTab.allCases) { item in
+        ForEach(HomeTab.allCases.filter { $0 != .today }) { item in
           TabPill(tab: item, isSelected: item == tab) {
             traceTabAction(to: item)
             withAnimation(.snappy) { tab = item }
@@ -723,7 +723,7 @@
       }
     }
 
-    // MARK: Bottom: search, Ask AI, new
+    // MARK: Bottom: Today, Chat, new
 
     private var bottomBar: some View {
       VStack(spacing: 8) {
@@ -734,14 +734,15 @@
           .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
       }
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-      .background(alignment: .bottom) {
-        // Fade the list out under the floating bar so text never collides with it.
+      // Scroll content can extend beneath the safe-area inset. Keep it out of the controls.
+      .background(Color(.systemBackground))
+      .overlay(alignment: .top) {
         LinearGradient(
           colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
-          startPoint: .top, endPoint: .center
+          startPoint: .top, endPoint: .bottom
         )
-        .frame(height: 110)
-        .offset(y: 40)
+        .frame(height: 24)
+        .offset(y: -24)
         .allowsHitTesting(false)
       }
     }
@@ -775,35 +776,57 @@
     /// On World Clock, + adds a city.
     private var plusAddsCity: Bool { tab == .clock && clockSection == .worldClock }
 
-    /// Stopwatch and Timer have nothing to add: no + there, like Clock.
-    private var showsPlus: Bool {
-      !(tab == .clock && (clockSection == .stopwatch || clockSection == .timer))
-    }
-
     private var bottomButtons: some View {
       HStack(spacing: 10) {
-        // Search lives in the sidebar (top right), like ChatGPT and Claude; the bar keeps only Ask AI and +.
+        Button {
+          traceTabAction(to: .today)
+          withAnimation(.snappy) { tab = .today }
+        } label: {
+          bottomDestinationLabel("Today", icon: "sun.max", selected: tab == .today && ask == nil)
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel("Today")
+        .accessibilityAddTraits(tab == .today && ask == nil ? .isSelected : [])
         Button {
           openAsk(nil)
         } label: {
-          HStack(spacing: 8) {
-            Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
-            Text("Ask AI or add anything").foregroundStyle(.secondary).lineLimit(1)
-            Spacer(minLength: 0)
-          }
-          .font(.body)
-          .padding(.horizontal, 18)
-          .frame(maxWidth: .infinity, minHeight: 50)
-          .glassCapsule()
+          bottomDestinationLabel("Chat", icon: "bubble.left.and.bubble.right", selected: false)
         }
         .buttonStyle(PressScale())
-        // +: tap adds what fits the page you are on (alarm on the Clock tab, a city on World Clock, event on Calendar,
-        // otherwise a reminder); press and hold to pick.
-        if showsPlus { plusButton }
+        .accessibilityLabel("Chat")
+        // Keep the existing automation entry while giving VoiceOver the visible control's name.
+        .accessibilityIdentifier("Ask AI or add anything")
+        .accessibilityHint("Opens a new chat. Past chats are in the menu.")
+        plusButton
       }
       .padding(.horizontal, 20)
       .padding(.top, 6)
       .padding(.bottom, 4)
+    }
+
+    private func bottomDestinationLabel(_ title: String, icon: String, selected: Bool) -> some View
+    {
+      VStack(spacing: 2) {
+        Image(systemName: icon).font(.title3.weight(.semibold))
+        Text(title).font(.caption).lineLimit(1)
+      }
+      .frame(maxWidth: .infinity, minHeight: 56)
+      .background(PillStyle.fill(selected: selected), in: Capsule())
+      .foregroundStyle(PillStyle.text(selected: selected))
+    }
+
+    private var newReminderUsesPreferredList: Bool {
+      guard tab == .tasks, let target = remindersPath.last else { return true }
+      if case .defaultList = target { return false }
+      return true
+    }
+
+    /// Resolve the current list by identity so renaming a list cannot leave a stale name behind.
+    private var newReminderListName: String {
+      guard tab == .tasks, let target = remindersPath.last, case .list(let id) = target,
+        let list = context.model(for: id) as? OneList
+      else { return "" }
+      return list.name
     }
 
     private func presentNewItem(_ item: NewItem) {
@@ -817,8 +840,34 @@
       newItem = item
     }
 
-    private var plusButton: some View {
-      Menu {
+    /// Stopwatch and Timer retain their own start controls; + offers the other creation routes.
+    private var plusShowsChoices: Bool {
+      tab == .today || (tab == .clock && (clockSection == .stopwatch || clockSection == .timer))
+    }
+
+    private var plusCaption: String {
+      if plusShowsChoices { return "Add" }
+      if plusAddsCity { return "City" }
+      switch smartNewItem {
+      case .task: return "Reminder"
+      case .event: return "Event"
+      case .alarm: return "Alarm"
+      }
+    }
+
+    private var plusLabel: some View {
+      VStack(spacing: 2) {
+        Image(systemName: "plus").font(.title3.weight(.semibold))
+        Text(plusCaption).font(.caption2).lineLimit(1)
+      }
+      .foregroundStyle(.primary)
+      .padding(.horizontal, 12)
+      .frame(minWidth: 64, minHeight: 56)
+      .glassCapsule()
+    }
+
+    private var creationChoices: some View {
+      Group {
         if plusAddsCity {
           Button {
             PerformanceTrace.shared.beginPage("clock.cityPicker")
@@ -826,6 +875,11 @@
           } label: {
             Label("Add city", systemImage: "globe")
           }
+        }
+        Button {
+          presentNewItem(.alarm)
+        } label: {
+          Label("New alarm", systemImage: "alarm")
         }
         Button {
           presentNewItem(.task)
@@ -837,37 +891,51 @@
         } label: {
           Label("New event", systemImage: "calendar")
         }
-        Button {
-          presentNewItem(.alarm)
-        } label: {
-          Label("New alarm", systemImage: "alarm")
-        }
-      } label: {
-        Image(systemName: "plus")
-          .font(.title3.weight(.semibold))
-          .foregroundStyle(.primary)
-          .frame(width: 50, height: 50)
-          .glassCircle()
-      } primaryAction: {
-        if plusAddsCity {
-          PerformanceTrace.shared.beginPage("clock.cityPicker")
-          addingCity = true
-        } else if smartNewItem == .event {
-          newEvent()
+      }
+    }
+
+    private var plusButton: some View {
+      Group {
+        if plusShowsChoices {
+          Menu {
+            Section(tab == .today ? "Add to Today" : "Add an item") { creationChoices }
+          } label: {
+            plusLabel
+          }
         } else {
-          presentNewItem(smartNewItem)
+          Menu {
+            creationChoices
+          } label: {
+            plusLabel
+          } primaryAction: {
+            if plusAddsCity {
+              PerformanceTrace.shared.beginPage("clock.cityPicker")
+              addingCity = true
+            } else if smartNewItem == .event {
+              newEvent()
+            } else {
+              presentNewItem(smartNewItem)
+            }
+          }
         }
       }
       .tint(.primary)
-      .accessibilityLabel("New")
+      .accessibilityIdentifier("New")
+      .accessibilityLabel(
+        plusShowsChoices
+          ? (tab == .today ? "Add to Today" : "Add an item") : "New \(plusCaption.lowercased())"
+      )
       .accessibilityHint(
-        "Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
+        plusShowsChoices
+          ? "Choose an alarm, reminder or event."
+          : "Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
     }
+
   }
 
   /// Swipe left or right to move to the next or previous tab.
   ///
-  /// Where it works: only on the top bar (the tab pills) and the bottom bar (search, Ask AI, +). These two
+  /// Where it works: only on the top bar (the tab pills) and the bottom bar (Today, Chat, +). These two
   /// strips hold no rows, so they never compete with row swipe actions (Delete / Flag on reminders,
   /// alarms and events), with Calendar's own month/week paging, or with scrolling in the middle of the
   /// page. The middle of the page does not switch tabs on purpose.

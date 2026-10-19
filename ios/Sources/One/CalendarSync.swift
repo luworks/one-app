@@ -288,6 +288,38 @@
       return events(in: interval, excluding: exclude)
     }
 
+    /// Only immutable identifiers leave the adapter. Source IDs are device-local EventKit sources.
+    package func focusIdentity(externalID: String?, occurrence requested: Date?)
+      -> FocusIdentityResolution
+    {
+      guard let id = externalID else { return .localOnly }
+      guard hasAccess else { return .permissionDenied }
+      guard isOn, storeReady else { return .unavailable }
+      let event: EKEvent?
+      if let requested {
+        if let exact = occurrence(id, at: requested) {
+          event = exact
+        } else if let candidate = store.event(withIdentifier: id) {
+          guard candidate.occurrenceDate == requested || candidate.startDate == requested else {
+            return .unavailable
+          }
+          event = candidate
+        } else {
+          event = nil
+        }
+      } else {
+        event = store.event(withIdentifier: id)
+      }
+      guard let event, let source = event.calendar.source else { return .notFound }
+      let repeating = event.hasRecurrenceRules || event.isDetached
+      guard !repeating || event.occurrenceDate != nil else { return .unavailable }
+      return .available(
+        FocusIdentity(
+          provider: "apple.calendar", account: source.sourceIdentifier,
+          calendar: event.calendar.calendarIdentifier, item: event.calendarItemIdentifier,
+          occurrence: repeating ? event.occurrenceDate : nil))
+    }
+
     /// The calendar a mirrored event (one Today created) lives in: its color, and whether the Calendars list hides it.
     package func calendar(forExternalID id: String?) -> SystemCalendar? {
       mirror(id)?.calendar
@@ -388,14 +420,25 @@
     package func delete(externalID: String?, occurrence: Date? = nil, span: EKSpan = .futureEvents)
       -> Bool
     {
-      guard isOn, let id = externalID,
-        let ek = occurrence.flatMap({ self.occurrence(id, at: $0) })
-          ?? store.event(withIdentifier: id)
-      else {
-        log.info(
-          "delete: no system copy (isOn=\(self.isOn), id=\(externalID ?? "nil", privacy: .public))")
-        return true
+      guard let id = externalID else { return true }
+      guard isOn, hasAccess, storeReady else { return false }
+      let ek: EKEvent?
+      if let occurrence {
+        if let exact = self.occurrence(id, at: occurrence) {
+          ek = exact
+        } else if let candidate = store.event(withIdentifier: id) {
+          guard candidate.occurrenceDate == occurrence || candidate.startDate == occurrence else {
+            return false
+          }
+          ek = candidate
+        } else {
+          ek = nil
+        }
+      } else {
+        ek = store.event(withIdentifier: id)
       }
+      // A genuinely absent exact ID is already deleted; callers must not offer resurrection Undo.
+      guard let ek else { return true }
       return remove(ek, span: span)
     }
 
@@ -409,16 +452,10 @@
       ).map { found[$0] }
     }
 
-    /// Removes the system copy of an event Today created. Its identifier can change after iCloud / Exchange sync re-keys the
-    /// event; then the id finds nothing, and the copy would survive the delete and come back as a calendar event. So when the
-    /// id misses, the copy is found by title and start time instead.
+    /// Explicit deletion uses exact source identity, never the sync mirror's title-matching fallback.
     @discardableResult
     package func delete(_ event: OneEvent, span: EKSpan = .futureEvents) -> Bool {
-      guard let ek = systemCopy(of: event) else {
-        log.info("delete: no linked system copy")
-        return true
-      }
-      return remove(ek, span: span)
+      delete(externalID: event.externalID, occurrence: event.start, span: span)
     }
 
     private func remove(_ ek: EKEvent, span: EKSpan) -> Bool {
@@ -463,7 +500,9 @@
 
     /// Whether the system copy of an event can be deleted (its calendar accepts changes). True when there is no system copy.
     package func canDelete(externalID: String?) -> Bool {
-      guard isOn, let id = externalID, let ek = store.event(withIdentifier: id) else { return true }
+      guard let id = externalID else { return true }
+      guard isOn, hasAccess, storeReady else { return false }
+      guard let ek = store.event(withIdentifier: id) else { return true }
       return ek.calendar.allowsContentModifications
     }
 

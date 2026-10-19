@@ -41,6 +41,8 @@
       calendar = TestCalendarService(runtime: runtime)
       reminders = TestReminderService(runtime: runtime, arguments: arguments)
       alarms = TestAlarmService()
+      alarms.failsSchedule = arguments.contains("-uiTestingAlarmScheduleError")
+      alarms.failsCancel = arguments.contains("-uiTestingAlarmCancelError")
       if arguments.contains("-uiTestingAlarmDenied") {
         alarms.authorization = .denied
         alarms.authorizationResponse = .denied
@@ -86,6 +88,8 @@
     package var queryEvents: [ExternalEvent] = []
     package var hiddenCalendarIDs: Set<String> = []
     package private(set) var refreshCount = 0
+    package private(set) var deletionRequests: [String?] = []
+    package var deletionResult: Bool?
     package private(set) var enableRequests: [Bool] = []
     private let runtime: PlannerRuntime
     package init(runtime: PlannerRuntime) { self.runtime = runtime }
@@ -126,6 +130,11 @@
       guard isOn, let id else { return nil }
       return queryEvents.first { $0.eventIdentifier == id }
     }
+    package var focusResolutions: [String: FocusIdentityResolution] = [:]
+    package func focusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution {
+      guard let id = externalID else { return .localOnly }
+      return focusResolutions[id] ?? .unavailable
+    }
     package func calendar(forExternalID id: String?) -> SystemCalendar? {
       guard let e = event(id) else { return nil }
       return availableCalendars.first { $0.id == e.calendarID }
@@ -141,10 +150,11 @@
     package func canDelete(externalID: String?) -> Bool { !isDisposed && externalID == nil }
     package func save(_ event: OneEvent, span: EKSpan) -> String? { nil }
     package func delete(_ event: OneEvent, span: EKSpan) -> Bool {
-      canDelete(externalID: event.externalID)
+      delete(externalID: event.externalID, occurrence: event.start, span: span)
     }
     package func delete(externalID: String?, occurrence: Date?, span: EKSpan) -> Bool {
-      canDelete(externalID: externalID)
+      deletionRequests.append(externalID)
+      return deletionResult ?? canDelete(externalID: externalID)
     }
     package func removedMirrors(_ events: [OneEvent]) -> [OneEvent] { [] }
     package func title(externalID: String, occurrence: Date?) -> String? {
@@ -229,8 +239,15 @@
       reconcileCount += 1
     }
     package var editFailure: Failure?
+    package var deletionFailure: Failure?
     package private(set) var editCalls = 0
+    package private(set) var deletionCalls = 0
 
+    package var focusResolutions: [String: FocusIdentityResolution] = [:]
+    package func focusIdentity(_ task: OneTask) -> FocusIdentityResolution {
+      guard let id = task.externalID else { return .localOnly }
+      return focusResolutions[id] ?? .unavailable
+    }
     package func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
       -> RemindersSync.Remote?
     {
@@ -251,6 +268,38 @@
     }
     package func didPersistEdit(_ task: OneTask, accepted: RemindersSync.Remote?) {
       scheduleReconcile(after: .milliseconds(50))
+    }
+    package func commitDeletion(_ task: OneTask, expected: TaskSnapshot) throws
+      -> ReminderDeletionReceipt
+    {
+      guard let id = task.externalID else { return .localOnly }
+      guard isConnected else { throw Failure.disconnected }
+      deletionCalls += 1
+      if let deletionFailure { throw deletionFailure }
+      guard let currentRemote else { return .alreadyAbsent(id) }
+      guard currentRemote.fingerprint == RemindersSync.fingerprint(of: expected) else {
+        throw Failure.changedOutside
+      }
+      self.currentRemote = nil
+      return .confirmed(currentRemote, token: runtime.nextID())
+    }
+    package func restoreDeletion(_ task: OneTask, receipt: ReminderDeletionReceipt) throws
+      -> RemindersSync.Remote?
+    {
+      switch receipt {
+      case .localOnly: return nil
+      case .alreadyAbsent: throw Failure.changedOutside
+      case .confirmed:
+        guard isConnected else { throw Failure.disconnected }
+        guard currentRemote == nil else { throw Failure.changedOutside }
+        let restored = RemindersSync.Remote(
+          id: runtime.nextID().uuidString, title: task.title,
+          notes: task.note, isDone: task.isDone, doneAt: task.doneAt, due: task.due,
+          listID: "test-list", listTitle: task.listName, flagged: task.flagged,
+          repeatRule: task.repeatRule, repeats: task.repeatRule != nil)
+        currentRemote = restored
+        return restored
+      }
     }
     package func commitCompletion(
       _ task: OneTask, done: Bool, restoringDue: Date?, restoresDue: Bool,
@@ -302,6 +351,11 @@
     package var isAvailable = true
     package private(set) var requestCount = 0
     package private(set) var syncCount = 0
+    package var failsSchedule = false
+    package var failsCancel = false
+    package private(set) var scheduledIDs: [UUID] = []
+    package private(set) var cancelledIDs: [UUID] = []
+    private var committing = false
     package private(set) var stoppedIDs: [UUID] = []
     package private(set) var isDisposed = false
     package init() {}
@@ -314,6 +368,31 @@
       authorization = authorizationResponse
     }
     package func sync(_ context: ModelContext) async { if !isDisposed { syncCount += 1 } }
+    package func commit(_ alarm: OneAlarm, context: ModelContext) async throws {
+      guard !committing, !isDisposed else { throw AlarmActions.Failure.busy }
+      committing = true
+      defer { committing = false }
+      try await AlarmActions.persist(
+        alarm, context: context,
+        schedule: { proposal in
+          guard self.authorization == .authorized, !self.failsSchedule else {
+            throw AlarmActions.Failure.unavailable
+          }
+          if let id = proposal.alarmKitID {
+            self.scheduledIDs.append(id)
+            self.states[id] = proposal.isOn ? .scheduled : nil
+          }
+        }, cancel: { proposal in try self.cancel(proposal) })
+    }
+    package func cancel(_ alarm: OneAlarm) throws {
+      guard !isDisposed, !failsCancel, authorization == .authorized else {
+        throw AlarmActions.Failure.unavailable
+      }
+      if let id = alarm.alarmKitID {
+        cancelledIDs.append(id)
+        states[id] = nil
+      }
+    }
     package func stop(_ id: UUID) {
       guard !isDisposed else { return }
       stoppedIDs.append(id)

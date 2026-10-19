@@ -14,6 +14,17 @@
     ) {
       switch entry.source {
       case .system(let id):
+        let resolution = calendar.focusIdentity(externalID: id, occurrence: entry.start)
+        if case .notFound = resolution {
+          calendar.refresh()
+          toast?.showNotice("This event was already deleted outside Today.")
+          return
+        }
+        guard case .available = resolution else {
+          toast?.showNotice(
+            "Calendar access is unavailable. This event was kept; reconnect and retry.")
+          return
+        }
         guard calendar.canDelete(externalID: id) else {
           toast?.showNotice(
             "“\(entry.title)” is in a read-only calendar, so it can't be deleted here.")
@@ -31,13 +42,21 @@
           before: plannerDayLabel(entry.start, runtime: runtime), context: context)
         // Undo puts back a plain copy (title, time, place) in the default calendar, for a one-off event only:
         // a series has its own rules and attendees that a plain copy would not carry, and it was asked about first.
-        guard !entry.repeats else { return }
+        guard !entry.repeats else {
+          toast?.showNotice("Deleted “\(entry.title)”")
+          return
+        }
         let backup = OneEvent(
           title: entry.title, start: entry.start,
           durationMinutes: max(1, Int(entry.end.timeIntervalSince(entry.start) / 60)),
           calendarName: entry.calendarTitle)
         backup.isAllDay = entry.isAllDay
-        toast?.show("Deleted “\(entry.title)”") {
+        toast?.show("Deleted “\(entry.title)”. Undo adds a new copy in the default calendar.") {
+          guard case .notFound = calendar.focusIdentity(externalID: id, occurrence: entry.start)
+          else {
+            toast?.showNotice("Calendar changed again. The event was not recreated.")
+            return
+          }
           guard calendar.save(backup) != nil else {
             toast?.showNotice("Couldn’t restore this event in Calendar. Try adding it again.")
             return
@@ -45,19 +64,68 @@
           calendar.refresh()
         }
       case .local(let event):
+        // A local repeating model has no per-occurrence exception storage. Keep the existing series-only
+        // action rather than deleting its entire mirror after a single-occurrence source write.
+        guard span != .thisEvent || event.repeats == nil else {
+          toast?.showNotice(
+            "Open this event in Calendar to delete one occurrence. The series was kept.")
+          return
+        }
         let backup = event.copy()
         let wasLinked = event.externalID != nil
+        let externalID = event.externalID
+        let resolution = calendar.focusIdentity(externalID: externalID, occurrence: entry.start)
+        let alreadyAbsent: Bool
+        if case .notFound = resolution { alreadyAbsent = true } else { alreadyAbsent = false }
+        if wasLinked {
+          switch resolution {
+          case .available, .notFound: break
+          default:
+            toast?.showNotice(
+              "Calendar access is unavailable. This event was kept; reconnect and retry.")
+            return
+          }
+        }
         // The copy in Apple Calendar goes first; if it refuses, nothing is deleted anywhere.
-        guard calendar.delete(event, span: span) else {
+        guard
+          !wasLinked || calendar.delete(externalID: externalID, occurrence: entry.start, span: span)
+        else {
           toast?.showNotice("Couldn't delete “\(event.title)” from Calendar, so it was kept.")
+          return
+        }
+        withAnimation(.snappy) { context.delete(event) }
+        do { try context.save() } catch {
+          context.insert(event)
+          toast?.showNotice(
+            wasLinked
+              ? "Calendar accepted the deletion, but Today couldn't save its copy. Refresh to retry."
+              : "Couldn't save the deletion. This event was kept.")
           return
         }
         ledger.record(
           .deleted, kind: "event", title: backup.title,
           before: plannerDayLabel(entry.start, runtime: runtime), context: context)
-        withAnimation(.snappy) { context.delete(event) }
-        toast?.show("Deleted “\(backup.title)”") {
+        guard !alreadyAbsent else {
+          toast?.showNotice("Removed the local copy. It was already deleted in Calendar.")
+          return
+        }
+        guard !wasLinked || !entry.repeats else {
+          toast?.showNotice("Deleted “\(backup.title)”")
+          return
+        }
+        let message =
+          wasLinked
+          ? "Deleted “\(backup.title)”. Undo adds a new copy in the default calendar."
+          : "Deleted “\(backup.title)”"
+        toast?.show(message) {
           if wasLinked {
+            guard
+              case .notFound = calendar.focusIdentity(
+                externalID: externalID, occurrence: entry.start)
+            else {
+              toast?.showNotice("Calendar changed again. The event was not recreated.")
+              return
+            }
             guard let id = calendar.save(backup) else {
               toast?.showNotice("Couldn’t restore this event in Calendar. Try adding it again.")
               return
@@ -68,9 +136,13 @@
           try? context.save()
         }
       case .task(let task):
-        TaskActions.delete(
-          task, context: context, toast: toast, reminders: reminders, ledger: ledger,
-          runtime: runtime)
+        do {
+          try TaskActions.deleteConfirmed(
+            task, context: context, toast: toast, reminders: reminders, ledger: ledger,
+            runtime: runtime)
+        } catch {
+          toast?.showNotice("Couldn't delete this reminder. " + error.localizedDescription)
+        }
       case .alarm(let alarm):
         AlarmActions.delete(
           alarm, context: context, toast: toast, alarms: alarms, ledger: ledger, runtime: runtime)

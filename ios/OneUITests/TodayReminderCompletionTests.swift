@@ -4,7 +4,10 @@ import XCTest
 @MainActor
 final class TodayReminderCompletionTests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
-  private func launch(title: String, store: String, seed: Bool = false, fail: Bool = false)
+  private func launch(
+    title: String, store: String, seed: Bool = false, fail: Bool = false,
+    extra: [String] = []
+  )
     -> XCUIApplication
   {
     let app = XCUIApplication()
@@ -12,6 +15,7 @@ final class TodayReminderCompletionTests: XCTestCase {
       "-uiTesting", "-uiTestingRemindersSync", "-uiTestingStore", store,
       "-uiTestingSyncDump", title, "-uiTestingNow", "12:00",
     ]
+    app.launchArguments += extra
     if seed { app.launchArguments += ["-uiTestingAppleOp", "addToday", title, "_"] }
     if fail { app.launchArguments += ["-uiTestingFailReminderCompletion"] }
     app.launch()
@@ -61,6 +65,129 @@ final class TodayReminderCompletionTests: XCTestCase {
       contentsOf: URL(fileURLWithPath: TestData.fixturePath("today-reminder-completion.json")))
     let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     return try XCTUnwrap((object["reminders"] as? [[String: Any]])?.first?["title"] as? String)
+  }
+
+  func testCompactEditorEditAndDeleteFailuresRetryAcrossInFlightSync() throws {
+    connect()
+    let title = "TX\(UUID().uuidString.prefix(8)) Editor commit"
+    let store = "editor-write-\(UUID().uuidString)"
+    let control = title + " control"
+    var app = launch(
+      title: title, store: store, seed: true,
+      extra: [
+        "-uiTestingReminderEditMetadata", "-uiTestingFailReminderEditOnce",
+        "-uiTestingFailReminderDeleteOnce",
+        "-uiTestingDelayReminderFetchAfterFirst",
+        "-uiTestingAppleOp", "addToday", control, "_",
+      ])
+    func wait(_ element: XCUIElement, _ format: String, _ value: String, timeout: TimeInterval = 25)
+    {
+      XCTAssertEqual(
+        XCTWaiter.wait(
+          for: [
+            expectation(
+              for: NSPredicate(format: format, value),
+              evaluatedWith: element)
+          ], timeout: timeout), .completed, element.debugDescription)
+    }
+    func assertTime(_ minutes: Int) {
+      let f = DateFormatter()
+      f.locale = Locale(identifier: "en_US_POSIX")
+      f.dateFormat = "yyyy-MM-dd"
+      let expected = "\(title)|open|\(f.string(from: .now)) 14:\(String(format: "%02d", minutes))|-"
+      for side in ["apple", "app", "persisted"] {
+        wait(app.staticTexts["syncDump.\(side)"], "label CONTAINS %@", expected)
+      }
+    }
+    assertTime(0)
+    app.staticTexts[title].firstMatch.tap()
+    app.buttons["+10 min"].tap()
+    app.buttons["task.save"].tap()
+    XCTAssertTrue(app.alerts["Couldn’t Update Reminder"].waitForExistence(timeout: 5))
+    app.alerts.buttons["OK"].tap()
+    XCTAssertTrue(app.textFields["task.title"].exists)
+    XCTAssertTrue(app.buttons["task.save"].isEnabled, "the failed draft remains retryable")
+    app.buttons["task.save"].tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
+    assertTime(10)
+    app.staticTexts[title].firstMatch.tap()
+    XCUIDevice.shared.press(.home)
+    app.activate()
+    wait(app.staticTexts["syncDump.fetch"], "label == %@", "fetching")
+    app.buttons["+10 min"].tap()
+    app.buttons["task.save"].tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
+    wait(app.staticTexts["syncDump.rejected"], "label != %@", "0")
+    assertTime(20)
+    let metadata = app.staticTexts["syncDump.metadata"].label.components(separatedBy: ";").first {
+      $0.contains("14:20")
+    }
+    XCTAssertNotNil(metadata)
+    app.staticTexts[title].firstMatch.tap()
+    app.buttons["Delete task"].tap()
+    XCTAssertTrue(app.alerts["Couldn’t Update Reminder"].waitForExistence(timeout: 5))
+    app.alerts.buttons["OK"].tap()
+    XCTAssertTrue(
+      app.textFields["task.title"].exists,
+      "a refused system delete leaves the editor and local object intact")
+    app.buttons["Delete task"].tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
+    app.buttons["Undo"].tap()
+    assertTime(20)
+    let restored = app.staticTexts["syncDump.metadata"].label.components(separatedBy: ";").first {
+      $0.contains("14:20")
+    }
+    XCTAssertEqual(
+      restored?.components(separatedBy: "|").dropFirst(),
+      metadata?.components(separatedBy: "|").dropFirst(),
+      "Undo preserves the native reminder payload, with a new system identity")
+    app.staticTexts[title].firstMatch.tap()
+    app.buttons["Delete task"].tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "yyyy-MM-dd"
+    let remaining = "\(control)|open|\(f.string(from: .now)) 14:00|-"
+    for side in ["apple", "app", "persisted"] {
+      wait(app.staticTexts["syncDump.\(side)"], "label == %@", remaining)
+    }
+    app.terminate()
+    app = launch(title: title, store: store)
+    for side in ["apple", "app", "persisted"] {
+      wait(app.staticTexts["syncDump.\(side)"], "label == %@", remaining)
+    }
+    XCTAssertFalse(
+      app.staticTexts[title].exists,
+      "a confirmed deletion does not reappear after refresh and relaunch")
+  }
+
+  func testCompactEditorCompletionFailureRetryWritebackAndUndo() throws {
+    connect()
+    let unique = UUID().uuidString.prefix(8)
+    let title = "TE\(unique) " + (try fixtureTitle())
+    let store = "editor-completion-\(unique)"
+    var app = launch(title: title, store: store, seed: true, fail: true)
+    assertState(app, done: false)
+    app.staticTexts[title].firstMatch.tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 5))
+    app.buttons["Mark done"].tap()
+    XCTAssertTrue(app.alerts["Couldn’t Update Reminder"].waitForExistence(timeout: 5))
+    app.alerts.buttons["OK"].tap()
+    XCTAssertTrue(app.textFields["task.title"].exists, "failure keeps the editor for retry")
+    app.buttons["Cancel"].tap()
+    assertState(app, done: false)
+    app.terminate()
+    app = launch(title: title, store: store)
+    assertState(app, done: false)
+    app.staticTexts[title].firstMatch.tap()
+    app.buttons["Mark done"].tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
+    assertState(app, done: true)
+    app.buttons["Undo"].tap()
+    assertState(app, done: false)
+    app.terminate()
+    app = launch(title: title, store: store)
+    assertState(app, done: false)
   }
 
   func testTodayCompletionCommitsToAppleAndSurvivesRefreshAndRelaunch() throws {

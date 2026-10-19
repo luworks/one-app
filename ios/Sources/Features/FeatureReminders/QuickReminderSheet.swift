@@ -16,6 +16,7 @@
     private let ledger: Ledger
     private let alarms: any AlarmService
     private let activity: ActivityCenter
+    private let usesPreferredList: Bool
     @State private var saveError: String?
     @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.dismiss) private var dismiss
@@ -38,13 +39,15 @@
     @FocusState private var focused: Bool
 
     package init(
-      listName: String = "", actions: PlannerActions, ledger: Ledger, alarms: any AlarmService,
+      listName: String = "", usesPreferredList: Bool = true, actions: PlannerActions,
+      ledger: Ledger, alarms: any AlarmService,
       activity: ActivityCenter, presentation: PlannerPresentation
     ) {
       self.actions = actions
       self.ledger = ledger
       self.alarms = alarms
       self.activity = activity
+      self.usesPreferredList = usesPreferredList
       _when = State(
         initialValue: QuickTime.start(now: presentation.now, calendar: presentation.calendar))
       _openedAt = State(initialValue: presentation.now)
@@ -72,7 +75,7 @@
       .onAppear {
         focused = true
         // Settings > Reminders > "New reminders go to" (Auto leaves the list as it was opened).
-        if listName.isEmpty,
+        if usesPreferredList, listName.isEmpty,
           let chosen = Preferences.newReminderList(
             existing: lists.map(\.name), presentation.defaults)
         {
@@ -307,59 +310,8 @@
       .tint(.primary)
     }
 
-    /// Due's grid: four times of day, then +10 min / +1 hr / +3 hr / +1 day, then the same backwards.
     private var grid: some View {
-      Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-        GridRow {
-          ForEach(QuickTime.presets, id: \.hour) { p in
-            cell(String(format: "%02d:%02d", p.hour, p.minute)) {
-              set(
-                QuickTime.preset(
-                  hour: p.hour, minute: p.minute, on: when ?? presentation.now,
-                  now: presentation.now, calendar: presentation.calendar))
-            }
-          }
-        }
-        GridRow {
-          ForEach(QuickTime.nudges, id: \.self) { m in
-            cell(QuickTime.nudgeLabel(m)) {
-              set(
-                QuickTime.nudge(
-                  when ?? QuickTime.start(now: presentation.now, calendar: presentation.calendar),
-                  minutes: m, calendar: presentation.calendar))
-            }
-          }
-        }
-        GridRow {
-          ForEach(QuickTime.nudges, id: \.self) { m in
-            cell(QuickTime.nudgeLabel(-m)) {
-              set(
-                QuickTime.nudge(
-                  when ?? QuickTime.start(now: presentation.now, calendar: presentation.calendar),
-                  minutes: -m, calendar: presentation.calendar))
-            }
-          }
-        }
-      }
-      .padding([.horizontal, .bottom], 12)
-      .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-    }
-
-    private func cell(_ text: String, action: @escaping () -> Void) -> some View {
-      Button(action: action) {
-        Text(text)
-          .font(.title3.monospacedDigit())
-          .lineLimit(1)
-          .minimumScaleFactor(0.7)
-          .padding(.horizontal, 4)
-          .frame(maxWidth: .infinity, minHeight: 50)
-          .background(
-            Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-          )
-          .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-      }
-      .buttonStyle(.plain)
-      .sensoryFeedback(.selection, trigger: when)
+      QuickTimeGrid(date: when, now: presentation.now, calendar: presentation.calendar, set: set)
     }
 
     private func set(_ date: Date) {
@@ -388,6 +340,64 @@
       activity.record(
         ActivityEvents.quickAddCommit(ms: Int(presentation.now.timeIntervalSince(openedAt) * 1000)))
       dismiss()
+    }
+  }
+
+  /// Shared by quick add and reminder editing, including reminders opened from Calendar.
+  /// Each cell keeps a 44-point target even when the surrounding sheet is compact.
+  struct QuickTimeGrid: View {
+    let date: Date?
+    let now: Date
+    let calendar: Calendar
+    let set: (Date) -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+      LazyVGrid(
+        columns: Array(
+          repeating: GridItem(.flexible(), spacing: 0),
+          count: typeSize.isAccessibilitySize ? 2 : 4), spacing: 0
+      ) {
+        ForEach(QuickTime.presets, id: \.hour) { preset in
+          cell(String(format: "%02d:%02d", preset.hour, preset.minute)) {
+            set(
+              QuickTime.preset(
+                hour: preset.hour, minute: preset.minute,
+                on: date ?? now, now: now, calendar: calendar))
+          }
+        }
+        ForEach(QuickTime.nudges + QuickTime.nudges.map { -$0 }, id: \.self) { minutes in
+          nudge(minutes)
+        }
+      }
+      .sensoryFeedback(.selection, trigger: date)
+    }
+
+    private func nudge(_ minutes: Int) -> some View {
+      cell(QuickTime.nudgeLabel(minutes)) {
+        set(
+          QuickTime.nudge(
+            date ?? QuickTime.start(now: now, calendar: calendar),
+            minutes: minutes, calendar: calendar))
+      }
+    }
+
+    private func cell(_ title: String, action: @escaping () -> Void) -> some View {
+      Button(action: action) {
+        Text(title)
+          .font(.body.monospacedDigit())
+          .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+          .minimumScaleFactor(typeSize.isAccessibilitySize ? 1 : 0.7)
+          .padding(.horizontal, 3)
+          .frame(maxWidth: .infinity, minHeight: 46)
+          .background(Color(.secondarySystemGroupedBackground))
+          .overlay(alignment: .bottom) { Rectangle().fill(Color(.separator)).frame(height: 0.5) }
+          .overlay(alignment: .trailing) { Rectangle().fill(Color(.separator)).frame(width: 0.5) }
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .tint(.primary)
     }
   }
 

@@ -50,6 +50,25 @@ final class QuickTimeTests: XCTestCase {
     XCTAssertEqual(QuickTime.nudgeLabel(1440), "+1 day")
   }
 
+  func testDayNudgesKeepWallTimeAcrossDSTAndMinuteNudgesCrossMidnight() {
+    var local = Calendar(identifier: .gregorian)
+    local.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+    for day in [
+      DateComponents(year: 2026, month: 3, day: 7, hour: 12),
+      DateComponents(year: 2026, month: 10, day: 31, hour: 12),
+    ] {
+      let before = local.date(from: day)!
+      let after = QuickTime.nudge(before, minutes: 1440, calendar: local)
+      XCTAssertEqual(local.component(.hour, from: after), 12)
+      XCTAssertEqual(local.dateComponents([.day], from: before, to: after).day, 1)
+      XCTAssertEqual(QuickTime.nudge(after, minutes: -1440, calendar: local), before)
+    }
+    let late = cal.date(bySettingHour: 23, minute: 55, second: 0, of: now)!
+    XCTAssertEqual(
+      parts(QuickTime.nudge(late, minutes: 10, calendar: cal)),
+      DateComponents(month: 10, day: 17, hour: 0, minute: 5))
+  }
+
   func testDaysKeepTheTime() {
     let nine = cal.date(bySettingHour: 9, minute: 30, second: 0, of: now)!
     XCTAssertEqual(
