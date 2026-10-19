@@ -19,6 +19,23 @@ def simulator_name(root):
     return 'Today-Dev-' + derived_data(root).name[:8]
 
 
+def execution_selectors(contract, root, expected):
+    """Swift Testing function identifiers include parentheses; XCTest selectors do not."""
+    frameworks = {}
+    for suites in contract.inventory(root).values():
+        for suite in suites:
+            for method in suite['methods']:
+                identifier = '/'.join(filter(None, (suite['target'], suite['suite'], method['name'])))
+                frameworks[identifier] = method['framework']
+    result = []
+    for identifier in expected:
+        framework = frameworks.get(identifier)
+        if framework not in ('SwiftTesting', 'XCTest'):
+            raise ValueError('Missing execution framework: ' + identifier)
+        result.append(identifier + ('()' if framework == 'SwiftTesting' else ''))
+    return result
+
+
 def selected(contract, root, groups, only=()):
     source = contract.inventory(root)
     plan = contract.plan(list(groups), source)
@@ -139,10 +156,10 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False, reuse=Fal
                 result = invoke([*command,
                                  '-destination', 'platform=iOS Simulator,id=' + simulator,
                                  '-derivedDataPath', str(derived_data(root)), '-resultBundlePath', str(bundle),
-                                 '-jobs', '2', '-parallel-testing-enabled', 'NO',
+                                 '-jobs', '2', '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
                                  '-maximum-concurrent-test-simulator-destinations', '1',
                                  '-maximum-parallel-testing-workers', '1',
-                                 *flags, *['-only-testing:' + value for value in expected]])
+                                 *flags, *['-only-testing:' + value for value in execution_selectors(contract, root, expected)]])
                 raw = result.log.read_text()
                 data, error, summary = None, None, None
                 try:

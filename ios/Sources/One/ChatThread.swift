@@ -1,16 +1,16 @@
 #if os(iOS)
-import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import Foundation
-import SwiftData
+  import TodayCore
+  import TodayShared
+  import TodayData
+  import TodayPlatform
+  import Foundation
+  import SwiftData
 
-/// A saved conversation with the AI: role + text per message, and the preview cards that were decided (added, dropped,
-/// undone; see `StoredCard`) under the message they belong to. A card still waiting for Add is not restored; plan and
-/// change cards are not kept. Reopening a chat shows what was said and lets you continue it.
-@Model
-package final class ChatThread {
+  /// A saved conversation with the AI: role + text per message, and the preview cards that were decided (added, dropped,
+  /// undone; see `StoredCard`) under the message they belong to. A card still waiting for Add is not restored; plan and
+  /// change cards are not kept. Reopening a chat shows what was said and lets you continue it.
+  @Model
+  package final class ChatThread {
     package var id: UUID = UUID()
     /// The first user message, tidied (see `ConversationHistory.title`).
     package var title: String = ""
@@ -29,48 +29,54 @@ package final class ChatThread {
     package var cardsData: Data = Data()
 
     package var cards: [StoredCard] {
-        get { StoredCard.restore(cardsData) }
-        set { cardsData = StoredCard.encode(newValue) }
+      get { StoredCard.restore(cardsData) }
+      set { cardsData = StoredCard.encode(newValue) }
     }
 
     package var items: [PersistentIdentifier] {
-        get { (try? JSONDecoder().decode([PersistentIdentifier].self, from: itemsData)) ?? [] }
-        set { itemsData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+      get { (try? JSONDecoder().decode([PersistentIdentifier].self, from: itemsData)) ?? [] }
+      set { itemsData = (try? JSONEncoder().encode(newValue)) ?? Data() }
     }
 
-    package init(title: String, messages: [ChatMessage], createdAt: Date = .now, updatedAt: Date = .now, id: UUID = UUID()) {
-        self.id = id
-        self.title = title
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-        self.messagesData = Self.encode(messages)
+    package init(
+      title: String, messages: [ChatMessage], createdAt: Date = .now, updatedAt: Date = .now,
+      id: UUID = UUID()
+    ) {
+      self.id = id
+      self.title = title
+      self.createdAt = createdAt
+      self.updatedAt = updatedAt
+      self.messagesData = Self.encode(messages)
     }
 
     package var messages: [ChatMessage] {
-        get {
-            var restored = (try? JSONDecoder().decode([ChatMessage].self, from: messagesData)) ?? []
-            // Legacy chats have no per-turn clock. Only the first request has a reliable
-            // thread-creation anchor; never assign the reopening time to older messages.
-            if let first = restored.firstIndex(where: { $0.role == .user }), restored[first].timestamp == nil {
-                restored[first].timestamp = createdAt
-            }
-            return restored
+      get {
+        var restored = (try? JSONDecoder().decode([ChatMessage].self, from: messagesData)) ?? []
+        // Legacy chats have no per-turn clock. Only the first request has a reliable
+        // thread-creation anchor; never assign the reopening time to older messages.
+        if let first = restored.firstIndex(where: { $0.role == .user }),
+          restored[first].timestamp == nil
+        {
+          restored[first].timestamp = createdAt
         }
-        set { messagesData = Self.encode(newValue) }
+        return restored
+      }
+      set { messagesData = Self.encode(newValue) }
     }
 
     private static func encode(_ messages: [ChatMessage]) -> Data {
-        (try? JSONEncoder().encode(messages)) ?? Data()
+      (try? JSONEncoder().encode(messages)) ?? Data()
     }
 
     /// An unsaved copy with the same content, used to put a deleted conversation back (Undo).
     package func copy() -> ChatThread {
-        let c = ChatThread(title: title, messages: [], createdAt: createdAt, updatedAt: updatedAt, id: id)
-        c.messagesData = messagesData
-        c.archived = archived
-        c.itemsData = itemsData
-        c.cardsData = cardsData
-        return c
+      let c = ChatThread(
+        title: title, messages: [], createdAt: createdAt, updatedAt: updatedAt, id: id)
+      c.messagesData = messagesData
+      c.archived = archived
+      c.itemsData = itemsData
+      c.cardsData = cardsData
+      return c
     }
-}
+  }
 #endif

@@ -5,205 +5,233 @@ import XCTest
 /// on-device model, so the rule parser reads the sentence.
 @MainActor
 final class AskCardStaysTests: XCTestCase {
-    var app: XCUIApplication!
+  var app: XCUIApplication!
 
-    override func setUp() async throws {
-        await MainActor.run {
-            continueAfterFailure = false
-            app = XCUIApplication()
-            app.launchArguments = TestData.launchArguments
-            app.launch()
-            app.buttons["Ask AI or add anything"].tap()
-        }
+  override func setUp() async throws {
+    await MainActor.run {
+      continueAfterFailure = false
+      app = XCUIApplication()
+      app.launchArguments = TestData.launchArguments
+      app.launch()
+      app.buttons["Ask AI or add anything"].tap()
     }
+  }
 
-    private var field: XCUIElement {
-        let f = app.textFields["Ask AI or add anything"].firstMatch
-        return f.exists ? f : app.textViews.firstMatch
+  private var field: XCUIElement {
+    let f = app.textFields["Ask AI or add anything"].firstMatch
+    return f.exists ? f : app.textViews.firstMatch
+  }
+
+  private func send(_ text: String) {
+    XCTAssertTrue(field.waitForExistence(timeout: 10))
+    field.tap()
+    field.typeText(text + "\n")
+  }
+
+  private func any(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
+
+  private func shot(_ name: String) {
+    let a = XCTAttachment(screenshot: app.screenshot())
+    a.name = name
+    a.lifetime = .keepAlways
+    add(a)
+    if let dir = ProcessInfo.processInfo.environment["TEST_RUNNER_CARD_SHOTS"] {
+      try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+      try? app.screenshot().pngRepresentation.write(
+        to: URL(fileURLWithPath: dir).appending(path: name + ".png"))
     }
+  }
 
-    private func send(_ text: String) {
-        XCTAssertTrue(field.waitForExistence(timeout: 10))
-        field.tap()
-        field.typeText(text + "\n")
-    }
+  /// Closes the chat, opens the sidebar and taps the newest conversation.
+  private func reopenFromSidebar(containing word: String) {
+    app.buttons["Close"].tap()
+    let menu = app.buttons["Open menu"]
+    XCTAssertTrue(menu.waitForExistence(timeout: 5))
+    menu.tap()
+    let row = app.buttons.matching(
+      NSPredicate(format: "identifier == 'conversation.row' AND label CONTAINS %@", word)
+    ).firstMatch
+    XCTAssertTrue(row.waitForExistence(timeout: 6), "the conversation is in the sidebar")
+    row.tap()
+  }
 
-    private func any(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
+  private func replaceTitle(with title: String) {
+    let field =
+      app.textFields["capture-title-field"].exists
+      ? app.textFields["capture-title-field"] : app.textViews["capture-title-field"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.tap()
+    let old = field.value as? String ?? ""
+    field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + title)
+  }
 
-    private func shot(_ name: String) {
-        let a = XCTAttachment(screenshot: app.screenshot())
-        a.name = name
-        a.lifetime = .keepAlways
-        add(a)
-        if let dir = ProcessInfo.processInfo.environment["TEST_RUNNER_CARD_SHOTS"] {
-            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-            try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: name + ".png"))
-        }
-    }
+  func testReportedChineseTitleAndTime() {
+    send("今天晚上11点的时候提醒我，必须要睡觉")
+    XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
+    XCTAssertEqual(app.buttons["capture-title"].label, "必须要睡觉")
+    let time = app.staticTexts.containing(
+      NSPredicate(format: "label CONTAINS '23:00' OR label CONTAINS '11:00'")
+    ).firstMatch
+    XCTAssertTrue(time.exists, "11 at night stays 23:00 (localized display)")
+    XCTAssertFalse(any("capture-added").exists, "understanding is only a preview")
+    shot("capture-reported-title-time")
+  }
 
-    /// Closes the chat, opens the sidebar and taps the newest conversation.
-    private func reopenFromSidebar(containing word: String) {
-        app.buttons["Close"].tap()
-        let menu = app.buttons["Open menu"]
-        XCTAssertTrue(menu.waitForExistence(timeout: 5))
-        menu.tap()
-        let row = app.buttons.matching(NSPredicate(format: "identifier == 'conversation.row' AND label CONTAINS %@", word)).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 6), "the conversation is in the sidebar")
-        row.tap()
-    }
+  func testPendingTitleSaveAndCancelStillRequireAdd() {
+    send("Remind me to review the draft tomorrow at 3pm")
+    XCTAssertTrue(app.buttons["capture-title"].waitForExistence(timeout: 20))
+    let original = app.buttons["capture-title"].label
+    app.buttons["capture-title"].tap()
+    replaceTitle(with: "Cancelled draft")
+    app.buttons["capture-title-cancel"].tap()
+    XCTAssertEqual(app.buttons["capture-title"].label, original)
+    app.buttons["capture-title"].tap()
+    replaceTitle(with: "Review the final draft")
+    app.buttons["capture-title-save"].tap()
+    XCTAssertEqual(app.buttons["capture-title"].label, "Review the final draft")
+    XCTAssertTrue(app.buttons["Add"].exists)
+    XCTAssertFalse(any("capture-added").exists)
+    app.buttons["Add"].tap()
+    app.buttons["capture-open"].tap()
+    XCTAssertEqual(app.textFields["task.title"].value as? String, "Review the final draft")
+  }
 
-    private func replaceTitle(with title: String) {
-        let field = app.textFields["capture-title-field"].exists
-            ? app.textFields["capture-title-field"] : app.textViews["capture-title-field"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
-        let old = field.value as? String ?? ""
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + title)
-    }
+  func testAddedAlarmTitleSaveCancelReopenAndUndo() {
+    send("今天晚上11点的时候提醒我，必须要睡觉")
+    XCTAssertTrue(app.buttons["capture.kind.alarm"].waitForExistence(timeout: 20))
+    app.buttons["capture.kind.alarm"].tap()
+    app.buttons["Add"].tap()
+    XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5))
+    let original = app.buttons["capture-title"].label
+    app.buttons["capture-title"].tap()
+    replaceTitle(with: "Cancelled alarm")
+    app.buttons["capture-title-cancel"].tap()
+    XCTAssertEqual(app.buttons["capture-title"].label, original)
+    app.buttons["capture-title"].tap()
+    replaceTitle(with: "该睡觉了")
+    app.buttons["capture-title-save"].tap()
+    XCTAssertEqual(app.buttons["capture-title"].label, "该睡觉了")
+    app.buttons["capture-open"].tap()
+    XCTAssertEqual(
+      app.textFields["alarm.label"].value as? String, "该睡觉了", "the real saved alarm changed")
+    app.buttons["Cancel"].tap()
+    reopenFromSidebar(containing: "睡觉")
+    XCTAssertEqual(
+      app.buttons["capture-title"].label, "该睡觉了", "StoredCard persists the saved title")
+    app.buttons["capture-open"].tap()
+    XCTAssertEqual(app.textFields["alarm.label"].value as? String, "该睡觉了")
+    app.buttons["Cancel"].tap()
+    app.buttons["capture-undo"].tap()
+    XCTAssertTrue(
+      any("capture-undone").waitForExistence(timeout: 5),
+      "creation Undo still removes the renamed alarm")
+    XCTAssertFalse(
+      app.buttons["capture-title"].exists, "an undone card cannot rename a deleted alarm")
+    shot("capture-renamed-alarm-undone")
+  }
 
-    func testReportedChineseTitleAndTime() {
-        send("今天晚上11点的时候提醒我，必须要睡觉")
-        XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
-        XCTAssertEqual(app.buttons["capture-title"].label, "必须要睡觉")
-        let time = app.staticTexts.containing(NSPredicate(format: "label CONTAINS '23:00' OR label CONTAINS '11:00'")).firstMatch
-        XCTAssertTrue(time.exists, "11 at night stays 23:00 (localized display)")
-        XCTAssertFalse(any("capture-added").exists, "understanding is only a preview")
-        shot("capture-reported-title-time")
-    }
+  func testAddedCardStaysThenUndoAndAddAgain() {
+    send("Order printer paper tomorrow at 3pm")
+    XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
+    XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
+    app.buttons["Add"].tap()
 
-    func testPendingTitleSaveAndCancelStillRequireAdd() {
-        send("Remind me to review the draft tomorrow at 3pm")
-        XCTAssertTrue(app.buttons["capture-title"].waitForExistence(timeout: 20))
-        let original = app.buttons["capture-title"].label
-        app.buttons["capture-title"].tap()
-        replaceTitle(with: "Cancelled draft")
-        app.buttons["capture-title-cancel"].tap()
-        XCTAssertEqual(app.buttons["capture-title"].label, original)
-        app.buttons["capture-title"].tap()
-        replaceTitle(with: "Review the final draft")
-        app.buttons["capture-title-save"].tap()
-        XCTAssertEqual(app.buttons["capture-title"].label, "Review the final draft")
-        XCTAssertTrue(app.buttons["Add"].exists)
-        XCTAssertFalse(any("capture-added").exists)
-        app.buttons["Add"].tap()
-        app.buttons["capture-open"].tap()
-        XCTAssertEqual(app.textFields["task.title"].value as? String, "Review the final draft")
-    }
+    // The card is still there, now confirmed; there is no separate "Added …" text line.
+    XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "the card shows Added")
+    XCTAssertTrue(
+      app.staticTexts["Order printer paper"].exists, "same card: the title is still there")
+    XCTAssertTrue(
+      app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'alerts you'")).firstMatch
+        .exists, "and the time line")
+    XCTAssertFalse(
+      app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Added “'")).firstMatch
+        .exists,
+      "the old text confirmation is gone")
+    XCTAssertFalse(
+      app.buttons["Add"].exists || app.buttons["Cancel"].exists, "Add and Cancel are replaced")
+    XCTAssertFalse(
+      app.buttons["capture.kind.task"].exists, "and so is the Reminder / Event / Alarm switcher")
+    XCTAssertTrue(
+      app.descendants(matching: .any).matching(
+        NSPredicate(format: "label BEGINSWITH 'Added: Order printer paper'")
+      ).firstMatch.exists,
+      "the card's accessibility label carries the confirmation")
+    shot("card-added")
 
-    func testAddedAlarmTitleSaveCancelReopenAndUndo() {
-        send("今天晚上11点的时候提醒我，必须要睡觉")
-        XCTAssertTrue(app.buttons["capture.kind.alarm"].waitForExistence(timeout: 20))
-        app.buttons["capture.kind.alarm"].tap()
-        app.buttons["Add"].tap()
-        XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5))
-        let original = app.buttons["capture-title"].label
-        app.buttons["capture-title"].tap()
-        replaceTitle(with: "Cancelled alarm")
-        app.buttons["capture-title-cancel"].tap()
-        XCTAssertEqual(app.buttons["capture-title"].label, original)
-        app.buttons["capture-title"].tap()
-        replaceTitle(with: "该睡觉了")
-        app.buttons["capture-title-save"].tap()
-        XCTAssertEqual(app.buttons["capture-title"].label, "该睡觉了")
-        app.buttons["capture-open"].tap()
-        XCTAssertEqual(app.textFields["alarm.label"].value as? String, "该睡觉了", "the real saved alarm changed")
-        app.buttons["Cancel"].tap()
-        reopenFromSidebar(containing: "睡觉")
-        XCTAssertEqual(app.buttons["capture-title"].label, "该睡觉了", "StoredCard persists the saved title")
-        app.buttons["capture-open"].tap()
-        XCTAssertEqual(app.textFields["alarm.label"].value as? String, "该睡觉了")
-        app.buttons["Cancel"].tap()
-        app.buttons["capture-undo"].tap()
-        XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5), "creation Undo still removes the renamed alarm")
-        XCTAssertFalse(app.buttons["capture-title"].exists, "an undone card cannot rename a deleted alarm")
-        shot("capture-renamed-alarm-undone")
-    }
+    // Open shows the created reminder.
+    app.buttons["capture-open"].tap()
+    XCTAssertTrue(
+      app.navigationBars["Reminder"].waitForExistence(timeout: 5), "Open shows the reminder")
+    XCTAssertEqual(app.textFields["task.title"].value as? String, "Order printer paper")
+    app.navigationBars["Reminder"].buttons["Cancel"].tap()
+    XCTAssertTrue(app.navigationBars["Reminder"].waitForNonExistence(timeout: 5))
 
-    func testAddedCardStaysThenUndoAndAddAgain() {
-        send("Order printer paper tomorrow at 3pm")
-        XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
-        XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
-        app.buttons["Add"].tap()
+    // Undo takes back exactly that; the card says Undone and offers Add again.
+    app.buttons["capture-undo"].tap()
+    XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5))
+    XCTAssertFalse(any("capture-added").exists)
+    XCTAssertTrue(app.buttons["capture-add-again"].exists)
+    XCTAssertTrue(app.staticTexts["Order printer paper"].exists, "the card stays")
 
-        // The card is still there, now confirmed; there is no separate "Added …" text line.
-        XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "the card shows Added")
-        XCTAssertTrue(app.staticTexts["Order printer paper"].exists, "same card: the title is still there")
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'alerts you'")).firstMatch.exists, "and the time line")
-        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Added “'")).firstMatch.exists,
-                       "the old text confirmation is gone")
-        XCTAssertFalse(app.buttons["Add"].exists || app.buttons["Cancel"].exists, "Add and Cancel are replaced")
-        XCTAssertFalse(app.buttons["capture.kind.task"].exists, "and so is the Reminder / Event / Alarm switcher")
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Added: Order printer paper'")).firstMatch.exists,
-                      "the card's accessibility label carries the confirmation")
-        shot("card-added")
+    app.buttons["capture-add-again"].tap()
+    XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "Add again writes it again")
+    app.buttons["capture-undo"].tap()
+    XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5))
 
-        // Open shows the created reminder.
-        app.buttons["capture-open"].tap()
-        XCTAssertTrue(app.navigationBars["Reminder"].waitForExistence(timeout: 5), "Open shows the reminder")
-        XCTAssertEqual(app.textFields["task.title"].value as? String, "Order printer paper")
-        app.navigationBars["Reminder"].buttons["Cancel"].tap()
-        XCTAssertTrue(app.navigationBars["Reminder"].waitForNonExistence(timeout: 5))
+    // Reopened from the sidebar, the card is there in its final state.
+    reopenFromSidebar(containing: "printer")
+    XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5), "the saved chat shows Undone")
+    XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
+    XCTAssertFalse(any("capture-stack").buttons["Add"].exists, "a decided card is not an open card")
 
-        // Undo takes back exactly that; the card says Undone and offers Add again.
-        app.buttons["capture-undo"].tap()
-        XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5))
-        XCTAssertFalse(any("capture-added").exists)
-        XCTAssertTrue(app.buttons["capture-add-again"].exists)
-        XCTAssertTrue(app.staticTexts["Order printer paper"].exists, "the card stays")
+    // And the reminder is not anywhere: Search does not find it.
+    app.buttons["Close"].tap()
+    app.buttons["Search"].tap()
+    let search = app.textFields["search.field"]
+    XCTAssertTrue(search.waitForExistence(timeout: 5))
+    search.typeText("printer")
+    XCTAssertTrue(
+      app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'No Results'")).firstMatch
+        .waitForExistence(timeout: 5),
+      "Undo removed the reminder")
+  }
 
-        app.buttons["capture-add-again"].tap()
-        XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "Add again writes it again")
-        app.buttons["capture-undo"].tap()
-        XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5))
+  func testAddedStateSurvivesReopening() {
+    send("Order printer paper tomorrow at 3pm")
+    XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
+    app.buttons["Add"].tap()
+    XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5))
+    reopenFromSidebar(containing: "printer")
+    XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "the saved chat shows Added")
+    XCTAssertTrue(app.buttons["capture-undo"].exists)
+    // Undo still works from the reopened chat.
+    app.buttons["capture-undo"].tap()
+    XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5))
+  }
 
-        // Reopened from the sidebar, the card is there in its final state.
-        reopenFromSidebar(containing: "printer")
-        XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5), "the saved chat shows Undone")
-        XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
-        XCTAssertFalse(any("capture-stack").buttons["Add"].exists, "a decided card is not an open card")
+  func testCancelLeavesADimmedDroppedCard() {
+    send("Order printer paper tomorrow at 3pm")
+    XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 90))
+    app.buttons["Cancel"].tap()
+    XCTAssertTrue(any("capture-dropped").waitForExistence(timeout: 5), "the card stays, Dropped")
+    XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
+    XCTAssertFalse(
+      app.buttons["Add"].exists || app.buttons["Cancel"].exists
+        || app.buttons["capture-undo"].exists, "no actions")
+    shot("card-dropped")
 
-        // And the reminder is not anywhere: Search does not find it.
-        app.buttons["Close"].tap()
-        app.buttons["Search"].tap()
-        let search = app.textFields["search.field"]
-        XCTAssertTrue(search.waitForExistence(timeout: 5))
-        search.typeText("printer")
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'No Results'")).firstMatch.waitForExistence(timeout: 5),
-                      "Undo removed the reminder")
-    }
+    reopenFromSidebar(containing: "printer")
+    XCTAssertTrue(
+      any("capture-dropped").waitForExistence(timeout: 5), "the saved chat shows Dropped")
+    XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
+  }
 
-    func testAddedStateSurvivesReopening() {
-        send("Order printer paper tomorrow at 3pm")
-        XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
-        app.buttons["Add"].tap()
-        XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5))
-        reopenFromSidebar(containing: "printer")
-        XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "the saved chat shows Added")
-        XCTAssertTrue(app.buttons["capture-undo"].exists)
-        // Undo still works from the reopened chat.
-        app.buttons["capture-undo"].tap()
-        XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5))
-    }
-
-    func testCancelLeavesADimmedDroppedCard() {
-        send("Order printer paper tomorrow at 3pm")
-        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 90))
-        app.buttons["Cancel"].tap()
-        XCTAssertTrue(any("capture-dropped").waitForExistence(timeout: 5), "the card stays, Dropped")
-        XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
-        XCTAssertFalse(app.buttons["Add"].exists || app.buttons["Cancel"].exists || app.buttons["capture-undo"].exists, "no actions")
-        shot("card-dropped")
-
-        reopenFromSidebar(containing: "printer")
-        XCTAssertTrue(any("capture-dropped").waitForExistence(timeout: 5), "the saved chat shows Dropped")
-        XCTAssertTrue(app.staticTexts["Order printer paper"].exists)
-    }
-
-    func testNewLineAfterAnOpenCardDropsIt() {
-        send("Order printer paper tomorrow at 3pm")
-        XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
-        send("Water the office plants friday at 9am")
-        XCTAssertTrue(any("capture-dropped").waitForExistence(timeout: 90), "the earlier card is Dropped")
-        XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1, "one open card")
-    }
+  func testNewLineAfterAnOpenCardDropsIt() {
+    send("Order printer paper tomorrow at 3pm")
+    XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
+    send("Water the office plants friday at 9am")
+    XCTAssertTrue(
+      any("capture-dropped").waitForExistence(timeout: 90), "the earlier card is Dropped")
+    XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1, "one open card")
+  }
 }

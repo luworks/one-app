@@ -5,195 +5,229 @@ import XCTest
 /// so these check the list and the editor, not the ringing.
 @MainActor
 final class AlarmsTabTests: XCTestCase {
-    var app: XCUIApplication!
+  var app: XCUIApplication!
 
-    override func setUp() async throws {
-        await MainActor.run {
-            continueAfterFailure = false
-            app = XCUIApplication()
-            app.launchArguments = ["-uiTesting"]
-            app.launch()
-            let alarms = app.buttons["Clock"].firstMatch
-            XCTAssertTrue(alarms.waitForExistence(timeout: 5))
-            alarms.tap()
-            XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5), "the app-wide + is there to add an alarm")
-        }
+  override func setUp() async throws {
+    await MainActor.run {
+      continueAfterFailure = false
+      app = XCUIApplication()
+      app.launchArguments = ["-uiTesting"]
+      app.launch()
+      let alarms = app.buttons["Clock"].firstMatch
+      XCTAssertTrue(alarms.waitForExistence(timeout: 5))
+      alarms.tap()
+      XCTAssertTrue(
+        app.buttons["New"].waitForExistence(timeout: 5), "the app-wide + is there to add an alarm")
     }
+  }
 
-    /// Set TEST_RUNNER_ALARM_SHOTS=<folder> to save screenshots of each step (for design review).
-    private func shot(_ name: String) {
-        guard let dir = ProcessInfo.processInfo.environment["ALARM_SHOTS"] else { return }
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir + "/" + name + ".png"))
+  /// Set TEST_RUNNER_ALARM_SHOTS=<folder> to save screenshots of each step (for design review).
+  private func shot(_ name: String) {
+    guard let dir = ProcessInfo.processInfo.environment["ALARM_SHOTS"] else { return }
+    try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    try? XCUIScreen.main.screenshot().pngRepresentation.write(
+      to: URL(fileURLWithPath: dir + "/" + name + ".png"))
+  }
+
+  private var rows: XCUIElementQuery { app.buttons.matching(identifier: "alarm.row") }
+  private var toggles: XCUIElementQuery { app.switches.matching(identifier: "alarm.toggle") }
+
+  /// Opens Add Alarm, optionally sets the repeat days, and saves.
+  @discardableResult
+  private func addAlarm(days: [String] = []) -> XCUIElement {
+    let before = rows.count
+    app.buttons["New"].tap()
+    XCTAssertTrue(
+      app.staticTexts["Add Alarm"].waitForExistence(timeout: 5), "the editor is titled Add Alarm")
+    if !days.isEmpty {
+      for day in days { app.buttons["Every " + day].tap() }
     }
-
-    private var rows: XCUIElementQuery { app.buttons.matching(identifier: "alarm.row") }
-    private var toggles: XCUIElementQuery { app.switches.matching(identifier: "alarm.toggle") }
-
-    /// Opens Add Alarm, optionally sets the repeat days, and saves.
-    @discardableResult
-    private func addAlarm(days: [String] = []) -> XCUIElement {
-        let before = rows.count
-        app.buttons["New"].tap()
-        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5), "the editor is titled Add Alarm")
-        if !days.isEmpty {
-            for day in days { app.buttons["Every " + day].tap() }
-        }
-        app.buttons["alarm.save"].tap()
-        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
-        let expected = before + 1
-        for _ in 0..<20 where rows.count < expected { _ = app.buttons["New"].waitForExistence(timeout: 0.25) }
-        XCTAssertEqual(rows.count, expected, "the saved alarm is listed")
-        return rows.element(boundBy: before)
+    app.buttons["alarm.save"].tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+    let expected = before + 1
+    for _ in 0..<20 where rows.count < expected {
+      _ = app.buttons["New"].waitForExistence(timeout: 0.25)
     }
+    XCTAssertEqual(rows.count, expected, "the saved alarm is listed")
+    return rows.element(boundBy: before)
+  }
 
-    func testEmptyStateAndAddAlarm() {
-        XCTAssertTrue(app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 3), "empty state like Clock")
-        shot("1-empty")
-        let row = addAlarm()
-        XCTAssertTrue(row.label.hasSuffix(", Alarm"), "a new alarm with no label and no repeat reads just 'Alarm': \(row.label)")
-        XCTAssertFalse(app.descendants(matching: .any)["alarms.empty"].exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Next alarm in'")).firstMatch.waitForExistence(timeout: 3),
-                      "the next-alarm hint shows while an alarm is on")
-        shot("2-one-alarm")
-    }
+  func testEmptyStateAndAddAlarm() {
+    XCTAssertTrue(
+      app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 3),
+      "empty state like Clock")
+    shot("1-empty")
+    let row = addAlarm()
+    XCTAssertTrue(
+      row.label.hasSuffix(", Alarm"),
+      "a new alarm with no label and no repeat reads just 'Alarm': \(row.label)")
+    XCTAssertFalse(app.descendants(matching: .any)["alarms.empty"].exists)
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Next alarm in'")).firstMatch
+        .waitForExistence(timeout: 3),
+      "the next-alarm hint shows while an alarm is on")
+    shot("2-one-alarm")
+  }
 
-    func testToggleSwitchesAlarmOffAndHidesNextHint() {
-        addAlarm()
-        let toggle = toggles.firstMatch
-        XCTAssertEqual(toggle.value as? String, "1", "a new alarm is on")
-        toggle.toggleSwitch()
-        XCTAssertEqual(toggle.value as? String, "0")
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Next alarm in'")).firstMatch.waitForNonExistence(timeout: 3),
-                      "no hint when every alarm is off")
-        shot("3-off")
-        toggle.toggleSwitch()
-        XCTAssertEqual(toggle.value as? String, "1")
-    }
+  func testToggleSwitchesAlarmOffAndHidesNextHint() {
+    addAlarm()
+    let toggle = toggles.firstMatch
+    XCTAssertEqual(toggle.value as? String, "1", "a new alarm is on")
+    toggle.toggleSwitch()
+    XCTAssertEqual(toggle.value as? String, "0")
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Next alarm in'")).firstMatch
+        .waitForNonExistence(timeout: 3),
+      "no hint when every alarm is off")
+    shot("3-off")
+    toggle.toggleSwitch()
+    XCTAssertEqual(toggle.value as? String, "1")
+  }
 
-    func testRepeatDaysShowClockWording() {
-        let row = addAlarm(days: ["Monday", "Wednesday"])
-        XCTAssertTrue(row.label.hasSuffix(", Alarm, Mon, Wed"), row.label)
-        // The editor shows the same value, and the check marks stick.
-        row.tap()
-        XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
-        let repeatRow = app.descendants(matching: .any)["alarm.repeat"]
-        XCTAssertEqual(repeatRow.label, "Repeat, Mon, Wed")
-        shot("4-edit")
-        XCTAssertTrue(app.buttons["Every Monday"].isSelected, "Monday is on")
-        XCTAssertFalse(app.buttons["Every Tuesday"].isSelected)
-        app.buttons["Every Monday"].tap()
-        app.buttons["Every Wednesday"].tap()
-        XCTAssertEqual(repeatRow.label, "Repeat, Never", "no days means Never")
-        app.buttons["Cancel"].tap()
-        XCTAssertTrue(rows.firstMatch.label.hasSuffix(", Alarm, Mon, Wed"), "Cancel keeps the alarm as it was")
-    }
+  func testRepeatDaysShowClockWording() {
+    let row = addAlarm(days: ["Monday", "Wednesday"])
+    XCTAssertTrue(row.label.hasSuffix(", Alarm, Mon, Wed"), row.label)
+    // The editor shows the same value, and the check marks stick.
+    row.tap()
+    XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
+    let repeatRow = app.descendants(matching: .any)["alarm.repeat"]
+    XCTAssertEqual(repeatRow.label, "Repeat, Mon, Wed")
+    shot("4-edit")
+    XCTAssertTrue(app.buttons["Every Monday"].isSelected, "Monday is on")
+    XCTAssertFalse(app.buttons["Every Tuesday"].isSelected)
+    app.buttons["Every Monday"].tap()
+    app.buttons["Every Wednesday"].tap()
+    XCTAssertEqual(repeatRow.label, "Repeat, Never", "no days means Never")
+    app.buttons["Cancel"].tap()
+    XCTAssertTrue(
+      rows.firstMatch.label.hasSuffix(", Alarm, Mon, Wed"), "Cancel keeps the alarm as it was")
+  }
 
-    func testEditTimeAndLabel() {
-        addAlarm()
-        rows.firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
-        let wheels = app.pickerWheels
-        XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
-        // The simulator may be on a 12- or 24-hour clock: set only the minutes, which read the same on both.
-        wheels.element(boundBy: 1).adjust(toPickerWheelValue: "30")
-        let field = app.textFields["alarm.label"]
-        field.tap()
-        field.typeText("Gym")
-        app.buttons["alarm.save"].tap()
-        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
-        let row = rows.firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5))
-        XCTAssertTrue(row.label.contains(":30"), row.label)
-        XCTAssertTrue(row.label.hasSuffix(", Gym"), row.label)
-        shot("6-edited")
-    }
+  func testEditTimeAndLabel() {
+    addAlarm()
+    rows.firstMatch.tap()
+    XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
+    let wheels = app.pickerWheels
+    XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
+    // The simulator may be on a 12- or 24-hour clock: set only the minutes, which read the same on both.
+    wheels.element(boundBy: 1).adjust(toPickerWheelValue: "30")
+    let field = app.textFields["alarm.label"]
+    field.tap()
+    field.typeText("Gym")
+    app.buttons["alarm.save"].tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+    let row = rows.firstMatch
+    XCTAssertTrue(row.waitForExistence(timeout: 5))
+    XCTAssertTrue(row.label.contains(":30"), row.label)
+    XCTAssertTrue(row.label.hasSuffix(", Gym"), row.label)
+    shot("6-edited")
+  }
 
-    func testSwipeLeftDeletes() {
-        addAlarm()
-        let row = rows.firstMatch
-        // A full swipe across the row deletes, like Clock.
-        let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
-        start.press(forDuration: 0.05, thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: -0.3, dy: 0.5)))
-        for _ in 0..<20 where rows.count > 0 { _ = app.buttons["New"].waitForExistence(timeout: 0.25) }
-        // A full swipe deletes at once; a shorter one (or the simulator's synthetic drag) leaves the Delete button open.
-        let delete = app.buttons["Delete"]
-        if delete.waitForExistence(timeout: 1) { delete.tap() }
-        XCTAssertEqual(rows.count, 0, "swipe left deletes the alarm")
-        XCTAssertTrue(app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 3))
-    }
+  func testSwipeLeftDeletes() {
+    addAlarm()
+    let row = rows.firstMatch
+    // A full swipe across the row deletes, like Clock.
+    let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
+    start.press(
+      forDuration: 0.05,
+      thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: -0.3, dy: 0.5)))
+    for _ in 0..<20 where rows.count > 0 { _ = app.buttons["New"].waitForExistence(timeout: 0.25) }
+    // A full swipe deletes at once; a shorter one (or the simulator's synthetic drag) leaves the Delete button open.
+    let delete = app.buttons["Delete"]
+    if delete.waitForExistence(timeout: 1) { delete.tap() }
+    XCTAssertEqual(rows.count, 0, "swipe left deletes the alarm")
+    XCTAssertTrue(app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 3))
+  }
 
-    func testDeleteAlarmFromEditor() {
-        addAlarm()
-        rows.firstMatch.tap()
-        XCTAssertTrue(app.buttons["alarm.delete"].waitForExistence(timeout: 5), "Edit Alarm has a red Delete Alarm button")
-        app.buttons["alarm.delete"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 5))
-    }
+  func testDeleteAlarmFromEditor() {
+    addAlarm()
+    rows.firstMatch.tap()
+    XCTAssertTrue(
+      app.buttons["alarm.delete"].waitForExistence(timeout: 5),
+      "Edit Alarm has a red Delete Alarm button")
+    app.buttons["alarm.delete"].tap()
+    XCTAssertTrue(app.descendants(matching: .any)["alarms.empty"].waitForExistence(timeout: 5))
+  }
 
-    /// Sound opens a list of the app's tones (the system sound, then ours); a choice sticks after saving.
-    func testChoosingATone() {
-        app.buttons["New"].tap()
-        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.switches["alarm.snooze"].value as? String, "1", "Snooze is on by default, like Clock")
-        XCTAssertTrue(app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
-        shot("8-add")
-        app.buttons["alarm.sound"].tap()
-        XCTAssertTrue(app.navigationBars["Sound"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Default"].isSelected, "the system sound is the default")
-        for name in ["Daybreak", "Chimes", "Marimba", "Glass", "Ripple", "Morning Piano", "Beacon", "Crystal"] {
-            XCTAssertTrue(app.buttons[name].exists, "tone \(name)")
-        }
-        shot("9-sounds")
-        app.buttons["Daybreak"].tap()
-        XCTAssertTrue(app.buttons["Daybreak"].isSelected)
-        app.navigationBars["Sound"].buttons.firstMatch.tap()   // Back
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Daybreak'")).firstMatch.waitForExistence(timeout: 3),
-                      "the row shows the chosen tone")
-        app.buttons["alarm.save"].tap()
-        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
-        rows.firstMatch.tap()
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Daybreak'")).firstMatch.waitForExistence(timeout: 5),
-                      "it is still chosen when the alarm is opened again")
+  /// Sound opens a list of the app's tones (the system sound, then ours); a choice sticks after saving.
+  func testChoosingATone() {
+    app.buttons["New"].tap()
+    XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+    XCTAssertEqual(
+      app.switches["alarm.snooze"].value as? String, "1", "Snooze is on by default, like Clock")
+    XCTAssertTrue(
+      app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
+    shot("8-add")
+    app.buttons["alarm.sound"].tap()
+    XCTAssertTrue(app.navigationBars["Sound"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["Default"].isSelected, "the system sound is the default")
+    for name in [
+      "Daybreak", "Chimes", "Marimba", "Glass", "Ripple", "Morning Piano", "Beacon", "Crystal",
+    ] {
+      XCTAssertTrue(app.buttons[name].exists, "tone \(name)")
     }
+    shot("9-sounds")
+    app.buttons["Daybreak"].tap()
+    XCTAssertTrue(app.buttons["Daybreak"].isSelected)
+    app.navigationBars["Sound"].buttons.firstMatch.tap()  // Back
+    XCTAssertTrue(
+      app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Daybreak'"))
+        .firstMatch.waitForExistence(timeout: 3),
+      "the row shows the chosen tone")
+    app.buttons["alarm.save"].tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+    rows.firstMatch.tap()
+    XCTAssertTrue(
+      app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Daybreak'"))
+        .firstMatch.waitForExistence(timeout: 5),
+      "it is still chosen when the alarm is opened again")
+  }
 
-    /// Missing permissions are one slim row above the list, not two big cards. (The simulator denies AlarmKit.)
-    func testPermissionIsOneSlimRow() throws {
-        let row = app.descendants(matching: .any)["alarms.permissionRow"]
-        try XCTSkipUnless(row.waitForExistence(timeout: 3), "alarms and notifications are both allowed here")
-        XCTAssertLessThanOrEqual(row.frame.height, 60, "a slim row, not a card")
-        XCTAssertTrue(row.label.contains("off") || app.staticTexts.matching(NSPredicate(format: "label CONTAINS ' off'")).count > 0)
-        XCTAssertFalse(app.staticTexts["Alarms Are Off"].exists)
-        XCTAssertFalse(app.staticTexts["Notifications Are Off"].exists)
-        XCTAssertLessThan(row.frame.maxY, app.frame.height / 3, "above the list")
-        shot("10-permission")
-    }
+  /// Missing permissions are one slim row above the list, not two big cards. (The simulator denies AlarmKit.)
+  func testPermissionIsOneSlimRow() throws {
+    let row = app.descendants(matching: .any)["alarms.permissionRow"]
+    try XCTSkipUnless(
+      row.waitForExistence(timeout: 3), "alarms and notifications are both allowed here")
+    XCTAssertLessThanOrEqual(row.frame.height, 60, "a slim row, not a card")
+    XCTAssertTrue(
+      row.label.contains("off")
+        || app.staticTexts.matching(NSPredicate(format: "label CONTAINS ' off'")).count > 0)
+    XCTAssertFalse(app.staticTexts["Alarms Are Off"].exists)
+    XCTAssertFalse(app.staticTexts["Notifications Are Off"].exists)
+    XCTAssertLessThan(row.frame.maxY, app.frame.height / 3, "above the list")
+    shot("10-permission")
+  }
 
-    func testSnoozeOffHidesDuration() {
-        app.buttons["New"].tap()
-        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
-        app.switches["alarm.snooze"].toggleSwitch()
-        XCTAssertTrue(app.buttons["alarm.snoozeDuration"].waitForNonExistence(timeout: 3))
-    }
+  func testSnoozeOffHidesDuration() {
+    app.buttons["New"].tap()
+    XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+    XCTAssertTrue(
+      app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
+    app.switches["alarm.snooze"].toggleSwitch()
+    XCTAssertTrue(app.buttons["alarm.snoozeDuration"].waitForNonExistence(timeout: 3))
+  }
 }
 
 /// Add Alarm opens on the next quarter hour of Today's clock (pinned to 10:56, so 11:00), not on a whole hour.
 @MainActor
 final class AlarmDefaultTimeTests: XCTestCase {
-    func testAddAlarmOpensOnTheNextQuarterHour() {
-        continueAfterFailure = false
-        let app = XCUIApplication()
-        app.launchArguments = ["-uiTesting", "-uiTestingNow", "10:56"]
-        app.launch()
-        app.buttons["Clock"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
-        app.buttons["New"].tap()
-        XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
-        let wheels = app.pickerWheels
-        XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
-        // 12- or 24-hour clock: the hour reads "11 o’clock" or "11", the minutes "00" on both.
-        XCTAssertTrue((wheels.element(boundBy: 0).value as? String ?? "").hasPrefix("11"), "hour: \(wheels.element(boundBy: 0).value ?? "")")
-        XCTAssertTrue((wheels.element(boundBy: 1).value as? String ?? "").hasPrefix("00"), "minutes: \(wheels.element(boundBy: 1).value ?? "")")   // "00 minutes"
-    }
+  func testAddAlarmOpensOnTheNextQuarterHour() {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launchArguments = ["-uiTesting", "-uiTestingNow", "10:56"]
+    app.launch()
+    app.buttons["Clock"].firstMatch.tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+    app.buttons["New"].tap()
+    XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+    let wheels = app.pickerWheels
+    XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
+    // 12- or 24-hour clock: the hour reads "11 o’clock" or "11", the minutes "00" on both.
+    XCTAssertTrue(
+      (wheels.element(boundBy: 0).value as? String ?? "").hasPrefix("11"),
+      "hour: \(wheels.element(boundBy: 0).value ?? "")")
+    XCTAssertTrue(
+      (wheels.element(boundBy: 1).value as? String ?? "").hasPrefix("00"),
+      "minutes: \(wheels.element(boundBy: 1).value ?? "")")  // "00 minutes"
+  }
 }

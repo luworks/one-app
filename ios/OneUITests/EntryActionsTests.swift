@@ -4,83 +4,87 @@ import XCTest
 /// Today leaves the day. Runs on the in-memory sample data (the system calendar is never touched).
 @MainActor
 final class EntryActionsTests: XCTestCase {
-    var app: XCUIApplication!
+  var app: XCUIApplication!
 
-    override func setUp() async throws {
-        await MainActor.run {
-            continueAfterFailure = false
-            app = XCUIApplication()
-            app.launchArguments = ["-uiTesting"]
-            app.launch()
-        }
+  override func setUp() async throws {
+    await MainActor.run {
+      continueAfterFailure = false
+      app = XCUIApplication()
+      app.launchArguments = ["-uiTesting"]
+      app.launch()
     }
+  }
 
-    private func row(_ title: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'agenda.row' AND label BEGINSWITH %@", title)).firstMatch
-    }
+  private func row(_ title: String) -> XCUIElement {
+    app.descendants(matching: .any).matching(
+      NSPredicate(format: "identifier == 'agenda.row' AND label BEGINSWITH %@", title)
+    ).firstMatch
+  }
 
-    private func showMonth() {
-        app.buttons["Calendar"].firstMatch.tap()
-        app.buttons["calendar.mode.month"].tap()
-    }
+  private func showMonth() {
+    app.buttons["Calendar"].firstMatch.tap()
+    app.buttons["calendar.mode.month"].tap()
+  }
 
-    /// Complete the circle of a planned task on Today and it disappears from the day.
-    func testCompletedTaskLeavesToday() {
-        let title = app.staticTexts["Write up design review notes"]
-        XCTAssertTrue(title.waitForExistence(timeout: 8), "a planned task is on Today")
-        app.buttons["Complete Write up design review notes"].tap()
-        XCTAssertTrue(title.waitForNonExistence(timeout: 5), "completing it removes it from the day")
-        XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 3), "with an Undo")
-    }
+  /// Complete the circle of a planned task on Today and it disappears from the day.
+  func testCompletedTaskLeavesToday() {
+    let title = app.staticTexts["Write up design review notes"]
+    XCTAssertTrue(title.waitForExistence(timeout: 8), "a planned task is on Today")
+    app.buttons["Complete Write up design review notes"].tap()
+    XCTAssertTrue(title.waitForNonExistence(timeout: 5), "completing it removes it from the day")
+    XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 3), "with an Undo")
+  }
 
-    func testLongPressOnAnEventOffersTheUsualActions() {
-        showMonth()
-        let dentist = row("Dentist")
-        XCTAssertTrue(dentist.waitForExistence(timeout: 8))
-        dentist.press(forDuration: 1.0)
-        for name in ["Show Details", "Edit", "Delete"] {
-            XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 3), "the menu has \(name)")
-        }
+  func testLongPressOnAnEventOffersTheUsualActions() {
+    showMonth()
+    let dentist = row("Dentist")
+    XCTAssertTrue(dentist.waitForExistence(timeout: 8))
+    dentist.press(forDuration: 1.0)
+    for name in ["Show Details", "Edit", "Delete"] {
+      XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 3), "the menu has \(name)")
     }
+  }
 
-    func testSwipeLeftDeletesAnEvent() {
-        showMonth()
-        let dentist = row("Dentist")
-        XCTAssertTrue(dentist.waitForExistence(timeout: 8))
-        dentist.swipeLeft()
-        let delete = app.buttons["Delete"]
-        // A full swipe deletes at once; a shorter one leaves the Delete button open.
-        if delete.waitForExistence(timeout: 1) { delete.tap() }
-        XCTAssertTrue(dentist.waitForNonExistence(timeout: 5), "swipe from the right deletes the event")
-    }
+  func testSwipeLeftDeletesAnEvent() {
+    showMonth()
+    let dentist = row("Dentist")
+    XCTAssertTrue(dentist.waitForExistence(timeout: 8))
+    dentist.swipeLeft()
+    let delete = app.buttons["Delete"]
+    // A full swipe deletes at once; a shorter one leaves the Delete button open.
+    if delete.waitForExistence(timeout: 1) { delete.tap() }
+    XCTAssertTrue(dentist.waitForNonExistence(timeout: 5), "swipe from the right deletes the event")
+  }
 
-    func testSwipingARepeatingEventAsksFirst() {
-        showMonth()
-        let standup = row("Standup")
-        XCTAssertTrue(standup.waitForExistence(timeout: 8))
-        standup.swipeLeft()
-        let delete = app.buttons["Delete"]
-        XCTAssertTrue(delete.waitForExistence(timeout: 3), "a series never full-swipes away: Delete shows")
-        delete.tap()
-        XCTAssertTrue(app.buttons["Delete All Occurrences"].waitForExistence(timeout: 3), "and asks what to delete")
-    }
+  func testSwipingARepeatingEventAsksFirst() {
+    showMonth()
+    let standup = row("Standup")
+    XCTAssertTrue(standup.waitForExistence(timeout: 8))
+    standup.swipeLeft()
+    let delete = app.buttons["Delete"]
+    XCTAssertTrue(
+      delete.waitForExistence(timeout: 3), "a series never full-swipes away: Delete shows")
+    delete.tap()
+    XCTAssertTrue(
+      app.buttons["Delete All Occurrences"].waitForExistence(timeout: 3), "and asks what to delete")
+  }
 
-    /// Deleting leaves an Undo in the system's undo stack too: shaking the phone offers "Undo Delete", like any iPhone app.
-    func testShakeOffersUndoAfterDelete() throws {
-        let shake = NSSelectorFromString("shake")
-        try XCTSkipUnless(XCUIDevice.shared.responds(to: shake), "this Xcode cannot synthesize a shake")
-        showMonth()
-        let dentist = row("Dentist")
-        XCTAssertTrue(dentist.waitForExistence(timeout: 8))
-        dentist.swipeLeft()
-        let delete = app.buttons["Delete"]
-        if delete.waitForExistence(timeout: 1) { delete.tap() }
-        XCTAssertTrue(dentist.waitForNonExistence(timeout: 5))
-        _ = XCUIDevice.shared.perform(shake)
-        let alert = app.alerts.firstMatch
-        XCTAssertTrue(alert.waitForExistence(timeout: 5), "shaking offers the system's Undo prompt")
-        XCTAssertTrue(alert.label.contains("Delete"), "it names the action: \(alert.label)")
-        alert.buttons["Undo"].tap()
-        XCTAssertTrue(dentist.waitForExistence(timeout: 5), "and undoing puts the event back")
-    }
+  /// Deleting leaves an Undo in the system's undo stack too: shaking the phone offers "Undo Delete", like any iPhone app.
+  func testShakeOffersUndoAfterDelete() throws {
+    let shake = NSSelectorFromString("shake")
+    try XCTSkipUnless(XCUIDevice.shared.responds(to: shake), "this Xcode cannot synthesize a shake")
+    showMonth()
+    let dentist = row("Dentist")
+    XCTAssertTrue(dentist.waitForExistence(timeout: 8))
+    dentist.swipeLeft()
+    let delete = app.buttons["Delete"]
+    if delete.waitForExistence(timeout: 1) { delete.tap() }
+    XCTAssertTrue(dentist.waitForNonExistence(timeout: 5))
+    _ = XCUIDevice.shared.perform(shake)
+    let alert = app.alerts.firstMatch
+    XCTAssertTrue(alert.waitForExistence(timeout: 5), "shaking offers the system's Undo prompt")
+    XCTAssertTrue(alert.label.contains("Delete"), "it names the action: \(alert.label)")
+    alert.buttons["Undo"].tap()
+    XCTAssertTrue(dentist.waitForExistence(timeout: 5), "and undoing puts the event back")
+  }
 }

@@ -10,10 +10,10 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts/ci'))
-import policy
-import prerequisite
-import release_guard
-import re
+import policy  # noqa: E402 - standalone test import bootstrap
+import prerequisite  # noqa: E402 - standalone test import bootstrap
+import release_guard  # noqa: E402 - standalone test import bootstrap
+import re  # noqa: E402 - standalone test import bootstrap
 
 spec = importlib.util.spec_from_file_location('ci_run', ROOT / 'scripts/ci/run.py')
 runner = importlib.util.module_from_spec(spec)

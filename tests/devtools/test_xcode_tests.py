@@ -14,7 +14,7 @@ from scripts.devtools import commands, xcode_tests  # noqa: E402
 from scripts.devtools.cli import main  # noqa: E402
 
 CONTRACT = commands.testing_contract(ROOT)
-METHOD = 'TodayTests/StoreUpgradeTests/frozenStoreReopensAndMutates'
+METHOD = 'TodayTests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation'
 
 
 def tree(ids, status='Passed'):
@@ -37,6 +37,13 @@ class XcodeTests(unittest.TestCase):
             xcode_tests.selected(CONTRACT, ROOT, ['integration'], ['Missing/testMissing'])
         with self.assertRaises(ValueError):
             xcode_tests.selected(CONTRACT, ROOT, ['unit'])
+
+    def test_swift_testing_and_xctest_dispatch_use_their_actual_identifiers(self):
+        swift = 'TodayTests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation'
+        xctest = 'TodaySnapshotTests/NativeSnapshotTests/testHealthStepsLight'
+        self.assertEqual(xcode_tests.execution_selectors(CONTRACT, ROOT, [swift, xctest]), [swift + '()', xctest])
+        with self.assertRaisesRegex(ValueError, 'Missing execution framework'):
+            xcode_tests.execution_selectors(CONTRACT, ROOT, ['TodayTests/Unknown/missing'])
 
     def test_fail_closed_completed_leaves(self):
         cases = [
@@ -119,7 +126,7 @@ class XcodeTests(unittest.TestCase):
         self.assertEqual(build[1], 'test')
         self.assertEqual(build[build.index('-scheme') + 1], 'TodayTests')
         self.assertEqual(build[build.index('-derivedDataPath') + 1], str(xcode_tests.derived_data(ROOT)))
-        self.assertEqual(build.count('-only-testing:' + METHOD), 1)
+        self.assertEqual(build.count('-only-testing:' + METHOD + '()'), 1)
         self.assertEqual(calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
         self.assertEqual(report['status'], 'passed')
         self.assertGreaterEqual(journal.artifact.call_count, 2)
@@ -173,6 +180,7 @@ class XcodeTests(unittest.TestCase):
         fake.report.return_value = {'status': 'failed', 'executed_count': 0, 'missing': [METHOD]}
         with patch.multiple(commands, host_lock=lock, dd_lock=lock), \
                 patch.object(commands, 'testing_contract', return_value=fake), \
+                patch.object(commands, 'generate', return_value=0), \
                 patch.object(commands, 'execute', side_effect=execute), \
                 patch.object(commands, 'atomic_json'), patch.object(commands, 'Evidence'), \
                 patch.object(xcode_tests, 'run', side_effect=run):

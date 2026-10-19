@@ -17,7 +17,7 @@ import zipfile
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.devtools import bootstrap as subject
+from scripts.devtools import bootstrap as subject  # noqa: E402 - standalone test import bootstrap
 
 ARM = b'\xcf\xfa\xed\xfe' + struct.pack('<I', 0x0100000c) + b'fixture'
 X86 = b'\xcf\xfa\xed\xfe' + struct.pack('<I', 0x01000007) + b'fixture'

@@ -1,67 +1,82 @@
 #if os(iOS)
-import One
-import FeatureToday
-import FeatureCalendar
-import FeatureReminders
-import FeatureActivity
-import FeatureSearch
-import FeatureSettings
-import FeatureAsk
-import TodayPlannerUI
-import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import TodayDesignSystem
-import FeatureClock
-import FeatureHealth
-import SwiftUI
-import SwiftData
+  import One
+  import FeatureToday
+  import FeatureCalendar
+  import FeatureReminders
+  import FeatureActivity
+  import FeatureSearch
+  import FeatureSettings
+  import FeatureAsk
+  import TodayPlannerUI
+  import TodayCore
+  import TodayShared
+  import TodayData
+  import TodayPlatform
+  import TodayDesignSystem
+  import FeatureClock
+  import FeatureHealth
+  import SwiftUI
+  import SwiftData
 
-enum HomeTab: String, CaseIterable, Identifiable {
+  enum HomeTab: String, CaseIterable, Identifiable {
     case today, calendar, tasks, clock
 
     var id: Self { self }
 
     var title: String {
-        switch self {
-        case .today: "Today"
-        case .calendar: "Calendar"
-        case .tasks: "Reminders"
-        case .clock: "Clock"
-        }
+      switch self {
+      case .today: "Today"
+      case .calendar: "Calendar"
+      case .tasks: "Reminders"
+      case .clock: "Clock"
+      }
     }
 
     var icon: String {
-        switch self {
-        case .today: "sun.max"
-        case .calendar: "calendar"
-        case .tasks: "checklist"
-        case .clock: "clock"
-        }
+      switch self {
+      case .today: "sun.max"
+      case .calendar: "calendar"
+      case .tasks: "checklist"
+      case .clock: "clock"
+      }
     }
-}
+  }
 
-/// App shell, laid out like Notion mobile: avatar + tab pills on top, content in the middle,
-/// and a bottom bar (search, Ask AI, new) that is always visible. A left drawer (like ChatGPT/Claude)
-/// opens from the avatar or a swipe from the left edge.
-public struct HomeView: View {
+  /// App shell, laid out like Notion mobile: avatar + tab pills on top, content in the middle,
+  /// and a bottom bar (search, Ask AI, new) that is always visible. A left drawer (like ChatGPT/Claude)
+  /// opens from the avatar or a swipe from the left edge.
+  public struct HomeView: View {
     private let composition: ShellComposition
     private var session: PlannerSession { composition.session }
     private var presentation: PlannerPresentation { composition.presentation }
     private let diagnostics: LocalDiagnostics
     private let prepareData: (@MainActor (ModelContext) async -> Bool)?
-    package init(composition: ShellComposition, diagnostics: LocalDiagnostics, prepareData: (@MainActor (ModelContext) async -> Bool)? = nil) {
-        self.composition = composition
-        self.diagnostics = diagnostics; self.prepareData = prepareData
-        let defaults = composition.session.defaults
-        let args = composition.arguments
-        let today = composition.session.runtime.calendar.startOfDay(for: composition.session.runtime.now())
-        _calendarDay = State(initialValue: today); _todayDay = State(initialValue: today)
-        _tab = State(initialValue: Self.restored(HomeTab.self, key: Self.tabKey, defaults: defaults, arguments: args) ?? .today)
-        _clockSection = State(initialValue: Self.restored(ClockSection.self, key: Self.clockSectionKey, defaults: defaults, arguments: args) ?? .alarms)
-        let last = Self.restored(CalendarView.Mode.self, key: Self.calendarModeKey, defaults: defaults, arguments: args)?.rawValue
-        _calendarMode = State(initialValue: CalendarView.Mode(rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .week)
+    package init(
+      composition: ShellComposition, diagnostics: LocalDiagnostics,
+      prepareData: (@MainActor (ModelContext) async -> Bool)? = nil
+    ) {
+      self.composition = composition
+      self.diagnostics = diagnostics
+      self.prepareData = prepareData
+      let defaults = composition.session.defaults
+      let args = composition.arguments
+      let today = composition.session.runtime.calendar.startOfDay(
+        for: composition.session.runtime.now())
+      _calendarDay = State(initialValue: today)
+      _todayDay = State(initialValue: today)
+      _tab = State(
+        initialValue: Self.restored(
+          HomeTab.self, key: Self.tabKey, defaults: defaults, arguments: args) ?? .today)
+      _clockSection = State(
+        initialValue: Self.restored(
+          ClockSection.self, key: Self.clockSectionKey, defaults: defaults, arguments: args)
+          ?? .alarms)
+      let last = Self.restored(
+        CalendarView.Mode.self, key: Self.calendarModeKey, defaults: defaults, arguments: args)?
+        .rawValue
+      _calendarMode = State(
+        initialValue: CalendarView.Mode(
+          rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .week)
     }
     @State private var editor: OpenedEntry?
 
@@ -80,12 +95,15 @@ public struct HomeView: View {
     @State private var clockSection: ClockSection
     @State private var addingCity = false
     // The tab and the Calendar view also survive a restart (not in UI tests, which always start the same way).
-    private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode", clockSectionKey = "today.last.clockSection"
-    private static func restored<T: RawRepresentable>(_: T.Type, key: String, defaults: UserDefaults, arguments: [String]) -> T? where T.RawValue == String {
-        guard !arguments.contains("-uiTesting") else { return nil }
-        // A tab saved under an old name (`alarms`, now `clock`) still opens on the same tab.
-        guard let raw = defaults.string(forKey: key) else { return nil }
-        return T(rawValue: key == tabKey ? TabMemory.migrated(raw) : raw)
+    private static let tabKey = "today.last.tab", calendarModeKey = "today.last.calendarMode",
+      clockSectionKey = "today.last.clockSection"
+    private static func restored<T: RawRepresentable>(
+      _: T.Type, key: String, defaults: UserDefaults, arguments: [String]
+    ) -> T? where T.RawValue == String {
+      guard !arguments.contains("-uiTesting") else { return nil }
+      // A tab saved under an old name (`alarms`, now `clock`) still opens on the same tab.
+      guard let raw = defaults.string(forKey: key) else { return nil }
+      return T(rawValue: key == tabKey ? TabMemory.migrated(raw) : raw)
     }
     @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
@@ -102,7 +120,7 @@ public struct HomeView: View {
     @State private var remindersPushed = false
     @State private var toast = UndoToast()
     #if DEBUG
-    @State private var shareImportTestState = ""
+      @State private var shareImportTestState = ""
     #endif
     @Environment(\.undoManager) private var undoManager
     /// Counts tab switches made by swiping; drives their haptic (pill taps already have one).
@@ -112,117 +130,150 @@ public struct HomeView: View {
     @State private var keyboardUp = false
 
     public var body: some View {
-        GeometryReader { geo in
-            // The sidebar takes most of the width; the page slides aside and stays visible beside it.
-            let full = geo.size.width
-            let width = full * DrawerLayout.widthFraction
-            ZStack(alignment: .leading) {
-                if drawer.isBuilt {
-                    Sidebar(drawer: drawer, width: width,
-                            onNewChat: { openAsk(nil, fromSidebar: true) },
-                            onOpen: { openAsk($0, fromSidebar: true) },
-                            onSearch: { PerformanceTrace.shared.beginPage("search"); showsSearch = true },
-                            onSettings: { PerformanceTrace.shared.beginPage("settings"); showsSettings = true },
-                            onActivity: { PerformanceTrace.shared.beginPage("activity"); showsActivity = true },
-                            close: { drawer.set(open: false) })
-                        .frame(width: width)
-                        .modifier(DrawerSidebarSlide(model: drawer, width: width))
-                }
+      GeometryReader { geo in
+        // The sidebar takes most of the width; the page slides aside and stays visible beside it.
+        let full = geo.size.width
+        let width = full * DrawerLayout.widthFraction
+        ZStack(alignment: .leading) {
+          if drawer.isBuilt {
+            Sidebar(
+              drawer: drawer, width: width,
+              onNewChat: { openAsk(nil, fromSidebar: true) },
+              onOpen: { openAsk($0, fromSidebar: true) },
+              onSearch: {
+                PerformanceTrace.shared.beginPage("search")
+                showsSearch = true
+              },
+              onSettings: {
+                PerformanceTrace.shared.beginPage("settings")
+                showsSettings = true
+              },
+              onActivity: {
+                PerformanceTrace.shared.beginPage("activity")
+                showsActivity = true
+              },
+              close: { drawer.set(open: false) }
+            )
+            .frame(width: width)
+            .modifier(DrawerSidebarSlide(model: drawer, width: width))
+          }
 
-                main
-                    .background(Color(.systemBackground))
-                    // Swipe right from the left edge opens the sidebar. The edge strip sits above the
-                    // lists so it wins over row swipe actions; row swipes elsewhere stay free.
-                    .overlay(alignment: .leading) {
-                        if edgeSwipeEnabled {
-                            Color.clear
-                                .frame(width: 24)
-                                .contentShape(Rectangle())
-                                .modifier(DrawerDrag(model: drawer, width: width, kind: .edgeStrip))
-                        }
-                    }
-                    .modifier(DrawerDrag(model: drawer, width: width, kind: .edgeOnly, enabled: edgeSwipeEnabled))
-                    .modifier(DrawerMainSlide(model: drawer, width: width, size: geo.size, insets: geo.safeAreaInsets))
-
-                // The visible strip of the page: a tap or a drag to the left closes the sidebar.
-                if drawer.isOpen {
-                    Button { drawer.set(open: false) } label: {
-                        Color.clear
-                            .frame(width: full - width)
-                            .frame(maxHeight: .infinity)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close sidebar")
-                    .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .ignoresSafeArea()
-                }
+          main
+            .background(Color(.systemBackground))
+            // Swipe right from the left edge opens the sidebar. The edge strip sits above the
+            // lists so it wins over row swipe actions; row swipes elsewhere stay free.
+            .overlay(alignment: .leading) {
+              if edgeSwipeEnabled {
+                Color.clear
+                  .frame(width: 24)
+                  .contentShape(Rectangle())
+                  .modifier(DrawerDrag(model: drawer, width: width, kind: .edgeStrip))
+              }
             }
+            .modifier(
+              DrawerDrag(model: drawer, width: width, kind: .edgeOnly, enabled: edgeSwipeEnabled)
+            )
+            .modifier(
+              DrawerMainSlide(
+                model: drawer, width: width, size: geo.size, insets: geo.safeAreaInsets))
+
+          // The visible strip of the page: a tap or a drag to the left closes the sidebar.
+          if drawer.isOpen {
+            Button {
+              drawer.set(open: false)
+            } label: {
+              Color.clear
+                .frame(width: full - width)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close sidebar")
+            .modifier(DrawerDrag(model: drawer, width: width, kind: .close))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .ignoresSafeArea()
+          }
         }
-        // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
-        // open, and the sidebar is put back underneath this screen when it goes back.
-        .fullScreenCover(item: $ask) { route in
-            AskScreen(thread: route.thread, toast: toast, composition: composition, onBack: { show in
-                // Put the sidebar back underneath, so closing or swiping right lands on it.
-                if route.fromSidebar { drawer.set(open: show, animated: false) }
-            }, onAdded: { capture in
-                if capture.hasDay { calendarDay = capture.day }
-            }, onOpenDay: { day in
-                // "Open" on an added event: leave the AI screen and show that day in Today.
-                ask = nil
-                drawer.set(open: false, animated: false)
-                tab = .today
-                todayDay = session.runtime.calendar.startOfDay(for: day)
-            })
-        }
-        .environment(toast)
-        .environment(session.actions)
-        .environment(presentation)
-        .defaultAppStorage(session.defaults)
-        .environment(\.calendar, session.runtime.calendar)
-        .environment(\.locale, session.runtime.locale)
-        .environment(\.timeZone, session.runtime.calendar.timeZone)
-        .onAppear { toast.undoManager = undoManager }
-        .onChange(of: undoManager) { _, new in toast.undoManager = new }
-        .sheet(item: $editor) { PlannerEditor(destination: $0, toast: toast, composition: composition) }
-        .sheet(isPresented: $showsSettings) { ShellSettings(diagnostics: diagnostics, composition: composition) }
-        .sheet(isPresented: $showsActivity) { ActivityView(activity: session.activity, flush: { session.ledger.flush(context) }, undo: { session.ledger.undo($0, context: context) }) }
-        .task {
-            // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.
-            try? await Task.sleep(for: .seconds(1.5))
-            drawer.isBuilt = true
-        }
+      }
+      // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
+      // open, and the sidebar is put back underneath this screen when it goes back.
+      .fullScreenCover(item: $ask) { route in
+        AskScreen(
+          thread: route.thread, toast: toast, composition: composition,
+          onBack: { show in
+            // Put the sidebar back underneath, so closing or swiping right lands on it.
+            if route.fromSidebar { drawer.set(open: show, animated: false) }
+          },
+          onAdded: { capture in
+            if capture.hasDay { calendarDay = capture.day }
+          },
+          onOpenDay: { day in
+            // "Open" on an added event: leave the AI screen and show that day in Today.
+            ask = nil
+            drawer.set(open: false, animated: false)
+            tab = .today
+            todayDay = session.runtime.calendar.startOfDay(for: day)
+          })
+      }
+      .environment(toast)
+      .environment(session.actions)
+      .environment(presentation)
+      .defaultAppStorage(session.defaults)
+      .environment(\.calendar, session.runtime.calendar)
+      .environment(\.locale, session.runtime.locale)
+      .environment(\.timeZone, session.runtime.calendar.timeZone)
+      .onAppear { toast.undoManager = undoManager }
+      .onChange(of: undoManager) { _, new in toast.undoManager = new }
+      .sheet(item: $editor) {
+        PlannerEditor(destination: $0, toast: toast, composition: composition)
+      }
+      .sheet(isPresented: $showsSettings) {
+        ShellSettings(diagnostics: diagnostics, composition: composition)
+      }
+      .sheet(isPresented: $showsActivity) {
+        ActivityView(
+          activity: session.activity, flush: { session.ledger.flush(context) },
+          undo: { session.ledger.undo($0, context: context) })
+      }
+      .task {
+        // Build the sidebar shortly after launch (off the cold-start path) so the first swipe is smooth.
+        try? await Task.sleep(for: .seconds(1.5))
+        drawer.isBuilt = true
+      }
     }
 
     /// Moves one tab left (-1) or right (+1), stopping at the ends. Used by `TabSwipe`.
     private func switchTab(by step: Int) {
-        let all = HomeTab.allCases
-        guard let i = all.firstIndex(of: tab) else { return }
-        let next = i + step
-        guard all.indices.contains(next) else { return }
-        traceTabAction(to: all[next])
-        withAnimation(.snappy) { tab = all[next] }
-        tabSwipes += 1
+      let all = HomeTab.allCases
+      guard let i = all.firstIndex(of: tab) else { return }
+      let next = i + step
+      guard all.indices.contains(next) else { return }
+      traceTabAction(to: all[next])
+      withAnimation(.snappy) { tab = all[next] }
+      tabSwipes += 1
     }
 
     private var traceRoute: String {
-        tab == .calendar ? "calendar.\(calendarMode.rawValue.lowercased())" : tab.rawValue
+      tab == .calendar ? "calendar.\(calendarMode.rawValue.lowercased())" : tab.rawValue
     }
 
     private func traceTabAction(to destination: HomeTab) {
-        guard PerformanceTrace.enabled, destination != tab else { return }
-        let target = destination == .calendar ? "calendar.\(calendarMode.rawValue.lowercased())" : destination.rawValue
-        PerformanceTrace.shared.begin("\(traceRoute)_to_\(target)", destination: target)
+      guard PerformanceTrace.enabled, destination != tab else { return }
+      let target =
+        destination == .calendar
+        ? "calendar.\(calendarMode.rawValue.lowercased())" : destination.rawValue
+      PerformanceTrace.shared.begin("\(traceRoute)_to_\(target)", destination: target)
     }
 
     private var tracedCalendarMode: Binding<CalendarView.Mode> {
-        Binding(get: { calendarMode }, set: { mode in
-            if mode != calendarMode {
-                let target = "calendar.\(mode.rawValue.lowercased())"
-                PerformanceTrace.shared.begin("\(traceRoute)_to_\(target)", destination: target)
-            }
-            calendarMode = mode
+      Binding(
+        get: { calendarMode },
+        set: { mode in
+          if mode != calendarMode {
+            let target = "calendar.\(mode.rawValue.lowercased())"
+            PerformanceTrace.shared.begin("\(traceRoute)_to_\(target)", destination: target)
+          }
+          calendarMode = mode
         })
     }
 
@@ -231,11 +282,11 @@ public struct HomeView: View {
     /// Opens the AI screen on a new chat, or on a saved conversation. Opened from the sidebar, closing it
     /// (close button or swipe right) goes back to the sidebar.
     private func openAsk(_ thread: ChatThread?, fromSidebar: Bool = false) {
-        PerformanceTrace.shared.beginPage("ai")
-        // From the sidebar, leave it open underneath: closing it first would flash the page (Calendar or
-        // Today) before the AI screen slides over it. Back then lands on the sidebar anyway.
-        if !fromSidebar { drawer.set(open: false, animated: false) }
-        ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
+      PerformanceTrace.shared.beginPage("ai")
+      // From the sidebar, leave it open underneath: closing it first would flash the page (Calendar or
+      // Today) before the AI screen slides over it. Back then lands on the sidebar anyway.
+      if !fromSidebar { drawer.set(open: false, animated: false) }
+      ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
     }
 
     /// Reminders added from the Share sheet wait in the App Group (`ShareInbox`) until the app is active; they come in
@@ -244,548 +295,694 @@ public struct HomeView: View {
     private static var sharedTestItemQueued = false
 
     private func importShared() {
-        let args = ProcessInfo.processInfo.arguments
-        var inboxURL = ShareInbox.fileURL
-        #if DEBUG
+      let args = ProcessInfo.processInfo.arguments
+      var inboxURL = ShareInbox.fileURL
+      #if DEBUG
         let test = ShareImportUITesting(arguments: args)
         if let test { inboxURL = test.inboxURL }
-        #endif
-        if args.contains("-uiTesting"), !args.contains("-uiTestingShareInbox") {
-            guard let i = args.firstIndex(of: "-uiTestingShare"), i + 1 < args.count else { return }
-            if !Self.sharedTestItemQueued {
-                Self.sharedTestItemQueued = true
-                var item = SharedReminder(title: args[i + 1], note: "https://example.com", due: ShareInbox.due(for: .tomorrow))
-                #if DEBUG
-                if let test { item.id = test.id }
-                #endif
-                ShareInbox.append(item, at: inboxURL)
-            }
+      #endif
+      if args.contains("-uiTesting"), !args.contains("-uiTestingShareInbox") {
+        guard let i = args.firstIndex(of: "-uiTestingShare"), i + 1 < args.count else { return }
+        if !Self.sharedTestItemQueued {
+          Self.sharedTestItemQueued = true
+          var item = SharedReminder(
+            title: args[i + 1], note: "https://example.com", due: ShareInbox.due(for: .tomorrow))
+          #if DEBUG
+            if let test { item.id = test.id }
+          #endif
+          ShareInbox.append(item, at: inboxURL)
         }
-        // A separate context makes this transaction independent of unrelated, unsaved editor changes.
-        // Autosave stays off: failure leaves only the durable inbox, never partially inserted tasks.
-        let importing = ModelContext(context.container)
-        importing.autosaveEnabled = false
-        let listNames = ((try? context.fetch(FetchDescriptor<OneList>())) ?? []).map(\.name)
-        let chosenList = Preferences.newReminderList(existing: listNames)
-        let added: [OneTask]
-        var acknowledge: ((Set<UUID>) -> Bool)? = nil
-        #if DEBUG
+      }
+      // A separate context makes this transaction independent of unrelated, unsaved editor changes.
+      // Autosave stays off: failure leaves only the durable inbox, never partially inserted tasks.
+      let importing = ModelContext(context.container)
+      importing.autosaveEnabled = false
+      let listNames = ((try? context.fetch(FetchDescriptor<OneList>())) ?? []).map(\.name)
+      let chosenList = Preferences.newReminderList(existing: listNames)
+      let added: [OneTask]
+      var acknowledge: ((Set<UUID>) -> Bool)? = nil
+      #if DEBUG
         if test?.failAcknowledgment == true { acknowledge = { _ in false } }
+      #endif
+      do {
+        let result = try ShareImport.run(
+          at: inboxURL,
+          committedIDs: {
+            Set(try importing.fetch(FetchDescriptor<ShareImportReceipt>()).map(\.sharedID))
+          },
+          persist: { shared in
+            let tasks = shared.map { s in
+              let task = OneTask(title: s.title, note: s.note, due: s.due)
+              if let chosenList { task.listName = chosenList }
+              importing.insert(task)
+              importing.insert(ShareImportReceipt(sharedID: s.id))
+              return task
+            }
+            #if DEBUG
+              // Explicit injection before save, not a spontaneous SwiftData failure.
+              if test?.failSave == true { throw ShareImportUITesting.InjectedFailure.save }
+            #endif
+            try importing.save()
+            return tasks.map(\.persistentModelID)
+          }, acknowledge: acknowledge)
+        added = result.added.compactMap { context.model(for: $0) as? OneTask }
+        #if DEBUG
+          shareImportTestState =
+            test?.state(
+              in: context.container, outcome: result.acknowledged ? "acknowledged" : "ack-failed")
+            ?? ""
         #endif
-        do {
-            let result = try ShareImport.run(at: inboxURL, committedIDs: {
-                Set(try importing.fetch(FetchDescriptor<ShareImportReceipt>()).map(\.sharedID))
-            }, persist: { shared in
-                let tasks = shared.map { s in
-                    let task = OneTask(title: s.title, note: s.note, due: s.due)
-                    if let chosenList { task.listName = chosenList }
-                    importing.insert(task)
-                    importing.insert(ShareImportReceipt(sharedID: s.id))
-                    return task
-                }
-                #if DEBUG
-                // Explicit injection before save, not a spontaneous SwiftData failure.
-                if test?.failSave == true { throw ShareImportUITesting.InjectedFailure.save }
-                #endif
-                try importing.save()
-                return tasks.map(\.persistentModelID)
-            }, acknowledge: acknowledge)
-            added = result.added.compactMap { context.model(for: $0) as? OneTask }
-            #if DEBUG
-            shareImportTestState = test?.state(in: context.container, outcome: result.acknowledged ? "acknowledged" : "ack-failed") ?? ""
-            #endif
-        } catch {
-            // Keep the original drafts for the next activation. Do not roll back the UI's context.
-            #if DEBUG
-            importing.rollback()
-            shareImportTestState = test?.state(in: context.container, outcome: "save-failed") ?? ""
-            #endif
-            return
-        }
-        guard !added.isEmpty else { return }
-        session.activity.record(ActivityEvents.shareImport(count: added.count))
-        let entries = added.map {
-            session.ledger.record(.created, task: $0, title: $0.title, after: LedgerFormat.time($0.due, none: ""), actor: .share,
-                          channel: .share, context: context)
-        }
-        toast.show(added.count == 1 ? "Added “\(added[0].title)” from Share" : "Added \(added.count) reminders from Share") {
-            // Receipts survive Undo, including when inbox acknowledgment failed.
-            added.forEach { context.delete($0) }
-            try? context.save()
-            entries.forEach { session.ledger.recordUndo(of: $0, context: context) }
-            #if DEBUG
-            shareImportTestState = test?.state(in: context.container, outcome: "undone") ?? ""
-            #endif
-        }
+      } catch {
+        // Keep the original drafts for the next activation. Do not roll back the UI's context.
+        #if DEBUG
+          importing.rollback()
+          shareImportTestState = test?.state(in: context.container, outcome: "save-failed") ?? ""
+        #endif
+        return
+      }
+      guard !added.isEmpty else { return }
+      session.activity.record(ActivityEvents.shareImport(count: added.count))
+      let entries = added.map {
+        session.ledger.record(
+          .created, task: $0, title: $0.title, after: LedgerFormat.time($0.due, none: ""),
+          actor: .share,
+          channel: .share, context: context)
+      }
+      toast.show(
+        added.count == 1
+          ? "Added “\(added[0].title)” from Share" : "Added \(added.count) reminders from Share"
+      ) {
+        // Receipts survive Undo, including when inbox acknowledgment failed.
+        added.forEach { context.delete($0) }
+        try? context.save()
+        entries.forEach { session.ledger.recordUndo(of: $0, context: context) }
+        #if DEBUG
+          shareImportTestState = test?.state(in: context.container, outcome: "undone") ?? ""
+        #endif
+      }
     }
 
     /// UI tests only (`-uiTesting -uiTestingAddReminder <title>`): adds one reminder without typing it.
     private static func seedUITestReminder(_ context: ModelContext) {
-        let args = ProcessInfo.processInfo.arguments
-        guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingAddReminder"), i + 1 < args.count else { return }
-        context.insert(OneTask(title: args[i + 1]))
+      let args = ProcessInfo.processInfo.arguments
+      guard args.contains("-uiTesting"), let i = args.firstIndex(of: "-uiTestingAddReminder"),
+        i + 1 < args.count
+      else { return }
+      context.insert(OneTask(title: args[i + 1]))
     }
 
     private var page: some View {
-        VStack(spacing: 0) {
-            topBar
-                .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
-            Group {
-                switch tab {
-                case .today:
-                    DayAgenda(day: $todayDay, showsWeekStrip: false, openTask: { editor = .task($0) }, openEvent: { editor = .local($0) }, openTimer: {
-                        clockSection = .timer
-                        withAnimation(.snappy) { tab = .clock }
-                    }, actions: session.actions, calendar: session.calendar, timers: session.timers, reminders: session.reminders, ledger: session.ledger, travel: session.travel, presentation: presentation)
-                case .calendar:
-                    CalendarView(day: $calendarDay, mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode, calendar: session.calendar, actions: session.actions, ledger: session.ledger, alarms: session.alarms, onOpenTask: { editor = .task($0) }, onOpenAlarm: { editor = .alarm($0) }) { picked in
-                        todayDay = picked
-                        withAnimation(.snappy) { tab = .today }
-                    }
-                case .tasks: RemindersView(isPushed: $remindersPushed, path: $remindersPath.performanceAction { $0.isEmpty ? nil : "reminders.list" }, sync: session.reminders, actions: session.actions, ledger: session.ledger, alarms: session.alarms, presentation: presentation, openSettings: composition.openSettings, requestAccess: { await FirstRun.reminders(session.reminders, defaults: session.defaults, arguments: composition.arguments) })
-                case .clock: AlarmsView(section: $clockSection, alarms: session.alarms, timers: session.timers, notifications: session.notifications, soundPreview: session.soundPreview, worldClock: composition.world, stopwatch: composition.stopwatch, now: session.runtime.now, defaults: session.defaults, arguments: composition.arguments, onAlarmCreated: composition.recordCreatedAlarm, showUndo: toast.show)
-                }
+      VStack(spacing: 0) {
+        topBar
+          .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
+        Group {
+          switch tab {
+          case .today:
+            DayAgenda(
+              day: $todayDay, showsWeekStrip: false, openTask: { editor = .task($0) },
+              openEvent: { editor = .local($0) },
+              openTimer: {
+                clockSection = .timer
+                withAnimation(.snappy) { tab = .clock }
+              }, actions: session.actions, calendar: session.calendar, timers: session.timers,
+              reminders: session.reminders, ledger: session.ledger, travel: session.travel,
+              presentation: presentation)
+          case .calendar:
+            CalendarView(
+              day: $calendarDay,
+              mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode,
+              calendar: session.calendar, actions: session.actions, ledger: session.ledger,
+              alarms: session.alarms, onOpenTask: { editor = .task($0) },
+              onOpenAlarm: { editor = .alarm($0) }
+            ) { picked in
+              todayDay = picked
+              withAnimation(.snappy) { tab = .today }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                if PerformanceTrace.enabled {
-                    PerformanceContentProbe(route: traceRoute, generation: PerformanceTrace.shared.generation,
-                                            bootstrapComplete: PerformanceTrace.shared.bootstrapComplete)
-                }
-            }
+          case .tasks:
+            RemindersView(
+              isPushed: $remindersPushed,
+              path: $remindersPath.performanceAction { $0.isEmpty ? nil : "reminders.list" },
+              sync: session.reminders, actions: session.actions, ledger: session.ledger,
+              alarms: session.alarms, presentation: presentation,
+              openSettings: composition.openSettings,
+              requestAccess: {
+                await FirstRun.reminders(
+                  session.reminders, defaults: session.defaults, arguments: composition.arguments)
+              })
+          case .clock:
+            AlarmsView(
+              section: $clockSection, alarms: session.alarms, timers: session.timers,
+              notifications: session.notifications, soundPreview: session.soundPreview,
+              worldClock: composition.world, stopwatch: composition.stopwatch,
+              now: session.runtime.now, defaults: session.defaults,
+              arguments: composition.arguments, onAlarmCreated: composition.recordCreatedAlarm,
+              showUndo: toast.show)
+          }
         }
-        .safeAreaInset(edge: .bottom) { if !keyboardUp { bottomBar } }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            keyboardUp = true
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+          if PerformanceTrace.enabled {
+            PerformanceContentProbe(
+              route: traceRoute, generation: PerformanceTrace.shared.generation,
+              bootstrapComplete: PerformanceTrace.shared.bootstrapComplete)
+          }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardUp = false
+      }
+      .safeAreaInset(edge: .bottom) { if !keyboardUp { bottomBar } }
+      .onReceive(
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+      ) { _ in
+        keyboardUp = true
+      }
+      .onReceive(
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+      ) { _ in
+        keyboardUp = false
+      }
+      .sensoryFeedback(.selection, trigger: tabSwipes)
+      .sheet(isPresented: $showsSearch) {
+        SearchView(calendar: session.calendar, defaults: session.defaults) { destination in
+          PlannerEditor(destination: destination, toast: toast, composition: composition)
         }
-        .sensoryFeedback(.selection, trigger: tabSwipes)
-        .sheet(isPresented: $showsSearch) { SearchView(calendar: session.calendar, defaults: session.defaults) { destination in PlannerEditor(destination: destination, toast: toast, composition: composition) } }
-        .sheet(isPresented: $addingCity) { CityPicker(store: composition.world, now: session.runtime.now) }
-        .sheet(item: $newItem) { item in
-            switch item {
-            case .task: QuickReminderSheet(actions: session.actions, ledger: session.ledger, alarms: session.alarms, activity: session.activity, presentation: presentation)   // Due-style quick add; editing a reminder opens TaskEditor
-            case .event: EventEditor(day: tab == .calendar ? calendarDay : session.runtime.now(), calendar: session.calendar, actions: session.actions, ledger: session.ledger, alarms: session.alarms, presentation: presentation)
-            case .alarm: AlarmEditor(alarms: session.alarms, soundPreview: session.soundPreview, runtime: session.runtime, defaults: session.defaults, onCreated: composition.recordCreatedAlarm).performanceDestination("alarm.editor")
-            }
+      }
+      .sheet(isPresented: $addingCity) {
+        CityPicker(store: composition.world, now: session.runtime.now)
+      }
+      .sheet(item: $newItem) { item in
+        switch item {
+        case .task:
+          QuickReminderSheet(
+            actions: session.actions, ledger: session.ledger, alarms: session.alarms,
+            // Due-style quick add; editing a reminder opens TaskEditor
+            activity: session.activity, presentation: presentation)
+        case .event:
+          EventEditor(
+            day: tab == .calendar ? calendarDay : session.runtime.now(), calendar: session.calendar,
+            actions: session.actions, ledger: session.ledger, alarms: session.alarms,
+            presentation: presentation)
+        case .alarm:
+          AlarmEditor(
+            alarms: session.alarms, soundPreview: session.soundPreview, runtime: session.runtime,
+            defaults: session.defaults, onCreated: composition.recordCreatedAlarm
+          ).performanceDestination("alarm.editor")
         }
+      }
     }
 
     private var main: some View {
-        page
+      page
         .task { await bootstrap() }
         .onAppear { LaunchTimer.markFirstFrame() }
         .overlay(alignment: .topLeading) {
-            if PerformanceTrace.enabled {
-                Text(PerformanceTrace.shared.report).font(.system(size: 1)).opacity(0.01)
-                    .accessibilityIdentifier("performance.trace")
-                    .accessibilityLabel(PerformanceTrace.shared.report)
-                    .allowsHitTesting(false)
+          if PerformanceTrace.enabled {
+            Text(PerformanceTrace.shared.report).font(.system(size: 1)).opacity(0.01)
+              .accessibilityIdentifier("performance.trace")
+              .accessibilityLabel(PerformanceTrace.shared.report)
+              .allowsHitTesting(false)
+          }
+          // UI tests read the cold start time from this invisible label.
+          if ProcessInfo.processInfo.arguments.contains("-uiTesting"),
+            let ms = LaunchTimer.milliseconds
+          {
+            Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier(
+              "coldStartMs"
+            ).accessibilityLabel(String(ms))
+          }
+          #if DEBUG
+            if composition.arguments.contains("-uiTestingSyncDump"),
+              let sync = session.reminders as? RemindersSync
+            {
+              SyncDumpProbe(sync: sync)
             }
-            // UI tests read the cold start time from this invisible label.
-            if ProcessInfo.processInfo.arguments.contains("-uiTesting"), let ms = LaunchTimer.milliseconds {
-                Text(String(ms)).font(.system(size: 1)).opacity(0.01).accessibilityIdentifier("coldStartMs").accessibilityLabel(String(ms))
-            }
-            #if DEBUG
-            if composition.arguments.contains("-uiTestingSyncDump"), let sync = session.reminders as? RemindersSync { SyncDumpProbe(sync: sync) }
             if !shareImportTestState.isEmpty {
-                Text(shareImportTestState).font(.system(size: 1)).opacity(0.01)
-                    .accessibilityIdentifier("shareImport.testState")
-                    .accessibilityLabel(shareImportTestState)
-                    .allowsHitTesting(false)
+              Text(shareImportTestState).font(.system(size: 1)).opacity(0.01)
+                .accessibilityIdentifier("shareImport.testState")
+                .accessibilityLabel(shareImportTestState)
+                .allowsHitTesting(false)
             }
-            #endif
+          #endif
         }
         // Timers follow AlarmKit on every tab, so the Today row appears the moment one starts (also from Siri).
         .task { await session.timers.watch() }
         .task(id: reminderSignature) {
-            try? await Task.sleep(for: .milliseconds(300))
-            allAlarms.forEach { $0.retireIfRung(now: session.runtime.now()) }
-            await session.notifications.resync()
-            await session.alarms.sync(context)
-            updateWidgets()
+          try? await Task.sleep(for: .milliseconds(300))
+          allAlarms.forEach { $0.retireIfRung(now: session.runtime.now()) }
+          await session.notifications.resync()
+          await session.alarms.sync(context)
+          updateWidgets()
         }
         .onChange(of: QuickAction.shared.pending, initial: true) { _, type in
-            guard let type else { return }
-            QuickAction.shared.pending = nil
-            switch type {
-            case "com.luworks.one.ask": openAsk(nil)
-            case "com.luworks.one.newTask": presentNewItem(.task)
-            case "com.luworks.one.newEvent": newEvent()
-            default: break
-            }
+          guard let type else { return }
+          QuickAction.shared.pending = nil
+          switch type {
+          case "com.luworks.one.ask": openAsk(nil)
+          case "com.luworks.one.newTask": presentNewItem(.task)
+          case "com.luworks.one.newEvent": newEvent()
+          default: break
+          }
         }
         .onChange(of: tab) { _, t in
-            session.defaults.set(t.rawValue, forKey: Self.tabKey)
-            session.activity.record(ActivityEvents.screenOpen(t.rawValue))
+          session.defaults.set(t.rawValue, forKey: Self.tabKey)
+          session.activity.record(ActivityEvents.screenOpen(t.rawValue))
         }
-        .onChange(of: calendarMode) { _, m in session.defaults.set(m.rawValue, forKey: Self.calendarModeKey) }
-        .onChange(of: clockSection) { _, s in session.defaults.set(s.rawValue, forKey: Self.clockSectionKey) }
+        .onChange(of: calendarMode) { _, m in
+          session.defaults.set(m.rawValue, forKey: Self.calendarModeKey)
+        }
+        .onChange(of: clockSection) { _, s in
+          session.defaults.set(s.rawValue, forKey: Self.clockSectionKey)
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
-                    // Covered roots cannot prove the visible page resumed. Keep those samples absent.
-                    if ask == nil, !showsSettings, !showsActivity, !showsSearch, newItem == nil,
-                       !addingCity, !drawer.isOpen, remindersPath.isEmpty {
-                        PerformanceTrace.shared.begin("resume_to_content_layout", destination: traceRoute)
-                    } else {
-                        PerformanceTrace.shared.mark("skip.resume_covered_root")
-                    }
-                }
-                dropDeletedMirrors()
-                importShared()
-                session.activity.importOutbox()
-                session.timers.refresh()
-                autoPlan()
-                Task { await session.notifications.resync() }
+          if phase == .active {
+            if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
+              // Covered roots cannot prove the visible page resumed. Keep those samples absent.
+              if ask == nil, !showsSettings, !showsActivity, !showsSearch, newItem == nil,
+                !addingCity, !drawer.isOpen, remindersPath.isEmpty
+              {
+                PerformanceTrace.shared.begin("resume_to_content_layout", destination: traceRoute)
+              } else {
+                PerformanceTrace.shared.mark("skip.resume_covered_root")
+              }
             }
-            if phase == .background {
-                session.ledger.flush(context)
-                session.activity.flushInBackground()
-                updateWidgets()
-                session.widget.scheduleBackgroundRefresh()
-            }
+            dropDeletedMirrors()
+            importShared()
+            session.activity.importOutbox()
+            session.timers.refresh()
+            autoPlan()
+            Task { await session.notifications.resync() }
+          }
+          if phase == .background {
+            session.ledger.flush(context)
+            session.activity.flushInBackground()
+            updateWidgets()
+            session.widget.scheduleBackgroundRefresh()
+          }
         }
         // An event deleted in Apple Calendar must not linger here: when the system calendar changes, drop the copies it lost.
         .onChange(of: session.calendar.version) {
-            dropDeletedMirrors()
-            updateWidgets()
+          dropDeletedMirrors()
+          updateWidgets()
         }
         // Widget rows link here (today://today?day=…): open Today on that day.
         .onOpenURL { url in
-            guard let day = WidgetLink.day(from: url) else { return }
-            ask = nil
-            showsSearch = false
-            drawer.set(open: false, animated: false)
-            tab = .today
-            todayDay = day
+          guard let day = WidgetLink.day(from: url) else { return }
+          ask = nil
+          showsSearch = false
+          drawer.set(open: false, animated: false)
+          tab = .today
+          todayDay = day
         }
     }
 
     private func bootstrap() async {
 
-            if PerformanceTrace.enabled { PerformanceTrace.shared.mark("bootstrap_start") }
-            if let prepareData {
-                guard await prepareData(context) else { return }
-            } else { SampleData.insertIfNeeded(context) }
-            ListActions.ensureLists(in: context, runtime: session.runtime)
-            #if DEBUG
-            // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
-            let args = ProcessInfo.processInfo.arguments
-            if let i = args.firstIndex(of: "-debugDeleteSystemEvent"), i + 1 < args.count {
-                (session.calendar as? CalendarSync)?.debugDeleteSystemEvents(titled: args[i + 1])
-            }
-            if let i = args.firstIndex(of: "-debugCreateSystemEvent"), i + 1 < args.count {
-                (session.calendar as? CalendarSync)?.debugCreateSystemEvent(titled: args[i + 1], repeating: false)
-            }
-            if let i = args.firstIndex(of: "-debugCreateRepeatingEvent"), i + 1 < args.count {
-                (session.calendar as? CalendarSync)?.debugCreateSystemEvent(titled: args[i + 1], repeating: true)
-            }
-            #endif
-            Self.seedUITestReminder(context)
-            importShared()
-            // The old SwiftData ledger is copied into the Activity store once; then expired activity is dropped.
-            #if DEBUG
-            LedgerMigration.seedLegacyForTests(context: context, arguments: composition.arguments, runtime: session.runtime)
-            #endif
-            LedgerMigration.run(context: context, ledger: session.ledger)
-            session.activity.importOutbox()
-            session.ledger.prune(context, now: session.runtime.now())
-            #if DEBUG
-            // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
-            if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"), GrantStore.active(.planFreeTime, context: context, now: session.runtime.now()) == nil {
-                GrantStore.grant(.planFreeTime, context: context, ledger: session.ledger, runtime: session.runtime)
-            }
-            #endif
-            autoPlan()
-            await FirstRun.calendar(session.calendar, defaults: session.defaults, arguments: composition.arguments)
-            if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
-        
+      if PerformanceTrace.enabled { PerformanceTrace.shared.mark("bootstrap_start") }
+      if let prepareData {
+        guard await prepareData(context) else { return }
+      } else {
+        SampleData.insertIfNeeded(context)
+      }
+      ListActions.ensureLists(in: context, runtime: session.runtime)
+      #if DEBUG
+        // UI-test hooks on the simulator's own calendar (see CalendarSync and ios/README.md).
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-debugDeleteSystemEvent"), i + 1 < args.count {
+          (session.calendar as? CalendarSync)?.debugDeleteSystemEvents(titled: args[i + 1])
+        }
+        if let i = args.firstIndex(of: "-debugCreateSystemEvent"), i + 1 < args.count {
+          (session.calendar as? CalendarSync)?.debugCreateSystemEvent(
+            titled: args[i + 1], repeating: false)
+        }
+        if let i = args.firstIndex(of: "-debugCreateRepeatingEvent"), i + 1 < args.count {
+          (session.calendar as? CalendarSync)?.debugCreateSystemEvent(
+            titled: args[i + 1], repeating: true)
+        }
+      #endif
+      Self.seedUITestReminder(context)
+      importShared()
+      // The old SwiftData ledger is copied into the Activity store once; then expired activity is dropped.
+      LedgerMigration.run(context: context, ledger: session.ledger)
+      session.activity.importOutbox()
+      session.ledger.prune(context, now: session.runtime.now())
+      #if DEBUG
+        // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
+        if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"),
+          GrantStore.active(.planFreeTime, context: context, now: session.runtime.now()) == nil
+        {
+          GrantStore.grant(
+            .planFreeTime, context: context, ledger: session.ledger, runtime: session.runtime)
+        }
+      #endif
+      autoPlan()
+      await FirstRun.calendar(
+        session.calendar, defaults: session.defaults, arguments: composition.arguments)
+      if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
+
     }
 
     /// Rewrites the Lock Screen / Home Screen widget snapshot (skipped when nothing changed).
     private func updateWidgets() {
-        session.widget.update(tasks: allTasks, events: allEvents, alarms: allAlarms, now: session.runtime.now(), calendar: session.runtime.calendar)
+      session.widget.update(
+        tasks: allTasks, events: allEvents, alarms: allAlarms, now: session.runtime.now(),
+        calendar: session.runtime.calendar)
     }
 
     /// Under a "Plan reminders into free time" grant, today's untimed reminders take their suggested free time by
     /// themselves, with a toast and Undo (see `AutoPlan`). Without a grant this does nothing.
     private func autoPlan() {
-        AutoPlan.run(context: context, toast: toast, calendar: session.calendar, ledger: session.ledger, runtime: session.runtime)
+      AutoPlan.run(
+        context: context, toast: toast, calendar: session.calendar, ledger: session.ledger,
+        runtime: session.runtime)
     }
 
     private func dropDeletedMirrors() {
-        let gone = session.calendar.removedMirrors(allEvents)
-        guard !gone.isEmpty else { return }
-        for event in gone {
-            session.ledger.record(.deleted, kind: "event", title: event.title, before: DayLabel.withTime(event.start),
-                          actor: .agent("Apple Calendar"), channel: .sync, approval: .observed, context: context)
-            context.delete(event)
-        }
-        try? context.save()
+      let gone = session.calendar.removedMirrors(allEvents)
+      guard !gone.isEmpty else { return }
+      for event in gone {
+        session.ledger.record(
+          .deleted, kind: "event", title: event.title, before: DayLabel.withTime(event.start),
+          actor: .agent("Apple Calendar"), channel: .sync, approval: .observed, context: context)
+        context.delete(event)
+      }
+      try? context.save()
     }
 
     /// Changes whenever anything that affects reminders changes.
     private var reminderSignature: Int {
-        var h = Hasher()
-        for t in allTasks {
-            h.combine(t.title); h.combine(t.isDone); h.combine(t.plannedStart); h.combine(t.due); h.combine(t.reminderOffsetMinutes)
-            h.combine(t.ringsAsAlarm)
-        }
-        for a in allAlarms { h.combine(a.scheduleSignature) }
-        for e in allEvents { h.combine(e.title); h.combine(e.start); h.combine(e.reminderOffsetMinutes); h.combine(e.repeatRule); h.combine(e.isAllDay); h.combine(e.ringsAsAlarm) }
-        return h.finalize()
+      var h = Hasher()
+      for t in allTasks {
+        h.combine(t.title)
+        h.combine(t.isDone)
+        h.combine(t.plannedStart)
+        h.combine(t.due)
+        h.combine(t.reminderOffsetMinutes)
+        h.combine(t.ringsAsAlarm)
+      }
+      for a in allAlarms { h.combine(a.scheduleSignature) }
+      for e in allEvents {
+        h.combine(e.title)
+        h.combine(e.start)
+        h.combine(e.reminderOffsetMinutes)
+        h.combine(e.repeatRule)
+        h.combine(e.isAllDay)
+        h.combine(e.ringsAsAlarm)
+      }
+      return h.finalize()
     }
 
     // MARK: Top: avatar + tab pills
 
     private var topBar: some View {
-        HStack(spacing: 8) {
-            // The three lines open the sidebar (chat history and Search), like ChatGPT and Claude; a swipe from the left edge does too.
-            CircleButton(systemImage: "line.3.horizontal", label: "Open menu", size: 44) { drawer.set(open: true) }
-            // Only scrolls when the pills don't fit (very large text). Otherwise there is no scroll view
-            // to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
-            ViewThatFits(in: .horizontal) {
-                pills
-                ScrollView(.horizontal, showsIndicators: false) { pills }
-            }
-            Spacer(minLength: 0)
+      HStack(spacing: 8) {
+        // The three lines open the sidebar (chat history and Search), like ChatGPT and Claude; a swipe from the left edge does too.
+        CircleButton(systemImage: "line.3.horizontal", label: "Open menu", size: 44) {
+          drawer.set(open: true)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        // Chrome stays usable at the largest text sizes; content below still scales fully.
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        // Only scrolls when the pills don't fit (very large text). Otherwise there is no scroll view
+        // to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
+        ViewThatFits(in: .horizontal) {
+          pills
+          ScrollView(.horizontal, showsIndicators: false) { pills }
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 20)
+      .padding(.vertical, 8)
+      .contentShape(Rectangle())
+      // Chrome stays usable at the largest text sizes; content below still scales fully.
+      .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private var pills: some View {
-        HStack(spacing: PillStyle.spacing) {
-            ForEach(HomeTab.allCases) { item in
-                TabPill(tab: item, isSelected: item == tab) {
-                    traceTabAction(to: item)
-                    withAnimation(.snappy) { tab = item }
-                }
-            }
+      HStack(spacing: PillStyle.spacing) {
+        ForEach(HomeTab.allCases) { item in
+          TabPill(tab: item, isSelected: item == tab) {
+            traceTabAction(to: item)
+            withAnimation(.snappy) { tab = item }
+          }
         }
+      }
     }
 
     // MARK: Bottom: search, Ask AI, new
 
     private var bottomBar: some View {
-        VStack(spacing: 8) {
-            // While the sidebar is open it shows its own toast: never two Undo buttons at once.
-            if !drawer.isOpen { UndoToastView() }
-            bottomButtons
-                .contentShape(Rectangle())
-                .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
-        }
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-        .background(alignment: .bottom) {
-            // Fade the list out under the floating bar so text never collides with it.
-            LinearGradient(colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
-                           startPoint: .top, endPoint: .center)
-                .frame(height: 110)
-                .offset(y: 40)
-                .allowsHitTesting(false)
-        }
+      VStack(spacing: 8) {
+        // While the sidebar is open it shows its own toast: never two Undo buttons at once.
+        if !drawer.isOpen { UndoToastView() }
+        bottomButtons
+          .contentShape(Rectangle())
+          .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
+      }
+      .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+      .background(alignment: .bottom) {
+        // Fade the list out under the floating bar so text never collides with it.
+        LinearGradient(
+          colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
+          startPoint: .top, endPoint: .center
+        )
+        .frame(height: 110)
+        .offset(y: 40)
+        .allowsHitTesting(false)
+      }
     }
 
     /// A new event: Apple's own editor when Calendar access is on (presented by UIKit, see `NativeEvents`), else ours.
     private func newEvent() {
-        guard session.calendar.usesNativeEditor else { presentNewItem(.event); return }
-        guard let native = session.calendar as? any NativeCalendarService else { presentNewItem(.event); return }
-        native.edit(identifier: nil, start: EventEditor.defaultStart(for: tab == .calendar ? calendarDay : session.runtime.now(), now: session.runtime.now(), calendar: session.runtime.calendar), end: nil, fullOptions: false, onComplete: nil)
+      guard session.calendar.usesNativeEditor else {
+        presentNewItem(.event)
+        return
+      }
+      guard let native = session.calendar as? any NativeCalendarService else {
+        presentNewItem(.event)
+        return
+      }
+      native.edit(
+        identifier: nil,
+        start: EventEditor.defaultStart(
+          for: tab == .calendar ? calendarDay : session.runtime.now(), now: session.runtime.now(),
+          calendar: session.runtime.calendar), end: nil, fullOptions: false, onComplete: nil)
     }
 
     /// What + adds right now: the thing this page is about.
     private var smartNewItem: NewItem {
-        switch tab {
-        case .calendar: .event
-        case .clock: .alarm
-        case .today, .tasks: .task
-        }
+      switch tab {
+      case .calendar: .event
+      case .clock: .alarm
+      case .today, .tasks: .task
+      }
     }
 
     /// On World Clock, + adds a city.
     private var plusAddsCity: Bool { tab == .clock && clockSection == .worldClock }
 
     /// Stopwatch and Timer have nothing to add: no + there, like Clock.
-    private var showsPlus: Bool { !(tab == .clock && (clockSection == .stopwatch || clockSection == .timer)) }
+    private var showsPlus: Bool {
+      !(tab == .clock && (clockSection == .stopwatch || clockSection == .timer))
+    }
 
     private var bottomButtons: some View {
-        HStack(spacing: 10) {
-            // Search lives in the sidebar (top right), like ChatGPT and Claude; the bar keeps only Ask AI and +.
-            Button { openAsk(nil) } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
-                    Text("Ask AI or add anything").foregroundStyle(.secondary).lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .font(.body)
-                .padding(.horizontal, 18)
-                .frame(maxWidth: .infinity, minHeight: 50)
-                .glassCapsule()
-            }
-            .buttonStyle(PressScale())
-            // +: tap adds what fits the page you are on (alarm on the Clock tab, a city on World Clock, event on Calendar,
-            // otherwise a reminder); press and hold to pick.
-            if showsPlus { plusButton }
+      HStack(spacing: 10) {
+        // Search lives in the sidebar (top right), like ChatGPT and Claude; the bar keeps only Ask AI and +.
+        Button {
+          openAsk(nil)
+        } label: {
+          HStack(spacing: 8) {
+            Image(systemName: "sparkles").foregroundStyle(Color.accentColor)
+            Text("Ask AI or add anything").foregroundStyle(.secondary).lineLimit(1)
+            Spacer(minLength: 0)
+          }
+          .font(.body)
+          .padding(.horizontal, 18)
+          .frame(maxWidth: .infinity, minHeight: 50)
+          .glassCapsule()
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 6)
-        .padding(.bottom, 4)
+        .buttonStyle(PressScale())
+        // +: tap adds what fits the page you are on (alarm on the Clock tab, a city on World Clock, event on Calendar,
+        // otherwise a reminder); press and hold to pick.
+        if showsPlus { plusButton }
+      }
+      .padding(.horizontal, 20)
+      .padding(.top, 6)
+      .padding(.bottom, 4)
     }
 
     private func presentNewItem(_ item: NewItem) {
-        let route: String
-        switch item {
-        case .task: route = "reminder.quick"
-        case .event: route = "event.editor"
-        case .alarm: route = "alarm.editor"
-        }
-        PerformanceTrace.shared.beginPage(route)
-        newItem = item
+      let route: String
+      switch item {
+      case .task: route = "reminder.quick"
+      case .event: route = "event.editor"
+      case .alarm: route = "alarm.editor"
+      }
+      PerformanceTrace.shared.beginPage(route)
+      newItem = item
     }
 
     private var plusButton: some View {
-        Menu {
-            if plusAddsCity {
-                Button { PerformanceTrace.shared.beginPage("clock.cityPicker"); addingCity = true } label: { Label("Add city", systemImage: "globe") }
-            }
-            Button { presentNewItem(.task) } label: { Label("New reminder", systemImage: "checklist") }
-            Button { newEvent() } label: { Label("New event", systemImage: "calendar") }
-            Button { presentNewItem(.alarm) } label: { Label("New alarm", systemImage: "alarm") }
-        } label: {
-            Image(systemName: "plus")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 50, height: 50)
-                .glassCircle()
-        } primaryAction: {
-            if plusAddsCity { PerformanceTrace.shared.beginPage("clock.cityPicker"); addingCity = true }
-            else if smartNewItem == .event { newEvent() } else { presentNewItem(smartNewItem) }
+      Menu {
+        if plusAddsCity {
+          Button {
+            PerformanceTrace.shared.beginPage("clock.cityPicker")
+            addingCity = true
+          } label: {
+            Label("Add city", systemImage: "globe")
+          }
         }
-        .tint(.primary)
-        .accessibilityLabel("New")
-        .accessibilityHint("Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
+        Button {
+          presentNewItem(.task)
+        } label: {
+          Label("New reminder", systemImage: "checklist")
+        }
+        Button {
+          newEvent()
+        } label: {
+          Label("New event", systemImage: "calendar")
+        }
+        Button {
+          presentNewItem(.alarm)
+        } label: {
+          Label("New alarm", systemImage: "alarm")
+        }
+      } label: {
+        Image(systemName: "plus")
+          .font(.title3.weight(.semibold))
+          .foregroundStyle(.primary)
+          .frame(width: 50, height: 50)
+          .glassCircle()
+      } primaryAction: {
+        if plusAddsCity {
+          PerformanceTrace.shared.beginPage("clock.cityPicker")
+          addingCity = true
+        } else if smartNewItem == .event {
+          newEvent()
+        } else {
+          presentNewItem(smartNewItem)
+        }
+      }
+      .tint(.primary)
+      .accessibilityLabel("New")
+      .accessibilityHint(
+        "Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
     }
-}
+  }
 
-/// Swipe left or right to move to the next or previous tab.
-///
-/// Where it works: only on the top bar (the tab pills) and the bottom bar (search, Ask AI, +). These two
-/// strips hold no rows, so they never compete with row swipe actions (Delete / Flag on reminders,
-/// alarms and events), with Calendar's own month/week paging, or with scrolling in the middle of the
-/// page. The middle of the page does not switch tabs on purpose.
-/// What it ignores: drags that start within 44pt of the left edge (they open the sidebar), drags that
-/// are not clearly sideways (horizontal under 2x vertical), and short ones. A drag on a button cancels
-/// its tap, so swiping across "Ask AI" does not open it.
-struct TabSwipe: ViewModifier {
+  /// Swipe left or right to move to the next or previous tab.
+  ///
+  /// Where it works: only on the top bar (the tab pills) and the bottom bar (search, Ask AI, +). These two
+  /// strips hold no rows, so they never compete with row swipe actions (Delete / Flag on reminders,
+  /// alarms and events), with Calendar's own month/week paging, or with scrolling in the middle of the
+  /// page. The middle of the page does not switch tabs on purpose.
+  /// What it ignores: drags that start within 44pt of the left edge (they open the sidebar), drags that
+  /// are not clearly sideways (horizontal under 2x vertical), and short ones. A drag on a button cancels
+  /// its tap, so swiping across "Ask AI" does not open it.
+  struct TabSwipe: ViewModifier {
     var isEnabled: Bool
     /// -1 = previous tab (finger moves right), +1 = next tab (finger moves left).
     let move: (Int) -> Void
 
     func body(content: Content) -> some View {
-        content.simultaneousGesture(
-            DragGesture(minimumDistance: 20, coordinateSpace: .global)
-                .onEnded { v in
-                    guard isEnabled, v.startLocation.x > 44 else { return }
-                    let dx = v.translation.width, dy = v.translation.height
-                    guard abs(dx) > 2 * abs(dy) else { return }
-                    // A quick flick counts even if the finger only moved a little.
-                    let reach = abs(v.predictedEndTranslation.width) > abs(dx) ? v.predictedEndTranslation.width : dx
-                    guard abs(reach) > 60 else { return }
-                    move(reach < 0 ? 1 : -1)
-                })
+      content.simultaneousGesture(
+        DragGesture(minimumDistance: 20, coordinateSpace: .global)
+          .onEnded { v in
+            guard isEnabled, v.startLocation.x > 44 else { return }
+            let dx = v.translation.width
+            let dy = v.translation.height
+            guard abs(dx) > 2 * abs(dy) else { return }
+            // A quick flick counts even if the finger only moved a little.
+            let reach =
+              abs(v.predictedEndTranslation.width) > abs(dx) ? v.predictedEndTranslation.width : dx
+            guard abs(reach) > 60 else { return }
+            move(reach < 0 ? 1 : -1)
+          })
     }
-}
+  }
 
-/// What the AI screen opens on. A fresh id per presentation, so "New chat" always starts clean.
-struct AskRoute: Identifiable {
+  /// What the AI screen opens on. A fresh id per presentation, so "New chat" always starts clean.
+  struct AskRoute: Identifiable {
     let id = UUID()
     let thread: ChatThread?
     /// Opened from the sidebar: going back returns there instead of to the page.
     var fromSidebar = false
-}
+  }
 
-enum NewItem: Identifiable {
+  enum NewItem: Identifiable {
     case task, event, alarm
     var id: Self { self }
 
     var noun: String {
-        switch self {
-        case .task: "a reminder"
-        case .event: "an event"
-        case .alarm: "an alarm"
-        }
+      switch self {
+      case .task: "a reminder"
+      case .event: "an event"
+      case .alarm: "an alarm"
+      }
     }
-}
+  }
 
-/// Selected tab: a wide pill with its label. Others: icon-only capsules.
-struct TabPill: View {
+  /// Selected tab: a wide pill with its label. Others: icon-only capsules.
+  struct TabPill: View {
     let tab: HomeTab
     let isSelected: Bool
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: PillStyle.Tab.iconLabelSpacing) {
-                Image(systemName: tab.icon)
-                if isSelected { Text(tab.title) }
-            }
-            .font(PillStyle.Tab.font)
-            .padding(.horizontal, isSelected ? PillStyle.Tab.selectedPadding : 0)
-            .frame(minWidth: PillStyle.Tab.minWidth, minHeight: PillStyle.Tab.height)
-            .background(PillStyle.fill(selected: isSelected), in: Capsule())
-            .foregroundStyle(PillStyle.text(selected: isSelected))
+      Button(action: action) {
+        HStack(spacing: PillStyle.Tab.iconLabelSpacing) {
+          Image(systemName: tab.icon)
+          if isSelected { Text(tab.title) }
         }
-        .buttonStyle(PressScale())
-        .accessibilityLabel(tab.title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .font(PillStyle.Tab.font)
+        .padding(.horizontal, isSelected ? PillStyle.Tab.selectedPadding : 0)
+        .frame(minWidth: PillStyle.Tab.minWidth, minHeight: PillStyle.Tab.height)
+        .background(PillStyle.fill(selected: isSelected), in: Capsule())
+        .foregroundStyle(PillStyle.text(selected: isSelected))
+      }
+      .buttonStyle(PressScale())
+      .accessibilityLabel(tab.title)
+      .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
-}
+  }
 
+  #if DEBUG
+    /// Isolates the inbox beside a named UI-test store. No real App Group data is read or cleared.
+    private struct ShareImportUITesting {
+      let id: UUID
+      let title: String
+      let inboxURL: URL
+      let failAcknowledgment: Bool
+      let failSave: Bool
 
-#if DEBUG
-/// Isolates the inbox beside a named UI-test store. No real App Group data is read or cleared.
-private struct ShareImportUITesting {
-    let id: UUID
-    let title: String
-    let inboxURL: URL
-    let failAcknowledgment: Bool
-    let failSave: Bool
+      enum InjectedFailure: Error { case save }
 
-    enum InjectedFailure: Error { case save }
-
-    init?(arguments args: [String]) {
+      init?(arguments args: [String]) {
         func value(_ flag: String) -> String? {
-            guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
-            return args[i + 1]
+          guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
+          return args[i + 1]
         }
         guard args.contains("-uiTesting"), let store = value("-uiTestingStore"),
-              let rawID = value("-uiTestingShareID"), let id = UUID(uuidString: rawID),
-              let title = value("-uiTestingShareProbeTitle") else { return nil }
+          let rawID = value("-uiTestingShareID"), let id = UUID(uuidString: rawID),
+          let title = value("-uiTestingShareProbeTitle")
+        else { return nil }
         self.id = id
         self.title = title
-        inboxURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(store).share-inbox.json")
+        inboxURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+          "\(store).share-inbox.json")
         failAcknowledgment = args.contains("-uiTestingShareFailAcknowledgment")
         failSave = args.contains("-uiTestingShareFailSave")
-    }
+      }
 
-    @MainActor
-    func state(in container: ModelContainer, outcome: String) -> String {
+      @MainActor
+      func state(in container: ModelContainer, outcome: String) -> String {
         // Read committed rows through a fresh context, rather than the UI's pending inserts/deletes.
         let saved = ModelContext(container)
         do {
-            let tasks = try saved.fetch(FetchDescriptor<OneTask>()).filter { $0.title == title }.count
-            let receipts = try saved.fetch(FetchDescriptor<ShareImportReceipt>()).filter { $0.sharedID == id }.count
-            let pending = try ShareInbox.read(at: inboxURL).filter { $0.id == id }.count
-            return "\(outcome);tasks=\(tasks);receipts=\(receipts);pending=\(pending)"
+          let tasks = try saved.fetch(FetchDescriptor<OneTask>()).filter { $0.title == title }.count
+          let receipts = try saved.fetch(FetchDescriptor<ShareImportReceipt>()).filter {
+            $0.sharedID == id
+          }.count
+          let pending = try ShareInbox.read(at: inboxURL).filter { $0.id == id }.count
+          return "\(outcome);tasks=\(tasks);receipts=\(receipts);pending=\(pending)"
         } catch { return "probe-failed" }
+      }
     }
-}
-#endif
+  #endif
 
 #endif

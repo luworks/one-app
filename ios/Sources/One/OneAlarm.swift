@@ -1,18 +1,18 @@
 #if os(iOS)
-import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import SwiftUI
-import SwiftData
+  import TodayCore
+  import TodayShared
+  import TodayData
+  import TodayPlatform
+  import SwiftUI
+  import SwiftData
 
-/// A real alarm (rings through Silent and Focus via AlarmKit). Not a reminder: reminders stay in
-/// Apple Reminders / Calendar; this is for "wake me up" things.
-///
-/// Each alarm owns one AlarmKit alarm with a stable id (`alarmKitID`), so an edit or a delete touches
-/// exactly that alarm. AlarmKit only lists alarms this app scheduled, never the ones in Apple's Clock app.
-@Model
-package final class OneAlarm {
+  /// A real alarm (rings through Silent and Focus via AlarmKit). Not a reminder: reminders stay in
+  /// Apple Reminders / Calendar; this is for "wake me up" things.
+  ///
+  /// Each alarm owns one AlarmKit alarm with a stable id (`alarmKitID`), so an edit or a delete touches
+  /// exactly that alarm. AlarmKit only lists alarms this app scheduled, never the ones in Apple's Clock app.
+  @Model
+  package final class OneAlarm {
     package var hour: Int
     package var minute: Int
     package var label: String
@@ -35,28 +35,30 @@ package final class OneAlarm {
     /// the system alarm still matches and leave it alone, e.g. while it is ringing.
     package var alarmKitSignature: String?
 
-    package init(hour: Int, minute: Int, label: String = "", weekdays: [Int] = [], snooze: Bool = true) {
-        self.hour = hour
-        self.minute = minute
-        self.label = label
-        self.weekdays = weekdays
-        self.snooze = snooze
-        self.createdAt = .now
+    package init(
+      hour: Int, minute: Int, label: String = "", weekdays: [Int] = [], snooze: Bool = true
+    ) {
+      self.hour = hour
+      self.minute = minute
+      self.label = label
+      self.weekdays = weekdays
+      self.snooze = snooze
+      self.createdAt = .now
     }
 
     /// An unsaved copy with the same settings, to put a deleted alarm back (Undo). It gets its own AlarmKit id.
     package func copy() -> OneAlarm {
-        let a = OneAlarm(hour: hour, minute: minute, label: label, weekdays: weekdays, snooze: snooze)
-        a.note = note
-        a.isOn = isOn
-        a.sound = sound
-        a.snoozeMinutes = snoozeMinutes
-        return a
+      let a = OneAlarm(hour: hour, minute: minute, label: label, weekdays: weekdays, snooze: snooze)
+      a.note = note
+      a.isOn = isOn
+      a.sound = sound
+      a.snoozeMinutes = snoozeMinutes
+      return a
     }
 
     /// The time of day as a date today (for pickers and display).
     package var timeToday: Date {
-        Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
+      Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
     }
 
     /// Clock's repeat value: "Never", "Every day", "Weekdays", "Every Mon, Wed", …
@@ -67,36 +69,44 @@ package final class OneAlarm {
     /// Everything that changes what AlarmKit has to ring, as a string (a `Hasher` seed changes per launch).
     /// `la1`: alarms carry `AlarmMeta` for the Live Activity; the suffix makes the next sync reschedule older ones.
     package var scheduleSignature: String {
-        "la1|\(isOn)|\(hour):\(minute)|\(weekdays.sorted())|\(label)|\(snooze)|\(sound)|\(snoozeMinutes)"
+      "la1|\(isOn)|\(hour):\(minute)|\(weekdays.sorted())|\(label)|\(snooze)|\(sound)|\(snoozeMinutes)"
     }
 
     /// Switching on a one-time alarm sets it for the next occurrence of its time, like Clock does.
     package func setOn(_ on: Bool) {
-        if on && !isOn { createdAt = .now; alarmKitSignature = nil }
-        isOn = on
+      if on && !isOn {
+        createdAt = .now
+        alarmKitSignature = nil
+      }
+      isOn = on
     }
 
     /// A one-time alarm turns itself off after it has rung, like Apple Clock.
     package func retireIfRung(now: Date = .now) {
-        guard isOn, weekdays.isEmpty,
-              let ring = AlarmPlan.nextFire(hour: hour, minute: minute, weekdays: [], after: createdAt),
-              ring < now else { return }
-        isOn = false
+      guard isOn, weekdays.isEmpty,
+        let ring = AlarmPlan.nextFire(hour: hour, minute: minute, weekdays: [], after: createdAt),
+        ring < now
+      else { return }
+      isOn = false
     }
 
     /// When this alarm will ring next, if it will.
     package func nextRing(now: Date = .now) -> Date? {
-        guard isOn else { return nil }
-        return AlarmPlan.nextRing(hour: hour, minute: minute, weekdays: weekdays, switchedOn: createdAt, now: now)
+      guard isOn else { return nil }
+      return AlarmPlan.nextRing(
+        hour: hour, minute: minute, weekdays: weekdays, switchedOn: createdAt, now: now)
     }
 
     /// The plain values the Calendar and Today rules work on (see `CalendarAlarms`).
-    package var spec: AlarmSpec { AlarmSpec(hour: hour, minute: minute, label: label, weekdays: weekdays, isOn: isOn) }
+    package var spec: AlarmSpec {
+      AlarmSpec(hour: hour, minute: minute, label: label, weekdays: weekdays, isOn: isOn)
+    }
 
     /// When this alarm rings on `day`, if it does. A one-time alarm rings on the day of its next occurrence.
     package func fires(on day: Date, now: Date = .now, calendar: Calendar = .current) -> Date? {
-        guard isOn else { return nil }
-        return AlarmPlan.fire(on: day, hour: hour, minute: minute, weekdays: weekdays, now: now, calendar: calendar)
+      guard isOn else { return nil }
+      return AlarmPlan.fire(
+        on: day, hour: hour, minute: minute, weekdays: weekdays, now: now, calendar: calendar)
     }
-}
+  }
 #endif

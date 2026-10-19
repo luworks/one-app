@@ -149,7 +149,7 @@ class Manifest:
             raise FeatureError('Verification already active')
         app = _safe(self.root, 'ios/App')
         entries = [p for p in app.glob('*.swift')
-                   if re.search(r'@main\s+struct\s+\w+\s*:\s*App\b', p.read_text())]
+                   if re.search(r'@main(?:\s+@\w+(?:\([^)]*\))?)*\s+struct\s+\w+\s*:\s*App\b', p.read_text())]
         if len(entries) != 1:
             raise FeatureError('Expected one @main App entry in ios/App')
         entry = entries[0]
@@ -174,7 +174,12 @@ class Manifest:
 
 def _insert(package, section, line):
     # Match Package's top-level arrays, not a product's nested targets array.
-    marker = re.compile(r'(?m)^(    ' + section + r': \[)[ \t]*$')
+    products = re.search(r'(?m)^([ \t]+)products:[ \t]*\[', package)
+    if products is None:
+        raise FeatureError('Expected one Package products array')
+    indent = products[1]
+    marker = re.compile(r'(?m)^(' + re.escape(indent) + section + r': \[)[ \t]*$')
+    line = indent + '  ' + line.lstrip()
     matches = list(marker.finditer(package))
     if len(matches) != 1:
         raise FeatureError(f'Expected one Package {section} array')

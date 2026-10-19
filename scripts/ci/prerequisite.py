@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Verify exact hosted toolchain; never install Xcode or silently use another version."""
 import json
-import os
-from pathlib import Path
 import platform
 import subprocess
 import sys

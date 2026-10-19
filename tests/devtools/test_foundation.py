@@ -16,9 +16,9 @@ from unittest.mock import patch
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.devtools import core
-from scripts.devtools.cli import main
-from scripts.devtools.process import Evidence, Redactor, run_process
+from scripts.devtools import core  # noqa: E402 - standalone test import bootstrap
+from scripts.devtools.cli import main  # noqa: E402 - standalone test import bootstrap
+from scripts.devtools.process import Evidence, Redactor, run_process  # noqa: E402 - standalone test import bootstrap
 
 
 class FoundationTests(unittest.TestCase):
@@ -52,7 +52,6 @@ class FoundationTests(unittest.TestCase):
              patch('scripts.devtools.core.toolchain', return_value={'xcode': None, 'sdks': []}), \
              patch('scripts.devtools.cli.toolchain', return_value={'xcode': None, 'sdks': []}), \
              patch('scripts.devtools.core.probe', side_effect=read_probe), \
-             patch('scripts.devtools.cli.probe', side_effect=read_probe), \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(main(['help'], self.root), 0)
             self.assertEqual(main(['inventory'], self.root), 0)

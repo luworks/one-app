@@ -1,10 +1,10 @@
 #if !SWIFT_PACKAGE
-import Foundation
+  import Foundation
 
-private final class TestResourceAnchor: NSObject {}
+  private final class TestResourceAnchor: NSObject {}
 
-extension Bundle {
+  extension Bundle {
     /// Same versioned fixtures as the SwiftPM tests, copied into the native test bundle.
     static var module: Bundle { Bundle(for: TestResourceAnchor.self) }
-}
+  }
 #endif

@@ -73,7 +73,10 @@ class UITests(unittest.TestCase):
 
     def perform(self, output=None, **kwargs):
         before = ui._snapshot(self.root, self.inputs)
-        with patch('scripts.devtools.resolve.locked_arguments', return_value=['-disableAutomaticPackageResolution']), patch.object(ui, '_locks', no_locks), patch.object(ui, '_export', return_value=(
+        with patch('scripts.devtools.commands.generate', return_value=0), \
+                patch.object(ui, 'fingerprint', return_value={'sha256': 'synthetic-source'}), \
+                patch.object(ui, 'record_build'), \
+                patch('scripts.devtools.resolve.locked_arguments', return_value=['-disableAutomaticPackageResolution']), patch.object(ui, '_locks', no_locks), patch.object(ui, '_export', return_value=(
                 self.manifest, self.inputs, before)), patch.object(ui, '_inputs', return_value=self.inputs), \
                 patch.object(ui.Native, 'run', self.fake_run_bound()), patch.object(ui, 'Evidence'):
             if output is None:

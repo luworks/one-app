@@ -5,14 +5,14 @@ import Foundation
 /// Your own words, and answers that carry content (today's summary), can be copied.
 /// Plain Swift (no SwiftUI) so it runs under `swift test`.
 public enum MessageCopy {
-    /// An answer worth copying: the summary of today ("Today: 3 open tasks and 1 upcoming event." and its lines).
-    /// A new kind of answer that carries content must be added here, or it is treated as a template.
-    public static func carriesContent(_ text: String) -> Bool {
-        text.hasPrefix("Today:")
-    }
+  /// An answer worth copying: the summary of today ("Today: 3 open tasks and 1 upcoming event." and its lines).
+  /// A new kind of answer that carries content must be added here, or it is treated as a template.
+  public static func carriesContent(_ text: String) -> Bool {
+    text.hasPrefix("Today:")
+  }
 
-    /// True for the app's own sentences. Every AI message is one unless it carries content.
-    public static func isTemplate(isUser: Bool, text: String) -> Bool {
-        !isUser && !carriesContent(text)
-    }
+  /// True for the app's own sentences. Every AI message is one unless it carries content.
+  public static func isTemplate(isUser: Bool, text: String) -> Bool {
+    !isUser && !carriesContent(text)
+  }
 }

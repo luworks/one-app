@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from .core import (derived_data, fingerprint, inspect_lock, probe, provenance,
+from .core import (derived_data, fingerprint, inspect_lock, provenance,
                    state_root, toolchain, worktree_id)
 from .process import Redactor
 

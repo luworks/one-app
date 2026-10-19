@@ -1,65 +1,65 @@
 #if os(iOS)
-#if canImport(AlarmKit)
-import AlarmKit
-import AppIntents
-import Foundation
+  #if canImport(AlarmKit)
+    import AlarmKit
+    import AppIntents
+    import Foundation
 
-// Shared by the app and the TodayWidgets extension: the metadata on every AlarmKit alarm (so both sides agree on
-// the `AlarmAttributes<AlarmMeta>` Live Activity type), and the buttons on that Live Activity.
-// AlarmKit ships no intents of its own; these call AlarmManager, and run in the app's process.
+    // Shared by the app and the TodayWidgets extension: the metadata on every AlarmKit alarm (so both sides agree on
+    // the `AlarmAttributes<AlarmMeta>` Live Activity type), and the buttons on that Live Activity.
+    // AlarmKit ships no intents of its own; these call AlarmManager, and run in the app's process.
 
-struct AlarmMeta: AlarmMetadata {
-    enum Kind: String, Codable, Hashable, Sendable {
+    struct AlarmMeta: AlarmMetadata {
+      enum Kind: String, Codable, Hashable, Sendable {
         case timer, alarm
+      }
+      var kind: Kind
     }
-    var kind: Kind
-}
 
-struct PauseAlarmIntent: LiveActivityIntent {
-    static let title: LocalizedStringResource = "Pause"
-    static let isDiscoverable = false
+    struct PauseAlarmIntent: LiveActivityIntent {
+      static let title: LocalizedStringResource = "Pause"
+      static let isDiscoverable = false
 
-    @Parameter(title: "Alarm ID") var alarmID: String
+      @Parameter(title: "Alarm ID") var alarmID: String
 
-    init(alarmID: UUID) { self.alarmID = alarmID.uuidString }
-    init() {}
+      init(alarmID: UUID) { self.alarmID = alarmID.uuidString }
+      init() {}
 
-    func perform() async throws -> some IntentResult {
+      func perform() async throws -> some IntentResult {
         if let id = UUID(uuidString: alarmID) { try AlarmManager.shared.pause(id: id) }
         return .result()
+      }
     }
-}
 
-struct ResumeAlarmIntent: LiveActivityIntent {
-    static let title: LocalizedStringResource = "Resume"
-    static let isDiscoverable = false
+    struct ResumeAlarmIntent: LiveActivityIntent {
+      static let title: LocalizedStringResource = "Resume"
+      static let isDiscoverable = false
 
-    @Parameter(title: "Alarm ID") var alarmID: String
+      @Parameter(title: "Alarm ID") var alarmID: String
 
-    init(alarmID: UUID) { self.alarmID = alarmID.uuidString }
-    init() {}
+      init(alarmID: UUID) { self.alarmID = alarmID.uuidString }
+      init() {}
 
-    func perform() async throws -> some IntentResult {
+      func perform() async throws -> some IntentResult {
         if let id = UUID(uuidString: alarmID) { try AlarmManager.shared.resume(id: id) }
         return .result()
+      }
     }
-}
 
-/// Ends a running timer or a snooze. `stop` deletes a one-shot alarm (the timer) and puts a repeating alarm
-/// back on its schedule, so a snoozing weekday alarm still rings tomorrow.
-struct StopAlarmIntent: LiveActivityIntent {
-    static let title: LocalizedStringResource = "Stop"
-    static let isDiscoverable = false
+    /// Ends a running timer or a snooze. `stop` deletes a one-shot alarm (the timer) and puts a repeating alarm
+    /// back on its schedule, so a snoozing weekday alarm still rings tomorrow.
+    struct StopAlarmIntent: LiveActivityIntent {
+      static let title: LocalizedStringResource = "Stop"
+      static let isDiscoverable = false
 
-    @Parameter(title: "Alarm ID") var alarmID: String
+      @Parameter(title: "Alarm ID") var alarmID: String
 
-    init(alarmID: UUID) { self.alarmID = alarmID.uuidString }
-    init() {}
+      init(alarmID: UUID) { self.alarmID = alarmID.uuidString }
+      init() {}
 
-    func perform() async throws -> some IntentResult {
+      func perform() async throws -> some IntentResult {
         if let id = UUID(uuidString: alarmID) { try AlarmManager.shared.stop(id: id) }
         return .result()
+      }
     }
-}
-#endif
+  #endif
 #endif

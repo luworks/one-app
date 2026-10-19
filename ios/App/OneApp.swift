@@ -1,116 +1,132 @@
-import One
-import TodayShell
-import TodayCore
-import TodayShared
-import TodayData
-import TodayPlatform
-import TodayDesignSystem
+import FeatureAsk
 import FeatureClock
 import FeatureHealth
-import FeatureAsk
-import SwiftUI
+import One
 import SwiftData
+import SwiftUI
+import TodayCore
+import TodayData
+import TodayDesignSystem
+import TodayPlatform
+import TodayShared
+import TodayShell
+
 #if TODAY_MOCK
-import TodayTestSupport
+  import TodayTestSupport
 #endif
 
 @main
 @MainActor
 struct OneApp: App {
-    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    private let diagnostics = LocalDiagnostics()
-    private let composition: ShellComposition
-    private let healthModel: HealthModel
-    private let healthLineModel: HealthLineModel
-    #if TODAY_MOCK
+  @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+  private let diagnostics = LocalDiagnostics()
+  private let composition: ShellComposition
+  private let healthModel: HealthModel
+  private let healthLineModel: HealthLineModel
+  #if TODAY_MOCK
     private let mock: MockAppComposition
-    #endif
+  #endif
 
-    init() {
-        let source: any HealthSource
-        #if TODAY_MOCK
-        do {
-            let mock = try MockAppComposition(arguments: ProcessInfo.processInfo.arguments)
-            self.mock = mock
-            composition = mock.shell
-        } catch { fatalError("Could not open the development store: \(error)") }
-        source = HealthTestSources.scripted(base: MockHealthSource(), arguments: ProcessInfo.processInfo.arguments)
-        #else
-        let liveSession = OneStore.session
-        do {
-            guard let url = Bundle.main.url(forResource: "cities", withExtension: "json") else {
-                throw CocoaError(.fileNoSuchFile)
-            }
-            let cities = try CityDatabase.decode(Data(contentsOf: url))
-            let world = WorldClockStore(database: cities, defaults: liveSession.defaults,
-                                        homeZoneIdentifier: liveSession.runtime.calendar.timeZone.identifier)
-            let stopwatch = StopwatchModel(defaults: liveSession.defaults, now: liveSession.runtime.now)
-            composition = ShellComposition(session: liveSession, world: world, stopwatch: stopwatch,
-                intelligence: .live(locale: liveSession.runtime.locale),
-                voice: VoiceInput(driver: LiveSpeechInputDriver(locale: liveSession.runtime.locale)), arguments: [],
-                openSettings: {
-                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
-                })
-        } catch { fatalError("Could not load the city database: \(error)") }
-        source = HealthKitSource()
-        #endif
-        let session = composition.session
-        #if TODAY_MOCK
-        let selection = HealthTestSelection.make(defaults: session.defaults, arguments: composition.arguments)
-        #else
-        let selection = HealthSelectionStore(defaults: session.defaults)
-        #endif
-        let gate = HealthAccessGate()
-        healthModel = HealthModel(source: source, store: selection, runtime: session.runtime, gate: gate)
-        healthLineModel = HealthLineModel(source: source, store: selection, defaults: session.defaults,
-                                          runtime: session.runtime, gate: gate)
-        diagnostics.start()
-        if PerformanceTrace.enabled { PerformanceTrace.shared.beginLaunch() }
-        LaunchTimer.mark("app init")
-        #if TODAY_MOCK
-        if composition.arguments.contains("-uiTesting") { SampleData.resetFlags() }
-        HealthDebugSeed.runIfRequested()
-        #endif
-        LaunchTimer.mark("store ready")
-    }
-
+  init() {
+    let source: any HealthSource
     #if TODAY_MOCK
-    private func prepareMockData(_ context: ModelContext) async -> Bool {
-        if composition.arguments.contains("-seedCalendarDemo"), let calendar = composition.session.calendar as? CalendarSync {
-            await calendar.seedDemo()
+      do {
+        let mock = try MockAppComposition(arguments: ProcessInfo.processInfo.arguments)
+        self.mock = mock
+        composition = mock.shell
+      } catch { fatalError("Could not open the development store: \(error)") }
+      source = HealthTestSources.scripted(
+        base: MockHealthSource(), arguments: ProcessInfo.processInfo.arguments)
+    #else
+      let liveSession = OneStore.session
+      do {
+        guard let url = Bundle.main.url(forResource: "cities", withExtension: "json") else {
+          throw CocoaError(.fileNoSuchFile)
         }
-        if let path = DevImport.requestedPath {
-            do {
-                _ = try DevImport.run(path: path, into: context)
-                ListActions.ensureLists(in: context, runtime: composition.session.runtime)
-            } catch { print("IMPORT failed code: \((error as NSError).code)") }
-            return false
-        }
-        if let path = TestDataset.requestedPath {
-            do { try TestDataset.load(path: path, into: context) }
-            catch { print("DATASET failed code: \((error as NSError).code)") }
-        } else { SampleData.insertIfNeeded(context) }
-        return true
-    }
+        let cities = try CityDatabase.decode(Data(contentsOf: url))
+        let world = WorldClockStore(
+          database: cities, defaults: liveSession.defaults,
+          homeZoneIdentifier: liveSession.runtime.calendar.timeZone.identifier)
+        let stopwatch = StopwatchModel(defaults: liveSession.defaults, now: liveSession.runtime.now)
+        composition = ShellComposition(
+          session: liveSession, world: world, stopwatch: stopwatch,
+          intelligence: .live(locale: liveSession.runtime.locale),
+          voice: VoiceInput(driver: LiveSpeechInputDriver(locale: liveSession.runtime.locale)),
+          arguments: [],
+          openSettings: {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(url)
+          })
+      } catch { fatalError("Could not load the city database: \(error)") }
+      source = HealthKitSource()
     #endif
+    let session = composition.session
+    #if TODAY_MOCK
+      let selection = HealthTestSelection.make(
+        defaults: session.defaults, arguments: composition.arguments)
+    #else
+      let selection = HealthSelectionStore(defaults: session.defaults)
+    #endif
+    let gate = HealthAccessGate()
+    healthModel = HealthModel(
+      source: source, store: selection, runtime: session.runtime, gate: gate)
+    healthLineModel = HealthLineModel(
+      source: source, store: selection, defaults: session.defaults,
+      runtime: session.runtime, gate: gate)
+    diagnostics.start()
+    if PerformanceTrace.enabled { PerformanceTrace.shared.beginLaunch() }
+    LaunchTimer.mark("app init")
+    #if TODAY_MOCK
+      if composition.arguments.contains("-uiTesting") { SampleData.resetFlags() }
+      HealthDebugSeed.runIfRequested()
+    #endif
+    LaunchTimer.mark("store ready")
+  }
 
-    var body: some Scene {
-        WindowGroup {
-            #if TODAY_MOCK
-            HomeView(composition: composition, diagnostics: diagnostics, prepareData: prepareMockData)
-                .environment(healthModel).environment(healthLineModel)
-                .appearanceRoot(defaults: composition.session.defaults, windows: appWindows)
-            #else
-            HomeView(composition: composition, diagnostics: diagnostics)
-                .environment(healthModel).environment(healthLineModel)
-                .appearanceRoot(defaults: composition.session.defaults, windows: appWindows)
-            #endif
+  #if TODAY_MOCK
+    private func prepareMockData(_ context: ModelContext) async -> Bool {
+      if composition.arguments.contains("-seedCalendarDemo"),
+        let calendar = composition.session.calendar as? CalendarSync
+      {
+        await calendar.seedDemo()
+      }
+      LaunchTestConfiguration.seedLegacyLedgerForTests(
+        context: context, arguments: composition.arguments,
+        runtime: composition.session.runtime)
+      if let path = DevImport.requestedPath {
+        do {
+          _ = try DevImport.run(path: path, into: context)
+          ListActions.ensureLists(in: context, runtime: composition.session.runtime)
+        } catch { print("IMPORT failed code: \((error as NSError).code)") }
+        return false
+      }
+      if let path = TestDataset.requestedPath {
+        do { try TestDataset.load(path: path, into: context) } catch {
+          print("DATASET failed code: \((error as NSError).code)")
         }
-        .modelContainer(composition.session.container)
+      } else {
+        SampleData.insertIfNeeded(context)
+      }
+      return true
     }
+  #endif
 
-    private func appWindows() -> [UIWindow] {
-        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+  var body: some Scene {
+    WindowGroup {
+      #if TODAY_MOCK
+        HomeView(composition: composition, diagnostics: diagnostics, prepareData: prepareMockData)
+          .environment(healthModel).environment(healthLineModel)
+          .appearanceRoot(defaults: composition.session.defaults, windows: appWindows)
+      #else
+        HomeView(composition: composition, diagnostics: diagnostics)
+          .environment(healthModel).environment(healthLineModel)
+          .appearanceRoot(defaults: composition.session.defaults, windows: appWindows)
+      #endif
     }
+    .modelContainer(composition.session.container)
+  }
+
+  private func appWindows() -> [UIWindow] {
+    UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+  }
 }

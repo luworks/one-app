@@ -1,6 +1,5 @@
 """Real local adapters. The UI/preview/test contracts retain orchestration ownership."""
 import json
-import os
 from pathlib import Path
 import shutil
 import sys
@@ -8,7 +7,7 @@ import time
 
 from .bootstrap import bootstrap as bootstrap_tools, BootstrapError
 from .core import (atomic_json, dd_lock, derived_data, fingerprint, host_lock,
-                   provenance, record_build, state_root)
+                   record_build)
 from .process import Evidence, Redactor, run_process
 
 
@@ -170,9 +169,10 @@ def test(root, group, *, only=(), timeout=600, full=False, _locked=False):
 
 
 def format_sources(root, *, check=False, timeout=600):
-    paths = [str(p.relative_to(root)) for folder in ['ios/Sources', 'ios/One', 'ios/Development',
-             'ios/TodayWidgets', 'ios/ShareExtension', 'ios/OneUITests', 'ios/Eval/Tests']
-             if (root / folder).is_dir() for p in sorted((root / folder).rglob('*.swift'))]
+    from .core import probe
+    paths = sorted({name for name in probe(
+        ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], root).split('\0')
+        if name.startswith('ios/') and name.endswith('.swift') and (root / name).is_file()})
     command = [tool(root, 'swift-format'), 'lint' if check else 'format', '--recursive']
     command += ['--strict'] if check else ['--in-place']
     return execute(root, [*command, *paths], timeout=timeout).returncode

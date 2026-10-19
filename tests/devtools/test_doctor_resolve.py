@@ -126,7 +126,7 @@ class ResolveTests(Fixture):
         (self.root / 'ios/Today.xcodeproj/project.pbxproj').unlink()
         with patch.object(commands, 'generate', return_value=0) as generate:
             self.assertEqual(self.run_mock(), 0)
-            generate.assert_called_once_with(self.root, timeout=600)
+            generate.assert_called_once_with(self.root, timeout=600, _locked=True)
 
     def test_normal_build_gate_rejects_missing_or_dirty_workspace(self):
         for contents in (None, '{}'):

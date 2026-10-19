@@ -12,9 +12,9 @@ from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.devtools import commands, core, xcode_tests
+from scripts.devtools import commands, core, xcode_tests  # noqa: E402 - standalone test import bootstrap
 
-METHOD = 'TodayTests/StoreUpgradeTests/frozenStoreReopensAndMutates'
+METHOD = 'TodayTests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation'
 CONTRACT = commands.testing_contract(ROOT)
 
 
@@ -218,7 +218,9 @@ class NativeProvenanceTests(unittest.TestCase):
             evidence.path.write_text(content)
             return SimpleNamespace(returncode=code, reason='exited' if code != 124 else 'timeout', log=evidence.path)
 
-        with patch.multiple(xcode_tests, host_lock=lock, dd_lock=lock, ResourceLock=lock), \
+        source_inventory = CONTRACT.inventory(ROOT)
+        with patch.object(CONTRACT, 'inventory', return_value=source_inventory), \
+                patch.multiple(xcode_tests, host_lock=lock, dd_lock=lock, ResourceLock=lock), \
                 patch.object(xcode_tests, 'Evidence', return_value=evidence), \
                 patch.object(xcode_tests, 'run_process', side_effect=process), \
                 patch.object(xcode_tests, 'selected', return_value={'unit': [METHOD], 'integration': [METHOD]}), \
@@ -236,7 +238,7 @@ class NativeProvenanceTests(unittest.TestCase):
         self.assertEqual(sum(c[:2] == ['xcodebuild', 'build-for-testing'] for c in self.calls), 1)
         tests = [c for c in self.calls if c[:2] == ['xcodebuild', 'test-without-building']]
         self.assertEqual(len(tests), 2)
-        self.assertEqual(tests[0].count('-only-testing:' + METHOD), 1)
+        self.assertEqual(tests[0].count('-only-testing:' + METHOD + '()'), 1)
         self.assertIn('-xctestrun', tests[0])
         self.assertEqual(self.calls[-1][:3], ['xcrun', 'simctl', 'shutdown'])
 
