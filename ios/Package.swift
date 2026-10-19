@@ -40,7 +40,7 @@ let package = Package(
                 path: "Sources/Features/FeatureClock", exclude: ["README.md"]),
         .target(name: "FeatureHealth", dependencies: ["TodayCore", "TodayDesignSystem", "TodayPlatform"],
                 path: "Sources/Features/FeatureHealth"),
-        .target(name: "TodayTestSupport", dependencies: ["TodayCore", "TodayShared"]),
+        .target(name: "TodayTestSupport", dependencies: ["TodayCore", "TodayShared", "TodayData", "TodayPlatform", "One"]),
         .target(name: "FeatureToday", dependencies: ["One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform", "TodayPlannerUI", "FeatureHealth"], path: "Sources/Features/FeatureToday"),
         .target(name: "FeatureCalendar", dependencies: ["One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform", "TodayPlannerUI"], path: "Sources/Features/FeatureCalendar"),
         .target(name: "FeatureReminders", dependencies: ["One", "TodayCore", "TodayShared", "TodayData", "TodayDesignSystem", "TodayPlatform", "TodayPlannerUI"], path: "Sources/Features/FeatureReminders"),
