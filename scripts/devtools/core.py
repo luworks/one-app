@@ -11,13 +11,26 @@ import time
 import uuid
 
 
-def probe(argv, cwd=None):
+def probe(argv, cwd=None, *, timeout=None):
     """Run only explicit read probes; never invoke a shell or xcrun."""
     env = dict(os.environ, GIT_OPTIONAL_LOCKS='0')
     # Cold checkout enumeration can exceed five seconds on a loaded hosted Mac.
-    timeout = 30 if argv and argv[0] == 'git' else 5
-    return subprocess.check_output(argv, cwd=cwd, env=env, stderr=subprocess.PIPE,
-                                   timeout=timeout).decode().strip()
+    timeout = timeout if timeout is not None else (30 if argv and argv[0] == 'git' else 5)
+    started = time.monotonic()
+    with subprocess.Popen(argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE) as child:
+        try:
+            output, stderr = child.communicate(timeout=timeout)
+            if child.returncode:
+                raise subprocess.CalledProcessError(child.returncode, argv, output, stderr)
+        except subprocess.TimeoutExpired as error:
+            child.kill()  # Only the direct read-probe child belongs to us.
+            output, error.stderr = child.communicate()
+            error.output = output
+            error.pid = child.pid
+            error.seconds = time.monotonic() - started
+            raise
+    return output.decode().strip()
 
 
 def canonical_root(root):
@@ -180,38 +193,55 @@ def native_test_options():
 GENERATED_INPUT_DIRS = ('.build', '__pycache__', 'DerivedData')
 
 
-def repository_files(root):
+def repository_files(root, *, paths=()):
     """Fresh Git inventory; tracked deletions and real untracked inputs survive.
 
     No cached manifest or untracked-cache extension is trusted. Git prunes ignored
     directories itself; explicit excludes also cover newly generated build trees
     before an enclosing .gitignore exists. --cached still includes tracked paths.
     """
-    command = ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard',
-               *('--exclude=' + name + '/' for name in GENERATED_INPUT_DIRS)]
-    try:
-        names = probe(command, root).split('\0')
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
-        from .process import Redactor
-        detail = Redactor()((error.stderr or b'').decode(errors='replace')
-                            if isinstance(error.stderr, bytes) else (error.stderr or ''))
-        reason = ('timeout after ' + str(error.timeout) + 's; child killed and reaped'
-                  if isinstance(error, subprocess.TimeoutExpired) else 'exit=' + str(error.returncode))
-        raise RuntimeError('Git source inventory failed: ' + reason + '; command=' +
-                           ' '.join(command) + '; stderr=' + (detail[:2000] or '<empty>')) from None
+    # Index enumeration never needs a worktree walk. Keep it separate so a slow
+    # untracked traversal has an unambiguous operation in the failure evidence.
+    names = []
+    for mode in ('--cached', '--others'):
+        command = ['git', 'ls-files', '-z', mode]
+        if mode == '--others':
+            command += ['--exclude-standard', '--exclude=/tests/results/', '--exclude=/tests/shots/',
+                        *('--exclude=' + name + '/' for name in GENERATED_INPUT_DIRS)]
+        command += ['--', *paths] if paths and mode == '--others' else []
+        started = time.monotonic()
+        try:
+            names.extend(probe(command, root).split('\0'))
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+            from .process import Redactor
+            detail = Redactor()((error.stderr or b'').decode(errors='replace')
+                                if isinstance(error.stderr, bytes) else (error.stderr or ''))
+            reason = ('timeout after ' + str(error.timeout) + 's; child killed and reaped'
+                      if isinstance(error, subprocess.TimeoutExpired) else 'exit=' + str(error.returncode))
+            context = f'; operation={mode}; pid={getattr(error, "pid", "unknown")}; seconds={time.monotonic() - started:.3f}; cwd={Path(root).resolve()}'
+            raise RuntimeError(Redactor()('Git source inventory failed: ' + reason + context + '; command=' +
+                               ' '.join(command) + '; stderr=' + (detail[:2000] or '<empty>'))) from None
     return sorted({name for name in names if name and not any(
         part in GENERATED_INPUT_DIRS for part in Path(name).parts)})
+
+
+# Versioned build/test/tool inputs live in these roots. Root configuration names
+# are literal pathspecs: a recursive basename glob would walk unrelated caches.
+SOURCE_ROOTS = ('ios', 'scripts', 'tests', '.github')
+SOURCE_CONFIGS = ('dev', 'Package.resolved', 'package-lock.json', 'yarn.lock',
+                  'pnpm-lock.yaml', 'uv.lock', 'requirements.txt', 'Gemfile.lock', 'Gemfile',
+                  'mise.lock', '.mise.toml', '.swift-format', '.swiftlint.yml', 'ruff.toml',
+                  'tool-pins.json', '.gitignore', '.gitattributes')
 
 
 def fingerprint(root, *, sdk='iphonesimulator', architecture=None, configuration='Debug', tools=None, scheme='Today'):
     """Hash current source bytes (including dirty/untracked inputs), not just HEAD."""
     root = Path(root).resolve()
-    names = repository_files(root)
+    names = repository_files(root, paths=(*SOURCE_ROOTS, *SOURCE_CONFIGS))
     files = {}
     for name in sorted(set(names)):
-        if not name or not (name.startswith(('ios/', 'scripts/', 'tests/fixtures/', '.github/')) or name == 'dev'
-                            or Path(name).name in ('Package.resolved', 'package-lock.json', 'yarn.lock',
-                                                   'pnpm-lock.yaml', 'uv.lock', 'requirements.txt', 'Gemfile.lock', 'Gemfile', 'mise.lock', '.mise.toml', '.swift-format', '.swiftlint.yml', 'ruff.toml', 'tool-pins.json', '.gitignore', '.gitattributes')):
+        if not (name.startswith(tuple(folder + '/' for folder in SOURCE_ROOTS))
+                or Path(name).name in SOURCE_CONFIGS):
             continue
         path = root / name
         if path.is_symlink():
@@ -447,6 +477,8 @@ def ensure_test_products(root, scheme, invoke, *, configuration='Debug', sdk='ip
         raise ValueError('Expected exactly one scheme xctestrun; rebuild in a fresh owned cache')
     path = candidates[0]
     record_build(root, current, [path], returncode=0, kind='build-for-testing', xctestrun=path)
-    if not provenance(root, fingerprint(root, **options), kind='build-for-testing', xctestrun=path)['valid']:
+    # record_build just rehashed live source before publishing. Reuse that
+    # identity for product validation; the caller checks again before dispatch.
+    if not provenance(root, current, kind='build-for-testing', xctestrun=path)['valid']:
         raise ValueError('Build products changed before test dispatch')
     return path

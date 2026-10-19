@@ -188,6 +188,52 @@ class NativeProvenanceTests(unittest.TestCase):
         # The normal implementation remains fresh too, without a cached manifest.
         self.assertEqual(before, self.fp())
 
+    def test_unrelated_tree_blocks_old_walk_but_scoped_source_inventory_finishes(self):
+        directory = self.root / 'unrelated-package-cache' / 'nested'
+        directory.mkdir(parents=True)
+        os.mkfifo(directory / '.gitignore')
+        command = ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard',
+                   *('--exclude=' + name + '/' for name in core.GENERATED_INPUT_DIRS)]
+        with self.assertRaises(subprocess.TimeoutExpired):
+            subprocess.check_output(command, cwd=self.root, timeout=0.2)
+        before = self.fp()
+        # Full tests source, root config and even tracked ignored inputs remain
+        # authoritative; the scoped walk does not mistake a new source for clean.
+        for name in ('tests/devtools/New.py', 'ios/Config/Local.xcconfig', 'requirements.txt'):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('new real input')
+            self.assertNotEqual(before, self.fp())
+            before = self.fp()
+        subprocess.run(['git', '-C', str(self.root), 'add', '-f', 'ios/Input.swift'], check=True)
+        (self.root / '.gitignore').write_text('ios/Input.swift\n')
+        before = self.fp()
+        self.source.write_text('tracked ignored modification')
+        self.assertNotEqual(before, self.fp())
+
+    def test_large_ignored_generated_tree_preserves_real_untracked_source(self):
+        (self.root / '.gitignore').write_text('tests/results/\n')
+        before = self.fp()
+        generated = self.root / 'tests/results/package-cache'
+        generated.mkdir(parents=True)
+        for number in range(1000):
+            (generated / str(number)).write_text('generated')
+        os.mkfifo(generated / '.gitignore')
+        self.assertEqual(before, self.fp())
+        self.source.write_text('dirty source')
+        self.assertNotEqual(before, self.fp())
+
+    def test_probe_timeout_reaps_only_its_child_and_keeps_pid_and_stderr(self):
+        with self.assertRaises(subprocess.TimeoutExpired) as caught:
+            core.probe([sys.executable, '-c',
+                        'import sys,time; print("inventory busy", file=sys.stderr, flush=True); time.sleep(20)'],
+                       self.root, timeout=0.2)
+        error = caught.exception
+        self.assertIn(b'inventory busy', error.stderr)
+        self.assertLess(error.seconds, 3)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(error.pid, 0)
+
     def test_tracked_deletion_and_tracked_ignored_file_still_invalidate(self):
         subprocess.run(['git', '-C', str(self.root), 'add', 'ios/Input.swift'], check=True)
         before = self.fp()

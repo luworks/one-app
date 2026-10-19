@@ -418,3 +418,41 @@ native build, simulator, axe or physical-device work ran. Product, AI, selectors
 assertions, baseline and timeout authorities are unchanged. The <=300s goal and
 current integrated-head acceptance remain open; PR104's earlier green run does
 not validate this candidate or newer main changes.
+
+
+### Iteration 9: bounded source inventory
+
+PR108 snapshot run `39305997798`, integrated SHA
+`e349cf0ed3a252568a4f85f48fdf453e36d1f9bc`, retained artifact `12214982002`
+(3,793 bytes, SHA-256 `1f03ae27e9fccda9e85eb08f52b15c59aed10febaf8d76e02e2efecaae115208`).
+It executed zero tests with six missing because Git source inventory timed out
+at 30 seconds. The transcript has simulator operations but no native build or
+pixel comparison; the last simulator operation took 116.693 seconds. This does
+not establish a post-build load problem or a product regression. The remote
+blocked syscall remains unknown; no strace is installed locally.
+
+Index-only enumeration and untracked traversal now use separate Git operations.
+Fingerprint untracked discovery is scoped to existing source/test/tool roots and
+literal root config paths, retaining tracked nested config/locks and ignored
+tracked inputs. Generated evidence and build trees are pruned before traversal.
+All test source now participates in identity. Every fingerprint still reads live
+source bytes and freshly discovers untracked source. No old test result or
+cached clean status substitutes for execution. The immediate duplicate scan after
+record_build is removed: that authority revalidates live source before publishing,
+and the native caller revalidates before dispatch. Git timeout evidence identifies
+the operation, owned PID, elapsed time, cwd and redacted stderr; only that child
+is killed and reaped. The 30-second limit is unchanged.
+
+Host regressions reproduce the old unscoped walk blocking on an unrelated FIFO,
+then prove scoped inventory completes. They also cover a thousand ignored generated
+files, newly added test source/config/requirements, tracked ignored modifications,
+existing lock/deletion/build-change invalidations, and real timeout cleanup.
+`./dev test helpers`: 134 passed in 11.329 seconds; `./dev lint` passed.
+The first fixture failure and its corrected result remain retained: adding test
+source to identity initially included generated QA output when fixture repositories
+lacked .gitignore; explicit generated-evidence pruning repairs that shared cause.
+No native build, simulator or physical-device acceptance was run locally.
+PR107 v8 run `39308893134` remains owned by the parent watch; this change must not
+cancel its first result. New integrated checks are required before merge and before
+PR108 adopts the common CI fix. The 300-second goal and warm-cache benefit remain
+unproven. Raw evidence stays in primary `tests/results/ci-hillclimb-20261019/`.
