@@ -1,0 +1,12 @@
+Third-Party Notices
+
+GeoNames geographical database
+https://www.geonames.org
+
+The city database derives from GeoNames data licensed under Creative Commons
+Attribution 4.0 International: https://creativecommons.org/licenses/by/4.0/
+Today filters and transforms the source data into a bundled city list and
+incorporates selected alternate names. GeoNames does not endorse Today.
+
+The Today application source is available under the accompanying MIT LICENSE.
+Development tools and test-only libraries are excluded from the shipped app.

@@ -443,7 +443,7 @@ private struct SceneAskCards: View {
                         CaptureStack(proposals: $proposals, lists: ["Work", "Home"], onAdd: add,
                                      onSkip: { id in update(id, status: .dropped) },
                                      onAddAll: { for p in proposals where p.status == .open { add(p.id) } },
-                                     onUndo: undo, onOpen: open)
+                                     onUndo: undo, onOpen: open, onRename: rename)
                     case .askPlan:
                         PlanCard(plan: plan, onApply: applyPlan, onAlways: {
                             if let apply = session.runtime.applyAlways { apply(plan, session.container.mainContext, session.toast) }
@@ -495,6 +495,14 @@ private struct SceneAskCards: View {
     private func update(_ id: UUID, status: CardStatus) {
         if let index = proposals.firstIndex(where: { $0.id == id }) { proposals[index].status = status }
     }
+    private func rename(_ id: UUID, to title: String) -> Bool {
+        guard let modelID = created[id],
+              CaptureUndo.rename(Ledger.ref(modelID), to: title, in: session.container.mainContext),
+              let index = proposals.firstIndex(where: { $0.id == id }) else { return false }
+        proposals[index].capture.title = title
+        return true
+    }
+
     private func add(_ id: UUID) {
         guard let proposal = proposals.first(where: { $0.id == id }), (proposal.status == .open || proposal.status == .undone) else { return }
         let result = proposal.capture.insertRecorded(into: session.container.mainContext,

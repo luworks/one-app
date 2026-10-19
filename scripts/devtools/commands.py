@@ -71,6 +71,8 @@ def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=F
                '-configuration', configuration, '-destination', 'generic/platform=iOS Simulator',
                '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64']
     with host_lock(root), dd_lock(root):
+        from .resolve import locked_arguments
+        command += locked_arguments(root)
         result = execute(root, command, timeout=timeout)
         if result.returncode:
             return result.returncode

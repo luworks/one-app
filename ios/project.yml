@@ -37,6 +37,14 @@
         },
         {
           "path": "Sources/One/TodayShortcuts.swift"
+        },
+        {
+          "path": "../LICENSE",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Resources/ThirdPartyNotices.txt",
+          "buildPhase": "resources"
         }
       ],
       "dependencies": [
@@ -176,6 +184,14 @@
         },
         {
           "path": "Sources/One/TodayShortcuts.swift"
+        },
+        {
+          "path": "../LICENSE",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Resources/ThirdPartyNotices.txt",
+          "buildPhase": "resources"
         }
       ],
       "dependencies": [
@@ -378,6 +394,14 @@
         },
         {
           "path": "../tests/fixtures/today-dataset.json",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "../LICENSE",
+          "buildPhase": "resources"
+        },
+        {
+          "path": "Resources/ThirdPartyNotices.txt",
           "buildPhase": "resources"
         }
       ],

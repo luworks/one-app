@@ -218,9 +218,11 @@ def _perform(root, scene, scenario, output, appearance, type_size, locale, timeo
     with _cancellation(native.cancel), _locks(root):
         manifest, inputs, before = _export(native)
         manifest.scene(scene, scenario)
+        from .resolve import locked_arguments
+        flags = locked_arguments(root)
         native.run(['xcodebuild', 'build', '-project', 'ios/Today.xcodeproj', '-scheme', 'TodayWorkbench',
                     '-configuration', 'Debug', '-destination', 'generic/platform=iOS Simulator',
-                    '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64'])
+                    '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64', *flags])
         app = derived_data(root) / 'Build/Products/Debug-iphonesimulator/TodayWorkbench.app'
         if not app.is_dir():
             raise ValueError('TodayWorkbench build product is missing')

@@ -36,6 +36,8 @@ def main(argv=None, root=ROOT):
     bootstrap_parser = sub.add_parser('bootstrap', help='install exact checksummed worktree-local tools')
     bootstrap_parser.add_argument('--tool', action='append')
     sub.add_parser('generate', help='generate Today.xcodeproj from the sole specification')
+    resolve_parser = sub.add_parser('resolve', help='resolve only versioned exact dependency pins')
+    resolve_parser.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench', 'TodayTests', 'TodaySnapshotTests'], default='Today')
     build_parser = sub.add_parser('build', help='build the real app and embedded extensions')
     build_parser.add_argument('configuration', nargs='?', choices=['Debug', 'Release'], default='Debug')
     build_parser.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench'], default='Today')
@@ -111,6 +113,9 @@ def main(argv=None, root=ROOT):
             if args.command == 'bootstrap':
                 print(json.dumps(commands.bootstrap(root, tools=args.tool), indent=2))
                 return 0
+            if args.command == 'resolve':
+                from .resolve import run
+                return run(root, args.scheme)
             if args.command == 'generate':
                 return commands.generate(root)
             if args.command == 'build':
@@ -127,18 +132,15 @@ def main(argv=None, root=ROOT):
                 return commands.release(root, args.action, args.options)
         data = inventory(root)
         if args.command == 'doctor':
-            checks = {'git': probe(['git', 'rev-parse', '--is-inside-work-tree'], root) == 'true',
-                      'xcode': bool(data['toolchain']['xcode']),
-                      'simulator_sdk': any('iPhoneSimulator' in s['path'] for s in data['toolchain']['sdks']),
-                      'runner': 'ui_runner' in data['existing_entrypoints']}
-            data['checks'] = checks
-            code = 0 if all(checks.values()) else 1
+            from .doctor import inspect
+            data = {'worktree': str(root), **inspect(root)}
+            code = 0 if data['ok'] else 1
         elif args.command == 'plan':
             current = fingerprint(root, sdk=args.sdk, architecture=args.architecture,
                                   configuration=args.configuration, tools=data['toolchain'])
             data.update({'fingerprint': current, 'provenance': provenance(root, current),
-                         'execution_supported': False,
-                         'next': 'Integrate an adapter using existing runner or preview entrypoint.'})
+                         'execution_supported': True,
+                         'next': './dev generate; ./dev resolve; ./dev build Debug'})
             code = 0
         else:
             code = 0

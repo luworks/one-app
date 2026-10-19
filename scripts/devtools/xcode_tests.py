@@ -116,6 +116,8 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False):
             for scheme, batch in batches.items():
                 bundle = output / (scheme + '.xcresult')
                 expected = list(dict.fromkeys(batch['expected']))
+                from .resolve import locked_arguments
+                flags = locked_arguments(root)
                 result = invoke(['xcodebuild', 'test', '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
                                  '-configuration', 'Debug', '-sdk', 'iphonesimulator',
                                  '-destination', 'platform=iOS Simulator,id=' + simulator,
@@ -123,7 +125,7 @@ def run(root, contract, groups, *, only=(), timeout=600, locked=False):
                                  '-jobs', '2', '-parallel-testing-enabled', 'NO',
                                  '-maximum-concurrent-test-simulator-destinations', '1',
                                  '-maximum-parallel-testing-workers', '1',
-                                 *['-only-testing:' + value for value in expected]])
+                                 *flags, *['-only-testing:' + value for value in expected]])
                 raw = result.log.read_text()
                 data, error, summary = None, None, None
                 try:

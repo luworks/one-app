@@ -14,7 +14,7 @@ from .process import Redactor
 def _version(argv, root, env=None):
     # A minimal environment prevents injected runtime hooks and user tool shims.
     environment = {k: v for k, v in os.environ.items() if k in ('HOME', 'TMPDIR', 'SYSTEMROOT')}
-    environment.update(PATH='/usr/bin:/bin', LANG='C', PYTHONDONTWRITEBYTECODE='1',
+    environment.update(PATH='/usr/bin:/bin', LANG='en_US.UTF-8', PYTHONDONTWRITEBYTECODE='1',
                        FASTLANE_OPT_OUT_USAGE='1', FASTLANE_SKIP_UPDATE_CHECK='1',
                        FASTLANE_HIDE_CHANGELOG='1', FASTLANE_SKIP_DOCS='1',
                        BUNDLE_IGNORE_CONFIG='1', BUNDLE_FROZEN='true')

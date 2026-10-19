@@ -48,7 +48,8 @@ class FoundationTests(unittest.TestCase):
             probes.append(argv)
             self.assertIn(argv[:2], [['git', 'ls-files'], ['git', 'rev-parse']])
             return real(argv, cwd)
-        with patch('scripts.devtools.core.toolchain', return_value={'xcode': None, 'sdks': []}), \
+        with patch('scripts.devtools.doctor.inspect', return_value={'ok': False, 'checks': {}, 'read_only': True}), \
+             patch('scripts.devtools.core.toolchain', return_value={'xcode': None, 'sdks': []}), \
              patch('scripts.devtools.cli.toolchain', return_value={'xcode': None, 'sdks': []}), \
              patch('scripts.devtools.core.probe', side_effect=read_probe), \
              patch('scripts.devtools.cli.probe', side_effect=read_probe), \
