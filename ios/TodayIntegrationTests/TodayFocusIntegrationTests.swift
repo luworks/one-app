@@ -7,11 +7,153 @@
   import TodayData
   import TodayShared
   import TodayTestSupport
+  import TodayDesignSystem
+  import FeatureToday
+  import FeatureHealth
+  import SwiftUI
+  import UIKit
+  import Vision
   @testable import One
 
   /// Real model/action integration with local service spies; no EventKit store is opened.
   @MainActor
   extension PlannerSessionTests {
+    @Test
+    func populatedDayAgendaRenderUsesImportedSnapshotsWithoutNativeLookups() async throws {
+      let a = try FocusSession()
+      defer { a.dispose() }
+      let runtime = a.services.runtime
+      let today = runtime.calendar.startOfDay(for: a.now)
+      let past = today.addingTimeInterval(-86400)
+      a.defaults.set(true, forKey: "today.remindersSync.enabled")
+      a.defaults.set(true, forKey: "one.calendarSync.enabled")
+      a.defaults.set(false, forKey: SettingsKey.healthSummary)
+      a.defaults.set(false, forKey: SettingsKey.jumpToNow)
+      a.defaults.set(false, forKey: Preferences.showTomorrowKey)
+      a.defaults.set(false, forKey: Preferences.showFreeTimeKey)
+      var nativeStoreCreations = 0
+      var rangeReads = 0
+      let reminder = OneTask(title: "Rendered imported Reminder")
+      reminder.externalID = "rendered-reminder"
+      reminder.plannedStart = today.addingTimeInterval(9 * 3600)
+      a.context.insert(reminder)
+      try a.context.save()
+      let remote = RemindersSync.Remote(
+        id: "rendered-reminder", title: reminder.title, notes: "", isDone: false, doneAt: nil,
+        due: nil, listID: "fixture-list", listTitle: "Fixture", flagged: false,
+        repeatRule: nil, repeats: false, accountID: "fixture-account")
+      let reminderSync = RemindersSync(
+        defaults: a.defaults, runtime: runtime, arguments: [],
+        makeStore: {
+          nativeStoreCreations += 1
+          return EKEventStore()
+        },
+        authorizationStatus: { .fullAccess })
+      reminderSync.acceptFocusSnapshot([remote])
+      let eventID = FocusIdentity(
+        provider: "apple.calendar", account: "fixture-account", calendar: "fixture-calendar",
+        item: "rendered-event")
+      let event = ExternalEvent(
+        id: "rendered-event", eventIdentifier: "rendered-event",
+        title: "Rendered imported Calendar",
+        start: today, end: today.addingTimeInterval(86400), isAllDay: true,
+        calendarID: eventID.calendar, calendarTitle: "Fixture", color: .blue)
+      let returnedID = FocusIdentity(
+        provider: "apple.calendar", account: eventID.account, calendar: eventID.calendar,
+        item: "past-event", occurrence: past)
+      let returned = CalendarFocusImport(
+        externalID: "past-event", identity: returnedID, title: "Returned exact Calendar occurrence",
+        start: past, end: past.addingTimeInterval(1800), isAllDay: false,
+        calendarTitle: "Fixture", colorComponents: [0, 0, 1], repeats: true, canDelete: true)
+      let calendar = CalendarSync(
+        defaults: a.defaults, runtime: runtime, arguments: [],
+        makeStore: {
+          nativeStoreCreations += 1
+          return EKEventStore()
+        },
+        readEvents: { interval in
+          rangeReads += 1
+          return event.start < interval.end && event.end > interval.start ? [event] : []
+        }, loadFocus: { _ in [returned] }, authorizationStatus: { .fullAccess })
+      defer {
+        reminderSync.dispose()
+        calendar.dispose()
+      }
+      calendar.acceptFocusSnapshot(event, identity: eventID, canDelete: true)
+      let chosenYesterday = PlannerRuntime(
+        now: { past }, nextID: { UUID() }, calendar: runtime.calendar, locale: runtime.locale)
+      let actions = PlannerActions(
+        calendar: calendar, reminders: reminderSync, alarms: a.services.alarms,
+        ledger: a.services.ledger, runtime: chosenYesterday)
+      #expect(
+        actions.focus.change(
+          .snoozed(until: today), identity: returnedID, localReference: "eventkit:past-event",
+          title: returned.title, context: a.context, toast: nil))
+      await calendar.hydrateFocus(actions.focus.records)
+      let presentation = PlannerPresentation(runtime: runtime, defaults: a.defaults)
+      let health = HealthLineModel(
+        source: MockHealthSource(), store: HealthSelectionStore(defaults: a.defaults),
+        defaults: a.defaults, runtime: runtime, gate: HealthAccessGate())
+      let view = DayAgenda(
+        day: .constant(a.now), showsWeekStrip: false, openTask: { _ in }, openEvent: { _ in },
+        openAlarm: { _ in }, openTimer: {}, actions: actions, calendar: calendar,
+        timers: a.services.timers, reminders: reminderSync, ledger: a.services.ledger,
+        travel: a.services.travel, presentation: presentation
+      )
+      .modelContainer(a.context.container)
+      .environment(presentation).environment(health)
+      .environment(\.calendar, runtime.calendar).environment(\.locale, runtime.locale)
+      .environment(\.timeZone, runtime.calendar.timeZone)
+      let host = UIHostingController(rootView: view)
+      let scene = try #require(
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+      let previous = scene.windows.first(where: \.isKeyWindow)
+      let window = UIWindow(windowScene: scene)
+      window.frame = CGRect(x: 0, y: 0, width: 393, height: 1000)
+      window.rootViewController = host
+      window.makeKeyAndVisible()
+      defer {
+        window.isHidden = true
+        window.rootViewController = nil
+        previous?.makeKey()
+      }
+      window.layoutIfNeeded()
+      try await Task.sleep(for: .milliseconds(200))
+      window.layoutIfNeeded()
+      #expect(host.view.bounds.width > 0 && host.view.bounds.height > 0)
+      var drawn = false
+      let image = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+        drawn = host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+      }
+      #expect(drawn, "The real populated DayAgenda window must render successfully")
+      Attachment.record(try #require(image.pngData()), named: "populated-day-agenda.png")
+      let request = VNRecognizeTextRequest()
+      request.recognitionLevel = .accurate
+      request.recognitionLanguages = ["en-US"]
+      try VNImageRequestHandler(cgImage: #require(image.cgImage)).perform([request])
+      let labels = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+        .joined(separator: " ").lowercased()
+      #expect(
+        labels.contains(reminder.title.lowercased()),
+        "The actual rendered pixels must contain the imported Reminder: \(labels)")
+      #expect(
+        labels.contains(event.title.lowercased()),
+        "The actual rendered pixels must contain the imported Calendar: \(labels)")
+      #expect(
+        labels.contains(returned.title.lowercased()),
+        "Expired cross-day Snooze must render its exact source title: \(labels)")
+      #expect(labels.contains("returned to today"))
+      #expect(reminderSync.isConnected && calendar.isOn && calendar.isReady)
+      #expect(rangeReads > 0)
+      #expect(reminderSync.focusIdentity(reminder) == .available(remote.focusIdentity!))
+      #expect(
+        calendar.cachedFocusIdentity(externalID: event.eventIdentifier, occurrence: nil)
+          == .available(eventID))
+      #expect(
+        nativeStoreCreations == 0,
+        "Mounted Focus identity/menu dependencies must never open EventKit")
+    }
+
     @Test
     func savedCalendarSnoozeHydratesOutsideOriginalDayAndRejectsStaleImports() async throws {
       let suite = "FocusHydration.\(UUID().uuidString)"

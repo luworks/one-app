@@ -191,6 +191,7 @@
     @ObservationIgnored private let runtime: PlannerRuntime
     @ObservationIgnored private let arguments: [String]
     @ObservationIgnored private let makeStore: () -> EKEventStore
+    @ObservationIgnored private let readEvents: ((DateInterval) -> [ExternalEvent])?
     @ObservationIgnored private let loadFocus:
       @Sendable ([FocusRecord]) async -> [CalendarFocusImport]
     @ObservationIgnored private let authorizationStatus: () -> EKAuthorizationStatus
@@ -200,6 +201,7 @@
     package init(
       defaults: UserDefaults, runtime: PlannerRuntime, arguments: [String],
       makeStore: @escaping () -> EKEventStore,
+      readEvents: ((DateInterval) -> [ExternalEvent])? = nil,
       loadFocus: @escaping @Sendable ([FocusRecord]) async -> [CalendarFocusImport] = { records in
         await CalendarFocusReader().load(records)
       },
@@ -211,6 +213,8 @@
       self.runtime = runtime
       self.arguments = arguments
       self.makeStore = makeStore
+      self.readEvents = readEvents
+      storeReady = readEvents != nil
       self.loadFocus = loadFocus
       self.authorizationStatus = authorizationStatus
       enabled =
@@ -336,6 +340,12 @@
     {
       _ = version
       guard isOn else { return [] }
+      // A scalar range source can be injected by an isolated native-view integration fixture.
+      if let readEvents {
+        return readEvents(interval).filter {
+          !exclude.contains($0.eventIdentifier) && !hiddenCalendarIDs.contains($0.calendarID)
+        }
+      }
       guard storeReady else {
         warmUp()
         return []

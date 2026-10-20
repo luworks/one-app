@@ -332,6 +332,18 @@
         {
           "package": "TodayModules",
           "product": "FeatureAsk"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureToday"
+        },
+        {
+          "package": "TodayModules",
+          "product": "FeatureHealth"
+        },
+        {
+          "package": "TodayModules",
+          "product": "TodayDesignSystem"
         }
       ]
     },
