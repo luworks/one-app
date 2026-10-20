@@ -77,9 +77,6 @@ def verify():
 def main():
     TEMP.mkdir(parents=True, exist_ok=True)
     udid = simulator()
-    # Boot now so the slow first boot overlaps the build instead of following it.
-    boot = subprocess.Popen(['xcrun', 'simctl', 'bootstatus', udid, '-b'], cwd=ROOT, stdout=subprocess.DEVNULL)
-    step('simulator boot started')
     run('./dev', 'bootstrap', '--tool', 'xcodegen')
     run('./dev', 'generate')
     lock = ROOT / 'ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
@@ -87,17 +84,20 @@ def main():
     lock.write_bytes((ROOT / 'ios/Dependencies/Package.resolved').read_bytes())
     step('project generated')
     destination = 'platform=iOS Simulator,id=' + udid
+    # A concurrent simulator boot made this build 4x slower on the hosted runner.
     run('xcodebuild', 'build-for-testing', '-quiet', '-project', 'ios/Today.xcodeproj', '-scheme', 'TodayCI',
-        '-configuration', 'Debug', '-destination', destination, *FLAGS)
+        '-configuration', 'Debug', '-destination', 'generic/platform=iOS Simulator', '-jobs', '2',
+        'ARCHS=arm64', *FLAGS)
     step('built App, Widget, Share, Mock and test bundles')
     products = DD / 'Build/Products/Debug-iphonesimulator'
     for path, identifier in PRODUCTS.items():
         info = plistlib.loads((products / path / 'Info.plist').read_bytes())
         if info.get('CFBundleIdentifier') != identifier or not (products / path / info['CFBundleExecutable']).is_file():
             raise SystemExit('Missing production product: ' + path)
-    if boot.wait():
-        raise SystemExit('Simulator failed to boot')
+    subprocess.run('ls -la /Library/Developer/CoreSimulator/Caches/dyld/*/* 2>&1 | head -20', shell=True)
+    run('xcrun', 'simctl', 'bootstatus', udid, '-b')
     step('simulator ready')
+    subprocess.run('ls -la /Library/Developer/CoreSimulator/Caches/dyld/*/* 2>&1 | head -20', shell=True)
     xctestrun = sorted(DD.glob('Build/Products/TodayCI_*.xctestrun'))
     if len(xctestrun) != 1:
         raise SystemExit('Expected one TodayCI xctestrun')

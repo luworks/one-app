@@ -3,7 +3,7 @@
 This change owns only `scripts/testing/contract.py`, `tests/testing/groups.json`,
 `tests/testing/test_contract.py` and this document. Runner, dev CLI, project,
 package and production module wiring remain parent-owned. Read this together
-with `baseline.md`, `visual-testing.md` and `ci-adapter.md`: older pending-state
+with `baseline.md`, `visual-testing.md` and `ci.md`: older pending-state
 statements in those documents are not evidence that the integrated targets ran.
 
 ## Source and execution contract

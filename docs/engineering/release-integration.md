@@ -123,12 +123,10 @@ Do not use a source-only preflight or a PID/install success as functional
 acceptance. There is no second installer or automatic device deployment.
 
 The selected run must be a completed successful `push` to current `main` in
-`.github/workflows/today.yml`, with `main-critical-v1` acceptance for the exact
-SHA/tree/run attempt, real positive leaves and matching Xcode/iOS SDK identity.
-The checker reads the compact receipt published by the existing CI job, checks all
-fixed critical leaves and rechecks current main and run attempt after reading.
-Offline, expired/missing artifact, docs-only success, branch green, old main,
-blocked/skipped native methods, a rerun in progress and source/product drift
+`.github/workflows/today.yml` whose `checks` and `today-required` jobs both
+succeeded for the exact SHA; the checker rereads current main and the run after
+checking the local device build receipt. Offline, branch green, old main, a
+failed/skipped/missing job, a rerun in progress and source/product drift
 block installation. An older accepted main is a rollback only when the user
 explicitly authorizes that revision. Do not race an approved install against
 another source change: use its explicit accepted SHA and rerun this read-only
