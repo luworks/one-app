@@ -6,6 +6,10 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 `TestData.path` and `TestData.launchArguments` continue to select the canonical
 `today-dataset.json`; that dataset is unchanged.
 
+`PerformanceClimbTests.testTodayWeekResponse`, `testYearWeekResponse` and
+`testRepeatedNavigationRetainsCalendarSelection` reuse this canonical dataset at
+09:41 for matched navigation response samples; they create no temporary dataset.
+
 | Dataset | Consumers and original generator |
 | [`today-reminder-completion.json`](today-reminder-completion.json) | `TodayReminderCompletionTests`: owner-reported Bring the water cup at 12:30, with notes and planned time. Tests namespace the title and seed the simulator EventKit store through `addToday`; no user reminder is used. |
 | --- | --- |

@@ -81,6 +81,7 @@
 
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query private var allTasks: [OneTask]
     @Query private var allEvents: [OneEvent]
     @Query private var allAlarms: [OneAlarm]
@@ -248,7 +249,7 @@
       let next = i + step
       guard all.indices.contains(next) else { return }
       traceTabAction(to: all[next])
-      withAnimation(.snappy) { tab = all[next] }
+      tab = all[next]
       tabSwipes += 1
     }
 
@@ -402,7 +403,7 @@
               openEvent: { editor = .local($0) }, openAlarm: { editor = .alarm($0) },
               openTimer: {
                 clockSection = .timer
-                withAnimation(.snappy) { tab = .clock }
+                tab = .clock
               }, actions: session.actions, calendar: session.calendar, timers: session.timers,
               reminders: session.reminders, ledger: session.ledger, travel: session.travel,
               presentation: presentation)
@@ -415,7 +416,7 @@
               onOpenAlarm: { editor = .alarm($0) }
             ) { picked in
               todayDay = picked
-              withAnimation(.snappy) { tab = .today }
+              tab = .today
             }
           case .tasks:
             RemindersView(
@@ -698,7 +699,10 @@
     private var topBar: some View {
       HStack(spacing: 8) {
         // The three lines open the sidebar (chat history and Search), like ChatGPT and Claude; a swipe from the left edge does too.
-        CircleButton(systemImage: "line.3.horizontal", label: "Open menu", size: 44) {
+        CircleButton(
+          systemImage: "line.3.horizontal", label: "Open menu",
+          size: ButtonConfiguration.minimumHitSize
+        ) {
           drawer.set(open: true)
         }
         // Only scrolls when the pills don't fit (very large text). Otherwise there is no scroll view
@@ -721,7 +725,7 @@
         ForEach(HomeTab.allCases.filter { $0 != .today }) { item in
           TabPill(tab: item, isSelected: item == tab) {
             traceTabAction(to: item)
-            withAnimation(.snappy) { tab = item }
+            tab = item
           }
         }
       }
@@ -785,7 +789,7 @@
         HStack(spacing: 4) {
           Button {
             traceTabAction(to: .today)
-            withAnimation(.snappy) { tab = .today }
+            tab = .today
           } label: {
             bottomDestinationLabel(icon: "sun.max", selected: tab == .today && ask == nil)
           }
@@ -804,7 +808,7 @@
           .accessibilityHint("Opens a new chat. Past chats are in the menu.")
         }
         .padding(3)
-        .background(Color(.secondarySystemBackground), in: Capsule())
+        .background(ButtonConfiguration.Icon.background, in: Capsule())
         .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.25), lineWidth: 0.5) }
         plusButton
       }
@@ -817,10 +821,11 @@
 
     private func bottomDestinationLabel(icon: String, selected: Bool) -> some View {
       Image(systemName: icon)
-        .font(.system(size: 20, weight: .medium))
-        .frame(maxWidth: .infinity, minHeight: 44)
-        .background(selected ? Color(.tertiarySystemFill) : .clear, in: Capsule())
+        .font(ButtonConfiguration.Icon.font)
+        .frame(maxWidth: .infinity, minHeight: ButtonConfiguration.minimumHitSize)
+        .background(selected ? ButtonConfiguration.Icon.selectedFill : .clear, in: Capsule())
         .foregroundStyle(selected ? Color.primary : Color.secondary)
+        .animation(reduceMotion ? nil : PillStyle.selectionAnimation, value: selected)
         .contentShape(Capsule())
     }
 
@@ -866,10 +871,12 @@
 
     private var plusLabel: some View {
       Image(systemName: "plus")
-        .font(.system(size: 20, weight: .medium))
+        .font(ButtonConfiguration.Icon.font)
         .foregroundStyle(.primary)
-        .frame(width: 44, height: 44)
-        .background(Color(.secondarySystemBackground), in: Circle())
+        .frame(
+          width: ButtonConfiguration.minimumHitSize, height: ButtonConfiguration.minimumHitSize
+        )
+        .background(ButtonConfiguration.Icon.background, in: Circle())
         .overlay { Circle().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
         .contentShape(Circle())
     }
@@ -995,6 +1002,7 @@
 
   /// Selected tab: a wide pill with its label. Others: icon-only capsules.
   struct TabPill: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let tab: HomeTab
     let isSelected: Bool
     var action: () -> Void
@@ -1010,6 +1018,7 @@
         .frame(minWidth: PillStyle.Tab.minWidth, minHeight: PillStyle.Tab.height)
         .background(PillStyle.fill(selected: isSelected), in: Capsule())
         .foregroundStyle(PillStyle.text(selected: isSelected))
+        .animation(reduceMotion ? nil : PillStyle.selectionAnimation, value: isSelected)
       }
       .buttonStyle(PressScale())
       .accessibilityLabel(tab.title)

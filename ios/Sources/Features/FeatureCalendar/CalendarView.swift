@@ -84,11 +84,9 @@
             )
           case .year:
             YearView(day: $day, calendar: calendar, openDay: showMonth) { month in
-              withAnimation(.snappy) {
-                day = CalendarMath.landingDay(
-                  inMonthOf: month, today: presentation.now, calendar: cal)
-                mode = .month
-              }
+              day = CalendarMath.landingDay(
+                inMonthOf: month, today: presentation.now, calendar: cal)
+              mode = .month
             }
           }
         }
@@ -138,10 +136,8 @@
 
     /// Year day taps keep the exact date selected in Month and show its agenda below the grid.
     private func showMonth(_ date: Date) {
-      withAnimation(.snappy) {
-        day = cal.startOfDay(for: date)
-        mode = .month
-      }
+      day = cal.startOfDay(for: date)
+      mode = .month
     }
 
     // MARK: One control row: the view switcher
@@ -149,11 +145,14 @@
     /// Week / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned, with the
     /// month title of the visible page on the same row, right-aligned (Year has no title).
     private var controlRow: some View {
-      HStack(spacing: 8) {
-        HStack(spacing: 8) {
+      HStack(spacing: PillStyle.spacing) {
+        HStack(spacing: PillStyle.spacing) {
           ForEach(Mode.allCases) { item in
-            ModePill(title: item.rawValue, isSelected: item == mode) {
-              withAnimation(.snappy) { mode = item }
+            PillButton(
+              title: item.rawValue, isSelected: item == mode,
+              identifier: "calendar.mode.\(item.rawValue.lowercased())"
+            ) {
+              mode = item
             }
           }
         }
@@ -173,31 +172,6 @@
       }
       .padding(.horizontal, 20)
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-    }
-  }
-
-  /// A text-only pill matching `TabPill`: black selected capsule with a white label, light gray otherwise.
-  /// The visible capsule is 34pt tall; the tap target stays 44pt.
-  private struct ModePill: View {
-    let title: String
-    let isSelected: Bool
-    var action: () -> Void
-
-    var body: some View {
-      Button(action: action) {
-        Text(title)
-          .font(PillStyle.Control.font)
-          .padding(.horizontal, PillStyle.Control.padding)
-          .frame(minHeight: PillStyle.Control.height)
-          .background(PillStyle.fill(selected: isSelected), in: Capsule())
-          .foregroundStyle(PillStyle.text(selected: isSelected))
-          .frame(minHeight: PillStyle.tapHeight)
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(PressScale())
-      .accessibilityLabel(title)
-      .accessibilityIdentifier("calendar.mode.\(title.lowercased())")
-      .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
   }
 
