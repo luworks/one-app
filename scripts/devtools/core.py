@@ -393,21 +393,53 @@ def mock_ui_product(root, path, *, normalize=False):
     expected_host = str(Path(value).parent / 'OneUITests-Runner.app')
     if target.get('TestHostPath') != expected_host:
         raise ValueError('Unexpected UI test runner host')
+    products = derived_data(root) / 'Build/Products'
+
+    def product_path(dependency):
+        if not isinstance(dependency, str) or not dependency:
+            raise ValueError('Malformed UI dependency path')
+        expanded = dependency.replace('__TESTROOT__', str(products)).replace(
+            '__TESTHOST__', str(products / Path(expected_host[len(prefix):])))
+        if re.search(r'__[A-Z][A-Z0-9_]*__', expanded) or not Path(expanded).is_absolute():
+            raise ValueError('Unresolved UI dependency path')
+        resolved = Path(expanded).resolve()
+        if not resolved.is_relative_to(products.resolve()) or resolved == products.resolve():
+            raise ValueError('Foreign UI dependency path')
+        # Canonical spelling does not authorize symlinked or missing products.
+        _product_identity(root, Path(expanded))
+        return resolved
+
     live = str(Path(value).parent / 'One.app')
     dependencies = target.get('DependentProductPaths', [])
     if not isinstance(dependencies, list):
         raise ValueError('Malformed UI dependencies')
-    allowed_apps = {value, expected_host}
+    allowed_apps = {product_path(value), product_path(expected_host)}
+    # TodayCI repeats the aggregate installation closure in every test target.
+    # Admit the isolated host only when a known native target declares it.
+    native_host = str(Path(value).parent / 'TodayTestHost.app')
+    for native in targets:
+        if (native.get('BlueprintName') in ('TodayTests', 'TodaySnapshotTests')
+                and not native.get('IsUITestBundle') and native.get('TestHostPath') == native_host):
+            host = product_path(native_host)
+            info = plistlib.loads((host / 'Info.plist').read_bytes())
+            if (info.get('CFBundleExecutable') != 'TodayTestHost'
+                    or info.get('CFBundleIdentifier') != 'com.luworks.one.development.todaytesthost'):
+                raise ValueError('Unexpected native test host identity')
+            allowed_apps.add(host)
+    live_path = (products / Path(live[len(prefix):])).resolve()
+    selected = []
     for dependency in dependencies:
-        if not isinstance(dependency, str):
-            raise ValueError('Malformed UI dependency path')
-        if dependency == live and normalize:
+        resolved = product_path(dependency)
+        if resolved == live_path and normalize:
             continue
-        if Path(dependency).suffix == '.app' and dependency not in allowed_apps:
+        if resolved.suffix == '.app' and resolved not in allowed_apps:
             raise ValueError('Ambiguous Live/UI installation dependency')
+        canonical = prefix + str(resolved.relative_to(products.resolve()))
+        if canonical not in selected:
+            selected.append(canonical)
     identity = mock_app_identity(app)
-    if normalize and live in dependencies:
-        target['DependentProductPaths'] = [d for d in dependencies if d != live]
+    if normalize and selected != dependencies:
+        target['DependentProductPaths'] = selected
         temporary = path.with_suffix('.normalizing')
         temporary.write_bytes(plistlib.dumps(data))
         temporary.replace(path)
