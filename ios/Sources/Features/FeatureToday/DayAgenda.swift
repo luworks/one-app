@@ -367,16 +367,6 @@
         identifier: "tomorrowHeader")
       if expandsTomorrow {
         Section {
-          Button {
-            withAnimation(.snappy) { day = tomorrow }
-          } label: {
-            Label("Open tomorrow", systemImage: "arrow.up.forward")
-              .font(.subheadline)
-              .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-          }
-          .buttonStyle(.plain)
-          .listRowSeparator(.hidden)
-          .accessibilityIdentifier("tomorrow.openDay")
           if EveningReview.shows(now: now, eveningHour: evening, calendar: cal) {
             Button {
               review = ReviewRequest(

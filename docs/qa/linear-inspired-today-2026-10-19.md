@@ -84,7 +84,7 @@ Yuan subsequently authorized a larger presentation-only follow-up in this same P
 - Remove Active title/count/divider/chevron, collapse state and dead count calculation. Active timeline and returned items are always rendered.
 - After the active timeline, order the disclosures as Overdue, Snoozed, Settled, Tomorrow; all start collapsed. Existing visibility preferences and current-day scope remain respected.
 - Keep one compact top overdue-count shortcut. On Today it expands the single bottom Overdue list, scrolls to its stable anchor and requests accessibility focus. It neither changes overdue records nor completes a reminder. Calendar's existing inline overdue behavior remains scoped separately.
-- Tomorrow's disclosure shows an accurate date/count and every existing next-day entry. Only its old More/Show less pagination was removed; an explicit Open tomorrow action retains full-day navigation. Existing row constructors/routes, recurrence, calendar/time-zone computation and evening Review today remain in use.
+- Tomorrow's disclosure shows an accurate date/count and every existing next-day entry. Its old More/Show less pagination and redundant Open tomorrow action are removed; Calendar retains full-day navigation. Existing row constructors/routes, recurrence, calendar/time-zone computation and evening Review today remain in use.
 
 Focus owner confirmed the exact presentation/state/test hunks are free. Health owner approved the narrow HealthReview helper/navigation changes; it owns separate Health metric journeys. No Focus store, identity, action implementation, sync or schema was edited.
 

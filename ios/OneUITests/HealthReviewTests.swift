@@ -60,8 +60,12 @@ final class HealthReviewTests: XCTestCase {
   func testHealthLineOnlyOnToday() {
     let app = launch(at: "09:41")
     XCTAssertTrue(healthLine(app).waitForExistence(timeout: 5))
-    _ = scrollToReview(app)
-    app.buttons["tomorrow.openDay"].tap()
+    app.buttons["Calendar"].firstMatch.tap()
+    app.buttons["calendar.mode.week"].tap()
+    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
+    let day = app.buttons[tomorrow.formatted(date: .complete, time: .omitted)].firstMatch
+    XCTAssertTrue(day.waitForExistence(timeout: 5))
+    day.tap()
     XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
     for _ in 0..<3 { app.swipeDown() }
     XCTAssertFalse(app.buttons["health.summary"].exists, "another day has no health line")
