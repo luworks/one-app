@@ -32,6 +32,7 @@ jobs:
       - run: ./dev format --check
       - run: ./dev lint
       - run: ./dev test helpers
+      - run: ./dev test qa
       - run: ./dev test unit
   # Merge gate: build the app, widget and share extension plus test bundles. No simulator.
   today-required:

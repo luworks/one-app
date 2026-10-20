@@ -128,3 +128,53 @@ down their simulators. Complete logs/xcresult stay indexed under canonical resul
 System appearance/content size are set before tests; individual tests can override
 appearance. These checks cannot establish actual RAM/GPU/thermal/radio/sensor,
 HealthKit authorization/data or physical AlarmKit behavior.
+
+## Generated-storage retention
+
+The owner's 2026-10-20 cleanup request authorizes this narrow exception to the raw
+preservation rule. `./dev cleanup` is read-only and dry-run by default (including
+no journal/evidence writes). `./dev cleanup --apply` rechecks eligibility under
+host/cache/name locks, then stores per-file path, size, SHA-256 and inode metadata
+in the primary results directory's `retention/` before deletion. Committed
+`qa.retention.planned` and `qa.retention.deleted`/`partial` events are additive
+journal tombstones; existing journal rows and archives remain intact. A partial
+operation is reported as a failure, never as a completed cleanup.
+
+Policy is the small versioned [`retention.json`](retention.json):
+
+- Passed raw copies: minimum **7 days**; failed/interrupted: **30 days**, using
+  newest file mtime conservatively. Retain the latest run per exact selected-method
+  lane. Require a final retained summary, matching latest journal lifecycle result,
+  no journal/shutdown errors, and a coherent byte-identical `qa.archive` revision.
+  No archive is created during cleanup. Missing metadata or archives retain the run.
+- Retired compiler caches: minimum **1 day**, only the explicit compiler/index
+  component allowlist. Require an original owner lock with matching worktree ID,
+  absent owner directory, no Git worktree registration, absent PID, and free kernel
+  locks. PID reuse can retain extra bytes; it never authorizes deletion. Preserve
+  all caches of existing worktrees, even idle ones. Products, Logs, TestResults,
+  SourcePackages, XCBuildData/build.db and release maps are outside this allowlist.
+- Pins protect a whole candidate if any descendant matches. Archives, phone/freeze/
+  release proof, known rollback identities, performance baselines and audit records
+  are pinned or outside the allowlist. Local tracked Markdown/JSON and current open
+  GitHub Issue/PR bodies, comments and reviews protect cited paths. A citation to a
+  derived-data root protects every component; a Products-only citation preserves
+  that sibling product tree. Failed reference retrieval stops cleanup.
+- Symlinks, aliased control files, databases, unknown entries, open files, live
+  writers and changed manifests fail closed. No device, app container or working
+  worktree is modified. A dry-run plan is descriptive; it is never trusted by apply.
+
+Automatic maintenance runs **once after each completed `./dev test ui`, `core`,
+`accessibility` or `release` command**, after the QA authority returns and releases
+its resource locks. It uses the same apply policy and cannot replace the QA exit
+code. A busy host or missing metadata/reference access skips maintenance with its
+own message. There is no daemon, timer or new T3 schedule, and no cleanup during
+an active run. Set `automatic` to false to disable; edit the positive integer day
+limits or pins deliberately. Automation starts when this revision of `./dev` is
+used; an older primary checkout does not acquire the hook merely because a PR merged.
+
+`./dev test qa` runs the bounded host QA collection with temporary synthetic trees,
+including dry-run/apply, pins/references, live owners/locks, symlink/traversal/control
+paths, changed files, immutable journal integrity, archived raw copies and the
+post-QA trigger. No native build or Simulator is needed. The small synthetic file
+contents are inline in `test_retention.py`; reusable UI datasets remain under
+`tests/fixtures/`.

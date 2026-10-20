@@ -143,6 +143,11 @@ def test(root, group, *, only=(), timeout=600, full=False, allow_skips=(), _lock
             first = first or code
             code = test(root, 'ui', timeout=timeout, full=True, allow_skips=allow_skips, _locked=True)
             return first or code
+    if group == 'qa':
+        if only or allow_skips:
+            raise ValueError('qa runs the bounded host QA helper collection')
+        return execute(root, [sys.executable, '-m', 'unittest', 'discover',
+                              '-s', 'tests/qa', '-p', 'test_*.py', '-v'], timeout=timeout, heavy=False).returncode
     if group == 'helpers':
         if only or allow_skips:
             raise ValueError('helpers runs the complete bounded CI policy collection')
@@ -215,7 +220,8 @@ def format_sources(root, *, check=False, timeout=600):
 def lint(root, timeout=600):
     commands = [[tool(root, 'swiftlint'), 'lint', '--strict', '--config', '.swiftlint.yml'],
                 [tool(root, 'ruff'), 'check', '--config', 'ruff.toml', 'scripts/devtools',
-                 'scripts/ci', 'scripts/testing', 'scripts/release', 'tests/devtools', 'tests/ci', 'tests/testing', 'tests/release']]
+                 'scripts/ci', 'scripts/testing', 'scripts/release', 'tests/devtools', 'tests/ci', 'tests/testing', 'tests/release',
+                 'tests/qa/retention.py', 'tests/qa/test_retention.py']]
     if (root / '.github/workflows').is_dir():
         commands.append([tool(root, 'actionlint'), '-shellcheck=', '-pyflakes='])
     for command in commands:

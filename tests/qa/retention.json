@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "automatic": true,
+  "passed_days": 7,
+  "failed_days": 30,
+  "cache_days": 1,
+  "pins": [
+    "storage-retention-*",
+    "archives/**",
+    "*phone*",
+    "*freeze*",
+    "*release*",
+    "*9043647*",
+    "*32df07b*",
+    "runs/performance-*",
+    "runs/posterboard-*",
+    "devtools/derived-data/*/Build/Products/**"
+  ]
+}

@@ -37,12 +37,12 @@ class CompatibilityTests(unittest.TestCase):
             self.assertFalse((root / "destination").exists())
 
     def test_lane_uses_copied_products_without_building(self):
-        command = compatibility.e2e.ui_command(["OneUITests/ClockTests/testScrubbing"], "lane-id", Path("cache"), Path("output"), Path("copy/One.xctestrun"))
+        command = compatibility.e2e.ui_command(["TodayUITests/ClockTests/testScrubbing"], "lane-id", Path("cache"), Path("output"), Path("copy/One.xctestrun"))
         self.assertEqual(command[1], "test-without-building")
         self.assertNotIn("-project", command)
         self.assertIn("copy/One.xctestrun", command)
         self.assertIn("platform=iOS Simulator,id=lane-id", command)
-        self.assertIn("-only-testing:OneUITests/ClockTests/testScrubbing", command)
+        self.assertIn("-only-testing:TodayUITests/ClockTests/testScrubbing", command)
 
 
 if __name__ == "__main__":

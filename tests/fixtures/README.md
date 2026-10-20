@@ -262,3 +262,8 @@ partitioning, routine-only scope and primary-checkout paths for linked worktrees
 ## Search Calendar rendering
 
 - `ios/TodayIntegrationTests/SearchCalendarIntegrationTests.swift` keeps one small synthetic Calendar occurrence, fixed UTC clock and mirror inline beside the mounted Search regression. Its production CalendarSync scalar range seam counts repeated reads and verifies rendered text, refresh, mirror deduplication and disable/re-enable without creating a native EventKit store.
+
+QA retention's host-only synthetic cache/run inputs are small inline bytes and
+JSON in `tests/qa/test_retention.py`, created in isolated temporary directories.
+They are not reusable UI datasets; the production retention policy lives in
+`tests/qa/retention.json` and is never taken from a temporary file.

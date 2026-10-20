@@ -1,0 +1,462 @@
+{
+  "baseline": "89ee93f9ad8d170a75e3005416e3f4e035bd5f57",
+  "captured_at": 1792528652.899344,
+  "accounting": "regular-file logical bytes and st_blocks*512; APFS shared extents are not measured free-volume capacity",
+  "before": {
+    "bytes": 41905894114,
+    "allocated": 42894553088,
+    "files": 367621,
+    "xcresults": 471,
+    "app_products": 153
+  },
+  "after": {
+    "bytes": 41117634704,
+    "allocated": 42096463872,
+    "files": 362884,
+    "xcresults": 471,
+    "app_products": 153
+  },
+  "removed": {
+    "components": 5,
+    "files": 4792,
+    "bytes": 799099562,
+    "allocated": 808943616
+  },
+  "categories_before": {
+    "settings-ai-automatic-toggle-logic.log": {
+      "bytes": 10421,
+      "allocated": 12288,
+      "files": 1
+    },
+    "issue62-v3-candidate.patch": {
+      "bytes": 29861,
+      "allocated": 32768,
+      "files": 1
+    },
+    "activity.sqlite": {
+      "bytes": 376385536,
+      "allocated": 378097664,
+      "files": 1
+    },
+    "reminder-recovery-promise-logic.log": {
+      "bytes": 8636,
+      "allocated": 12288,
+      "files": 1
+    },
+    "activity.sqlite-shm": {
+      "bytes": 32768,
+      "allocated": 32768,
+      "files": 1
+    },
+    "issue32-current-comment.txt": {
+      "bytes": 18605,
+      "allocated": 20480,
+      "files": 1
+    },
+    "reminder-recovery-logic.log": {
+      "bytes": 22635,
+      "allocated": 24576,
+      "files": 1
+    },
+    "activity.sqlite-wal": {
+      "bytes": 0,
+      "allocated": 0,
+      "files": 1
+    },
+    "claude-main-patrol.txt": {
+      "bytes": 17857,
+      "allocated": 20480,
+      "files": 1
+    },
+    "qa.sqlite": {
+      "bytes": 61440,
+      "allocated": 61440,
+      "files": 1
+    },
+    "ios-readme-main-patrol.txt": {
+      "bytes": 40004,
+      "allocated": 40960,
+      "files": 1
+    },
+    "reminder-recovery-review-logic.log": {
+      "bytes": 16298,
+      "allocated": 16384,
+      "files": 1
+    },
+    "qa.sqlite-wal": {
+      "bytes": 0,
+      "allocated": 0,
+      "files": 1
+    },
+    "ai-stage-export-source-check-20261018.log": {
+      "bytes": 311,
+      "allocated": 4096,
+      "files": 1
+    },
+    "ai-dispatch-schema-source-check-20261018.log": {
+      "bytes": 371,
+      "allocated": 4096,
+      "files": 1
+    },
+    "qa.sqlite-shm": {
+      "bytes": 32768,
+      "allocated": 32768,
+      "files": 1
+    },
+    "migration-20261019T022641759748Z": {
+      "bytes": 4930708,
+      "allocated": 5320704,
+      "files": 204
+    },
+    "scene-session-20261019T042835.126590Z": {
+      "bytes": 231593,
+      "allocated": 270336,
+      "files": 13
+    },
+    "clock-module-t3-0e88b2ee": {
+      "bytes": 1518,
+      "allocated": 4096,
+      "files": 1
+    },
+    "settings-activity-search-20261018-211537": {
+      "bytes": 32928,
+      "allocated": 40960,
+      "files": 4
+    },
+    "today-navigation-response-20261020": {
+      "bytes": 87949237,
+      "allocated": 89063424,
+      "files": 328
+    },
+    "docs-dev-entry-20261019T043949Z": {
+      "bytes": 74591,
+      "allocated": 81920,
+      "files": 4
+    },
+    "async-deadline-lane": {
+      "bytes": 518026,
+      "allocated": 552960,
+      "files": 14
+    },
+    "today-density-20261020": {
+      "bytes": 14242283,
+      "allocated": 14393344,
+      "files": 67
+    },
+    "health-today-sync-20261019": {
+      "bytes": 56595215,
+      "allocated": 58568704,
+      "files": 649
+    },
+    "today-focus-20261019": {
+      "bytes": 27611492,
+      "allocated": 27844608,
+      "files": 96
+    },
+    "reminder-compact-20261019": {
+      "bytes": 108237768,
+      "allocated": 109543424,
+      "files": 499
+    },
+    "calendar-feature-reconstruction": {
+      "bytes": 0,
+      "allocated": 0,
+      "files": 1
+    },
+    "health-dashboard-20261019": {
+      "bytes": 105761915,
+      "allocated": 107683840,
+      "files": 619
+    },
+    "swiftui-preview": {
+      "bytes": 25852384,
+      "allocated": 25964544,
+      "files": 44
+    },
+    "focus-source-invariance-20261020": {
+      "bytes": 1309725,
+      "allocated": 1351680,
+      "files": 17
+    },
+    "pr108-j3-continuation-20261019-v4": {
+      "bytes": 4391,
+      "allocated": 16384,
+      "files": 4
+    },
+    "deterministic-rendering-20261019-042535-956136": {
+      "bytes": 34270,
+      "allocated": 53248,
+      "files": 6
+    },
+    "remove-tomorrow-open-20261020": {
+      "bytes": 11089,
+      "allocated": 16384,
+      "files": 2
+    },
+    "ask-consumers-20261019-041925-592467": {
+      "bytes": 117679,
+      "allocated": 131072,
+      "files": 6
+    },
+    "design-mcp-research": {
+      "bytes": 58902244,
+      "allocated": 69492736,
+      "files": 3832
+    },
+    "settled-unsettle-20261020": {
+      "bytes": 32651,
+      "allocated": 114688,
+      "files": 25
+    },
+    "ai-recurrence-20261018": {
+      "bytes": 480901,
+      "allocated": 671744,
+      "files": 63
+    },
+    "latest-ui-phone-20261020": {
+      "bytes": 43494417,
+      "allocated": 43765760,
+      "files": 97
+    },
+    "snapshot-harness-20261019T042131Z": {
+      "bytes": 1238,
+      "allocated": 8192,
+      "files": 2
+    },
+    "session-services-20261018-210955-700ca951": {
+      "bytes": 190683,
+      "allocated": 200704,
+      "files": 4
+    },
+    "steward-setup": {
+      "bytes": 593,
+      "allocated": 4096,
+      "files": 1
+    },
+    "local-docker-native-phone-20261019": {
+      "bytes": 156940885,
+      "allocated": 161615872,
+      "files": 1966
+    },
+    "latest-correct-main-phone-20261019": {
+      "bytes": 63918,
+      "allocated": 69632,
+      "files": 3
+    },
+    "archives": {
+      "bytes": 5623270533,
+      "allocated": 5738541056,
+      "files": 34742
+    },
+    "preview-poc-research": {
+      "bytes": 23506819,
+      "allocated": 24219648,
+      "files": 291
+    },
+    "reminders-module-20261018": {
+      "bytes": 368,
+      "allocated": 4096,
+      "files": 1
+    },
+    "ci-hillclimb": {
+      "bytes": 58187,
+      "allocated": 73728,
+      "files": 5
+    },
+    "latest-health-main-phone-20261019": {
+      "bytes": 51084108,
+      "allocated": 51810304,
+      "files": 233
+    },
+    "linear-ui-20261019": {
+      "bytes": 75446525,
+      "allocated": 76849152,
+      "files": 479
+    },
+    "ai-oneoff-reminder-20261020": {
+      "bytes": 564586,
+      "allocated": 667648,
+      "files": 31
+    },
+    "planner-session-tests-20261018-ffc704de": {
+      "bytes": 31495,
+      "allocated": 49152,
+      "files": 5
+    },
+    "today-reconstruction-visual-tests-20261018": {
+      "bytes": 100681540,
+      "allocated": 101023744,
+      "files": 181
+    },
+    "pr108-ci39318725236-20261019-first-failure": {
+      "bytes": 29750481,
+      "allocated": 30060544,
+      "files": 105
+    },
+    "migration-20261019T022720736327Z": {
+      "bytes": 3443609,
+      "allocated": 3813376,
+      "files": 189
+    },
+    "latest-main-wifi-phone-20261020": {
+      "bytes": 105564126,
+      "allocated": 106336256,
+      "files": 276
+    },
+    "today-release-preflight": {
+      "bytes": 2856,
+      "allocated": 20480,
+      "files": 5
+    },
+    "devtools": {
+      "bytes": 21968923430,
+      "allocated": 22525231104,
+      "files": 221886
+    },
+    "launch-fixture-extraction-20261018-ea805aff": {
+      "bytes": 1433,
+      "allocated": 12288,
+      "files": 3
+    },
+    "pr136-normalmerge-20261020T191357Z": {
+      "bytes": 314828,
+      "allocated": 372736,
+      "files": 20
+    },
+    "diagnostics-20261018": {
+      "bytes": 268077,
+      "allocated": 294912,
+      "files": 12
+    },
+    "migration-20261019T022850039084Z": {
+      "bytes": 3443984,
+      "allocated": 3817472,
+      "files": 190
+    },
+    "phone-freeze-1748a4a8-20261019": {
+      "bytes": 107375980,
+      "allocated": 108027904,
+      "files": 244
+    },
+    "pr137-normal-merge-20261020T200605Z": {
+      "bytes": 106081,
+      "allocated": 188416,
+      "files": 27
+    },
+    "ai-annual-check-20261019": {
+      "bytes": 7326579,
+      "allocated": 8065024,
+      "files": 236
+    },
+    "planner-consumers-20261019-042100-084ebb13": {
+      "bytes": 156142,
+      "allocated": 172032,
+      "files": 6
+    },
+    "upstream-research-20261018": {
+      "bytes": 2621722,
+      "allocated": 2760704,
+      "files": 58
+    },
+    "clock-health-consumers-20261019T041657Z": {
+      "bytes": 3665,
+      "allocated": 8192,
+      "files": 2
+    },
+    "platform-consumers-20261018-808be87": {
+      "bytes": 29351,
+      "allocated": 45056,
+      "files": 5
+    },
+    "reconstruction": {
+      "bytes": 467070478,
+      "allocated": 478363648,
+      "files": 3684
+    },
+    "design-module-c8093b18": {
+      "bytes": 1898,
+      "allocated": 4096,
+      "files": 1
+    },
+    "world-clock-scrub-direction-v1": {
+      "bytes": 11099,
+      "allocated": 16384,
+      "files": 2
+    },
+    "mise-runtime-20261018-fedb8e94": {
+      "bytes": 1798910,
+      "allocated": 1839104,
+      "files": 14
+    },
+    "ci-under-five-20261020": {
+      "bytes": 7489854,
+      "allocated": 7720960,
+      "files": 74
+    },
+    "test-session-services-20261018-ff74a691": {
+      "bytes": 32259,
+      "allocated": 45056,
+      "files": 5
+    },
+    "t3-mobile-learning-20261020": {
+      "bytes": 456063406,
+      "allocated": 528941056,
+      "files": 28480
+    },
+    "ai-context-20261018": {
+      "bytes": 239739,
+      "allocated": 253952,
+      "files": 7
+    },
+    "migration-20261019T022619487024Z": {
+      "bytes": 4662183,
+      "allocated": 5042176,
+      "files": 191
+    },
+    "runs": {
+      "bytes": 11545170671,
+      "allocated": 11733377024,
+      "files": 63412
+    },
+    "all-pr-main-phone-20261019": {
+      "bytes": 42341266,
+      "allocated": 42618880,
+      "files": 98
+    },
+    "repeat-weekday-static-20261018-t3-98e27f48": {
+      "bytes": 17288,
+      "allocated": 24576,
+      "files": 2
+    },
+    "ci-hillclimb-20261019": {
+      "bytes": 205365153,
+      "allocated": 217202688,
+      "files": 3821
+    },
+    "today-scenes-7f36f517": {
+      "bytes": 246,
+      "allocated": 4096,
+      "files": 1
+    },
+    "simulator-ui-reset-20261019": {
+      "bytes": 1349493,
+      "allocated": 1372160,
+      "files": 9
+    },
+    "review-c880179-aa20b91b": {
+      "bytes": 1813,
+      "allocated": 4096,
+      "files": 1
+    }
+  },
+  "evidence": "/Users/yuanlu/code/one-app/tests/results/storage-retention-20261020",
+  "tombstones": "/Users/yuanlu/code/one-app/tests/results/retention/storage-retention-efec87639cac44f2b2cd83dd7a1c5cba",
+  "journal_integrity": "ok",
+  "qa_host_tests": 23,
+  "lint": "passed",
+  "native_build_simulator_phone_tests": "not_run",
+  "duplicates": "24 identical app product groups observed; all products retained",
+  "raw_policy_effect": "zero raw deletions; under-age, latest, referenced, pinned or uncertain metadata preserved",
+  "automation": "after completed ./dev test ui/core/accessibility/release, once per command after locks release; no daemon/timer",
+  "review": "one focused destructive-path review; five concrete findings fixed with regression tests"
+}
