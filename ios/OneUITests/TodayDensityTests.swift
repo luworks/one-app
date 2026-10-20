@@ -12,7 +12,7 @@ final class TodayDensityTests: XCTestCase {
       TestData.fixtureArguments("today-density.json") + [
         "-uiTestingNow", "10:30", "-today.setting.jumpToNow", "NO",
         "-today.setting.healthSummary", "YES",
-        "-uiTestingPrefs", "suggestTimes=0,showFreeTime=1",
+        "-uiTestingPrefs", "suggestTimes=0,showFreeTime=1,showSnooze=1",
         "-AppleLanguages", "(en)", "-AppleLocale", "en_GB", "-appearance",
         largeText ? "dark" : "light",
         "-UIPreferredContentSizeCategoryName",

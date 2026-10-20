@@ -53,6 +53,12 @@
         wrappedValue: true, SettingsKey.jumpToNow, store: presentation.defaults)
       _showsHealth = AppStorage(
         wrappedValue: true, SettingsKey.healthSummary, store: presentation.defaults)
+      _showsSettle = AppStorage(
+        wrappedValue: Preferences.showSettle, Preferences.showSettleKey,
+        store: presentation.defaults)
+      _showsSnooze = AppStorage(
+        wrappedValue: Preferences.showSnooze, Preferences.showSnoozeKey,
+        store: presentation.defaults)
       _showsTomorrow = AppStorage(
         wrappedValue: Preferences.showTomorrow, Preferences.showTomorrowKey,
         store: presentation.defaults)
@@ -80,6 +86,8 @@
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
     @AppStorage(SettingsKey.healthSummary) private var showsHealth = true
+    @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
+    @AppStorage(Preferences.showSnoozeKey) private var showsSnooze = Preferences.showSnooze
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.eveningHourKey) private var eveningHour = Preferences.eveningHour
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
@@ -237,8 +245,8 @@
         if !showsWeekStrip {
           returnedSection(items)
           if isTodayTab, showsOverdue { overdueSection }
-          focusSection(snoozed: true)
-          focusSection(snoozed: false)
+          if showsSnooze { focusSection(snoozed: true) }
+          if showsSettle { focusSection(snoozed: false) }
         }
         if !showsWeekStrip, showsTomorrow, cal.isDate(day, inSameDayAs: now) {
           tomorrowSection()
@@ -265,7 +273,9 @@
         Button("Cancel", role: .cancel) { deleteTarget = nil }
       } message: {
         Text(
-          "This deletes the reminder from its source. Use Settle to hide it in Today only."
+          showsSettle
+            ? "This deletes the reminder from its source. Use Settle to hide it in Today only."
+            : "This deletes the reminder from its source."
         )
       }
       .confirmationDialog(
@@ -572,8 +582,9 @@
     private func attention(_ target: FocusTarget) -> TodayRowAttention? {
       guard !showsWeekStrip else { return nil }
       return TodayRowAttention(
-        settle: target.identity == nil ? nil : { changeFocus(.settled, target: target) },
-        snooze: target.identity == nil ? nil : { snoozeTarget = target },
+        settle: target.identity == nil || !showsSettle
+          ? nil : { changeFocus(.settled, target: target) },
+        snooze: target.identity == nil || !showsSnooze ? nil : { snoozeTarget = target },
         canDelete: canDeleteAttention(target))
     }
 
@@ -597,7 +608,8 @@
         settle: { changeFocus(.settled, target: target) },
         snooze: { snoozeTarget = target },
         open: { openAttentionItem(target) },
-        delete: canDeleteAttention(target) ? { requestDeleteAttention(target) } : nil)
+        delete: canDeleteAttention(target) ? { requestDeleteAttention(target) } : nil,
+        showSettle: showsSettle, showSnooze: showsSnooze)
     }
 
     private func changeFocus(_ state: TodayFocusState?, target: FocusTarget) {
