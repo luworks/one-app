@@ -360,6 +360,26 @@ final class TodayFocusTests: XCTestCase {
     reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
   }
 
+  func testCustomSnoozeCancelKeepsActiveAndExplicitTapCommits() {
+    let app = launch()
+    act("Snooze", on: "Focus invoice", in: app)
+    app.buttons["Choose date and time"].tap()
+    let picker = app.datePickers["focus.snoozeUntil"]
+    XCTAssertTrue(picker.waitForExistence(timeout: 3))
+    XCTAssertFalse(app.staticTexts["focus.snoozeValidation"].exists)
+    // Opening the picker is not a visibility write. Cancel keeps the item active.
+    app.navigationBars["Snooze"].buttons["Cancel"].tap()
+    assertFocusSections(app, snoozed: 0, settled: 0)
+    act("Snooze", on: "Focus invoice", in: app)
+    app.buttons["Choose date and time"].tap()
+    XCTAssertTrue(picker.waitForExistence(timeout: 3))
+    app.buttons["Snooze"].firstMatch.tap()
+    XCTAssertTrue(app.navigationBars["Snooze"].waitForNonExistence(timeout: 3))
+    assertFocusSections(app, snoozed: 1, settled: 0)
+    restore("Focus invoice", section: "snoozed", in: app)
+    reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
+  }
+
   func testFocusChoicesPersistAcrossRelaunchWithoutReseedingSourceModels() {
     let store = "today-focus-\(UUID().uuidString)"
     var app = launch(store: store)

@@ -1,5 +1,6 @@
 #if os(iOS)
   import SwiftUI
+  import TodayCore
   import TodayData
   import TodayPlannerUI
 
@@ -73,39 +74,44 @@
   }
 
   struct TodaySnoozeSheet: View {
-    let now: Date
+    let now: () -> Date
+    @State private var initialNow: Date
     let calendar: Calendar
-    let commit: (Date) -> Void
+    let commit: (Date) -> Bool
     @Environment(\.dismiss) private var dismiss
+    @State private var validation: String?
     @State private var custom = false
     @State private var committing = false
     @State private var until: Date
 
-    init(now: Date, calendar: Calendar, commit: @escaping (Date) -> Void) {
+    init(now: @escaping () -> Date, calendar: Calendar, commit: @escaping (Date) -> Bool) {
       self.now = now
+      let initialNow = now()
+      _initialNow = State(initialValue: initialNow)
       self.calendar = calendar
       self.commit = commit
-      _until = State(initialValue: now.addingTimeInterval(3600))
+      _until = State(initialValue: initialNow.addingTimeInterval(3600))
     }
 
     var body: some View {
       NavigationStack {
         Form {
           Section {
-            Button("In 1 hour") { choose(now.addingTimeInterval(3600)) }
-            Button("Tomorrow morning") {
-              let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-              choose(
-                calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow)
-            }
+            Button("In 1 hour") { choose(.inOneHour) }
+            Button("Tomorrow morning") { choose(.tomorrowMorning) }
             Button("Choose date and time") { custom = true }
             if custom {
               DatePicker(
-                "Return to Today", selection: $until, in: now...,
+                "Return to Today", selection: $until, in: initialNow...,
                 displayedComponents: [.date, .hourAndMinute]
               )
               .accessibilityIdentifier("focus.snoozeUntil")
-              Button("Snooze") { choose(until) }.disabled(until <= now)
+              .onChange(of: until) { validation = nil }
+              Button("Snooze") { choose(.custom(until)) }
+            }
+            if let validation {
+              Text(validation).foregroundStyle(.red)
+                .accessibilityIdentifier("focus.snoozeValidation")
             }
           } footer: {
             Text("Only hides this item in Today. Dates and alerts stay unchanged.")
@@ -119,11 +125,19 @@
       .presentationDetents([.medium, .large])
     }
 
-    private func choose(_ date: Date) {
-      guard !committing, date > now, date.timeIntervalSinceReferenceDate.isFinite else { return }
+    private func choose(_ selection: SnoozeSelection) {
+      guard !committing else { return }
+      guard let date = selection.resolve(now: now(), calendar: calendar) else {
+        validation = "Choose a future date and time, then tap Snooze again."
+        return
+      }
       committing = true
-      dismiss()
-      commit(date)
+      if commit(date) {
+        dismiss()
+      } else {
+        committing = false
+        validation = "Couldn't snooze this item. Check the time or refresh Today, then try again."
+      }
     }
   }
 #endif
