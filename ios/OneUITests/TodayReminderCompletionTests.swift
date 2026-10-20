@@ -122,14 +122,43 @@ final class TodayReminderCompletionTests: XCTestCase {
     }
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     app.buttons["Ask AI or add anything"].firstMatch.tap()
-    let field =
-      app.textFields["Ask AI or add anything"].firstMatch.exists
-      ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
-    XCTAssertTrue(field.waitForExistence(timeout: 5))
-    field.typeText(try XCTUnwrap(fixture["chatDraft"]))
-    app.buttons["Close"].firstMatch.tap()
+    try assertChatDraftAndClose(in: app, draft: XCTUnwrap(fixture["chatDraft"]))
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     assertState(app, done: false)
+  }
+
+  /// Isolates keyboard synchronization from the native-import journey without replacing that regression.
+  func testChatDraftAndCloseRemainResponsive() throws {
+    let data = try Data(
+      contentsOf: URL(fileURLWithPath: TestData.fixturePath("phone-freeze-navigation.json")))
+    let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
+    let draft = try XCTUnwrap(fixture["chatDraft"])
+    let app = XCUIApplication()
+    app.launchArguments = TestData.launchArguments
+    app.launch()
+    XCTAssertTrue(app.buttons["Ask AI or add anything"].firstMatch.waitForExistence(timeout: 5))
+    app.buttons["Ask AI or add anything"].firstMatch.tap()
+    try assertChatDraftAndClose(in: app, draft: draft)
+    XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
+    XCTAssertTrue(app.buttons["Ask AI or add anything"].firstMatch.isHittable)
+  }
+
+  private func assertChatDraftAndClose(in app: XCUIApplication, draft: String) throws {
+    let field = app.textFields["Ask AI or add anything"].firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+    field.typeText(draft)
+    // A vertical TextField loses its placeholder after entry; XCTest disagrees on its native type.
+    let entered = app.descendants(matching: .any).matching(
+      NSPredicate(format: "value == %@", draft)
+    ).firstMatch
+    XCTAssertTrue(
+      entered.waitForExistence(timeout: 5), "Native keyboard input remains an unsent draft")
+    XCTAssertEqual(entered.value as? String, draft)
+    XCTAssertTrue(app.buttons["Send"].exists)
+    XCTAssertFalse(app.staticTexts[draft].exists, "Typing alone does not send the draft")
+    app.buttons["Close"].firstMatch.tap()
+    XCTAssertTrue(entered.waitForNonExistence(timeout: 5))
   }
 
   func testCompactEditorEditAndDeleteFailuresRetryAcrossInFlightSync() throws {
