@@ -1,0 +1,50 @@
+# CI under five minutes: measured result (2026-10-20)
+
+PR #125. Every run below is a real hosted run on the `xcode-27` image `20261012.0260.1` (3 CPUs, 7.5 GB). Times run from run creation to run completion and include queueing. Raw logs are in the primary `tests/results/ci-under-five-20261020/`.
+
+| Run | Head | Result | Total | What changed / what it showed |
+| --- | --- | --- | --- | --- |
+| 39368090808 (main baseline) | a56646b | success | 1087 s | Old serial wrapper. Build 154 s, integration 411 s (tests ran 5 s), core UI 340 s |
+| 39375569228 | 82615c7 | cancelled | >900 s | Simulator booted during the build, which then took 700 s |
+| 39377071335 | e81ccac | failed | ~720 s | Build 194 s, boot 78 s, xcodebuild silent 215 s; cold Reminders permission sheet |
+| 39378337228 | 4c156dd | success | 753 s | Boot after build. About 250 s of cold-simulator settling; connect flow 95 s inside the 153 s UI test |
+| 39379690220 | c665023 | success | 711 s | Preconnected UI journey 81 s; `simctl privacy` blocked 273 s while the device settled |
+| 39381017476 | c8106ae | success | 627 s | Cold device-cache miss: settle 117 s + 100 s; saving the 1.35 GB cache took 23 s |
+| 39382125381 | a9b9d3f | success | 478 s | Device cache hit (restore 25 s). Included 69 s of unnecessary shutdown |
+| 39382981738 | 09154b1 | success | 713 s | Warm device booted during the build, which then took 515 s. Rejected |
+| **39384307957** | **485bc1f** | **success** | **406 s** | **Final layout, cache hit** |
+
+Final warm breakdown, `today-required`: setup/checkout/SPM cache 9 s, device cache restore 30 s, generate 6 s, build-for-testing 130 s, boot 63 s, access grant (device settling) 48 s, test run 88 s (3 integration leaves 5 s, UI journey 45 s, install and launch of hosts ~38 s), verify 3 s. `checks` (105 s) runs in parallel and is never the critical path.
+
+## Floor and limits
+
+- Warm (device cache hit): about **6.8 min**. Cold (first run after a runner image update, cache miss): about **10.5 min**. Neither meets 300 s.
+- Remaining cost: build plus boot plus device settling plus the test run, all on a 3-CPU runner. A simulator booting while the build runs slows the build 4–5×, for cold and restored devices alike, so these steps cannot overlap on this runner.
+- Cache scope: a branch can read only its own caches and those of `main`. The first `main` push after merge is therefore a cold run (~630 s). It saves the main cache, which later PRs and main pushes restore. Each runner image update costs one more cold run.
+- Install preflight: rewritten `check_install` makes 3–4 `gh api` reads (seconds) plus the existing local device-receipt checks. Covered by `tests/ci/test_main_gate.py`; not exercised end to end here, because that needs the owner's device-build receipt.
+- Pre-existing failures, identical on main `a56646b`, not run in CI: `tests/devtools` (3 failures, 2 errors that depend on the host environment) and `tests/testing` (3 failures, 1 error).
+- This floor holds only for the free standard hosted runner. It is not a limit for every simulator setup.
+
+## Decision and final policy (Yuan, 2026-10-20: free and fast merges)
+
+Option 3 was chosen. Merging and phone installation are separate gates:
+
+- **Merge gate** (PR, merge group, main push): `checks` ‖ `today-required` (native build and product identities, no simulator). Run 39387437368 (ad1c045) was green in **191 s** from creation to completion, including a 7 s queue. `checks` took 180 s and `today-required` 141 s (build 129 s).
+- **Install gate**: an explicit `workflow_dispatch lane=install-smoke` on main runs the four Simulator leaves. Install readiness is roughly merge plus ~7 min warm or ~10.5 min cold. This is not a ≤300 s path.
+- **Preflight**: requires current main, its push run (`checks` and `today-required`), an install-smoke dispatch run on the same SHA, and the device build receipt.
+
+### Install-smoke evidence and unresolved risk
+
+- Run 39387436265 (ad1c045, branch dispatch, cold: the PR-scoped caches are invisible to a branch dispatch) **failed** after 710 s. The 3 PlannerSessionTests passed. `testPreconnectedImportedTimelineStaysResponsive` failed its unchanged 10 s editor responsiveness assertion, measuring 16.6 s. The app was idle 0.01 s after the Cancel tap began, but XCTest's element lookup for Cancel took 6.8 s while the cold device was still settling. The same leaf passed in the six earlier smoke runs (44–81 s). The assertion is not weakened. Raw log and xcresult: `tests/results/ci-under-five-20261020/install-smoke-39387436265/`.
+- Fix: the device cache is now saved whenever the device shut down cleanly, failed run or not, so one cold failure does not keep every later run cold.
+- Not yet run: a green install-smoke on a main SHA. That can only happen after merge (`gh workflow run today.yml --ref main -f lane=install-smoke`).
+
+### Preflight run against live GitHub (exit 2, blocked)
+
+| Inputs | Code |
+| --- | --- |
+| current main a56646b, old push run 39368090808 (no `checks` job) + branch smoke | `main_gate_required_jobs_missing` |
+| push run only, no `--smoke-run` | `main_gate_exact_commit_and_runs_required` |
+| dispatch run 39387436265 used as the merge gate | `main_gate_completed_main_run_required` |
+
+Outputs: `tests/results/ci-under-five-20261020/preflight-live-20261020/`. The happy path still needs the merged main push run, a green install-smoke on that SHA, a checkout at that SHA and the signed device build receipt. Signing and physical-device checks are outside this PR.

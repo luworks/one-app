@@ -116,19 +116,20 @@ Formal release `preflight` also reads the authoritative `tests/testing/groups.js
 ## Exact-main manual installation preflight
 
 `./dev release preflight-local --commit <full-main-sha> --version <version>
---build <build> --for-install --main-run <push-run-id> --build-receipt <path>`
+--build <build> --for-install --main-run <push-run-id> --smoke-run <install-smoke-run-id>
+--build-receipt <path>`
 is the mandatory check immediately before an explicitly authorized manual
 `xcrun devicectl device install app` of a new main build. It installs nothing.
 Do not use a source-only preflight or a PID/install success as functional
 acceptance. There is no second installer or automatic device deployment.
 
-The selected run must be a completed successful `push` to current `main` in
-`.github/workflows/today.yml`, with `main-critical-v1` acceptance for the exact
-SHA/tree/run attempt, real positive leaves and matching Xcode/iOS SDK identity.
-The checker reads the compact receipt published by the existing CI job, checks all
-fixed critical leaves and rechecks current main and run attempt after reading.
-Offline, expired/missing artifact, docs-only success, branch green, old main,
-blocked/skipped native methods, a rerun in progress and source/product drift
+Both runs must be in `.github/workflows/today.yml` for the exact SHA of current `main`:
+the `push` run (merge gate) with `checks` and `today-required` successful, and an explicit
+`workflow_dispatch` run with `lane=install-smoke` whose `install-smoke` job (the
+Simulator usability leaves) succeeded. A green merge gate alone never authorizes an
+install. After checking the local device build receipt, the checker rereads current
+main and both runs. Offline, branch green, old main, a
+failed/skipped/missing job or missing install smoke, a rerun in progress and source/product drift
 block installation. An older accepted main is a rollback only when the user
 explicitly authorizes that revision. Do not race an approved install against
 another source change: use its explicit accepted SHA and rerun this read-only

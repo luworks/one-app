@@ -67,13 +67,6 @@ def main(argv=None, root=ROOT):
     release_parser = sub.add_parser('release', help='guarded release preflight/archive/validate')
     release_parser.add_argument('action', choices=['preflight', 'archive', 'validate', 'preflight-local', 'archive-local', 'validate-local'])
     release_parser.add_argument('options', nargs=argparse.REMAINDER)
-    ci_parser = sub.add_parser('ci', help='execute one fail-closed integrated-SHA CI lane')
-    ci_parser.add_argument('lane')
-    ci_parser.add_argument('--selection', type=Path, required=True)
-    ci_parser.add_argument('--output', type=Path, required=True)
-    ci_parser.add_argument('--sha', required=True)
-    ci_parser.add_argument('--synthetic', action='store_true')
-    ci_parser.add_argument('--no-distribute', action='store_true')
     feature_parser = sub.add_parser('new-feature', help='create a linked native feature or verify a temporary one')
     feature_parser.add_argument('name')
     feature_parser.add_argument('--verify', action='store_true')
@@ -126,10 +119,6 @@ def main(argv=None, root=ROOT):
                         identity = ui.open_scene(root, args.scene, args.scenario, **options)
                     print(json.dumps({'device': identity.device, 'os': identity.os}))
                 return 0
-            if args.command == 'ci':
-                from .ci_adapter import main as ci_main
-                return ci_main(root, args.lane, selection=args.selection, output=args.output,
-                               sha=args.sha, synthetic=args.synthetic, no_distribute=args.no_distribute)
             if args.command == 'new-feature':
                 from .new_feature import create, temporary
                 if args.verify:

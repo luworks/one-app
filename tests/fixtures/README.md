@@ -225,8 +225,7 @@ Small source/lock/configuration inputs, isolated Git repositories and generated
 `.gitignore` FIFOs are defined inline in
 `tests/devtools/test_native_provenance.py`; `tests/ci/test_native_execution.py`
 provides the synthetic owned-device/build callback lifecycle.
-`tests/ci/test_producer.py` defines closed preflight/build failure summaries and
-missing-test expectations. `./dev test helpers` loads these existing authorities.
+`./dev test helpers` loads these existing authorities.
 Temporary material is reconstructed from these versioned inputs; retained raw
 logs and closed hosted artifacts belong in the primary QA results directory.
 The same native provenance fixture covers compiler-module transport keys,

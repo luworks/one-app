@@ -49,25 +49,6 @@ class BuildDiagnosticsTests(unittest.TestCase):
             with self.assertRaises(ProcessLookupError):
                 os.kill(events[0]['pid'], 0)
 
-    def test_shared_deadline_reserves_cleanup_and_upload_and_never_dispatches_when_expired(self):
-        from scripts.ci import run
-        self.assertLessEqual(run.RUN_BUDGET + run.CLEANUP_GRACE + 150 + 180, 1800)
-        with patch.dict(os.environ, {'TODAY_CI_JOB_STARTED': '1000'}), \
-                patch.object(run.time, 'time', return_value=1300), \
-                patch.object(run.time, 'monotonic', return_value=400):
-            self.assertEqual(run.wrapper_deadline(), 400 + 1260)
-        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {
-                'RUNNER_TEMP': temporary, 'GITHUB_SHA': 'c' * 40}), \
-                patch.object(run, 'producer_boundary'), \
-                patch.object(run.subprocess, 'check_output', return_value='c' * 40), \
-                patch.object(run, 'execute') as execute, \
-                patch.object(run, 'close_producer'), \
-                patch.object(run, 'close_wrapper', side_effect=ValueError('missing receipt')), \
-                contextlib.redirect_stdout(io.StringIO()):
-            prepared = {'tools': set(), 'native': False, 'selection': b'{}', 'deadline': time.monotonic() - 1}
-            self.assertEqual(run.run_lane('business', prepared), 124)
-            execute.assert_not_called()
-
     def test_activity_keeps_only_owned_build_tree(self):
         from scripts.devtools.process import build_activity
         raw = ('10 1 1.0 100 00:01 xcodebuild build\n'

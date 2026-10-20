@@ -29,7 +29,7 @@ Replace selector placeholders with discovered method IDs; repeat `--only` for a 
 
 `build --for-testing` uses the same test-product provenance as the test adapters, without booting a device or executing tests. Set the existing synthetic CI environment when diagnosing its compiler mode. Native build logs retain elapsed phase markers and a read-only CPU/RSS process-tree sample every 30 seconds, including before a timeout; diagnostics do not change the build deadline or compiler settings.
 
-CI uses the same entry: `./dev ci <lane> --selection <selection.json> --output <fresh-directory> --sha <integrated-sha> --synthetic --no-distribute`. Read [CI adapter integration](../docs/engineering/ci-native-integration.md) for execution and artifact boundaries. Local success does not establish hosted CI acceptance.
+CI is described in [CI](../docs/engineering/ci.md): `./dev` checks plus one native smoke (`scripts/ci/smoke.py`). Local success does not establish hosted CI acceptance.
 
 ## Pinned tools and host ownership
 
