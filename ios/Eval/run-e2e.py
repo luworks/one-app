@@ -356,10 +356,9 @@ def main(argv=None):
         if not boot_started:
             boot_started = True
             journal.action(["xcrun", "simctl", "boot", simulator], subprocess.run, check=True)
-        # Routine CI lets the fresh XCTest session own destination readiness;
-        # a separate bootstatus process took ~117s only to report already booted.
-        if not native_test_options():
-            journal.action(["xcrun", "simctl", "bootstatus", simulator, "-b"], subprocess.run, check=True)
+        # UI app launch requires a ready destination, including routine CI.
+        # A boot request alone can leave the first XCTest launch waiting until timeout.
+        journal.action(["xcrun", "simctl", "bootstatus", simulator, "-b"], subprocess.run, check=True)
         if args.test_products:
             summary["test_products"] = str(args.test_products.resolve())
             summary["test_products_sha256"] = hashlib.sha256(args.test_products.read_bytes()).hexdigest()

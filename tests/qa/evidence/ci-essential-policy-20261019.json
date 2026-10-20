@@ -1,0 +1,233 @@
+{
+  "base": "1748a4a8565fd86f4bf5fe23d64b1ff010ee0d43",
+  "policy": "essential-risk-selected",
+  "status": "pr119-v22-clock-readiness-repair-remote-pending",
+  "local": {
+    "helpers": "passed",
+    "helpers_seconds": 19.576257,
+    "lint": "passed",
+    "format": "passed",
+    "native": "not-run-host-freeze",
+    "phone": "not-run"
+  },
+  "previous_failure": {
+    "pr": 118,
+    "head": "a29e0fc9a6351d56926ce71a1e64cb38dce2117a",
+    "run": 39336559322,
+    "leaves": 36,
+    "passed": 35,
+    "failed": [
+      "TodayUITests/JourneyTests/testJ3_completeAndUndo"
+    ],
+    "push_to_required_seconds": 1318,
+    "created_to_native_seconds": 314,
+    "evidence": "tests/results/ci-hillclimb-20261019/pr118-first-failure/audit.json",
+    "classification": "test-wait-condition-consumed-toast-window; known failed until remote repair proof"
+  },
+  "selection": {
+    "version": 1,
+    "mode": "wide",
+    "reason": "shared/schema/dependency/engineering or unmapped path: tests/ci/test_policy.py",
+    "changed": [
+      ".github/actions/check/action.yml",
+      ".github/workflows/today.yml",
+      "docs/engineering/ci.md",
+      "ios/OneUITests/JourneyTests.swift",
+      "ios/project.yml",
+      "scripts/ci/policy.py",
+      "scripts/ci/run.py",
+      "scripts/devtools/ci_adapter.py",
+      "scripts/devtools/core.py",
+      "tests/ci/test_adapter.py",
+      "tests/ci/test_policy.py"
+    ],
+    "targets": [],
+    "all_targets": true,
+    "snapshots": true
+  },
+  "required_lanes": [
+    "format",
+    "lint",
+    "business",
+    "build",
+    "integration",
+    "snapshots",
+    "core-ui"
+  ],
+  "expected": {
+    "business": {
+      "kind": "logic",
+      "count": 705
+    },
+    "integration": {
+      "kind": "integration",
+      "count": 23,
+      "tests": [
+        "TodayTests/StoreUpgradeTests/baselineStorePreservesAllFieldsAcrossReopenAndMutation",
+        "TodayTests/PlannerSessionTests/confirmedEditorDeleteFailurePreservesIdentityThenRetryAndUndoCommitOnce",
+        "TodayTests/PlannerSessionTests/confirmedEditorDeleteCannotResurrectExternalRemovalOrReappearance",
+        "TodayTests/PlannerSessionTests/alarmCommitAndCancelErrorsKeepIdentityAndRetry",
+        "TodayTests/PlannerSessionTests/newAlarmFailureRetryRetainsSystemID",
+        "TodayTests/PlannerSessionTests/alarmLocalSaveFailureCompensatesAndKeepsPreviousSettings",
+        "TodayTests/PlannerSessionTests/askPlanUndoRestoresOnlyUnchangedTasksAndRecordsOnce",
+        "TodayTests/PlannerSessionTests/deterministicCaptureKeepsProductionAlarmAndReminderRules",
+        "TodayTests/PlannerSessionTests/askDeleteUndoOutlivesItsToastAndRunsOnce",
+        "TodayTests/PlannerSessionTests/askMoveUndoPreservesDeadlineAndSubsequentEdits",
+        "TodayTests/PlannerSessionTests/localCalendarDeleteAndUndoKeepExternalWritesRefused",
+        "TodayTests/PlannerSessionTests/existentialObservationAndDisposalStayInsideTheirSession",
+        "TodayTests/PlannerSessionTests/addApplyAndActivityUndoPersistWithoutChangingDeadlineOrPeer",
+        "TodayTests/PlannerSessionTests/automaticPlanningRequiresRecordedChangesAndPreservesScopeAndUndo",
+        "TodayTests/PlannerSessionTests/sevenDayExpiryAndRevocationUseOnlyTheirSessionClockAndStore",
+        "TodayTests/PlannerSessionTests/localRecurrenceToastUndoRestoresOccurrenceAndCannotResurrectDeletedTask",
+        "TodayTests/PlannerSessionTests/completionUndoPassesAcceptedReceiptAndRefusesOutsideEdit",
+        "TodayTests/PlannerSessionTests/rejectedRemoteCompletionAndAlarmStopNeverCompleteAnotherTask",
+        "TodayTests/PlannerSessionTests/focusPausedOrDisabledActivityDoesNotOwnFocusOrItsUndo",
+        "TodayTests/PlannerSessionTests/focusRefreshedSourceFieldsKeepFocusButDifferentIdentityDoesNotInheritIt",
+        "TodayTests/PlannerSessionTests/recurringEventFocusAppliesOnlyToSelectedOccurrence",
+        "TodayTests/PlannerSessionTests/calendarDeletionKeepsUnavailableOrChangedMirrorsAndLocalSeriesUndo",
+        "TodayTests/PlannerSessionTests/deleteAllLocalDataClearsFocusWithoutDeletingItsAppleSource"
+      ]
+    },
+    "snapshots": {
+      "kind": "snapshot",
+      "count": 6,
+      "tests": [
+        "TodaySnapshotTests/NativeSnapshotTests/testHealthStepsLight",
+        "TodaySnapshotTests/NativeSnapshotTests/testHealthEmptyDarkLargeType",
+        "TodaySnapshotTests/NativeSnapshotTests/testStopwatchStoppedAnalog",
+        "TodaySnapshotTests/NativeSnapshotTests/testStopwatchRunningDigitalDark",
+        "TodaySnapshotTests/NativeSnapshotTests/testNativePillSwitcherLargeType",
+        "TodaySnapshotTests/NativeSnapshotTests/testHealthDataPerturbationChangesPixels"
+      ]
+    },
+    "core-ui": {
+      "kind": "ui",
+      "count": 20,
+      "tests": [
+        "TodayUITests/JourneyTests/testJ1_addTimedTaskFromOneLine",
+        "TodayUITests/JourneyTests/testJ3_completeAndUndo",
+        "TodayUITests/CalendarAlarmTests/testWeekLateAlarmOpensItsEditorWithoutOtherEntries",
+        "TodayUITests/AskSuggestionTests/testPolitePlanRequestPreservesPreviewThroughOperationQuestionsUntilApply",
+        "TodayUITests/SinglePresentationTests/testLongPressOnAnEventShowsOnlyItsMenu",
+        "TodayUITests/SinglePresentationTests/testDraggingATaskDoesNotMakeAnEvent",
+        "TodayUITests/ShareImportTests/testPersistedShareIsVisibleAndReplayDoesNotDuplicate",
+        "TodayUITests/JourneyTests/testJ2_todayShowsWhatsLeft",
+        "TodayUITests/JourneyTests/testJ4_addEvent",
+        "TodayUITests/JourneyTests/testJ5_addReminderToList",
+        "TodayUITests/JourneyTests/testJ6_addAlarmAndSeeItInToday",
+        "TodayUITests/JourneyTests/testJ7_search",
+        "TodayUITests/JourneyTests/testSearchFindsEventsAndRemindersTogether",
+        "TodayUITests/JourneyTests/testSearchSuggestionsAndCancelClosesIt",
+        "TodayUITests/JourneyTests/testSidebarOpensWithEdgeSwipe",
+        "TodayUITests/JourneyTests/testMenuButtonOpensTheSidebar",
+        "TodayUITests/JourneyTests/testPlanMyDay",
+        "TodayUITests/JourneyTests/testDragTaskInWeekGrid",
+        "TodayUITests/JourneyTests/testSettingsExplainsEachOptionUnderItsRow",
+        "TodayUITests/JourneyTests/testSettingsDeleteAllDataNeedsTwoConfirmations"
+      ]
+    }
+  },
+  "pr119_first_failure": {
+    "head": "16065252aa8e04d3f67615d85b64766824799bc4",
+    "run": 39339915559,
+    "job": 118358616714,
+    "status": "failed-before-selection",
+    "cause": "ModuleNotFoundError: scripts; routine execute called before run_lane path initialization",
+    "queue_seconds": 6,
+    "job_seconds": 22,
+    "run_created_to_job_closed_seconds": 28,
+    "native_started": false,
+    "formatter_started": false,
+    "reports": [],
+    "test_leaves": [],
+    "xcresult": null,
+    "artifacts_count": 0,
+    "not_execution_success": true,
+    "evidence": "tests/results/ci-hillclimb-20261019/pr119-first-failure/audit.json"
+  },
+  "repair": "Pin Journey app runtime to 09:41; execute J4/J6/Plan assertions without host-time guards/skips. Restore UI simulator bootstatus barrier before XCTest.",
+  "acceptance": "Remote risk-selected reports and fresh native leaves pending; five-minute ordinary Swift profile remains unqualified.",
+  "pr119_v21_failure": {
+    "head": "79a0de1b3ffa70fe098357ce9be6b019a88daec3",
+    "integrated_sha": "aa4225ac1fe4455a4f7d352ef7ddddc6db51ddcb",
+    "run": 39340347079,
+    "job": 118360038562,
+    "queue_seconds": 9.0,
+    "job_seconds": 1734.0,
+    "created_to_required_seconds": 1743.0,
+    "artifact_sha256": "276b5ff6c58c98b08ada6d194bf46745fdac867948b2a36d5db0e3eca96d5ea0",
+    "lanes": {
+      "lint": {
+        "status": "passed",
+        "executed": 3,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "business": {
+        "status": "passed",
+        "executed": 701,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "format": {
+        "status": "passed",
+        "executed": 337,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "core-ui": {
+        "status": "failed",
+        "executed": 19,
+        "failed": 2,
+        "cancelled": 0,
+        "missing": 1,
+        "errors": [
+          "runner_incomplete",
+          "runner_stage_failure",
+          "process_exit:65",
+          "log_failure",
+          "test_failure",
+          "unexpected_skip",
+          "command_exit:65"
+        ]
+      },
+      "integration": {
+        "status": "passed",
+        "executed": 23,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "build": {
+        "status": "passed",
+        "executed": 3,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      },
+      "snapshots": {
+        "status": "passed",
+        "executed": 6,
+        "failed": 0,
+        "cancelled": 0,
+        "missing": 0,
+        "errors": []
+      }
+    },
+    "failures": {
+      "AskSuggestionTests": "first app launch timed out before business assertions; readiness barrier absent; root cause not established",
+      "JourneyTests/testJ2_todayShowsWhatsLeft": "late-clock autoscroll leaves list at bottom (AX scrollbar 100%); Buy milk and Overdue (1) present; top overdue shortcut and date not realized",
+      "JourneyTests/testPlanMyDay": "host real clock >=18 triggered explicit skip; runner and simulator time zones differ"
+    },
+    "repair": "Pin Journey app runtime to 09:41; execute J4/J6/Plan assertions without host-time guards/skips. Restore UI simulator bootstatus barrier before XCTest.",
+    "remaining": "Remote proof pending; first-launch cause unresolved until fresh run. Wide config run is not an ordinary Swift <=300s qualification."
+  }
+}

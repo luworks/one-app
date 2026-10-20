@@ -518,7 +518,8 @@
     "TodayMock": {
       "build": {
         "targets": {
-          "TodayMock": "all"
+          "TodayMock": "all",
+          "Today": "all"
         }
       },
       "run": {

@@ -67,6 +67,9 @@ class AdapterTests(unittest.TestCase):
     def invoke(self, *, runner=None, lane='business', **kwargs):
         options = dict(selection=self.selection, output=self.output, sha=self.sha, synthetic=True, no_distribute=True)
         options.update(kwargs)
+        if lane == 'release':
+            with patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'workflow_dispatch', 'MANUAL_LANE': 'release'}):
+                return adapter._main(self.root, lane, runner=runner or self.runner(), **options)
         return adapter._main(self.root, lane, runner=runner or self.runner(), **options)
 
     def report(self):
@@ -117,6 +120,20 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(xcode_tests.test_scheme('snapshot'), 'TodayCI')
         with patch.dict(os.environ, {'TODAY_CI_NATIVE_BATCH': '0'}):
             self.assertEqual(core.ci_test_scheme('TodayMock'), 'TodayMock')
+
+    def test_smoke_uses_ui_products_with_production_build_in_same_producer(self):
+        from scripts.devtools import core
+        project = json.loads((ROOT / 'ios/project.yml').read_text())
+        targets = project['schemes']['TodayMock']['build']['targets']
+        self.assertEqual(set(targets), {'Today', 'TodayMock'})
+        with patch.dict(os.environ, {'TODAY_CI_SYNTHETIC': '1', 'TODAY_CI_NATIVE_BATCH': '1',
+                                     'TODAY_CI_UI_ONLY': '1'}):
+            identities = []
+            for lane in ('build', 'core-ui'):
+                with patch.dict(os.environ, {'TODAY_LANE': lane}):
+                    self.assertEqual(core.ci_test_scheme('TodayCI'), 'TodayMock')
+                    identities.append(core.fingerprint(self.root, scheme='TodayMock', tools={}))
+            self.assertEqual(identities[0], identities[1])
 
     def test_batch_workflow_plan_accepts_shared_scheme_and_rejects_unknown_scheme(self):
         from scripts.devtools import cli, core
