@@ -120,9 +120,9 @@ final class TodayTomorrowTests: XCTestCase {
       XCTAssertGreaterThanOrEqual(button.frame.width, 44)
       XCTAssertGreaterThanOrEqual(button.frame.height, 44)
     }
-    let shortcut = app.buttons["today.overdueShortcut"]
-    reveal(shortcut, in: app)
-    shortcut.tap()
+    XCTAssertFalse(app.buttons["today.overdueShortcut"].exists)
+    reveal(headers[0], in: app)
+    headers[0].tap()
     XCTAssertEqual(headers[0].value as? String, "Expanded")
     let overdue = app.staticTexts["Section overdue"].firstMatch
     XCTAssertTrue(overdue.waitForExistence(timeout: 3))
@@ -131,7 +131,7 @@ final class TodayTomorrowTests: XCTestCase {
     reveal(overdue, in: app)
     XCTAssertTrue(
       app.buttons["Complete Section overdue"].exists, "Opening Overdue never completes it")
-    screenshot("today-overdue-shortcut-expanded")
+    screenshot("today-overdue-section-expanded")
     reveal(headers[0], in: app)
     headers[0].tap()
     XCTAssertFalse(overdue.exists)

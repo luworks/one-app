@@ -12,7 +12,7 @@
 
   /// One day's view: active events, tasks and alarms stay directly visible in a single timeline.
   /// Today ends with collapsed Overdue, Snoozed, Settled and Tomorrow disclosures;
-  /// the compact overdue shortcut opens the single overdue list below the timeline.
+  /// overdue tasks appear only in the disclosure below today's timeline.
   /// The Calendar tab adds the week strip to pick a day.
   package struct DayAgenda: View {
     private let actions: PlannerActions
@@ -190,7 +190,6 @@
             Text(error).font(.footnote).foregroundStyle(.secondary)
           }
         }
-        if isTodayTab, showsOverdue, !overdue.isEmpty { overdueShortcut }
         if !items.allDay.isEmpty || !items.externalAllDay.isEmpty {
           Section {
             ForEach(items.allDay) {
