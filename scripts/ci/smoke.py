@@ -42,10 +42,6 @@ def run(*argv, capture=False):
                           stdout=subprocess.PIPE if capture else None).stdout
 
 
-def busy():
-    subprocess.run("ps -Ao pcpu=,comm= -r | head -8 | awk '{n=split($2,a,\"/\"); print $1, a[n]}'", shell=True)
-
-
 def simulator():
     """Prefer the canonical iPhone 18 Pro Max on the newest installed iOS runtime."""
     devices = json.loads(run('xcrun', 'simctl', 'list', 'devices', 'available', '--json', capture=True))['devices']
@@ -85,10 +81,6 @@ def main():
         # Let CoreSimulator rescan the restored device directories.
         subprocess.run(['pkill', '-f', 'CoreSimulatorService'])
     udid = simulator()
-    # A restored device already finished first-boot setup, so it can boot during the build.
-    # A cold first boot is CPU-heavy and made the build 4x slower, so it waits.
-    boot = subprocess.Popen(['xcrun', 'simctl', 'bootstatus', udid, '-b'], cwd=ROOT,
-                            stdout=subprocess.DEVNULL) if warm else None
     run('./dev', 'bootstrap', '--tool', 'xcodegen')
     run('./dev', 'generate')
     lock = ROOT / 'ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
@@ -105,12 +97,10 @@ def main():
         info = plistlib.loads((products / path / 'Info.plist').read_bytes())
         if info.get('CFBundleIdentifier') != identifier or not (products / path / info['CFBundleExecutable']).is_file():
             raise SystemExit('Missing production product: ' + path)
-    if boot is None:
-        run('xcrun', 'simctl', 'bootstatus', udid, '-b')
-    elif boot.wait():
-        raise SystemExit('Simulator failed to boot')
+    # Boot only after the build: on the 3-CPU hosted runner a concurrent boot made the
+    # build take 515-700 s instead of ~115 s, even for a restored device.
+    run('xcrun', 'simctl', 'bootstatus', udid, '-b')
     step('simulator ready')
-    busy()
     xctestrun = sorted(DD.glob('Build/Products/TodayCI_*.xctestrun'))
     if len(xctestrun) != 1:
         raise SystemExit('Expected one TodayCI xctestrun')
@@ -118,15 +108,10 @@ def main():
     for service in ('reminders', 'calendar'):
         run('xcrun', 'simctl', 'privacy', udid, 'grant', service, 'com.luworks.one')
     step('access granted')
-    busy()
-    test = subprocess.Popen(['xcodebuild', 'test-without-building', '-xctestrun', str(xctestrun[0]),
-                             '-destination', destination, '-resultBundlePath', str(RESULT),
-                             '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
-                             *FLAGS[:2], *['-only-testing:' + test for test in TESTS]], cwd=ROOT)
-    while test.poll() is None and time.monotonic() - STARTED < 900:
-        busy()
-        time.sleep(20)
-    code = test.wait()
+    code = subprocess.run(['xcodebuild', 'test-without-building', '-xctestrun', str(xctestrun[0]),
+                           '-destination', destination, '-resultBundlePath', str(RESULT),
+                           '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
+                           *FLAGS[:2], *['-only-testing:' + test for test in TESTS]], cwd=ROOT).returncode
     step('tests finished')
     if not warm:
         # A cleanly shut down device is cached so the next runner skips first-boot setup.
