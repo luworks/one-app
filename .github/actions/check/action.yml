@@ -10,9 +10,19 @@ runs:
     - shell: bash
       env:
         TODAY_LANES: ${{ inputs.lane }}
+        TODAY_CI_DIAGNOSTICS: '1'
+        PYTHONUNBUFFERED: '1'
       run: |
         read -ra lanes <<< "$TODAY_LANES"
         python3 scripts/ci/run.py "${lanes[@]}"
+    - name: Retain partial phase diagnostics (never accepted receipts)
+      if: always()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: today-diagnostics-${{ github.job }}-${{ github.sha }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/today-diagnostics/*.jsonl
+        if-no-files-found: warn
+        retention-days: 7
     - if: always()
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:

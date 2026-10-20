@@ -9,6 +9,23 @@ import subprocess
 import sys
 import time
 
+# Whole-wrapper budget, shared by setup and all selected lanes. Also subtract
+# time already spent in checkout/helpers from the unchanged 1800s job budget.
+RUN_BUDGET = 1440
+CLEANUP_GRACE = 30
+UPLOAD_RESERVE = 180
+
+
+def wrapper_deadline():
+    remaining = RUN_BUDGET
+    if 'TODAY_CI_JOB_STARTED' in os.environ:
+        elapsed = time.time() - float(os.environ['TODAY_CI_JOB_STARTED'])
+        if elapsed < 0:
+            raise ValueError('job budget timestamp is in the future')
+        # 30s also covers job setup before the first workflow step records time.
+        remaining = min(remaining, 1800 - 30 - CLEANUP_GRACE - UPLOAD_RESERVE - elapsed)
+    return time.monotonic() + remaining
+
 # Direct workflow execution must resolve package imports before routine selection.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -304,6 +321,7 @@ def execute(argv, *, timeout=600, grace=30):
 def run_lane(lane, prepared):
     if lane not in LANES:
         raise ValueError('unknown lane')
+    deadline = prepared.setdefault('deadline', wrapper_deadline())
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=5).strip()
     if sha != os.environ['GITHUB_SHA']:
         raise ValueError('checkout does not match integrated GITHUB_SHA')
@@ -340,7 +358,12 @@ def run_lane(lane, prepared):
         started = time.monotonic()
         try:
             # The adapter may build and test serially before closing its receipt.
-            completed = execute(argv, timeout=2100 if argv == command else 600, grace=30)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                completed = subprocess.CompletedProcess(argv, 124, 'shared CI deadline exhausted\n')
+            else:
+                completed = execute(argv, timeout=min(remaining, RUN_BUDGET if argv == command else 600),
+                                    grace=CLEANUP_GRACE)
         except OSError as error:
             # Exception text may include private paths; retain only its type.
             completed = subprocess.CompletedProcess(argv, 1, type(error).__name__ + '\n')
@@ -403,7 +426,8 @@ def run_lane(lane, prepared):
 
 def main():
     lanes = sys.argv[1:]
-    prepared = {'tools': set(), 'native': False, 'selection': None}
+    prepared = {'tools': set(), 'native': False, 'selection': None,
+                'deadline': wrapper_deadline()}
     if lanes == ['routine']:
         selection = Path(os.environ['RUNNER_TEMP']) / 'routine-selection.json'
         selected = execute([sys.executable, 'scripts/ci/policy.py', 'select', '--output', str(selection)])
