@@ -13,9 +13,9 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 try:
-    from .policy import LANES, validate_report, routine_lanes
+    from .policy import LANES, validate_report, routine_lanes, main_selection, main_lanes
 except ImportError:  # Direct workflow entry point.
-    from policy import LANES, validate_report, routine_lanes
+    from policy import LANES, validate_report, routine_lanes, main_selection, main_lanes
 
 
 def sanitize(text):
@@ -410,8 +410,12 @@ def main():
         if selected.returncode:
             print(sanitize(selected.stdout or 'selection failed'))
             return selected.returncode
-        prepared['selection'] = selection.read_bytes()
-        lanes = routine_lanes(json.loads(prepared['selection']))
+        selected = json.loads(selection.read_bytes())
+        is_main = os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_REF') == 'refs/heads/main'
+        if is_main:
+            selected = main_selection(selected)
+        prepared['selection'] = json.dumps(selected).encode()
+        lanes = main_lanes(selected) if is_main else routine_lanes(selected)
         if 'core-ui' in lanes or 'integration' in lanes or 'snapshots' in lanes:
             os.environ['TODAY_CI_NATIVE_BATCH'] = '1'
             os.environ['TODAY_CI_UI_ONLY'] = '1' if not any(
@@ -425,6 +429,10 @@ def main():
         if code:
             # Do not manufacture successful receipts for unexecuted later lanes.
             return code
+    if (os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_REF') == 'refs/heads/main'
+            and prepared['selection'] is not None and 'core-ui' in lanes):
+        from scripts.ci.main_gate import seal_acceptance
+        seal_acceptance(Path(__file__).resolve().parents[2], Path(os.environ['RUNNER_TEMP']), lanes)
     return 0
 
 

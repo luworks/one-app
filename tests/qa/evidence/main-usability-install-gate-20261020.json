@@ -1,0 +1,36 @@
+{
+  "status": "source-implementation-awaiting-main-runtime",
+  "base": "99a3df766ed985ccfa28d03e9748e62ddb6d8719",
+  "profile": "main-critical-v1",
+  "pr_policy": "unchanged essential risk selection",
+  "main": "one existing today-required job; same dev adapters; fixed3integration+1populated import navigation/Chat UI; no everypush snapshots/full20",
+  "install": "existing preflight-local --for-install; live current-main exact SHA/tree/run attempt; matching Xcode/iOS SDK +device build receipt +3productionproduct identities; no install",
+  "dependency": "PR120 owner reviewed-ready product/fixture/mounted-render companion must land and all fixed leaves actually pass before main acceptance",
+  "local": {
+    "helpers": "151 passed; final command13.373s; raw receipt retained in primary QA journal",
+    "lint_actionlint": "passed",
+    "actual_remote_negative": "branch run39343822869 refused by install preflight exit2; dirty source also separately blocked",
+    "native": "not run locally; preserve sole PR120 runner",
+    "phone": "no actions; rollback9043647 retained"
+  },
+  "pr119": {
+    "merged": "99a3df766ed985ccfa28d03e9748e62ddb6d8719",
+    "tested_head": "03ab459e892f019918dc4b634ef85db972225453",
+    "tested_integrated": "1242bbdeedd6758ae08d9cf1785036921fcdffbb",
+    "tree": "855ee3778af725a235bae7515a8aa44ce461e077",
+    "run": 39343822869,
+    "creation_to_required_seconds": 1265,
+    "queue_seconds": 7,
+    "business": {
+      "passed": 701,
+      "allowed_skips": 4
+    },
+    "integration": 23,
+    "snapshots": 6,
+    "ui": 20,
+    "300_seconds": "not met; configuration-wide not ordinary Swift"
+  },
+  "pr118": "closed SUPERSEDED by119, first failure preserved, no branch deletion",
+  "primary_evidence": "tests/results/ci-hillclimb-20261019 and tests/results/activity.sqlite",
+  "acceptance": "No remote main critical positive, ordinary Swift <=300 timing, device signature or phone functional acceptance inferred."
+}

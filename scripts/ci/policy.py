@@ -45,6 +45,27 @@ FEATURE_LOGIC = {
 }
 
 
+# Fixed main usability contract. These are real product regression leaves; an
+# unavailable PR120 leaf blocks main acceptance rather than using an empty Mock.
+MAIN_PROFILE = 'main-critical-v1'
+MAIN_UI = ('TodayReminderCompletionTests/testImportedTimelineNavigationAndCancelledEditorsStayResponsive',)
+MAIN_INTEGRATION = (
+    'PlannerSessionTests/populatedDayAgendaRenderUsesImportedSnapshotsWithoutNativeLookups',
+    'PlannerSessionTests/importedFocusRenderingNeverOpensNativeStoreAndWritesStillRevalidate',
+    'PlannerSessionTests/savedCalendarSnoozeHydratesOutsideOriginalDayAndRejectsStaleImports',
+)
+
+
+def main_selection(selection):
+    return dict(selection, profile=MAIN_PROFILE)
+
+
+def main_lanes(selection):
+    if select(selection.get('changed', []))['mode'] == 'docs' and not selection.get('all_targets'):
+        return ['format', 'lint']
+    return ['format', 'lint', 'business', 'build', 'integration', 'core-ui']
+
+
 def select(paths, nodes=None, reason=None):
     """Version-one selection receipt from conservative, reviewable source paths."""
     paths = list(paths)
@@ -103,6 +124,11 @@ def execution_selection(selection, source, lane, broad):
         broad = list(dict.fromkeys([*broad, *added]))
     if os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch':
         return broad
+    if selection.get('profile') == MAIN_PROFILE:
+        if lane == 'core-ui':
+            return contract.expand(MAIN_UI, source, 'ui')
+        if lane == 'integration':
+            return contract.expand(MAIN_INTEGRATION, source, 'integration')
     actual = select(selection.get('changed', []))
     if selection.get('all_targets') or actual['all_targets']:
         return broad

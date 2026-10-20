@@ -21,3 +21,11 @@ runs:
         if-no-files-found: warn
         retention-days: 7
         include-hidden-files: true
+    - name: Publish compact merged-main acceptance
+      if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: today-main-acceptance-${{ github.sha }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/today-artifacts-main-acceptance/main-acceptance.json
+        if-no-files-found: ignore
+        retention-days: 7
