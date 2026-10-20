@@ -97,6 +97,12 @@ public enum HealthTestSources {
   /// With no UI-test launch flag, the supplied source is returned unchanged.
   public static func scripted(base: any HealthSource, arguments: [String]) -> any HealthSource {
     guard arguments.contains("-uiTesting") else { return base }
+    if let index = arguments.firstIndex(of: "-uiTestingHealthStepSequence"),
+      index + 1 < arguments.count
+    {
+      let values = arguments[index + 1].split(separator: ",").compactMap { Double($0) }
+      if !values.isEmpty { return SequencedHealthSource(base: base, values: values) }
+    }
     let stalled = metrics(after: "-uiTestingHealthStall", in: arguments)
     let authStalled = metrics(after: "-uiTestingHealthAuthStall", in: arguments)
     if stalled.isEmpty, authStalled.isEmpty { return base }

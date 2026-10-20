@@ -1,0 +1,4 @@
+{
+  "launchArguments": ["-uiTestingHealthMetrics", "steps", "-uiTestingHealthStepSequence", "1111,2222"],
+  "scope": "Synthetic query-driven app state synchronization, not HealthKit delivery"
+}

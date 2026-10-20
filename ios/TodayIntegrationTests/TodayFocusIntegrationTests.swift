@@ -92,8 +92,9 @@
       await calendar.hydrateFocus(actions.focus.records)
       let presentation = PlannerPresentation(runtime: runtime, defaults: a.defaults)
       let health = HealthLineModel(
-        source: MockHealthSource(), store: HealthSelectionStore(defaults: a.defaults),
-        defaults: a.defaults, runtime: runtime, gate: HealthAccessGate())
+        model: HealthModel(
+          source: MockHealthSource(), store: HealthSelectionStore(defaults: a.defaults),
+          runtime: runtime, gate: HealthAccessGate()))
       let view = DayAgenda(
         day: .constant(a.now), showsWeekStrip: false, openTask: { _ in }, openEvent: { _ in },
         openAlarm: { _ in }, openTimer: {}, actions: actions, calendar: calendar,
