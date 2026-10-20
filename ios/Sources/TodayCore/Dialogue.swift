@@ -280,8 +280,12 @@ public enum CaptureConversation {
   static func referencesReminder(_ raw: String) -> Bool {
     has(
       raw.trimmingCharacters(in: .whitespacesAndNewlines),
-      #"^(?:(?:就|只要|请|帮我|你|麻烦|\s))*(?:设定|设置|设|定|创建|添加|加)(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒)(?:就行|就可以|吧)?[。.!！]*$|^(?:(?:please|just|no|actually)[, ]+)*(?:set|add|create|make)(?: it)? (?:a |the |that )?reminder(?: for (?:it|that))?[.!]*$"#
+      #"^(?:(?:就|只要|请|帮我|你|麻烦|\s))*(?:设定|设置|设|定|创建|添加|加)(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒)(?:就行|就可以|吧)?[。.!！]*$|^(?:(?:please|just|no|actually)[, ]+)*(?:set|setting|add|create|make)(?: it)? (?:a |the |that )?reminder(?: for (?:it|that))?[.!]*$"#
     )
+  }
+
+  public static func isOneOffAnswer(_ text: String) -> Bool {
+    has(text, #"^\s*(?:one[ -]?off|one time|just once|一次性|一次|单次)[。.!！]*\s*$"#)
   }
 
   private static func proceeds(_ text: String) -> Bool {
@@ -318,9 +322,10 @@ public enum CaptureConversation {
   ) -> Capture? {
     let alarm = referencesAlarm(text)
     let reminder = referencesReminder(text)
+    let once = isOneOffAnswer(text)
     let proceed = proceeds(text)
     let time = Dialogue.isOnlyWhen(text, now: now, calendar: calendar)
-    guard alarm || reminder || proceed || (time && pending == nil) else { return nil }
+    guard alarm || reminder || once || proceed || (time && pending == nil) else { return nil }
     // An explicit existing-item edit must reach edit routing, not reconstruct another capture.
     if pending == nil, time, !alarm, !reminder, !proceed,
       Editing.looksLikeEdit(text, items: [], now: now, calendar: calendar)
@@ -349,6 +354,9 @@ public enum CaptureConversation {
       } else if referencesReminder(user) {
         prior?.kind = .task
         prior?.ringsAsAlarm = false
+        requested = prior != nil
+      } else if isOneOffAnswer(user), prior?.repeatRule == nil {
+        continue
       } else if acknowledges(user) || proceeds(user) {
         // Keep the active user subject through short acknowledgments, without treating
         // them as creation requests. Unrelated conversation below still clears it.
@@ -387,8 +395,9 @@ public enum CaptureConversation {
       result.isAllDay = false
       return result
     }
-    if reminder || proceed {
-      guard requested, var result = pending ?? prior else { return nil }
+    if reminder || proceed || once {
+      guard requested || reminder, var result = pending ?? prior else { return nil }
+      if once, result.repeatRule != nil { return nil }
       if reminder {
         result.kind = .task
         result.ringsAsAlarm = false

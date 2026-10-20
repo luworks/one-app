@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "about": "Synthetic empty planner, screenshot utterance and legacy model replies; clock pinned by UI test at 09:11.",
+  "lists": [
+    {
+      "name": "Reminders",
+      "color": 0
+    }
+  ],
+  "reminders": [],
+  "events": [],
+  "alarms": [],
+  "chats": [
+    {
+      "title": "Costco wrong chat",
+      "hoursAgo": 0.1,
+      "messages": [
+        [
+          "user",
+          "11点去 costco 加油 买 粒粒"
+        ],
+        [
+          "ai",
+          "Got it. Let me know what you would like to do with that 11:00 trip to Costco, like setting a reminder or something else."
+        ]
+      ]
+    }
+  ]
+}

@@ -39,9 +39,9 @@ final class JourneyTests: XCTestCase {
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.typeText("Call Alex tomorrow at 3pm\n")
     let title = app.buttons["capture-title"]
-    XCTAssertTrue(title.waitForExistence(timeout: 5), "preview shows the parsed title")
+    XCTAssertTrue(
+      title.waitForExistence(timeout: 5), "the submitted request shows the parsed title")
     XCTAssertEqual(title.label, "Call Alex")
-    tap(app.buttons["Add"])
     XCTAssertTrue(
       app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5),
       "the card stays, now Added")
@@ -50,7 +50,7 @@ final class JourneyTests: XCTestCase {
         NSPredicate(format: "label BEGINSWITH 'Tomorrow' AND label CONTAINS 'alerts you'")
       )
       .firstMatch.exists, "the card still says what was made: a reminder that alerts")
-    XCTAssertLessThanOrEqual(taps, 2, "J1 tap budget")
+    XCTAssertLessThanOrEqual(taps, 1, "J1 tap budget: Send authorizes this one-off reminder")
   }
 
   /// J2: see what's left today.

@@ -147,7 +147,7 @@ final class AppearanceUITests: XCTestCase {
         ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
       if field.waitForExistence(timeout: 5) {
         shot("7-ask", mode)
-        field.typeText("Call Alex tomorrow at 3pm\n")
+        field.typeText("Call Alex tomorrow at 3pm every week\n")
         _ = app.buttons["Add"].waitForExistence(timeout: 5)
         shot("8-ask-preview", mode)
       }

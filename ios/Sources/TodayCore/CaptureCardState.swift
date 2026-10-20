@@ -56,10 +56,14 @@ public struct StoredCard: Codable, Equatable, Identifiable {
   public var itemRef: String?
   /// The Activity entry that recorded the creation, so Undo is recorded against it.
   public var entryID: UUID?
+  /// A failed submitted one-off request remains recoverable across chat reopen.
+  public var retainsDraft: Bool = false
+  public var pendingExternalID: String?
 
   public init(
     id: UUID, anchor: UUID, batch: UUID, batchSize: Int, capture: Capture, status: CardStatus,
-    itemRef: String? = nil, entryID: UUID? = nil
+    itemRef: String? = nil, entryID: UUID? = nil, retainsDraft: Bool = false,
+    pendingExternalID: String? = nil
   ) {
     self.id = id
     self.anchor = anchor
@@ -69,10 +73,13 @@ public struct StoredCard: Codable, Equatable, Identifiable {
     self.status = status
     self.itemRef = itemRef
     self.entryID = entryID
+    self.retainsDraft = retainsDraft
+    self.pendingExternalID = pendingExternalID
   }
 
   private enum CodingKeys: String, CodingKey {
-    case id, anchor, batch, batchSize, capture, status, itemRef, entryID
+    case id, anchor, batch, batchSize, capture, status, itemRef, entryID, retainsDraft,
+      pendingExternalID
   }
 
   public init(from decoder: Decoder) throws {
@@ -86,11 +93,13 @@ public struct StoredCard: Codable, Equatable, Identifiable {
     status = (try? c.decodeIfPresent(CardStatus.self, forKey: .status)) ?? .open
     itemRef = try c.decodeIfPresent(String.self, forKey: .itemRef)
     entryID = try c.decodeIfPresent(UUID.self, forKey: .entryID)
+    retainsDraft = try c.decodeIfPresent(Bool.self, forKey: .retainsDraft) ?? false
+    pendingExternalID = try c.decodeIfPresent(String.self, forKey: .pendingExternalID)
   }
 
   /// The cards to keep for a conversation: the decided ones.
   public static func encode(_ cards: [StoredCard]) -> Data {
-    (try? JSONEncoder().encode(cards.filter { $0.status != .open })) ?? Data()
+    (try? JSONEncoder().encode(cards.filter { $0.status != .open || $0.retainsDraft })) ?? Data()
   }
 
   /// Saved cards back. Old conversations (no data), damaged entries and cards with no final status give nothing extra,
@@ -99,7 +108,7 @@ public struct StoredCard: Codable, Equatable, Identifiable {
     guard !data.isEmpty, let items = try? JSONDecoder().decode([Lossy].self, from: data) else {
       return []
     }
-    return items.compactMap(\.card).filter { $0.status != .open }
+    return items.compactMap(\.card).filter { $0.status != .open || $0.retainsDraft }
   }
 
   private struct Lossy: Decodable {

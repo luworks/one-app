@@ -678,6 +678,13 @@ public enum CaptureParser {
   /// Also accepts model titles whose time words have already been removed.
   public static func cleanRequestTitle(_ title: String) -> String {
     var text = title
+    // Generated Chinese wrappers describe the request, not the task itself.
+    if let start = text.range(of: #"^(?:请|帮我)?(?:设置|设定|创建|添加)"#, options: .regularExpression),
+      let end = text.range(of: #"的提醒(?:事项)?[。.!！]*$"#, options: .regularExpression),
+      start.upperBound < end.lowerBound
+    {
+      text = String(text[start.upperBound..<end.lowerBound])
+    }
     while true {
       let previous = text
       text = text.trimmingCharacters(in: titleBoundary)

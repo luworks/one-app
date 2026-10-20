@@ -20,6 +20,8 @@
     /// What Add wrote (the created item's id and its Activity entry), kept so Undo and Open reach exactly that.
     package var itemRef: String?
     package var entryID: UUID?
+    package var retainsDraft = false
+    package var pendingExternalID: String?
 
     package init(capture: Capture, batchSize: Int = 1, batch: UUID = UUID(), anchor: UUID? = nil) {
       self.capture = capture
@@ -39,6 +41,8 @@
       anchor = stored.anchor
       itemRef = stored.itemRef
       entryID = stored.entryID
+      retainsDraft = stored.retainsDraft
+      pendingExternalID = stored.pendingExternalID
     }
 
     /// The saved form; nil for a card with no message to sit under.
@@ -46,7 +50,8 @@
       anchor.map {
         StoredCard(
           id: id, anchor: $0, batch: batch, batchSize: batchSize, capture: capture, status: status,
-          itemRef: itemRef, entryID: entryID)
+          itemRef: itemRef, entryID: entryID, retainsDraft: retainsDraft,
+          pendingExternalID: pendingExternalID)
       }
     }
   }

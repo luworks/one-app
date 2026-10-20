@@ -323,6 +323,65 @@
 
     /// Explicit editor writes use EventKit's commit acknowledgement, never an old reconcile pass.
     /// The same fence rejects any in-flight fetch that predates this accepted write.
+    /// Commits only a new, clear one-off reminder. Synchronous MainActor work cannot race
+    /// a permission-generation change; the fence invalidates any older asynchronous fetch.
+    package func commitCreation(_ task: OneTask, context: ModelContext) throws {
+      guard !disposed else { throw CompletionError.disconnected }
+      guard task.repeatRule == nil, !task.ringsAsAlarm else { throw CompletionError.changedOutside }
+      // An intentionally disconnected app remains local-only, as in the existing add flow.
+      if !enabled {
+        guard task.externalID == nil else { throw CompletionError.disconnected }
+        context.insert(task)
+        do { try context.save() } catch {
+          context.delete(task)
+          throw error
+        }
+        return
+      }
+      guard isConnected else { throw CompletionError.disconnected }
+      let reminder: EKReminder
+      if let id = task.externalID {
+        // A previous local-save + compensation failure must retry this exact system item.
+        guard let existing = store.calendarItem(withIdentifier: id) as? EKReminder,
+          Remote(existing, calendar: runtime.calendar).fingerprint == Self.fingerprint(of: task)
+        else { throw CompletionError.changedOutside }
+        reminder = existing
+      } else {
+        let matches =
+          task.listName.isEmpty
+          ? store.defaultCalendarForNewReminders().map { [$0] } ?? []
+          : store.calendars(for: .reminder).filter { $0.title == task.listName }
+        guard matches.count == 1, let list = matches.first, list.allowsContentModifications
+        else { throw CompletionError.readOnly }
+        reminder = EKReminder(eventStore: store)
+        reminder.calendar = list
+        try completionFence.commit { try write(task, to: reminder) }
+        task.externalID = reminder.calendarItemIdentifier
+        task.listName = list.title
+      }
+      let accepted = Remote(reminder, calendar: runtime.calendar)
+      guard reminder.calendar.allowsContentModifications else { throw CompletionError.readOnly }
+      context.insert(task)
+      do {
+        try ReminderCreationCommit.persist(
+          save: { try context.save() },
+          compensate: {
+            // Compensation touches only the exact unchanged item written by this request.
+            guard let current = store.calendarItem(withIdentifier: accepted.id) as? EKReminder,
+              Remote(current, calendar: runtime.calendar).fingerprint == accepted.fingerprint
+            else { throw CompletionError.changedOutside }
+            try completionFence.commit { try store.remove(current, commit: true) }
+            task.externalID = nil
+          })
+      } catch {
+        // A failed compensation leaves the real system identity on the retained draft.
+        context.delete(task)
+        throw error
+      }
+      focusIdentities[accepted.id] = accepted.focusIdentity
+      didPersistEdit(task, accepted: accepted)
+    }
+
     package func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot)
       throws -> Remote?
     {
