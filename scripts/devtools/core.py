@@ -176,7 +176,7 @@ def toolchain():
 def ci_test_scheme(default):
     """Only the explicit synthetic batch uses the common product provenance."""
     if os.environ.get('TODAY_CI_SYNTHETIC') == '1' and os.environ.get('TODAY_CI_NATIVE_BATCH') == '1':
-        return 'TodayCI'
+        return 'TodayMock' if os.environ.get('TODAY_CI_UI_ONLY') == '1' else 'TodayCI'
     return default
 
 

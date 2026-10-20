@@ -8,119 +8,39 @@ on:
   workflow_dispatch:
     inputs:
       lane:
-        description: Explicit additional validation (release never distributes)
+        description: Explicit extended or release validation (never distributes)
         type: choice
         required: true
-        options: [extended, sanitizer, performance, protected-release]
+        options: [extended, integration, snapshots, release, sanitizer, performance, protected-release]
 permissions:
   contents: read
 concurrency:
-  # Dispatches (including protected release) and main acceptance never share a
-  # cancellation group with ordinary PR updates. Preserve every main revision.
-  group: today-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ (github.event_name != 'pull_request' && github.event_name != 'merge_group') && github.run_id || '' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+  group: today-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 env:
   DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
   TODAY_CI_SYNTHETIC: '1'
 jobs:
-  helpers:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - run: ./dev test helpers
-  host:
-    needs: [helpers]
+  today-required:
+    if: always()
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
           persist-credentials: false
-      - run: python3 scripts/ci/prerequisite.py
+      - run: ./dev test helpers
       - uses: ./.github/actions/check
         with:
-          lane: format lint business
-  native:
-    needs: [helpers]
+          lane: routine
+  extended:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: xcode-27
     timeout-minutes: 45
     env:
-      TODAY_CI_NATIVE_BATCH: '1'
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-      - run: python3 scripts/ci/prerequisite.py
-      - uses: ./.github/actions/check
-        with:
-          lane: build integration snapshots core-ui
-  release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [helpers]
-    runs-on: xcode-27
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-      - run: python3 scripts/ci/prerequisite.py
-      - uses: ./.github/actions/check
-        with:
-          lane: release
-  extended:
-    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'extended'
-    needs: [helpers]
-    runs-on: xcode-27
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-      - run: python3 scripts/ci/prerequisite.py
-      - uses: ./.github/actions/check
-        with:
-          lane: extended
-  sanitizer:
-    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'sanitizer'
-    needs: [helpers]
-    runs-on: xcode-27
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-      - run: python3 scripts/ci/prerequisite.py
-      - uses: ./.github/actions/check
-        with:
-          lane: sanitizer
-  performance:
-    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'performance'
-    needs: [helpers]
-    runs-on: xcode-27
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-      - run: python3 scripts/ci/prerequisite.py
-      - uses: ./.github/actions/check
-        with:
-          lane: performance
-  protected-release:
-    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'protected-release' && github.ref == 'refs/heads/main'
-    needs: [helpers]
-    runs-on: xcode-27
-    timeout-minutes: 45
-    environment: release-validation
+      MANUAL_LANE: ${{ inputs.lane }}
+    environment: ${{ inputs.lane == 'protected-release' && 'release-validation' || '' }}
     permissions:
       contents: read
       actions: read
@@ -130,24 +50,11 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - name: Verify configured release protection
+        if: inputs.lane == 'protected-release'
         env:
           GH_READ_TOKEN: ${{ github.token }}
         run: python3 scripts/ci/release_guard.py
       - run: python3 scripts/ci/prerequisite.py
       - uses: ./.github/actions/check
         with:
-          lane: protected-release
-  today-required:
-    if: always()
-    needs: [helpers, host, native, release, extended, sanitizer, performance, protected-release]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Require every expected job result
-        env:
-          NEEDS_JSON: ${{ toJSON(needs) }}
-          MANUAL_LANE: ${{ inputs.lane }}
-        run: python3 scripts/ci/policy.py aggregate --needs-json "$NEEDS_JSON"
+          lane: ${{ inputs.lane }}

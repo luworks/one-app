@@ -4,6 +4,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -18,6 +19,26 @@ from scripts.devtools import ci_adapter as adapter  # noqa: E402
 from scripts.devtools.core import canonical_root  # noqa: E402
 
 SHA = 'c' * 40
+
+
+class DirectEntryTests(unittest.TestCase):
+    def test_direct_script_imports_process_runner_before_any_lane(self):
+        # Match Python's direct-script search path without inheriting test imports.
+        script = '''import runpy, sys
+sys.path[0] = 'scripts/ci'
+entry = runpy.run_path('scripts/ci/run.py')
+for code in (0, 7):
+    result = entry['execute']([sys.executable, '-c',
+                               'print("entry-child"); raise SystemExit(' + str(code) + ')'])
+    assert result.returncode == code, result
+    assert 'entry-child' in result.stdout, result
+print('direct-entry-passed')
+'''
+        env = {key: value for key, value in os.environ.items() if key != 'PYTHONPATH'}
+        result = subprocess.run([sys.executable, '-c', script], cwd=ROOT, env=env,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('direct-entry-passed', result.stdout)
 
 
 class ProducerTests(unittest.TestCase):
