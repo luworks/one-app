@@ -733,11 +733,23 @@
               }
             }
             Spacer()
-            Button(restoreLabel) {
+            Button {
               changeFocus(source == nil ? nil : .active, target: target)
+            } label: {
+              Group {
+                if !snoozed && source != nil {
+                  Image(systemName: "arrow.uturn.backward")
+                    .font(ButtonConfiguration.Icon.actionFont)
+                    .frame(minWidth: ButtonConfiguration.minimumHitSize)
+                } else {
+                  Text(restoreLabel)
+                }
+              }
+              .frame(minHeight: ButtonConfiguration.minimumHitSize)
+              .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .frame(minHeight: 44)
+            .help(restoreLabel)
             .accessibilityLabel(
               source == nil ? "Clear unavailable Focus choice" : restoreLabel + " " + target.title)
           }
