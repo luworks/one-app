@@ -23,18 +23,21 @@
       if canDelete {
         Button(action: delete) { Label("Delete", systemImage: "trash") }.tint(.red)
       }
-      if let snooze { Button(action: snooze) { Label("Snooze", systemImage: "clock") }.tint(.gray) }
+      if let snooze {
+        Button(action: snooze) { Label("Snooze", systemImage: "clock.circle.fill") }.tint(.gray)
+      }
       if let settle {
-        Button(action: settle) { Label("Settle", systemImage: "checkmark") }.tint(.indigo)
+        Button(action: settle) { Label("Settle", systemImage: "checkmark.circle.fill") }.tint(
+          .indigo)
       }
     }
 
     @ViewBuilder package var menu: some View {
       if let settle {
-        Button(action: settle) { Label("Settle", systemImage: "checkmark") }
+        Button(action: settle) { Label("Settle", systemImage: "checkmark.circle.fill") }
           .accessibilityHint("Hides this item in Today only. Alerts stay unchanged.")
       }
-      if let snooze { Button(action: snooze) { Label("Snooze", systemImage: "clock") } }
+      if let snooze { Button(action: snooze) { Label("Snooze", systemImage: "clock.circle.fill") } }
     }
   }
 

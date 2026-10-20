@@ -19,6 +19,166 @@
   @MainActor
   extension PlannerSessionTests {
     @Test
+    func focusLifecyclePreservesSourcePayloadThroughProductionAdapters() async throws {
+      let a = try FocusSession(persistentFocus: true)
+      defer { a.dispose() }
+      let task = try a.addTask()
+      task.tags = ["source-tag"]
+      task.checklist = [ChecklistItem(title: "Unfinished source step")]
+      task.reminderOffsetMinutes = 17
+      task.ringsAsAlarm = true
+      let event = OneEvent(title: "Source series", start: a.now, durationMinutes: 47)
+      event.note = "Original event note"
+      event.calendarName = "Source calendar"
+      event.externalID = "event-fixture"
+      event.repeatRule = "daily"
+      event.reminderOffsetMinutes = 23
+      event.ringsAsAlarm = true
+      a.context.insert(event)
+      try a.context.save()
+      let taskID = task.persistentModelID
+      let eventID = event.persistentModelID
+      let taskPayload = Ledger.snapshot(of: task)
+      // Every persisted event field, including identity and alert configuration.
+      func eventPayload() throws -> Data {
+        try JSONSerialization.data(
+          withJSONObject: [
+            "title": event.title, "note": event.note,
+            "start": event.start.timeIntervalSince1970,
+            "duration": event.durationMinutes, "calendar": event.calendarName,
+            "alert": event.reminderOffsetMinutes as Any? ?? NSNull(),
+            "allDay": event.isAllDay, "rings": event.ringsAsAlarm,
+            "externalID": event.externalID as Any? ?? NSNull(),
+            "repeat": event.repeatRule as Any? ?? NSNull(),
+          ], options: [.sortedKeys])
+      }
+      let originalEvent = try eventPayload()
+      let occurrences = event.occurrences(in: DateInterval(start: a.now, duration: 3 * 86400))
+      a.defaults.set(true, forKey: "today.remindersSync.enabled")
+      a.defaults.set(true, forKey: "one.calendarSync.enabled")
+      var nativeStoreCalls = 0
+      let reminders = RemindersSync(
+        defaults: a.defaults, runtime: a.services.runtime, arguments: [],
+        makeStore: {
+          nativeStoreCalls += 1
+          return EKEventStore()
+        },
+        authorizationStatus: { .fullAccess })
+      let calendar = CalendarSync(
+        defaults: a.defaults, runtime: a.services.runtime, arguments: [],
+        makeStore: {
+          nativeStoreCalls += 1
+          return EKEventStore()
+        },
+        loadFocus: { _ in [] }, authorizationStatus: { .fullAccess })
+      defer {
+        reminders.dispose()
+        calendar.dispose()
+      }
+      let remote = RemindersSync.Remote(
+        id: "reminder-fixture", title: task.title, notes: task.note, isDone: false,
+        doneAt: nil, due: task.due, listID: "list", listTitle: task.listName,
+        flagged: true, repeatRule: task.repeatRule, repeats: true, accountID: "account")
+      let reminderIdentity = try #require(remote.focusIdentity)
+      let calendarIdentity = FocusIdentity(
+        provider: "apple.calendar", account: "account", calendar: "calendar",
+        item: "series", occurrence: event.start)
+      let imported = ExternalEvent(
+        id: "selected-occurrence", eventIdentifier: "event-fixture", title: event.title,
+        start: event.start, end: event.start.addingTimeInterval(event.duration),
+        isAllDay: false, calendarTitle: event.calendarName, color: .blue, repeats: true)
+      func acceptImport() {
+        reminders.acceptFocusSnapshot([remote])
+        calendar.acceptFocusSnapshot(imported, identity: calendarIdentity, canDelete: true)
+      }
+      func makeActions() -> PlannerActions {
+        PlannerActions(
+          calendar: calendar, reminders: reminders, alarms: a.services.alarms,
+          ledger: a.services.ledger, runtime: a.services.runtime)
+      }
+      func expectUnchanged() throws {
+        #expect(Ledger.snapshot(of: task) == taskPayload)
+        #expect(task.externalID == remote.id && task.persistentModelID == taskID)
+        #expect(try eventPayload() == originalEvent)
+        #expect(event.persistentModelID == eventID)
+        #expect(
+          event.occurrences(in: DateInterval(start: a.now, duration: 3 * 86400)) == occurrences)
+        #expect(try a.context.fetchCount(FetchDescriptor<OneTask>()) == 1)
+        #expect(try a.context.fetchCount(FetchDescriptor<OneEvent>()) == 1)
+        // Any native save/remove path must first obtain the adapter's lazy EventKit store.
+        #expect(nativeStoreCalls == 0)
+        a.expectNoSourceWrites()
+        #expect(a.services.calendar.deletionRequests.isEmpty)
+        #expect(a.services.alarms.scheduledIDs.isEmpty && a.services.alarms.cancelledIDs.isEmpty)
+        #expect(a.services.notifications.resyncCount == 0)
+      }
+      acceptImport()
+      var actions = makeActions()
+      let until = a.now.addingTimeInterval(3600)
+      for (identity, reference) in [
+        (reminderIdentity, TodayFocus.reference(taskID)),
+        (calendarIdentity, TodayFocus.reference(eventID)),
+      ] {
+        for state in [TodayFocusState.settled, .active, .snoozed(until: until), .active] {
+          let previous = actions.focus.state(for: identity, now: a.now)
+          #expect(
+            actions.focus.change(
+              state, identity: identity, localReference: reference, title: "Synthetic source",
+              context: a.context, toast: a.toast))
+          #expect(
+            actions.focus.state(for: identity, now: a.now) == (state == .active ? nil : state))
+          try expectUnchanged()
+          a.toast.performUndo()
+          #expect(actions.focus.state(for: identity, now: a.now) == previous)
+          try expectUnchanged()
+          #expect(
+            actions.focus.change(
+              state, identity: identity, localReference: reference, title: "Synthetic source",
+              context: a.context, toast: nil))
+        }
+        #expect(
+          actions.focus.change(
+            .snoozed(until: until), identity: identity, localReference: reference,
+            title: "Synthetic source", context: a.context, toast: nil))
+      }
+      let records = actions.focus.records
+      calendar.refresh()
+      acceptImport()
+      actions = makeActions()  // Reopens the production disk overlay, without reseeding sources.
+      await calendar.hydrateFocus(actions.focus.records)
+      #expect(actions.focus.records == records)
+      for identity in [reminderIdentity, calendarIdentity] {
+        #expect(actions.focus.state(for: identity, now: until.addingTimeInterval(-1)) != nil)
+        #expect(actions.focus.state(for: identity, now: until) == nil)
+        #expect(actions.focus.records == records, "Expiry only changes read-time classification")
+      }
+      #expect(reminders.focusIdentity(task) == .available(reminderIdentity))
+      #expect(
+        calendar.cachedEvent(externalID: "event-fixture", occurrence: event.start) == imported)
+      #expect(
+        actions.focus.state(
+          for: FocusIdentity(
+            provider: calendarIdentity.provider, account: calendarIdentity.account,
+            calendar: calendarIdentity.calendar, item: calendarIdentity.item,
+            occurrence: event.start.addingTimeInterval(86400)), now: a.now) == nil)
+      try expectUnchanged()
+      // A concurrent disk change must keep the existing row classification and source intact.
+      let file = a.directory.appendingPathComponent("activity.focus-v1.json")
+      var bytes = try Data(contentsOf: file)
+      bytes.append(0x0A)
+      try bytes.write(to: file, options: .atomic)
+      let revision = actions.focus.revision
+      #expect(
+        !actions.focus.change(
+          .settled, identity: reminderIdentity, localReference: TodayFocus.reference(taskID),
+          title: task.title, context: a.context, toast: a.toast))
+      #expect(actions.focus.revision == revision && actions.focus.records == records)
+      #expect(a.toast.message?.contains("Couldn't save") == true)
+      #expect(try Data(contentsOf: file) == bytes)
+      try expectUnchanged()
+    }
+
+    @Test
     func calendarGrantPrecedesStatusUpdateWithoutOverridingRevocation() async throws {
       let a = try FocusSession()
       defer { a.dispose() }
@@ -707,7 +867,7 @@
     let services: PlannerTestServices
     let toast = UndoToast()
 
-    init() throws {
+    init(persistentFocus: Bool = false) throws {
       defaults = try #require(UserDefaults(suiteName: suite))
       defaults.removePersistentDomain(forName: suite)
       directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
@@ -731,7 +891,10 @@
       context.autosaveEnabled = false
       services = try PlannerTestServices(
         container: container, defaults: defaults,
-        runtime: runtime, arguments: [])
+        runtime: runtime, arguments: [],
+        activityStore: persistentFocus
+          ? ActivityStore(location: .file(directory.appendingPathComponent("activity.sqlite")))
+          : nil)
     }
 
     func addTask() throws -> OneTask {
