@@ -87,8 +87,8 @@
       .listRowSeparator(.hidden)
       .listRowInsets(
         EdgeInsets(
-          top: attention == nil ? 1 : 3, leading: attention == nil ? 20 : 12,
-          bottom: attention == nil ? 1 : 3, trailing: attention == nil ? 20 : 12)
+          top: 1, leading: attention == nil ? 20 : 12,
+          bottom: 1, trailing: attention == nil ? 20 : 12)
       )
       .accessibilityElement(children: .combine)
       .accessibilityLabel(

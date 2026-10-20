@@ -44,15 +44,9 @@
     @ViewBuilder package func body(content: Content) -> some View {
       if enabled {
         content
-          .padding(.horizontal, 8).padding(.vertical, 6)
-          .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-          .overlay {
-            RoundedRectangle(cornerRadius: 12)
-              .strokeBorder(Color(.separator).opacity(0.18), lineWidth: 0.5)
-              .allowsHitTesting(false)
-          }
-          .contentShape(RoundedRectangle(cornerRadius: 12))
-          .listRowInsets(EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12))
+          .padding(.horizontal, 8)
+          .contentShape(Rectangle())
+          .listRowInsets(EdgeInsets(top: 1, leading: 12, bottom: 1, trailing: 12))
       } else {
         content
       }
@@ -129,8 +123,8 @@
       .listRowSeparator(.hidden)
       .listRowInsets(
         EdgeInsets(
-          top: attention == nil ? 1 : 3, leading: attention == nil ? 20 : 12,
-          bottom: attention == nil ? 1 : 3, trailing: attention == nil ? 20 : 12)
+          top: 1, leading: attention == nil ? 20 : 12,
+          bottom: 1, trailing: attention == nil ? 20 : 12)
       )
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(
@@ -260,8 +254,8 @@
       .listRowSeparator(.hidden)
       .listRowInsets(
         EdgeInsets(
-          top: attention != nil ? 3 : (compact ? 1 : 4), leading: attention == nil ? 20 : 12,
-          bottom: attention != nil ? 3 : (compact ? 1 : 4), trailing: attention == nil ? 20 : 12)
+          top: attention != nil ? 1 : (compact ? 1 : 4), leading: attention == nil ? 20 : 12,
+          bottom: attention != nil ? 1 : (compact ? 1 : 4), trailing: attention == nil ? 20 : 12)
       )
       // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
       // long-press for the menu. (Delete has an Undo toast.)
@@ -469,8 +463,8 @@
       .listRowSeparator(.hidden)
       .listRowInsets(
         EdgeInsets(
-          top: attention == nil ? 1 : 3, leading: attention == nil ? 20 : 12,
-          bottom: attention == nil ? 1 : 3, trailing: attention == nil ? 20 : 12)
+          top: 1, leading: attention == nil ? 20 : 12,
+          bottom: 1, trailing: attention == nil ? 20 : 12)
       )
       .accessibilityElement(children: .combine)
       .accessibilityLabel(
