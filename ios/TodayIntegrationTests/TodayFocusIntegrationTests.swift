@@ -13,6 +13,113 @@
   @MainActor
   extension PlannerSessionTests {
     @Test
+    func savedCalendarSnoozeHydratesOutsideOriginalDayAndRejectsStaleImports() async throws {
+      let suite = "FocusHydration.\(UUID().uuidString)"
+      let defaults = try #require(UserDefaults(suiteName: suite))
+      defer { defaults.removePersistentDomain(forName: suite) }
+      defaults.set(true, forKey: "one.calendarSync.enabled")
+      let original = Date(timeIntervalSince1970: 1_792_314_000)
+      let tomorrow = original.addingTimeInterval(86400)
+      let identity = FocusIdentity(
+        provider: "apple.calendar", account: "account", calendar: "calendar",
+        item: "series", occurrence: original)
+      let directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: directory) }
+      let location = TodayFocusStore.Location.file(directory.appendingPathComponent("focus.json"))
+      try TodayFocusStore(location: location).set(
+        state: .snoozed(until: tomorrow), for: identity, now: original,
+        localReference: "eventkit:exact-event")
+      let reopened = try TodayFocusStore(location: location)
+      let records = reopened.records
+      let imported = CalendarFocusImport(
+        externalID: "exact-event", identity: identity, title: "Current source title",
+        start: original, end: original.addingTimeInterval(1800), isAllDay: false,
+        calendarTitle: "Fixture", colorComponents: [0, 0, 1], repeats: true, canDelete: true)
+      let loader = FocusImportFixture(row: imported)
+      var access = EKAuthorizationStatus.fullAccess
+      var nativeCalls = 0
+      let calendar = CalendarSync(
+        defaults: defaults,
+        runtime: PlannerRuntime(
+          now: { tomorrow }, nextID: { UUID() }, calendar: Calendar(identifier: .gregorian),
+          locale: Locale(identifier: "en_US_POSIX")), arguments: [],
+        makeStore: {
+          nativeCalls += 1
+          return EKEventStore()
+        },
+        loadFocus: { await loader.load($0) }, authorizationStatus: { access })
+      defer { calendar.dispose() }
+      #expect(imported.end < tomorrow)  // Tomorrow's range cannot populate this occurrence.
+      #expect(calendar.cachedEvent(externalID: "exact-event", occurrence: original) == nil)
+      await calendar.hydrateFocus(records)
+      #expect(await loader.requests == [records])
+      #expect(reopened.state(for: identity, now: tomorrow) == nil)
+      for _ in 0..<1000 {
+        #expect(
+          calendar.cachedFocusIdentity(externalID: "exact-event", occurrence: original)
+            == .available(identity))
+        let event = try #require(
+          calendar.cachedFocusEvent(identity: identity, reference: records.first?.localReference))
+        #expect(event.title == "Current source title" && event.eventIdentifier == "exact-event")
+        #expect(event.start == identity.occurrence)  // The Open route uses this exact occurrence.
+        #expect(calendar.cachedEvent(externalID: "exact-event", occurrence: tomorrow) == nil)
+      }
+      #expect(nativeCalls == 0)
+      #expect(await loader.requests.count == 1)
+      #expect(reopened.records == records)
+      calendar.refresh()
+      #expect(calendar.cachedEvent(externalID: "exact-event", occurrence: original) == nil)
+      await calendar.hydrateFocus(records)
+      #expect(
+        calendar.cachedFocusIdentity(externalID: "exact-event", occurrence: original)
+          == .available(identity))
+
+      // In-flight work cannot publish after a version change, permission loss or cancellation.
+      for interruption in 0..<3 {
+        calendar.refresh()
+        await loader.pause()
+        let task = Task { await calendar.hydrateFocus(records) }
+        while !(await loader.waiting) { await Task.yield() }
+        if interruption == 0 { calendar.refresh() }
+        if interruption == 1 { access = .denied }
+        if interruption == 2 { task.cancel() }
+        await loader.resume()
+        await task.value
+        #expect(calendar.cachedEvent(externalID: "exact-event", occurrence: original) == nil)
+        access = .fullAccess
+      }
+      // Exact source/account/calendar/item/occurrence must all match; no replacement is adopted.
+      for replacement in [
+        FocusIdentity(
+          provider: "apple.calendar", account: "other", calendar: "calendar",
+          item: "series", occurrence: original),
+        FocusIdentity(
+          provider: "apple.calendar", account: "account", calendar: "other",
+          item: "series", occurrence: original),
+        FocusIdentity(
+          provider: "apple.calendar", account: "account", calendar: "calendar",
+          item: "replacement", occurrence: original),
+        FocusIdentity(
+          provider: "apple.calendar", account: "account", calendar: "calendar",
+          item: "series", occurrence: tomorrow),
+      ] {
+        await calendar.hydrateFocus([
+          FocusRecord(
+            identity: replacement, state: .settled, changedAt: original,
+            localReference: "eventkit:exact-event")
+        ])
+        #expect(calendar.cachedEvent(externalID: "exact-event", occurrence: original) == nil)
+      }
+      await loader.setRows([])
+      await calendar.hydrateFocus(records)
+      #expect(
+        calendar.cachedFocusEvent(identity: identity, reference: records.first?.localReference)
+          == nil)
+      #expect(reopened.records == records && nativeCalls == 0)
+    }
+
+    @Test
     func importedFocusRenderingNeverOpensNativeStoreAndWritesStillRevalidate() throws {
       let suite = "FocusRenderCache.\(UUID().uuidString)"
       let defaults = try #require(UserDefaults(suiteName: suite))
@@ -356,6 +463,33 @@
       #expect(try a.services.activityStore.count() == 0)
       #expect(!a.services.reminders.isConnected && !a.services.reminders.hasAccess)
       a.expectNoSourceWrites()
+    }
+  }
+
+  private actor FocusImportFixture {
+    var rows: [CalendarFocusImport]
+    var requests: [[FocusRecord]] = []
+    var waiting = false
+    private var paused = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    init(row: CalendarFocusImport) { rows = [row] }
+    func setRows(_ rows: [CalendarFocusImport]) { self.rows = rows }
+    func pause() { paused = true }
+    func resume() {
+      paused = false
+      continuation?.resume()
+      continuation = nil
+      waiting = false
+    }
+    func load(_ records: [FocusRecord]) async -> [CalendarFocusImport] {
+      requests.append(records)
+      if paused {
+        await withCheckedContinuation {
+          continuation = $0
+          waiting = true
+        }
+      }
+      return rows
     }
   }
 

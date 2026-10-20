@@ -524,6 +524,10 @@
         }
         // Timers follow AlarmKit on every tab, so the Today row appears the moment one starts (also from Siri).
         .task { await session.timers.watch() }
+        .task(id: "\(session.calendar.version):\(session.actions.focus.revision):\(scenePhase)") {
+          guard scenePhase == .active else { return }
+          await session.calendar.hydrateFocus(session.actions.focus.records)
+        }
         .task(id: reminderSignature) {
           try? await Task.sleep(for: .milliseconds(300))
           allAlarms.forEach { $0.retireIfRung(now: session.runtime.now()) }

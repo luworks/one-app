@@ -771,16 +771,11 @@
         let candidate = target(alarm, fireDate: fireDate)
         if candidate.identity == record.identity { return candidate }
       }
-      if let ref = record.localReference, ref.hasPrefix("eventkit:") {
-        let id = String(ref.dropFirst("eventkit:".count))
-        if case .available(let identity) = calendar.cachedFocusIdentity(
-          externalID: id, occurrence: record.identity.occurrence),
-          identity == record.identity,
-          let title = calendar.cachedEvent(externalID: id, occurrence: record.identity.occurrence)?
-            .title
-        {
-          return FocusTarget(identity: identity, reference: ref, title: title)
-        }
+      if let event = calendar.cachedFocusEvent(
+        identity: record.identity, reference: record.localReference)
+      {
+        return FocusTarget(
+          identity: record.identity, reference: record.localReference, title: event.title)
       }
       return nil
     }
@@ -867,16 +862,13 @@
         openEvent(event)
         return
       }
-      if let ref = target.reference, ref.hasPrefix("eventkit:"),
-        let native = calendar as? any NativeCalendarService,
-        case .available(let identity) = calendar.cachedFocusIdentity(
-          externalID: String(ref.dropFirst("eventkit:".count)),
-          occurrence: target.identity?.occurrence),
-        identity == target.identity
+      if let identity = target.identity,
+        let event = calendar.cachedFocusEvent(identity: identity, reference: target.reference),
+        let native = calendar as? any NativeCalendarService
       {
         native.edit(
-          identifier: String(ref.dropFirst("eventkit:".count)),
-          start: identity.occurrence ?? now, end: nil, fullOptions: false, onComplete: nil)
+          identifier: event.eventIdentifier, start: event.start, end: nil,
+          fullOptions: false, onComplete: nil)
       } else {
         toast?.showNotice("This source is unavailable. Reconnect and try again.")
       }
