@@ -222,6 +222,7 @@
     package init(runtime: PlannerRuntime, arguments: [String]) {
       self.runtime = runtime
       if arguments.contains("-uiTestingFailReminderCompletion") { completionFailure = .injected }
+      failCreationOnce = arguments.contains("-uiTestingFailReminderCreationOnce")
     }
     package func connectIfFirstRun() async {}  // No implicit authorization in local sessions.
     package func connect() async {
@@ -249,6 +250,23 @@
     package func reconcile() async {
       guard !isDisposed else { return }
       reconcileCount += 1
+    }
+    private var failCreationOnce = false
+    package var creationFailure: Failure?
+    package private(set) var creationCalls = 0
+    package func commitCreation(_ task: OneTask, context: ModelContext) throws {
+      creationCalls += 1
+      if failCreationOnce {
+        failCreationOnce = false
+        throw Failure.injected
+      }
+      if let creationFailure { throw creationFailure }
+      // This synthetic adapter never manufactures an EventKit identity.
+      context.insert(task)
+      do { try context.save() } catch {
+        context.delete(task)
+        throw error
+      }
     }
     package var editFailure: Failure?
     package var deletionFailure: Failure?

@@ -79,6 +79,9 @@
     func noteDeleted(list externalID: String?)
     func scheduleReconcile(after delay: Duration)
     func reconcile() async
+    /// A submitted clear one-off request. Returns only after system and local saves succeed.
+    /// The caller retains the same detached task on failure so a retry keeps its system identity.
+    func commitCreation(_ task: OneTask, context: ModelContext) throws
     func focusIdentity(_ task: OneTask) -> FocusIdentityResolution
     func commitEdit(_ task: OneTask, draft: TaskSnapshot, expected: TaskSnapshot) throws
       -> RemindersSync.Remote?

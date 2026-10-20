@@ -186,6 +186,14 @@ public enum ChatRouting {
     ) {
       return .conversation
     }
+    // An action word with an unknown object ("Buy what?") is still a question.
+    // Quantities (买几个苹果) and polite imperatives (Can you buy milk?) remain requests.
+    if has(
+      requestBody(text),
+      #"^(?:buy|pay|send|email|submit|call|order|book)\s+(?:what|which|who|whom|where|when|how)\b|^(?:买|付|交|发|寄|订|预约)(?:什么|哪|谁)"#
+    ) {
+      return .conversation
+    }
     // Keep terse planner input working, including no-date errands. Dates alone are not an intent.
     if has(
       requestBody(text),
@@ -202,6 +210,22 @@ public enum ChatRouting {
         text,
         #"\b(?:meeting|appointment|lunch|dinner|dentist|flight|class|interview)\b|会议|开会|面试|上课|聚餐|航班|看牙|体检"#
       )
+    {
+      return .capture
+    }
+    // A terse timed errand is a submitted action, even without a reminder wrapper.
+    // Inspect the parsed action only after question, report and refusal guards above.
+    if !isQuestion(text), parsed.hour != nil,
+      has(
+        parsed.title,
+        #"^去\s*\S+.*(?:加油|买|取|拿|还|缴)|^(?:go to|stop at)\b.+\b(?:buy|get|pick up|gas|refuel)\b"#)
+    {
+      return .capture
+    }
+    if !isQuestion(text), parsed.hour != nil, parsed.title != text,
+      has(
+        parsed.title,
+        #"^(?:buy|pay|send|email|submit|call|pick up|return|renew)\b|^(?:买|付|交|寄|取|拿|缴|打电话)"#)
     {
       return .capture
     }

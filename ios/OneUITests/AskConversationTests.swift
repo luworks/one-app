@@ -41,11 +41,12 @@ final class AskConversationTests: XCTestCase {
     XCTAssertTrue(app.staticTexts["No activity yet"].waitForExistence(timeout: 5))
   }
 
+  // Recurring requests retain Add; ordinary chat must leave that preview unchanged.
   func testChatThenExplicitRequestAndChatPreservesPreview() {
     send("Hello")
     XCTAssertTrue(reply("What's on your mind?").waitForExistence(timeout: 10))
     XCTAssertFalse(app.buttons["Add"].exists)
-    send("Call Alex tomorrow at 3pm")
+    send("Call Alex tomorrow at 3pm every week")
     XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
     send("Thanks for explaining the alarm")
     XCTAssertTrue(reply("You're welcome").waitForExistence(timeout: 10))
@@ -61,7 +62,7 @@ final class AskConversationTests: XCTestCase {
   }
 
   func testExistingAlarmQuestionPreservesPendingReminder() {
-    send("Call Alex tomorrow at 3pm")
+    send("Call Alex tomorrow at 3pm every week")
     XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
     send("Did I set an alarm for 7am?")
     XCTAssertTrue(reply("We can just chat").waitForExistence(timeout: 10))

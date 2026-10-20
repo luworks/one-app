@@ -68,7 +68,14 @@ final class AskEditTests: XCTestCase {
     ]
     for (i, c) in cases.enumerated() {
       send(c.input)
-      XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90), "card for \(c.input)")
+      let direct = [0, 3, 4].contains(i)
+      let stack = app.descendants(matching: .any).matching(identifier: "capture-stack").element(
+        boundBy: i)
+      let action = direct ? stack.buttons["capture-open"] : stack.buttons["Add"]
+      XCTAssertTrue(action.waitForExistence(timeout: 90), "card for \(c.input)")
+      if direct {
+        XCTAssertTrue(stack.descendants(matching: .any)["capture-added"].exists)
+      }
       for e in c.expect {
         XCTAssertTrue(cardText(containing: e).exists, "'\(e)' on the card for \(c.input)")
       }
@@ -76,9 +83,8 @@ final class AskEditTests: XCTestCase {
         XCTAssertFalse(cardText(containing: n).exists, "no '\(n)' for \(c.input)")
       }
       shot("capture-\(i + 1)")
-      if i == 0 {
-        app.buttons["Add"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5))
+      if direct {
+        if i != 0 { stack.buttons["capture-undo"].tap() }
       } else {
         app.buttons["Cancel"].tap()
       }

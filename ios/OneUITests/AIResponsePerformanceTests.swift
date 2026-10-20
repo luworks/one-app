@@ -241,12 +241,13 @@ final class AIResponsePerformanceTests: XCTestCase {
     }
   }
 
-  /// n=3 identical two-turn journeys. Follow-up samples have exactly one prior request, never growing history.
+  /// n=3 identical recurring-preview journeys. Explicit recurrence retains Add under the one-off Send exception.
+  /// Follow-up samples have exactly one prior request, never growing history.
   func testCaptureFollowupConfirmationFreshLaunchN3() {
     for repetition in 1...3 {
       freshAsk(journey: "capture_followup", repetition: repetition)
       sendAndSample(
-        "Call Alex tomorrow at 3pm", context: "capture.fresh.\(repetition).turn1",
+        "Call Alex tomorrow at 3pm every week", context: "capture.fresh.\(repetition).turn1",
         backend: "fallback_model_unavailable")
       XCTAssertEqual(app.buttons["capture-title"].label, "Call Alex")
       XCTAssertTrue(text("New reminder").exists)

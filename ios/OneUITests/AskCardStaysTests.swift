@@ -67,18 +67,19 @@ final class AskCardStaysTests: XCTestCase {
 
   func testReportedChineseTitleAndTime() {
     send("今天晚上11点的时候提醒我，必须要睡觉")
-    XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 20))
+    XCTAssertTrue(any("capture-added").waitForExistence(timeout: 20))
     XCTAssertEqual(app.buttons["capture-title"].label, "必须要睡觉")
     let time = app.staticTexts.containing(
       NSPredicate(format: "label CONTAINS '23:00' OR label CONTAINS '11:00'")
     ).firstMatch
     XCTAssertTrue(time.exists, "11 at night stays 23:00 (localized display)")
-    XCTAssertFalse(any("capture-added").exists, "understanding is only a preview")
+    XCTAssertTrue(app.buttons["capture-undo"].exists, "Send authorizes this clear one-off reminder")
     shot("capture-reported-title-time")
   }
 
   func testPendingTitleSaveAndCancelStillRequireAdd() {
-    send("Remind me to review the draft tomorrow at 3pm")
+    // Explicit recurrence retains the editable Add preview.
+    send("Remind me to review the draft tomorrow at 3pm every week")
     XCTAssertTrue(app.buttons["capture-title"].waitForExistence(timeout: 20))
     let original = app.buttons["capture-title"].label
     app.buttons["capture-title"].tap()
@@ -97,7 +98,7 @@ final class AskCardStaysTests: XCTestCase {
   }
 
   func testAddedAlarmTitleSaveCancelReopenAndUndo() {
-    send("今天晚上11点的时候提醒我，必须要睡觉")
+    send("今天晚上11点的时候提醒我，必须要睡觉，每天")
     XCTAssertTrue(app.buttons["capture.kind.alarm"].waitForExistence(timeout: 20))
     app.buttons["capture.kind.alarm"].tap()
     app.buttons["Add"].tap()
@@ -132,11 +133,10 @@ final class AskCardStaysTests: XCTestCase {
 
   func testAddedCardStaysThenUndoAndAddAgain() {
     send("Order printer paper tomorrow at 3pm")
-    XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
+    XCTAssertTrue(any("capture-added").waitForExistence(timeout: 20))
     let title = app.buttons["capture-title"]
     XCTAssertTrue(title.exists)
     XCTAssertEqual(title.label, "Order printer paper")
-    app.buttons["Add"].tap()
 
     // The card is still there, now confirmed; there is no separate "Added …" text line.
     XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "the card shows Added")
@@ -201,8 +201,7 @@ final class AskCardStaysTests: XCTestCase {
 
   func testAddedStateSurvivesReopening() {
     send("Order printer paper tomorrow at 3pm")
-    XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
-    app.buttons["Add"].tap()
+    XCTAssertTrue(any("capture-added").waitForExistence(timeout: 20))
     XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5))
     reopenFromSidebar(containing: "printer")
     XCTAssertTrue(any("capture-added").waitForExistence(timeout: 5), "the saved chat shows Added")
@@ -213,7 +212,7 @@ final class AskCardStaysTests: XCTestCase {
   }
 
   func testCancelLeavesADimmedDroppedCard() {
-    send("Order printer paper tomorrow at 3pm")
+    send("Order printer paper tomorrow at 3pm every week")
     XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 90))
     app.buttons["Cancel"].tap()
     XCTAssertTrue(any("capture-dropped").waitForExistence(timeout: 5), "the card stays, Dropped")
@@ -230,9 +229,9 @@ final class AskCardStaysTests: XCTestCase {
   }
 
   func testNewLineAfterAnOpenCardDropsIt() {
-    send("Order printer paper tomorrow at 3pm")
+    send("Order printer paper tomorrow at 3pm every week")
     XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
-    send("Water the office plants friday at 9am")
+    send("Water the office plants friday at 9am every week")
     XCTAssertTrue(
       any("capture-dropped").waitForExistence(timeout: 90), "the earlier card is Dropped")
     XCTAssertEqual(app.buttons.matching(identifier: "Add").count, 1, "one open card")

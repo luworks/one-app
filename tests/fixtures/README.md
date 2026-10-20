@@ -247,3 +247,9 @@ partitioning, routine-only scope and primary-checkout paths for linked worktrees
 - `health-today-sync.json`: Steps A=1111 → B=2222 through one injected source; Health sheet → Today synchronization. Not HealthKit delivery evidence.
 - `ios/TodayIntegrationTests/HealthSummaryIntegrationTests.swift` keeps small inline Steps histories (current values and an 80-day-old point) beside the native shared-state/generation tests; no external or private Health data is required.
 - `tests/devtools/test_native_provenance.py` keeps paired inline Live/Mock app metadata and sentinel executable fixtures for installation selection/rejection; these synthetic host fixtures are not native build evidence.
+
+## Submitted one-off reminders
+
+`ios/Eval/Tests/OneLogicTests/OneOffReminderTests.swift` versions the small screenshot utterance/dialogue, absolute 2026-10-20 09:11 America/Los_Angeles clock, next-day, ordinary-chat/recurrence exclusions, failed-draft encoding and compensation inputs inline beside the tests. Synthetic identities are not EventKit evidence.
+
+`ai-oneoff-reminder-ui.json` supplies the empty synthetic planner and exact legacy Costco conversation for the three `AIReminderRecoveryTests` journeys. The connected journey uses only the lane-owned simulator EventKit store; the failure journey explicitly injects one synthetic service failure.

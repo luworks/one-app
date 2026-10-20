@@ -2,6 +2,8 @@
 
 调研日期 2026-10-15。资料来源：Apple 官方 Foundation Models 文档（developer.apple.com）+ 本机 Xcode 27 / iOS 27 SDK 编译验证。第三方博客只用来补充，已标注。
 
+Current scoped exception (2026-10-20): a clear submitted one-off reminder is authorized by Send and uses deterministic rules plus confirmed persistence. See “Submitted one-off reminder requests” below. Historical preview-only statements in this research document remain applicable to all other changes.
+
 ## 结论（先看这个）
 
 1. **能做，而且几乎不用改产品原则。** 用 Apple 的 `FoundationModels` 框架（iOS 26+）调用设备上的端侧模型：免费、离线、数据不出设备、没有 API key、不需要后端。
@@ -300,3 +302,9 @@ spike 做了 7.6 的前两步，数字如下（评测集很小，r4 是开发集
 **工作在哪里：** 以上代码（解析器规则、`Understanding.swift`、`Editing.swift`、新评测句子）都在 spike 的 worktree 和分支 `claude-/great-mccarthy-28dd71`，**没有提交，没有合并到本分支，编辑部分没有接入任何界面**。
 
 **仍未验证：** iOS 27.0 的模型、手机延迟、评测集规模、大量条目下的追问频率。
+
+### Submitted one-off reminder requests
+
+The user's Send tap authorizes a clear actionable one-off reminder in chat. No recurrence words means once; do not ask whether to create a reminder or whether it repeats when the request already establishes that. Rules own the original action/date/time, including context-only follow-ups such as `setting reminder` and `one off`. At 09:11, `11点去 costco 加油 买 粒粒` uses the parser's existing local next-11:00 policy: today at 11:00, as the reminder deadline/alert, not planned work time. A passed clock time uses tomorrow under the existing policy. Materially ambiguous action/time stays a preview or asks the necessary clarification.
+
+This exception covers no calendar events/invitations, alarms, recurring requests, edits, deletes or background grant. Both fallback and Foundation Models pass through the same deterministic admission boundary. Direct creation uses the normal Activity approval/Undo/Open receipts, waits for local durability and connected EventKit commit, and retains a retry/cancel draft on failure. A system creation whose local save and compensation both fail retains its real identity so retry does not create a second reminder. Decided continuation answers reuse the existing card; Undo/Cancel never silently re-add it.

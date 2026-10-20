@@ -17,7 +17,8 @@ final class AIContextJourneyTests: XCTestCase {
 
   func testChineseScreenshotSequencePreservesDinnerAlarmContext() {
     openNewChat()
-    send("今天晚上6点的时候吧，就提醒我一定不能再吃饭了")
+    // Explicit recurrence keeps this alarm-conversion journey behind Add.
+    send("今天晚上6点的时候吧，就提醒我一定不能再吃饭了，每天")
     let title = assertPreview(
       titleContaining: "不能再吃饭", kind: "New reminder", day: "Today", hour: 18)
     keepScreenshot("Chinese U1 - dinner reminder at 6pm")
@@ -34,7 +35,7 @@ final class AIContextJourneyTests: XCTestCase {
 
   func testEnglishAlarmClarificationAndDateTimeCorrectionsPreserveTitle() {
     openNewChat()
-    send("At 6pm tonight, remind me not to eat dinner again.")
+    send("At 6pm tonight, remind me not to eat dinner again every day.")
     let title = assertPreview(
       titleContaining: "Do not eat dinner again", kind: "New reminder", day: "Today", hour: 18)
     send("No, just add an alarm.")

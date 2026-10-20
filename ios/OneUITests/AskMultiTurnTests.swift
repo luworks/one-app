@@ -32,7 +32,7 @@ final class AskMultiTurnTests: XCTestCase {
   }
 
   func testFollowUpChangesTheTimeOnTheSameCard() {
-    send("Call Alex tomorrow at 3pm")
+    send("Call Alex tomorrow at 3pm every week")
     XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
     send("make it 4pm")
     XCTAssertTrue(
@@ -50,7 +50,7 @@ final class AskMultiTurnTests: XCTestCase {
   }
 
   func testFollowUpMakesItAnAlarm() {
-    send("Call Alex tomorrow at 3pm")
+    send("Call Alex tomorrow at 3pm every week")
     XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
     send("make it an alarm")
     XCTAssertTrue(label(containing: "Alarm ").waitForExistence(timeout: 10))
@@ -96,12 +96,12 @@ final class AskMultiTurnTests: XCTestCase {
     send("Remind me to call Mom tomorrow at 5pm")
     let card = app.descendants(matching: .any)["capture-stack"].firstMatch
     XCTAssertTrue(
-      card.buttons["Add"].waitForExistence(timeout: 20), "the new request gets its own preview")
+      card.buttons["capture-open"].waitForExistence(timeout: 20),
+      "the clear new reminder is saved directly")
     XCTAssertEqual(card.buttons["capture-title"].label, "call Mom")
     XCTAssertTrue(
       card.staticTexts.containing(NSPredicate(format: "label CONTAINS '17:00'")).firstMatch.exists)
     XCTAssertFalse(app.otherElements["change-card"].exists, "no proposed move of Dentist")
-    card.buttons["Add"].tap()
     XCTAssertTrue(app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5))
 
     // Adding the unrelated reminder has not moved the existing event.
@@ -224,8 +224,6 @@ final class AskMultiTurnTests: XCTestCase {
 
   func testItMeansWhatWeTalkedAboutLast() {
     send("Call Alex tomorrow at 3pm")
-    XCTAssertTrue(app.buttons["Add"].waitForExistence(timeout: 90))
-    app.buttons["Add"].tap()
     XCTAssertTrue(app.descendants(matching: .any)["capture-added"].waitForExistence(timeout: 5))
     send("move it to 5pm")
     XCTAssertTrue(

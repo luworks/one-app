@@ -14,6 +14,43 @@
   @MainActor
   struct PlannerSessionTests {
     @Test
+    func submittedOneOffCreationRetriesWithoutDuplicateAndKeepsDeadlineAndUndo() throws {
+      let a = try Session(seed: 1910)
+      defer { a.dispose() }
+      let capture = try #require(
+        OneOffReminderRequest.capture(
+          "11点去 costco 加油 买 粒粒", now: a.clock.now(), calendar: a.runtime.calendar))
+      let requestID = UUID()
+      a.services.reminders.creationFailure = .injected
+      #expect(throws: TestReminderService.Failure.self) {
+        try a.services.actions.insertOneOffReminder(capture, requestID: requestID, into: a.context)
+      }
+      #expect(try a.tasks().isEmpty)
+      #expect(try a.rows().isEmpty)
+      a.services.reminders.creationFailure = nil
+      let receipt = try a.services.actions.insertOneOffReminder(
+        capture, requestID: requestID, into: a.context)
+      let duplicate = try a.services.actions.insertOneOffReminder(
+        capture, requestID: requestID, into: a.context)
+      #expect(receipt.id == duplicate.id && receipt.entry.id == duplicate.entry.id)
+      #expect(a.services.reminders.creationCalls == 2)
+      let persisted = try #require(
+        try ModelContext(a.context.container).fetch(FetchDescriptor<OneTask>()).first)
+      #expect(persisted.title == "去 costco 加油 买 粒粒")
+      #expect(persisted.due == capture.taskTiming(calendar: a.runtime.calendar).due)
+      #expect(persisted.plannedStart == nil && persisted.repeatRule == nil)
+      #expect(persisted.reminderOffsetMinutes == 0 && persisted.externalID == nil)
+      #expect(try a.tasks().count == 1)
+      #expect(try a.rows().filter { $0.actionValue == .created }.count == 1)
+      #expect(
+        a.services.actions.undoCapture(
+          itemRef: Ledger.ref(receipt.id), entryID: receipt.entry.id,
+          title: capture.title, context: a.context))
+      #expect(try a.tasks().isEmpty)
+      #expect(try a.rows().filter { $0.actionValue == .undone }.count == 1)
+    }
+
+    @Test
     func confirmedEditorDeleteFailurePreservesIdentityThenRetryAndUndoCommitOnce() async throws {
       let a = try Session(seed: 1900)
       defer { a.dispose() }

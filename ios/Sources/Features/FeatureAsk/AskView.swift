@@ -591,10 +591,40 @@
       }
       turnStart = sentAt
       let intent = ChatRouting.intent(text)
+      if let capture = OneOffReminderRequest.capture(text, now: sentAt, calendar: runtime.calendar)
+      {
+        recordTurn("capture", text)
+        clearPreviews()
+        createSubmittedReminder(capture)
+        return
+      }
       if let resolved = CaptureConversation.resolve(
         text, context: turnContext, pending: pending, now: now(), calendar: runtime.calendar)
       {
         recordTurn("answer", text)
+        if OneOffReminderRequest.eligible(resolved),
+          OneOffReminderRequest.contextAllows(turnContext)
+        {
+          // A subjectless continuation never duplicates a previously decided card, including
+          // after reopening the chat. Undo/Cancel require a deliberate Add again/new request.
+          if let existing = proposals.last(where: {
+            OneOffReminderRequest.matches($0.capture, resolved)
+          }) {
+            if existing.status == .open {
+              commit(existing.id)
+            } else {
+              messages.append(
+                reply(
+                  existing.status == .added
+                    ? "Already added. Use Open or Undo on the reminder."
+                    : "Use the card to add it again."))
+            }
+          } else {
+            clearPreviews()
+            createSubmittedReminder(resolved)
+          }
+          return
+        }
         if pending != nil {
           pending = resolved
         } else {
@@ -782,20 +812,25 @@
     }
 
     private func dropOpenCards() {
-      for i in proposals.indices {
+      for i in proposals.indices where !proposals[i].retainsDraft {
         if let next = proposals[i].status.after(.drop) { proposals[i].status = next }
       }
     }
 
     /// The first item still waiting for Add: what a follow-up like "make it 5pm" edits. Setting nil drops them all.
     private var pending: Capture? {
-      get { proposals.first { $0.status == .open }?.capture }
+      get {
+        guard let batch = proposals.last?.batch else { return nil }
+        return proposals.first { $0.batch == batch && $0.status == .open }?.capture
+      }
       nonmutating set {
         guard let newValue else {
           dropOpenCards()
           return
         }
-        if let i = proposals.firstIndex(where: { $0.status == .open }) {
+        if let batch = proposals.last?.batch,
+          let i = proposals.firstIndex(where: { $0.batch == batch && $0.status == .open })
+        {
           proposals[i].capture = newValue
         }
       }
@@ -1160,6 +1195,29 @@
       }
     }
 
+    /// The Send tap is the scoped approval for a clear one-off reminder. Save errors leave
+    /// the same card open; Added/Undo/Open come only from the normal commit receipt.
+    private func createSubmittedReminder(_ capture: Capture) {
+      let message = reply("Saving reminder…")
+      var proposal = CaptureProposal(capture: filed(capture), anchor: message.id)
+      proposal.retainsDraft = true
+      proposals.append(proposal)
+      recordCard(shown: "capture", items: 1)
+      messages.append(message)
+      // Direct creation can precede SwiftUI's message-persistence callback on a new chat.
+      // Establish the thread first so its item relationship receives the real save receipt.
+      persist()
+      let saved = commit(proposal.id) != nil
+      if let index = messages.firstIndex(where: { $0.id == message.id }) {
+        messages[index] = ChatMessage(
+          id: message.id, role: .ai,
+          text: saved ? "Added." : "Reminder not added. Your draft is ready to retry or cancel.",
+          timestamp: message.timestamp)
+      }
+      persist()
+      persistCards()
+    }
+
     private func show(_ captures: [Capture]) {
       guard !captures.isEmpty else {
         messages.append(
@@ -1232,7 +1290,7 @@
     /// Saves the decided cards with the conversation (the open ones are not kept).
     private func persistCards() {
       guard let thread else { return }
-      let decided = proposals.compactMap(\.stored).filter { $0.status != .open }
+      let decided = proposals.compactMap(\.stored).filter { $0.status != .open || $0.retainsDraft }
       guard thread.cards != decided else { return }
       thread.cards = decided
       thread.updatedAt = now()
@@ -1259,11 +1317,21 @@
       let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
       let written: (id: PersistentIdentifier, entry: LedgerItem)
       do {
-        written = try actions.insert(
-          capture, into: context, actor: .todayAI, channel: .ask, approval: .asked)
+        if proposals[i].retainsDraft && OneOffReminderRequest.eligible(capture) {
+          written = try actions.insertOneOffReminder(
+            capture, requestID: id,
+            recoveryExternalID: proposals[i].pendingExternalID, into: context)
+        } else {
+          guard proposals[i].pendingExternalID == nil else { throw CocoaError(.coderInvalidValue) }
+          written = try actions.insert(
+            capture, into: context, actor: .todayAI, channel: .ask, approval: .asked)
+        }
       } catch {
+        proposals[i].pendingExternalID = actions.pendingReminderCreationID(id)
         messages.append(
-          reply("Couldn't save “\(capture.title)”. The preview is still here; tap Add to retry."))
+          reply(
+            "Couldn't save “\(capture.title)”: \(error.localizedDescription) The draft is still here; tap Add to retry."
+          ))
         return nil
       }
       recordCard(resolved: "capture", edits.isEmpty ? "applied" : "edited", edits: edits)
@@ -1273,6 +1341,7 @@
       proposals[i].itemRef = Ledger.ref(written.id)
       proposals[i].entryID = written.entry.id
       proposals[i].status = next
+      proposals[i].pendingExternalID = nil
       return capture
     }
 
@@ -1281,6 +1350,20 @@
       guard let i = proposals.firstIndex(where: { $0.id == id }),
         let next = proposals[i].status.after(.drop)
       else { return }
+      if proposals[i].pendingExternalID != nil {
+        do {
+          try actions.cancelReminderCreation(
+            proposals[i].capture, requestID: id,
+            recoveryExternalID: proposals[i].pendingExternalID, context: context)
+        } catch {
+          messages.append(
+            reply(
+              "Couldn't cancel the Apple reminder: \(error.localizedDescription) Retry from this card."
+            ))
+          return
+        }
+        proposals[i].pendingExternalID = nil
+      }
       if proposals[i].status == .open { recordCard(resolved: "capture", "skipped") }
       proposals[i].status = next
     }
@@ -1302,6 +1385,7 @@
       if let ref = p.itemRef, let pid = CaptureUndo.decode(ref) {
         thread?.items.removeAll { $0 == pid }
       }
+      if p.retainsDraft { actions.didUndoReminderCreation(id) }
       proposals[i].itemRef = nil
       proposals[i].entryID = nil
       proposals[i].status = next

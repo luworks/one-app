@@ -11,6 +11,10 @@
   @MainActor
   @Observable
   package final class PlannerActions {
+    // One proposal ID owns one creation attempt, including a partially compensated failure.
+    private var reminderCreationDrafts: [UUID: OneTask] = [:]
+    private var reminderCreationReceipts: [UUID: (id: PersistentIdentifier, entry: LedgerItem)] =
+      [:]
     package let focus: TodayFocus
     private let calendar: any CalendarService
     private let reminders: any ReminderService
@@ -91,6 +95,57 @@
       try capture.insertRecorded(
         into: context, actor: actor, channel: channel, approval: approval,
         ledger: ledger, runtime: runtime)
+    }
+
+    /// Narrow submitted-chat authority; does not grant background autonomy or recurrence writes.
+    package func insertOneOffReminder(
+      _ capture: Capture, requestID: UUID, recoveryExternalID: String? = nil,
+      into context: ModelContext
+    ) throws -> (id: PersistentIdentifier, entry: LedgerItem) {
+      if let receipt = reminderCreationReceipts[requestID] { return receipt }
+      guard capture.kind == .task, !capture.ringsAsAlarm, capture.repeatRule == nil else {
+        throw CocoaError(.coderInvalidValue)
+      }
+      // With no accepted remote identity, edits to a failed draft become the next attempt.
+      let retained = reminderCreationDrafts[requestID]
+      let task =
+        retained?.externalID != nil ? retained! : capture.makeTask(calendar: runtime.calendar)
+      if task.externalID == nil { task.externalID = recoveryExternalID }
+      if task.externalID != nil {
+        let requested = capture.makeTask(calendar: runtime.calendar)
+        guard RemindersSync.fingerprint(of: task) == RemindersSync.fingerprint(of: requested) else {
+          throw CocoaError(.coderInvalidValue)
+        }
+      }
+      if retained == nil { task.createdAt = runtime.now() }
+      reminderCreationDrafts[requestID] = task
+      try reminders.commitCreation(task, context: context)
+      let entry = ledger.record(
+        .created, task: task, kind: "task", title: task.title, after: capture.summary,
+        actor: .todayAI, channel: .ask, approval: .asked, context: context)
+      let receipt = (id: task.persistentModelID, entry: entry)
+      reminderCreationReceipts[requestID] = receipt
+      reminderCreationDrafts[requestID] = nil
+      return receipt
+    }
+
+    package func didUndoReminderCreation(_ requestID: UUID) {
+      reminderCreationReceipts[requestID] = nil
+    }
+
+    package func pendingReminderCreationID(_ requestID: UUID) -> String? {
+      reminderCreationDrafts[requestID]?.externalID
+    }
+
+    package func cancelReminderCreation(
+      _ capture: Capture, requestID: UUID, recoveryExternalID: String?, context: ModelContext
+    ) throws {
+      let task = reminderCreationDrafts[requestID] ?? capture.makeTask(calendar: runtime.calendar)
+      if task.externalID == nil { task.externalID = recoveryExternalID }
+      if task.externalID != nil {
+        _ = try reminders.commitDeletion(task, expected: Ledger.snapshot(of: task))
+      }
+      reminderCreationDrafts[requestID] = nil
     }
 
     @discardableResult
