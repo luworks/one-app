@@ -82,14 +82,14 @@ final class AIAlarmContextTests: XCTestCase {
     let button = app.buttons[name].firstMatch
     XCTAssertTrue(button.waitForExistence(timeout: 5))
     button.tap()
-    XCTAssertTrue(app.textFields["Ask AI or add anything"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.textViews["Ask AI or add anything"].waitForExistence(timeout: 5))
   }
   private func send(_ text: String) {
-    let field = app.textFields["Ask AI or add anything"].firstMatch
+    let field = app.textViews["Ask AI or add anything"].firstMatch
     field.tap()
     field.typeText(text)
-    app.buttons["Send"].tap()
-    XCTAssertTrue(app.buttons["Send"].waitForNonExistence(timeout: 5))
+    app.buttons["ask-send"].tap()
+    XCTAssertTrue(app.buttons["ask-send"].waitForNonExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["Thinking…"].waitForNonExistence(timeout: 15))
   }
   private func assertAlarm(minutesFrom anchor: Date, offset: Int) {

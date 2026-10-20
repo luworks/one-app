@@ -143,8 +143,8 @@ final class AppearanceUITests: XCTestCase {
       app.closeSidebar()
       app.buttons["Ask AI or add anything"].tap()
       let field =
-        app.textFields["Ask AI or add anything"].firstMatch.exists
-        ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
+        app.textViews["Ask AI or add anything"].firstMatch.exists
+        ? app.textViews["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
       if field.waitForExistence(timeout: 5) {
         shot("7-ask", mode)
         field.typeText("Call Alex tomorrow at 3pm every week\n")

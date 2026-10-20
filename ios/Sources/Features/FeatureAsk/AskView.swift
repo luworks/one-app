@@ -9,8 +9,9 @@
 
   /// Full-screen AI page, modeled on ChatGPT / Claude mobile.
   /// Conversation stays conversational; only requests to add items become capture previews.
-  /// Nothing is created until the user taps Add on the preview card.
+  /// Explicit Send approves a clear one-off reminder; other changes keep their Add / Apply gate.
   package struct AskView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
@@ -44,6 +45,30 @@
     @State private var cardShownAt: Date?
     @State private var messages: [ChatMessage]
     @State private var draft = ""
+    @State private var followsTail = true
+    @State private var scrollPhase: ScrollPhase = .idle
+
+    private struct ConversationGeometry: Equatable {
+      let nearEnd: Bool
+      let offset: CGFloat
+      let content: CGSize
+      let viewport: CGSize
+    }
+
+    private var isUserScrolling: Bool {
+      scrollPhase == .tracking || scrollPhase == .interacting || scrollPhase == .decelerating
+    }
+
+    private var cardTransition: AnyTransition {
+      reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
+    }
+
+    private func followEnd(_ proxy: ScrollViewProxy) {
+      guard followsTail else { return }
+      withAnimation(reduceMotion ? nil : .default) {
+        proxy.scrollTo(Self.endID, anchor: .bottom)
+      }
+    }
     /// The preview cards of this conversation, each under the AI message that proposed it. They stay after Add / Cancel
     /// (Added, Dropped, Undone) and are saved with the conversation.
     @State private var proposals: [CaptureProposal] = []
@@ -161,7 +186,7 @@
     @State private var followup: Followup?
     /// Title of the item the conversation touched last: what "it" means.
     @State private var lastTouched: String?
-    @FocusState private var focused: Bool
+    @State private var focused = false
     /// Swipe right to go back: horizontal offset of the screen while the finger moves, 0 otherwise.
     @State private var backDrag: CGFloat = 0
     /// nil until the first event of a drag decides whether it is a back swipe.
@@ -309,12 +334,42 @@
               Color.clear.frame(height: 1).id(Self.endID)
             }
             .padding(20)
-            .animation(.snappy, value: proposals.map(\.status))
+            .animation(reduceMotion ? nil : .snappy, value: proposals.map(\.status))
           }
         }
         .performanceDestination("ai")
         .scrollDismissesKeyboard(.interactively)
-        .defaultScrollAnchor(messages.isEmpty ? .top : .bottom)
+        .defaultScrollAnchor(messages.isEmpty ? .top : .bottom, for: .initialOffset)
+        .onScrollPhaseChange { previous, phase in
+          scrollPhase = phase
+          if phase == .idle,
+            previous == .tracking || previous == .interacting || previous == .decelerating
+          {
+            followEnd(proxy)
+          }
+        }
+        .onScrollGeometryChange(for: ConversationGeometry.self) { geometry in
+          ConversationGeometry(
+            nearEnd: geometry.contentSize.height - geometry.contentOffset.y
+              - geometry.containerSize.height <= 64,
+            offset: geometry.contentOffset.y,
+            content: geometry.contentSize, viewport: geometry.containerSize)
+        } action: { before, after in
+          // Only a real pan changes reading intent. Programmatic follow animations cannot turn it off.
+          if isUserScrolling, before.content == after.content, before.viewport == after.viewport,
+            before.offset != after.offset
+          {
+            if after.nearEnd {
+              followsTail = true
+            } else if after.offset < before.offset {
+              followsTail = false
+            }
+          }
+          if !isUserScrolling, before.content != after.content || before.viewport != after.viewport
+          {
+            followEnd(proxy)
+          }
+        }
         .onChange(of: messages) {
           if AIResponseTrace.enabled {
             AIResponseTrace.shared.stage("persist_before", token: generationToken)
@@ -324,13 +379,13 @@
             AIResponseTrace.shared.stage("persist_after", token: generationToken)
             AIResponseTrace.shared.stage("scroll_request_before", token: generationToken)
           }
-          withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }
+          followEnd(proxy)
           if AIResponseTrace.enabled {
             AIResponseTrace.shared.stage("scroll_request_after", token: generationToken)
           }
         }
         .onChange(of: proposals.count) {
-          withAnimation { proxy.scrollTo(Self.endID, anchor: .bottom) }
+          followEnd(proxy)
         }
         .onChange(of: proposals) { persistCards() }
 
@@ -383,13 +438,13 @@
       backClaim = nil
       let width = max(screenWidth, 1)
       if max(projected, backDrag) > width / 2 && projected > 0 {
-        withAnimation(DrawerModel.spring) {
+        withAnimation(reduceMotion ? nil : DrawerModel.spring) {
           backDrag = width
         } completion: {
           close(animated: false)
         }
       } else {
-        withAnimation(DrawerModel.spring) { backDrag = 0 }
+        withAnimation(reduceMotion ? nil : DrawerModel.spring) { backDrag = 0 }
         onBack(false)
       }
     }
@@ -440,7 +495,7 @@
             }
           )
           .background { responseProbe(.plan) }
-          .transition(.move(edge: .bottom).combined(with: .opacity))
+          .transition(cardTransition)
         }
         if !tidy.isEmpty {
           TidyCard(
@@ -451,7 +506,7 @@
             }
           )
           .background { responseProbe(.tidy) }
-          .transition(.move(edge: .bottom).combined(with: .opacity))
+          .transition(cardTransition)
         }
         if let undo = undoRow {
           HStack(spacing: 12) {
@@ -467,7 +522,7 @@
           .padding(.horizontal, 16)
           .padding(.vertical, 12)
           .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
-          .transition(.move(edge: .bottom).combined(with: .opacity))
+          .transition(cardTransition)
         }
         if case .chooseItem(_, let options)? = followup {
           ChoiceBar(options: options, onPick: tapChoice)
@@ -478,7 +533,7 @@
               choiceFrame = $0
             }
             .onDisappear { choiceFrame = .zero }
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .transition(cardTransition)
         }
         if let change {
           ChangeCard(
@@ -489,15 +544,18 @@
             }
           )
           .background { responseProbe(.change(change.id)) }
-          .transition(.move(edge: .bottom).combined(with: .opacity))
+          .transition(cardTransition)
         }
         HStack(alignment: .bottom, spacing: 8) {
-          TextField("Ask AI or add anything", text: $draft, axis: .vertical)
-            .lineLimit(1...5)
-            .focused($focused)
-            .onChange(of: draft) { _, text in
-              // Return sends, like a chat app (a vertical TextField would insert a newline).
-              if text.hasSuffix("\n") { send(String(text.dropLast())) }
+          AskComposer(text: $draft, focused: $focused, onSubmit: { send(draft) })
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .topLeading) {
+              if draft.isEmpty {
+                Text("Ask AI or add anything")
+                  .foregroundStyle(.tertiary)
+                  .allowsHitTesting(false)
+                  .accessibilityHidden(true)
+              }
             }
             .padding(.vertical, 8)
           if isEmpty || voice.state == .listening {
@@ -520,6 +578,7 @@
                 .frame(width: 44, height: 44)
             }
             .accessibilityLabel("Send")
+            .accessibilityIdentifier("ask-send")
           }
         }
         .padding(.leading, 16)
@@ -535,10 +594,10 @@
       .padding(.horizontal, 12)
       .padding(.bottom, 6)
       .background(Color(.systemBackground))
-      .animation(.snappy, value: plan.count)
-      .animation(.snappy, value: change)
-      .animation(.snappy, value: followup)
-      .animation(.snappy, value: undoRow?.id)
+      .animation(reduceMotion ? nil : .snappy, value: plan.count)
+      .animation(reduceMotion ? nil : .snappy, value: change)
+      .animation(reduceMotion ? nil : .snappy, value: followup)
+      .animation(reduceMotion ? nil : .snappy, value: undoRow?.id)
       .onChange(of: voice.transcript) { _, text in
         if !text.isEmpty { draft = text }
       }
@@ -565,6 +624,7 @@
     private func send(_ raw: String) {
       let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !text.isEmpty else { return }
+      followsTail = true
       let token = AIResponseTrace.enabled ? UUID() : generationToken
       if AIResponseTrace.enabled {
         AIResponseTrace.shared.begin(token, modelAvailable: intelligence.backend() == .onDevice)
@@ -947,6 +1007,7 @@
 
     private func tapChoice(_ option: ChoiceOption) {
       guard case .chooseItem(let original, _)? = followup else { return }
+      followsTail = true
       messages.append(ChatMessage(role: .user, text: option.title))
       followup = nil
       choose(
@@ -1157,7 +1218,7 @@
         label: label,
         action: {
           activity.record(ActivityEvents.aiUndo(card: card, thread: threadID))
-          withAnimation { action() }
+          withAnimation(reduceMotion ? nil : .default) { action() }
         })
     }
 

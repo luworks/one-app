@@ -120,10 +120,12 @@
       let stopwatch = StopwatchModel(
         defaults: defaults, now: runtime.now, initialState: initialState, initialPage: page)
       let multiCapture = arguments.contains("-uiTestingMultiCapture")
+      let askReplyDelay = arguments.contains("-uiTestingAskReplyDelay")
       let intelligence = AskIntelligence(
-        backend: { multiCapture ? .scripted : .rules },
+        backend: { multiCapture || askReplyDelay ? .scripted : .rules },
         parse: { text, _, now, calendar in
-          AskIntelligence.ruleCapture(text, now: now, calendar: calendar)
+          if askReplyDelay { try? await Task.sleep(for: .seconds(12)) }
+          return AskIntelligence.ruleCapture(text, now: now, calendar: calendar)
         },
         propose: { text, now, calendar in
           guard multiCapture, text.contains(";") else { return nil }
@@ -133,10 +135,11 @@
           }
         }, refineTitle: { capture, _, _ in capture },
         respond: { text, _, intent in
-          intent == .capture ? .capture : .reply(ChatRouting.fallbackReply(text))
+          if askReplyDelay, intent != .capture { try? await Task.sleep(for: .seconds(12)) }
+          return intent == .capture ? .capture : .reply(ChatRouting.fallbackReply(text))
         },
         plan: { _, _, _, _, _ in EditPlan(op: .none, target: nil) },
-        rank: { _, _, _, _ in nil }, prewarm: {}, isAvailable: { multiCapture },
+        rank: { _, _, _, _ in nil }, prewarm: {}, isAvailable: { multiCapture || askReplyDelay },
         unavailableReason: { _ in "Unavailable on Simulator" })
       shell = ShellComposition(
         session: session, world: world, stopwatch: stopwatch, intelligence: intelligence,

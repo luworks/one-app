@@ -32,7 +32,7 @@ final class AIResponsePerformanceTests: XCTestCase {
     app.launch()
     XCTAssertTrue(app.buttons["Ask AI or add anything"].waitForExistence(timeout: 10))
     app.buttons["Ask AI or add anything"].tap()
-    let input = app.textFields["Ask AI or add anything"].firstMatch
+    let input = app.textViews["Ask AI or add anything"].firstMatch
     XCTAssertTrue(input.waitForExistence(timeout: 5))
     // Ask's destination modifier exposes its own report while the modal hides the presenter.
     let reports = app.staticTexts.matching(identifier: "performance.trace")
@@ -95,7 +95,7 @@ final class AIResponsePerformanceTests: XCTestCase {
     _ text: String, context: String, backend: String, diagnoseConversation: Bool = false
   ) -> [String] {
     let previous = Set(rows(history).compactMap { fields($0)["turn"] })
-    let field = app.textFields["Ask AI or add anything"].firstMatch
+    let field = app.textViews["Ask AI or add anything"].firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.tap()
     field.typeText(text + "\n")

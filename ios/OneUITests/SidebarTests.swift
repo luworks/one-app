@@ -21,8 +21,8 @@ final class SidebarTests: XCTestCase {
     XCTAssertTrue(bar.waitForExistence(timeout: 5))
     bar.tap()
     let field =
-      app.textFields["Ask AI or add anything"].firstMatch.exists
-      ? app.textFields["Ask AI or add anything"].firstMatch
+      app.textViews["Ask AI or add anything"].firstMatch.exists
+      ? app.textViews["Ask AI or add anything"].firstMatch
       : app.textViews.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.typeText(text + "\n")

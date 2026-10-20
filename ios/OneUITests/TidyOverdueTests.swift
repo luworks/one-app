@@ -60,8 +60,8 @@ final class TidyOverdueTests: XCTestCase {
   /// The suggestion chips change with the data (no chip once nothing is overdue), so the sentence is typed.
   private func sendTidy(_ app: XCUIApplication) {
     let field =
-      app.textFields["Ask AI or add anything"].firstMatch.exists
-      ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
+      app.textViews["Ask AI or add anything"].firstMatch.exists
+      ? app.textViews["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.tap()
     field.typeText("Tidy overdue\n")

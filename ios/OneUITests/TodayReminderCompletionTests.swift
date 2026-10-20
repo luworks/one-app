@@ -186,7 +186,7 @@ final class TodayReminderCompletionTests: XCTestCase {
   }
 
   private func assertChatDraftAndClose(in app: XCUIApplication, draft: String) throws {
-    let field = app.textFields["Ask AI or add anything"].firstMatch
+    let field = app.textViews["Ask AI or add anything"].firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
     field.typeText(draft)
@@ -197,7 +197,7 @@ final class TodayReminderCompletionTests: XCTestCase {
     XCTAssertTrue(
       entered.waitForExistence(timeout: 5), "Native keyboard input remains an unsent draft")
     XCTAssertEqual(entered.value as? String, draft)
-    XCTAssertTrue(app.buttons["Send"].exists)
+    XCTAssertTrue(app.buttons["ask-send"].exists)
     XCTAssertFalse(app.staticTexts[draft].exists, "Typing alone does not send the draft")
     app.buttons["Close"].firstMatch.tap()
     XCTAssertTrue(entered.waitForNonExistence(timeout: 5))
