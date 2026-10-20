@@ -95,7 +95,8 @@ final class TodayFocusTests: XCTestCase {
     let header = section(name, in: app)
     reveal(header, in: app)
     header.tap()
-    let restore = app.buttons["Restore \(title)"].firstMatch
+    let action = name == "settled" ? "Unsettle" : "Restore"
+    let restore = app.buttons["\(action) \(title)"].firstMatch
     reveal(restore, in: app)
     restore.tap()
   }

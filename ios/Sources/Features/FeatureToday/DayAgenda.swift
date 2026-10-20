@@ -704,6 +704,7 @@
       if expanded.wrappedValue {
         ForEach(records, id: \.identity) { record in
           let source = resolved(record)
+          let restoreLabel = source == nil ? "Clear choice" : (snoozed ? "Restore" : "Unsettle")
           let target =
             source
             ?? FocusTarget(
@@ -720,13 +721,13 @@
               }
             }
             Spacer()
-            Button(source == nil ? "Clear choice" : "Restore") {
+            Button(restoreLabel) {
               changeFocus(source == nil ? nil : .active, target: target)
             }
             .buttonStyle(.borderless)
             .frame(minHeight: 44)
             .accessibilityLabel(
-              source == nil ? "Clear unavailable Focus choice" : "Restore " + target.title)
+              source == nil ? "Clear unavailable Focus choice" : restoreLabel + " " + target.title)
           }
           .modifier(TodayItemSurface(enabled: true))
           .modifier(
@@ -737,7 +738,7 @@
                 ? { requestDeleteAttention(target) } : nil,
               restore: { changeFocus(source == nil ? nil : .active, target: target) },
               showSnooze: snoozed && source != nil,
-              restoreLabel: source == nil ? "Clear choice" : "Restore")
+              restoreLabel: restoreLabel)
           )
           .listRowSeparator(.hidden)
         }
