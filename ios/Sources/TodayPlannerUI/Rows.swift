@@ -98,12 +98,17 @@
     }
 
     package var body: some View {
-      HStack(spacing: 10) {
+      HStack(
+        alignment: attention == nil ? .center : .firstTextBaseline,
+        spacing: attention == nil ? 10 : 0
+      ) {
         if !event.isAllDay {
-          TimeColumn(date: start ?? event.start).dynamicTypeSize(
+          TimeColumn(date: start ?? event.start, compact: attention != nil).dynamicTypeSize(
             ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
         }
         CalendarBar(color: calendar.color(forExternalID: event.externalID) ?? Color.blue)
+          .frame(height: attention == nil ? nil : 20)
+          .modifier(AgendaIconSlot(enabled: attention != nil))
         VStack(alignment: .leading, spacing: 1) {
           TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2)
           {
@@ -126,6 +131,7 @@
       .fixedSize(horizontal: false, vertical: true)
       .frame(minHeight: 44)
       .contentShape(Rectangle())
+      .font(attention == nil ? Font.body : AgendaRowStyle.title)
       .modifier(TodayItemSurface(enabled: attention != nil))
       .onTapGesture { open(event) }
 
@@ -213,25 +219,33 @@
     }
 
     package var body: some View {
-      HStack(spacing: attention == nil ? 10 : 0) {
+      HStack(
+        alignment: attention == nil ? .center : .firstTextBaseline,
+        spacing: attention == nil ? 10 : 0
+      ) {
         if let suggested {
-          TimeColumn(date: suggested).dynamicTypeSize(
+          TimeColumn(date: suggested, compact: attention != nil).dynamicTypeSize(
             ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge)
           ).opacity(0.6)
         } else if showsTime, let start = time ?? task.plannedStart {
-          TimeColumn(date: start).dynamicTypeSize(
+          TimeColumn(date: start, compact: attention != nil).dynamicTypeSize(
             ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
         }
         Button {
           actions.toggleDone(task, context: context, toast: toast)
         } label: {
           Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
-            .font(.title3)
+            .font(attention == nil ? .title3 : AgendaRowStyle.title)
             .foregroundStyle(task.isDone ? Color.green : Color.secondary)
-            .frame(minWidth: attention == nil ? 24 : 44, minHeight: attention == nil ? 0 : 44)
+            .frame(height: attention != nil && !typeSize.isAccessibilitySize ? 20 : nil)
+            .frame(
+              minWidth: attention == nil ? 24 : 44, minHeight: attention == nil ? 0 : 44,
+              alignment: attention != nil && !typeSize.isAccessibilitySize ? .top : .center
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
+        .modifier(AgendaIconSlot(enabled: attention != nil))
         .sensoryFeedback(.success, trigger: task.isDone) { _, done in done }
         .accessibilityLabel(task.isDone ? "Reopen \(task.title)" : "Complete \(task.title)")
         if compact {
@@ -256,6 +270,7 @@
       }
       .frame(minHeight: 44)
       .contentShape(Rectangle())
+      .font(attention == nil ? Font.body : AgendaRowStyle.title)
       .modifier(TodayItemSurface(enabled: attention != nil))
       .onTapGesture {
         PerformanceTrace.shared.beginPage("reminder.editor")
@@ -438,18 +453,23 @@
       Button {
         if !alarm.isDeleted { open(alarm) }
       } label: {
-        HStack(spacing: 10) {
-          TimeColumn(date: date).dynamicTypeSize(
+        HStack(
+          alignment: attention == nil ? .center : .firstTextBaseline,
+          spacing: attention == nil ? 10 : 0
+        ) {
+          TimeColumn(date: date, compact: attention != nil).dynamicTypeSize(
             ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
           Image(systemName: "alarm")
-            .font(attention == nil ? .body : .system(size: 20))
+            .font(attention == nil ? .body : AgendaRowStyle.title)
             .foregroundStyle(Color.accentColor)
-            .frame(width: attention == nil ? 4 + 6 : 24)
+            .frame(width: attention == nil ? 4 + 6 : nil)
+            .modifier(AgendaIconSlot(enabled: attention != nil))
           Text(alarm.label.isEmpty ? "Alarm" : alarm.label)
             .foregroundStyle(alarm.isOn ? Color.primary : Color.secondary)
           Spacer(minLength: 0)
         }
         .frame(minHeight: 44)
+        .font(attention == nil ? Font.body : AgendaRowStyle.title)
         .modifier(TodayItemSurface(enabled: attention != nil))
         .contentShape(Rectangle())
       }

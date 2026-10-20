@@ -38,12 +38,17 @@
     }
 
     package var body: some View {
-      HStack(spacing: 10) {
+      HStack(
+        alignment: attention == nil ? .center : .firstTextBaseline,
+        spacing: attention == nil ? 10 : 0
+      ) {
         if !event.isAllDay {
-          TimeColumn(date: event.start).dynamicTypeSize(
+          TimeColumn(date: event.start, compact: attention != nil).dynamicTypeSize(
             ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
         }
         CalendarBar(color: event.color)
+          .frame(height: attention == nil ? nil : 20)
+          .modifier(AgendaIconSlot(enabled: attention != nil))
         VStack(alignment: .leading, spacing: 1) {
           TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2)
           {
@@ -66,6 +71,7 @@
       .fixedSize(horizontal: false, vertical: true)
       .frame(minHeight: 44)
       .contentShape(Rectangle())
+      .font(attention == nil ? Font.body : AgendaRowStyle.title)
       .modifier(TodayItemSurface(enabled: attention != nil))
       .onTapGesture {
         (calendar as? any NativeCalendarService)?.edit(
