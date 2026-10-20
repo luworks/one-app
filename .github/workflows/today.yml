@@ -61,7 +61,7 @@ jobs:
           path: ${{ runner.temp }}/today-smoke/dd/SourcePackages
           key: spm-${{ hashFiles('ios/Dependencies/Package.resolved') }}
       # Reuse simulator devices that already finished first-boot setup on this runner image
-      # (~1.3 GB, synthetic smoke data only); a miss saves them after a green smoke.
+      # (~1.3 GB, synthetic smoke data only); a miss saves them once the device shut down cleanly.
       - id: image
         run: echo "version=$ImageVersion" >> "$GITHUB_OUTPUT"
       - id: sim
@@ -69,10 +69,12 @@ jobs:
         with:
           path: ~/Library/Developer/CoreSimulator/Devices
           key: sim-devices-${{ steps.image.outputs.version }}-v1
-      - run: python3 scripts/ci/smoke.py
+      - id: smoke
+        run: python3 scripts/ci/smoke.py
         env:
           SIM_CACHE_HIT: ${{ steps.sim.outputs.cache-hit }}
-      - if: success() && steps.sim.outputs.cache-hit != 'true'
+      # Save whenever the device was shut down cleanly: a failed cold run must not stay cold.
+      - if: always() && steps.smoke.outputs.device == 'clean'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/CoreSimulator/Devices

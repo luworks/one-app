@@ -25,8 +25,26 @@ Final warm breakdown, `today-required`: setup/checkout/SPM cache 9 s, device cac
 - Pre-existing failures, identical on main `a56646b`, not run in CI: `tests/devtools` (3 failures, 2 errors that depend on the host environment) and `tests/testing` (3 failures, 1 error).
 - This floor holds only for the free standard hosted runner. It is not a limit for every simulator setup.
 
-## Decision needed from Yuan
+## Decision and final policy (Yuan, 2026-10-20: free and fast merges)
 
-1. **Keep this layout** (~7 min warm): every PR and main push runs the phone-freeze smoke. Free, simplest.
-2. **Faster hardware**: a paid larger GitHub runner, or a self-hosted runner on a Mac that stays on. Either needs explicit approval for cost or a persistent runner. Not measured.
-3. **Split policy**: PR and main block only on checks plus a native build (~3 min). The simulator smoke then runs separately before installation, and the install still waits ~7 min. Not "everything ≤5 min"; this needs an explicit choice.
+Option 3 was chosen. Merging and phone installation are separate gates:
+
+- **Merge gate** (PR, merge group, main push): `checks` ‖ `today-required` (native build and product identities, no simulator). Run 39387437368 (ad1c045) was green in **191 s** from creation to completion, including a 7 s queue. `checks` took 180 s and `today-required` 141 s (build 129 s).
+- **Install gate**: an explicit `workflow_dispatch lane=install-smoke` on main runs the four Simulator leaves. Install readiness is roughly merge plus ~7 min warm or ~10.5 min cold. This is not a ≤300 s path.
+- **Preflight**: requires current main, its push run (`checks` and `today-required`), an install-smoke dispatch run on the same SHA, and the device build receipt.
+
+### Install-smoke evidence and unresolved risk
+
+- Run 39387436265 (ad1c045, branch dispatch, cold: the PR-scoped caches are invisible to a branch dispatch) **failed** after 710 s. The 3 PlannerSessionTests passed. `testPreconnectedImportedTimelineStaysResponsive` failed its unchanged 10 s editor responsiveness assertion, measuring 16.6 s. The app was idle 0.01 s after the Cancel tap began, but XCTest's element lookup for Cancel took 6.8 s while the cold device was still settling. The same leaf passed in the six earlier smoke runs (44–81 s). The assertion is not weakened. Raw log and xcresult: `tests/results/ci-under-five-20261020/install-smoke-39387436265/`.
+- Fix: the device cache is now saved whenever the device shut down cleanly, failed run or not, so one cold failure does not keep every later run cold.
+- Not yet run: a green install-smoke on a main SHA. That can only happen after merge (`gh workflow run today.yml --ref main -f lane=install-smoke`).
+
+### Preflight run against live GitHub (exit 2, blocked)
+
+| Inputs | Code |
+| --- | --- |
+| current main a56646b, old push run 39368090808 (no `checks` job) + branch smoke | `main_gate_required_jobs_missing` |
+| push run only, no `--smoke-run` | `main_gate_exact_commit_and_runs_required` |
+| dispatch run 39387436265 used as the merge gate | `main_gate_completed_main_run_required` |
+
+Outputs: `tests/results/ci-under-five-20261020/preflight-live-20261020/`. The happy path still needs the merged main push run, a green install-smoke on that SHA, a checkout at that SHA and the signed device build receipt. Signing and physical-device checks are outside this PR.

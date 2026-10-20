@@ -120,6 +120,9 @@ def main(build_only=False):
         # A cleanly shut down device is cached so the next runner skips first-boot setup.
         run('xcrun', 'simctl', 'shutdown', udid)
         step('simulator shut down')
+        # First-boot setup is done even if a test failed; let the workflow cache the device.
+        with open(os.environ.get('GITHUB_OUTPUT', os.devnull), 'a') as output:
+            output.write('device=clean\n')
     verify()
     return code
 
