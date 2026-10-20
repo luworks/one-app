@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Native usability smoke for CI: one build, one simulator boot, one test run.
+"""Native CI: one build; with no flag also one simulator boot and one test run.
 
-Fails unless every selected leaf ran and passed in the completed xcresult.
+`--build-only` is the merge gate (products and their identities). The full run is the
+install gate and fails unless every selected leaf ran and passed in the completed xcresult.
 Standard library only; prints elapsed seconds per step for timing.
 """
 import json
@@ -74,20 +75,19 @@ def verify():
         raise SystemExit('Smoke requires exactly these leaves to pass: ' + ', '.join(sorted(expected)))
 
 
-def main():
+def main(build_only=False):
     TEMP.mkdir(parents=True, exist_ok=True)
     warm = os.environ.get('SIM_CACHE_HIT') == 'true'
     if warm:
         # Let CoreSimulator rescan the restored device directories.
         subprocess.run(['pkill', '-f', 'CoreSimulatorService'])
-    udid = simulator()
+    udid = None if build_only else simulator()
     run('./dev', 'bootstrap', '--tool', 'xcodegen')
     run('./dev', 'generate')
     lock = ROOT / 'ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
     lock.parent.mkdir(parents=True, exist_ok=True)
     lock.write_bytes((ROOT / 'ios/Dependencies/Package.resolved').read_bytes())
     step('project generated')
-    destination = 'platform=iOS Simulator,id=' + udid
     run('xcodebuild', 'build-for-testing', '-quiet', '-project', 'ios/Today.xcodeproj', '-scheme', 'TodayCI',
         '-configuration', 'Debug', '-destination', 'generic/platform=iOS Simulator', '-jobs', '2',
         'ARCHS=arm64', *FLAGS)
@@ -97,6 +97,9 @@ def main():
         info = plistlib.loads((products / path / 'Info.plist').read_bytes())
         if info.get('CFBundleIdentifier') != identifier or not (products / path / info['CFBundleExecutable']).is_file():
             raise SystemExit('Missing production product: ' + path)
+    if build_only:
+        return 0
+    destination = 'platform=iOS Simulator,id=' + udid
     # Boot only after the build: on the 3-CPU hosted runner a concurrent boot made the
     # build take 515-700 s instead of ~115 s, even for a restored device.
     run('xcrun', 'simctl', 'bootstatus', udid, '-b')
@@ -122,4 +125,6 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    if sys.argv[1:] not in ([], ['--build-only']):
+        raise SystemExit('usage: smoke.py [--build-only]')
+    sys.exit(main(build_only=sys.argv[1:] == ['--build-only']))

@@ -7,10 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      full:
-        description: Also run the complete logic, integration, snapshot and UI suites (manual, ~25 min)
-        type: boolean
-        default: false
+      lane:
+        description: install-smoke = Simulator usability gate required before a phone install; full = complete suites
+        type: choice
+        options: [install-smoke, full]
+        default: install-smoke
 permissions:
   contents: read
 concurrency:
@@ -20,6 +21,7 @@ env:
   DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
 jobs:
   checks:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: xcode-27
     timeout-minutes: 10
     steps:
@@ -31,7 +33,23 @@ jobs:
       - run: ./dev lint
       - run: ./dev test helpers
       - run: ./dev test unit
+  # Merge gate: build the app, widget and share extension plus test bundles. No simulator.
   today-required:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: xcode-27
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/today-smoke/dd/SourcePackages
+          key: spm-${{ hashFiles('ios/Dependencies/Package.resolved') }}
+      - run: python3 scripts/ci/smoke.py --build-only
+  # Install gate, run explicitly on main before any phone install. Never installs a phone.
+  install-smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'install-smoke'
     runs-on: xcode-27
     timeout-minutes: 20
     steps:
@@ -67,7 +85,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
   full:
-    if: github.event_name == 'workflow_dispatch' && inputs.full
+    if: github.event_name == 'workflow_dispatch' && inputs.lane == 'full'
     runs-on: xcode-27
     timeout-minutes: 60
     steps:

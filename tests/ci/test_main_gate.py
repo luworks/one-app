@@ -21,7 +21,7 @@ class MainInstallTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.args = SimpleNamespace(commit=self.sha, main_run='42', build_receipt=self.root / 'build.json')
+        self.args = SimpleNamespace(commit=self.sha, main_run='42', smoke_run='43', build_receipt=self.root / 'build.json')
         self.product = {n: {'bundle_id': b, 'executable_sha256': 'd' * 64, 'info_sha256': 'e' * 64}
                         for n, b in gate.PRODUCTS.items()}
         self.build = {'source': self.sha, 'tree': self.tree, 'source_after': self.sha, 'dirty_after': '',
@@ -31,21 +31,26 @@ class MainInstallTests(unittest.TestCase):
         app = Path(self.build['app'])
         app.mkdir(parents=True)
         (app / 'Info.plist').write_bytes(plistlib.dumps({'CFBundleSupportedPlatforms': ['iPhoneOS']}))
-        self.info = {'head_sha': self.sha, 'head_branch': 'main', 'event': 'push',
-                     'path': '.github/workflows/today.yml', 'status': 'completed', 'conclusion': 'success', 'run_attempt': 1}
+        run = {'head_sha': self.sha, 'head_branch': 'main', 'path': '.github/workflows/today.yml',
+               'status': 'completed', 'conclusion': 'success', 'run_attempt': 1}
+        # Merge gate (main push) and the separate install smoke (explicit dispatch) on one SHA.
+        self.runs = {'42': dict(run, event='push'), '43': dict(run, event='workflow_dispatch')}
+        self.info = self.runs['42']
         self.main_sha = self.sha
         self.calls = []
-        self.jobs = {'checks': 'success', 'today-required': 'success'}
+        self.jobs = {'42': {'checks': 'success', 'today-required': 'success'},
+                     '43': {'install-smoke': 'success'}}
 
     def github(self, argv, root):
         path = argv[-1]
         self.calls.append(path)
         if path.endswith('commits/main'):
             return json.dumps({'sha': self.main_sha}).encode()
-        if path.endswith('/42'):
-            return json.dumps(self.info).encode()
-        if '/42/attempts/1/jobs' in path:
-            return json.dumps({'jobs': [{'name': n, 'conclusion': c} for n, c in self.jobs.items()]}).encode()
+        run_id = path.split('actions/runs/')[-1].split('/')[0]
+        if path.endswith('actions/runs/' + run_id):
+            return json.dumps(self.runs[run_id]).encode()
+        if '/attempts/' in path:
+            return json.dumps({'jobs': [{'name': n, 'conclusion': c} for n, c in self.jobs[run_id].items()]}).encode()
         raise AssertionError(path)
 
     def check(self):
@@ -74,22 +79,44 @@ class MainInstallTests(unittest.TestCase):
         self.assertTrue(all(p.startswith('repos/luworks/one-app/') for p in self.calls))
 
     def test_branch_old_main_running_or_failed_run_blocks(self):
-        for field, value in [('head_sha', 'f' * 40), ('event', 'pull_request'), ('head_branch', 'feature'),
-                             ('status', 'in_progress'), ('conclusion', 'failure'), ('path', 'other.yml')]:
-            with self.subTest(field=field), patch.dict(self.info, {field: value}), self.assertRaises(ValueError):
-                self.check()
+        for run_id in ('42', '43'):
+            for field, value in [('head_sha', 'f' * 40), ('event', 'pull_request'), ('head_branch', 'feature'),
+                                 ('status', 'in_progress'), ('conclusion', 'failure'), ('path', 'other.yml')]:
+                with self.subTest(run=run_id, field=field), patch.dict(self.runs[run_id], {field: value}), \
+                        self.assertRaises(ValueError):
+                    self.check()
         self.main_sha = 'f' * 40
         with self.assertRaisesRegex(ValueError, 'current_main_mismatch'):
             self.check()
 
+    def test_merge_gate_alone_or_swapped_runs_cannot_authorize_install(self):
+        for missing in ('main_run', 'smoke_run'):
+            with self.subTest(missing=missing), patch.object(self.args, missing, ''), \
+                    self.assertRaisesRegex(ValueError, 'runs_required'):
+                self.check()
+        # A push run in the smoke slot (or the reverse) is rejected by its event.
+        self.args.main_run, self.args.smoke_run = '43', '42'
+        with self.assertRaisesRegex(ValueError, 'completed_main_run_required'):
+            self.check()
+
     def test_failed_skipped_or_missing_required_job_blocks(self):
-        for name in ('checks', 'today-required'):
+        for run_id, name in (('42', 'checks'), ('42', 'today-required'), ('43', 'install-smoke')):
             for conclusion in ('failure', 'skipped', 'cancelled', None):
                 with self.subTest(name=name, conclusion=conclusion), \
-                        patch.dict(self.jobs, {name: conclusion}), self.assertRaisesRegex(ValueError, 'jobs_missing'):
+                        patch.dict(self.jobs[run_id], {name: conclusion}), self.assertRaisesRegex(ValueError, 'jobs_missing'):
                     self.check()
-        del self.jobs['today-required']
+        del self.jobs['43']['install-smoke']
         with self.assertRaisesRegex(ValueError, 'jobs_missing'):
+            self.check()
+
+    def test_rerun_started_while_reading_blocks(self):
+        original = self.github
+        def rerun(argv, root):
+            data = original(argv, root)
+            if argv[-1].endswith('commits/main') and len(self.calls) > 1:
+                self.runs['43']['run_attempt'] = 2
+            return data
+        with patch.object(self, 'github', side_effect=rerun), self.assertRaisesRegex(ValueError, 'run_changed'):
             self.check()
 
     def test_device_source_toolchain_or_product_drift_blocks(self):

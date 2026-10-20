@@ -1,4 +1,7 @@
-"""Manual install preflight: exact current main must have a green Today CI push run.
+"""Manual install preflight: exact current main needs a green merge gate and install smoke.
+
+The merge gate is the main push run (checks + native build). The install smoke is a
+separate explicit workflow_dispatch run of the Simulator usability leaves on the same SHA.
 
 No installation, signing, receipt artifact or alternate test runner lives here.
 """
@@ -12,7 +15,8 @@ from scripts.devtools.core import probe, toolchain
 
 PRODUCTS = {'One': 'com.luworks.one', 'TodayWidgets': 'com.luworks.one.widgets',
             'ShareExtension': 'com.luworks.one.share'}
-REQUIRED_JOBS = ('checks', 'today-required')
+# Workflow run event -> jobs that must have succeeded in that run.
+REQUIRED = {'push': ('checks', 'today-required'), 'workflow_dispatch': ('install-smoke',)}
 
 
 def digest(data):
@@ -52,25 +56,30 @@ def product_identity(app):
 
 def check_install(root, args, run):
     """Read GitHub live on every authorized manual install preflight; offline blocks."""
-    sha, run_id = args.commit, getattr(args, 'main_run', '')
-    if not re.fullmatch(r'[0-9a-f]{40}', sha) or not re.fullmatch(r'[1-9][0-9]*', str(run_id)):
-        raise ValueError('main_gate_exact_commit_and_run_required')
+    sha = args.commit
+    runs = {'push': getattr(args, 'main_run', ''), 'workflow_dispatch': getattr(args, 'smoke_run', '')}
+    if not re.fullmatch(r'[0-9a-f]{40}', sha) or any(
+            not re.fullmatch(r'[1-9][0-9]*', str(run_id)) for run_id in runs.values()):
+        raise ValueError('main_gate_exact_commit_and_runs_required')
     def api(path):
         return run(['gh', 'api', 'repos/luworks/one-app/' + path], root)
     def require_current():
         if json.loads(api('commits/main'))['sha'] != sha:
             raise ValueError('main_gate_current_main_mismatch')
+    def require_run(event, run_id):
+        info = json.loads(api('actions/runs/' + str(run_id)))
+        if (info.get('head_sha') != sha or info.get('head_branch') != 'main' or info.get('event') != event
+                or info.get('path') != '.github/workflows/today.yml' or info.get('status') != 'completed'
+                or info.get('conclusion') != 'success'):
+            raise ValueError('main_gate_completed_main_run_required')
+        jobs = json.loads(api('actions/runs/' + str(run_id) + '/attempts/' + str(info['run_attempt'])
+                              + '/jobs?per_page=100'))['jobs']
+        conclusions = {job.get('name'): job.get('conclusion') for job in jobs}
+        if any(conclusions.get(name) != 'success' for name in REQUIRED[event]):
+            raise ValueError('main_gate_required_jobs_missing')
+        return info['run_attempt']
     require_current()
-    info = json.loads(api('actions/runs/' + str(run_id)))
-    if (info.get('head_sha') != sha or info.get('head_branch') != 'main' or info.get('event') != 'push'
-            or info.get('path') != '.github/workflows/today.yml' or info.get('status') != 'completed'
-            or info.get('conclusion') != 'success'):
-        raise ValueError('main_gate_completed_main_run_required')
-    jobs = json.loads(api('actions/runs/' + str(run_id) + '/attempts/' + str(info['run_attempt'])
-                          + '/jobs?per_page=100'))['jobs']
-    conclusions = {job.get('name'): job.get('conclusion') for job in jobs}
-    if any(conclusions.get(name) != 'success' for name in REQUIRED_JOBS):
-        raise ValueError('main_gate_required_jobs_missing')
+    attempts = {event: require_run(event, run_id) for event, run_id in runs.items()}
     tree = probe(['git', 'rev-parse', 'HEAD^{tree}'], root)
     tools = tool_identity()
     path = getattr(args, 'build_receipt', None)
@@ -91,9 +100,9 @@ def check_install(root, args, run):
         raise ValueError('main_gate_device_product_changed')
     # Reject an obsolete source or rerun that started while evidence was read.
     require_current()
-    latest = json.loads(api('actions/runs/' + str(run_id)))
-    if latest.get('run_attempt') != info['run_attempt'] or latest.get('status') != 'completed' or latest.get('conclusion') != 'success':
+    if {event: require_run(event, run_id) for event, run_id in runs.items()} != attempts:
         raise ValueError('main_gate_run_changed')
     if probe(['git', 'rev-parse', 'HEAD'], root) != sha or probe(['git', 'status', '--porcelain'], root):
         raise ValueError('main_gate_source_changed')
-    return {'sha': sha, 'run_id': str(run_id), 'jobs': list(REQUIRED_JOBS), 'phone': 'not_installed'}
+    return {'sha': sha, 'main_run': str(runs['push']), 'smoke_run': str(runs['workflow_dispatch']),
+            'phone': 'not_installed'}
