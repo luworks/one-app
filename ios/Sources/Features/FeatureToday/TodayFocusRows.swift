@@ -27,10 +27,12 @@
       if let restore {
         Button(restoreLabel, systemImage: "arrow.uturn.backward", action: restore)
       } else {
-        Button("Settle", systemImage: "checkmark", action: settle)
+        Button("Settle", systemImage: "checkmark.circle.fill", action: settle)
       }
       if showSnooze {
-        Button(restore == nil ? "Snooze" : "Change Snooze", systemImage: "clock", action: snooze)
+        Button(
+          restore == nil ? "Snooze" : "Change Snooze", systemImage: "clock.circle.fill",
+          action: snooze)
       }
     }
 
@@ -41,14 +43,15 @@
             if let delete { Button("Delete", systemImage: "trash", action: delete).tint(.red) }
             if showSnooze {
               Button(
-                restore == nil ? "Snooze" : "Change Snooze", systemImage: "clock", action: snooze
+                restore == nil ? "Snooze" : "Change Snooze", systemImage: "clock.circle.fill",
+                action: snooze
               ).tint(.gray)
             }
             if let restore {
               Button(restoreLabel, systemImage: "arrow.uturn.backward", action: restore).tint(
                 .indigo)
             } else {
-              Button("Settle", systemImage: "checkmark", action: settle).tint(.indigo)
+              Button("Settle", systemImage: "checkmark.circle.fill", action: settle).tint(.indigo)
             }
           }
           .contextMenu {
@@ -74,6 +77,7 @@
     let commit: (Date) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var custom = false
+    @State private var committing = false
     @State private var until: Date
 
     init(now: Date, calendar: Calendar, commit: @escaping (Date) -> Void) {
@@ -106,6 +110,7 @@
             Text("Only hides this item in Today. Dates and alerts stay unchanged.")
           }
         }
+        .disabled(committing)
         .navigationTitle("Snooze")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -114,9 +119,10 @@
     }
 
     private func choose(_ date: Date) {
-      guard date > now, date.timeIntervalSinceReferenceDate.isFinite else { return }
-      commit(date)
+      guard !committing, date > now, date.timeIntervalSinceReferenceDate.isFinite else { return }
+      committing = true
       dismiss()
+      commit(date)
     }
   }
 #endif
