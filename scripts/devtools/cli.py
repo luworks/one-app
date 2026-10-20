@@ -29,6 +29,8 @@ def main(argv=None, root=ROOT):
     sub.add_parser('help', help='show supported commands')
     sub.add_parser('doctor', help='read-only environment checks; no simulator boot')
     sub.add_parser('inventory', help='read-only worktree, locks and tools')
+    cleanup = sub.add_parser('cleanup', help='dry-run retention; --apply removes only eligible generated artifacts')
+    cleanup.add_argument('--apply', action='store_true')
     plan = sub.add_parser('plan', help='read-only fingerprint and provenance; executes nothing')
     plan.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench', 'TodayTests', 'TodaySnapshotTests', 'TodayCI'], default='Today')
     plan.add_argument('--sdk', default='iphonesimulator')
@@ -56,7 +58,7 @@ def main(argv=None, root=ROOT):
     build_parser.add_argument('--for-testing', action='store_true', help='prepare authoritative test products without booting a device or running tests')
     build_parser.add_argument('--timeout', type=float, default=None, help='per-process seconds; default 600')
     test_parser = sub.add_parser('test', help='run an authoritative test group')
-    test_parser.add_argument('group', choices=['helpers', 'unit', 'ios-unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
+    test_parser.add_argument('group', choices=['helpers', 'qa', 'unit', 'ios-unit', 'integration', 'ui', 'snapshot', 'accessibility', 'core', 'release'])
     test_parser.add_argument('--only', action='append', default=[])
     test_parser.add_argument('--allow-skip', action='append', default=[], choices=['hardware', 'screenshot', 'time'])
     test_parser.add_argument('--timeout', type=float, default=None, help='per-process seconds; default 600')
@@ -90,6 +92,11 @@ def main(argv=None, root=ROOT):
         return 0
     try:
         root = Path(root).resolve()
+        if args.command == 'cleanup':
+            sys.path.insert(0, str(root / 'tests/qa'))
+            from retention import run
+            print(json.dumps(run(root, apply=args.apply), indent=2))
+            return 0
         if args.command == 'report':
             from .report import collect
             result = collect(root, args.paths)
@@ -153,7 +160,12 @@ def main(argv=None, root=ROOT):
                     options['allow_skips'] = args.allow_skip
                 if args.timeout is not None and args.timeout <= 0:
                     raise ValueError('--timeout must be positive')
-                return commands.test(root, args.group, only=args.only, full=args.full, **options)
+                code = commands.test(root, args.group, only=args.only, full=args.full, **options)
+                if args.group in ('ui', 'core', 'accessibility', 'release'):
+                    sys.path.insert(0, str(root / 'tests/qa'))
+                    from retention import after_run
+                    after_run(root)
+                return code
             if args.command == 'format':
                 return commands.format_sources(root, check=args.check)
             if args.command == 'lint':

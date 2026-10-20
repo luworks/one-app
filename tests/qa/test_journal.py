@@ -15,7 +15,7 @@ spec.loader.exec_module(j)
 
 class JournalTests(unittest.TestCase):
     def test_migration_is_exact_app_contract(self):
-        source = (j.ROOT / 'ios/One/ActivityStore.swift').read_text()
+        source = (j.ROOT / 'ios/Sources/TodayData/ActivityStore.swift').read_text()
         sql = re.search(r'static let migrations: \[String\] = \[\s*"""\n(.*?)\n\s*"""', source, re.S).group(1)
         self.assertEqual(j.SCHEMA.read_text(), textwrap.dedent(sql) + '\n')
 

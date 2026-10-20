@@ -35,3 +35,13 @@ For authorized multi-task Today iOS coordination, follow [Zhugeliang](docs/opera
 - Store generated history and evidence in the primary checkout's `tests/results/`, including when working from a temporary worktree. This local database is separate from the app's user Activity database and must not be pruned or deleted during worktree cleanup.
 - Keep raw logs, screenshots, videos and complete `xcresult` bundles as files indexed by SQLite paths and hashes. Archive completed runs coherently; do not move or finalize a live bundle. Imported historical timestamps describe import time; original execution timing remains in the raw logs.
 - Version code, fixtures and compact evidence summaries in Git. Runtime SQLite files and large artifacts stay in the persistent results directory. Use `./dev`'s durable default output (the UI adapter retains `ios/Eval/run-e2e.py` as its underlying authority), and retain any explicitly selected temporary output before claiming completion.
+
+### Authorized generated-storage retention
+
+The owner's 2026-10-20 storage-cleanup scope permits the bounded exceptions in
+[QA retention](tests/qa/README.md#generated-storage-retention): retired compiler
+cache components, and aged, closed raw copies only when a complete hash-verified
+journal archive remains. This is not permission to sweep `tests/results`, delete
+the journal, remove fixtures/source, prune devices/worktrees, or retire referenced,
+pinned, active or uncertain evidence. Use `./dev cleanup` to review and
+`./dev cleanup --apply` to apply the same fail-closed policy.
