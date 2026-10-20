@@ -80,10 +80,15 @@ def verify():
 
 def main():
     TEMP.mkdir(parents=True, exist_ok=True)
-    if os.environ.get('SIM_CACHE_HIT') == 'true':
+    warm = os.environ.get('SIM_CACHE_HIT') == 'true'
+    if warm:
         # Let CoreSimulator rescan the restored device directories.
         subprocess.run(['pkill', '-f', 'CoreSimulatorService'])
     udid = simulator()
+    # A restored device already finished first-boot setup, so it can boot during the build.
+    # A cold first boot is CPU-heavy and made the build 4x slower, so it waits.
+    boot = subprocess.Popen(['xcrun', 'simctl', 'bootstatus', udid, '-b'], cwd=ROOT,
+                            stdout=subprocess.DEVNULL) if warm else None
     run('./dev', 'bootstrap', '--tool', 'xcodegen')
     run('./dev', 'generate')
     lock = ROOT / 'ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved'
@@ -91,7 +96,6 @@ def main():
     lock.write_bytes((ROOT / 'ios/Dependencies/Package.resolved').read_bytes())
     step('project generated')
     destination = 'platform=iOS Simulator,id=' + udid
-    # A concurrent simulator boot made this build 4x slower on the hosted runner.
     run('xcodebuild', 'build-for-testing', '-quiet', '-project', 'ios/Today.xcodeproj', '-scheme', 'TodayCI',
         '-configuration', 'Debug', '-destination', 'generic/platform=iOS Simulator', '-jobs', '2',
         'ARCHS=arm64', *FLAGS)
@@ -101,7 +105,10 @@ def main():
         info = plistlib.loads((products / path / 'Info.plist').read_bytes())
         if info.get('CFBundleIdentifier') != identifier or not (products / path / info['CFBundleExecutable']).is_file():
             raise SystemExit('Missing production product: ' + path)
-    run('xcrun', 'simctl', 'bootstatus', udid, '-b')
+    if boot is None:
+        run('xcrun', 'simctl', 'bootstatus', udid, '-b')
+    elif boot.wait():
+        raise SystemExit('Simulator failed to boot')
     step('simulator ready')
     busy()
     xctestrun = sorted(DD.glob('Build/Products/TodayCI_*.xctestrun'))
@@ -121,10 +128,10 @@ def main():
         time.sleep(20)
     code = test.wait()
     step('tests finished')
-    # A cleanly shut down device can be cached so the next runner skips first-boot setup.
-    run('xcrun', 'simctl', 'shutdown', udid)
-    step('simulator shut down')
-    subprocess.run(['du', '-sh', str(Path.home() / 'Library/Developer/CoreSimulator/Devices' / udid)])
+    if not warm:
+        # A cleanly shut down device is cached so the next runner skips first-boot setup.
+        run('xcrun', 'simctl', 'shutdown', udid)
+        step('simulator shut down')
     verify()
     return code
 
