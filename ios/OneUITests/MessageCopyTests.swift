@@ -10,7 +10,7 @@ final class MessageCopyTests: XCTestCase {
     app.launchArguments = ["-uiTesting"]
     app.launch()
     app.buttons["Ask AI or add anything"].tap()
-    let f = app.textFields["Ask AI or add anything"].firstMatch
+    let f = app.textViews["Ask AI or add anything"].firstMatch
     let field = f.exists ? f : app.textViews.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.tap()
@@ -32,7 +32,7 @@ final class MessageCopyTests: XCTestCase {
     app.launchArguments = ["-uiTesting"]
     app.launch()
     app.buttons["Ask AI or add anything"].tap()
-    let f = app.textFields["Ask AI or add anything"].firstMatch
+    let f = app.textViews["Ask AI or add anything"].firstMatch
     let field = f.exists ? f : app.textViews.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.tap()

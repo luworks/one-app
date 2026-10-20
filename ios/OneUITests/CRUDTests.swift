@@ -620,7 +620,7 @@ final class CRUDTests: XCTestCase {
     ).firstMatch
   }
 
-  private var askField: XCUIElement { app.textFields["Ask AI or add anything"].firstMatch }
+  private var askField: XCUIElement { app.textViews["Ask AI or add anything"].firstMatch }
 
   /// Ask AI bar: send a message, see it in the sidebar; reopen a chat; New chat from the sidebar.
   func testChatCreateAndReopen() {

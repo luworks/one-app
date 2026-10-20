@@ -25,7 +25,7 @@ final class AskEditTests: XCTestCase {
   }
 
   private var field: XCUIElement {
-    let f = app.textFields["Ask AI or add anything"].firstMatch
+    let f = app.textViews["Ask AI or add anything"].firstMatch
     return f.exists ? f : app.textViews.firstMatch
   }
 

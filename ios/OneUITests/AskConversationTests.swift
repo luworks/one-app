@@ -15,7 +15,7 @@ final class AskConversationTests: XCTestCase {
   }
 
   private func send(_ text: String) {
-    let input = app.textFields["Ask AI or add anything"].firstMatch
+    let input = app.textViews["Ask AI or add anything"].firstMatch
     XCTAssertTrue(input.waitForExistence(timeout: 10))
     input.tap()
     input.typeText(text + "\n")

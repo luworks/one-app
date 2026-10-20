@@ -136,7 +136,7 @@ final class PerformanceBaselineTests: XCTestCase {
     app.terminate()
     app.launch()
     app.buttons["Ask AI or add anything"].tap()
-    let field = app.textFields["Ask AI or add anything"].firstMatch
+    let field = app.textViews["Ask AI or add anything"].firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     sample("plan_preview_including_typing") {
       field.tap()

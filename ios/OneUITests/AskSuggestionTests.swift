@@ -71,7 +71,7 @@ final class AskSuggestionTests: XCTestCase {
   }
 
   private func send(_ text: String) {
-    let field = app.textFields["Ask AI or add anything"].firstMatch
+    let field = app.textViews["Ask AI or add anything"].firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.tap()
     field.typeText(text + "\n")

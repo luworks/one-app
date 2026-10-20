@@ -15,13 +15,13 @@ final class AIAnnualCheckTests: XCTestCase {
   }
 
   private func send(_ text: String) {
-    let input = app.textFields["Ask AI or add anything"].firstMatch
+    let input = app.textViews["Ask AI or add anything"].firstMatch
     let field = input.exists ? input : app.textViews.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.tap()
     field.typeText(text)
-    app.buttons["Send"].tap()
-    XCTAssertTrue(app.buttons["Send"].waitForNonExistence(timeout: 5))
+    app.buttons["ask-send"].tap()
+    XCTAssertTrue(app.buttons["ask-send"].waitForNonExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["Thinking…"].waitForNonExistence(timeout: 15))
   }
 

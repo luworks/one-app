@@ -33,8 +33,8 @@ final class JourneyTests: XCTestCase {
   func testJ1_addTimedTaskFromOneLine() {
     tap(app.buttons["Ask AI or add anything"])
     let field =
-      app.textFields["Ask AI or add anything"].firstMatch.exists
-      ? app.textFields["Ask AI or add anything"].firstMatch
+      app.textViews["Ask AI or add anything"].firstMatch.exists
+      ? app.textViews["Ask AI or add anything"].firstMatch
       : app.textViews.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.typeText("Call Alex tomorrow at 3pm\n")
@@ -229,8 +229,8 @@ final class JourneyTests: XCTestCase {
     tap(app.buttons["Ask AI or add anything"])
     // The suggestion chips change with the data, so the sentence is typed, as a user would.
     let field =
-      app.textFields["Ask AI or add anything"].firstMatch.exists
-      ? app.textFields["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
+      app.textViews["Ask AI or add anything"].firstMatch.exists
+      ? app.textViews["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.typeText("Plan my day\n")
     XCTAssertTrue(app.staticTexts["Plan for today"].waitForExistence(timeout: 5))

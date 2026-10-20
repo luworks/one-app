@@ -56,14 +56,14 @@ final class AIRecurringReminderTests: XCTestCase {
       .containing(.button, identifier: "Add").firstMatch
   }
   private var field: XCUIElement {
-    let input = app.textFields["Ask AI or add anything"].firstMatch
+    let input = app.textViews["Ask AI or add anything"].firstMatch
     return input.exists ? input : app.textViews.firstMatch
   }
   private func send(_ text: String) {
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.tap()
     field.typeText(text)
-    let send = app.buttons["Send"]
+    let send = app.buttons["ask-send"]
     XCTAssertTrue(send.waitForExistence(timeout: 5))
     send.tap()
     XCTAssertTrue(send.waitForNonExistence(timeout: 5))

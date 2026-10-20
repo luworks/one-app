@@ -10,7 +10,7 @@ final class LocalConversationResponseTests: XCTestCase {
     app.launch()
     defer { app.terminate() }
     app.buttons["Ask AI or add anything"].tap()
-    let input = app.textFields["Ask AI or add anything"].firstMatch
+    let input = app.textViews["Ask AI or add anything"].firstMatch
     XCTAssertTrue(input.waitForExistence(timeout: 5))
     input.tap()
     input.typeText("Hello\n")

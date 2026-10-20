@@ -70,7 +70,7 @@ final class TabMemoryTests: XCTestCase {
     XCTAssertEqual(plus.label, "Add to Today")
     capture("navigation-after-today")
     chat.tap()
-    let input = app.textFields["Ask AI or add anything"].firstMatch
+    let input = app.textViews["Ask AI or add anything"].firstMatch
     XCTAssertTrue(
       input.waitForExistence(timeout: 3) || app.textViews.firstMatch.waitForExistence(timeout: 3))
     XCTAssertFalse(

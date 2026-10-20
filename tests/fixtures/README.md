@@ -271,3 +271,5 @@ QA retention's host-only synthetic cache/run inputs are small inline bytes and
 JSON in `tests/qa/test_retention.py`, created in isolated temporary directories.
 They are not reusable UI datasets; the production retention policy lives in
 `tests/qa/retention.json` and is never taken from a temporary file.
+
+`ask-reading-history.json` contains 36 synthetic long chat messages for `AskReadingPositionTests`. The Mock-only `-uiTestingAskReplyDelay` capability delays replies and capture parsing by twelve seconds so a real history pan can finish before a reply/card arrives. `AskInteractionTests` keeps short native text-input and injected Calendar read fixtures inline beside its tests.

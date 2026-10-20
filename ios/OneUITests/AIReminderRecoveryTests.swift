@@ -130,14 +130,14 @@ final class AIReminderRecoveryTests: XCTestCase {
     XCTAssertTrue(button.waitForExistence(timeout: 5))
     XCTAssertTrue(button.isHittable && button.isFullyVisible(in: app.frame))
     button.tap()
-    XCTAssertTrue(app.textFields["Ask AI or add anything"].firstMatch.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.textViews["Ask AI or add anything"].firstMatch.waitForExistence(timeout: 5))
   }
   private func send(_ text: String) {
-    let field = app.textFields["Ask AI or add anything"].firstMatch
+    let field = app.textViews["Ask AI or add anything"].firstMatch
     field.tap()
     field.typeText(text)
-    app.buttons["Send"].tap()
-    XCTAssertTrue(app.buttons["Send"].waitForNonExistence(timeout: 5))
+    app.buttons["ask-send"].tap()
+    XCTAssertTrue(app.buttons["ask-send"].waitForNonExistence(timeout: 5))
     XCTAssertTrue(app.staticTexts["Thinking…"].waitForNonExistence(timeout: 15))
   }
   private func assertAdded() {
