@@ -80,6 +80,9 @@ def verify():
 
 def main():
     TEMP.mkdir(parents=True, exist_ok=True)
+    if os.environ.get('SIM_CACHE_HIT') == 'true':
+        # Let CoreSimulator rescan the restored device directories.
+        subprocess.run(['pkill', '-f', 'CoreSimulatorService'])
     udid = simulator()
     run('./dev', 'bootstrap', '--tool', 'xcodegen')
     run('./dev', 'generate')
