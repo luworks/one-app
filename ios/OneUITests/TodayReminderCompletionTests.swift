@@ -29,6 +29,8 @@ final class TodayReminderCompletionTests: XCTestCase {
       app.launchArguments += ["-uiTestingCalendarSync"]
       // This owned-simulator fixture must not inherit a cancelled/denied Calendar prompt from another run.
       app.resetAuthorizationStatus(for: .calendar)
+      // Revoking authorization must also reset the saved toggle before exercising first-time connection.
+      app.launchArguments += ["-one.calendarSync.enabled", "NO"]
     }
     app.launch()
     app.openSidebar()
