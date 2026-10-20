@@ -164,26 +164,4 @@ final class TodayTomorrowTests: XCTestCase {
     XCTAssertTrue(review.exists, "Review today remains available inside the disclosure")
     assertCompleteTomorrow(app)
   }
-
-  func testHeaderOpensTomorrowAsItsOwnDay() {
-    let app = launch(at: "09:41")
-    tomorrow(app).tap()
-    let open = app.buttons["tomorrow.openDay"]
-    reveal(open, in: app)
-    open.tap()
-    XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
-    XCTAssertFalse(app.buttons["tomorrowHeader"].exists)
-    let nextDay = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
-    XCTAssertEqual(
-      app.staticTexts["todayDate"].label,
-      nextDay.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
-    let task = app.staticTexts["Tomorrow timed task"].firstMatch
-    reveal(task, in: app)
-    task.tap()
-    XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 3))
-    XCTAssertEqual(app.textFields["task.title"].value as? String, "Tomorrow timed task")
-    app.buttons["Cancel"].tap()
-    app.buttons["Back to today"].tap()
-    XCTAssertEqual(tomorrow(app).value as? String, "Collapsed")
-  }
 }

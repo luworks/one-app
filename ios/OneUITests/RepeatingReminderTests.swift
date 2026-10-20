@@ -48,8 +48,12 @@ final class RepeatingReminderTests: XCTestCase {
     XCTAssertEqual(rowsOnToday(), 0, "it leaves today's timeline")
 
     // Its next occurrence is tomorrow's own day.
-    header.tap()
-    app.buttons["tomorrow.openDay"].tap()
+    app.buttons["Calendar"].firstMatch.tap()
+    app.buttons["calendar.mode.week"].tap()
+    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
+    let day = app.buttons[tomorrow.formatted(date: .complete, time: .omitted)].firstMatch
+    XCTAssertTrue(day.waitForExistence(timeout: 5))
+    day.tap()
     XCTAssertTrue(
       app.buttons["Back to today"].waitForExistence(timeout: 5),
       "tomorrow opens as a day of its own")
