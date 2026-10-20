@@ -20,6 +20,9 @@ Final warm breakdown, `today-required`: setup/checkout/SPM cache 9 s, device cac
 
 - Warm (device cache hit): about **6.8 min**. Cold (first run after a runner image update, cache miss): about **10.5 min**. Neither meets 300 s.
 - Remaining cost: build plus boot plus device settling plus the test run, all on a 3-CPU runner. A simulator booting while the build runs slows the build 4–5×, for cold and restored devices alike, so these steps cannot overlap on this runner.
+- Cache scope: a branch can read only its own caches and those of `main`. The first `main` push after merge is therefore a cold run (~630 s). It saves the main cache, which later PRs and main pushes restore. Each runner image update costs one more cold run.
+- Install preflight: rewritten `check_install` makes 3–4 `gh api` reads (seconds) plus the existing local device-receipt checks. Covered by `tests/ci/test_main_gate.py`; not exercised end to end here, because that needs the owner's device-build receipt.
+- Pre-existing failures, identical on main `a56646b`, not run in CI: `tests/devtools` (3 failures, 2 errors that depend on the host environment) and `tests/testing` (3 failures, 1 error).
 - This floor holds only for the free standard hosted runner. It is not a limit for every simulator setup.
 
 ## Decision needed from Yuan
