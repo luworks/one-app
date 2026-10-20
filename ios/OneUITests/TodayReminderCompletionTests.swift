@@ -88,6 +88,18 @@ final class TodayReminderCompletionTests: XCTestCase {
   /// Actual simulator EventKit imports exercise the production adapters, not empty/local-only Mock rows.
   func testImportedTimelineNavigationAndCancelledEditorsStayResponsive() throws {
     connect(includeCalendar: true)
+    try assertImportedTimelineJourney()
+  }
+
+  /// CI smoke: the same imported journey without the Settings connection flow. The runner grants
+  /// Reminders and Calendar access with `simctl privacy` and both syncs start on from launch arguments.
+  func testPreconnectedImportedTimelineStaysResponsive() throws {
+    try assertImportedTimelineJourney(extra: [
+      "-today.remindersSync.enabled", "YES", "-one.calendarSync.enabled", "YES",
+    ])
+  }
+
+  private func assertImportedTimelineJourney(extra: [String] = []) throws {
     let data = try Data(
       contentsOf: URL(fileURLWithPath: TestData.fixturePath("phone-freeze-navigation.json")))
     let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: String])
@@ -96,7 +108,7 @@ final class TodayReminderCompletionTests: XCTestCase {
     let eventTitle = try XCTUnwrap(fixture["eventTitle"]) + " " + suffix
     let app = launch(
       title: title, store: "freeze-navigation-" + suffix, seed: true,
-      extra: ["-uiTestingCalendarSync", "-debugCreateSystemEvent", eventTitle])
+      extra: ["-uiTestingCalendarSync", "-debugCreateSystemEvent", eventTitle] + extra)
     assertState(app, done: false)
     XCTAssertTrue(app.staticTexts[title].firstMatch.waitForExistence(timeout: 8))
     let event = app.descendants(matching: .any).matching(

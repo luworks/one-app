@@ -22,7 +22,7 @@ TESTS = (
     'TodayTests/PlannerSessionTests/populatedDayAgendaRenderUsesImportedSnapshotsWithoutNativeLookups()',
     'TodayTests/PlannerSessionTests/importedFocusRenderingNeverOpensNativeStoreAndWritesStillRevalidate()',
     'TodayTests/PlannerSessionTests/savedCalendarSnoozeHydratesOutsideOriginalDayAndRejectsStaleImports()',
-    'TodayUITests/TodayReminderCompletionTests/testImportedTimelineNavigationAndCancelledEditorsStayResponsive',
+    'TodayUITests/TodayReminderCompletionTests/testPreconnectedImportedTimelineStaysResponsive',
 )
 PRODUCTS = {'One.app': 'com.luworks.one',
             'One.app/PlugIns/TodayWidgets.appex': 'com.luworks.one.widgets',
@@ -94,27 +94,23 @@ def main():
         info = plistlib.loads((products / path / 'Info.plist').read_bytes())
         if info.get('CFBundleIdentifier') != identifier or not (products / path / info['CFBundleExecutable']).is_file():
             raise SystemExit('Missing production product: ' + path)
-    subprocess.run('ls -la /Library/Developer/CoreSimulator/Caches/dyld/*/* 2>&1 | head -20', shell=True)
     run('xcrun', 'simctl', 'bootstatus', udid, '-b')
     step('simulator ready')
-    subprocess.run('ls -la /Library/Developer/CoreSimulator/Caches/dyld/*/* 2>&1 | head -20', shell=True)
+    subprocess.run('ps -Ao pcpu=,rss=,comm= -r | head -12 | cut -c1-150; sysctl -n hw.ncpu hw.memsize', shell=True)
     xctestrun = sorted(DD.glob('Build/Products/TodayCI_*.xctestrun'))
     if len(xctestrun) != 1:
         raise SystemExit('Expected one TodayCI xctestrun')
-    # Pre-grant Reminders so the cold simulator's permission sheet timing is not under test.
-    run('xcrun', 'simctl', 'privacy', udid, 'grant', 'reminders', 'com.luworks.one')
+    # The smoke journey starts connected; the permission sheets are covered by the full UI suite.
+    for service in ('reminders', 'calendar'):
+        run('xcrun', 'simctl', 'privacy', udid, 'grant', service, 'com.luworks.one')
+    step('access granted')
     test = subprocess.Popen(['xcodebuild', 'test-without-building', '-xctestrun', str(xctestrun[0]),
                              '-destination', destination, '-resultBundlePath', str(RESULT),
                              '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
                              *FLAGS[:2], *['-only-testing:' + test for test in TESTS]], cwd=ROOT)
-    for delay in (40, 100):
-        try:
-            test.wait(timeout=delay)
-            break
-        except subprocess.TimeoutExpired:
-            step('sampling xcodebuild')
-            subprocess.run(f'sample {test.pid} 2 -mayDie 2>/dev/null | grep -E "^ +[0-9]+ " | head -120 | cut -c1-200',
-                           shell=True)
+    while test.poll() is None and time.monotonic() - STARTED < 900:
+        subprocess.run('ps -Ao pcpu=,rss=,comm= -r | head -6 | cut -c1-150', shell=True)
+        time.sleep(20)
     code = test.wait()
     step('tests finished')
     verify()
