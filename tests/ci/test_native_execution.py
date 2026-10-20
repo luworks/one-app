@@ -156,7 +156,11 @@ class CoreUIExecutionTests(unittest.TestCase):
     def test_process_error_preserves_partial_build_log_and_fails_before_tests(self):
         self.run_ci_ui(process_error=True)
 
-    def run_ci_ui(self, build_code=0, inventory_error=False, cached=False, process_error=False):
+    def test_wrong_installed_product_stops_before_native_test_dispatch(self):
+        self.run_ci_ui(wrong_installed=True)
+
+    def run_ci_ui(self, build_code=0, inventory_error=False, cached=False, process_error=False,
+                  wrong_installed=False):
         path = Path(__file__).resolve().parents[2] / 'ios/Eval/run-e2e.py'
         spec = importlib.util.spec_from_file_location('ci_ui_runner', path)
         runner = importlib.util.module_from_spec(spec)
@@ -167,7 +171,11 @@ class CoreUIExecutionTests(unittest.TestCase):
 
         def action(command, function, **kwargs):
             calls.append(command)
-            return 'synthetic-head' if command[0] == 'git' else SimpleNamespace(returncode=0)
+            if command[0] == 'git':
+                return 'synthetic-head'
+            if command[:3] == ['xcrun', 'simctl', 'get_app_container']:
+                return str(base / 'installed.app')
+            return SimpleNamespace(returncode=0)
 
         journal.action.side_effect = action
         with tempfile.TemporaryDirectory() as temporary:
@@ -212,6 +220,12 @@ class CoreUIExecutionTests(unittest.TestCase):
                     patch.object(runner, 'run_logged', side_effect=logged), \
                     patch.object(runner, 'execute', side_effect=execute), \
                     patch.object(runner, 'ensure_test_products', side_effect=ensure) as build, \
+                    patch.object(runner, 'fingerprint', return_value={'sha256': 'synthetic-source'}), \
+                    patch.object(runner, 'provenance', return_value={'valid': True}), \
+                    patch.object(runner, 'mock_ui_product', return_value={
+                        'app': str(base / 'TodayMock.app'), 'identity': {'payload_sha256': 'mock'}}), \
+                    patch.object(runner, 'mock_app_identity', return_value={
+                        'payload_sha256': 'live' if wrong_installed else 'mock'}), \
                     patch.object(runner, 'read_xcresult', return_value=[{
                         'test': selected[0], 'status': 'passed', 'source': 'xcresult'}]), \
                     patch('scripts.devtools.resolve.locked_arguments', return_value=['-disableAutomaticPackageResolution']):
@@ -231,6 +245,11 @@ class CoreUIExecutionTests(unittest.TestCase):
                 self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'shutdown'] for c in calls))
                 self.assertFalse(any(c[:3] == ['xcrun', 'simctl', 'boot'] for c in calls))
                 self.assertFalse(any(c[0] == 'xcodebuild' for c in calls))
+                return
+            if wrong_installed:
+                self.assertEqual(code, 1)
+                self.assertIn('Installed UI product differs', (base / 'output/summary.json').read_text())
+                self.assertFalse(any(c[:2] == ['xcodebuild', 'test-without-building'] for c in calls))
                 return
             if cached:
                 self.assertEqual(code, 0)

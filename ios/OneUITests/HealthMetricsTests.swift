@@ -35,6 +35,41 @@ final class HealthMetricsTests: XCTestCase {
     app.buttons["health.row.\(id)"]
   }
 
+  func testHealthUpdateReachesTodayWithoutReopeningApp() throws {
+    let data = try Data(
+      contentsOf: URL(fileURLWithPath: TestData.fixturePath("health-today-sync.json")))
+    let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let arguments = try XCTUnwrap(fixture["launchArguments"] as? [String])
+    let app = launch(arguments)
+    let line = app.buttons["health.summary"]
+    func waitForValue(_ element: XCUIElement, _ value: String) {
+      let expectation = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "exists == true AND label CONTAINS %@", value),
+        object: element)
+      XCTAssertEqual(
+        XCTWaiter().wait(for: [expectation], timeout: 8), .completed, element.debugDescription)
+    }
+    func evidence(_ name: String) {
+      let screenshot = XCTAttachment(screenshot: app.screenshot())
+      screenshot.name = name
+      screenshot.lifetime = .keepAlways
+      add(screenshot)
+      let hierarchy = XCTAttachment(string: app.debugDescription)
+      hierarchy.name = name + "-hierarchy"
+      hierarchy.lifetime = .keepAlways
+      add(hierarchy)
+    }
+    waitForValue(line, "1,111")
+    evidence("today-A")
+    let steps = openSheet(app)
+    waitForValue(steps, "2,222")
+    evidence("health-B")
+    app.buttons["Done"].tap()
+    XCTAssertTrue(line.waitForExistence(timeout: 5))
+    evidence("today-after-health-B")
+    waitForValue(line, "2,222")
+  }
+
   // MARK: List
 
   func testListShowsTheDefaultRowsAndNoCards() {

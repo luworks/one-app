@@ -26,7 +26,8 @@ sys.path.insert(0, str(ROOT / "scripts/testing"))
 import contract
 
 sys.path.insert(0, str(ROOT))
-from scripts.devtools.core import (ci_test_scheme, derived_data, ensure_test_products, native_test_options)
+from scripts.devtools.core import (ci_test_scheme, derived_data, ensure_test_products, native_test_options,
+                                   fingerprint, provenance, mock_ui_product, mock_app_identity)
 from scripts.devtools.commands import execute
 from scripts.devtools.process import PhaseDiagnostics
 
@@ -323,12 +324,11 @@ def main(argv=None):
         summary["simulator_id"] = simulator
         summary["device_type"] = args.device_type
         summary["runtime"] = args.runtime
-        if (os.environ.get("TODAY_CI_SYNTHETIC") == "1"
-                and os.environ.get("TODAY_LANE") == "core-ui" and not args.test_products):
+        if not args.test_products:
             # One trusted build, using the same product/provenance authority as
             # native tests. Keep cold simulator startup out of native compilation.
             if derived != derived_data(ROOT).resolve():
-                raise ValueError("CI build reuse requires the canonical owned derived data")
+                raise ValueError("UI build reuse requires the canonical owned derived data")
             from scripts.devtools.resolve import locked_arguments
 
             validation_started = time.monotonic()
@@ -372,6 +372,21 @@ def main(argv=None):
             if value:
                 journal.action(["xcrun", "simctl", "ui", simulator, setting, value], subprocess.run, check=True)
         summary["display_settings"] = {"appearance": args.appearance, "content_size": args.content_size}
+        identity = fingerprint(ROOT, scheme=ci_test_scheme("TodayMock"), architecture="arm64")
+        receipt = provenance(ROOT, identity, kind="build-for-testing", xctestrun=args.test_products)
+        if not receipt["valid"]:
+            raise ValueError("UI product provenance rejected: " + receipt["reason"])
+        mock = mock_ui_product(ROOT, args.test_products)
+        if mock is None:
+            raise ValueError("Missing explicit Mock UI product")
+        journal.action(["xcrun", "simctl", "install", simulator, mock["app"]], subprocess.run, check=True)
+        installed = journal.action(
+            ["xcrun", "simctl", "get_app_container", simulator, "com.luworks.one", "app"], capture).strip()
+        if mock_app_identity(installed) != mock["identity"]:
+            raise ValueError("Installed UI product differs from verified TodayMock")
+        summary["mock_product"] = {**mock, "installed_app": installed,
+                                   "source_fingerprint": identity["sha256"]}
+        (output / "mock-product.json").write_text(json.dumps(summary["mock_product"], indent=2) + "\n")
         command = ui_command(selected, simulator, derived, output, args.test_products)
         summary["commands"].append(command)
         summary["attempts"]["ui"] = []

@@ -46,3 +46,48 @@ public struct ScriptedHealthSource: HealthSource {
     self.onRequest = onRequest
   }
 }
+
+/// Query-driven synthetic updates through the real HealthSource seam; no view or model state is changed.
+/// The first Steps query returns A. Opening/refreshing Health observes subsequent values from the same source.
+public actor SequencedHealthSource: HealthSource {
+  public nonisolated let isAvailable = true
+  public nonisolated let isSample = true
+  private let base: any HealthSource
+  private let values: [Double]
+  private var stepQueries = 0
+  private let identity = UUID()
+  private var trace: [[String: String]] = []
+
+  public init(base: any HealthSource, values: [Double]) {
+    self.base = base
+    self.values = values
+  }
+
+  public func requestAccess(for metrics: [HealthMetric]) async {
+    await base.requestAccess(for: metrics)
+  }
+
+  public func preferredUnits() async -> HealthUnits? { await base.preferredUnits() }
+
+  public func series(for metrics: [HealthMetric], days: Int, now: Date) async
+    -> [HealthMetric: HealthSeries]
+  {
+    var result = await base.series(for: metrics, days: days, now: now)
+    if metrics.contains(.steps) {
+      let value = values[min(stepQueries, values.count - 1)]
+      stepQueries += 1
+      result[.steps] = HealthSeries(points: [HealthPoint(date: now, value: value)])
+      trace.append([
+        "source": identity.uuidString, "query": String(stepQueries), "days": String(days),
+        "steps": String(value), "timestamp": Date().description,
+      ])
+      if let data = try? JSONEncoder().encode(trace) {
+        try? data.write(
+          to: FileManager.default.temporaryDirectory.appendingPathComponent("health-sequence.json"),
+          options: .atomic)
+      }
+      print("HealthSequence source=\(identity) query=\(stepQueries) days=\(days) steps=\(value)")
+    }
+    return result
+  }
+}
