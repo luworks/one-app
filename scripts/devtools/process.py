@@ -74,6 +74,46 @@ class ProcessResult:
     log: Path
 
 
+class PhaseDiagnostics:
+    """Independent partial evidence: allowlisted metadata, never acceptance or stdout."""
+    def __init__(self, argv):
+        self.path = None
+        self.start = time.monotonic()
+        self.pid = None
+        self.phase = 'process'
+        for value in map(str, argv):
+            if value in ('build', 'build-for-testing', 'test-without-building', 'bootstrap',
+                         'generate', 'resolve', 'business', 'integration', 'snapshots', 'core-ui'):
+                self.phase = value
+                break
+        if os.environ.get('TODAY_CI_DIAGNOSTICS') == '1':
+            directory = Path(os.environ['RUNNER_TEMP']) / 'today-diagnostics'
+            if any(p.is_symlink() for p in (directory, *directory.parents)):
+                raise ValueError('symlink diagnostic output rejected')
+            directory.mkdir(exist_ok=True)
+            self.path = directory / (uuid.uuid4().hex + '.jsonl')
+
+    def emit(self, event, **fields):
+        if self.path is None:
+            return
+        record = {'diagnostic_only': True, 'event': event, 'phase': self.phase,
+                  'pid': self.pid, 'started_unix': round(time.time() - (time.monotonic() - self.start), 3),
+                  'elapsed_seconds': round(time.monotonic() - self.start, 3), **fields}
+        line = json.dumps(record) + '\n'
+        # Each writer owns one file. Flush every record before continuing work.
+        with self.path.open('a', encoding='utf-8') as stream:
+            stream.write(line)
+            stream.flush()
+        print('DEV_PHASE ' + line.rstrip(), flush=True)
+
+    def observe(self, line):
+        # Keep source test identifiers only; drop titles, chat, Health values,
+        # arbitrary output and argv, even when they contain no recognizable secret.
+        match = re.search(r"Test Case '-?\[((?:Today|One)[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?) (test[A-Za-z0-9_]+)\]' (started|passed|failed|skipped)", line)
+        if match:
+            self.emit('selector', selector=match[1] + '/' + match[2], state=match[3])
+
+
 def build_activity(pid):
     """Read only this build's process tree; a failed probe must not fail a build."""
     result = {'cpu_count': os.cpu_count(), 'processes': []}
@@ -129,6 +169,8 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
     failure = None
     pending = b''
     start = time.monotonic()
+    diagnostics = PhaseDiagnostics(argv)
+    next_diagnostic = 30
     profile_build = Path(str(argv[0])).name == 'xcodebuild' and len(argv) > 1 and argv[1] in ('build', 'build-for-testing')
     next_profile = 0
     evidence.record(repr(evidence.redact.arguments(argv)), 'running')
@@ -140,6 +182,8 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
         with evidence.path.open('x', encoding='utf-8') as log, selectors.DefaultSelector() as selector:
             proc = subprocess.Popen(list(map(str, argv)), cwd=cwd, env=env,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+            diagnostics.pid = proc.pid
+            diagnostics.emit('started')
             selector.register(proc.stdout, selectors.EVENT_READ)
             pending = b''
             dropping_line = False
@@ -147,6 +191,9 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
             eof = False
             while not eof or proc.poll() is None:
                 now = time.monotonic()
+                if now - start >= next_diagnostic:
+                    diagnostics.emit('running')
+                    next_diagnostic = now - start + 30
                 if profile_build and now - start >= next_profile:
                     record = {'seconds': round(now - start, 3), **build_activity(proc.pid)}
                     log.write('DEV_BUILD_ACTIVITY ' + evidence.redact(json.dumps(record)) + '\n')
@@ -154,6 +201,7 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
                 if stopped is None and (cancelled.is_set() or (cancel and cancel.is_set()) or now - start >= timeout):
                     reason = 'cancelled' if cancelled.is_set() or (cancel and cancel.is_set()) else 'timeout'
                     stopped = now
+                    diagnostics.emit(reason)
                     _signal_group(proc.pid, signal.SIGTERM)
                 if stopped is not None and now - stopped >= grace:
                     _signal_group(proc.pid, signal.SIGKILL)
@@ -177,6 +225,7 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
                     while b'\n' in pending:
                         line, pending = pending.split(b'\n', 1)
                         decoded = evidence.redact(line.decode('utf-8', errors='replace'))
+                        diagnostics.observe(decoded)
                         if profile_build and decoded.startswith((
                                 'SwiftDriver ', 'SwiftCompile normal ', 'SwiftEmitModule ',
                                 'Ld ', 'ComputeTargetDependencyGraph', 'Resolve Package Graph')):
@@ -217,6 +266,8 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
                 proc.stdout.close()
         for sig, handler in handlers.items():
             signal.signal(sig, handler)
+        diagnostics.emit('reaped', exit=proc.returncode if proc else None, reason=reason,
+                         cleanup_failed=bool(cleanup_errors))
         if failure is None and cleanup_errors:
             failure = cleanup_errors.pop(0)
         if failure is not None:

@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.devtools.core import (ci_test_scheme, derived_data, ensure_test_products, native_test_options,
                                    fingerprint, provenance, mock_ui_product, mock_app_identity)
 from scripts.devtools.commands import execute
+from scripts.devtools.process import PhaseDiagnostics
 
 CASE = re.compile(r"Test Case '(.*?)' (passed|failed|skipped)")
 
@@ -84,6 +85,7 @@ def ui_command(selected, simulator, derived, output, test_products=None):
 
 
 def run_logged(command, logfile, progress, attempts, journal=None):
+    diagnostics = PhaseDiagnostics(command)
     command_id = uuid.uuid4().hex
     if journal:
         journal.record("qa.command.started", shlex.join(command), status="started", subject=command_id)
@@ -91,11 +93,14 @@ def run_logged(command, logfile, progress, attempts, journal=None):
     with logfile.open("w") as log:
         process = subprocess.Popen(command, cwd=IOS, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                    text=True, bufsize=1, start_new_session=True)
+        diagnostics.pid = process.pid
         try:
+            diagnostics.emit('started')
             current_test = None
             for line in process.stdout:
                 log.write(line)
                 log.flush()
+                diagnostics.observe(line)
                 started_case = re.search(r"Test Case '(.*?)' started", line)
                 if started_case:
                     current_test = started_case[1]
@@ -126,6 +131,7 @@ def run_logged(command, logfile, progress, attempts, journal=None):
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait()
             process.stdout.close()
+            diagnostics.emit('reaped', exit=process.returncode)
             if journal:
                 journal.record("qa.command.completed", shlex.join(command), status="completed",
                                subject=command_id, props={"exit_code": process.returncode})

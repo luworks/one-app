@@ -333,7 +333,11 @@ class ProducerTests(unittest.TestCase):
 
         def execute(argv, **kwargs):
             calls.append(argv)
-            self.assertEqual(kwargs['timeout'], 2100 if argv[:2] == ['./dev', 'ci'] else 600)
+            if argv[:2] == ['./dev', 'ci']:
+                self.assertGreater(kwargs['timeout'], 0)
+                self.assertLessEqual(kwargs['timeout'], producer.RUN_BUDGET)
+            else:
+                self.assertEqual(kwargs['timeout'], 600)
             self.assertEqual(kwargs['grace'], 30)
             if argv[0] == sys.executable:
                 self.write('selection.json', b'{}')

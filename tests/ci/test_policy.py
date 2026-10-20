@@ -206,6 +206,14 @@ class PrerequisiteTests(unittest.TestCase):
 
 
 class SetupTests(unittest.TestCase):
+    def setUp(self):
+        # These fixtures exercise PR dispatch. A push-to-main host must not
+        # change their selection or attempt to seal synthetic native receipts.
+        event = patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'pull_request',
+                                       'GITHUB_REF': 'refs/pull/1/merge'})
+        event.start()
+        self.addCleanup(event.stop)
+
     @staticmethod
     def finished(argv, **kwargs):
         if 'select' in argv:

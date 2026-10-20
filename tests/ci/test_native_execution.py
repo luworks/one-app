@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 import os
+import sys
 from pathlib import Path
 import tempfile
 import time
@@ -13,6 +14,60 @@ from unittest.mock import Mock, patch
 
 
 class BuildDiagnosticsTests(unittest.TestCase):
+    def test_partial_phase_is_flushed_before_timeout_without_a_receipt(self):
+        from scripts.devtools.process import Evidence, Redactor, run_process
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {
+                'RUNNER_TEMP': str(Path(temporary).resolve()), 'TODAY_CI_DIAGNOSTICS': '1'}):
+            evidence = Evidence(root, 'partial-diagnostics-regression', Redactor())
+            self.addCleanup(evidence.close)
+            observed = []
+
+            def inspect(chunk):
+                # Synchronous reader sees the start while the writer still runs.
+                observed.extend(Path(temporary).glob('today-diagnostics/*.jsonl'))
+                self.assertTrue(observed)
+                self.assertIn('started', observed[0].read_text())
+
+            script = ("import time; print(\"Test Case '-[OneUITests.HealthMetricsTests "
+                      "testHealthUpdate]' started.\", flush=True); "
+                      "print('private title chat Health value token=fixture-secret', flush=True); time.sleep(10)")
+            with contextlib.redirect_stdout(io.StringIO()):
+                result = run_process([sys.executable, '-c', script], cwd=root, evidence=evidence,
+                                     timeout=1, grace=0.1, output_observer=inspect)
+            self.assertEqual((result.returncode, result.reason), (124, 'timeout'))
+            self.assertTrue(observed)
+            raw = observed[0].read_text()
+            events = [json.loads(line) for line in raw.splitlines()]
+            self.assertEqual([e['event'] for e in events], ['started', 'selector', 'timeout', 'reaped'])
+            self.assertEqual(events[1]['selector'], 'OneUITests.HealthMetricsTests/testHealthUpdate')
+            self.assertTrue(all(e['diagnostic_only'] and e['pid'] > 0 for e in events))
+            self.assertNotIn('fixture-secret', raw)
+            self.assertNotIn('private title', raw)
+            self.assertFalse(list(Path(temporary).rglob('report.json')))
+            self.assertFalse(list(Path(temporary).rglob('*.xcresult')))
+            with self.assertRaises(ProcessLookupError):
+                os.kill(events[0]['pid'], 0)
+
+    def test_shared_deadline_reserves_cleanup_and_upload_and_never_dispatches_when_expired(self):
+        from scripts.ci import run
+        self.assertLessEqual(run.RUN_BUDGET + run.CLEANUP_GRACE + 150 + 180, 1800)
+        with patch.dict(os.environ, {'TODAY_CI_JOB_STARTED': '1000'}), \
+                patch.object(run.time, 'time', return_value=1300), \
+                patch.object(run.time, 'monotonic', return_value=400):
+            self.assertEqual(run.wrapper_deadline(), 400 + 1260)
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {
+                'RUNNER_TEMP': temporary, 'GITHUB_SHA': 'c' * 40}), \
+                patch.object(run, 'producer_boundary'), \
+                patch.object(run.subprocess, 'check_output', return_value='c' * 40), \
+                patch.object(run, 'execute') as execute, \
+                patch.object(run, 'close_producer'), \
+                patch.object(run, 'close_wrapper', side_effect=ValueError('missing receipt')), \
+                contextlib.redirect_stdout(io.StringIO()):
+            prepared = {'tools': set(), 'native': False, 'selection': b'{}', 'deadline': time.monotonic() - 1}
+            self.assertEqual(run.run_lane('business', prepared), 124)
+            execute.assert_not_called()
+
     def test_activity_keeps_only_owned_build_tree(self):
         from scripts.devtools.process import build_activity
         raw = ('10 1 1.0 100 00:01 xcodebuild build\n'
