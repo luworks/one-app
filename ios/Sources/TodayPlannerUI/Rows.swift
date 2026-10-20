@@ -49,7 +49,7 @@
         content
           .padding(.horizontal, 8)
           .contentShape(Rectangle())
-          .listRowInsets(EdgeInsets(top: 1, leading: 12, bottom: 1, trailing: 12))
+          .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12))
       } else {
         content
       }
@@ -107,11 +107,17 @@
         VStack(alignment: .leading, spacing: 1) {
           TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2)
           {
-            Label(detail, systemImage: "lock.fill")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .labelStyle(.titleAndIcon)
-              .lineLimit(1)
+            Group {
+              if attention != nil {
+                Text(detail)
+              } else {
+                Label(detail, systemImage: "lock.fill")
+                  .labelStyle(.titleAndIcon)
+              }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(attention != nil && typeSize.isAccessibilitySize ? nil : 1)
           }
           if let travel { TravelLine(text: travel) }
         }
@@ -126,8 +132,8 @@
       .listRowSeparator(.hidden)
       .listRowInsets(
         EdgeInsets(
-          top: 1, leading: attention == nil ? 20 : 12,
-          bottom: 1, trailing: attention == nil ? 20 : 12)
+          top: attention == nil ? 1 : 0, leading: attention == nil ? 20 : 12,
+          bottom: attention == nil ? 1 : 0, trailing: attention == nil ? 20 : 12)
       )
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(
@@ -207,7 +213,7 @@
     }
 
     package var body: some View {
-      HStack(spacing: 10) {
+      HStack(spacing: attention == nil ? 10 : 0) {
         if let suggested {
           TimeColumn(date: suggested).dynamicTypeSize(
             ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge)
@@ -222,7 +228,8 @@
           Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
             .font(.title3)
             .foregroundStyle(task.isDone ? Color.green : Color.secondary)
-            .frame(minWidth: 24)
+            .frame(minWidth: attention == nil ? 24 : 44, minHeight: attention == nil ? 0 : 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .sensoryFeedback(.success, trigger: task.isDone) { _, done in done }
@@ -242,6 +249,7 @@
           Image(systemName: "flag.fill")
             .font(.caption)
             .foregroundStyle(Color.accentColor)
+            .padding(.leading, attention == nil ? 0 : 6)
             .accessibilityLabel("Flagged")
         }
         if let suggested { planButton(suggested) }
@@ -257,8 +265,8 @@
       .listRowSeparator(.hidden)
       .listRowInsets(
         EdgeInsets(
-          top: attention != nil ? 1 : (compact ? 1 : 4), leading: attention == nil ? 20 : 12,
-          bottom: attention != nil ? 1 : (compact ? 1 : 4), trailing: attention == nil ? 20 : 12)
+          top: attention != nil ? 0 : (compact ? 1 : 4), leading: attention == nil ? 20 : 12,
+          bottom: attention != nil ? 0 : (compact ? 1 : 4), trailing: attention == nil ? 20 : 12)
       )
       // Same gestures as Apple Reminders: tap the circle to complete, swipe left for Delete / Flag,
       // long-press for the menu. (Delete has an Undo toast.)
@@ -466,8 +474,8 @@
       .listRowSeparator(.hidden)
       .listRowInsets(
         EdgeInsets(
-          top: 1, leading: attention == nil ? 20 : 12,
-          bottom: 1, trailing: attention == nil ? 20 : 12)
+          top: attention == nil ? 1 : 0, leading: attention == nil ? 20 : 12,
+          bottom: attention == nil ? 1 : 0, trailing: attention == nil ? 20 : 12)
       )
       .accessibilityElement(children: .combine)
       .accessibilityLabel(
