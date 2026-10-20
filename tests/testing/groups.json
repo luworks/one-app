@@ -23,7 +23,8 @@
         "JourneyTests/testJ1_addTimedTaskFromOneLine",
         "JourneyTests/testJ3_completeAndUndo",
         "CalendarAlarmTests/testWeekLateAlarmOpensItsEditorWithoutOtherEntries",
-        "AskSuggestionTests/testPolitePlanRequestPreservesPreviewThroughOperationQuestionsUntilApply"
+        "AskSuggestionTests/testPolitePlanRequestPreservesPreviewThroughOperationQuestionsUntilApply",
+        "TodayReminderCompletionTests/testImportedTimelineNavigationAndCancelledEditorsStayResponsive"
       ]
     },
     "snapshot": {

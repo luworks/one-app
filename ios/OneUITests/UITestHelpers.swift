@@ -250,29 +250,30 @@ extension XCTestCase {
   /// Turns on Apple Calendar in Settings (sidebar > Settings), answering the access prompt the first time. Does nothing
   /// when it is already on. Leaves the sidebar closed.
   func enableCalendarSync(_ app: XCUIApplication) {
-    addUIInterruptionMonitor(withDescription: "Calendar access") { alert in
+    let monitor = addUIInterruptionMonitor(withDescription: "Calendar access") { alert in
       for label in ["Allow Full Access", "Allow", "OK"] where alert.buttons[label].exists {
         alert.buttons[label].tap()
         return true
       }
       return false
     }
+    defer { removeUIInterruptionMonitor(monitor) }
     app.openSidebar()
     app.buttons["Settings"].firstMatch.tap()
     let toggle = app.switches["Apple Calendar"]
     XCTAssertTrue(toggle.waitForExistence(timeout: 5))
     if (toggle.value as? String) != "1" {
       toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+      // Wait for the alert itself: the toggle's optimistic value does not mean authorization finished.
+      // System alerts invoke the monitor on an interaction, not an existence query.
       let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-      for label in ["Allow Full Access", "Allow"] {
-        let b = springboard.buttons[label]
-        if b.waitForExistence(timeout: 3) {
-          b.tap()
-          break
-        }
-      }
+      _ = springboard.alerts.firstMatch.waitForExistence(timeout: 5)
+      app.tap()
     }
-    sleep(1)
+    XCTAssertEqual(
+      XCTWaiter.wait(
+        for: [expectation(for: NSPredicate(format: "value == '1'"), evaluatedWith: toggle)],
+        timeout: 8), .completed)
     app.buttons["Done"].tap()
     app.closeSidebar()
   }

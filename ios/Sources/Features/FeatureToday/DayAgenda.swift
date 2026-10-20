@@ -551,7 +551,7 @@
       let ref = TodayFocus.reference(event.persistentModelID)
       return FocusTarget(
         identity: actions.focus.identity(
-          resolution: calendar.focusIdentity(externalID: event.externalID, occurrence: start),
+          resolution: calendar.cachedFocusIdentity(externalID: event.externalID, occurrence: start),
           localReference: ref, kind: "event", occurrence: event.repeats == nil ? nil : start),
         reference: ref, title: event.title)
     }
@@ -560,7 +560,7 @@
       let ref = "eventkit:" + event.eventIdentifier
       return FocusTarget(
         identity: actions.focus.identity(
-          resolution: calendar.focusIdentity(
+          resolution: calendar.cachedFocusIdentity(
             externalID: event.eventIdentifier, occurrence: event.start),
           localReference: ref, kind: "event", occurrence: event.repeats ? event.start : nil),
         reference: ref, title: event.title)
@@ -771,15 +771,11 @@
         let candidate = target(alarm, fireDate: fireDate)
         if candidate.identity == record.identity { return candidate }
       }
-      if let ref = record.localReference, ref.hasPrefix("eventkit:") {
-        let id = String(ref.dropFirst("eventkit:".count))
-        if case .available(let identity) = calendar.focusIdentity(
-          externalID: id, occurrence: record.identity.occurrence),
-          identity == record.identity,
-          let title = calendar.title(externalID: id, occurrence: record.identity.occurrence)
-        {
-          return FocusTarget(identity: identity, reference: ref, title: title)
-        }
+      if let event = calendar.cachedFocusEvent(
+        identity: record.identity, reference: record.localReference)
+      {
+        return FocusTarget(
+          identity: record.identity, reference: record.localReference, title: event.title)
       }
       return nil
     }
@@ -866,16 +862,13 @@
         openEvent(event)
         return
       }
-      if let ref = target.reference, ref.hasPrefix("eventkit:"),
-        let native = calendar as? any NativeCalendarService,
-        case .available(let identity) = calendar.focusIdentity(
-          externalID: String(ref.dropFirst("eventkit:".count)),
-          occurrence: target.identity?.occurrence),
-        identity == target.identity
+      if let identity = target.identity,
+        let event = calendar.cachedFocusEvent(identity: identity, reference: target.reference),
+        let native = calendar as? any NativeCalendarService
       {
         native.edit(
-          identifier: String(ref.dropFirst("eventkit:".count)),
-          start: identity.occurrence ?? now, end: nil, fullOptions: false, onComplete: nil)
+          identifier: event.eventIdentifier, start: event.start, end: nil,
+          fullOptions: false, onComplete: nil)
       } else {
         toast?.showNotice("This source is unavailable. Reconnect and try again.")
       }
@@ -907,14 +900,14 @@
           id: "r\(event.persistentModelID.hashValue)@\(start.timeIntervalSince1970)",
           source: .local(event), title: event.title, start: start,
           end: start.addingTimeInterval(event.duration), isAllDay: event.isAllDay,
-          color: calendar.color(forExternalID: event.externalID) ?? .blue,
+          color: calendar.cachedEvent(
+            externalID: event.externalID ?? "", occurrence: start)?.color ?? .blue,
           repeats: event.repeats != nil)
       }
       if let ref = target.reference, ref.hasPrefix("eventkit:"),
-        let event = calendar.events(on: identity.occurrence ?? day).first(where: {
-          $0.eventIdentifier == String(ref.dropFirst("eventkit:".count))
-            && self.target($0).identity == identity
-        })
+        let event = calendar.cachedEvent(
+          externalID: String(ref.dropFirst("eventkit:".count)), occurrence: identity.occurrence),
+        self.target(event).identity == identity
       {
         return CalEntry(
           id: event.id, source: .system(event.eventIdentifier), title: event.title,
@@ -934,8 +927,8 @@
         }
       case .alarm: true
       case .local(let event):
-        event.externalID == nil || calendar.canDelete(externalID: event.externalID)
-      case .system(let id): calendar.canDelete(externalID: id)
+        event.externalID == nil || calendar.cachedCanDelete(externalID: event.externalID)
+      case .system(let id): calendar.cachedCanDelete(externalID: id)
       }
     }
 
