@@ -341,6 +341,81 @@ def _product_identity(root, product):
     return {'files': files}
 
 
+def mock_app_identity(app):
+    """Verify the actual Mock executable/module/composition, not its shared bundle ID alone."""
+    app = Path(app)
+    info = plistlib.loads((app / 'Info.plist').read_bytes())
+    if info.get('CFBundleExecutable') != 'TodayMock' or info.get('CFBundleIdentifier') != 'com.luworks.one':
+        raise ValueError('Expected TodayMock executable and bundle identity')
+    executable = app / 'TodayMock'
+    payload = app / 'TodayMock.debug.dylib'
+    payload = payload if payload.exists() else executable
+    if executable.is_symlink() or payload.is_symlink():
+        raise ValueError('Symlinked Mock binary')
+    code = payload.read_bytes()
+    if b'TodayMockApp' not in code or b'MockAppComposition' not in code:
+        raise ValueError('Missing TodayMockApp module / Mock composition')
+    return {'executable': 'TodayMock', 'module': 'TodayMockApp', 'mock_composition_linked': True,
+            'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest(),
+            'payload_sha256': hashlib.sha256(code).hexdigest()}
+
+
+def mock_ui_product(root, path, *, normalize=False):
+    """Constrain only the known UI target's installation closure; production still builds."""
+    path = Path(path)
+    data = plistlib.loads(path.read_bytes())
+    configs = data.get('TestConfigurations')
+    targets = ([target for config in configs for target in config['TestTargets']]
+               if configs is not None else [v for k, v in data.items() if not k.startswith('__')])
+    ui = [t for t in targets if isinstance(t, dict) and t.get('IsUITestBundle')]
+    if not ui:
+        return None
+    if len(ui) != 1 or ui[0].get('BlueprintName') != 'TodayUITests':
+        raise ValueError('Ambiguous UI application target')
+    target = ui[0]
+    prefix = '__TESTROOT__/'
+    value = target.get('UITargetAppPath', '')
+    if not value.startswith(prefix) or Path(value).name != 'TodayMock.app':
+        raise ValueError('UI target must explicitly select TodayMock.app')
+    relative = Path(value[len(prefix):])
+    if len(relative.parts) != 2 or relative.parts[0] not in ('Debug-iphonesimulator', 'Release-iphonesimulator'):
+        raise ValueError('Unexpected Mock product path')
+    app = derived_data(root) / 'Build/Products' / relative
+    if app.is_symlink():
+        raise ValueError('Symlinked Mock application')
+    configuration = relative.parts[0].split('-')[0]
+    config = Path(root) / ('ios/Config/TodayMock-' + configuration + '.xcconfig')
+    config_bytes = config.read_bytes()
+    if not re.search(rb'^SWIFT_ACTIVE_COMPILATION_CONDITIONS\s*=.*\bTODAY_MOCK\b', config_bytes, re.M):
+        raise ValueError('Missing TODAY_MOCK compilation condition')
+    if not re.search(rb'^PRODUCT_MODULE_NAME\s*=\s*TodayMockApp\s*$', config_bytes, re.M):
+        raise ValueError('Unexpected Mock product module')
+    expected_host = str(Path(value).parent / 'OneUITests-Runner.app')
+    if target.get('TestHostPath') != expected_host:
+        raise ValueError('Unexpected UI test runner host')
+    live = str(Path(value).parent / 'One.app')
+    dependencies = target.get('DependentProductPaths', [])
+    if not isinstance(dependencies, list):
+        raise ValueError('Malformed UI dependencies')
+    allowed_apps = {value, expected_host}
+    for dependency in dependencies:
+        if not isinstance(dependency, str):
+            raise ValueError('Malformed UI dependency path')
+        if dependency == live and normalize:
+            continue
+        if Path(dependency).suffix == '.app' and dependency not in allowed_apps:
+            raise ValueError('Ambiguous Live/UI installation dependency')
+    identity = mock_app_identity(app)
+    if normalize and live in dependencies:
+        target['DependentProductPaths'] = [d for d in dependencies if d != live]
+        temporary = path.with_suffix('.normalizing')
+        temporary.write_bytes(plistlib.dumps(data))
+        temporary.replace(path)
+    return {'app': str(app), 'identity': identity, 'test_host': expected_host,
+            'ui_target_app': value, 'compilation_condition': 'TODAY_MOCK',
+            'configuration_sha256': hashlib.sha256(config_bytes).hexdigest()}
+
+
 def xctestrun_products(root, path, *, identities=None):
     """Resolve both Xcode plist formats into exact local test/host product roots."""
     path = Path(path).absolute()
@@ -391,6 +466,7 @@ def xctestrun_products(root, path, *, identities=None):
         found.add(str(Path(value).absolute()))
         return resolved
 
+    mock_ui_product(root, path)
     for target in targets:
         if not isinstance(target, dict):
             raise ValueError('Malformed xctestrun target')
@@ -502,6 +578,7 @@ def ensure_test_products(root, scheme, invoke, *, configuration='Debug', sdk='ip
     if len(candidates) != 1:
         raise ValueError('Expected exactly one scheme xctestrun; rebuild in a fresh owned cache')
     path = candidates[0]
+    mock_ui_product(root, path, normalize=True)
     record_build(root, current, [path], returncode=0, kind='build-for-testing', xctestrun=path)
     # record_build just rehashed live source before publishing. Reuse that
     # identity for product validation; the caller checks again before dispatch.
