@@ -20,13 +20,14 @@
     var open: (() -> Void)? = nil
     var delete: (() -> Void)? = nil
     var restore: (() -> Void)? = nil
+    var showSettle = true
     var showSnooze = true
     var restoreLabel = "Restore"
 
     @ViewBuilder private var attentionButtons: some View {
       if let restore {
         Button(restoreLabel, systemImage: "arrow.uturn.backward", action: restore)
-      } else {
+      } else if showSettle {
         Button("Settle", systemImage: "checkmark.circle.fill", action: settle)
       }
       if showSnooze {
@@ -50,7 +51,7 @@
             if let restore {
               Button(restoreLabel, systemImage: "arrow.uturn.backward", action: restore).tint(
                 .indigo)
-            } else {
+            } else if showSettle {
               Button("Settle", systemImage: "checkmark.circle.fill", action: settle).tint(.indigo)
             }
           }

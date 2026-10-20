@@ -14,12 +14,24 @@
   package struct TodayTimelineSettings: View {
     @Environment(PlannerPresentation.self) private var presentation
     package init() {}
+    @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
+    @AppStorage(Preferences.showSnoozeKey) private var showsSnooze = Preferences.showSnooze
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.eveningHourKey) private var eveningHour = Preferences.eveningHour
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
 
     package var body: some View {
+      ExplainedToggle(
+        title: "Show Settle", isOn: $showsSettle,
+        caption:
+          "Show Settle actions and Settled items in Today. Settle hides an item in Today only. Turn this back on to access settled items."
+      )
+      ExplainedToggle(
+        title: "Show Snooze", isOn: $showsSnooze,
+        caption:
+          "Show Snooze actions and Snoozed items in Today. Snooze hides an item until a time you choose; alerts stay unchanged. Turn this back on to access snoozed items."
+      )
       ExplainedToggle(
         title: "Show Tomorrow", isOn: $showsTomorrow,
         caption: "A short look at tomorrow at the end of Today.")

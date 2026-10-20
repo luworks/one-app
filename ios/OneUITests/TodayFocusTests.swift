@@ -12,7 +12,8 @@ final class TodayFocusTests: XCTestCase {
     app.launchArguments =
       TestData.fixtureArguments(seed ? "today-focus.json" : "empty-relaunch.json")
       + [
-        "-uiTestingNow", time, "-uiTestingPrefs", "showTomorrow=0,suggestTimes=1,showFreeTime=1",
+        "-uiTestingNow", time, "-uiTestingPrefs",
+        "showTomorrow=0,showSnooze=1,suggestTimes=1,showFreeTime=1",
       ]
     if let store { app.launchArguments += ["-uiTestingStore", store] }
     app.launch()
@@ -143,6 +144,78 @@ final class TodayFocusTests: XCTestCase {
     app.buttons["Today"].firstMatch.tap()
   }
 
+  private func setVisibility(settle: Bool, snooze: Bool, in app: XCUIApplication) {
+    app.openSidebar()
+    app.buttons["Settings"].firstMatch.tap()
+    XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+    for (label, enabled) in [("Show Settle", settle), ("Show Snooze", snooze)] {
+      let toggle = app.switches.matching(NSPredicate(format: "label BEGINSWITH %@", label))
+        .firstMatch
+      for _ in 0..<8 where !toggle.isHittable { app.swipeUp() }
+      XCTAssertTrue(toggle.isHittable)
+      if (toggle.value as? String == "1") != enabled { toggle.toggleSwitch() }
+      XCTAssertEqual(toggle.value as? String, enabled ? "1" : "0")
+    }
+    screenshot("focus-visibility-settings")
+    app.buttons["Done"].tap()
+    app.closeSidebar()
+  }
+
+  func testVisibilitySettingsKeepExistingChoicesAcrossRelaunchAndReenable() {
+    let store = "focus-visibility-\(UUID().uuidString)"
+    let app = launch(store: store)
+    act("Settle", on: "Busy meeting", in: app)
+    act("Snooze", on: "Focus invoice", in: app)
+    app.buttons["Tomorrow morning"].tap()
+    setVisibility(settle: false, snooze: false, in: app)
+    XCTAssertFalse(section("settled", in: app).exists)
+    XCTAssertFalse(section("snoozed", in: app).exists)
+    app.terminate()
+    app.launchArguments =
+      TestData.fixtureArguments("empty-relaunch.json") + [
+        "-uiTestingStore", store, "-uiTestingNow", "09:00", "-uiTestingKeepPreferences",
+      ]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    XCTAssertFalse(section("settled", in: app).exists)
+    XCTAssertFalse(section("snoozed", in: app).exists)
+    let row = app.staticTexts["Focus flexible"].firstMatch
+    reveal(row, in: app)
+    row.press(forDuration: 1)
+    XCTAssertFalse(app.buttons["Settle"].exists)
+    XCTAssertFalse(app.buttons["Snooze"].exists)
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+    setVisibility(settle: true, snooze: false, in: app)
+    reveal(section("settled", in: app), in: app)
+    XCTAssertEqual(section("settled", in: app).label, "Settled (1)")
+    XCTAssertFalse(section("snoozed", in: app).exists)
+    setVisibility(settle: true, snooze: true, in: app)
+    assertFocusSections(app, snoozed: 1, settled: 1)
+    restore("Busy meeting", section: "settled", in: app)
+    restore("Focus invoice", section: "snoozed", in: app)
+    assertFocusSections(app, snoozed: 0, settled: 0)
+    reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
+  }
+
+  func testUnsetPreferencesShowSettleAndHideSnooze() {
+    let app = XCUIApplication()
+    app.launchArguments =
+      TestData.fixtureArguments("today-focus.json") + ["-uiTestingNow", "09:00"]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    let title = app.staticTexts["Focus invoice"].firstMatch
+    reveal(title, in: app)
+    title.press(forDuration: 1)
+    XCTAssertTrue(app.buttons["Settle"].waitForExistence(timeout: 3))
+    XCTAssertFalse(app.buttons["Snooze"].exists)
+    screenshot("focus-default-context-menu")
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+    act("Settle", on: "Focus invoice", in: app)
+    reveal(section("settled", in: app), in: app)
+    XCTAssertEqual(section("settled", in: app).label, "Settled (1)")
+    XCTAssertFalse(section("snoozed", in: app).exists)
+  }
+
   func testSettleAndRestoreChangeFocusCountsWithoutCompletingReminder() {
     let app = launch()
     assertFocusSections(app, snoozed: 0, settled: 0)
@@ -181,7 +254,7 @@ final class TodayFocusTests: XCTestCase {
     let app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments("today-alarm-actions.json") + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0,showSnooze=1",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ]
     app.launch()
@@ -220,7 +293,7 @@ final class TodayFocusTests: XCTestCase {
     let app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments("today-alarm-actions.json") + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0,showSnooze=1",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
         "-appearance", "dark", "-UIPreferredContentSizeCategoryName",
         "UICTContentSizeCategoryAccessibilityXXXL",

@@ -2,7 +2,7 @@ import Foundation
 
 /// The choices in Settings that were added after the first release: their keys, their defaults, and plain readers.
 /// Plain Swift (Foundation only) so the defaults run under `swift test`. Every default is what the app did before the
-/// choice existed, so nobody who never opens Settings sees a change. Screens read these through `@AppStorage`
+/// choice existed, except the intentionally opt-in Snooze display. Screens read these through `@AppStorage`
 /// with the same key and default; the readers here are for code that is not a view.
 ///
 /// The older choices (overdue, alarms, scroll to now, travel time, Health summary, chat archive) keep their keys in
@@ -14,6 +14,8 @@ public enum Preferences {
   public static let firstWeekdayKey = "today.setting.firstWeekday"
   public static let weekNumbersKey = "today.setting.weekNumbers"
   public static let calendarStartKey = "today.setting.calendarStart"
+  public static let showSettleKey = "today.setting.showSettle"
+  public static let showSnoozeKey = "today.setting.showSnooze"
   public static let showTomorrowKey = "today.setting.showTomorrow"
   public static let eveningHourKey = "today.setting.eveningHour"
   public static let showFreeTimeKey = "today.setting.showFreeTime"
@@ -27,7 +29,7 @@ public enum Preferences {
     dimPastDaysKey, firstWeekdayKey, weekNumbersKey, calendarStartKey, showTomorrowKey,
     eveningHourKey,
     showFreeTimeKey, suggestTimesKey, newReminderListKey, newAlarmSnoozeKey, newAlarmSoundKey,
-    askSuggestionsKey,
+    askSuggestionsKey, showSettleKey, showSnoozeKey,
   ]
 
   // MARK: Defaults (the behaviour before these choices existed)
@@ -36,6 +38,8 @@ public enum Preferences {
   public static let firstWeekday = FirstWeekday.system
   public static let weekNumbers = false
   public static let calendarStart = CalendarStart.lastUsed
+  public static let showSettle = true
+  public static let showSnooze = false
   public static let showTomorrow = true
   /// 18:00, Apple Reminders' "Tonight".
   public static let eveningHour = TomorrowPreview.eveningHour
