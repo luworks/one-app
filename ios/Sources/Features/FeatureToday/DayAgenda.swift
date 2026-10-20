@@ -93,6 +93,7 @@
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(HealthLineModel.self) private var health
     /// The open "Review today" sheet: tomorrow and its first items, taken when the row is tapped.
     @State private var review: ReviewRequest?
@@ -129,7 +130,7 @@
             scrollToNow(proxy)
           }
           .onChange(of: overdueRevealRequest) {
-            withAnimation(.snappy) {
+            withAnimation(reduceMotion ? nil : .snappy) {
               proxy.scrollTo("overdue-section", anchor: .top)
             } completion: {
               overdueSectionFocused = true
@@ -159,7 +160,7 @@
       guard cal.isDate(day, inSameDayAs: now), jumpsToNow else { return }
       Task { @MainActor in
         try? await Task.sleep(for: .milliseconds(250))
-        withAnimation(.snappy) { proxy.scrollTo("now-line", anchor: .center) }
+        withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo("now-line", anchor: .center) }
       }
     }
 
@@ -177,7 +178,9 @@
         }
         if !showsWeekStrip, !cal.isDate(day, inSameDayAs: now) {
           Button {
-            withAnimation(.snappy) { day = cal.startOfDay(for: presentation.now) }
+            withAnimation(reduceMotion ? nil : .snappy) {
+              day = cal.startOfDay(for: presentation.now)
+            }
           } label: {
             Label("Back to today", systemImage: "arrow.uturn.backward").font(.subheadline)
               .frame(minHeight: 44)
@@ -292,7 +295,7 @@
         Text("This cancels the system alarm and deletes its saved row.")
       }
       .sheet(item: $snoozeTarget) { target in
-        TodaySnoozeSheet(now: now, calendar: cal) { until in
+        TodaySnoozeSheet(now: presentation.runtime.now, calendar: cal) { until in
           changeFocus(.snoozed(until: until), target: target)
         }
       }
@@ -583,7 +586,7 @@
       guard !showsWeekStrip else { return nil }
       return TodayRowAttention(
         settle: target.identity == nil || !showsSettle
-          ? nil : { changeFocus(.settled, target: target) },
+          ? nil : { _ = changeFocus(.settled, target: target) },
         snooze: target.identity == nil || !showsSnooze ? nil : { snoozeTarget = target },
         canDelete: canDeleteAttention(target))
     }
@@ -605,16 +608,17 @@
     private func focusActions(_ target: FocusTarget) -> TodayFocusRowActions {
       TodayFocusRowActions(
         enabled: !showsWeekStrip,
-        settle: { changeFocus(.settled, target: target) },
+        settle: { _ = changeFocus(.settled, target: target) },
         snooze: { snoozeTarget = target },
         open: { openAttentionItem(target) },
         delete: canDeleteAttention(target) ? { requestDeleteAttention(target) } : nil,
         showSettle: showsSettle, showSnooze: showsSnooze)
     }
 
-    private func changeFocus(_ state: TodayFocusState?, target: FocusTarget) {
-      withAnimation(.snappy) {
-        _ = actions.focus.change(
+    @discardableResult
+    private func changeFocus(_ state: TodayFocusState?, target: FocusTarget) -> Bool {
+      withAnimation(reduceMotion ? nil : .snappy) {
+        actions.focus.change(
           state, identity: target.identity, localReference: target.reference,
           title: target.title, context: context, toast: toast)
       }
@@ -627,7 +631,7 @@
       -> some View
     {
       Button {
-        withAnimation(.snappy) { expanded.wrappedValue.toggle() }
+        withAnimation(reduceMotion ? nil : .snappy) { expanded.wrappedValue.toggle() }
       } label: {
         HStack {
           Text("\(title) (\(count))").font(AgendaRowStyle.disclosure.weight(.medium))
@@ -652,7 +656,7 @@
     private var overdueShortcut: some View {
       Button {
         if showsWeekStrip {
-          withAnimation(.snappy) { showsAllOverdue.toggle() }
+          withAnimation(reduceMotion ? nil : .snappy) { showsAllOverdue.toggle() }
         } else {
           showsAllOverdue = true
           overdueSectionFocused = false
@@ -760,7 +764,7 @@
               open: source == nil ? nil : { openAttentionItem(target) },
               delete: source != nil && canDeleteAttention(target)
                 ? { requestDeleteAttention(target) } : nil,
-              restore: { changeFocus(source == nil ? nil : .active, target: target) },
+              restore: { _ = changeFocus(source == nil ? nil : .active, target: target) },
               showSnooze: snoozed && source != nil,
               restoreLabel: restoreLabel)
           )
