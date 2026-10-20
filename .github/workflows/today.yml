@@ -28,12 +28,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: ./dev bootstrap --tool swift-format --tool swiftlint --tool ruff --tool actionlint
-      - run: ./dev format --check
-      - run: ./dev lint
-      - run: ./dev test helpers
-      - run: ./dev test qa
-      - run: ./dev test unit
+      - run: python3 scripts/ci/smoke.py --command ./dev bootstrap --tool swift-format --tool swiftlint --tool ruff --tool actionlint
+      - run: python3 scripts/ci/smoke.py --command ./dev format --check
+      - run: python3 scripts/ci/smoke.py --command ./dev lint
+      - run: python3 scripts/ci/smoke.py --command ./dev test helpers
+      - run: python3 scripts/ci/smoke.py --command ./dev test qa
+      - run: python3 scripts/ci/smoke.py --command ./dev test unit
+      # Export allowlisted diagnostics only; raw command bytes remain runner-local/private.
+      - if: failure() || cancelled()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: checks-failure-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/today-smoke/failure
+          if-no-files-found: warn
+          retention-days: 7
   # Merge gate: build the app, widget and share extension plus test bundles. No simulator.
   today-required:
     if: github.event_name != 'workflow_dispatch'
@@ -48,6 +56,14 @@ jobs:
           path: ${{ runner.temp }}/today-smoke/dd/SourcePackages
           key: spm-${{ hashFiles('ios/Dependencies/Package.resolved') }}
       - run: python3 scripts/ci/smoke.py --build-only
+      # Export allowlisted diagnostics only; raw command bytes remain runner-local/private.
+      - if: failure() || cancelled()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: build-failure-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/today-smoke/failure
+          if-no-files-found: warn
+          retention-days: 7
   # Install gate, run explicitly on main before any phone install. Never installs a phone.
   install-smoke:
     if: github.event_name == 'workflow_dispatch' && inputs.lane == 'install-smoke'
@@ -80,12 +96,13 @@ jobs:
         with:
           path: ~/Library/Developer/CoreSimulator/Devices
           key: sim-devices-${{ steps.image.outputs.version }}-v1
-      - if: failure()
+      # Export allowlisted diagnostics only; raw command bytes remain runner-local/private.
+      - if: failure() || cancelled()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: smoke-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/today-smoke/smoke.xcresult
-          if-no-files-found: ignore
+          name: smoke-failure-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/today-smoke/failure
+          if-no-files-found: warn
           retention-days: 7
   full:
     if: github.event_name == 'workflow_dispatch' && inputs.lane == 'full'

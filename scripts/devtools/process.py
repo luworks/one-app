@@ -139,7 +139,8 @@ def build_activity(pid):
     return result
 
 
-def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grace=1, output_observer=None):
+def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grace=1, output_observer=None,
+                stream_output=None):
     """Execute argv without a shell; signal only the new session created here.
 
     Adapters acquire resource locks before calling. SIGINT/SIGTERM are converted
@@ -168,6 +169,8 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
     reason, code = 'exited', 1
     failure = None
     pending = b''
+    if stream_output is None:
+        stream_output = (os.environ if env is None else env).get('TODAY_CI_STREAM_LOGS') == '1'
     start = time.monotonic()
     diagnostics = PhaseDiagnostics(argv)
     next_diagnostic = 30
@@ -232,12 +235,17 @@ def run_process(argv, *, cwd, evidence, env=None, timeout=600, cancel=None, grac
                             log.write('DEV_BUILD_PHASE ' + json.dumps({
                                 'seconds': round(time.monotonic() - start, 3), 'phase': decoded}) + '\n')
                         log.write(decoded + '\n')
+                        if stream_output:
+                            # CI's outer recorder must receive tool traces, not just a log path.
+                            print(decoded, flush=True)
                 if len(pending) > 1024 * 1024:
                     log.write('[Overlong output line omitted]\n')
                     pending = b''
                     dropping_line = True
                 log.flush()
             log.write(evidence.redact(pending.decode('utf-8', errors='replace')))
+            if stream_output and pending:
+                print(evidence.redact(pending.decode('utf-8', errors='replace')), flush=True)
             code = proc.wait()
             if reason != 'exited':
                 code = 124 if reason == 'timeout' else 130
