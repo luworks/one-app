@@ -111,3 +111,45 @@ signed export/distribution, simulator journeys, installed Shortcuts, physical-de
 upgrade and on-device capability checks remain root-owned acceptance gates.
 
 Formal release `preflight` also reads the authoritative `tests/testing/groups.json` release pending gates. Three known failed extended `.all` accessibility audits and unverified physical-device acceptance currently block it with `release_acceptance_pending`, with the reasons visible in JSON. Root excluded broad accessibility remediation from PR101 merge acceptance; this does not confer formal release qualification. The unsigned source-only gate retains its separate limited meaning.
+
+
+## Exact-main manual installation preflight
+
+`./dev release preflight-local --commit <full-main-sha> --version <version>
+--build <build> --for-install --main-run <push-run-id> --build-receipt <path>`
+is the mandatory check immediately before an explicitly authorized manual
+`xcrun devicectl device install app` of a new main build. It installs nothing.
+Do not use a source-only preflight or a PID/install success as functional
+acceptance. There is no second installer or automatic device deployment.
+
+The selected run must be a completed successful `push` to current `main` in
+`.github/workflows/today.yml`, with `main-critical-v1` acceptance for the exact
+SHA/tree/run attempt, real positive leaves and matching Xcode/iOS SDK identity.
+The checker reads the compact receipt published by the existing CI job, checks all
+fixed critical leaves and rechecks current main and run attempt after reading.
+Offline, expired/missing artifact, docs-only success, branch green, old main,
+blocked/skipped native methods, a rerun in progress and source/product drift
+block installation. An older accepted main is a rollback only when the user
+explicitly authorizes that revision. Do not race an approved install against
+another source change: use its explicit accepted SHA and rerun this read-only
+preflight immediately before installation. CI never cancels a manual install.
+
+The existing authorized device-build receipt (the `build-receipt.json` shape
+used for prior manual phone deliveries) must retain `source`, `tree`, `exit: 0`,
+`source_after`, empty `dirty_after`, `signing_changes: false`,
+`automatic_provisioning_updates: false`, absolute `app` ending in
+`Debug-iphoneos/One.app`, `toolchain` and `product_identity`. Record the latter
+two at the successful build's completion using `scripts.ci.main_gate.tool_identity()`
+and `product_identity(app)`; they read Xcode/SDK metadata and only the three
+App/Widget/Share executable/Info identities. A historical receipt without these
+fields is not upgraded by assumption. Existing signed-build credentials and
+signature checks remain a separate authorized device gate; unsigned/simulator
+CI cannot prove device signatures or platform behavior. This mode needs no
+Ruby/Fastlane archive setup and does not change any signing settings.
+
+The current phone stays on user-accepted rollback9043647. No candidate install
+is authorized by implementing this check. After a future authorized install,
+actual Today/Calendar/Reminders/Chat-return navigation must still be observed
+(user-assisted when tools cannot tap); Health/FM/AlarmKit require their own real
+acceptance. PR120's product fix and populated fixture must land before the main
+smoke can certify the known freeze path. Missing fixtures block, never skip.

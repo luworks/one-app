@@ -435,6 +435,24 @@ def validate_product_link_maps(root, app, maps, *, target_names=False):
 def local_preflight(root, args):
     report = Report('preflight-local')
     report.data.update(readiness='unsigned_local', evidence='source_checks_only', signing='not_checked')
+    if getattr(args, 'for_install', False):
+        report.data.update(readiness='manual_install_candidate', evidence='exact_main_ci_and_device_build',
+                           phone='not_installed')
+        report.check('release_metadata', lambda: metadata(args, local=True))
+        report.check('git_commit_clean', lambda: check_git(root, args.commit))
+        def main_gate():
+            sys.path.insert(0, str(ROOT))
+            from scripts.ci.main_gate import check_install
+            try:
+                report.data['main_acceptance'] = check_install(root, args, run)
+            except ValueError as error:
+                code = str(error)
+                raise Blocked(code if re.fullmatch(r'main_gate_[a-z_]+', code) else
+                              'main_usability_or_device_build_not_accepted') from None
+            except (OSError, KeyError, TypeError, zipfile.BadZipFile):
+                raise Blocked('main_usability_or_device_build_not_accepted') from None
+        report.check('main_usability', main_gate)
+        return report
     report.check('release_metadata', lambda: metadata(args, local=True))
     report.check('git_commit_clean', lambda: check_git(root, args.commit))
     report.check('locked_tools', lambda: check_tools(root))
@@ -499,7 +517,12 @@ def main(argv=None):
     p.add_argument('--team', default='')
     p.add_argument('--archive', type=Path)
     p.add_argument('--ipa', type=Path)
+    p.add_argument('--for-install', action='store_true', help='require live exact-main CI and matching device build; installs nothing')
+    p.add_argument('--main-run', default='')
+    p.add_argument('--build-receipt', type=Path)
     args = p.parse_args(argv)
+    if args.for_install and args.action != 'preflight-local':
+        p.error('--for-install requires preflight-local')
     report = Report(args.action)
     if args.action.endswith('-local'):
         report = local_preflight(ROOT, args)

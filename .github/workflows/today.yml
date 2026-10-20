@@ -31,7 +31,8 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - run: ./dev test helpers
-      - uses: ./.github/actions/check
+      - name: Validate PR risk or merged-main usability
+        uses: ./.github/actions/check
         with:
           lane: routine
   extended:
