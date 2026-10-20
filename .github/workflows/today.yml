@@ -7,59 +7,56 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      lane:
-        description: Explicit extended or release validation (never distributes)
-        type: choice
-        required: true
-        options: [extended, integration, snapshots, release, sanitizer, performance, protected-release]
+      full:
+        description: Also run the complete logic, integration, snapshot and UI suites (manual, ~25 min)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: today-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
+  group: today-${{ github.event_name }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 env:
   DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
-  TODAY_CI_SYNTHETIC: '1'
 jobs:
-  today-required:
-    if: always()
+  checks:
     runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
-      - name: Record job budget
-        run: echo "TODAY_CI_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
           persist-credentials: false
+      - run: ./dev bootstrap --tool swift-format --tool swiftlint --tool ruff --tool actionlint
+      - run: ./dev format --check
+      - run: ./dev lint
       - run: ./dev test helpers
-      - name: Validate PR risk or merged-main usability
-        uses: ./.github/actions/check
-        with:
-          lane: routine
-  extended:
-    if: github.event_name == 'workflow_dispatch'
+      - run: ./dev test unit
+  today-required:
     runs-on: xcode-27
-    timeout-minutes: 45
-    env:
-      MANUAL_LANE: ${{ inputs.lane }}
-    environment: ${{ inputs.lane == 'protected-release' && 'release-validation' || '' }}
-    permissions:
-      contents: read
-      actions: read
+    timeout-minutes: 15
     steps:
-      - name: Record job budget
-        run: echo "TODAY_CI_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
           persist-credentials: false
-      - name: Verify configured release protection
-        if: inputs.lane == 'protected-release'
-        env:
-          GH_READ_TOKEN: ${{ github.token }}
-        run: python3 scripts/ci/release_guard.py
-      - run: python3 scripts/ci/prerequisite.py
-      - uses: ./.github/actions/check
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          lane: ${{ inputs.lane }}
+          path: ${{ runner.temp }}/today-smoke/dd/SourcePackages
+          key: spm-${{ hashFiles('ios/Dependencies/Package.resolved') }}
+      - run: python3 scripts/ci/smoke.py
+      - if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: smoke-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/today-smoke/smoke.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
+  full:
+    if: github.event_name == 'workflow_dispatch' && inputs.full
+    runs-on: xcode-27
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: ./dev bootstrap --tool xcodegen
+      - run: ./dev test release --full --timeout 1800
