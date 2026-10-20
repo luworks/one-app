@@ -42,7 +42,23 @@ jobs:
         with:
           path: ${{ runner.temp }}/today-smoke/dd/SourcePackages
           key: spm-${{ hashFiles('ios/Dependencies/Package.resolved') }}
+      # Experiment: reuse a simulator device that already finished first-boot setup on this image.
+      - id: image
+        run: |
+          echo "version=$ImageVersion" >> "$GITHUB_OUTPUT"
+          du -sh ~/Library/Developer/CoreSimulator/Devices
+          sudo mdutil -a -i off
+      - id: sim
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/CoreSimulator/Devices
+          key: sim-devices-${{ steps.image.outputs.version }}-v1
       - run: python3 scripts/ci/smoke.py
+      - if: success() && steps.sim.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Developer/CoreSimulator/Devices
+          key: sim-devices-${{ steps.image.outputs.version }}-v1
       - if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
