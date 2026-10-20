@@ -59,6 +59,9 @@ values were added to replace these defaults.
   keeps small Chinese/English title regressions inline: the exact 23:00 sleep
   reminder, dangling temporal connectors, request punctuation, conditions, negation
   and modality, plus model mapping with unchanged date/time/type/repeat fields.
+- `NativeSnapshotTests.testUndoToastLongEnglishNarrow` and
+  `testUndoToastChineseAccessibilityDark` keep their small synthetic English/Chinese
+  toast captions inline beside the native 320pt render checks; no app data is used.
 - Small constants and synthetic generators in Swift test files are already
   versioned test inputs. Keep them with their corresponding tests rather than
   duplicating thousands of literals in JSON.

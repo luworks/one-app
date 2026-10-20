@@ -216,6 +216,23 @@ final class TodayFocusTests: XCTestCase {
     XCTAssertFalse(section("snoozed", in: app).exists)
   }
 
+  func testSettleToastUndoRestoresVisibleIncompleteReminder() {
+    let app = launch()
+    act("Settle", on: "Focus invoice", in: app)
+    let undo = app.buttons["Undo"].firstMatch
+    XCTAssertTrue(undo.waitForExistence(timeout: 2))
+    XCTAssertEqual(
+      app.staticTexts["undoToast.message"].label, "Hidden in Today only: “Focus invoice”")
+    XCTAssertGreaterThanOrEqual(undo.frame.width, 44)
+    XCTAssertGreaterThanOrEqual(undo.frame.height, 44)
+    XCTAssertTrue(undo.isHittable)
+    screenshot("settle-toast-local-only-undo")
+    undo.tap()
+    XCTAssertTrue(app.buttons["Complete Focus invoice"].firstMatch.waitForExistence(timeout: 3))
+    XCTAssertFalse(app.staticTexts["undoToast.message"].exists)
+    XCTAssertTrue(app.buttons["Ask AI or add anything"].isHittable)
+  }
+
   func testSettleAndRestoreChangeFocusCountsWithoutCompletingReminder() {
     let app = launch()
     assertFocusSections(app, snoozed: 0, settled: 0)

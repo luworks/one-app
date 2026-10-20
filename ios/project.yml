@@ -367,6 +367,8 @@
         }
       ],
       "dependencies": [
+        { "package": "TodayModules", "product": "One" },
+        { "package": "TodayModules", "product": "TodayPlannerUI" },
         {
           "target": "TodayTestHost"
         },
