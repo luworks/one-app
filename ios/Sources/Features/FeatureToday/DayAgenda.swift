@@ -192,6 +192,12 @@
         }
         if !items.allDay.isEmpty || !items.externalAllDay.isEmpty {
           Section {
+            if !showsWeekStrip {
+              // An inline caption avoids the plain List section header's reserved vertical space.
+              AgendaHeader(title: "All day", isInline: true)
+                .accessibilityAddTraits(.isHeader)
+                .listRowSeparator(.hidden)
+            }
             ForEach(items.allDay) {
               EventRow(
                 event: $0, pendingDelete: $pendingDelete, open: openEvent, calendar: calendar,
@@ -207,7 +213,7 @@
               )
             }
           } header: {
-            AgendaHeader(title: "All day")
+            if showsWeekStrip { AgendaHeader(title: "All day") }
           }
         }
         if showsWeekStrip, cal.isDate(day, inSameDayAs: now), showsOverdue, !overdue.isEmpty {
@@ -239,9 +245,9 @@
         }
       }
       .listStyle(.plain)
-      // Rows set their own 44pt minimum where they can be tapped; this lets the alarm and now lines sit tighter.
-      .environment(\.defaultMinListRowHeight, 24)
-      .listSectionSpacing(6)
+      // Interactive rows own their 44pt targets. Today captions and gaps use their natural text height.
+      .environment(\.defaultMinListRowHeight, showsWeekStrip ? 24 : 0)
+      .listSectionSpacing(showsWeekStrip ? 6 : 0)
       .scrollContentBackground(.hidden)
       .entryDeleteDialog($pendingDelete)
       .confirmationDialog(
@@ -1041,13 +1047,15 @@
 
   struct AgendaHeader: View {
     let title: String
+    var isInline = false
     package var body: some View {
       Text(title)
         .font(.footnote.weight(.semibold))
         // secondaryLabel, not .secondary: a list header is already dimmed, and .secondary on top read too faint.
         .foregroundStyle(Color(.secondaryLabel))
         .textCase(nil)
-        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 2, trailing: 20))
+        .listRowInsets(
+          EdgeInsets(top: isInline ? 4 : 8, leading: 20, bottom: isInline ? 0 : 2, trailing: 20))
     }
   }
 
@@ -1072,7 +1080,8 @@
         .font(.caption)
         .foregroundStyle(.tertiary)
         .padding(.leading, 68)
-        .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
         .accessibilityLabel(

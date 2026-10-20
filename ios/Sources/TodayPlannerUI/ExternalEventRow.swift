@@ -47,16 +47,17 @@
         VStack(alignment: .leading, spacing: 1) {
           TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2)
           {
-            Label(
-              event.isAllDay
-                ? event.calendarTitle
-                : "\(DurationLabel.text(minutes: event.durationMinutes)) · \(event.calendarTitle)",
-              systemImage: "calendar"
-            )
+            Group {
+              if attention != nil {
+                Text(detail)
+              } else {
+                Label(detail, systemImage: "calendar")
+                  .labelStyle(.titleAndIcon)
+              }
+            }
             .font(.caption)
             .foregroundStyle(.secondary)
-            .labelStyle(.titleAndIcon)
-            .lineLimit(1)
+            .lineLimit(attention != nil && typeSize.isAccessibilitySize ? nil : 1)
           }
           if let travel { TravelLine(text: travel) }
         }
@@ -87,8 +88,8 @@
       .listRowSeparator(.hidden)
       .listRowInsets(
         EdgeInsets(
-          top: 1, leading: attention == nil ? 20 : 12,
-          bottom: 1, trailing: attention == nil ? 20 : 12)
+          top: attention == nil ? 1 : 0, leading: attention == nil ? 20 : 12,
+          bottom: attention == nil ? 1 : 0, trailing: attention == nil ? 20 : 12)
       )
       .accessibilityElement(children: .combine)
       .accessibilityLabel(
@@ -98,6 +99,12 @@
           + (travel.map { ". " + $0 } ?? "")
       )
       .accessibilityAddTraits(.isButton)
+    }
+
+    private var detail: String {
+      event.isAllDay
+        ? event.calendarTitle
+        : "\(DurationLabel.text(minutes: event.durationMinutes)) · \(event.calendarTitle)"
     }
 
     /// "Drive 18 min · Leave by 14:20" for an upcoming event with a location (today or tomorrow).

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "about": "Synthetic Today density capture. Two all-day items, bilingual titles, exact deadlines, duration, repeat and gaps; UI clock pinned at 10:30 with auto-scroll off.",
+  "lists": [{"name": "Family", "color": 1}, {"name": "Work", "color": 2}],
+  "events": [
+    {"title": "准备午餐和饮用水", "start": {"day": 0}, "minutes": 1440, "allDay": true},
+    {"title": "整理换季衣物，留下孩子明天上学要穿的一套", "start": {"day": 0}, "minutes": 1440, "allDay": true},
+    {"title": "School drop-off · 送孩子上学", "start": {"day": 0, "time": "07:30"}, "minutes": 45},
+    {"title": "打开后院门", "start": {"day": 0, "time": "08:00"}, "minutes": 10},
+    {"title": "School pickup · 接孩子放学", "start": {"day": 0, "time": "18:00"}, "minutes": 30},
+    {"title": "Weekly reading class and parent discussion · 本周阅读与家长讨论", "start": {"day": 0, "time": "20:00"}, "minutes": 60}
+  ],
+  "reminders": [
+    {"title": "记录体重并拍照", "list": "Family", "due": {"day": 0, "time": "08:00"}, "repeat": "daily"},
+    {"title": "Buy groceries and fill the car", "list": "Family", "due": {"day": 0, "time": "11:31"}},
+    {"title": "回复设计评审邮件，确认中英文标题和无障碍检查结果", "list": "Work", "planned": {"day": 0, "time": "14:00"}, "due": {"day": 0, "time": "16:45"}, "minutes": 25, "flagged": true},
+    {"title": "Prepare interview notes", "list": "Work", "due": {"day": 0, "time": "17:31"}}
+  ],
+  "alarms": [{"time": "17:50", "label": "Leave for school"}],
+  "chats": []
+}
