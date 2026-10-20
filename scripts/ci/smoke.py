@@ -5,6 +5,7 @@
 install gate and fails unless every selected leaf ran and passed in the completed xcresult.
 Standard library only; prints elapsed seconds per step for timing.
 """
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,11 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from scripts.ci.failure import FailureEvidence  # noqa: E402 - direct script execution from any cwd
+
+EVIDENCE = None
+RESULT_CLOSED = False
 TEMP = Path(os.environ.get('RUNNER_TEMP', '/tmp')) / 'today-smoke'
 DD = TEMP / 'dd'
 RESULT = TEMP / 'smoke.xcresult'
@@ -39,8 +45,7 @@ def step(name):
 
 
 def run(*argv, capture=False):
-    return subprocess.run(argv, cwd=ROOT, check=True, text=True,
-                          stdout=subprocess.PIPE if capture else None).stdout
+    return EVIDENCE.run(*argv, capture=capture)
 
 
 def simulator():
@@ -65,8 +70,10 @@ def leaves(node):
 
 
 def verify():
+    global RESULT_CLOSED
     data = json.loads(run('xcrun', 'xcresulttool', 'get', 'test-results', 'tests',
                           '--path', str(RESULT), '--format', 'json', capture=True))
+    RESULT_CLOSED = True
     cases = [case for root in data['testNodes'] for case in leaves(root)]
     actual = {case['name'].removesuffix('()'): case.get('result') for case in cases}
     expected = {test.rsplit('/', 1)[1].removesuffix('()') for test in TESTS}
@@ -77,10 +84,12 @@ def verify():
 
 def main(build_only=False):
     TEMP.mkdir(parents=True, exist_ok=True)
+    if RESULT.exists():
+        raise SystemExit('Existing xcresult rejected; use a fresh runner temporary directory')
     warm = os.environ.get('SIM_CACHE_HIT') == 'true'
     if warm:
         # Let CoreSimulator rescan the restored device directories.
-        subprocess.run(['pkill', '-f', 'CoreSimulatorService'])
+        EVIDENCE.run('pkill', '-f', 'CoreSimulatorService', allowed=(0, 1))
     udid = None if build_only else simulator()
     run('./dev', 'bootstrap', '--tool', 'xcodegen')
     run('./dev', 'generate')
@@ -97,6 +106,11 @@ def main(build_only=False):
         info = plistlib.loads((products / path / 'Info.plist').read_bytes())
         if info.get('CFBundleIdentifier') != identifier or not (products / path / info['CFBundleExecutable']).is_file():
             raise SystemExit('Missing production product: ' + path)
+        EVIDENCE.data['products'][path].update(
+            status='verified', bundle_id=info['CFBundleIdentifier'],
+            executable_sha256=hashlib.sha256((products / path / info['CFBundleExecutable']).read_bytes()).hexdigest(),
+            info_sha256=hashlib.sha256((products / path / 'Info.plist').read_bytes()).hexdigest())
+        EVIDENCE.write()
     if build_only:
         return 0
     destination = 'platform=iOS Simulator,id=' + udid
@@ -111,23 +125,59 @@ def main(build_only=False):
     for service in ('reminders', 'calendar'):
         run('xcrun', 'simctl', 'privacy', udid, 'grant', service, 'com.luworks.one')
     step('access granted')
-    code = subprocess.run(['xcodebuild', 'test-without-building', '-xctestrun', str(xctestrun[0]),
+    code = EVIDENCE.run('xcodebuild', 'test-without-building', '-xctestrun', str(xctestrun[0]),
                            '-destination', destination, '-resultBundlePath', str(RESULT),
                            '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
-                           *FLAGS[:2], *['-only-testing:' + test for test in TESTS]], cwd=ROOT).returncode
+                           *FLAGS[:2], *['-only-testing:' + test for test in TESTS], check=False)
+    test_cancelled = EVIDENCE.commands[-1].get('reason') != 'exited'
     step('tests finished')
-    if not warm:
-        # A cleanly shut down device is cached so the next runner skips first-boot setup.
-        run('xcrun', 'simctl', 'shutdown', udid)
-        step('simulator shut down')
-        # First-boot setup is done even if a test failed; let the workflow cache the device.
-        with open(os.environ.get('GITHUB_OUTPUT', os.devnull), 'a') as output:
-            output.write('device=clean\n')
-    verify()
+    try:
+        if not warm:
+            # A cleanly shut down device is cached so the next runner skips first-boot setup.
+            run('xcrun', 'simctl', 'shutdown', udid)
+            step('simulator shut down')
+            # First-boot setup is done even if a test failed; let the workflow cache the device.
+            with open(os.environ.get('GITHUB_OUTPUT', os.devnull), 'a') as output:
+                output.write('device=clean\n')
+    finally:
+        # Only a normally exited test writer can yield a closed result, including failure.
+        if not test_cancelled:
+            verify()
+    return code
+
+
+def entry(argv):
+    global EVIDENCE
+    command = argv[1:] if argv[:1] == ['--command'] else None
+    if command is None and argv not in ([], ['--build-only']):
+        raise SystemExit('usage: smoke.py [--build-only | --command <argv>...]')
+    if command == []:
+        raise SystemExit('command required')
+    EVIDENCE = FailureEvidence(ROOT, TEMP, PRODUCTS,
+                               lane='checks' if command else 'build' if argv else 'install-smoke')
+    code = 1
+    try:
+        code = EVIDENCE.run(*command) if command else main(build_only=argv == ['--build-only'])
+    except subprocess.CalledProcessError as error:
+        code = error.returncode
+    except SystemExit as error:
+        EVIDENCE.data['error'] = EVIDENCE.redact(str(error))
+        code = error.code if isinstance(error.code, int) else 1
+        print(EVIDENCE.redact(str(error)), file=sys.stderr)
+    except Exception as error:
+        EVIDENCE.data['error'] = EVIDENCE.redact(repr(error))
+        print(EVIDENCE.redact(repr(error)), file=sys.stderr)
+    finally:
+        # A later verification/cleanup failure must not erase the first command exit.
+        if EVIDENCE.first_failure:
+            code = EVIDENCE.first_failure['exit']
+        try:
+            EVIDENCE.finish(code, RESULT, closed=RESULT_CLOSED)
+        except Exception as error:
+            print('Evidence finalization failed: ' + EVIDENCE.redact(repr(error)), file=sys.stderr)
+            code = code or 1
     return code
 
 
 if __name__ == '__main__':
-    if sys.argv[1:] not in ([], ['--build-only']):
-        raise SystemExit('usage: smoke.py [--build-only]')
-    sys.exit(main(build_only=sys.argv[1:] == ['--build-only']))
+    sys.exit(entry(sys.argv[1:]))
