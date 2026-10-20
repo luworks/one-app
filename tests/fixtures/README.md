@@ -253,3 +253,7 @@ partitioning, routine-only scope and primary-checkout paths for linked worktrees
 `ios/Eval/Tests/OneLogicTests/OneOffReminderTests.swift` versions the small screenshot utterance/dialogue, absolute 2026-10-20 09:11 America/Los_Angeles clock, next-day, ordinary-chat/recurrence exclusions, failed-draft encoding and compensation inputs inline beside the tests. Synthetic identities are not EventKit evidence.
 
 `ai-oneoff-reminder-ui.json` supplies the empty synthetic planner and exact legacy Costco conversation for the three `AIReminderRecoveryTests` journeys. The connected journey uses only the lane-owned simulator EventKit store; the failure journey explicitly injects one synthetic service failure.
+
+## Search Calendar rendering
+
+- `ios/TodayIntegrationTests/SearchCalendarIntegrationTests.swift` keeps one small synthetic Calendar occurrence, fixed UTC clock and mirror inline beside the mounted Search regression. Its production CalendarSync scalar range seam counts repeated reads and verifies rendered text, refresh, mirror deduplication and disable/re-enable without creating a native EventKit store.
