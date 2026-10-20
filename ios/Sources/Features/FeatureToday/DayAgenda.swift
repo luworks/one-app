@@ -630,7 +630,7 @@
         withAnimation(.snappy) { expanded.wrappedValue.toggle() }
       } label: {
         HStack {
-          Text("\(title) (\(count))").font(.subheadline.weight(.medium))
+          Text("\(title) (\(count))").font(AgendaRowStyle.disclosure.weight(.medium))
           if let detail { Text(detail).font(.caption).lineLimit(1) }
           Rectangle().fill(.quaternary).frame(height: 1)
           Image(systemName: expanded.wrappedValue ? "chevron.down" : "chevron.right")
@@ -1075,12 +1075,12 @@
     var isInline = false
     package var body: some View {
       Text(title)
-        .font(.footnote.weight(.semibold))
+        .font(isInline ? .caption.weight(.semibold) : .footnote.weight(.semibold))
         // secondaryLabel, not .secondary: a list header is already dimmed, and .secondary on top read too faint.
         .foregroundStyle(Color(.secondaryLabel))
         .textCase(nil)
         .listRowInsets(
-          EdgeInsets(top: isInline ? 4 : 8, leading: 20, bottom: isInline ? 0 : 2, trailing: 20))
+          EdgeInsets(top: isInline ? 2 : 8, leading: 20, bottom: isInline ? 0 : 2, trailing: 20))
     }
   }
 
