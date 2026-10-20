@@ -22,8 +22,14 @@ phone install:
 The script fails unless exactly those four leaves are in the completed xcresult and all
 passed; zero, missing or skipped leaves fail. The xcresult is uploaded only on failure.
 
-Target: push to both jobs green within **300 s**, including queue. Measured numbers are
-in the PR that introduced this layout and in `docs/qa/ci-under-five-minutes-20261020.md`.
+`today-required` caches the simulator devices after their first boot, keyed by runner
+image version (~1.3 GB, synthetic smoke data only), and boots only after the build. On
+this 3-CPU runner a simulator booting during the build made the build 4–5× slower.
+
+Measured (push → both jobs green, including queue): about **406 s** with a warm device
+cache and about **630 s** on the first run after a runner image update. The 300 s target is
+**not met** on standard hosted runners. See
+[the measurements](../qa/ci-under-five-minutes-20261020.md) for phases and the open decision.
 
 ## Not run on every change
 
