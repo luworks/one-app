@@ -14,10 +14,12 @@ phone install:
 - `PlannerSessionTests` ×3 — populated Day agenda and Focus render use imported
   snapshots and never query EventKit on the main thread (the PR120 freeze), saved
   Calendar snooze hydration.
-- `TodayReminderCompletionTests/testImportedTimelineNavigationAndCancelledEditorsStayResponsive`
-  — connects simulator Reminders + Calendar, launches populated with a real EventKit
-  event, opens and cancels the editor within 10 s, taps all four tabs, types an unsent
-  Chat draft and closes it.
+- `TodayReminderCompletionTests/testPreconnectedImportedTimelineStaysResponsive`
+  — the script grants Reminders and Calendar access with `simctl privacy`; the app
+  launches populated with a real EventKit event and both syncs on, opens and cancels
+  the editor within 10 s, taps all four tabs, types an unsent Chat draft and closes it.
+  The Settings-connection variant (`testImportedTimelineNavigationAndCancelledEditorsStayResponsive`)
+  stays in the full UI suite.
 
 The script fails unless exactly those four leaves are in the completed xcresult and all
 passed; zero, missing or skipped leaves fail. The xcresult is uploaded only on failure.
@@ -33,8 +35,7 @@ cache and about **630 s** on the first run after a runner image update. The 300 
 
 ## Not run on every change
 
-Removed from the routine path on purpose (they cost ~15 minutes and never caught a
-freeze the smoke misses): path-based risk selection, the whole integration (23) and
+Removed from the routine path on purpose (they cost ~15 minutes per run): path-based risk selection, the whole integration (23) and
 snapshot (6) suites, the 20-method core UI suite, separate production build lane,
 wrapper receipts, provenance/secret scans of artifacts and the main acceptance
 artifact. Run them explicitly with **Actions → Today CI → Run workflow → full**, which

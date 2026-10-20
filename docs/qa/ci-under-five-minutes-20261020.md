@@ -5,7 +5,7 @@ PR #125. Every run below is a real hosted run on the `xcode-27` image `20261012.
 | Run | Head | Result | Total | What changed / what it showed |
 | --- | --- | --- | --- | --- |
 | 39368090808 (main baseline) | a56646b | success | 1087 s | Old serial wrapper. Build 154 s, integration 411 s (tests ran 5 s), core UI 340 s |
-| 39375569228 | 9d…  | cancelled | >900 s | Simulator booted during the build, which then took 700 s |
+| 39375569228 | 82615c7 | cancelled | >900 s | Simulator booted during the build, which then took 700 s |
 | 39377071335 | e81ccac | failed | ~720 s | Build 194 s, boot 78 s, xcodebuild silent 215 s; cold Reminders permission sheet |
 | 39378337228 | 4c156dd | success | 753 s | Boot after build. About 250 s of cold-simulator settling; connect flow 95 s inside the 153 s UI test |
 | 39379690220 | c665023 | success | 711 s | Preconnected UI journey 81 s; `simctl privacy` blocked 273 s while the device settled |
