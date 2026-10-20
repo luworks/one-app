@@ -78,6 +78,23 @@ class FailureCaptureTests(unittest.TestCase):
         self.assertEqual(data['xcresult'], 'unconfirmed_not_uploaded')
         self.assertFalse(list(self.evidence.export.glob('*.tar.gz')))
 
+    def test_nested_dev_process_trace_reaches_failure_export_redacted(self):
+        script = (f'import sys; sys.path.insert(0, {str(ROOT)!r}); '
+                  'from pathlib import Path; from scripts.devtools.commands import execute; '
+                  'result = execute(Path.cwd(), [sys.executable, "-c", '
+                  '"import os; print(\\\"AssertionError: nested fixture\\\"); '
+                  'print(os.environ[\\\"CI_TEST_TOKEN\\\"]); raise SystemExit(37)"]); '
+                  'raise SystemExit(result.returncode)')
+        with patch.dict(os.environ, {'CI_TEST_TOKEN': 'nested-private-secret'}):
+            code = self.evidence.run(sys.executable, '-c', script, check=False)
+        self.assertEqual(code, 37)
+        self.evidence.finish(code, self.root / 'missing.xcresult')
+        exported = (self.evidence.export / '00.log').read_text()
+        self.assertIn('AssertionError: nested fixture', exported)
+        self.assertEqual(exported.count('AssertionError: nested fixture'), 1)
+        self.assertNotIn('nested-private-secret', exported)
+        self.assertEqual(self.evidence.first_failure['exit'], 37)
+
     def test_only_closed_result_is_archived_byte_exact_with_log_export_limit(self):
         result = self.root / 'synthetic.xcresult'
         (result / 'Data').mkdir(parents=True)

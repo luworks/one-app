@@ -93,7 +93,8 @@ class FailureEvidence:
             with raw_path.open('xb') as raw:
                 raw_path.chmod(0o600)
                 result = run_process(argv, cwd=self.root, evidence=evidence,
-                                     output_observer=observe, timeout=timeout, grace=5)
+                                     output_observer=observe, timeout=timeout, grace=5,
+                                     env={**os.environ, 'TODAY_CI_STREAM_LOGS': '1'}, stream_output=False)
             entry.update(status='passed' if result.returncode in allowed else 'failed',
                          exit=result.returncode, reason=result.reason, seconds=round(result.seconds, 3),
                          raw_sha256=evidence.journal.artifact(self.session, raw_path))
