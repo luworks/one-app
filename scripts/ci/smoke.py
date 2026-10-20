@@ -101,10 +101,21 @@ def main():
     xctestrun = sorted(DD.glob('Build/Products/TodayCI_*.xctestrun'))
     if len(xctestrun) != 1:
         raise SystemExit('Expected one TodayCI xctestrun')
-    code = subprocess.run(['xcodebuild', 'test-without-building', '-xctestrun', str(xctestrun[0]),
-                           '-destination', destination, '-resultBundlePath', str(RESULT),
-                           '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
-                           *FLAGS[:2], *['-only-testing:' + test for test in TESTS]], cwd=ROOT).returncode
+    # Pre-grant Reminders so the cold simulator's permission sheet timing is not under test.
+    run('xcrun', 'simctl', 'privacy', udid, 'grant', 'reminders', 'com.luworks.one')
+    test = subprocess.Popen(['xcodebuild', 'test-without-building', '-xctestrun', str(xctestrun[0]),
+                             '-destination', destination, '-resultBundlePath', str(RESULT),
+                             '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',
+                             *FLAGS[:2], *['-only-testing:' + test for test in TESTS]], cwd=ROOT)
+    for delay in (40, 100):
+        try:
+            test.wait(timeout=delay)
+            break
+        except subprocess.TimeoutExpired:
+            step('sampling xcodebuild')
+            subprocess.run(f'sample {test.pid} 2 -mayDie 2>/dev/null | grep -E "^ +[0-9]+ " | head -120 | cut -c1-200',
+                           shell=True)
+    code = test.wait()
     step('tests finished')
     verify()
     return code
