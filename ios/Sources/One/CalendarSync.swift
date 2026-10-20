@@ -181,7 +181,13 @@
     /// (UI tests start with every calendar shown, so an earlier run can't hide events from a later one.)
     package private(set) var hiddenCalendarIDs: Set<String>
 
-    package var hasAccess: Bool { authorizationStatus() == .fullAccess }
+    package var hasAccess: Bool {
+      let status = authorizationStatus()
+      // A successful full-access callback can precede EventKit's status update.
+      // Keep that session-only answer until a determined status supersedes it.
+      if status != .notDetermined { pendingFullAccessGrant = false }
+      return status == .fullAccess || (status == .notDetermined && pendingFullAccessGrant)
+    }
     package var isOn: Bool { !disposed && enabled && hasAccess }
 
     /// Apple's own event editor is used when Calendar access is on. UI tests keep the in-app editor (no permission prompts).
@@ -195,6 +201,8 @@
     @ObservationIgnored private let loadFocus:
       @Sendable ([FocusRecord]) async -> [CalendarFocusImport]
     @ObservationIgnored private let authorizationStatus: () -> EKAuthorizationStatus
+    @ObservationIgnored private let requestFullAccess: (() async throws -> Bool)?
+    @ObservationIgnored private var pendingFullAccessGrant = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var disposed = false
 
@@ -207,7 +215,8 @@
       },
       authorizationStatus: @escaping () -> EKAuthorizationStatus = {
         EKEventStore.authorizationStatus(for: .event)
-      }
+      },
+      requestFullAccess: (() async throws -> Bool)? = nil
     ) {
       self.defaults = defaults
       self.runtime = runtime
@@ -217,6 +226,7 @@
       storeReady = readEvents != nil
       self.loadFocus = loadFocus
       self.authorizationStatus = authorizationStatus
+      self.requestFullAccess = requestFullAccess
       enabled =
         defaults.bool(forKey: Self.enabledKey)
         && (!arguments.contains("-uiTesting") || arguments.contains("-uiTestingCalendarSync"))
@@ -227,6 +237,7 @@
 
     package func dispose() {
       disposed = true
+      pendingFullAccessGrant = false
       observers.forEach(NotificationCenter.default.removeObserver)
       observers.removeAll()
       warmTask?.cancel()
@@ -280,8 +291,21 @@
     /// Turns sync on (asking for access the first time) or off.
     package func setEnabled(_ on: Bool) async {
       guard !disposed else { return }
+      if !on { pendingFullAccessGrant = false }
       if on && !hasAccess {
-        _ = try? await store.requestFullAccessToEvents()
+        do {
+          let granted: Bool
+          if let requestFullAccess {
+            granted = try await requestFullAccess()
+          } else {
+            granted = try await store.requestFullAccessToEvents()
+          }
+          guard !disposed else { return }
+          pendingFullAccessGrant = granted
+        } catch {
+          pendingFullAccessGrant = false
+          log.error("calendar access request failed: \((error as NSError).code, privacy: .public)")
+        }
       }
       guard !disposed else { return }
       storeReady = true

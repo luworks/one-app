@@ -19,6 +19,61 @@
   @MainActor
   extension PlannerSessionTests {
     @Test
+    func calendarGrantPrecedesStatusUpdateWithoutOverridingRevocation() async throws {
+      let a = try FocusSession()
+      defer { a.dispose() }
+      var status = EKAuthorizationStatus.notDetermined
+      var granted = true
+      var fails = false
+      var requests = 0
+      var nativeStores = 0
+      let calendar = CalendarSync(
+        defaults: a.defaults, runtime: a.services.runtime, arguments: [],
+        makeStore: {
+          nativeStores += 1
+          return EKEventStore()
+        }, authorizationStatus: { status },
+        requestFullAccess: {
+          requests += 1
+          if fails { throw CocoaError(.userCancelled) }
+          return granted
+        })
+      defer { calendar.dispose() }
+      #expect(!calendar.hasAccess && !calendar.isOn)
+      await calendar.setEnabled(true)
+      #expect(requests == 1 && calendar.hasAccess && calendar.isOn)
+      #expect(a.defaults.bool(forKey: "one.calendarSync.enabled"))
+      status = .denied
+      #expect(!calendar.hasAccess && !calendar.isOn)
+      status = .notDetermined
+      #expect(!calendar.hasAccess, "A determined denial retires the earlier callback")
+      for denied in [EKAuthorizationStatus.denied, .restricted, .writeOnly] {
+        status = denied
+        await calendar.setEnabled(true)
+        #expect(!calendar.hasAccess && !calendar.isOn)
+      }
+      status = .notDetermined
+      granted = false
+      await calendar.setEnabled(true)
+      #expect(!calendar.hasAccess && !calendar.enabled)
+      granted = true
+      fails = true
+      await calendar.setEnabled(true)
+      #expect(!calendar.hasAccess && !calendar.enabled)
+      fails = false
+      await calendar.setEnabled(true)
+      #expect(calendar.isOn)
+      status = .fullAccess
+      #expect(calendar.isOn)
+      status = .notDetermined
+      #expect(!calendar.hasAccess, "A later unknown state cannot reuse a settled grant")
+      await calendar.setEnabled(true)
+      await calendar.setEnabled(false)
+      #expect(!calendar.hasAccess && !calendar.isOn)
+      #expect(nativeStores == 0)
+    }
+
+    @Test
     func populatedDayAgendaRenderUsesImportedSnapshotsWithoutNativeLookups() async throws {
       let a = try FocusSession()
       defer { a.dispose() }
