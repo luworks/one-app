@@ -119,3 +119,75 @@ with SQLite path/hash entries. The owned simulator
 the queued phone-v4/density owners received the actual release. Protected Today-UI
 was untouched. Native validation finished before incorporating independently
 validated Search PR130 (`71a1137f`); the final integrated source needs its own CI.
+
+## Bounded residual diagnosis on current main
+
+Owner checkout `t3-03897ea5` was clean at `a8060182`, then fast-forwarded safely
+without reset to `bfed1ca59b1c0fe42d89a91de5aa5e8732ad6a66` (includes density
+PR133). No parent dirty patch or other checkout was copied or modified.
+The original before/after evidence above remains unchanged.
+
+The original 1003.908791 ms Month -> Today interval begins at monotonic
+`379581131519875` in candidate run `today-qa-20261020-104914-9f80213a`.
+Its app-side clock starts inside the action, so XCTest's pre-tap AX lookup and
+post-tap report query cannot simply be charged to that interval. The separate
+XCTest automation interval was 3828.887167 ms. The retained xcresult reports
+`Error: No console log available`; its retained endpoint samples contain no
+CPU stacks or internal layout phases. This evidence cannot distinguish a main
+thread stall, framework work or delayed display-link scheduling during that
+specific outlier. It does not establish that the outlier was harness-only.
+
+One hypothesis was tested: rebuilding Today's List and its delayed scroll-to-now
+might overlap and explain the long return. Temporary, opt-in phase marks recorded
+item computation, the CalendarService read, agenda/title appearance, probe arming
+and both display-link callbacks. Diagnostic state was excluded from Observation
+tracking to avoid adding render subscriptions. The existing endpoint and all
+selection/retention assertions were preserved. No product behavior changed.
+
+Only `TodayUITests/PerformanceClimbTests/testTodayReturnPhaseDiagnostic` ran:
+**1/1 passed**, 56.671 s UI, 147.0 s complete invocation including incremental
+build/readiness/evidence. It reproduced the original three Month return cycles
+with repeated selected-control taps, then one Week return and an actual
+Standup -> editor -> Cancel interaction. Same owned simulator/DD, TodayMock Debug,
+iOS 27.0, pinned 09:41 and original populated fixture were used. This current-main
+phase cohort is not a matched speedup comparison with the earlier candidate.
+
+- Month -> Today: 200.69, 167.31, 167.39 ms; title onAppear at 138.80, 122.52,
+  130.35 ms. Each return made six item computations, totaling 5.68, 6.61, 5.65 ms;
+  their CalendarService call spans totaled 0.65, 0.66, 0.65 ms.
+- Week -> Today: 150.83 ms; title onAppear at 125.06 ms; six item computations
+  totaled 5.85 ms, with CalendarService call spans totaling 0.62 ms.
+
+All measured endpoints finished before the 250 ms scroll task. This cohort does
+not support scroll overlap or repeated item calculations as the cause of a
+one-second stall. The remaining uninstrumented gaps include SwiftUI/List work
+and callback scheduling; onAppear and two display-link ticks do not establish
+compositor presentation or the first instant an item can handle input. XCTest
+verified the content interaction later, after its normal synchronization, not
+at the app's 150.83 ms endpoint. Mock call spans do not measure live EventKit.
+
+**Outcome: causal product fix remains unresolved.** The one-second interval did
+not reproduce; its old evidence lacks the stacks/phases needed for attribution.
+A reproduced long return with contemporaneous main-thread stacks and content
+presentation/input timing is the missing discriminator before a product change.
+No cache, timing-assertion relaxation or navigation/layout change is justified by
+this run. Year construction and live EventKit remain unprofiled; phone acceptance
+is still pending and was neither exercised nor changed here.
+
+The temporary source/test edits were removed after retaining their exact patch
+and identity. Evidence is in primary `tests/results/today-navigation-response-20261020/residual/`
+(`phase-samples.json`, `diagnostic-source.patch`, `identity.json`, host snapshots,
+released inventory), indexed by QA session `today-navigation-residual-20261020`.
+The complete successful run and xcresult remain in primary
+`tests/results/runs/today-qa-20261020-112833-93ab5720/`, with actual source/product
+fingerprints in `inventory.json` and `mock-product.json`. The initial command
+`today-qa-20261020-112803-36b4278a` failed before build/UI because the Device panel
+had prebooted the owned simulator; shutdown restored the runner's readiness
+contract. That failure is retained, not counted as a test pass.
+
+Search's existing resource owner confirmed no conflicting reservation. The owned
+`06456893-03AA-4872-91AE-D8D9F113997C` is shut down; host/DD locks released.
+Protected Today-UI was untouched. No full suite, repeated passing original three
+methods, new unit run, phone install, signing change or user-data write occurred.
+The final change is this evidence note only; focused review checked raw samples,
+identity and attribution limits, and `git diff --check` passed.
