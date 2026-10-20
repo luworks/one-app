@@ -21,7 +21,7 @@
     /// Gap between neighbouring pills (both rows).
     public static let spacing: CGFloat = 8
     /// Minimum height of a tappable pill; the visible capsule of a control pill may be shorter.
-    public static let tapHeight: CGFloat = 44
+    public static let tapHeight = ButtonConfiguration.minimumHitSize
 
     /// Row 1: the tab pills. Selected = icon + label, others = icon only.
     public enum Tab {
@@ -29,7 +29,7 @@
       public static let iconLabelSpacing: CGFloat = 6
       public static let selectedPadding: CGFloat = 16
       public static let minWidth: CGFloat = 54
-      public static let height: CGFloat = 44
+      public static let height = ButtonConfiguration.minimumHitSize
     }
 
     /// Row 2 and every other selector: a text pill, one size down from the tab pills.
@@ -48,13 +48,14 @@
     }
 
     /// The selection animation every pill row uses.
-    public static let selectionAnimation = Animation.snappy
+    public static let selectionAnimation = ButtonConfiguration.responseAnimation
   }
 
   /// One control pill: the visible look of Week / Month / Year. A label, optionally with a symbol.
   /// Use it directly for a single on/off pill, or through `PillSwitcher` for a choice.
   @MainActor
   public struct PillButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     package let title: String
     package var icon: String? = nil
     package let isSelected: Bool
@@ -85,10 +86,12 @@
         .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: PillStyle.Control.height)
         .background(PillStyle.fill(selected: isSelected), in: Capsule())
         .foregroundStyle(PillStyle.text(selected: isSelected))
+        // Animate the control, not the destination content changed by its action.
+        .animation(reduceMotion ? nil : PillStyle.selectionAnimation, value: isSelected)
         .frame(minHeight: PillStyle.tapHeight)
         .contentShape(Rectangle())
       }
-      .buttonStyle(PillPressScale())
+      .buttonStyle(PressScale())
       .accessibilityLabel(title)
       .accessibilityAddTraits(isSelected ? .isSelected : [])
       .accessibilityIdentifier(identifier ?? "")
@@ -137,7 +140,7 @@
             title: title(item), icon: icon?(item), isSelected: item == selection,
             identifier: identifier?(item), fillsWidth: fixedWidth && distribution == .equal
           ) {
-            withAnimation(PillStyle.selectionAnimation) { selection = item }
+            selection = item
           }
         }
         if fixedWidth && distribution == .leading { Spacer(minLength: 0) }
@@ -193,7 +196,7 @@
         .frame(minHeight: PillStyle.tapHeight)
         .contentShape(Rectangle())
       }
-      .buttonStyle(PillPressScale())
+      .buttonStyle(PressScale())
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(accessibilityText ?? title)
       .accessibilityIdentifier(identifier ?? "")
@@ -230,16 +233,4 @@
     }
   }
 
-  /// 0.97 press scale with a light haptic, shared by the module’s pill buttons.
-  @MainActor
-  private struct PillPressScale: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-      configuration.label
-        .scaleEffect(configuration.isPressed ? 0.97 : 1)
-        .animation(.snappy(duration: 0.15), value: configuration.isPressed)
-        .sensoryFeedback(.impact(weight: .light), trigger: configuration.isPressed) { _, pressed in
-          pressed
-        }
-    }
-  }
 #endif

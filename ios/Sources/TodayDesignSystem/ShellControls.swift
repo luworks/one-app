@@ -4,7 +4,8 @@
 
   package struct CircleButton: View {
     package init(
-      systemImage: String, label: String, size: CGFloat = 50, action: @escaping () -> Void
+      systemImage: String, label: String, size: CGFloat = ButtonConfiguration.Icon.size,
+      action: @escaping () -> Void
     ) {
       self.systemImage = systemImage
       self.label = label
@@ -13,15 +14,18 @@
     }
     package let systemImage: String
     package let label: String
-    package var size: CGFloat = 50
+    package var size: CGFloat = ButtonConfiguration.Icon.size
     package var action: () -> Void
 
     package var body: some View {
       Button(action: action) {
         Image(systemName: systemImage)
-          .font(.body.weight(.semibold))
+          .font(ButtonConfiguration.Icon.actionFont)
           .foregroundStyle(.primary)
-          .frame(width: size, height: size)
+          .frame(
+            width: max(ButtonConfiguration.minimumHitSize, size),
+            height: max(ButtonConfiguration.minimumHitSize, size)
+          )
           .glassCircle()
       }
       .buttonStyle(PressScale())

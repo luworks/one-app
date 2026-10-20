@@ -1,6 +1,6 @@
 import XCTest
 
-/// Run identically on frozen source and candidate with Debug + SWIFT_OPTIMIZATION_LEVEL=-O.
+/// Run on frozen source and candidate with identical compiler settings; retain the build identity.
 /// XCTest drives journeys; only the app's monotonic samples measure operation latency.
 @MainActor
 final class PerformanceClimbTests: XCTestCase {
@@ -70,9 +70,14 @@ final class PerformanceClimbTests: XCTestCase {
     let current = reports()
     XCTAssertEqual(current.count, 1, "Visible trace mirrors must agree before navigation")
     let previous = current.first ?? ""
+    let automationStart = DispatchTime.now().uptimeNanoseconds
     app.buttons[label].firstMatch.tap()
     sample(name, after: previous)
     XCTAssertTrue(ready.waitForExistence(timeout: 5), "Destination content exists: \(label)")
+    let automationEnd = DispatchTime.now().uptimeNanoseconds
+    print(
+      "PERF_AUTOMATION name=\(name) start_ns=\(automationStart) end_ns=\(automationEnd) ms=\(Double(automationEnd - automationStart) / 1_000_000)"
+    )
   }
 
   func testLaunchAndResumeEndpoints() {
@@ -155,6 +160,66 @@ final class PerformanceClimbTests: XCTestCase {
     app.buttons["Calendar"].firstMatch.tap()
     XCTAssertTrue(
       element("calendar.monthPager").waitForExistence(timeout: 5), "Calendar keeps Month")
+  }
+
+  /// Matched baseline/candidate cohort: populated fixture, pinned time, first entry then two revisits.
+  func testTodayWeekResponse() {
+    app.launchArguments += ["-appearance", "light"]
+    app.launch()
+    sample("app_init_to_content_layout")
+    for visit in 0..<3 {
+      tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+      XCTAssertTrue(app.buttons["Calendar"].firstMatch.isSelected)
+      XCTAssertTrue(app.buttons["calendar.mode.week"].isSelected)
+      if visit == 0 { captureNavigation("week-light") }
+      tap("Today", sample: "calendar.week_to_today", ready: app.staticTexts["todayDate"])
+      XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
+    }
+  }
+
+  func testYearWeekResponse() {
+    app.launchArguments += ["-appearance", "dark"]
+    app.launch()
+    sample("app_init_to_content_layout")
+    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    for visit in 0..<3 {
+      tap(
+        "calendar.mode.year", sample: "calendar.week_to_calendar.year",
+        ready: element("calendar.year.scroll"))
+      XCTAssertTrue(app.buttons["calendar.mode.year"].isSelected)
+      if visit == 0 { captureNavigation("year-dark") }
+      tap(
+        "calendar.mode.week", sample: "calendar.year_to_calendar.week",
+        ready: element("calendar.weekGrid"))
+      XCTAssertTrue(app.buttons["calendar.mode.week"].isSelected)
+      if visit == 0 { captureNavigation("week-dark") }
+    }
+  }
+
+  func testRepeatedNavigationRetainsCalendarSelection() {
+    app.launch()
+    sample("app_init_to_content_layout")
+    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap(
+      "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+      ready: element("calendar.monthPager"))
+    for _ in 0..<3 {
+      tap("Today", sample: "calendar.month_to_today", ready: app.staticTexts["todayDate"])
+      // Repeated taps on the selected destination must not toggle it or schedule a later switch.
+      app.buttons["Today"].firstMatch.doubleTap()
+      XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
+      tap("Calendar", sample: "today_to_calendar.month", ready: element("calendar.monthPager"))
+      app.buttons["calendar.mode.month"].doubleTap()
+      XCTAssertTrue(app.buttons["calendar.mode.month"].isSelected)
+      XCTAssertFalse(element("calendar.weekGrid").exists)
+    }
+  }
+
+  private func captureNavigation(_ name: String) {
+    let capture = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+    capture.name = "navigation-response-\(name)"
+    capture.lifetime = .keepAlways
+    add(capture)
   }
 
   func testYearScrollMemory() {
