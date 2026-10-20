@@ -738,10 +738,10 @@
         // While the sidebar is open it shows its own toast: never two Undo buttons at once.
         if !drawer.isOpen { UndoToastView() }
         bottomButtons
+          .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
           .contentShape(Rectangle())
           .modifier(TabSwipe(isEnabled: !drawer.isOpen, move: switchTab))
       }
-      .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
       // Scroll content can extend beneath the safe-area inset. Keep it out of the controls.
       .background(Color(.systemBackground))
       .overlay(alignment: .top) {

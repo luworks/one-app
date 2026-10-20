@@ -1,9 +1,11 @@
 import FeatureClock
 import FeatureHealth
+import One
 import SnapshotTesting
 import SwiftUI
 import TodayCore
 import TodayDesignSystem
+import TodayPlannerUI
 import UIKit
 import XCTest
 
@@ -103,6 +105,77 @@ final class NativeSnapshotTests: XCTestCase {
         items: [7, 30, 90], selection: .constant(30),
         title: { "\($0) Days" }, identifier: { "health.range.\($0)" }),
       named: "range-accessibility3", largeType: true)
+  }
+
+  func testUndoToastLongEnglishNarrow() throws {
+    try checkToast(
+      "Deleted “Review the quarterly delivery plan with the design and engineering teams”",
+      typeSize: .large, dark: false, undoable: true)
+  }
+
+  func testUndoToastChineseAccessibilityDark() throws {
+    try checkToast(
+      "无法保存这个专注选择。所有提醒事项、日历事件和通知均保持不变，请稍后重试。",
+      typeSize: .accessibility3, dark: true, undoable: false)
+  }
+
+  /// Inline messages are synthetic render inputs; this mounts the production toast, not a replica.
+  private func checkToast(
+    _ message: String, typeSize: DynamicTypeSize, dark: Bool, undoable: Bool
+  ) throws {
+    let toast = UndoToast()
+    var undone = false
+    if undoable { toast.show(message) { undone = true } } else { toast.showNotice(message) }
+    defer { toast.dispose() }
+    let view = UndoToastView()
+      .environment(toast)
+      .environment(\.dynamicTypeSize, typeSize)
+      .environment(\.colorScheme, dark ? .dark : .light)
+      .transaction { $0.disablesAnimations = true }
+    let host = UIHostingController(rootView: view)
+    let scene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let previousKey = scene.windows.first(where: \.isKeyWindow)
+    let window = UIWindow(windowScene: scene)
+    window.frame = CGRect(x: 0, y: 0, width: 320, height: 568)
+    window.overrideUserInterfaceStyle = dark ? .dark : .light
+    window.rootViewController = host
+    window.makeKeyAndVisible()
+    defer {
+      window.isHidden = true
+      window.rootViewController = nil
+      previousKey?.makeKey()
+    }
+    window.layoutIfNeeded()
+    RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+    let insets = host.view.safeAreaInsets
+    host.additionalSafeAreaInsets = UIEdgeInsets(
+      top: -insets.top, left: -insets.left, bottom: -insets.bottom, right: -insets.right)
+    window.layoutIfNeeded()
+    let fitted = host.sizeThatFits(in: CGSize(width: 320, height: 1000))
+    print(
+      "Toast native geometry: width=320 height=\(fitted.height) type=\(typeSize) undo=\(undoable)")
+    let image = UIGraphicsImageRenderer(size: window.bounds.size).image { _ in
+      window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+    }
+    let attachment = XCTAttachment(image: image)
+    attachment.name = undoable ? "toast-long-english-narrow" : "toast-chinese-AX3-dark"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+    if undoable { toast.show("Deleted") { undone = true } } else { toast.showNotice("Try again") }
+    window.layoutIfNeeded()
+    let short = host.sizeThatFits(in: CGSize(width: 320, height: 1000))
+    print("Toast native short geometry: height=\(short.height)")
+    XCTAssertGreaterThan(
+      fitted.height, short.height + 15,
+      "Long content must wrap rather than truncate at the short caption height")
+    if undoable { XCTAssertEqual(short.height, 48, accuracy: 0.5, "Short Undo stays compact") }
+    XCTAssertLessThan(fitted.height, 400, "Toast must leave room for the page and navigation")
+    if undoable {
+      toast.performUndo()
+      XCTAssertTrue(undone)
+      XCTAssertNil(toast.message)
+    }
   }
 
   /// Proves the real render/diff pipeline notices changed production data without writing baselines.

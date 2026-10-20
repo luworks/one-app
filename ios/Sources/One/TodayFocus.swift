@@ -124,13 +124,13 @@
       switch state {
       case .settled:
         action = .settled
-        message = "Settled “\(title)”"
+        message = "Hidden in Today only: “\(title)”"
       case .snoozed:
         action = .snoozed
-        message = "Snoozed “\(title)”"
+        message = "Snoozed in Today only: “\(title)”"
       case .active, nil:
         action = .restored
-        message = "Restored “\(title)”"
+        message = "Shown in Today only: “\(title)”"
       }
       let entry = ledger.record(
         action, kind: "focus", title: title, before: label(old), after: label(state),
