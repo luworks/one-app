@@ -154,11 +154,45 @@ final class JourneyTests: XCTestCase {
     let field = app.textFields["search.field"]
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.typeText("priya")
+    let result = app.buttons.matching(identifier: "search.result")
+      .containing(NSPredicate(format: "label CONTAINS %@", "Lunch with Priya")).firstMatch
     XCTAssertTrue(
-      app.staticTexts["Lunch with Priya"].waitForExistence(timeout: 5), "an event is found")
+      result.waitForExistence(timeout: 5), "an event is found in Search")
     XCTAssertTrue(
       app.buttons["search.scope.alarms"].exists && app.buttons["search.scope.reminders"].exists,
       "scopes (pills): All / Reminders / Events / Alarms")
+    recordSearchScope("before-reminders")
+    let target = app.buttons["search.scope.reminders"]
+    let touch = target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    print("SEARCH_SCOPE_TOUCH screenPoint=\(touch.screenPoint) targetFrame=\(target.frame)")
+    touch.tap()
+    recordSearchScope("after-reminders")
+    XCTAssertTrue(result.waitForNonExistence(timeout: 5), "reminder scope excludes events")
+    XCTAssertTrue(target.isSelected, "the requested scope is selected")
+    tap(app.buttons["search.scope.events"])
+    XCTAssertTrue(
+      result.waitForExistence(timeout: 5),
+      "returning to event scope restores the matching result")
+  }
+
+  private func recordSearchScope(_ stage: String) {
+    let matches = app.descendants(matching: .any).matching(identifier: "search.scope.reminders")
+    var details = "SEARCH_SCOPE \(stage) descendants=\(matches.count)\n"
+    for (index, element) in matches.allElementsBoundByIndex.enumerated() {
+      details +=
+        "\(index) type=\(element.elementType) frame=\(element.frame) "
+        + "hittable=\(element.isHittable) selected=\(element.isSelected)\n"
+    }
+    details += app.debugDescription
+    print(details)
+    let tree = XCTAttachment(string: details)
+    tree.name = "Search scope \(stage) tree"
+    tree.lifetime = .keepAlways
+    add(tree)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Search scope \(stage) screen"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
   }
 
   /// Search opens straight onto suggestions (no empty pop-up), a suggestion lists things, and Cancel closes Search.

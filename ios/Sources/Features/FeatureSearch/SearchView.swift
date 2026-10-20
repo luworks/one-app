@@ -48,6 +48,7 @@
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \OneTask.createdAt, order: .reverse) private var tasks: [OneTask]
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query private var alarms: [OneAlarm]
@@ -57,6 +58,56 @@
     @State private var opened: Opened?
     @State private var recents: [String]
     @State private var quick: Quick?
+    @State private var calendarSnapshot: CalendarSnapshot?
+
+    private struct CalendarRequest: Equatable {
+      let day: Date
+      let upcomingOnly: Bool
+      let version: Int
+      let ready: Bool
+      let hiddenCalendars: Set<String>
+      let calendar: Calendar
+
+      func window(now: Date) -> DateInterval {
+        if upcomingOnly {
+          return DateInterval(
+            start: now, end: calendar.date(byAdding: .day, value: 7, to: now) ?? now)
+        }
+        return DateInterval(
+          start: calendar.date(byAdding: .year, value: -2, to: now) ?? now,
+          end: calendar.date(byAdding: .year, value: 2, to: now) ?? now)
+      }
+    }
+
+    private struct CalendarSnapshot {
+      let request: CalendarRequest
+      let events: [ExternalEvent]
+    }
+
+    /// Query characters only filter values. Source reads run once per range/version in the view task.
+    private var calendarRequest: CalendarRequest? {
+      guard calendar.isOn else { return nil }
+      let cal = presentation.calendar
+      let today = cal.startOfDay(for: presentation.now)
+      let empty = query.trimmingCharacters(in: .whitespaces).isEmpty
+      if empty {
+        guard quick == .events else { return nil }
+      } else {
+        guard scope == .all || scope == .events else { return nil }
+      }
+      return CalendarRequest(
+        day: today, upcomingOnly: empty, version: calendar.version,
+        ready: calendar.isReady, hiddenCalendars: calendar.hiddenCalendarIDs, calendar: cal)
+    }
+
+    /// Reject stale/disabled snapshots immediately, before the replacement task gets its turn.
+    private var systemEvents: [ExternalEvent] {
+      guard let request = calendarRequest, let calendarSnapshot,
+        calendarSnapshot.request == request
+      else { return [] }
+      let mirrors = Set(events.compactMap(\.externalID))
+      return calendarSnapshot.events.filter { !mirrors.contains($0.eventIdentifier) }
+    }
 
     private let limit = 25
 
@@ -210,6 +261,18 @@
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { focused = true }
+        .task(id: calendarRequest) {
+          guard !Task.isCancelled else { return }
+          if let request = calendarRequest {
+            let values = calendar.events(in: request.window(now: presentation.now))
+            calendarSnapshot = CalendarSnapshot(request: request, events: values)
+          } else {
+            calendarSnapshot = nil
+          }
+        }
+        .onChange(of: scenePhase) { _, phase in
+          if phase == .active, calendarRequest != nil { calendar.refresh() }
+        }
         .sheet(item: $opened) { item in
           switch item {
           case .task(let t): editor(.task(t))
@@ -325,8 +388,10 @@
             ?? presentation.now,
           end: presentation.calendar.date(byAdding: .year, value: 2, to: presentation.now)
             ?? presentation.now)
-        for s in calendar.events(in: window, excluding: Set(events.compactMap(\.externalID)))
-        where SearchMatch.matches(q, in: [s.title, s.location, s.calendarTitle]) {
+        for s in systemEvents
+        where s.start < window.end && s.end > window.start
+          && SearchMatch.matches(q, in: [s.title, s.location, s.calendarTitle])
+        {
           hits.append(
             EventHit(
               id: "s\(s.id)", title: s.title, detail: dateLabel(s.start) + " · " + s.calendarTitle,
@@ -380,8 +445,7 @@
             detail: dateLabel(next) + " · " + e.calendarName, start: next, color: .blue,
             opened: .event(e))
         }
-        for s in calendar.events(in: window, excluding: Set(events.compactMap(\.externalID)))
-        where s.start >= presentation.now {
+        for s in systemEvents where s.start >= presentation.now && s.start < window.end {
           hits.append(
             EventHit(
               id: "s\(s.id)", title: s.title, detail: dateLabel(s.start) + " · " + s.calendarTitle,
