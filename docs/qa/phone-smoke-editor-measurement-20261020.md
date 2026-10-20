@@ -26,4 +26,12 @@ Coordinates are derived from the current semantic element, checked for hittabili
 
 ## Verification and delivery
 
-Pending the single focused native verification and hosted exact-main gates. Build, simulator behavior, signed installation, process liveness and owner-assisted phone interactions are separate evidence categories.
+`./dev format --check` and `git diff --check` passed. One focused source review found no production changes, relaxed timeouts, omitted state checks or omitted downstream journey.
+
+`./dev test ui --only TodayUITests/TodayReminderCompletionTests/testImportedTimelineNavigationAndCancelledEditorsStayResponsive` passed **1/1**, missing/skipped **0**, at candidate `bae676e`. The command completed in 285.6 seconds including one build. Raw log, source/Mock product provenance, reconciled summary and complete xcresult: `/Users/yuanlu/code/one-app/tests/results/runs/today-qa-20261020-105456-a79cae37/`.
+
+`SMOKE_EDITOR`: open preparation 0.312541 s; open response 2.247602 s; Cancel preparation 0.358999 s; Cancel response 2.060044 s; summed response **4.307647 s**; full wall **4.979187 s**. This local run establishes the revised measurement and complete shared imported journey on its owned simulator. It does not reproduce the hosted 4-second AX queries or establish their underlying cause.
+
+The runner shut down `Today-Dev-4de55eb2` (`45A7B46F-9376-4A3B-B0DF-8FEB24602E3F`); host-heavy and owned DD locks were released before handing the local slot to Density. No repeated passing test or full suite was run.
+
+Hosted exact-main gates and phone delivery remain pending. Build, simulator behavior, signed installation, process liveness and owner-assisted phone interactions are separate evidence categories.
