@@ -115,13 +115,27 @@ final class TodayReminderCompletionTests: XCTestCase {
       NSPredicate(format: "label BEGINSWITH %@", eventTitle)
     ).firstMatch
     XCTAssertTrue(event.waitForExistence(timeout: 8), "native Calendar import is rendered")
-    let started = Date()
-    app.staticTexts[title].firstMatch.tap()
+    // Resolve each target while it is ready, before measuring its touch-to-state response.
+    // XCUIElement.tap resolves the AX tree again before synthesizing a touch (8.34s across
+    // these two targets in smoke 39466973063); that is not time after a user's touch.
+    let journeyStarted = ProcessInfo.processInfo.systemUptime
+    let open = readyCoordinate(app.staticTexts[title].firstMatch, in: app)
+    let started = ProcessInfo.processInfo.systemUptime
+    open.tap()
     XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 5))
-    app.buttons["Cancel"].firstMatch.tap()
+    let opened = ProcessInfo.processInfo.systemUptime
+    let cancel = readyCoordinate(app.buttons["Cancel"].firstMatch, in: app)
+    let cancelStarted = ProcessInfo.processInfo.systemUptime
+    cancel.tap()
     XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
+    let returned = ProcessInfo.processInfo.systemUptime
+    let response = (opened - started) + (returned - cancelStarted)
+    print(
+      "SMOKE_EDITOR open_prepare_s=\(started - journeyStarted) open_response_s=\(opened - started) "
+        + "cancel_prepare_s=\(cancelStarted - opened) cancel_response_s=\(returned - cancelStarted) "
+        + "response_s=\(response) wall_s=\(returned - journeyStarted)")
     XCTAssertLessThan(
-      Date().timeIntervalSince(started), 10,
+      response, 10,
       "editor opens and cancels without a scene watchdog stall")
     for tab in ["Calendar", "Reminders", "Clock", "Today"] {
       app.buttons[tab].firstMatch.tap()
@@ -139,6 +153,20 @@ final class TodayReminderCompletionTests: XCTestCase {
     try assertChatDraftAndClose(in: app, draft: XCTUnwrap(fixture["chatDraft"]))
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     assertState(app, done: false)
+  }
+
+  /// Coordinates come from the current hittable element, never a fixed screen location.
+  /// The timed interval still includes event synthesis, app execution, idling and AX state checks.
+  private func readyCoordinate(_ element: XCUIElement, in app: XCUIApplication)
+    -> XCUICoordinate
+  {
+    XCTAssertTrue(element.isHittable, "The measured control must be ready for a user touch")
+    let frame = element.frame
+    let appFrame = app.frame
+    XCTAssertFalse(frame.isEmpty)
+    XCTAssertTrue(appFrame.contains(frame), "The measured control must be visible")
+    return app.coordinate(withNormalizedOffset: .zero).withOffset(
+      CGVector(dx: frame.midX - appFrame.minX, dy: frame.midY - appFrame.minY))
   }
 
   /// Isolates keyboard synchronization from the native-import journey without replacing that regression.
