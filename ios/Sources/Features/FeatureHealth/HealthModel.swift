@@ -30,6 +30,9 @@
     /// The latest fetch started for each metric; an older fetch that answers late must not overwrite a newer answer.
     @ObservationIgnored private var generation: [HealthMetric: Int] = [:]
 
+    @ObservationIgnored private var loadedDays: [HealthMetric: Int] = [:]
+    @ObservationIgnored private var active: [HealthMetric: Int] = [:]
+
     /// App assembly owns one model for the Today line and every Health sheet. Workbench supplies its own source.
     public init(
       source: any HealthSource, store: HealthSelectionStore, runtime: PlannerRuntime,
@@ -61,6 +64,18 @@
       await preferred
     }
 
+    /// Existing Today lifecycle events refresh at most two metrics; active reads already supply their values.
+    /// The computed summary only formats this model's state; it never starts a native query while rendering.
+    package func loadSummary() async {
+      let metrics = HealthLine.metrics(for: selection).filter {
+        active[$0] == nil
+      }
+      guard !metrics.isEmpty else { return }
+      async let preferred: Void = refreshUnits()
+      await run(metrics, days: HealthSpark.days)
+      await preferred
+    }
+
     /// Adds metrics at the end, then asks Apple Health for those types only (the caller has dismissed the picker, so
     /// Apple's sheet can show), then reads them. The new rows are on screen at once, each with its own spinner.
     public func add(_ metrics: [HealthMetric]) async {
@@ -77,16 +92,21 @@
     }
 
     /// Requests access (once per new batch of types), then reads each metric on its own.
-    private func run(_ metrics: [HealthMetric]) async {
+    private func run(_ metrics: [HealthMetric], days: Int = HealthModel.days) async {
       guard !Task.isCancelled, !metrics.isEmpty else { return }
       for metric in metrics where states[metric] == nil { states[metric] = .loading }
       var tokens: [HealthMetric: Int] = [:]
       for metric in metrics {
         generation[metric, default: 0] += 1
         tokens[metric] = generation[metric]
+        active[metric] = generation[metric]
       }
       let tokenSnapshot = tokens
+      let now = runtime.now()
       defer {
+        for metric in metrics where active[metric] == tokenSnapshot[metric] {
+          active[metric] = nil
+        }
         if Task.isCancelled {
           for metric in metrics
           where generation[metric] == tokenSnapshot[metric] && states[metric] == .loading {
@@ -95,21 +115,34 @@
         }
       }
       await HealthLoader.load(
-        metrics, source: source, gate: gate, days: Self.days, now: runtime.now(), timeout: timeout,
+        metrics, source: source, gate: gate, days: days, now: now, timeout: timeout,
         onLateAccess: { [weak self] in
           // The permission sheet answered after the timeout: read what it allowed.
-          Task { @MainActor in await self?.run(metrics) }
+          Task { @MainActor in await self?.run(metrics, days: days) }
         },
         onResult: { [weak self] metric, result, access in
-          await self?.apply(metric, result, access: access, token: tokenSnapshot[metric] ?? 0)
+          await self?.apply(
+            metric, result, access: access, token: tokenSnapshot[metric] ?? 0, days: days, now: now)
         })
     }
 
     private func apply(
-      _ metric: HealthMetric, _ result: HealthFetchResult, access: HealthAccessOutcome, token: Int
+      _ metric: HealthMetric, _ result: HealthFetchResult, access: HealthAccessOutcome, token: Int,
+      days: Int, now: Date
     ) {
       guard !Task.isCancelled, generation[metric] == token else { return }
-      if case .series(let s) = result { series[metric] = s }
+      if case .series(let incoming) = result {
+        // A short refresh replaces its covered dates, preserving older chart history from a longer read.
+        let window = HealthWindow(days: days, now: now, calendar: runtime.calendar)
+        let retainedWindow = HealthWindow(
+          days: max(loadedDays[metric] ?? 0, days), now: now, calendar: runtime.calendar)
+        let older =
+          series[metric]?.points.filter {
+            $0.date >= retainedWindow.start && $0.date < window.start
+          } ?? []
+        series[metric] = HealthSeries(points: older + incoming.points)
+        loadedDays[metric] = max(loadedDays[metric] ?? 0, days)
+      }
       let hadData = series[metric].map { !$0.points.isEmpty } ?? false
       states[metric] = HealthMetricState.settled(result, access: access, hadData: hadData)
     }

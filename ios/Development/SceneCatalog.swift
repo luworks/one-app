@@ -119,9 +119,7 @@
       health = HealthModel(
         source: source, store: healthSelection, runtime: runtime, gate: healthGate,
         timeout: configuration.scenario == .error ? 0.05 : HealthTimeout.seconds)
-      healthLine = HealthLineModel(
-        source: source, store: healthSelection, defaults: defaults, runtime: runtime,
-        gate: healthGate)
+      healthLine = HealthLineModel(model: health)
       guard let citiesURL else { throw SceneSessionError.missingCities }
       let cities = try CityDatabase.decode(Data(contentsOf: citiesURL))
       let keys =

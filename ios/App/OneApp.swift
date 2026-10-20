@@ -70,9 +70,7 @@ struct OneApp: App {
     let gate = HealthAccessGate()
     healthModel = HealthModel(
       source: source, store: selection, runtime: session.runtime, gate: gate)
-    healthLineModel = HealthLineModel(
-      source: source, store: selection, defaults: session.defaults,
-      runtime: session.runtime, gate: gate)
+    healthLineModel = HealthLineModel(model: healthModel)
     diagnostics.start()
     if PerformanceTrace.enabled { PerformanceTrace.shared.beginLaunch() }
     LaunchTimer.mark("app init")
