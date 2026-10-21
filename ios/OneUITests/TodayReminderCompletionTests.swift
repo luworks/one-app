@@ -200,7 +200,21 @@ final class TodayReminderCompletionTests: XCTestCase {
     XCTAssertTrue(app.buttons["ask-send"].exists)
     XCTAssertFalse(app.staticTexts[draft].exists, "Typing alone does not send the draft")
     app.buttons["Close"].firstMatch.tap()
+    let closed = XCTAttachment(screenshot: app.screenshot())
+    closed.name = "Imported timeline after Chat Close"
+    closed.lifetime = .keepAlways
+    add(closed)
     XCTAssertTrue(entered.waitForNonExistence(timeout: 5))
+    XCTAssertFalse(app.textViews["ask-input"].exists, "Close removes the editor from accessibility")
+    let chat = app.buttons["Ask AI or add anything"].firstMatch
+    XCTAssertTrue(chat.isHittable, "The underlying page is usable after Close")
+    chat.tap()
+    let reopened = app.textViews["ask-input"].firstMatch
+    XCTAssertTrue(reopened.waitForExistence(timeout: 5))
+    XCTAssertEqual(reopened.value as? String, draft, "Close/reopen retains the exact unsent draft")
+    XCTAssertFalse(app.staticTexts[draft].exists, "Reopening does not submit the draft")
+    app.buttons["Close"].firstMatch.tap()
+    XCTAssertTrue(reopened.waitForNonExistence(timeout: 5))
   }
 
   func testCompactEditorEditAndDeleteFailuresRetryAcrossInFlightSync() throws {
