@@ -169,6 +169,24 @@ public enum RepeatAdvance {
   }
 }
 
+/// A reminder whose deadline moved to another day leaves the day its plan was made for.
+public enum DeadlineMove {
+  /// The planned time to keep after the deadline moved from `oldDue` to `newDue`.
+  /// A plan made on the old deadline's day was for that deadline, so it goes when the deadline leaves
+  /// that day (otherwise the reminder stays on today for a day it is no longer due). A plan on any other
+  /// day was chosen on its own and stays, and so does a plan when there was or is no deadline.
+  public static func plannedStart(
+    _ planned: Date?, deadlineMovedFrom oldDue: Date?, to newDue: Date?,
+    calendar: Calendar = .current
+  ) -> Date? {
+    guard let planned, let oldDue, let newDue,
+      calendar.isDate(planned, inSameDayAs: oldDue),
+      !calendar.isDate(newDue, inSameDayAs: oldDue)
+    else { return planned }
+    return nil
+  }
+}
+
 /// A checklist line inside a task.
 public struct ChecklistItem: Codable, Hashable, Identifiable {
   public var id = UUID()

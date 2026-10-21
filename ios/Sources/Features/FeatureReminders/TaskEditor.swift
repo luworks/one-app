@@ -545,7 +545,14 @@
       }
       t.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
       t.note = note
-      t.plannedStart = hasStart ? start : nil
+      // Only a deadline moved on its own takes the old day's plan with it; a plan edited here is kept.
+      let plan = hasStart ? start : nil
+      t.plannedStart =
+        plan == previous?.plannedStart
+        ? DeadlineMove.plannedStart(
+          plan, deadlineMovedFrom: previous?.due, to: hasDue ? due : nil,
+          calendar: presentation.calendar)
+        : plan
       t.durationMinutes = duration
       t.due = hasDue ? due : nil
       t.reminderOffsetMinutes = reminder
