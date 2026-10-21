@@ -1,11 +1,13 @@
 #if os(iOS)
   import SwiftUI
   import UIKit
+  import TodayPlatform
 
   /// A native multiline editor whose input events, not text contents, own keyboard submission.
   struct AskComposer: UIViewRepresentable {
     @Binding var text: String
     @Binding var focused: Bool
+    var isPresented = true
     let onSubmit: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -29,9 +31,21 @@
 
     func updateUIView(_ view: Editor, context: Context) {
       context.coordinator.parent = self
+      if PerformanceTrace.enabled, view.tracedPresentation != isPresented {
+        view.tracedPresentation = isPresented
+        PerformanceTrace.shared.mark(isPresented ? "chat.native_shown" : "chat.native_hidden")
+      }
+      view.isHidden = !isPresented
+      view.isUserInteractionEnabled = isPresented
+      view.isAccessibilityElement = isPresented
+      view.accessibilityElementsHidden = !isPresented
       // SwiftUI redraws must never replace an in-progress IME composition.
       if view.markedTextRange == nil, view.text != text { view.text = text }
-      if focused, !view.isFirstResponder { view.becomeFirstResponder() }
+      if focused, !view.isFirstResponder {
+        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.focus_begin") }
+        view.becomeFirstResponder()
+        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.focus_end") }
+      }
       if !focused, view.isFirstResponder { view.resignFirstResponder() }
     }
 
@@ -43,6 +57,19 @@
     }
 
     final class Editor: UITextView {
+      private var tracedGeneration = -1
+      var tracedPresentation: Bool?
+
+      override func layoutSubviews() {
+        super.layoutSubviews()
+        guard PerformanceTrace.enabled, window != nil, bounds.width > 0, bounds.height > 0,
+          isEditable, isUserInteractionEnabled,
+          tracedGeneration != PerformanceTrace.shared.generation
+        else { return }
+        tracedGeneration = PerformanceTrace.shared.generation
+        PerformanceTrace.shared.mark("chat.composer_laid_out")
+      }
+
       var insertingPaste = false
       var insertingLineBreak = false
 
@@ -69,8 +96,13 @@
       var parent: AskComposer
       init(_ parent: AskComposer) { self.parent = parent }
 
-      func textViewDidBeginEditing(_ textView: UITextView) { parent.focused = true }
-      func textViewDidEndEditing(_ textView: UITextView) { parent.focused = false }
+      // UIKit calls these synchronously during programmatic updates too; avoid reentrant state writes.
+      func textViewDidBeginEditing(_ textView: UITextView) {
+        if !parent.focused { parent.focused = true }
+      }
+      func textViewDidEndEditing(_ textView: UITextView) {
+        if parent.focused { parent.focused = false }
+      }
       func textViewDidChange(_ textView: UITextView) {
         parent.text = textView.text
         textView.invalidateIntrinsicContentSize()

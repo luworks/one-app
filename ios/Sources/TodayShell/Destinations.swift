@@ -108,6 +108,9 @@
     let thread: ChatThread?
     let toast: UndoToast
     let composition: ShellComposition
+    let isPresented: Bool
+    let maximumHeight: CGFloat
+    let onClose: () -> Void
     let onBack: (Bool) -> Void
     let onAdded: (Capture) -> Void
     let onOpenDay: (Date) -> Void
@@ -116,7 +119,8 @@
     private var session: PlannerSession { composition.session }
     package var body: some View {
       AskView(
-        thread: thread, calendar: session.calendar, now: session.runtime.now,
+        thread: thread, isPresented: isPresented, maximumHeight: maximumHeight,
+        onClose: onClose, calendar: session.calendar, now: session.runtime.now,
         actions: session.actions, ledger: session.ledger, activity: session.activity,
         intelligence: composition.intelligence, voice: composition.voice,
         presentation: composition.presentation,

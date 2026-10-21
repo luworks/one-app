@@ -108,8 +108,9 @@
     @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
     @State private var todayDay: Date
-    /// The AI screen: a new chat, or a saved conversation to continue. nil = closed.
+    /// The mounted conversation survives panel dismissal; nil means Chat has not opened yet.
     @State private var ask: AskRoute?
+    @State private var askVisible = false
     @State private var showsSearch = false
     @State private var newItem: NewItem?
     @State private var showsSettings = false
@@ -155,10 +156,13 @@
               close: { drawer.set(open: false) }
             )
             .frame(width: width)
+            .accessibilityHidden(askVisible)
             .modifier(DrawerSidebarSlide(model: drawer, width: width))
           }
 
           main
+            .accessibilityHidden(askVisible)
+            .ignoresSafeArea(.keyboard, edges: askVisible ? .bottom : [])
             .background(Color(.systemBackground))
             // Swipe right from the left edge opens the sidebar. The edge strip sits above the
             // lists so it wins over row swipe actions; row swipes elsewhere stay free.
@@ -195,25 +199,56 @@
           }
         }
       }
-      // On the root, not on the page: the page slides away and stops taking touches while the sidebar is
-      // open, and the sidebar is put back underneath this screen when it goes back.
-      .fullScreenCover(item: $ask) { route in
-        AskScreen(
-          thread: route.thread, toast: toast, composition: composition,
-          onBack: { show in
-            // Put the sidebar back underneath, so closing or swiping right lands on it.
-            if route.fromSidebar { drawer.set(open: show, animated: false) }
-          },
-          onAdded: { capture in
-            if capture.hasDay { calendarDay = capture.day }
-          },
-          onOpenDay: { day in
-            // "Open" on an added event: leave the AI screen and show that day in Today.
-            ask = nil
-            drawer.set(open: false, animated: false)
-            tab = .today
-            todayDay = session.runtime.calendar.startOfDay(for: day)
-          })
+      .overlay(alignment: .bottom) {
+        GeometryReader { geometry in
+          ZStack(alignment: .bottom) {
+            if askVisible {
+              Color.black.opacity(0.12)
+                .contentShape(Rectangle())
+                .onTapGesture { closeAsk() }
+                .accessibilityHidden(true)
+            }
+            if let route = ask {
+              AskScreen(
+                thread: route.thread, toast: toast, composition: composition,
+                isPresented: askVisible,
+                maximumHeight: max(0, geometry.size.height - 64),
+                onClose: closeAsk,
+                onBack: { _ in },
+                onAdded: { capture in
+                  if capture.hasDay { calendarDay = capture.day }
+                },
+                onOpenDay: { day in
+                  closeAsk()
+                  drawer.set(open: false, animated: false)
+                  tab = .today
+                  todayDay = session.runtime.calendar.startOfDay(for: day)
+                }
+              )
+              .id(route.id)
+              .accessibilityAddTraits(.isModal)
+              .frame(maxWidth: 620)
+              .background(Color(.systemBackground))
+              .clipShape(RoundedRectangle(cornerRadius: 24))
+              .overlay {
+                RoundedRectangle(cornerRadius: 24)
+                  .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
+                  .allowsHitTesting(false)
+              }
+              .shadow(color: .black.opacity(0.16), radius: 20, y: 6)
+              .padding(.horizontal, 12)
+              .padding(.bottom, 12)
+              // Keep native subviews outside the hit-test region while retaining conversation state.
+              .offset(y: askVisible ? 0 : geometry.size.height + 640)
+              .opacity(askVisible ? 1 : 0)
+              .transaction { if !askVisible { $0.disablesAnimations = true } }
+              .allowsHitTesting(askVisible)
+              .accessibilityHidden(!askVisible)
+            }
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        }
+        .allowsHitTesting(askVisible)
       }
       .sheet(item: $editor) {
         PlannerEditor(destination: $0, toast: toast, composition: composition)
@@ -279,14 +314,28 @@
 
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
 
-    /// Opens the AI screen on a new chat, or on a saved conversation. Opened from the sidebar, closing it
-    /// (close button or swipe right) goes back to the sidebar.
+    /// Bottom Chat resumes the conversation; sidebar actions select a new or saved conversation.
     private func openAsk(_ thread: ChatThread?, fromSidebar: Bool = false) {
       PerformanceTrace.shared.beginPage("ai")
-      // From the sidebar, leave it open underneath: closing it first would flash the page (Calendar or
-      // Today) before the AI screen slides over it. Back then lands on the sidebar anyway.
+      // A history selection keeps its sidebar context underneath the panel.
       if !fromSidebar { drawer.set(open: false, animated: false) }
-      ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) {
+        // Bottom Chat resumes the mounted conversation, including its unsent native editor.
+        // Sidebar New chat and history selections intentionally choose a different conversation.
+        if ask == nil || fromSidebar {
+          ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
+        }
+        askVisible = true
+      }
+    }
+
+    private func closeAsk() {
+      if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.close_requested") }
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) { askVisible = false }
     }
 
     /// Reminders added from the Share sheet wait in the App Group (`ShareInbox`) until the app is active; they come in
@@ -590,7 +639,7 @@
         // Widget rows link here (today://today?day=…): open Today on that day.
         .onOpenURL { url in
           guard let day = WidgetLink.day(from: url) else { return }
-          ask = nil
+          closeAsk()
           showsSearch = false
           drawer.set(open: false, animated: false)
           tab = .today
@@ -791,11 +840,11 @@
             traceTabAction(to: .today)
             tab = .today
           } label: {
-            bottomDestinationLabel(icon: "sun.max", selected: tab == .today && ask == nil)
+            bottomDestinationLabel(icon: "sun.max", selected: tab == .today && !askVisible)
           }
           .buttonStyle(PressScale())
           .accessibilityLabel("Today")
-          .accessibilityAddTraits(tab == .today && ask == nil ? .isSelected : [])
+          .accessibilityAddTraits(tab == .today && !askVisible ? .isSelected : [])
           Button {
             openAsk(nil)
           } label: {
@@ -805,7 +854,7 @@
           .accessibilityLabel("Chat")
           // Keep the existing automation entry while giving VoiceOver the visible control's name.
           .accessibilityIdentifier("Ask AI or add anything")
-          .accessibilityHint("Opens a new chat. Past chats are in the menu.")
+          .accessibilityHint("Opens your conversation. New and past chats are in the menu.")
         }
         .padding(3)
         .background(ButtonConfiguration.Icon.background, in: Capsule())

@@ -7,12 +7,16 @@
   import SwiftUI
   import SwiftData
 
-  /// Full-screen AI page, modeled on ChatGPT / Claude mobile.
+  /// Conversation content hosted by the shell in a floating panel.
   /// Conversation stays conversational; only requests to add items become capture previews.
   /// Explicit Send approves a clear one-off reminder; other changes keep their Add / Apply gate.
   package struct AskView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private let isPresented: Bool
+    private let maximumHeight: CGFloat?
+    private let onClose: (() -> Void)?
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
@@ -187,17 +191,10 @@
     /// Title of the item the conversation touched last: what "it" means.
     @State private var lastTouched: String?
     @State private var focused = false
-    /// Swipe right to go back: horizontal offset of the screen while the finger moves, 0 otherwise.
-    @State private var backDrag: CGFloat = 0
-    /// nil until the first event of a drag decides whether it is a back swipe.
-    @State private var backClaim: Bool?
-    @GestureState private var backActive = false
-    @State private var screenWidth: CGFloat = 0
-    /// Drags that start on the "which one?" chips scroll them instead of going back.
-    @State private var choiceFrame: CGRect = .zero
 
     package init(
-      thread: ChatThread? = nil, calendar: any CalendarService, now: @escaping () -> Date,
+      thread: ChatThread? = nil, isPresented: Bool = true, maximumHeight: CGFloat? = nil,
+      onClose: (() -> Void)? = nil, calendar: any CalendarService, now: @escaping () -> Date,
       actions: PlannerActions, ledger: Ledger, activity: ActivityCenter,
       intelligence: AskIntelligence, voice: VoiceInput, presentation: PlannerPresentation,
       travel: any TravelTimeProviding, suggestionMemory: AskSuggestionMemory,
@@ -206,6 +203,9 @@
       onOpenTask: @escaping (OneTask, @escaping () -> Void) -> Void,
       onOpenAlarm: @escaping (OneAlarm, @escaping () -> Void) -> Void
     ) {
+      self.isPresented = isPresented
+      self.maximumHeight = maximumHeight
+      self.onClose = onClose
       self.calendarSync = calendar
       self.now = now
       self.actions = actions
@@ -232,26 +232,23 @@
     }
 
     package var body: some View {
-      NavigationStack {
+      VStack(spacing: 0) {
+        panelHeader
         conversation
           .safeAreaInset(edge: .bottom) { inputArea }
-          .navigationTitle("AI")
-          .navigationBarTitleDisplayMode(.inline)
-          .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-              Button {
-                close()
-              } label: {
-                Image(systemName: "xmark")
-              }
-              .accessibilityLabel("Close")
-            }
-          }
           .task {
             // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
-            if messages.isEmpty { focused = true }
+            if isPresented, messages.isEmpty { focused = true }
             refreshCardTitles()
             intelligence.prewarm()
+          }
+          .onChange(of: isPresented) { _, presented in
+            if PerformanceTrace.enabled {
+              PerformanceTrace.shared.mark(presented ? "chat.shown" : "chat.hidden")
+            }
+            focused = presented && (messages.isEmpty || !draft.isEmpty)
+            if !presented { voice.stop() }
+            if presented { refreshCardTitles() }
           }
           .onChange(of: emittedTurn) { _, token in
             if AIResponseTrace.enabled, let token {
@@ -273,34 +270,48 @@
       .environment(actions)
       .environment(presentation)
       .defaultAppStorage(presentation.defaults)
-      .background(Color(.systemBackground).ignoresSafeArea())
-      // A soft edge on the left while the screen slides away, like the drawer's page.
-      .background(alignment: .leading) {
-        LinearGradient(
-          colors: [.clear, .black.opacity(0.10)], startPoint: .leading, endPoint: .trailing
-        )
-        .frame(width: 14)
-        .offset(x: -14)
-        .ignoresSafeArea()
-        .opacity(backDrag > 0 ? 1 : 0)
-      }
-      .onGeometryChange(for: CGFloat.self) {
-        $0.size.width
-      } action: {
-        screenWidth = $0
-      }
-      .offset(x: backDrag)
-      .simultaneousGesture(backSwipe)
-      // `onEnded` is skipped when the system cancels a drag; settle a claimed one by position.
-      .onChange(of: backActive) { _, isActive in
-        guard !isActive else { return }
-        Task { @MainActor in
-          if backClaim == true { settleBack(projected: backDrag) } else { backClaim = nil }
+      .background(Color(.systemBackground))
+      .frame(
+        height: maximumHeight.map {
+          min($0, messages.isEmpty ? (dynamicTypeSize.isAccessibilitySize ? 480 : 320) : 640)
+        }
+      )
+      .accessibilityAction(.escape) { close() }
+      .overlay(alignment: .topTrailing) { AIResponseTraceHistory() }
+    }
+
+    private var panelHeader: some View {
+      HStack(spacing: 8) {
+        Button(action: close) {
+          Image(systemName: "xmark")
+            .font(.system(size: 20, weight: .medium))
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Close")
+        Spacer(minLength: 0)
+        Text("AI").font(.headline)
+        Spacer(minLength: 0)
+        Group {
+          if focused {
+            Button {
+              focused = false
+            } label: {
+              Image(systemName: "keyboard.chevron.compact.down")
+                .font(.system(size: 20, weight: .medium))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Dismiss keyboard")
+          } else {
+            Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
+          }
         }
       }
-      // Clear, so what this screen goes back to (the sidebar or the page) shows underneath during a back swipe.
-      .presentationBackground(.clear)
-      .overlay(alignment: .topTrailing) { AIResponseTraceHistory() }
+      .buttonStyle(.plain)
+      .foregroundStyle(.primary)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 4)
     }
 
     private var conversation: some View {
@@ -395,58 +406,11 @@
     // MARK: Going back
 
     /// Closes the screen and returns to where it was opened from (the sidebar, when opened there).
-    private func close(animated: Bool = true) {
+    private func close() {
+      focused = false
+      voice.stop()
       onBack(true)
-      if animated {
-        dismiss()
-      } else {
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) { dismiss() }
-      }
-    }
-
-    /// Swipe right anywhere to go back, like a pushed screen. Mostly-horizontal rightward drags only,
-    /// so scrolling the conversation is left alone.
-    private var backSwipe: some Gesture {
-      DragGesture(minimumDistance: 12, coordinateSpace: .global)
-        .updating($backActive) { _, state, _ in state = true }
-        .onChanged { v in
-          if backClaim == nil {
-            let t = v.translation
-            let rightward = t.width > 0 && t.width > abs(t.height) * 1.2
-            backClaim = rightward && !choiceFrame.contains(v.startLocation)
-            if backClaim == true {
-              focused = false
-              onBack(true)
-            }
-          }
-          guard backClaim == true else { return }
-          backDrag = max(v.translation.width, 0)
-        }
-        .onEnded { v in
-          guard backClaim == true else {
-            backClaim = nil
-            return
-          }
-          settleBack(projected: v.predictedEndTranslation.width)
-        }
-    }
-
-    /// Finishes the back swipe when the finger was heading past half the screen (`projected` includes momentum), otherwise springs back.
-    private func settleBack(projected: CGFloat) {
-      backClaim = nil
-      let width = max(screenWidth, 1)
-      if max(projected, backDrag) > width / 2 && projected > 0 {
-        withAnimation(reduceMotion ? nil : DrawerModel.spring) {
-          backDrag = width
-        } completion: {
-          close(animated: false)
-        }
-      } else {
-        withAnimation(reduceMotion ? nil : DrawerModel.spring) { backDrag = 0 }
-        onBack(false)
-      }
+      if let onClose { onClose() } else { dismiss() }
     }
 
     /// Saves the conversation as it grows: the thread is created with the first user message and updated after
@@ -472,7 +436,7 @@
       VStack(alignment: .leading, spacing: 24) {
         Text("What do you want to plan?")
           .font(.title2.weight(.medium))
-        if showsSuggestions {
+        if showsSuggestions, isPresented {
           AskSuggestionList(
             calendar: calendarSync, now: now, presentation: presentation, travel: travel,
             activity: activity, intelligence: intelligence, memory: suggestionMemory, onSend: send)
@@ -480,7 +444,7 @@
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(.horizontal, 20)
-      .padding(.top, 60)
+      .padding(.top, 20)
     }
 
     private var inputArea: some View {
@@ -527,12 +491,6 @@
         if case .chooseItem(_, let options)? = followup {
           ChoiceBar(options: options, onPick: tapChoice)
             .background { responseProbe(.choices(options.map(\.id))) }
-            .onGeometryChange(for: CGRect.self) {
-              $0.frame(in: .global)
-            } action: {
-              choiceFrame = $0
-            }
-            .onDisappear { choiceFrame = .zero }
             .transition(cardTransition)
         }
         if let change {
@@ -547,17 +505,22 @@
           .transition(cardTransition)
         }
         HStack(alignment: .bottom, spacing: 8) {
-          AskComposer(text: $draft, focused: $focused, onSubmit: { send(draft) })
-            .frame(maxWidth: .infinity)
-            .overlay(alignment: .topLeading) {
-              if draft.isEmpty {
-                Text("Ask AI or add anything")
-                  .foregroundStyle(.tertiary)
-                  .allowsHitTesting(false)
-                  .accessibilityHidden(true)
-              }
+          AskComposer(
+            text: $draft,
+            focused: Binding(get: { focused && isPresented }, set: { focused = $0 }),
+            isPresented: isPresented,
+            onSubmit: { send(draft) }
+          )
+          .frame(maxWidth: .infinity)
+          .overlay(alignment: .topLeading) {
+            if draft.isEmpty {
+              Text("Ask AI or add anything")
+                .foregroundStyle(.tertiary)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
-            .padding(.vertical, 8)
+          }
+          .padding(.vertical, 8)
           if isEmpty || voice.state == .listening {
             Button {
               Task { await voice.toggle() }
