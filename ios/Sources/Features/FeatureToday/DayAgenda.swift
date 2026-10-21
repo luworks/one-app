@@ -856,25 +856,57 @@
 
     private func attentionEntry(_ target: FocusTarget) -> CalEntry? {
       guard let identity = target.identity else { return nil }
-      if let task = tasks.first(where: { self.target($0).identity == identity }) {
+      // A local identity carries its model ID. Prefer that candidate, but decoded
+      // PersistentIdentifier equality can differ after migration: retain the full
+      // canonical identity lookup as a fallback, and always revalidate the candidate.
+      let localKind = identity.provider == "today.local" ? identity.calendar : nil
+      let localID: PersistentIdentifier? =
+        localKind == nil
+        ? nil
+        : identity.item.data(using: .utf8).flatMap {
+          try? JSONDecoder().decode(PersistentIdentifier.self, from: $0)
+        }
+      func matching<Model: PersistentModel>(
+        _ models: [Model], kind: String, matches: (Model) -> Bool
+      ) -> Model? {
+        guard localKind == nil || localKind == kind else { return nil }
+        if let localID, let candidate = models.first(where: { $0.persistentModelID == localID }),
+          matches(candidate)
+        {
+          return candidate
+        }
+        return models.first(where: matches)
+      }
+      if let task = matching(
+        tasks, kind: "reminder",
+        matches: {
+          self.target($0).identity == identity
+        })
+      {
         let start = task.plannedStart ?? task.due ?? now
         return CalEntry(
           id: target.id, source: .task(task), title: task.title,
           start: start, end: start.addingTimeInterval(Double(task.durationMinutes) * 60),
           isAllDay: false, color: .accentColor, repeats: task.repeats != nil)
       }
-      if let alarm = alarms.first(where: {
-        self.target($0, fireDate: identity.occurrence ?? now).identity == identity
-      }) {
+      if let alarm = matching(
+        alarms, kind: "alarm",
+        matches: {
+          self.target($0, fireDate: identity.occurrence ?? now).identity == identity
+        })
+      {
         let start = identity.occurrence ?? now
         return CalEntry(
           id: target.id, source: .alarm(alarm), title: target.title,
           start: start, end: start.addingTimeInterval(60), isAllDay: false, color: .accentColor,
           repeats: false)
       }
-      if let event = events.first(where: {
-        self.target($0, start: identity.occurrence ?? $0.start).identity == identity
-      }) {
+      if let event = matching(
+        events, kind: "event",
+        matches: {
+          self.target($0, start: identity.occurrence ?? $0.start).identity == identity
+        })
+      {
         let start = identity.occurrence ?? event.start
         return CalEntry(
           id: "r\(event.persistentModelID.hashValue)@\(start.timeIntervalSince1970)",
