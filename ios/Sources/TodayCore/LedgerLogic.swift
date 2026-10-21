@@ -234,13 +234,8 @@ public enum LedgerFormat {
     date.map { DayLabel.withTime($0, calendar: calendar) } ?? none
   }
 
-  /// The toast after an automatic change: "Planned 3 reminders into free time".
-  public static func autoPlanned(_ count: Int) -> String {
-    "Planned \(count) reminder\(count == 1 ? "" : "s") into free time"
-  }
-
-  /// Activity offers Undo for changes it can put back on its own: Today's own reminders (complete, plan, move,
-  /// deadline, add, delete). Not for events, alarms or grants (they have their own screens), undo records,
+  /// Activity offers Undo for changes it can put back on its own: Today's own reminders (complete, date,
+  /// add, delete). Not for events, alarms or grants (they have their own screens), undo records,
   /// changes seen in sync, or something already undone.
   public static func canUndo(
     action: LedgerAction, itemKind: String, approval: LedgerApproval, hasItem: Bool,
@@ -249,9 +244,10 @@ public enum LedgerFormat {
     guard !alreadyUndone, itemKind == "task", approval != .observed else { return false }
     switch action {
     case .deleted: return hasSnapshot
-    case .completed, .reopened, .planned, .moved, .unscheduled, .redated, .renamed, .created:
-      return hasItem
-    case .undone, .granted, .revoked, .settled, .snoozed, .restored: return false
+    case .completed, .reopened, .redated, .renamed, .created: return hasItem
+    // Retired planned-time entries stay listed but cannot be undone: a reminder has one date now.
+    case .planned, .moved, .unscheduled, .undone, .granted, .revoked, .settled, .snoozed, .restored:
+      return false
     }
   }
 

@@ -38,8 +38,6 @@ final class LedgerFormatTests: XCTestCase {
     XCTAssertEqual(LedgerFormat.time(nil), "Not planned")
     XCTAssertEqual(LedgerFormat.time(nil, none: "No date"), "No date")
     XCTAssertEqual(LedgerFormat.time(cal.startOfDay(for: .now), calendar: cal), "Today")
-    XCTAssertEqual(LedgerFormat.autoPlanned(1), "Planned 1 reminder into free time")
-    XCTAssertEqual(LedgerFormat.autoPlanned(3), "Planned 3 reminders into free time")
   }
 
   func testUndoIsOfferedOnlyForReminderChangesTodayCanPutBack() {
@@ -52,7 +50,10 @@ final class LedgerFormatTests: XCTestCase {
         action: a, itemKind: kind, approval: approval, hasItem: item, hasSnapshot: snapshot,
         alreadyUndone: undone)
     }
-    XCTAssertTrue(can(.planned, approval: .autoUnderGrant))
+    XCTAssertTrue(can(.redated))
+    XCTAssertFalse(can(.planned), "retired planned-time entries cannot be undone")
+    XCTAssertFalse(can(.moved))
+    XCTAssertFalse(can(.unscheduled))
     XCTAssertTrue(can(.completed))
     XCTAssertTrue(can(.renamed))
     XCTAssertFalse(can(.renamed, item: false), "renaming Undo never resurrects a missing reminder")

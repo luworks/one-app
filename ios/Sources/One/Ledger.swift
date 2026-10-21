@@ -289,8 +289,12 @@
           return false
         }
         reminders.didPersistCompletion(t)
-      case .planned, .moved, .unscheduled, .redated:
+      case .planned, .moved, .unscheduled:
+        // Retired planned-time entries from before a reminder had one date: nothing to put back.
+        return false
+      case .redated:
         t.due = entry.beforeDate
+        reminders.scheduleReconcile()
       case .renamed:
         guard t.title == entry.after else { return false }
         t.title = entry.before

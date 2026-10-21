@@ -315,10 +315,9 @@
       let old = task.due
       guard old != due else { return nil }
       withAnimation { task.due = due }
-      let action: LedgerAction = due == nil ? .unscheduled : (old == nil ? .planned : .moved)
       return ledger.record(
-        action, task: task, title: task.title, before: ledger.timeLabel(old),
-        after: ledger.timeLabel(due),
+        .redated, task: task, title: task.title, before: ledger.timeLabel(old, none: "No date"),
+        after: ledger.timeLabel(due, none: "No date"),
         beforeDate: old, afterDate: due, actor: actor, channel: channel, approval: approval,
         context: context)
     }
