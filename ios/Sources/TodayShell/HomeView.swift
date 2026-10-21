@@ -322,7 +322,7 @@
       var transaction = Transaction()
       transaction.disablesAnimations = true
       withTransaction(transaction) {
-        // Bottom Chat resumes the mounted conversation, including its unsent native editor.
+        // Bottom Chat resumes the mounted conversation, including its unsent draft.
         // Sidebar New chat and history selections intentionally choose a different conversation.
         if ask == nil || fromSidebar {
           ask = AskRoute(thread: thread, fromSidebar: fromSidebar)

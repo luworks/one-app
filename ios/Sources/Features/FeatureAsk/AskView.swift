@@ -505,22 +505,25 @@
           .transition(cardTransition)
         }
         HStack(alignment: .bottom, spacing: 8) {
-          AskComposer(
-            text: $draft,
-            focused: Binding(get: { focused && isPresented }, set: { focused = $0 }),
-            isPresented: isPresented,
-            onSubmit: { send(draft) }
-          )
-          .frame(maxWidth: .infinity)
-          .overlay(alignment: .topLeading) {
-            if draft.isEmpty {
-              Text("Ask AI or add anything")
-                .foregroundStyle(.tertiary)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+          // Keep draft/conversation state mounted, but remove the hidden UIKit editor from AX.
+          if isPresented {
+            AskComposer(
+              text: $draft,
+              focused: Binding(get: { focused && isPresented }, set: { focused = $0 }),
+              isPresented: isPresented,
+              onSubmit: { send(draft) }
+            )
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .topLeading) {
+              if draft.isEmpty {
+                Text("Ask AI or add anything")
+                  .foregroundStyle(.tertiary)
+                  .allowsHitTesting(false)
+                  .accessibilityHidden(true)
+              }
             }
+            .padding(.vertical, 8)
           }
-          .padding(.vertical, 8)
           if isEmpty || voice.state == .listening {
             Button {
               Task { await voice.toggle() }

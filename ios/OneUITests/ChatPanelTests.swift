@@ -51,7 +51,7 @@ final class ChatPanelTests: XCTestCase {
     closed.name = "Underlying page after Close"
     closed.lifetime = .keepAlways
     add(closed)
-    print("CHAT_UI after_close_field_frame=\(field.frame) hittable=\(field.isHittable)")
+    XCTAssertTrue(field.waitForNonExistence(timeout: 5))
     XCTAssertFalse(field.isHittable)
     chat.tap()
     XCTAssertTrue(field.waitForExistence(timeout: 5))
