@@ -63,6 +63,7 @@
         for: composition.session.runtime.now())
       _calendarDay = State(initialValue: today)
       _todayDay = State(initialValue: today)
+      _todayReferenceNow = State(initialValue: composition.session.runtime.now())
       _tab = State(
         initialValue: Self.restored(
           HomeTab.self, key: Self.tabKey, defaults: defaults, arguments: args) ?? .today)
@@ -108,6 +109,7 @@
     @State private var remindersPath: [ReminderTarget] = []
     /// The day Today shows. Picking a day in Calendar opens it here.
     @State private var todayDay: Date
+    @State private var todayReferenceNow: Date
     /// The mounted conversation survives panel dismissal; nil means Chat has not opened yet.
     @State private var ask: AskRoute?
     @State private var askVisible = false
@@ -595,7 +597,12 @@
           default: break
           }
         }
-        .onChange(of: tab) { _, t in
+        .onChange(of: tab) { previous, t in
+          if t == .today {
+            todayDay = session.runtime.refreshedTodayDay(
+              todayDay, previousNow: todayReferenceNow, now: session.runtime.now())
+          }
+          if previous == .today || t == .today { todayReferenceNow = session.runtime.now() }
           session.defaults.set(t.rawValue, forKey: Self.tabKey)
           session.activity.record(ActivityEvents.screenOpen(t.rawValue))
         }
@@ -607,6 +614,9 @@
         }
         .onChange(of: scenePhase) { _, phase in
           if phase == .active {
+            todayDay = session.runtime.refreshedTodayDay(
+              todayDay, previousNow: todayReferenceNow, now: session.runtime.now())
+            todayReferenceNow = session.runtime.now()
             if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
               // Covered roots cannot prove the visible page resumed. Keep those samples absent.
               if ask == nil, !showsSettings, !showsActivity, !showsSearch, newItem == nil,

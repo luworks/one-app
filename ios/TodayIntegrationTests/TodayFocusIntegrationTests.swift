@@ -1,5 +1,6 @@
 #if os(iOS)
   import Foundation
+  import Synchronization
   import SwiftData
   import EventKit
   import Testing
@@ -8,6 +9,7 @@
   import TodayShared
   import TodayTestSupport
   import TodayDesignSystem
+  import TodayPlannerUI
   import FeatureToday
   import FeatureHealth
   import SwiftUI
@@ -18,6 +20,70 @@
   /// Real model/action integration with local service spies; no EventKit store is opened.
   @MainActor
   extension PlannerSessionTests {
+    @Test
+    func settleDayBoundaryReleasesSameSourcesAndCrossDayUndoWithoutSourceWrites() throws {
+      let a = try FocusSession(persistentFocus: true)
+      defer { a.dispose() }
+      let task = try a.addTask()
+      let payload = Ledger.snapshot(of: task)
+      let calendar = a.services.runtime.calendar
+      let midnight = calendar.date(
+        byAdding: .day, value: 1,
+        to: calendar.startOfDay(for: a.now))!
+      let clock = Mutex(midnight.addingTimeInterval(-60))
+      let runtime = PlannerRuntime(
+        now: { clock.withLock { $0 } }, nextID: { UUID() },
+        calendar: calendar, locale: a.services.runtime.locale)
+      func makeFocus() -> TodayFocus {
+        TodayFocus(ledger: a.services.ledger, runtime: runtime)
+      }
+      let focus = makeFocus()
+      let reminder = try #require(a.reminderIdentity(task))
+      let event = OneEvent(title: "Yesterday fixed event", start: a.now, durationMinutes: 30)
+      a.context.insert(event)
+      try a.context.save()
+      let sourceStart = event.start
+      let eventID = FocusIdentity(
+        provider: "today.local", account: "local-store",
+        calendar: "event", item: "stable-event", occurrence: event.start)
+      for identity in [reminder, eventID] {
+        #expect(
+          focus.change(
+            .settled, identity: identity, localReference: nil,
+            title: "Synthetic source", context: a.context, toast: nil))
+        #expect(focus.state(for: identity, now: runtime.now()) == .settled)
+      }
+      // Unsettle on D, then Undo on D+1 must not renew yesterday's decision.
+      #expect(
+        focus.change(
+          .active, identity: reminder, localReference: nil,
+          title: task.title, context: a.context, toast: a.toast))
+      clock.withLock { $0 = midnight }
+      #expect(
+        runtime.refreshedTodayDay(
+          a.now, previousNow: midnight.addingTimeInterval(-60),
+          now: runtime.now()) == midnight)
+      let browsed = calendar.date(byAdding: .day, value: -3, to: a.now)!
+      #expect(runtime.refreshedTodayDay(browsed, previousNow: a.now, now: midnight) == browsed)
+      a.toast.performUndo()
+      for projection in [focus, makeFocus()] {
+        #expect(projection.state(for: reminder, now: runtime.now()) == nil)
+        #expect(projection.state(for: eventID, now: runtime.now()) == nil)
+      }
+      #expect(event.occurs(on: midnight, calendar: calendar).isEmpty)
+      #expect(plannerIsOverdue(task, now: midnight, calendar: calendar))
+      #expect(Ledger.snapshot(of: task) == payload)
+      #expect(event.start == sourceStart && event.repeatRule == nil)
+      // Same series, next occurrence cannot inherit yesterday's settled identity.
+      event.repeatRule = "daily"
+      let next = try #require(event.occurs(on: midnight, calendar: calendar).first)
+      let nextID = FocusIdentity(
+        provider: eventID.provider, account: eventID.account,
+        calendar: eventID.calendar, item: eventID.item, occurrence: next)
+      #expect(focus.state(for: nextID, now: runtime.now()) == nil)
+      a.expectNoSourceWrites()
+    }
+
     @Test
     func focusLifecyclePreservesSourcePayloadThroughProductionAdapters() async throws {
       let a = try FocusSession(persistentFocus: true)

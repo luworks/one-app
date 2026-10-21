@@ -98,12 +98,19 @@ public final class TodayFocusStore {
   }
 
   /// Expiration is a read-time decision: no timer, midnight reset, or source mutation is required.
-  public func state(for identity: FocusIdentity, now: Date) -> TodayFocusState? {
+  public func state(for identity: FocusIdentity, now: Date, calendar: Calendar = .current)
+    -> TodayFocusState?
+  {
     guard now.timeIntervalSinceReferenceDate.isFinite else { return nil }
     lock.lock()
     defer { lock.unlock() }
     guard let record = storedRecords.first(where: { $0.identity == identity }) else { return nil }
     if case .active = record.state { return nil }
+    if case .settled = record.state,
+      !calendar.isDate(record.changedAt, inSameDayAs: now)
+    {
+      return nil
+    }
     if case .snoozed(let until) = record.state, until <= now { return nil }
     return record.state
   }
