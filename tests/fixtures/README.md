@@ -273,3 +273,5 @@ They are not reusable UI datasets; the production retention policy lives in
 `tests/qa/retention.json` and is never taken from a temporary file.
 
 `ask-reading-history.json` contains 36 synthetic long chat messages for `AskReadingPositionTests`. The Mock-only `-uiTestingAskReplyDelay` capability delays replies and capture parsing by twelve seconds so a real history pan can finish before a reply/card arrives. `AskInteractionTests` keeps short native text-input and injected Calendar read fixtures inline beside its tests.
+
+`ChatPanelTests.swift` keeps its small unsent English/Chinese draft and Hello interaction inline. Long-history panel scrolling reuses `ask-reading-history.json`; failed creation and exact Undo/Open reuse `ai-oneoff-reminder-ui.json`. No private data is required.
