@@ -252,7 +252,7 @@ partitioning, routine-only scope and primary-checkout paths for linked worktrees
 
 - `ios/TodayIntegrationTests/TodayFocusIntegrationTests.swift` (small inline inputs): `savedCalendarSnoozeHydratesOutsideOriginalDayAndRejectsStaleImports` persists/reopens a synthetic cross-day Calendar Snooze and injects an exact scalar importer through the production CalendarSync boundary. It covers the shared display/Open snapshot lookup, invalidation, cancellation, permission loss, identity replacements and missing-source preservation. This does not mount DayAgenda or present Apple's editor.
 
-- Same `TodayFocusIntegrationTests.swift` inline fixture: `populatedDayAgendaRenderUsesImportedSnapshotsWithoutNativeLookups` mounts production DayAgenda with connected production RemindersSync/CalendarSync, scalar imported rows and an injected range source. Isolated UserDefaults, in-memory SwiftData/Activity, synthetic permission closures and exact hydration avoid personal/system-store access. The real window PNG and local Vision OCR prove populated Reminder/Calendar and expired cross-day Returned content. Native store creation must remain zero; this is not live EventKit permission/import acceptance.
+- Same `TodayFocusIntegrationTests.swift` inline fixture: `populatedDayAgendaRenderUsesImportedSnapshotsWithoutNativeLookups` mounts production DayAgenda with connected production RemindersSync/CalendarSync, scalar imported rows and an injected range source. Isolated UserDefaults, in-memory SwiftData/Activity, synthetic permission closures and exact hydration avoid personal/system-store access. The real window PNG and local Vision OCR prove populated Reminder/Calendar and no extra history for an expired cross-day Snooze occurrence. Native store creation must remain zero; this is not live EventKit permission/import acceptance.
 
 - `health-today-sync.json`: Steps A=1111 → B=2222 through one injected source; Health sheet → Today synchronization. Not HealthKit delivery evidence.
 - `ios/TodayIntegrationTests/HealthSummaryIntegrationTests.swift` keeps small inline Steps histories (current values and an 80-day-old point) beside the native shared-state/generation tests; no external or private Health data is required.
@@ -276,3 +276,9 @@ They are not reusable UI datasets; the production retention policy lives in
 `ask-reading-history.json` contains 36 synthetic long chat messages for `AskReadingPositionTests`. The Mock-only `-uiTestingAskReplyDelay` capability delays replies and capture parsing by twelve seconds so a real history pan can finish before a reply/card arrives. `AskInteractionTests` keeps short native text-input and injected Calendar read fixtures inline beside its tests.
 
 `ChatPanelTests.swift` keeps its small unsent English/Chinese draft and Hello interaction inline. Long-history panel scrolling reuses `ask-reading-history.json`; failed creation and exact Undo/Open reuse `ai-oneoff-reminder-ui.json`. No private data is required.
+
+`remove-returned-to-today.json` supplies synthetic old settled/restored events,
+new-day task/meeting, overdue reminder and tomorrow event for
+`TodayFocusTests.testCrossDayReleaseUsesOriginalDatesWithoutReturnHistory`.
+The test pins local dates using ISO `-uiTestingNow`, which also supplies the Mock
+dataset load clock, then relaunches its isolated persistent store on the next day.

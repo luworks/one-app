@@ -99,7 +99,11 @@ struct OneApp: App {
         return false
       }
       if let path = TestDataset.requestedPath {
-        do { try TestDataset.load(path: path, into: context) } catch {
+        do {
+          try TestDataset.load(
+            path: path, into: context, now: composition.session.runtime.now(),
+            calendar: composition.session.runtime.calendar)
+        } catch {
           print("DATASET failed code: \((error as NSError).code)")
         }
       } else {
