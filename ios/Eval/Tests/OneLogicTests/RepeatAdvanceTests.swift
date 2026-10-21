@@ -114,20 +114,24 @@ final class RepeatAdvanceTests: XCTestCase {
 
   func testDeadlineMovedAwayFromToday_dropsThePlanMadeForIt() {
     // Planned 09:00 today for a deadline today; the deadline moves to Oct 24: it is no longer today's.
-    XCTAssertNil(moved(date(2026, 10, 15, 9), from: date(2026, 10, 15, 12), to: date(2026, 10, 24, 10)))
+    XCTAssertNil(
+      moved(date(2026, 10, 15, 9), from: date(2026, 10, 15, 12), to: date(2026, 10, 24, 10)))
     // Also when it moves earlier, onto another day.
-    XCTAssertNil(moved(date(2026, 10, 15, 9), from: date(2026, 10, 15, 12), to: date(2026, 10, 14, 10)))
+    XCTAssertNil(
+      moved(date(2026, 10, 15, 9), from: date(2026, 10, 15, 12), to: date(2026, 10, 14, 10)))
   }
 
   func testDeadlineMovedWithinTheSameDay_keepsThePlan() {
     let planned: Date? = date(2026, 10, 15, 9)
-    XCTAssertEqual(moved(planned, from: date(2026, 10, 15, 12), to: date(2026, 10, 15, 17)), planned)
+    XCTAssertEqual(
+      moved(planned, from: date(2026, 10, 15, 12), to: date(2026, 10, 15, 17)), planned)
   }
 
   func testPlanChosenOnItsOwnDay_staysWhenTheDeadlineMoves() {
     // Planned today for a deadline on Oct 24 (Plan my day); moving the deadline later keeps today's plan.
     let planned: Date? = date(2026, 10, 15, 9)
-    XCTAssertEqual(moved(planned, from: date(2026, 10, 24, 10), to: date(2026, 10, 30, 10)), planned)
+    XCTAssertEqual(
+      moved(planned, from: date(2026, 10, 24, 10), to: date(2026, 10, 30, 10)), planned)
   }
 
   func testNoDeadlineBeforeOrAfter_keepsThePlan() {
