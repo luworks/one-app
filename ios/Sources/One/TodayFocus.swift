@@ -91,7 +91,7 @@
     package func state(for identity: FocusIdentity?, now: Date) -> TodayFocusState? {
       _ = revision
       guard let identity else { return nil }
-      return store?.state(for: identity, now: now)
+      return store?.state(for: identity, now: now, calendar: runtime.calendar)
     }
 
     package static func reference(_ id: PersistentIdentifier) -> String? {
@@ -108,8 +108,13 @@
           errorMessage ?? "This source is unavailable. Refresh its connection and try again.")
         return false
       }
-      let old = store.records.first { $0.identity == identity }?.state
-      guard old != state else { return true }
+      let oldRecord = store.records.first { $0.identity == identity }
+      let old = oldRecord?.state
+      // An expired Settle can be chosen again today for the same overdue reminder.
+      let expiredSettle =
+        old == .settled
+        && store.state(for: identity, now: runtime.now(), calendar: runtime.calendar) == nil
+      guard old != state || (state == .settled && expiredSettle) else { return true }
       do {
         try store.set(
           state: state, for: identity, now: runtime.now(), localReference: localReference)
@@ -145,6 +150,10 @@
           let restored: TodayFocusState?
           if case .snoozed(let until) = old, until <= self.runtime.now() {
             restored = .active
+          } else if case .settled = old, let oldRecord,
+            !self.runtime.calendar.isDate(oldRecord.changedAt, inSameDayAs: self.runtime.now())
+          {
+            restored = nil
           } else {
             restored = old
           }

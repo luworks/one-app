@@ -1,4 +1,5 @@
 import Foundation
+import TodayCore
 import XCTest
 
 @testable import TodayData
@@ -28,6 +29,62 @@ final class TodayFocusStoreTests: XCTestCase {
   }
 
   private func disk() throws -> TodayFocusStore { try TodayFocusStore(location: .file(url)) }
+
+  func testSettleExpiresOnNextLocalDayWhileOpenAndAfterReopen() throws {
+    let calendar = Calendar.current
+    let start = calendar.date(
+      from: DateComponents(year: 2026, month: 10, day: 20, hour: 23, minute: 59))!
+    let midnight = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: start)!)
+    let source = identity(occurrence: start)
+    let focus = try disk()
+    try focus.set(state: .settled, for: source, now: start, localReference: "same-source")
+    let bytes = try Data(contentsOf: url)
+    XCTAssertEqual(focus.state(for: source, now: midnight.addingTimeInterval(-1)), .settled)
+    XCTAssertNil(focus.state(for: source, now: midnight))
+    XCTAssertNil(try disk().state(for: source, now: midnight))
+    XCTAssertEqual(try Data(contentsOf: url), bytes)
+    XCTAssertEqual(focus.records.first?.changedAt, start)
+  }
+
+  func testSettleUsesLocalCalendarDaysAcrossDSTWithoutChangingSnooze() throws {
+    struct Fixture: Decodable {
+      struct Boundary: Decodable {
+        let settled: String
+        let midnight: String
+      }
+      let timeZone: String
+      let cases: [Boundary]
+    }
+    let path = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+      .appendingPathComponent("../../../../tests/fixtures/settle-day-boundary.json")
+    let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: path))
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try XCTUnwrap(TimeZone(identifier: fixture.timeZone))
+    let formatter = ISO8601DateFormatter()
+    for boundary in fixture.cases {
+      let start = try XCTUnwrap(formatter.date(from: boundary.settled))
+      let midnight = try XCTUnwrap(formatter.date(from: boundary.midnight))
+      let runtime = PlannerRuntime(
+        now: { midnight }, nextID: { UUID() }, calendar: calendar,
+        locale: Locale(identifier: "en_US_POSIX"))
+      XCTAssertEqual(runtime.refreshedTodayDay(start, previousNow: start, now: midnight), midnight)
+      let browsed = calendar.date(byAdding: .day, value: -2, to: start)!
+      XCTAssertEqual(runtime.refreshedTodayDay(browsed, previousNow: start, now: midnight), browsed)
+      let focus = try TodayFocusStore(location: .memory)
+      let source = identity(occurrence: start)
+      try focus.set(state: .settled, for: source, now: start)
+      XCTAssertEqual(
+        focus.state(for: source, now: midnight.addingTimeInterval(-1), calendar: calendar), .settled
+      )
+      XCTAssertNil(focus.state(for: source, now: midnight, calendar: calendar))
+      XCTAssertNil(focus.state(for: identity(occurrence: midnight), now: start, calendar: calendar))
+      let until = midnight.addingTimeInterval(3600)
+      try focus.set(state: .snoozed(until: until), for: source, now: start)
+      XCTAssertEqual(
+        focus.state(for: source, now: midnight, calendar: calendar), .snoozed(until: until))
+      XCTAssertNil(focus.state(for: source, now: until, calendar: calendar))
+    }
+  }
 
   func testDiskReopenRestoresOverlayAndExplicitClearRemovesIt() throws {
     let settled = identity()
@@ -126,7 +183,7 @@ final class TodayFocusStoreTests: XCTestCase {
     XCTAssertNil(focus.state(for: identity(), now: until.addingTimeInterval(86400)))
     XCTAssertNil(try disk().state(for: identity(), now: until))
     try focus.set(state: .settled, for: identity(), now: start)
-    XCTAssertEqual(focus.state(for: identity(), now: until.addingTimeInterval(86400)), .settled)
+    XCTAssertNil(focus.state(for: identity(), now: until.addingTimeInterval(86400)))
   }
 
   func testStableIdentitySurvivesRefreshButDoesNotLeakAcrossSourcesOrOccurrences() throws {

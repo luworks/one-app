@@ -16,4 +16,11 @@ public struct PlannerRuntime: Sendable {
     self.calendar = calendar
     self.locale = locale
   }
+  /// Follow Today across a clock refresh while preserving an explicitly browsed date.
+  public func refreshedTodayDay(_ selected: Date, previousNow: Date, now: Date) -> Date {
+    guard calendar.isDate(selected, inSameDayAs: previousNow),
+      !calendar.isDate(previousNow, inSameDayAs: now)
+    else { return selected }
+    return calendar.startOfDay(for: now)
+  }
 }

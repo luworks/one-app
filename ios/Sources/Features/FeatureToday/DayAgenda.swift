@@ -114,7 +114,7 @@
       ScrollViewReader { proxy in
         list
           .onAppear {
-            now = presentation.now
+            refreshClock()
             scrollToNow(proxy)
           }
           .onChange(of: day) { _, _ in
@@ -131,7 +131,7 @@
           }
       }
       .onChange(of: scenePhase) { _, phase in
-        if phase == .active { now = presentation.now }
+        if phase == .active { refreshClock() }
       }
       .environment(actions)
       .defaultAppStorage(presentation.defaults)
@@ -143,9 +143,18 @@
       .task {
         while !Task.isCancelled {
           try? await Task.sleep(for: .seconds(60))
-          now = presentation.now
+          refreshClock()
         }
       }
+    }
+
+    /// Reuse the existing clock refresh and foreground boundary; keep explicitly browsed days.
+    private func refreshClock() {
+      let next = presentation.now
+      if !showsWeekStrip {
+        day = presentation.runtime.refreshedTodayDay(day, previousNow: now, now: next)
+      }
+      now = next
     }
 
     /// Open on what is happening now: the day's schedule scrolls to the "now" line.

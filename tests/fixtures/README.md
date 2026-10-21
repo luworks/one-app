@@ -11,6 +11,7 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 09:41 for matched navigation response samples; they create no temporary dataset.
 
 | Dataset | Consumers and original generator |
+| [`settle-day-boundary.json`](settle-day-boundary.json) | `TodayFocusStoreTests`: controlled Los Angeles midnight, spring-forward and fall-back dates; daily Settle expiry and unchanged absolute Snooze expiry. |
 | --- | --- |
 | [`today-density.json`](today-density.json) | `TodayDensityTests`: synthetic bilingual schedule modeled on the owner's density screenshot, two all-day events, timed rows, repeat/list/deadline metadata and multiple gaps. UI time 10:30, auto-scroll off, same viewport and font for before/after; accessibility text checks grow long titles. |
 | [`today-reminder-completion.json`](today-reminder-completion.json) | `TodayReminderCompletionTests`: owner-reported Bring the water cup at 12:30, with notes and planned time. Tests namespace the title and seed the simulator EventKit store through `addToday`; no user reminder is used. |
