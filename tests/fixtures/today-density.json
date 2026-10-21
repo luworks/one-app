@@ -13,7 +13,7 @@
   "reminders": [
     {"title": "记录体重并拍照", "list": "Family", "due": {"day": 0, "time": "08:00"}, "repeat": "daily"},
     {"title": "Buy groceries and fill the car", "list": "Family", "due": {"day": 0, "time": "11:31"}},
-    {"title": "回复设计评审邮件，确认中英文标题和无障碍检查结果", "list": "Work", "planned": {"day": 0, "time": "14:00"}, "due": {"day": 0, "time": "16:45"}, "minutes": 25, "flagged": true},
+    {"title": "回复设计评审邮件，确认中英文标题和无障碍检查结果", "list": "Work", "due": {"day": 0, "time": "16:45"}, "minutes": 25, "flagged": true},
     {"title": "Prepare interview notes", "list": "Work", "due": {"day": 0, "time": "17:31"}}
   ],
   "alarms": [{"time": "17:50", "label": "Leave for school"}],

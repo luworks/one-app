@@ -136,57 +136,6 @@ public enum RepeatRule: RawRepresentable, CaseIterable, Codable, Hashable, Senda
   }
 }
 
-/// What happens to a task's planned time when a repeating reminder rolls forward to its next occurrence.
-///
-/// Apple Reminders rolls a repeating reminder itself (complete it and its due date moves to the next occurrence, still
-/// open). Only the due date comes back through the sync; the planned time is ours. A plan is a plan for ONE occurrence
-/// (planned time is not the deadline), so the next occurrence starts unplanned, otherwise the finished occurrence's plan
-/// keeps the row on the old day ("Due Oct 28" showing at 09:00 today).
-///
-/// The one exception is a plan that clearly targets the new occurrence: it is on a later day than today AND nearer to the
-/// new due date than to the finished one (e.g. a weekly reminder planned for next Monday while this Monday's is completed).
-/// Everything on or before today belongs to the occurrence that was just finished, however close the new due date is.
-public enum RepeatAdvance {
-  /// True when `newDue` is later than `oldDue`: the reminder moved on to a later occurrence.
-  public static func movedForward(from oldDue: Date?, to newDue: Date?) -> Bool {
-    guard let oldDue, let newDue else { return false }
-    return newDue > oldDue
-  }
-
-  /// The planned time to keep after the due date changed from `oldDue` to `newDue`.
-  /// Only a repeating, still open reminder whose due date moved forward loses its plan; any other change keeps it.
-  public static func plannedStart(
-    _ planned: Date?, dueMovedFrom oldDue: Date?, to newDue: Date?, repeats: Bool, isDone: Bool,
-    now: Date = .now, calendar: Calendar = .current
-  ) -> Date? {
-    guard let planned, repeats, !isDone, movedForward(from: oldDue, to: newDue), let oldDue,
-      let newDue
-    else { return planned }
-    let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
-    guard planned >= tomorrow else { return nil }
-    return abs(planned.timeIntervalSince(newDue)) < abs(planned.timeIntervalSince(oldDue))
-      ? planned : nil
-  }
-}
-
-/// A reminder whose deadline moved to another day leaves the day its plan was made for.
-public enum DeadlineMove {
-  /// The planned time to keep after the deadline moved from `oldDue` to `newDue`.
-  /// A plan made on the old deadline's day was for that deadline, so it goes when the deadline leaves
-  /// that day (otherwise the reminder stays on today for a day it is no longer due). A plan on any other
-  /// day was chosen on its own and stays, and so does a plan when there was or is no deadline.
-  public static func plannedStart(
-    _ planned: Date?, deadlineMovedFrom oldDue: Date?, to newDue: Date?,
-    calendar: Calendar = .current
-  ) -> Date? {
-    guard let planned, let oldDue, let newDue,
-      calendar.isDate(planned, inSameDayAs: oldDue),
-      !calendar.isDate(newDue, inSameDayAs: oldDue)
-    else { return planned }
-    return nil
-  }
-}
-
 /// A checklist line inside a task.
 public struct ChecklistItem: Codable, Hashable, Identifiable {
   public var id = UUID()
@@ -266,91 +215,10 @@ public enum ReminderPlan {
   }
 }
 
-/// "Plan my day": first-fit flexible tasks into free time between fixed events.
-public enum DayPlanner {
-  public struct Item: Equatable {
-    public let id: Int
-    public let minutes: Int
-
-    public init(id: Int, minutes: Int) {
-      self.id = id
-      self.minutes = minutes
-    }
-  }
-
-  /// Assigns start times in `items` order, skipping anything that doesn't fit before the window ends.
-  /// Starts are rounded up to 5 minutes and keep `buffer` minutes after each busy block.
-  public static func plan(
-    _ items: [Item], busy: [DateInterval], window: DateInterval, buffer: Int = 5,
-    calendar: Calendar = .current
-  ) -> [(id: Int, start: Date)] {
-    var blocks = busy.filter { $0.end > window.start && $0.start < window.end }.sorted {
-      $0.start < $1.start
-    }
-    var result: [(Int, Date)] = []
-    for item in items {
-      let length = TimeInterval(item.minutes * 60)
-      var cursor = roundUp(window.start, calendar: calendar)
-      var placed = false
-      while cursor.addingTimeInterval(length) <= window.end {
-        let slot = DateInterval(start: cursor, duration: length)
-        if let clash = blocks.first(where: {
-          $0.intersects(slot) && $0.end > slot.start && $0.start < slot.end
-        }) {
-          cursor = roundUp(
-            clash.end.addingTimeInterval(TimeInterval(buffer * 60)), calendar: calendar)
-        } else {
-          result.append((item.id, cursor))
-          blocks.append(slot)
-          blocks.sort { $0.start < $1.start }
-          placed = true
-          break
-        }
-      }
-      _ = placed
-    }
-    return result
-  }
-
-  private static func roundUp(_ date: Date, calendar: Calendar) -> Date {
-    let m = calendar.component(.minute, from: date)
-    let s = calendar.component(.second, from: date)
-    let extra = (5 - m % 5) % 5
-    if extra == 0 && s == 0 { return date }
-    let base = calendar.date(bySetting: .second, value: 0, of: date) ?? date
-    return base.addingTimeInterval(TimeInterval((extra == 0 ? 5 : extra) * 60))
-  }
-}
-
-/// The day view's single timeline: where reminders due that day without a time are suggested.
-/// Suggestions only show; nothing is written until the user taps Plan (planned time, never the deadline).
+/// The day view's single timeline: the free time shown between items.
 public enum DaySchedule {
-  /// Suggestions fill free time from 08:00 (or now, on today) until 21:00, like "Plan my day".
+  /// Free time is counted from 08:00 (or now, on today) until 21:00.
   public static let openHour = 8, closeHour = 21
-
-  /// A suggested start for each item (nil = no gap left: it goes under "Anytime"), in `minutes` order.
-  /// Past days get no suggestions.
-  public static func suggestedStarts(
-    minutes: [Int], busy: [DateInterval], day: Date, now: Date,
-    calendar: Calendar = .current
-  ) -> [Date?] {
-    let none = [Date?](repeating: nil, count: minutes.count)
-    let dayStart = calendar.startOfDay(for: day)
-    guard dayStart >= calendar.startOfDay(for: now),
-      let open = calendar.date(bySettingHour: openHour, minute: 0, second: 0, of: dayStart),
-      let close = calendar.date(bySettingHour: closeHour, minute: 0, second: 0, of: dayStart)
-    else { return none }
-    let start = calendar.isDate(day, inSameDayAs: now) ? max(now, open) : open
-    guard start < close else { return none }
-    let items = minutes.enumerated().map { DayPlanner.Item(id: $0.offset, minutes: $0.element) }
-    var result = none
-    for placed in DayPlanner.plan(
-      items, busy: busy, window: DateInterval(start: start, end: close), calendar: calendar)
-    {
-      result[placed.id] = placed.start
-    }
-    return result
-  }
 }
 
 extension DaySchedule {

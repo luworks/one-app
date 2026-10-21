@@ -125,34 +125,6 @@ final class ActivityDataTests: XCTestCase {
       "the oldest row is there")
   }
 
-  /// While recording is paused nothing applies by itself under a grant (no Activity entry or Undo would exist), and the
-  /// plan card still waits for a tap.
-  func testPausedRecordingStopsAutomaticChanges() {
-    let store = "settings-paused-grant-" + UUID().uuidString
-    launch(["-uiTestingStore", store, "-uiTestingActivityPaused"])
-    app.openSidebar()
-    app.buttons["Settings"].firstMatch.tap()
-    let toggle = app.switches["settings.automaticChanges.toggle"]
-    XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-    app.revealSettingsRow(toggle)
-    XCTAssertEqual(toggle.value as? String, "0")
-    toggle.toggleSwitch()
-    XCTAssertTrue(
-      app.staticTexts["grant.recordingWarning"].exists, "granting never silently resumes Activity")
-    app.terminate()
-    app.launch()
-    let toast = app.staticTexts.matching(
-      NSPredicate(format: "label BEGINSWITH 'Planned ' AND label ENDSWITH ' into free time'")
-    ).firstMatch
-    XCTAssertTrue(
-      app.staticTexts["Buy milk"].firstMatch.waitForExistence(timeout: 10), "Today is up")
-    XCTAssertFalse(toast.waitForExistence(timeout: 4), "no automatic change while paused")
-    app.openSidebar()
-    openActivityFromSidebar()
-    XCTAssertTrue(
-      app.staticTexts["No activity yet"].waitForExistence(timeout: 3), "and nothing is recorded")
-  }
-
   /// An install from before the Activity store: the old SwiftData ledger rows are copied into the store at launch (the real
   /// import path), listed in Activity with their Undo and Undone state, kept for that launch, and retired in the next one.
   func testOldLedgerRowsAreImportedOnceAndRetiredInALaterLaunch() {

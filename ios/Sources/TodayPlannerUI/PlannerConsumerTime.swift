@@ -13,20 +13,11 @@
   package func plannerMove(_ task: OneTask, tomorrow: Bool, now: Date, calendar cal: Calendar)
     -> Date?
   {
-    if tomorrow {
-      if let start = task.plannedStart { return cal.date(byAdding: .day, value: 1, to: start) }
-      return cal.date(byAdding: .day, value: 1, to: now).flatMap {
-        cal.date(bySettingHour: 9, minute: 0, second: 0, of: $0)
-      }
-    }
-    if let start = task.plannedStart {
-      let time = cal.dateComponents([.hour, .minute], from: start)
-      return cal.date(bySettingHour: time.hour ?? 9, minute: time.minute ?? 0, second: 0, of: now)
-    }
-    let next = cal.date(byAdding: .hour, value: 1, to: now) ?? now
-    return cal.date(bySetting: .minute, value: 0, of: next).map {
-      cal.date(bySetting: .second, value: 0, of: $0) ?? $0
-    }
+    // The reminder keeps its time of day; a date-only reminder stays date-only (midnight), like Apple Reminders.
+    let day = cal.date(byAdding: .day, value: tomorrow ? 1 : 0, to: now) ?? now
+    let time = task.due.map { cal.dateComponents([.hour, .minute], from: $0) }
+    return cal.date(
+      bySettingHour: time?.hour ?? 0, minute: time?.minute ?? 0, second: 0, of: day)
   }
   @MainActor
   package func plannerDueHasTime(_ task: OneTask, calendar: Calendar) -> Bool {
@@ -79,7 +70,7 @@
   package func plannerEntrySpeech(_ entry: CalEntry, runtime: PlannerRuntime) -> String {
     let time = entry.start.plannerFormatted(date: .omitted, time: .shortened, runtime: runtime)
     if entry.isAlarm { return "Alarm \(entry.title) at \(time)" }
-    if entry.isTask { return "\(entry.title), planned \(time)" }
+    if entry.isTask { return "\(entry.title), \(time)" }
     return plannerEventSpeech(
       title: entry.title, start: entry.start, end: entry.end, isAllDay: entry.isAllDay,
       location: entry.location, calendar: entry.calendarTitle, runtime: runtime)
@@ -91,7 +82,6 @@
   {
     let calendar = runtime.calendar
     var facts: [String] = []
-    if input.isSuggested { facts.append("Suggested") }
     if let due = input.due {
       if !calendar.isDate(due, inSameDayAs: day) {
         facts.append("Due " + plannerDayLabel(due, runtime: runtime))
@@ -101,9 +91,6 @@
         facts.append(
           "Due " + due.plannerFormatted(date: .omitted, time: .shortened, runtime: runtime))
       }
-    }
-    if let planned = input.planned {
-      facts.append("Planned " + plannerDayLabel(planned, runtime: runtime))
     }
     if input.repeats { facts.append("↻") }
     if input.stepsTotal > 0 { facts.append("\(input.stepsDone)/\(input.stepsTotal)") }

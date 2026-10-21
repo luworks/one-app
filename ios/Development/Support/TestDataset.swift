@@ -101,8 +101,8 @@ import One
       }
       for r in file.reminders {
         let t = OneTask(
-          title: r.title, note: r.note ?? "", plannedStart: date(r.planned)?.date,
-          durationMinutes: r.minutes ?? 25, due: date(r.due)?.date)
+          title: r.title, note: r.note ?? "",
+          durationMinutes: r.minutes ?? 25, due: (date(r.due) ?? date(r.planned))?.date)
         t.listName = r.list ?? ""
         t.flagged = r.flagged ?? false
         t.tags = r.tags ?? []

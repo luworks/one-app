@@ -2,14 +2,12 @@ import XCTest
 
 /// Completing a repeating reminder from Today: it leaves today's timeline for good (not just its done state), shows on its
 /// next day and in Scheduled with the new date, and Undo brings back the very same row at the same time.
-/// Own tiny dataset (one daily reminder due 07:00, planned 09:00 today), so the shared fixture stays as it is.
-/// The Apple Reminders side (Apple rolls the reminder, the app drops the finished occurrence's plan) is covered by
-/// `RepeatAdvanceTests` in the logic package; Apple Reminders sync is off in these runs.
+/// Own tiny dataset (one daily reminder due 07:00 today), so the shared fixture stays as it is.
+/// Apple Reminders sync is off in these runs.
 @MainActor
 final class RepeatingReminderTests: XCTestCase {
   private var app: XCUIApplication!
   private let title = "Clean the drain filter"
-  private let dueLine = "Due 07:00 · ↻"
 
   override func setUp() async throws {
     await MainActor.run {
@@ -79,7 +77,8 @@ final class RepeatingReminderTests: XCTestCase {
   func testUndoBringsBackTheSameRowAtTheSameTime() {
     XCTAssertTrue(circle.waitForExistence(timeout: 5))
     let before = circle.frame.minY
-    XCTAssertTrue(app.staticTexts[dueLine].exists)
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "↻")).firstMatch.exists)
     XCTAssertEqual(rowsOnToday(), 1)
 
     circle.tap()
@@ -97,8 +96,10 @@ final class RepeatingReminderTests: XCTestCase {
     XCTAssertEqual(
       circle.frame.minY, before, accuracy: 1,
       "at the same place on the timeline, so at the same time")
-    XCTAssertTrue(app.staticTexts["09:00"].exists, "planned at 09:00 as before")
-    XCTAssertTrue(app.staticTexts[dueLine].exists, "with its deadline untouched")
+    XCTAssertTrue(app.staticTexts["07:00"].exists, "due at 07:00 as before")
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "↻")).firstMatch.exists,
+      "still repeating")
     XCTAssertEqual(
       app.staticTexts.matching(NSPredicate(format: "label == %@", title)).count, 1,
       "one row, not two")

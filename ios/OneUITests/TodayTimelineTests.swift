@@ -1,8 +1,8 @@
 import XCTest
 
-/// Today is one timeline: reminders due at a time sit at that time, reminders due today with no time get a
-/// suggested free time (saved only on Plan), and overdue reminders stay in the overdue line.
-/// The clock is pinned to 09:41 so the suggestions are the same at any time of day (see tests/fixtures/today-dataset.json).
+/// Today is one timeline: reminders due at a time sit at that time, reminders due today with no time are listed under
+/// Anytime, and overdue reminders stay in the overdue line.
+/// The clock is pinned to 09:41 so the timeline is the same at any time of day (see tests/fixtures/today-dataset.json).
 @MainActor
 final class TodayTimelineTests: XCTestCase {
   private var app: XCUIApplication!
@@ -29,13 +29,8 @@ final class TodayTimelineTests: XCTestCase {
   }
 
   func testRowSubtitlesKeepTwoFactsAtMost() {
-    // Buy milk: Suggested + Home; "Due Today" is implied by the timeline and the #errands tag stays in the detail sheet.
-    XCTAssertTrue(app.staticTexts["Suggested · Home"].waitForExistence(timeout: 5))
-    // Prepare the demo: Due tomorrow + step count; the Work list is the third fact and is dropped.
-    let demo = app.staticTexts.matching(
-      NSPredicate(format: "label BEGINSWITH 'Due Tomorrow ' AND label ENDSWITH ' · 1/3'")
-    ).firstMatch
-    XCTAssertTrue(demo.exists, "the deadline that is not today and the step count")
+    // Buy milk: Home only; "Due Today" is implied by the timeline and the #errands tag stays in the detail sheet.
+    XCTAssertTrue(app.staticTexts["Home"].waitForExistence(timeout: 5))
     XCTAssertFalse(
       app.staticTexts.matching(
         NSPredicate(format: "label CONTAINS 'Due Today' OR label CONTAINS '#'")
@@ -57,32 +52,13 @@ final class TodayTimelineTests: XCTestCase {
     XCTAssertLessThan(bank.frame.minY, lunch.frame.minY, "and before lunch at 12:15")
   }
 
-  func testUntimedReminderIsSuggestedAndPlannedOnTap() {
-    let plan = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Plan Buy milk at '"))
-      .firstMatch
+  func testUntimedReminderStaysUnderAnytime() {
     XCTAssertTrue(
-      plan.waitForExistence(timeout: 5), "a reminder due today with no time gets a suggested time")
-    XCTAssertTrue(element("Suggested").exists)
-    plan.tap()
-    XCTAssertTrue(
-      element("Planned “Buy milk”").waitForExistence(timeout: 3), "Plan shows an Undo toast")
-    XCTAssertFalse(plan.exists, "once planned it is a normal row")
-    XCTAssertTrue(element("Buy milk").exists)
-    app.buttons["Undo"].firstMatch.tap()
-    XCTAssertTrue(plan.waitForExistence(timeout: 5), "Undo restores the same unplanned suggestion")
-  }
-
-  func testFreeTimeShowsAfterTheSuggestions() {
-    let free = app.descendants(matching: .any).matching(
-      NSPredicate(format: "label BEGINSWITH 'Free '")
-    ).firstMatch
-    XCTAssertTrue(
-      free.waitForExistence(timeout: 5), "free time of 30 minutes or more shows as a quiet row")
-    let milk = element("Buy milk")
-    XCTAssertTrue(milk.exists)
-    XCTAssertLessThan(
-      milk.frame.minY, free.frame.minY,
-      "the suggestion takes the first gap; what is left stays free")
+      element("Buy milk").waitForExistence(timeout: 5),
+      "a reminder due today with no time is listed")
+    XCTAssertFalse(
+      app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Plan Buy milk'")).firstMatch
+        .exists, "there is no suggested time or Plan button")
   }
 
   func testOverdueStaysOutOfTheTimeline() {
@@ -92,7 +68,7 @@ final class TodayTimelineTests: XCTestCase {
     XCTAssertTrue(element("Product sync").exists, "the morning of the timeline is on screen")
     XCTAssertFalse(
       element("Renew parking permit").exists,
-      "an overdue reminder planned today is not a timeline row")
+      "an overdue reminder is not a timeline row")
     line.tap()
     XCTAssertTrue(
       element("Renew parking permit").waitForExistence(timeout: 3), "it is in the overdue line")

@@ -98,8 +98,8 @@
       scoped.filter(\.isDone).sorted { ($0.doneAt ?? .distantPast) > ($1.doneAt ?? .distantPast) }
     }
 
-    /// Time a reminder is about: planned time, else deadline.
-    private func when(_ t: OneTask) -> Date { t.plannedStart ?? t.due ?? t.createdAt }
+    /// Time a reminder is about: its date.
+    private func when(_ t: OneTask) -> Date { t.due ?? t.createdAt }
 
     private var groups: [Group] {
       let cal = presentation.calendar
@@ -118,7 +118,7 @@
         .filter { !$0.tasks.isEmpty }
       case .smart(.scheduled):
         let byDay = Dictionary(grouping: open) { t in
-          cal.startOfDay(for: [t.due, t.plannedStart].compactMap { $0 }.min() ?? t.createdAt)
+          cal.startOfDay(for: t.due ?? t.createdAt)
         }
         return byDay.keys.sorted().map { day in
           let past = day < cal.startOfDay(for: presentation.now)
@@ -355,7 +355,7 @@
       ReminderSuggest.suggest(
         from: scoped.map {
           .init(
-            title: $0.title, createdAt: $0.createdAt, due: $0.due ?? $0.plannedStart,
+            title: $0.title, createdAt: $0.createdAt, due: $0.due,
             isOpen: !$0.isDone)
         }, now: presentation.now, calendar: presentation.calendar, limit: 3)
     }

@@ -237,7 +237,6 @@ final class AIResponsePerformanceTests: XCTestCase {
       XCTAssertFalse(app.buttons["Add"].exists)
       XCTAssertFalse(app.buttons["capture-add-all"].exists)
       XCTAssertFalse(any("change-card").exists)
-      XCTAssertFalse(app.buttons["plan.apply"].exists)
     }
   }
 
@@ -274,29 +273,6 @@ final class AIResponsePerformanceTests: XCTestCase {
       XCTAssertTrue(any("capture-undone").waitForExistence(timeout: 5))
       XCTAssertFalse(any("capture-added").exists)
       XCTAssertTrue(app.buttons["capture-add-again"].exists)
-    }
-  }
-
-  /// n=3 local planning previews. Apply/Undo are correctness guards, not save-success latency evidence.
-  func testPlanConfirmationFreshLaunchN3() {
-    for repetition in 1...3 {
-      freshAsk(journey: "plan", repetition: repetition)
-      sendAndSample(
-        "Can you plan my day?", context: "plan.fresh.\(repetition).turn1", backend: "rules")
-      XCTAssertTrue(app.buttons["plan.apply"].isEnabled)
-      XCTAssertTrue(text("Meetings stay fixed").exists)
-      XCTAssertFalse(app.buttons["Add"].exists)
-      XCTAssertFalse(any("ask-undo").exists, "Nothing has been applied before confirmation")
-      let applied = app.staticTexts.containing(
-        NSPredicate(format: "label BEGINSWITH 'Planned ' AND label ENDSWITH 'for today.'")
-      ).firstMatch
-      XCTAssertFalse(applied.exists)
-      app.buttons["plan.apply"].tap()
-      XCTAssertTrue(applied.waitForExistence(timeout: 5))
-      XCTAssertFalse(app.buttons["plan.apply"].exists)
-      XCTAssertTrue(app.buttons["ask-undo"].isEnabled)
-      app.buttons["ask-undo"].tap()
-      XCTAssertTrue(any("ask-undo").waitForNonExistence(timeout: 5))
     }
   }
 }

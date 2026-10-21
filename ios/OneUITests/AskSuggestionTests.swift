@@ -32,8 +32,7 @@ final class AskSuggestionTests: XCTestCase {
     let labels = chipLabels()
     XCTAssertTrue((2...3).contains(labels.count), "2 or 3 suggestions, got \(labels)")
     XCTAssertFalse(labels.contains("Call Alex tomorrow at 3pm"), "no longer a fixed list")
-    XCTAssertTrue(
-      labels.contains("Plan my day"), "morning with free time and unplanned reminders: \(labels)")
+    XCTAssertFalse(labels.contains("Plan my day"), "there is no planning feature: \(labels)")
     XCTAssertTrue(
       labels.contains("Tidy 2 overdue"), "the dataset has two overdue reminders: \(labels)")
 
@@ -55,7 +54,6 @@ final class AskSuggestionTests: XCTestCase {
     let night = chipLabels()
     XCTAssertNotEqual(morning, night, "morning \(morning) vs night \(night)")
     XCTAssertFalse(night.contains("Review today"))
-    XCTAssertFalse(night.contains("Plan my day"), "too late to plan: \(night)")
   }
 
   private func send(_ text: String) {
@@ -67,23 +65,6 @@ final class AskSuggestionTests: XCTestCase {
 
   private func reply(containing text: String) -> XCUIElement {
     app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
-  }
-
-  func testPolitePlanRequestPreservesPreviewThroughOperationQuestionsUntilApply() {
-    launch(at: "09:41")
-    send("Can you plan my day?")
-    XCTAssertTrue(app.buttons["plan.apply"].waitForExistence(timeout: 10))
-    XCTAssertTrue(reply(containing: "Meetings stay fixed").exists)
-    send("Does plan my day move events?")
-    XCTAssertTrue(reply(containing: "We can just chat").waitForExistence(timeout: 10))
-    XCTAssertTrue(app.buttons["plan.apply"].exists)
-    XCTAssertFalse(app.buttons["Add"].exists)
-    XCTAssertFalse(reply(containing: "for today.").exists)
-    app.buttons["plan.apply"].tap()
-    let applied = app.staticTexts.containing(
-      NSPredicate(format: "label BEGINSWITH 'Planned ' AND label ENDSWITH 'for today.'")
-    ).firstMatch
-    XCTAssertTrue(applied.waitForExistence(timeout: 5))
   }
 
   func testPoliteTidyRequestRequiresApplyAndAboutQuestionPreservesIt() {

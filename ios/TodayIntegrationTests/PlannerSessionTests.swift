@@ -38,7 +38,7 @@
         try ModelContext(a.context.container).fetch(FetchDescriptor<OneTask>()).first)
       #expect(persisted.title == "去 costco 加油 买 粒粒")
       #expect(persisted.due == capture.taskTiming(calendar: a.runtime.calendar).due)
-      #expect(persisted.plannedStart == nil && persisted.repeatRule == nil)
+      #expect(persisted.repeatRule == nil)
       #expect(persisted.reminderOffsetMinutes == 0 && persisted.externalID == nil)
       #expect(try a.tasks().count == 1)
       #expect(try a.rows().filter { $0.actionValue == .created }.count == 1)
@@ -58,7 +58,6 @@
       let task = try a.add("Editor deletion")
       task.externalID = "editor-delete-id"
       task.note = "Retain this note"
-      task.plannedStart = a.clock.now().addingTimeInterval(3600)
       try a.context.save()
       let identity = task.persistentModelID
       let original = Ledger.snapshot(of: task)
@@ -83,7 +82,7 @@
       a.toast.performUndo()
       let restored = try #require(try a.tasks().first)
       #expect(try a.tasks().count == 1)
-      #expect(restored.note == original.note && restored.plannedStart == original.plannedStart)
+      #expect(restored.note == original.note)
       #expect(restored.due == original.due)
       #expect(restored.externalID == a.services.reminders.currentRemote?.id)
       #expect(restored.externalID != "editor-delete-id")
@@ -161,7 +160,7 @@
       #expect(try a.context.fetch(FetchDescriptor<OneAlarm>()).count == 1)
       #expect(try ModelContext(a.context.container).fetch(FetchDescriptor<OneAlarm>()).count == 1)
       #expect(a.services.alarms.cancelledIDs == [id])
-      #expect(!reminder.isDone && reminder.due == due && reminder.plannedStart == nil)
+      #expect(!reminder.isDone && reminder.due == due)
       a.services.alarms.failsSchedule = true
       do {
         try await a.services.alarms.commit(deleted, context: a.context)
@@ -221,35 +220,6 @@
     }
 
     @Test
-    func askPlanUndoRestoresOnlyUnchangedTasksAndRecordsOnce() throws {
-      let a = try Session(seed: 1400)
-      defer { a.dispose() }
-      let task = try a.add("Plan and undo")
-      let edited = try a.add("User edited")
-      let deleted = try a.add("Deleted after apply")
-      let completed = try a.add("Completed after apply")
-      let start = a.clock.now().addingTimeInterval(3600)
-      var plan = [task, edited, deleted, completed].map { (task: $0, start: start) }
-      let feedback = AskNativeActions.applyPlan(
-        plan: &plan, grant: nil, context: a.context, actions: a.services.actions,
-        ledger: a.services.ledger, runtime: a.runtime)
-      #expect(plan.isEmpty && task.plannedStart == start && task.due == a.day)
-      edited.plannedStart = start.addingTimeInterval(1800)
-      completed.isDone = true
-      a.context.delete(deleted)
-      try a.context.save()
-      let undo = try #require(feedback.undo)
-      undo.action()
-      undo.action()
-      #expect(task.plannedStart == nil && task.due == a.day)
-      #expect(edited.plannedStart == start.addingTimeInterval(1800))
-      #expect(completed.isDone && completed.plannedStart == start)
-      #expect(try a.tasks().count == 3)
-      #expect(try a.rows().filter { $0.actionValue == .undone }.count == 1)
-      #expect(a.services.reminders.completionCalls.isEmpty)
-    }
-
-    @Test
     func deterministicCaptureKeepsProductionAlarmAndReminderRules() throws {
       let a = try Session(seed: 1600)
       defer { a.dispose() }
@@ -273,10 +243,8 @@
       let task = try a.add("Delete and restore")
       task.note = "Retain the details"
       task.tags = ["Synthetic"]
-      task.plannedStart = a.clock.now().addingTimeInterval(1800)
       try a.context.save()
       let deadline = task.due
-      let planned = task.plannedStart
       let change = PendingChange(
         subject: .task(task), delete: true, title: task.title, oldText: "",
         newStart: nil, notes: [], attendees: 0)
@@ -294,12 +262,11 @@
       #expect(try a.tasks().count == 1)
       #expect(restored.title == "Delete and restore" && restored.note == "Retain the details")
       #expect(restored.tags == ["Synthetic"] && restored.due == deadline)
-      #expect(restored.plannedStart == planned)
       #expect(try a.rows().filter { $0.actionValue == .undone }.count == 1)
     }
 
     @Test
-    func askMoveUndoPreservesDeadlineAndSubsequentEdits() throws {
+    func askMoveUndoRestoresTheDateAndKeepsSubsequentEdits() throws {
       for editsAfterApply in [false, true] {
         let a = try Session(seed: editsAfterApply ? 1802 : 1801)
         defer { a.dispose() }
@@ -307,9 +274,8 @@
         let original = a.clock.now().addingTimeInterval(900)
         let moved = original.addingTimeInterval(1800)
         let later = moved.addingTimeInterval(600)
-        task.plannedStart = original
+        task.due = original
         try a.context.save()
-        let deadline = task.due
         let identity = task.persistentModelID
         let change = PendingChange(
           subject: .task(task), delete: false, title: task.title, oldText: "",
@@ -317,16 +283,16 @@
         let feedback = AskNativeActions.applyChange(
           change, context: a.context, calendar: a.services.calendar,
           actions: a.services.actions, ledger: a.services.ledger, runtime: a.runtime)
-        #expect(task.plannedStart == moved && task.due == deadline)
+        #expect(task.due == moved)
         let undo = try #require(feedback.undo)
         if editsAfterApply {
-          task.plannedStart = later
+          task.due = later
           try a.context.save()
         }
         undo.action()
         undo.action()
-        #expect(task.plannedStart == (editsAfterApply ? later : original))
-        #expect(task.due == deadline && task.persistentModelID == identity)
+        #expect(task.due == (editsAfterApply ? later : original))
+        #expect(task.persistentModelID == identity)
         #expect(
           try a.rows().filter { $0.actionValue == .undone }.count == (editsAfterApply ? 0 : 1))
       }
@@ -451,7 +417,7 @@
     }
 
     @Test
-    func addApplyAndActivityUndoPersistWithoutChangingDeadlineOrPeer() throws {
+    func addApplyAndActivityUndoPersistWithoutChangingPeer() throws {
       let a = try Session(seed: 300)
       let b = try Session(seed: 400)
       defer {
@@ -465,22 +431,22 @@
         preview, into: a.context, actor: .todayAI, channel: .ask, approval: .asked)
       let task = try #require(try a.tasks().first)
       let identity = task.persistentModelID
-      #expect(added.id == identity && task.due == a.day && task.plannedStart == nil)
+      #expect(added.id == identity && task.due == a.day)
       let created = try #require(try a.rows().first)
       #expect(created.id == added.entry.id && created.actionValue == .created)
       #expect(a.services.ledger.task(for: created, in: a.context)?.persistentModelID == identity)
       let start = a.clock.now().addingTimeInterval(3600)
       let requested = try #require(
-        a.services.actions.setPlanned(
+        a.services.actions.setDue(
           task, to: start, context: a.context,
           actor: .todayAI, channel: .ask, approval: .asked))
-      #expect(task.plannedStart == start && task.due == a.day)
-      #expect(a.services.actions.setPlanned(task, to: start, context: a.context) == nil)
+      #expect(task.due == start)
+      #expect(a.services.actions.setDue(task, to: start, context: a.context) == nil)
       let persisted = try a.rows()
       #expect(persisted.count == 2)
       let applied = try #require(persisted.first { $0.id == requested.id })
       #expect(a.services.actions.undo(applied, context: a.context))
-      #expect(task.plannedStart == nil && task.due == a.day && task.persistentModelID == identity)
+      #expect(task.due == a.day && task.persistentModelID == identity)
       #expect(!a.services.actions.undo(applied, context: a.context))
       let rows = try a.rows()
       #expect(rows.count == 3)
@@ -491,117 +457,6 @@
       #expect(try a.context.fetchCount(FetchDescriptor<LedgerEntry>()) == 0)
       #expect(try b.tasks().isEmpty && b.rows().isEmpty)
       #expect(a.services.reminders.completionCalls.isEmpty)
-    }
-
-    @Test
-    func automaticPlanningRequiresRecordedChangesAndPreservesScopeAndUndo() throws {
-      let a = try Session(seed: 500)
-      let b = try Session(seed: 600)
-      defer {
-        a.dispose()
-        b.dispose()
-      }
-      let allowed = try a.add("Due today")
-      let overdue = try a.add("Overdue", due: a.day.addingTimeInterval(-86400))
-      let future = try a.add("Tomorrow", due: a.day.addingTimeInterval(86400))
-      let ringing = try a.add("Rings", rings: true)
-      let done = try a.add("Done")
-      done.isDone = true
-      let timed = try a.add("Timed deadline", due: a.day.addingTimeInterval(16 * 3600))
-      let chosen = try a.add("User chose")
-      _ = a.services.actions.setPlanned(chosen, to: a.clock.now(), context: a.context)
-      _ = a.services.actions.setPlanned(chosen, to: nil, context: a.context)
-      let event = OneEvent(title: "Fixed meeting", start: a.clock.now(), durationMinutes: 60)
-      a.context.insert(event)
-      try a.context.save()
-      _ = try b.add("Peer due today")
-      let initial = try a.rows().count
-      a.services.actions.autoPlan(context: a.context, toast: a.toast)
-      #expect(allowed.plannedStart == nil && !a.toast.canUndo)
-      try GrantStore.setEnabled(
-        true, scope: .planFreeTime, context: a.context, ledger: a.services.ledger,
-        runtime: a.runtime)
-      let grantRows = try a.rows().count
-      #expect(grantRows == initial + 1)
-      for key in [ActivitySettings.pausedKey, ActivitySettings.tierKey(.changes)] {
-        a.defaults.set(key == ActivitySettings.pausedKey, forKey: key)
-        #expect(!a.services.activity.recordsChanges)
-        a.services.actions.autoPlan(context: a.context, toast: a.toast)
-        #expect(allowed.plannedStart == nil && !a.toast.canUndo)
-        #expect(try a.rows().count == grantRows)
-        a.defaults.removeObject(forKey: key)
-      }
-      #expect(a.services.activity.recordsChanges && b.services.activity.recordsChanges)
-      a.services.actions.autoPlan(context: a.context, toast: a.toast)
-      let placed = try #require(allowed.plannedStart)
-      #expect(placed >= event.start.addingTimeInterval(3600))
-      #expect(allowed.due == a.day && a.toast.canUndo)
-      #expect(
-        [overdue, future, ringing, done, timed, chosen].allSatisfy { $0.plannedStart == nil })
-      #expect(timed.due == a.day.addingTimeInterval(16 * 3600))
-      #expect(event.start == a.clock.now())
-      let rows = try a.rows()
-      let automatic = try #require(
-        rows.first { $0.title == allowed.title && $0.actionValue == .planned })
-      #expect(automatic.approvalValue == .autoUnderGrant)
-      #expect(
-        automatic.actor == LedgerActor.todayAI.raw
-          && automatic.channel == LedgerChannel.automatic.rawValue)
-      a.services.actions.autoPlan(context: a.context, toast: a.toast)
-      #expect(try a.rows().count == rows.count)
-      a.toast.performUndo()
-      #expect(allowed.plannedStart == nil && allowed.due == a.day)
-      #expect(try a.rows().contains { $0.undoOf == automatic.id })
-      let afterUndo = try a.rows().count
-      a.services.actions.autoPlan(context: a.context, toast: a.toast)
-      #expect(allowed.plannedStart == nil && !a.toast.canUndo)
-      #expect(try a.rows().count == afterUndo)
-      #expect(a.services.reminders.completionCalls.isEmpty)
-      #expect(try b.tasks().allSatisfy { $0.plannedStart == nil })
-      #expect(GrantStore.active(.planFreeTime, context: b.context, now: b.clock.now()) == nil)
-    }
-
-    @Test
-    func sevenDayExpiryAndRevocationUseOnlyTheirSessionClockAndStore() throws {
-      let a = try Session(seed: 700)
-      let b = try Session(seed: 800)
-      defer {
-        a.dispose()
-        b.dispose()
-      }
-      for session in [a, b] {
-        try GrantStore.setEnabled(
-          true, scope: .planFreeTime, context: session.context,
-          ledger: session.services.ledger, runtime: session.runtime)
-        try GrantStore.setEnabled(
-          true, scope: .planFreeTime, context: session.context,
-          ledger: session.services.ledger, runtime: session.runtime)
-        #expect(try session.context.fetchCount(FetchDescriptor<AIGrant>()) == 1)
-        #expect(try session.rows().filter { $0.actionValue == .granted }.count == 1)
-      }
-      let grant = try #require(
-        GrantStore.active(.planFreeTime, context: a.context, now: a.clock.now()))
-      let expiry = try #require(
-        a.runtime.calendar.date(byAdding: .day, value: 7, to: a.clock.now()))
-      #expect(grant.expires == expiry)
-      #expect(
-        GrantStore.active(.planFreeTime, context: a.context, now: expiry.addingTimeInterval(-1))
-          != nil)
-      a.clock.setNow(expiry)
-      let task = try a.add("At expiry", due: a.runtime.calendar.startOfDay(for: expiry))
-      a.services.actions.autoPlan(context: a.context, toast: a.toast)
-      #expect(task.plannedStart == nil && !a.toast.canUndo)
-      #expect(GrantStore.active(.planFreeTime, context: a.context, now: a.clock.now()) == nil)
-      #expect(GrantStore.active(.planFreeTime, context: b.context, now: b.clock.now()) != nil)
-      try GrantStore.setEnabled(
-        false, scope: .planFreeTime, context: b.context, ledger: b.services.ledger,
-        runtime: b.runtime)
-      try GrantStore.setEnabled(
-        false, scope: .planFreeTime, context: b.context, ledger: b.services.ledger,
-        runtime: b.runtime)
-      #expect(GrantStore.active(.planFreeTime, context: b.context, now: b.clock.now()) == nil)
-      #expect(try b.rows().filter { $0.actionValue == .revoked }.count == 1)
-      #expect(grant.revoked == nil)
     }
 
     @Test
@@ -650,7 +505,6 @@
         let task = try session.add("Linked recurring reminder")
         task.externalID = "linked-reminder"
         task.repeatRule = "daily"
-        task.plannedStart = session.clock.now().addingTimeInterval(600)
         try session.context.save()
         session.services.actions.toggleDone(task, context: session.context, toast: session.toast)
         #expect(task.isDone && session.toast.canUndo)
@@ -663,7 +517,6 @@
       let acceptedB = try #require(b.services.reminders.currentRemote)
       // Model an intervening sync rolling the linked occurrence forward before toast Undo.
       taskA.due = a.day.addingTimeInterval(86400)
-      taskA.plannedStart = nil
       a.toast.performUndo()
       let undoA = try #require(a.services.reminders.completionCalls.last)
       #expect(
@@ -672,7 +525,6 @@
       #expect(undoA.expected?.id == acceptedA.id && !undoA.done && undoA.restoresDue)
       #expect(undoA.restoringDue == a.day)
       #expect(!taskA.isDone && taskA.due == a.day)
-      #expect(taskA.plannedStart == a.clock.now().addingTimeInterval(600))
       a.toast.performUndo()
       #expect(a.services.reminders.completionCalls.count == 2)
       b.services.reminders.currentRemote = RemindersSync.Remote(

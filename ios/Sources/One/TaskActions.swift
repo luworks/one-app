@@ -133,8 +133,8 @@
       // Apple Reminders rolls its own repeating reminders forward, so only local-only tasks spawn the next one here.
       let next = task.externalID == nil ? nextOccurrence(of: task, runtime: runtime) : nil
       // What the finished occurrence looked like, for Undo: a synced repeating reminder comes back from Apple with its
-      // due date rolled forward and no plan (`RemindersSync.apply`), so Undo must put both back exactly.
-      let (oldDue, oldPlanned) = (task.due, task.plannedStart)
+      // due date rolled forward, so Undo must put it back exactly.
+      let oldDue = task.due
       withAnimation {
         task.isDone.toggle()
         task.doneAt = task.isDone ? runtime.now() : nil
@@ -147,7 +147,7 @@
       else { return }
       let suffix =
         next.map { n in
-          " · next " + plannerDayLabel(n.plannedStart ?? n.due ?? runtime.now(), runtime: runtime)
+          " · next " + plannerDayLabel(n.due ?? runtime.now(), runtime: runtime)
         } ?? ""
       let entry = ledger.record(
         .completed, task: task, title: task.title, after: next.map { _ in "Next one added" } ?? "",
@@ -171,7 +171,6 @@
           }
           if let next { context.delete(next) }
           if task.due != oldDue { task.due = oldDue }
-          if task.plannedStart != oldPlanned { task.plannedStart = oldPlanned }
         }
         if persistCompletion(
           task, context: context, toast: toast, reminders: reminders, oldDone: undoDone,
@@ -305,21 +304,22 @@
       }
     }
 
-    /// Sets or clears the planned time (never the deadline) and records it: Plan, Today, Tomorrow, Unschedule, drag.
+    /// Sets or clears the reminder's date and records it: Today, Tomorrow, Unschedule, an AI move.
+    /// Apple Reminders gets the new date from the next reconcile, like any other local edit.
     @discardableResult
-    package static func setPlanned(
-      _ task: OneTask, to start: Date?, context: ModelContext, ledger: Ledger,
+    package static func setDue(
+      _ task: OneTask, to due: Date?, context: ModelContext, ledger: Ledger,
       actor: LedgerActor = .you, channel: LedgerChannel = .app, approval: LedgerApproval = .userMade
     ) -> LedgerItem? {
       guard !task.isDeleted, task.modelContext != nil else { return nil }
-      let old = task.plannedStart
-      guard old != start else { return nil }
-      withAnimation { task.plannedStart = start }
-      let action: LedgerAction = start == nil ? .unscheduled : (old == nil ? .planned : .moved)
+      let old = task.due
+      guard old != due else { return nil }
+      withAnimation { task.due = due }
+      let action: LedgerAction = due == nil ? .unscheduled : (old == nil ? .planned : .moved)
       return ledger.record(
         action, task: task, title: task.title, before: ledger.timeLabel(old),
-        after: ledger.timeLabel(start),
-        beforeDate: old, afterDate: start, actor: actor, channel: channel, approval: approval,
+        after: ledger.timeLabel(due),
+        beforeDate: old, afterDate: due, actor: actor, channel: channel, approval: approval,
         context: context)
     }
 
@@ -329,19 +329,14 @@
       next.isDone = false
       next.doneAt = nil
       next.createdAt = runtime.now()
-      next.plannedStart = task.plannedStart.map { rule.next(after: $0, calendar: runtime.calendar) }
-      next.due =
-        task.due.map { rule.next(after: $0, calendar: runtime.calendar) }
-        ?? (task.plannedStart == nil
-          ? rule.next(
-            after: runtime.calendar.startOfDay(for: runtime.now()), calendar: runtime.calendar)
-          : nil)
+      next.due = rule.next(
+        after: task.due ?? runtime.calendar.startOfDay(for: runtime.now()),
+        calendar: runtime.calendar)
       next.checklist = task.checklist.map { ChecklistItem(id: runtime.nextID(), title: $0.title) }
       return next
     }
 
     private static func deletedDetail(_ t: OneTask, runtime: PlannerRuntime) -> String {
-      if let s = t.plannedStart { return "Planned " + plannerDayLabel(s, runtime: runtime) }
       if let d = t.due { return "Due " + plannerDayLabel(d, runtime: runtime) }
       return t.listName
     }

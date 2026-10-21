@@ -17,7 +17,6 @@
     @AppStorage(Preferences.showSnoozeKey) private var showsSnooze = Preferences.showSnooze
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
-    @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
 
     package var body: some View {
       ExplainedToggle(
@@ -36,11 +35,6 @@
       ExplainedToggle(
         title: "Show free time", isOn: $showsFreeTime,
         caption: "Quiet “Free 1 h” lines in the gaps between your plans.")
-      ExplainedToggle(
-        title: "Suggest times for reminders", isOn: $suggestsTimes,
-        caption:
-          "A reminder due today with no time gets a faint suggested time in a free gap. Off lists it under Anytime today. Nothing is scheduled either way."
-      )
     }
   }
 

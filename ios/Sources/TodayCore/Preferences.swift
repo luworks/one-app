@@ -19,7 +19,6 @@ public enum Preferences {
   public static let showTomorrowKey = "today.setting.showTomorrow"
   public static let eveningHourKey = "today.setting.eveningHour"
   public static let showFreeTimeKey = "today.setting.showFreeTime"
-  public static let suggestTimesKey = "today.setting.suggestTimes"
   public static let newReminderListKey = "today.setting.newReminderList"
   public static let newAlarmSnoozeKey = "today.setting.newAlarmSnooze"
   public static let newAlarmSoundKey = "today.setting.newAlarmSound"
@@ -28,7 +27,7 @@ public enum Preferences {
   static let allKeys = [
     dimPastDaysKey, firstWeekdayKey, weekNumbersKey, calendarStartKey, showTomorrowKey,
     eveningHourKey,
-    showFreeTimeKey, suggestTimesKey, newReminderListKey, newAlarmSnoozeKey, newAlarmSoundKey,
+    showFreeTimeKey, newReminderListKey, newAlarmSnoozeKey, newAlarmSoundKey,
     askSuggestionsKey, showSettleKey, showSnoozeKey,
   ]
 
@@ -44,7 +43,6 @@ public enum Preferences {
   /// 18:00, Apple Reminders' "Tonight".
   public static let eveningHour = TomorrowPreview.eveningHour
   public static let showFreeTime = true
-  public static let suggestTimes = true
   /// "" = Auto: the list the text clearly belongs to, else the Inbox (Ask), else the default list (quick add).
   public static let newReminderList = ""
   public static let newAlarmSnooze = AlarmPlan.defaultSnoozeMinutes

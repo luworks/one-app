@@ -65,9 +65,6 @@
       _showsFreeTime = AppStorage(
         wrappedValue: Preferences.showFreeTime, Preferences.showFreeTimeKey,
         store: presentation.defaults)
-      _suggestsTimes = AppStorage(
-        wrappedValue: Preferences.suggestTimes, Preferences.suggestTimesKey,
-        store: presentation.defaults)
       _day = day
       self.showsWeekStrip = showsWeekStrip
       self.openTask = openTask
@@ -87,7 +84,6 @@
     @AppStorage(Preferences.showSnoozeKey) private var showsSnooze = Preferences.showSnooze
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
-    @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(HealthLineModel.self) private var health
@@ -333,19 +329,9 @@
           event: e, pendingDelete: $pendingDelete, calendar: calendar, travel: travel,
           attention: attention(target(e))
         )
-      case .task(let task):
-        TaskRow(
-          task: task, showsTime: true, compact: true, agendaDay: rowDay,
-          onDelete: { requestDelete(task) }, open: openTask, attention: attention(target(task))
-        )
       case .due(let task):
         TaskRow(
           task: task, showsTime: true, time: task.due, compact: true, agendaDay: rowDay,
-          onDelete: { requestDelete(task) }, open: openTask, attention: attention(target(task))
-        )
-      case .suggested(let task, let start):
-        TaskRow(
-          task: task, compact: true, suggested: start, agendaDay: rowDay,
           onDelete: { requestDelete(task) }, open: openTask, attention: attention(target(task))
         )
       case .alarm(let alarm, let date):
@@ -422,40 +408,19 @@
       // Overdue reminders stay in the overdue line, never inside a day's timeline.
       // A completed task leaves the day (Undo in the toast brings it back).
       let open = tasks.filter { !$0.isDone && !plannerIsOverdue($0, now: now, calendar: cal) }
-      var untimed: [OneTask] = []
-      for task in open {
-        if let start = task.plannedStart {
-          guard cal.isDate(start, inSameDayAs: day) else { continue }
-          timeline.append(.task(task))
-          busy.append(DateInterval(start: start, duration: TimeInterval(task.durationMinutes * 60)))
-        } else if let due = task.due, cal.isDate(due, inSameDayAs: day) {
-          // Planned time is not a deadline: only a task with no plan shows at its due time.
-          if plannerDueHasTime(task, calendar: presentation.calendar) {
-            timeline.append(.due(task))
-            busy.append(DateInterval(start: due, duration: TimeInterval(task.durationMinutes * 60)))
-          } else {
-            untimed.append(task)
-          }
-        }
-      }
-      // Untimed reminders get a suggested time in a free gap (flagged first); what doesn't fit is "Anytime".
-      untimed.sort { ($0.flagged ? 0 : 1, $0.createdAt) < ($1.flagged ? 0 : 1, $1.createdAt) }
-      // Settings > Today > "Suggest times for reminders": off leaves them under "Anytime today".
-      let starts =
-        suggestsTimes
-        ? DaySchedule.suggestedStarts(
-          minutes: untimed.map(\.durationMinutes), busy: busy, day: day, now: now, calendar: cal)
-        : [Date?](repeating: nil, count: untimed.count)
       var anytime: [OneTask] = []
-      for (task, start) in zip(untimed, starts) {
-        if let start {
-          timeline.append(.suggested(task, start))
-          busy.append(DateInterval(start: start, duration: TimeInterval(task.durationMinutes * 60)))
+      for task in open {
+        guard let due = task.due, cal.isDate(due, inSameDayAs: day) else { continue }
+        if plannerDueHasTime(task, calendar: presentation.calendar) {
+          timeline.append(.due(task))
+          busy.append(DateInterval(start: due, duration: TimeInterval(task.durationMinutes * 60)))
         } else {
           anytime.append(task)
         }
       }
-      // What is still free after the suggestions, as quiet "Free 1 h 30 min" rows.
+      // Reminders with no time stay under "Anytime", flagged first.
+      anytime.sort { ($0.flagged ? 0 : 1, $0.createdAt) < ($1.flagged ? 0 : 1, $1.createdAt) }
+      // What is still free, as quiet "Free 1 h 30 min" rows.
       if showsFreeTime {
         timeline += DaySchedule.freeGaps(busy: busy, day: day, now: now, calendar: cal).map(
           TimelineItem.gap)
@@ -506,7 +471,7 @@
       return FocusTarget(
         identity: actions.focus.identity(
           resolution: reminders.focusIdentity(task), localReference: ref, kind: "reminder",
-          occurrence: task.repeats == nil ? nil : (task.due ?? task.plannedStart)),
+          occurrence: task.repeats == nil ? nil : task.due),
         reference: ref, title: task.title)
     }
 
@@ -554,7 +519,7 @@
       switch item {
       case .event(let event, let start): isHidden(target(event, start: start))
       case .external(let event): isHidden(target(event))
-      case .task(let task), .due(let task), .suggested(let task, _): isHidden(target(task))
+      case .due(let task): isHidden(target(task))
       case .alarm(let alarm, let date): isHidden(target(alarm, fireDate: date))
       case .gap, .nowMarker: false
       }
@@ -817,7 +782,7 @@
           self.target($0).identity == identity
         })
       {
-        let start = task.plannedStart ?? task.due ?? now
+        let start = task.due ?? now
         return CalEntry(
           id: target.id, source: .task(task), title: task.title,
           start: start, end: start.addingTimeInterval(Double(task.durationMinutes) * 60),
@@ -933,11 +898,8 @@
   enum TimelineItem: Identifiable {
     case event(OneEvent, Date)
     case external(ExternalEvent)
-    case task(OneTask)
-    /// A reminder with no plan, at the time it is due.
+    /// A reminder, at the time it is due.
     case due(OneTask)
-    /// A reminder due this day with no time, at a suggested free time. Nothing is saved until Plan.
-    case suggested(OneTask, Date)
     case alarm(OneAlarm, Date)
     /// Free time of 30 minutes or more, from now on.
     case gap(DateInterval)
@@ -947,9 +909,7 @@
       switch self {
       case .event(let e, let d): return [AnyHashable(ObjectIdentifier(e)), AnyHashable(d)]
       case .external(let e): return e.id
-      case .task(let t): return ObjectIdentifier(t)
       case .due(let t): return ["due", AnyHashable(ObjectIdentifier(t))]
-      case .suggested(let t, _): return ["suggested", AnyHashable(ObjectIdentifier(t))]
       case .alarm(let a, _): return ObjectIdentifier(a)
       case .gap(let free): return ["gap", AnyHashable(free.start)]
       case .nowMarker: return "now"
@@ -962,9 +922,7 @@
       switch self {
       case .event(_, let d): return d
       case .external(let e): return e.start
-      case .task(let t): return t.plannedStart ?? .distantFuture
       case .due(let t): return t.due ?? .distantFuture
-      case .suggested(_, let d): return d
       case .alarm(_, let d): return d
       case .gap(let free): return free.start
       case .nowMarker(let d): return d
@@ -1004,7 +962,7 @@
     }
   }
 
-  /// Starts the reminders that are due this day with no time and no free gap to suggest.
+  /// Heads the reminders that are due this day with no time.
   struct AnytimeLabel: View {
     let title: String
     package var body: some View {

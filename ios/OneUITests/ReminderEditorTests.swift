@@ -46,7 +46,7 @@ final class ReminderEditorTests: XCTestCase {
     return date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
   }
 
-  func testPresetsSaveCancelAndFieldsStayIndependent() {
+  func testPresetsSaveAndCancel() {
     open("Prepare the demo")
     XCTAssertFalse(app.buttons["task.save"].isEnabled)
     let when = app.buttons["task.when"]
@@ -58,26 +58,11 @@ final class ReminderEditorTests: XCTestCase {
     XCTAssertTrue(app.buttons["task.save"].waitForNonExistence(timeout: 5))
     open("Prepare the demo")
     XCTAssertTrue(when.label.contains(dateLabel(day: 1, hour: 17, minute: 50)))
-    when.tap()
-    app.segmentedControls.buttons["Planned time"].tap()
-    XCTAssertTrue(when.label.contains(dateLabel(day: 0, hour: 13, minute: 30)))
-    app.buttons["+10 min"].tap()
-    XCTAssertTrue(when.label.contains(dateLabel(day: 0, hour: 13, minute: 40)))
-    app.buttons["task.save"].tap()
-    open("Prepare the demo")
-    XCTAssertTrue(
-      when.label.contains(dateLabel(day: 1, hour: 17, minute: 50)),
-      "planning keeps the saved deadline")
-    when.tap()
-    app.segmentedControls.buttons["Planned time"].tap()
-    XCTAssertTrue(when.label.contains(dateLabel(day: 0, hour: 13, minute: 40)))
     app.buttons["+1 day"].tap()
     app.buttons["Cancel"].tap()
     open("Prepare the demo")
-    when.tap()
-    app.segmentedControls.buttons["Planned time"].tap()
     XCTAssertTrue(
-      when.label.contains(dateLabel(day: 0, hour: 13, minute: 40)), "Cancel discards the extra day")
+      when.label.contains(dateLabel(day: 1, hour: 17, minute: 50)), "Cancel discards the extra day")
   }
 
   func testReferencePanelAndAdvancedDraftCancel() {
@@ -92,7 +77,6 @@ final class ReminderEditorTests: XCTestCase {
     }
     shot("compact-reference")
     app.buttons["task.more"].tap()
-    XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
     XCTAssertEqual(app.switches["Deadline"].value as? String, "1")
     XCTAssertEqual(
       app.descendants(matching: .any)["task.note"].firstMatch.value as? String, "Around the park.")
@@ -120,7 +104,6 @@ final class ReminderEditorTests: XCTestCase {
     XCTAssertTrue(app.buttons["task.when"].label.contains("No date"))
     XCTAssertFalse(app.buttons["task.save"].isEnabled)
     app.buttons["task.more"].tap()
-    XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
     XCTAssertEqual(app.switches["Deadline"].value as? String, "0")
     app.buttons["Quick edit"].tap()
     let title = app.textFields["task.title"]
@@ -134,7 +117,6 @@ final class ReminderEditorTests: XCTestCase {
     open("Read the article tonight")
     XCTAssertTrue(app.buttons["task.when"].label.contains(dateLabel(day: 0, hour: 18, minute: 30)))
     app.buttons["task.more"].tap()
-    XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
     XCTAssertEqual(app.switches["Deadline"].value as? String, "1")
   }
 }

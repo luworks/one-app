@@ -87,7 +87,7 @@
 
   @MainActor
   package enum CalendarEntries {
-    /// Everything overlapping `interval`, merged from the system calendar, Today's own events and planned tasks.
+    /// Everything overlapping `interval`, merged from the system calendar, Today's own events and timed reminders.
     /// Events hidden in the Calendars list are left out. Pass `alarms` (already empty when "Show alarms in the day" is off)
     /// to add their rings by the same rule as the Today timeline (see `CalendarAlarms`); reminders that ring as alarms stay reminders.
     package static func make(
@@ -139,7 +139,9 @@
       }
 
       for t in tasks where !t.isDone {
-        guard let s = t.plannedStart, interval.contains(s) else { continue }
+        guard let s = t.due, interval.contains(s),
+          calendar.dateComponents([.hour, .minute], from: s) != DateComponents(hour: 0, minute: 0)
+        else { continue }
         result.append(
           CalEntry(
             id: "t\(t.persistentModelID.hashValue)", source: .task(t), title: t.title, start: s,

@@ -41,8 +41,7 @@
       context.insert(offsite)
 
       let demo = OneTask(
-        title: "Prepare the demo", plannedStart: at(0, 13, 30), durationMinutes: 45,
-        due: at(1, 17, 0))
+        title: "Prepare the demo", durationMinutes: 45, due: at(1, 17, 0))
       demo.listName = "Work"
       demo.flagged = true
       demo.checklist = [
@@ -50,7 +49,7 @@
         ChecklistItem(title: "Rehearse"),
       ]
       context.insert(demo)
-      context.insert(OneTask(title: "Write up design review notes", plannedStart: at(0, 16, 0)))
+      context.insert(OneTask(title: "Write up design review notes", due: at(0, 16, 0)))
       let milk = OneTask(title: "Buy milk", due: today)
       milk.listName = "Home"
       milk.tags = ["errands"]

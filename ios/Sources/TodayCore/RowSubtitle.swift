@@ -7,28 +7,23 @@ public enum RowSubtitle {
   public static let maxFacts = 2
 
   public struct Input {
-    public var isSuggested = false
     public var due: Date?
     public var dueHasTime = false
-    /// The time shown in the row's time column (planned or due time), if any.
+    /// The time shown in the row's time column (the due time), if any.
     public var shownTime: Date?
-    /// A planned time worth naming; nil when the time column already shows it.
-    public var planned: Date?
     public var repeats = false
     public var stepsDone = 0
     public var stepsTotal = 0
     public var listName = ""
 
     public init(
-      isSuggested: Bool = false, due: Date? = nil, dueHasTime: Bool = false, shownTime: Date? = nil,
-      planned: Date? = nil, repeats: Bool = false, stepsDone: Int = 0, stepsTotal: Int = 0,
+      due: Date? = nil, dueHasTime: Bool = false, shownTime: Date? = nil, repeats: Bool = false,
+      stepsDone: Int = 0, stepsTotal: Int = 0,
       listName: String = ""
     ) {
-      self.isSuggested = isSuggested
       self.due = due
       self.dueHasTime = dueHasTime
       self.shownTime = shownTime
-      self.planned = planned
       self.repeats = repeats
       self.stepsDone = stepsDone
       self.stepsTotal = stepsTotal
@@ -45,15 +40,11 @@ public enum RowSubtitle {
   /// The facts in priority order, cut to `maxFacts`. `day` is the day the row sits on.
   public static func facts(_ input: Input, day: Date, calendar: Calendar = .current) -> [String] {
     var out: [String] = []
-    if input.isSuggested { out.append("Suggested") }
     if let due = input.due,
       let text = dueText(
         due, hasTime: input.dueHasTime, shownTime: input.shownTime, day: day, calendar: calendar)
     {
       out.append(text)
-    }
-    if let planned = input.planned {
-      out.append("Planned " + DayLabel.withTime(planned, calendar: calendar))
     }
     if input.repeats { out.append("↻") }
     if input.stepsTotal > 0 { out.append("\(input.stepsDone)/\(input.stepsTotal)") }
@@ -67,7 +58,7 @@ public enum RowSubtitle {
   }
 
   /// A deadline on the row's own day is implied by where the row sits; only a time that differs from the
-  /// time column ("Due 17:00" on a task planned for the morning) is worth saying.
+  /// time column is worth saying.
   private static func dueText(
     _ due: Date, hasTime: Bool, shownTime: Date?, day: Date, calendar: Calendar
   ) -> String? {

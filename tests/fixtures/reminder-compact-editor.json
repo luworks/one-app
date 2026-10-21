@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "about": "Compact native reminder editor: a reference time, independent planned/deadline fields, and an undated reminder. Relative to the launch day; clock pinned to 10:32.",
+  "about": "Compact native reminder editor: a reference time, and an undated reminder. Relative to the launch day; clock pinned to 10:32.",
   "lists": [{"name": "Home", "color": 1}],
   "reminders": [
     {"title": "test", "list": "Home", "due": {"day": 0, "time": "10:32"}, "note": "Around the park."},
-    {"title": "Prepare the demo", "list": "Home", "planned": {"day": 0, "time": "13:30"}, "due": {"day": 1, "time": "17:00"}, "minutes": 45,
+    {"title": "Prepare the demo", "list": "Home", "due": {"day": 1, "time": "17:00"}, "minutes": 45,
       "checklist": [{"title": "Outline", "done": true}, {"title": "Slides"}], "flagged": true},
     {"title": "Read the article", "list": "Home"}
   ],

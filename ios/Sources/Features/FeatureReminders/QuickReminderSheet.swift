@@ -84,7 +84,7 @@
         suggestions = ReminderSuggest.suggest(
           from: tasks.map {
             .init(
-              title: $0.title, createdAt: $0.createdAt, due: $0.due ?? $0.plannedStart,
+              title: $0.title, createdAt: $0.createdAt, due: $0.due,
               isOpen: !$0.isDone)
           }, now: presentation.now, calendar: presentation.calendar)
       }

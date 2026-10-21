@@ -223,51 +223,6 @@ final class JourneyTests: XCTestCase {
     XCTAssertTrue(app.buttons["New chat"].waitForExistence(timeout: 3))
   }
 
-  /// AI claim 9: plan my day is a preview; nothing moves until Apply.
-  func testPlanMyDay() {
-    // The pinned morning clock leaves free time for all three planned tasks.
-    tap(app.buttons["Ask AI or add anything"])
-    // The suggestion chips change with the data, so the sentence is typed, as a user would.
-    let field =
-      app.textViews["Ask AI or add anything"].firstMatch.exists
-      ? app.textViews["Ask AI or add anything"].firstMatch : app.textViews.firstMatch
-    XCTAssertTrue(field.waitForExistence(timeout: 5))
-    field.typeText("Plan my day\n")
-    XCTAssertTrue(app.staticTexts["Plan for today"].waitForExistence(timeout: 5))
-    XCTAssertTrue(app.staticTexts["Pay studio invoice"].exists, "overdue task is placed first")
-    tap(app.buttons["Apply"])
-    XCTAssertTrue(
-      app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Planned 3 tasks'"))
-        .firstMatch
-        .waitForExistence(timeout: 3))
-  }
-
-  /// Interaction claim 8: long-press and drag a task in the week grid to reschedule it.
-  func testDragTaskInWeekGrid() {
-    tab("Calendar")
-    tap(app.buttons["Week"])
-    let block = app.otherElements.matching(
-      NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned'")
-    ).firstMatch
-    let anyBlock =
-      block.exists
-      ? block
-      : app.descendants(matching: .any).matching(
-        NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned'")
-      ).firstMatch
-    XCTAssertTrue(anyBlock.waitForExistence(timeout: 5))
-    let before = anyBlock.label
-    let start = anyBlock.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
-    // One hour down = 48 pt in the grid.
-    start.press(forDuration: 0.6, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 48)))
-    let moved = app.descendants(matching: .any)
-      .matching(
-        NSPredicate(format: "label BEGINSWITH 'Prepare the demo, planned' AND label != %@", before)
-      ).firstMatch
-    XCTAssertTrue(
-      moved.waitForExistence(timeout: 3), "planned time changed after drag (was: \(before))")
-  }
-
   /// Each Today option explains itself right under its own switch (not in one shared footer).
   func testSettingsExplainsEachOptionUnderItsRow() {
     app.openSidebar()

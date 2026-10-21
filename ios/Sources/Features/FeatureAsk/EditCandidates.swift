@@ -36,16 +36,15 @@
       }
       let openTasks = tasks.filter { t in
         guard !t.isDone else { return false }
-        guard let s = t.plannedStart else { return true }
+        guard let s = t.due else { return true }
         return window.contains(s)
-      }.sorted { ($0.plannedStart ?? .distantFuture) < ($1.plannedStart ?? .distantFuture) }.prefix(
-        12)
+      }.sorted { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }.prefix(12)
       for (i, t) in openTasks.enumerated() {
         let id = "t\(i + 1)"
         taskByID[id] = t
         items.append(
           EditItem(
-            id: id, type: "task", title: t.title, start: t.plannedStart, minutes: t.durationMinutes,
+            id: id, type: "task", title: t.title, start: t.due, minutes: t.durationMinutes,
             attendees: 0))
       }
       return (items, taskByID, eventByID)

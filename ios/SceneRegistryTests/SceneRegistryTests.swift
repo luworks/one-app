@@ -29,7 +29,6 @@ struct SceneRegistryTests {
         "activity", "settings", "settings.appearance", "settings.apple", "settings.today",
         "settings.calendar",
         "settings.reminders", "settings.smartLists", "settings.alarms", "settings.ai",
-        "settings.ai.automaticChanges",
         "settings.activity", "settings.calendar.holidays", "settings.about", "settings.delete",
       ],
       ["health", "health.detail", "health.picker"],

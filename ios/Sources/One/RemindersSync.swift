@@ -1157,8 +1157,7 @@
       tasks.forEach { $0.listName = new }
     }
 
-    /// Apple -> app. Planned time, duration, tags, checklist and reminder offsets stay as they are (a plan only goes when a
-    /// repeating reminder rolls to its next occurrence).
+    /// Apple -> app. Duration, tags, checklist and reminder offsets stay as they are.
     /// Only changed fields are written: SwiftData counts a same-value write as a change, which would loop the sync.
     private func apply(_ r: Remote, to t: OneTask) {
       if t.title != r.title { t.title = r.title }
@@ -1167,17 +1166,7 @@
         t.isDone = r.isDone
         t.doneAt = r.isDone ? (r.doneAt ?? runtime.now()) : nil
       }
-      if t.due != r.due {
-        // Apple rolled a repeating reminder to its next occurrence: the finished one's plan does not follow (see RepeatAdvance).
-        var plan = RepeatAdvance.plannedStart(
-          t.plannedStart, dueMovedFrom: t.due, to: r.due, repeats: r.repeats, isDone: r.isDone,
-          now: runtime.now(), calendar: runtime.calendar)
-        // Moved to another day in Apple Reminders: it is no longer today's, so its plan for the old day goes.
-        plan = DeadlineMove.plannedStart(
-          plan, deadlineMovedFrom: t.due, to: r.due, calendar: runtime.calendar)
-        if t.plannedStart != plan { t.plannedStart = plan }
-        t.due = r.due
-      }
+      if t.due != r.due { t.due = r.due }
       if t.listName != r.listTitle { t.listName = r.listTitle }
       if t.flagged != r.flagged { t.flagged = r.flagged }
       if t.repeatRule != r.repeatRule { t.repeatRule = r.repeatRule }

@@ -90,7 +90,7 @@ final class LedgerFormatTests: XCTestCase {
 
   func testTaskSnapshotRoundTrips() throws {
     let s = TaskSnapshot(
-      title: "Buy milk", plannedStart: .now, listName: "Home", flagged: true,
+      title: "Buy milk", due: .now, listName: "Home", flagged: true,
       checklist: [ChecklistItem(title: "Oat")])
     let back = try JSONDecoder().decode(TaskSnapshot.self, from: JSONEncoder().encode(s))
     XCTAssertEqual(back, s)

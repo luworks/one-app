@@ -169,7 +169,6 @@ public struct TaskSnapshot: Codable, Equatable {
   public var note: String = ""
   public var isDone = false
   public var doneAt: Date?
-  public var plannedStart: Date?
   public var durationMinutes = 25
   public var due: Date?
   public var createdAt = Date()
@@ -183,7 +182,7 @@ public struct TaskSnapshot: Codable, Equatable {
 
   public init(
     title: String, note: String = "", isDone: Bool = false, doneAt: Date? = nil,
-    plannedStart: Date? = nil, durationMinutes: Int = 25, due: Date? = nil,
+    durationMinutes: Int = 25, due: Date? = nil,
     createdAt: Date = Date(), reminderOffsetMinutes: Int? = 0, listName: String = "",
     tags: [String] = [], flagged: Bool = false, repeatRule: String? = nil,
     checklist: [ChecklistItem] = [], ringsAsAlarm: Bool = false
@@ -192,7 +191,6 @@ public struct TaskSnapshot: Codable, Equatable {
     self.note = note
     self.isDone = isDone
     self.doneAt = doneAt
-    self.plannedStart = plannedStart
     self.durationMinutes = durationMinutes
     self.due = due
     self.createdAt = createdAt

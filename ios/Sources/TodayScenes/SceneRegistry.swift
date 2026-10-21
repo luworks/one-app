@@ -43,7 +43,6 @@ public enum TodaySceneID: String, CaseIterable, Codable, Sendable, Identifiable 
   case settingsSmartLists = "settings.smartLists"
   case settingsAlarms = "settings.alarms"
   case settingsAI = "settings.ai"
-  case settingsAutomaticChanges = "settings.ai.automaticChanges"
   case settingsActivity = "settings.activity"
   case settingsHolidays = "settings.calendar.holidays"
   case settingsAbout = "settings.about"

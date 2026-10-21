@@ -25,7 +25,7 @@ struct CaptureEditRoutingTests {
     let decision = Editing.decide(
       text: "move it to 5pm", plan: nil, items: [item], now: now, calendar: calendar, focus: item)
     #expect(decision.op == .move && decision.target == item.id)
-    #expect(decision.newStart == recovered.plannedStart(calendar: calendar))
+    #expect(decision.newStart == recovered.clockTime(calendar: calendar))
     #expect(item.start != decision.newStart)
     #expect(
       Editing.decide(

@@ -149,7 +149,7 @@ final class CRUDTests: XCTestCase {
     let dueDay =
       cal.isDate(tomorrow, equalTo: .now, toGranularity: .month)
       ? tomorrow : cal.date(byAdding: .day, value: -1, to: .now)!
-    // Due, the only date picker while Plan a time is off
+    // Due, the only date picker
     pickDate(app.datePickers.element(boundBy: 0), day: dueDay)
     app.buttons["task.save"].tap()
 

@@ -28,8 +28,8 @@ public struct Capture: Equatable, Codable, Sendable {
   /// The Reminders list a task goes to (`OneTask.listName`). nil = the app's default; the AI screen fills in the Inbox
   /// or a confident `ListGuess`, and the user can change it on the card.
   public var listName: String? = nil
-  /// The time is working time ("work on the report for 2 hours"), so the item is written with a planned time.
-  /// Every other clock time on a reminder is when it alerts: it is written as the reminder's due time, alert at 0 min.
+  /// The time is working time ("work on the report for 2 hours"). A reminder has one date, so it is written like any
+  /// other timed reminder (due at that time, alert at it).
   public var isWorkBlock: Bool = false
   /// Verbatim context retained when a concise title separates action from motivation.
   public var notes: String? = nil
@@ -37,28 +37,25 @@ public struct Capture: Equatable, Codable, Sendable {
   /// An alarm without a chosen time remains a preview, never an ordinary reminder.
   public var isReadyToAdd: Bool { !ringsAsAlarm || hour != nil }
 
-  public var plannedStart: Date? {
-    plannedStart(calendar: .current)
+  /// The clock time the line named, on its day.
+  public var clockTime: Date? {
+    clockTime(calendar: .current)
   }
 
-  public func plannedStart(calendar: Calendar) -> Date? {
+  public func clockTime(calendar: Calendar) -> Date? {
     guard let hour else { return nil }
     return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
   }
 
-  /// The dates a reminder made from this capture is written with. A reminder that alerts at a time is written like the
-  /// Quick Add sheet writes it: the time is its due time and the alert fires at it (reminderOffsetMinutes 0). Only working
-  /// time (`isWorkBlock`) and alarms keep a planned time, so principle 3 holds: planned time is never the deadline.
-  public var taskTiming: (plannedStart: Date?, due: Date?, alertMinutesBefore: Int?) {
+  /// The date a reminder made from this capture is written with: a clock time is its due time and the alert fires at it
+  /// (reminderOffsetMinutes 0), a bare day is a date-only due.
+  public var taskTiming: (due: Date?, alertMinutesBefore: Int?) {
     taskTiming(calendar: .current)
   }
 
-  public func taskTiming(calendar: Calendar) -> (
-    plannedStart: Date?, due: Date?, alertMinutesBefore: Int?
-  ) {
-    let start = plannedStart(calendar: calendar)
-    if alertsAtTime(calendar: calendar) { return (nil, start, 0) }
-    return (start, start == nil && hasDay ? day : nil, nil)
+  public func taskTiming(calendar: Calendar) -> (due: Date?, alertMinutesBefore: Int?) {
+    if let start = clockTime(calendar: calendar) { return (start, 0) }
+    return (hasDay ? day : nil, nil)
   }
 
   /// "New reminder", "New event", "New alarm": the card's first line.
@@ -81,7 +78,7 @@ public struct Capture: Equatable, Codable, Sendable {
   }
 
   public func alertsAtTime(calendar: Calendar) -> Bool {
-    kind == .task && !ringsAsAlarm && !isWorkBlock && plannedStart(calendar: calendar) != nil
+    kind == .task && !ringsAsAlarm && clockTime(calendar: calendar) != nil
   }
 
   /// What the card says will be created, in the words of the result: "Tomorrow 9:00 AM · alerts you", "Due Friday".
@@ -94,7 +91,7 @@ public struct Capture: Equatable, Codable, Sendable {
   public func isReadyToAdd(calendar: Calendar) -> Bool { isReadyToAdd }
 
   public func summary(now: Date, calendar: Calendar, locale: Locale) -> String {
-    let plannedStart = plannedStart(calendar: calendar)
+    let clockTime = clockTime(calendar: calendar)
     func dayText(_ date: Date) -> String {
       if calendar.isDate(date, inSameDayAs: now) { return "Today" }
       if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
@@ -125,15 +122,15 @@ public struct Capture: Equatable, Codable, Sendable {
     case .event where isAllDay:
       parts.append(dayText(day) + " · All day")
     case .event:
-      let start = plannedStart ?? day
+      let start = clockTime ?? day
       parts.append(withTime(start))
       if let d = durationMinutes { parts.append(DurationLabel.text(minutes: d)) }
     case .task where ringsAsAlarm:
-      parts.append("Alarm " + (plannedStart.map { withTime($0) } ?? ""))
+      parts.append("Alarm " + (clockTime.map { withTime($0) } ?? ""))
       if let rule = repeatRule.flatMap(RepeatRule.init(rawValue:)) { parts.append(rule.label) }
     case .task:
-      if let start = plannedStart {
-        parts.append((isWorkBlock ? "Planned " : "") + withTime(start))
+      if let start = clockTime {
+        parts.append(withTime(start))
       } else if hasDay {
         parts.append("Due " + dayText(day))
       } else {

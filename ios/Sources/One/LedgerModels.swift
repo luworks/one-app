@@ -68,27 +68,21 @@
     }
   }
 
-  /// A grant the user gave with "Always for 7 days" (see `AutonomyPolicy`). Revoking keeps the row (with `revoked`) for the record.
+  /// Retired: "Always for 7 days" grants are gone with Today's planned time. The model stays in the schema so
+  /// existing installs migrate; nothing reads or writes it.
   @Model
   package final class AIGrant {
     package var id: UUID
-    /// `GrantScope.rawValue`.
     package var scope: String
     package var granted: Date
     package var expires: Date
     package var revoked: Date?
 
-    package init(scope: GrantScope, granted: Date = .now) {
-      self.id = UUID()
-      self.scope = scope.rawValue
+    package init(id: UUID = UUID(), scope: String, granted: Date, expires: Date) {
+      self.id = id
+      self.scope = scope
       self.granted = granted
-      self.expires = Grants.expiry(from: granted)
-    }
-
-    package var info: GrantInfo? {
-      GrantScope(rawValue: scope).map {
-        GrantInfo(scope: $0, granted: granted, expires: expires, revoked: revoked)
-      }
+      self.expires = expires
     }
   }
 

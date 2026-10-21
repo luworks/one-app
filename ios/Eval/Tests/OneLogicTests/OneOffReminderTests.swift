@@ -21,7 +21,6 @@ final class OneOffReminderTests: XCTestCase {
     XCTAssertEqual(capture.hour, 11)
     XCTAssertEqual(capture.minute, 0)
     XCTAssertNil(capture.repeatRule)
-    XCTAssertNil(capture.taskTiming(calendar: calendar).plannedStart)
     XCTAssertEqual(
       capture.taskTiming(calendar: calendar).due,
       calendar.date(bySettingHour: 11, minute: 0, second: 0, of: now))
@@ -67,18 +66,16 @@ final class OneOffReminderTests: XCTestCase {
     }
   }
 
-  func testClockRolloverAndPlannedDeadlineSeparation() throws {
+  func testClockRollover() throws {
     let late = calendar.date(bySettingHour: 12, minute: 0, second: 0, of: now)!
     let capture = try XCTUnwrap(
       OneOffReminderRequest.capture(utterance, now: late, calendar: calendar))
     XCTAssertEqual(
       capture.day, calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)))
     XCTAssertEqual(capture.hour, 11)
-    XCTAssertNil(capture.taskTiming(calendar: calendar).plannedStart)
     let working = CaptureConversation.parse(
       "Work on the report tomorrow at 11am for 2 hours", now: now, calendar: calendar)
-    XCTAssertNotNil(working.taskTiming(calendar: calendar).plannedStart)
-    XCTAssertNil(working.taskTiming(calendar: calendar).due)
+    XCTAssertNotNil(working.taskTiming(calendar: calendar).due)
   }
 
   func testFailedDraftRoundTripsAndContinuationOnlyMatchesSameAction() throws {
