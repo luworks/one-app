@@ -118,24 +118,7 @@ public enum Preferences {
     }
   }
 
-  /// The hours offered for "Evening starts at"; `off` (-1) never opens Tomorrow by the clock.
-  public static let eveningChoices = [17, 18, 19, 20, off]
-  public static let off = -1
-
   // MARK: Readers for code that is not a view
-
-  /// The hour Today opens all of tomorrow and offers the evening review; nil when the choice is off.
-  public static func eveningStart(_ defaults: UserDefaults = .standard) -> Int? {
-    let hour = defaults.object(forKey: eveningHourKey) as? Int ?? eveningHour
-    if hour == off { return nil }
-    return eveningChoices.contains(hour) ? hour : eveningHour
-  }
-
-  /// The hour the review is offered: nil when it is off, or when Today does not show Tomorrow at all (the review row lives there).
-  public static func reviewStart(_ defaults: UserDefaults = .standard) -> Int? {
-    (defaults.object(forKey: showTomorrowKey) as? Bool ?? showTomorrow)
-      ? eveningStart(defaults) : nil
-  }
 
   public static func firstWeekdayChoice(_ defaults: UserDefaults = .standard) -> FirstWeekday {
     FirstWeekday(stored: defaults.string(forKey: firstWeekdayKey))

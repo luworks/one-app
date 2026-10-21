@@ -744,9 +744,6 @@
         recordTurn("plan", text)
         clearPreviews()
         proposePlan()
-      } else if SentenceRoute.isReviewRequest(text) {
-        recordTurn("review", text)
-        messages.append(reply(reviewSummary))
       } else if Editing.looksLikeEdit(
         text, items: editCandidates().items, now: now(), calendar: runtime.calendar)
       {
@@ -1649,33 +1646,6 @@
       show(feedback, card: "tidy")
     }
 
-    /// "Review today": what got done against what the day held, and what is left. Read only; moving or dropping what is
-    /// left happens in the Review today sheet on the Today tab, where each choice is a preview.
-    private var reviewSummary: String {
-      let now = now()
-      let items = tasks.enumerated().map {
-        EveningReview.Item(
-          id: $0.offset, isDone: $0.element.isDone, doneAt: $0.element.doneAt,
-          plannedStart: $0.element.plannedStart, due: $0.element.due,
-          repeats: $0.element.repeats != nil)
-      }
-      let summary = EveningReview.summary(items, now: now, calendar: runtime.calendar)
-      var lines = [EveningReview.headline(summary) + "."]
-      let left = summary.left.map { tasks[$0].title }
-      if !left.isEmpty {
-        lines.append("Left today:")
-        lines += left.prefix(5).map { "· " + $0 }
-        if left.count > 5 { lines.append("· and \(left.count - 5) more") }
-      }
-      if EveningReview.shows(
-        now: now, eveningHour: Preferences.reviewStart(presentation.defaults),
-        calendar: runtime.calendar), !left.isEmpty
-      {
-        lines.append("Open Review today on the Today tab to move or drop what's left.")
-      }
-      return lines.joined(separator: "\n")
-    }
-
     private var todaySummary: String {
       let cal = runtime.calendar
       let now = now()
@@ -1753,7 +1723,6 @@
     }
 
     package init(message: ChatMessage) { self.message = message }
-
   }
 
   /// One overdue reminder on the tidy card, with the date the user picked for it.

@@ -311,45 +311,6 @@ final class SettingsChoicesTests: XCTestCase {
     return header
   }
 
-  func testEveningHourSettingMovesTheReview() {
-    launch(now: "19:30")
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    _ = scrollToTomorrow()
-    XCTAssertTrue(
-      app.buttons["reviewToday"].waitForExistence(timeout: 3), "19:30 is after the default 18:00")
-    app.swipeDown(velocity: .fast)
-    app.swipeDown(velocity: .fast)
-
-    // Settings > Today > Evening starts at > Off.
-    openSettings()
-    let picker = reveal(element("settings.eveningHour"))
-    picker.tap()
-    let off = app.buttons["Off"]
-    XCTAssertTrue(off.waitForExistence(timeout: 3), "the menu lists the hours and Off")
-    XCTAssertTrue(
-      app.buttons.matching(NSPredicate(format: "label CONTAINS '7:00' OR label CONTAINS '19:00'"))
-        .firstMatch.exists)
-    off.tap()
-    closeSettings()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    _ = scrollToTomorrow()
-    XCTAssertFalse(app.buttons["reviewToday"].exists, "Off: no Review today row")
-  }
-
-  func testEveningHourPreferenceIsRespectedAtLaunch() {
-    launch(prefs: "eveningHour=20", now: "19:30")
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    _ = scrollToTomorrow()
-    XCTAssertFalse(app.buttons["reviewToday"].exists, "19:30 is before 20:00")
-  }
-
-  func testEarlierEveningHourOpensTheReviewSooner() {
-    launch(prefs: "eveningHour=17", now: "17:30")
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    _ = scrollToTomorrow()
-    XCTAssertTrue(app.buttons["reviewToday"].waitForExistence(timeout: 3), "17:30 is after 17:00")
-  }
-
   func testShowTomorrowOffHidesTheSection() {
     launch(prefs: "showTomorrow=0", now: "09:41")
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))

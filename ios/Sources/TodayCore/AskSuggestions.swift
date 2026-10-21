@@ -45,10 +45,10 @@ public enum SuggestionLanguage: String, Sendable {
 
 // MARK: - Routing mirror
 
-/// Where a sentence goes when it is sent from the Ask page, in the order `AskView.send` tries: tidy, plan, review,
+/// Where a sentence goes when it is sent from the Ask page, in the order `AskView.send` tries: tidy, plan,
 /// question, edit of an existing item, else a new item. Pure, so a suggestion can be checked before it is shown.
 public enum SentenceRoute: Equatable {
-  case tidy, plan, review, question
+  case tidy, plan, question
   case edit(EditDecision)
   case capture(Capture)
 
@@ -63,14 +63,6 @@ public enum SentenceRoute: Equatable {
     }
   }
 
-  /// "Review today" / "回顾今天": a look back at what got done and what is left.
-  public static func isReviewRequest(_ text: String) -> Bool {
-    has(
-      text,
-      #"^\s*(?:review|recap)\s+(?:my\s+)?(?:today|the day|day)\s*[.!]?\s*$|^\s*(?:回顾|复盘|总结)(?:一下)?今天|^\s*今天(?:回顾|复盘|总结)"#
-    )
-  }
-
   /// Same words `Understanding.asksForAlarmStrict` looks for (that file needs the model framework, this one does not).
   public static func asksForAlarm(_ text: String) -> Bool {
     has(text, #"wake\s+me|\balarm\b|\btimer\b|计时|闹钟|叫醒|叫我起床|起床"#)
@@ -82,7 +74,6 @@ public enum SentenceRoute: Equatable {
     let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     if OverdueTidy.isRequest(text) { return .tidy }
     if isPlanRequest(text) { return .plan }
-    if isReviewRequest(text) { return .review }
     if Editing.isQuestion(text) { return .question }
     if Editing.looksLikeEdit(text, items: items, now: now, calendar: calendar) {
       let d = Editing.decide(text: text, plan: nil, items: items, now: now, calendar: calendar)
@@ -95,7 +86,7 @@ public enum SentenceRoute: Equatable {
   /// A "which one?" question or "when?" question is not enough for a suggestion, because the point is one tap.
   public var isActionable: Bool {
     switch self {
-    case .tidy, .plan, .review, .question: return true
+    case .tidy, .plan, .question: return true
     case .edit(let d):
       return (d.op == .move && d.target != nil && d.newStart != nil)
         || (d.op == .delete && d.target != nil)
@@ -120,7 +111,6 @@ public enum SentenceRoute: Equatable {
     switch self {
     case .tidy: return "tidy"
     case .plan: return "plan"
-    case .review: return "review"
     case .question: return "question"
     case .edit(let d): return "edit:" + (d.target ?? "?")
     case .capture(let c): return "capture:" + c.title.lowercased()
@@ -130,7 +120,7 @@ public enum SentenceRoute: Equatable {
 
 /// What a candidate's sentence must land on. Checked against `SentenceRoute`, for the rule sentence and for any rewording.
 public enum SuggestionExpectation: Equatable, Sendable {
-  case tidy, plan, review, question
+  case tidy, plan, question
   /// Move this item (by title) to this time.
   case move(title: String, to: Date)
   /// A new reminder at this time of day (not an alarm), `day` days from today.
@@ -144,7 +134,7 @@ public enum SuggestionExpectation: Equatable, Sendable {
   ) -> Bool {
     guard route.isActionable else { return false }
     switch (self, route) {
-    case (.tidy, .tidy), (.plan, .plan), (.review, .review), (.question, .question): return true
+    case (.tidy, .tidy), (.plan, .plan), (.question, .question): return true
     case (.move(let title, let to), .edit(let d)):
       guard d.op == .move, let new = d.newStart, let id = d.target,
         items.first(where: { $0.id == id })?.title == title
@@ -279,7 +269,7 @@ public struct SuggestionContext: Equatable {
     }
   }
 
-  /// Still open for today: planned today, or no plan and due today (the same rule the evening review uses).
+  /// Still open for today: planned today, or no plan and due today (planned work takes precedence over the deadline).
   func leftToday(_ cal: Calendar = .current) -> [Task] {
     tasks.filter { t in
       guard !t.isDone else { return false }
@@ -344,7 +334,7 @@ public struct SuggestionContext: Equatable {
 
 public struct SuggestionCandidate: Equatable, Identifiable, Sendable {
   public enum Kind: String, Sendable {
-    case plan, tidy, review, whatsLeft, moveTask, moveEvent, habit, prepare, leave, wake,
+    case plan, tidy, whatsLeft, moveTask, moveEvent, habit, prepare, leave, wake,
       fallbackReminder
   }
 
@@ -453,25 +443,13 @@ public enum SuggestionRules {
           why: "\(n) overdue reminder\(n == 1 ? "" : "s")"))
     }
 
-    // Review today, from the evening hour (18:00 unless changed in Settings), when the day held anything.
-    let left = ctx.leftToday(cal)
-    let done = ctx.doneToday(cal)
-    let hasReview =
-      (EveningReview.eveningHour.map { h >= Double($0) } ?? false) && done + left.count > 0
-    if hasReview {
-      out.append(
-        .init(
-          id: "review", kind: .review, text: zh ? "回顾今天" : "Review today", score: 88,
-          expectation: .review,
-          why: "It is evening: \(done) done, \(left.count) left today"))
-    }
-
     // What's left today.
+    let left = ctx.leftToday(cal)
     let upcomingToday = ctx.upcomingEvents().count
     let remaining = left.count + upcomingToday
     let leftScore: Double =
       remaining == 0
-      ? 20 : (hasReview ? 30 : 38 + min(Double(remaining), 6) * 2 + (h >= 12 ? 4 : 0))
+      ? 20 : 38 + min(Double(remaining), 6) * 2 + (h >= 12 ? 4 : 0)
     out.append(
       .init(
         id: "left", kind: .whatsLeft, text: zh ? "今天还剩什么？" : "What's left today?", score: leftScore,
@@ -680,7 +658,7 @@ public enum SuggestionRules {
         asked.contains(norm(c.text))
         || routes.contains { r in
           switch (r, c.expectation) {
-          case (.tidy, .tidy), (.plan, .plan), (.review, .review), (.question, .question):
+          case (.tidy, .tidy), (.plan, .plan), (.question, .question):
             return true
           default: return false
           }

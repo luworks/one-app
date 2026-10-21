@@ -371,7 +371,7 @@ final class ChatRoutingTests: XCTestCase {
   func testSupportedOperationQuestionsReachExistingDispatch() {
     for text in [
       "Can you plan my day?", "Could you schedule my day?", "Can you tidy overdue?",
-      "Could you tidy my 2 overdue reminders?", "总结一下今天好吗？",
+      "Could you tidy my 2 overdue reminders?",
     ] {
       // Unsure continues to the existing planner handlers, rather than generic chat/capture.
       XCTAssertEqual(ChatRouting.intent(text), .unsure, text)
@@ -380,9 +380,15 @@ final class ChatRoutingTests: XCTestCase {
       "How does Plan my day work?", "Does plan my day move events?",
       "Can you explain tidy overdue?", "Did you plan my day?",
       "Could you tell me how to tidy overdue?", "总结一下今天是什么意思？",
+      "总结一下今天好吗？",
     ] {
       XCTAssertEqual(ChatRouting.intent(text), .conversation, text)
     }
+  }
+
+  func testRemovedReviewRequestUsesOrdinaryUncertainRouting() {
+    XCTAssertEqual(ChatRouting.intent("Review today"), .unsure)
+    XCTAssertFalse(ChatRouting.isSupportedOperationRequest("Review today"))
   }
 
   func testEnglishRequestBoundaryDoesNotDependOnTitleLanguage() {
@@ -400,18 +406,18 @@ final class ChatRoutingTests: XCTestCase {
   func testOperationBoundaryRequiresCompleteSupportedRequest() {
     for text in [
       "Plan my day", "Can you plan my day?", "Could you tidy my 2 overdue reminders?",
-      "Tidy 2 overdue", "整理2条过期提醒", "总结一下今天好吗？", "Review today",
+      "Tidy 2 overdue", "整理2条过期提醒",
     ] {
       XCTAssertTrue(ChatRouting.isSupportedOperationRequest(text), text)
       XCTAssertTrue(
-        SentenceRoute.isPlanRequest(text) || OverdueTidy.isRequest(text)
-          || SentenceRoute.isReviewRequest(text), "Must reach an existing handler: \(text)")
+        SentenceRoute.isPlanRequest(text) || OverdueTidy.isRequest(text),
+        "Must reach an existing handler: \(text)")
     }
     for text in [
       "Does plan my day move events at 5pm?", "How does Plan my day work?",
       "Can you explain tidy overdue?", "Did you plan my day?",
       "Can you plan my day without asking?", "总结一下今天是什么意思？",
-      "Could you review tomorrow?", "Can you tidy my overdue?",
+      "Review today", "总结一下今天好吗？", "Could you review tomorrow?", "Can you tidy my overdue?",
     ] {
       XCTAssertFalse(ChatRouting.isSupportedOperationRequest(text), text)
     }

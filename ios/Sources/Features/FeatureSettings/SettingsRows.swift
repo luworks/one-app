@@ -12,12 +12,10 @@
 
   /// Settings > Today: the timeline's extras. Rows only; they sit inside the Today section.
   package struct TodayTimelineSettings: View {
-    @Environment(PlannerPresentation.self) private var presentation
     package init() {}
     @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
     @AppStorage(Preferences.showSnoozeKey) private var showsSnooze = Preferences.showSnooze
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
-    @AppStorage(Preferences.eveningHourKey) private var eveningHour = Preferences.eveningHour
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
 
@@ -34,17 +32,7 @@
       )
       ExplainedToggle(
         title: "Show Tomorrow", isOn: $showsTomorrow,
-        caption: "A short look at tomorrow at the end of Today.")
-      if showsTomorrow {
-        MenuChoiceRow(
-          title: "Evening starts at", selection: $eveningHour,
-          caption:
-            "From then Today shows all of tomorrow and offers Review today. Off keeps Tomorrow short.",
-          identifier: "settings.eveningHour"
-        ) {
-          ForEach(Preferences.eveningChoices, id: \.self) { Text(title(forHour: $0)).tag($0) }
-        }
-      }
+        caption: "Expand Tomorrow at the end of Today to see all its items.")
       ExplainedToggle(
         title: "Show free time", isOn: $showsFreeTime,
         caption: "Quiet “Free 1 h” lines in the gaps between your plans.")
@@ -53,18 +41,6 @@
         caption:
           "A reminder due today with no time gets a faint suggested time in a free gap. Off lists it under Anytime today. Nothing is scheduled either way."
       )
-    }
-
-    private func title(forHour hour: Int) -> String {
-      guard hour != Preferences.off,
-        let date = presentation.calendar.date(
-          bySettingHour: hour, minute: 0, second: 0, of: presentation.now)
-      else { return "Off" }
-      return date.formatted(
-        Date.FormatStyle(
-          locale: presentation.locale, calendar: presentation.calendar,
-          timeZone: presentation.calendar.timeZone
-        ).hour().minute())
     }
   }
 

@@ -54,20 +54,8 @@ final class AskSuggestionTests: XCTestCase {
     launch(at: "21:30")
     let night = chipLabels()
     XCTAssertNotEqual(morning, night, "morning \(morning) vs night \(night)")
-    XCTAssertTrue(night.contains("Review today"), "after 18:00 the day can be reviewed: \(night)")
+    XCTAssertFalse(night.contains("Review today"))
     XCTAssertFalse(night.contains("Plan my day"), "too late to plan: \(night)")
-  }
-
-  func testReviewTodayAnswersWithWhatGotDone() {
-    launch(at: "21:30")
-    _ = chipLabels()
-    chips.matching(NSPredicate(format: "label == %@", "Review today")).firstMatch.tap()
-    let reply = app.staticTexts.containing(
-      NSPredicate(format: "label MATCHES %@", #"(?s).* of .* done\..*"#)
-    ).firstMatch
-    XCTAssertTrue(
-      reply.waitForExistence(timeout: 5), "an answer, not a new reminder called “Review today”")
-    XCTAssertFalse(app.buttons["Add"].exists, "nothing to add")
   }
 
   private func send(_ text: String) {
@@ -109,20 +97,6 @@ final class AskSuggestionTests: XCTestCase {
     XCTAssertFalse(app.buttons["Add"].exists)
     app.buttons["tidy.apply"].tap()
     XCTAssertTrue(reply(containing: "Moved 2 reminders.").waitForExistence(timeout: 5))
-  }
-
-  func testChineseQuestionReviewUsesExistingReadOnlySummary() {
-    launch(at: "21:30")
-    send("总结一下今天好吗？")
-    let summary = app.staticTexts.containing(
-      NSPredicate(format: "label MATCHES %@", #"(?s).* of .* done\..*"#)
-    ).firstMatch
-    XCTAssertTrue(summary.waitForExistence(timeout: 10))
-    send("总结一下今天是什么意思？")
-    XCTAssertTrue(reply(containing: "我们可以直接聊聊").waitForExistence(timeout: 10))
-    XCTAssertFalse(app.buttons["Add"].exists)
-    XCTAssertFalse(app.buttons["plan.apply"].exists)
-    XCTAssertFalse(app.buttons["tidy.apply"].exists)
   }
 
   func testCanonicalRemainingTodayQuestionReadsCurrentDataset() {

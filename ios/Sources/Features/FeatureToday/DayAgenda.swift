@@ -62,9 +62,6 @@
       _showsTomorrow = AppStorage(
         wrappedValue: Preferences.showTomorrow, Preferences.showTomorrowKey,
         store: presentation.defaults)
-      _eveningHour = AppStorage(
-        wrappedValue: Preferences.eveningHour, Preferences.eveningHourKey,
-        store: presentation.defaults)
       _showsFreeTime = AppStorage(
         wrappedValue: Preferences.showFreeTime, Preferences.showFreeTimeKey,
         store: presentation.defaults)
@@ -89,15 +86,11 @@
     @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
     @AppStorage(Preferences.showSnoozeKey) private var showsSnooze = Preferences.showSnooze
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
-    @AppStorage(Preferences.eveningHourKey) private var eveningHour = Preferences.eveningHour
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @AppStorage(Preferences.suggestTimesKey) private var suggestsTimes = Preferences.suggestTimes
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(HealthLineModel.self) private var health
-    /// The open "Review today" sheet: tomorrow and its first items, taken when the row is tapped.
-    @State private var review: ReviewRequest?
-
     private var cal: Calendar {
       Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
     }
@@ -105,7 +98,7 @@
     @State private var expandsTomorrow = false
     @State private var overdueRevealRequest = 0
     @AccessibilityFocusState private var overdueSectionFocused: Bool
-    /// Refreshed every minute for the Now line and time-dependent review availability.
+    /// Refreshed every minute for the Now line and time-dependent timeline content.
     @State private var now: Date
     /// A repeating system event whose Delete is waiting for "this event or the series?".
     @State private var pendingDelete: CalEntry?
@@ -299,14 +292,6 @@
           changeFocus(.snoozed(until: until), target: target)
         }
       }
-      .sheet(item: $review) { r in
-        EveningReviewSheet(
-          now: now, tomorrow: r.tomorrow, peek: r.peek, actions: actions, reminders: reminders,
-          ledger: ledger
-        )
-        .environment(actions)
-        .environment(presentation)
-      }
     }
 
     @ViewBuilder
@@ -372,7 +357,6 @@
     private func tomorrowSection() -> some View {
       let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: day)) ?? day
       let next = items(on: tomorrow, now: now)
-      let evening = eveningHour == Preferences.off ? nil : eveningHour
       let entries = next.entries.filter {
         switch $0 {
         case .timeline(.gap), .timeline(.nowMarker): false
@@ -386,23 +370,6 @@
         identifier: "tomorrowHeader")
       if expandsTomorrow {
         Section {
-          if EveningReview.shows(now: now, eveningHour: evening, calendar: cal) {
-            Button {
-              review = ReviewRequest(
-                tomorrow: tomorrow,
-                peek: Array(entries.compactMap(Self.peek).prefix(EveningReview.tomorrowLimit)))
-            } label: {
-              Label("Review today", systemImage: "checklist.checked")
-                .font(.subheadline)
-                .foregroundStyle(Color.accentColor)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .listRowSeparator(.hidden)
-            .accessibilityHint("Done and left today, and tomorrow's first items")
-            .accessibilityIdentifier("reviewToday")
-          }
           if entries.isEmpty {
             Text("Nothing planned").foregroundStyle(.secondary)
               .listRowSeparator(.hidden)
@@ -424,26 +391,6 @@
             case .timeline(let item): timelineRow(item, on: tomorrow)
             }
           }
-        }
-      }
-    }
-
-    /// Tomorrow's entry as a plain line for the review; the Now line and free time are left out.
-    private static func peek(_ entry: DayEntry) -> ReviewPeek? {
-      switch entry {
-      case .allDay(let e): return ReviewPeek(id: entry.id, time: nil, title: e.title)
-      case .externalAllDay(let e): return ReviewPeek(id: entry.id, time: nil, title: e.title)
-      case .anytime(let t): return ReviewPeek(id: entry.id, time: nil, title: t.title)
-      case .timeline(let item):
-        switch item {
-        case .event(let e, let d): return ReviewPeek(id: entry.id, time: d, title: e.title)
-        case .external(let e): return ReviewPeek(id: entry.id, time: e.start, title: e.title)
-        case .task(let t), .due(let t):
-          return ReviewPeek(id: entry.id, time: item.start, title: t.title)
-        case .suggested(let t, let d): return ReviewPeek(id: entry.id, time: d, title: t.title)
-        case .alarm(let a, let d):
-          return ReviewPeek(id: entry.id, time: d, title: a.label.isEmpty ? "Alarm" : a.label)
-        case .gap, .nowMarker: return nil
         }
       }
     }
@@ -975,12 +922,6 @@
         ($0.due ?? .distantPast) < ($1.due ?? .distantPast)
       }
     }
-  }
-
-  struct ReviewRequest: Identifiable {
-    let id = UUID()
-    let tomorrow: Date
-    let peek: [ReviewPeek]
   }
 
   /// What one day holds, in the order the day view shows it.

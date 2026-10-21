@@ -108,7 +108,7 @@ final class AskSuggestionsTests: XCTestCase {
     XCTAssertEqual(kinds(top).first, .moveTask, "a slipped plan is the most useful thing to fix")
   }
 
-  func testEveningAfterSixOffersReviewAndAnAlarmForAnEarlyStart() {
+  func testEveningOffersAnAlarmForAnEarlyStart() {
     let ctx = make(
       now: at(20, 30),
       events: [event("Standup", 9, 30)],
@@ -118,8 +118,6 @@ final class AskSuggestionsTests: XCTestCase {
       ],
       tomorrowFirst: event("Flight", 8, 15, day: 1))
     let top = SuggestionRules.top(ctx, calendar: cal)
-    XCTAssertEqual(top.first?.kind, .review)
-    XCTAssertEqual(top.first?.text, "Review today")
     XCTAssertTrue(kinds(top).contains(.wake))
     XCTAssertEqual(
       top.first(where: { $0.kind == .wake })?.text, "Wake me at 6:30am tomorrow",
@@ -333,8 +331,6 @@ final class AskSuggestionsTests: XCTestCase {
     XCTAssertEqual(route("整理3条过期提醒"), .tidy)
     XCTAssertEqual(route("What's left today?"), .question)
     XCTAssertEqual(route("今天还剩什么？"), .question)
-    XCTAssertEqual(route("Review today"), .review)
-    XCTAssertEqual(route("回顾今天"), .review)
     if case .edit(let d) = route("Move Write up design notes to 3:15pm") {
       XCTAssertEqual(d.op, .move)
     } else {
@@ -357,9 +353,6 @@ final class AskSuggestionsTests: XCTestCase {
     } else {
       XCTFail("capture")
     }
-    XCTAssertFalse(
-      route("Review the design doc today").isActionable
-        && route("Review the design doc today") == .review)
   }
 
   // MARK: Blend with the model's answer
