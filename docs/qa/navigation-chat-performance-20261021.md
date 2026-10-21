@@ -129,3 +129,83 @@ this mock fixture. No optimization PR is warranted from these data alone.
 Physical latency and interaction remain unknown. The separate physical QA v2
 owner reported no authorized signed runner path and performed no installation or
 phone interaction; that report is not a physical pass for this task.
+
+## Profile v2: successful live attachment, no product repair
+
+Preserved local measurement commit `6923f5e00b4eb484c9216293d8d5d3e502d1b29b`.
+One additional invocation of the same populated Chat method completed at
+`tests/results/runs/today-qa-20261021-015305-40b84047`: **1/1 passed**, UI/shutdown
+exit 0, no journal errors, 157.145s runner elapsed. The engineering authority
+invalidated its broad source fingerprint after the earlier measurement/docs work
+and performed a 13.683s incremental build validation. Its build log contains no
+Swift compilation; the Mock executable remains byte-identical to baseline
+`df04e02edd7a67f09f4840f67325169c7bd9fe507b613b6c51a62b5e33969406`.
+The new source fingerprint is
+`c5778cc02c822d70d5af23e85ce1c111d127b46edc25427cbb1139eefac6f013`.
+No product, test, fixture or selector was changed for this run.
+
+Evidence is retained under the primary performance directory's `profile-v2/`:
+complete `first-chat.trace`, exported raw `time-profile.xml` and `time-sample.xml`,
+closed-run diagnostic stdout, `metadata.json`, capture/analysis scripts,
+`clock-calibration.json`, `analysis.json` (including full selected stacks), and
+`categories.json`. The original failed capture remains untouched.
+
+The watcher was armed before the runner and detected actual owned app PID **8291**
+at 01:54:36.419 PDT. Adding the explicit simulator `--device` argument made this
+attachment succeed (exit 0). This corrects the earlier capture setup; it does not
+prove the historical failure's sole cause. Time Profiler recorded
+01:54:42.791–01:54:55.756 PDT, before the first Chat tap (XCTest approximately
+01:54:49–51), while this same PID remained alive through 01:54:59. No fallback
+`sample` invocation or second capture was needed. A warning about one table
+without a known input source is retained verbatim in `xctrace.log`; the CPU
+sample tables are nonempty and symbolized.
+
+First-layout times were **1005.336 / 629.127 / 520.305ms**; retained-editor reopen
+was **129.858 / 194.186 / 190.823ms**. Only the first process was profiled. Its
+focus-return-to-layout interval was **751.779ms**; the subsequent processes were
+367.295 / 266.993ms. The profiled first value is consistent in scale with the
+natural baseline's 669–1013ms, but profiler and startup overhead prevent a speed
+comparison. No before/after improvement is claimed.
+
+The existing endpoint signposts were not included by this template's configured
+PointsOfInterest categories (export has zero signpost rows). Alignment therefore
+uses the retained app monotonic endpoints, a bracketed post-run host
+`mach_absolute_time`/wall-clock calibration, and trace wall start. Dated app logs
+provide a cross-check: keyboard focus logging at 01:54:51.565 and keyboard render
+logging at 01:54:51.616 lie between focus return and the composer layout.
+This is approximate cross-clock attribution, not signpost-exact boundary proof.
+The Python watcher's process-relative monotonic values are not subtracted from
+app uptime. A future boundary-sensitive capture should explicitly include the
+PerformanceTrace signpost category and take calibration before and after capture.
+
+There are **476 running main-thread samples** in the aligned first Chat interval,
+including **306 after focus return**. In the latter interval, 155 stacks include
+`UIKeyboardSceneDelegate _reloadInputViewsForResponder`, 59 include `dlopen_from`,
+71 include Swift protocol-conformance lookup, and 296 include SwiftUI hosting
+layout. These are overlapping inclusive sample counts, not additive elapsed
+milliseconds or wall-time percentages. Keyboard paths include first
+`UIKeyboardAutomatic` creation, input-assistant view loading and TextInputUI
+library loading; other stacks show SwiftUI/AttributeGraph rendering and runtime
+metadata work. Startup/before-Chat samples separately contain SwiftUI host layout
+and conformance lookup, with zero keyboard-reload matches in that slice. This
+prevents mislabeling all startup cost as Chat cost.
+
+**Confidence:** actual keyboard/input-view construction and SwiftUI/runtime work
+are now observed within the delayed first-layout window. This is stronger than
+an empty callgraph, but does not attribute the entire 752ms or establish a narrow,
+removable app-owned hotspot. Suggestion-rule symbols have zero matches and
+conversation history has one match in the full Chat interval; sampling absence
+does not prove these pipelines cost nothing. Waiting-thread costs are not covered
+by this running-thread template. Framework symbols and a profiled Debug simulator
+alone do not justify removing input-assistant behavior, changing IME, prewarming
+heavy work at launch, or restructuring the floating panel.
+
+No product fix, additional design change, PR, unit rerun, full UI run, live data
+write, phone operation, signing change or navigation expansion was made. The exact
+draft typing/Close/reopen assertions still pass. The narrower unresolved boundary
+is separating framework cold construction from app-owned rendering under exact
+signpost alignment; there is no evidence-backed safe repair to publish yet.
+The owned simulator was shut down by the runner, the Device panel was closed,
+and host/cache locks were confirmed free. The PR148 phone delivery worker was
+told the heavy window was released and could start its authorized incremental
+LiveDebug build. No further heavy profiling run is queued.
