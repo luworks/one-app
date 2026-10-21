@@ -215,6 +215,49 @@ final class PerformanceClimbTests: XCTestCase {
     }
   }
 
+  func testPopulatedHistorySelectedDayNavigation() {
+    app.launchArguments =
+      TestData.fixtureArguments("populated-history.json") + [
+        "-performanceTrace", "-uiTestingNow", "09:41",
+      ]
+    app.launch()
+    sample("app_init_to_content_layout")
+    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap(
+      "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+      ready: element("calendar.monthPager"))
+    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
+    let parts = Calendar.current.dateComponents([.year, .month, .day], from: tomorrow)
+    let day = app.buttons[
+      String(format: "day.%04d-%02d-%02d", parts.year!, parts.month!, parts.day!)]
+    XCTAssertTrue(day.waitForExistence(timeout: 5))
+    day.tap()
+    XCTAssertTrue(day.isSelected)
+    let agenda = element("calendar.dayList")
+    for title in ["Tomorrow agenda event", "Tomorrow agenda reminder"] {
+      XCTAssertTrue(
+        agenda.descendants(matching: .any).matching(
+          NSPredicate(format: "label BEGINSWITH %@", title)
+        ).firstMatch.waitForExistence(timeout: 5))
+    }
+    XCTAssertFalse(agenda.staticTexts["Today meeting 00"].exists)
+    day.tap()
+    XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
+    XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Tomorrow agenda event"].exists)
+    captureNavigation("populated-selected-tomorrow")
+    for _ in 0..<2 {
+      tap("Calendar", sample: "today_to_calendar.month", ready: element("calendar.monthPager"))
+      XCTAssertTrue(day.isSelected)
+      tap("Today", sample: "calendar.month_to_today", ready: app.staticTexts["todayDate"])
+      XCTAssertTrue(app.staticTexts["Tomorrow agenda event"].exists)
+    }
+    app.buttons["Back to today"].tap()
+    XCTAssertFalse(app.buttons["Back to today"].exists)
+    XCTAssertFalse(app.staticTexts["Tomorrow agenda event"].exists)
+    captureNavigation("populated-back-to-today")
+  }
+
   private func captureNavigation(_ name: String) {
     let capture = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
     capture.name = "navigation-response-\(name)"

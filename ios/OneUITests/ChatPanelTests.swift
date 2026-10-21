@@ -2,6 +2,44 @@ import XCTest
 
 @MainActor
 final class ChatPanelTests: XCTestCase {
+  /// Three fresh processes distinguish first presentation from retained-editor reopening.
+  /// App trace marks measure layout; XCTest's typing interval is reported separately.
+  func testPopulatedFirstOpenAndReopenEvidence() {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launchArguments =
+      TestData.launchArguments + ["-performanceTrace", "-uiTestingNow", "09:41"]
+    for process in 0..<3 {
+      app.launch()
+      let chat = app.buttons["Ask AI or add anything"]
+      XCTAssertTrue(chat.waitForExistence(timeout: 5))
+      let start = ProcessInfo.processInfo.systemUptime
+      chat.tap()
+      let field = app.textViews["ask-input"].firstMatch
+      XCTAssertTrue(field.waitForExistence(timeout: 5))
+      field.tap()
+      let draft = "Unsent populated draft \(process)"
+      field.typeText(draft)
+      XCTAssertEqual(field.value as? String, draft)
+      print(
+        "CHAT_UI process=\(process) tap_call_to_verified_text_ms=\((ProcessInfo.processInfo.systemUptime - start) * 1000) includes_XCTest_lookup_idle_tap_and_typing=true"
+      )
+      app.buttons["Close"].firstMatch.tap()
+      XCTAssertTrue(field.waitForNonExistence(timeout: 5))
+      XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
+      chat.tap()
+      XCTAssertTrue(field.waitForExistence(timeout: 5))
+      XCTAssertEqual(field.value as? String, draft)
+      XCTAssertFalse(app.buttons["capture-open"].exists)
+      XCTAssertFalse(app.buttons["Add"].exists)
+      let shot = XCTAttachment(screenshot: app.screenshot())
+      shot.name = "Populated Chat process \(process), retained unsent draft"
+      shot.lifetime = .keepAlways
+      add(shot)
+      app.terminate()
+    }
+  }
+
   func testTapToUsableComposerEvidence() {
     continueAfterFailure = false
     let app = XCUIApplication()
