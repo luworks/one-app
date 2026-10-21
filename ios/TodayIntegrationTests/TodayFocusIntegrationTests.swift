@@ -422,9 +422,10 @@
         labels.contains(event.title.lowercased()),
         "The actual rendered pixels must contain the imported Calendar: \(labels)")
       #expect(
-        labels.contains(returned.title.lowercased()),
-        "Expired cross-day Snooze must render its exact source title: \(labels)")
-      #expect(labels.contains("returned to today"))
+        !labels.contains(returned.title.lowercased()),
+        "Expired Snooze follows the original occurrence date without extra history: \(labels)")
+      #expect(!labels.contains("returned to today"))
+      #expect(actions.focus.state(for: returnedID, now: runtime.now()) == nil)
       #expect(reminderSync.isConnected && calendar.isOn && calendar.isReady)
       #expect(rangeReads > 0)
       #expect(reminderSync.focusIdentity(reminder) == .available(remote.focusIdentity!))

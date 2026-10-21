@@ -161,6 +161,65 @@ final class TodayFocusTests: XCTestCase {
     app.closeSidebar()
   }
 
+  func testCrossDayReleaseUsesOriginalDatesWithoutReturnHistory() {
+    let app = XCUIApplication()
+    let store = "focus-release-\(UUID().uuidString)"
+    let cal = Calendar.current
+    let first = cal.date(from: DateComponents(year: 2026, month: 10, day: 20, hour: 9))!
+    let second = cal.date(byAdding: .day, value: 1, to: first)!
+    func arguments(_ fixture: String, _ now: Date) -> [String] {
+      TestData.fixtureArguments(fixture) + [
+        "-uiTestingStore", store, "-uiTestingNow", ISO8601DateFormatter().string(from: now),
+        "-uiTestingPrefs", "showTomorrow=1,showSettle=1,showSnooze=1,showFreeTime=0,suggestTimes=0",
+        "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
+      ]
+    }
+    app.launchArguments = arguments("remove-returned-to-today.json", first)
+    app.launch()
+    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    act("Settle", on: "Old settled occurrence", in: app)
+    act("Settle", on: "Old explicitly restored occurrence", in: app)
+    restore("Old explicitly restored occurrence", section: "settled", in: app)
+    app.terminate()
+    app.launchArguments = arguments("empty-relaunch.json", second)
+    app.launch()
+    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    reveal(
+      app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "New day meeting,"))
+        .firstMatch, in: app)
+    XCTAssertTrue(app.staticTexts["New day task"].exists)
+    reveal(section("settled", in: app), in: app)
+    screenshot("cross-day-release")
+    let ax = XCTAttachment(string: app.debugDescription)
+    ax.name = "cross-day-release-ax"
+    ax.lifetime = .keepAlways
+    add(ax)
+    XCTAssertFalse(app.staticTexts["Returned to Today"].exists)
+    XCTAssertFalse(
+      app.descendants(matching: .any).matching(
+        NSPredicate(format: "label CONTAINS %@", "Old settled occurrence")
+      ).firstMatch.exists)
+    XCTAssertFalse(
+      app.descendants(matching: .any).matching(
+        NSPredicate(format: "label CONTAINS %@", "Old explicitly restored occurrence")
+      ).firstMatch.exists)
+    XCTAssertEqual(section("settled", in: app).label, "Settled (0)")
+    reveal(section("overdue", in: app), in: app)
+    section("overdue", in: app).tap()
+    reveal(app.buttons["Complete Normal overdue"].firstMatch, in: app)
+    act("Settle", on: "New day meeting", in: app)
+    reveal(section("settled", in: app), in: app)
+    XCTAssertEqual(section("settled", in: app).label, "Settled (1)")
+    let tomorrow = app.buttons["tomorrowHeader"].firstMatch
+    reveal(tomorrow, in: app)
+    tomorrow.tap()
+    reveal(
+      app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Tomorrow meeting,"))
+        .firstMatch, in: app)
+    screenshot("cross-day-preserved-sections")
+    XCTAssertTrue(app.buttons["Ask AI or add anything"].exists)
+  }
+
   func testVisibilitySettingsKeepExistingChoicesAcrossRelaunchAndReenable() {
     let store = "focus-visibility-\(UUID().uuidString)"
     let app = launch(store: store)
