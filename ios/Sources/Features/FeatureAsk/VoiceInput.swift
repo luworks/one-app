@@ -74,9 +74,7 @@
         // CoreAudio input deadlocks in the simulator; dictation is device-only.
         onState(.unavailable)
       #else
-        let speech = await withCheckedContinuation { c in
-          SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) }
-        }
+        let speech = await Self.requestSpeechAuthorization()
         guard generation == token, !Task.isCancelled else { return }
         let mic = await AVAudioApplication.requestRecordPermission()
         guard generation == token, !Task.isCancelled else { return }
@@ -126,6 +124,15 @@
       #endif
     }
 
+    /// TCC calls the handler on a background queue. Building the closure here, outside the
+    /// main actor, keeps Swift 6 from asserting main-actor isolation inside it (a crash).
+    nonisolated private static func requestSpeechAuthorization() async
+      -> SFSpeechRecognizerAuthorizationStatus
+    {
+      await withCheckedContinuation { c in
+        SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) }
+      }
+    }
     nonisolated private static func tapBlock(_ request: SFSpeechAudioBufferRecognitionRequest)
       -> AVAudioNodeTapBlock
     {
