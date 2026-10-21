@@ -27,8 +27,7 @@ final class AskCardTests: XCTestCase {
     XCTAssertFalse(c.summary.contains("Planned"), c.summary)
     // Written as a due time with the alert at it: the same as Quick Add.
     let t = c.taskTiming
-    XCTAssertNil(t.plannedStart)
-    XCTAssertEqual(t.due, c.plannedStart)
+    XCTAssertEqual(t.due, c.clockTime)
     XCTAssertEqual(t.alertMinutesBefore, 0)
   }
 
@@ -39,19 +38,16 @@ final class AskCardTests: XCTestCase {
     XCTAssertEqual(c.taskTiming.alertMinutesBefore, 0)
   }
 
-  func testWorkTimeStaysPlanned() {
+  func testWorkTimeIsAnOrdinaryTimedReminder() {
     for line in [
       "work on the report tomorrow at 2pm", "write the proposal tomorrow at 2pm for 2 hours",
     ] {
       let c = parse(line)
-      XCTAssertTrue(c.isWorkBlock, line)
-      XCTAssertFalse(c.alertsAtTime, line)
-      XCTAssertTrue(c.summary.hasPrefix("Planned "), c.summary)
-      XCTAssertFalse(c.summary.contains("alerts you"), c.summary)
+      XCTAssertTrue(c.alertsAtTime, line)
+      XCTAssertFalse(c.summary.contains("Planned"), c.summary)
       let t = c.taskTiming
-      XCTAssertEqual(t.plannedStart, c.plannedStart, line)
-      XCTAssertNil(t.due, line)
-      XCTAssertNil(t.alertMinutesBefore, line)
+      XCTAssertEqual(t.due, c.clockTime, line)
+      XCTAssertEqual(t.alertMinutesBefore, 0, line)
     }
   }
 
@@ -65,7 +61,6 @@ final class AskCardTests: XCTestCase {
     XCTAssertTrue(c.summary.hasPrefix("Due "), c.summary)
     XCTAssertFalse(c.summary.contains("alerts you"))
     let t = c.taskTiming
-    XCTAssertNil(t.plannedStart)
     XCTAssertEqual(t.due, c.day)
   }
 
@@ -76,15 +71,15 @@ final class AskCardTests: XCTestCase {
     XCTAssertEqual(alarm.kindLabel, "New alarm")
     XCTAssertFalse(alarm.alertsAtTime)
     XCTAssertTrue(alarm.summary.hasPrefix("Alarm "), alarm.summary)
-    XCTAssertEqual(alarm.taskTiming.plannedStart, alarm.plannedStart, "an alarm keeps its time")
+    XCTAssertEqual(alarm.taskTiming.due, alarm.clockTime, "an alarm keeps its time")
   }
 
-  func testAIDraftWithLengthIsWorkTime() throws {
+  func testAIDraftWithLengthIsATimedReminder() throws {
     let work = try XCTUnwrap(
       CaptureDraftMapper.capture(
         from: .init(kind: "task", title: "Write report", time: "14:00", durationMinutes: 120),
         now: now, calendar: cal))
-    XCTAssertTrue(work.isWorkBlock)
+    XCTAssertTrue(work.alertsAtTime)
     let plain = try XCTUnwrap(
       CaptureDraftMapper.capture(
         from: .init(kind: "task", title: "Call mom", time: "09:00"), now: now, calendar: cal))

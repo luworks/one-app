@@ -12,7 +12,7 @@ final class TodayDensityTests: XCTestCase {
       TestData.fixtureArguments("today-density.json") + [
         "-uiTestingNow", "10:30", "-today.setting.jumpToNow", "NO",
         "-today.setting.healthSummary", "YES",
-        "-uiTestingPrefs", "suggestTimes=0,showFreeTime=1,showSnooze=1",
+        "-uiTestingPrefs", "showFreeTime=1,showSnooze=1",
         "-AppleLanguages", "(en)", "-AppleLocale", "en_GB", "-appearance",
         largeText ? "dark" : "light",
         "-UIPreferredContentSizeCategoryName",
@@ -65,7 +65,8 @@ final class TodayDensityTests: XCTestCase {
     let complete = app.buttons["Complete Buy groceries and fill the car"]
     XCTAssertGreaterThanOrEqual(complete.frame.width, 44)
     XCTAssertGreaterThanOrEqual(complete.frame.height, 44)
-    XCTAssertTrue(app.staticTexts["Due 16:45 · Work"].exists)
+    XCTAssertTrue(app.staticTexts["16:45"].exists, "the row sits at its due time")
+    XCTAssertTrue(app.staticTexts["Work"].firstMatch.exists)
     // Opening a reminder must still target the editor rather than its completion circle.
     title.tap()
     let cancel = app.buttons["Cancel"].firstMatch

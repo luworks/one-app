@@ -195,22 +195,6 @@ final class SinglePresentationTests: XCTestCase {
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()  // dismiss the menu
   }
 
-  /// Long-press and drag a planned task: the task moves (it is flexible); no new event is made.
-  func testDraggingATaskDoesNotMakeAnEvent() {
-    showWeek()
-    let task = labeled("Prepare the demo")
-    XCTAssertTrue(task.waitForExistence(timeout: 5))
-    let y = task.frame.minY
-    let from = task.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
-    from.press(
-      forDuration: 0.8, thenDragTo: from.withOffset(CGVector(dx: 0, dy: 48)), withVelocity: .slow,
-      thenHoldForDuration: 0.3)
-    sleep(1)
-    shot("drag-task")
-    XCTAssertFalse(app.navigationBars["New event"].exists, "no new-event editor")
-    XCTAssertGreaterThan(task.frame.minY, y + 30, "the task moved about an hour later")
-  }
-
   /// A quick tap on an empty slot does nothing, and a swipe still scrolls the grid (no editor, no placeholder).
   func testTapAndSwipeOnTheGridDoNotMakeAnEvent() {
     showWeek()

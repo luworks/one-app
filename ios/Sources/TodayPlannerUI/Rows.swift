@@ -177,7 +177,7 @@
   }
 
   /// Tasks flex: they can be moved, and only the circle completes them (like Apple Reminders).
-  /// Moving a task changes its planned time, never its deadline.
+  /// A reminder row. Today / Tomorrow in its menu change the reminder's one date.
   package struct TaskRow: View {
     @Environment(PlannerActions.self) private var actions
     @Environment(PlannerPresentation.self) private var presentation
@@ -186,14 +186,12 @@
     @Environment(\.dynamicTypeSize) private var typeSize
     package let task: OneTask
     package var showsTime = false
-    /// The time in the time column; nil = the planned time.
+    /// The time in the time column.
     package var time: Date? = nil
     /// Add the list name to the detail line. Off inside a list, where it is the title.
     package var showsList = true
     /// Day view: detail on the title's line when it fits, titles capped at two lines, tighter insets.
     package var compact = false
-    /// A suggested time for a reminder due today with no time: shown faint with a Plan button. Nothing is saved until Plan.
-    package var suggested: Date? = nil
     /// Set on the Today tab: the day the row sits on. The detail line then keeps at most two facts (see `RowSubtitle`).
     package var agendaDay: Date? = nil
     package var onDelete: (() -> Void)? = nil
@@ -202,7 +200,7 @@
 
     package init(
       task: OneTask, showsTime: Bool = false, time: Date? = nil, showsList: Bool = true,
-      compact: Bool = false, suggested: Date? = nil, agendaDay: Date? = nil,
+      compact: Bool = false, agendaDay: Date? = nil,
       onDelete: (() -> Void)? = nil, open: @escaping @MainActor (OneTask) -> Void,
       attention: TodayRowAttention? = nil
     ) {
@@ -211,7 +209,6 @@
       self.time = time
       self.showsList = showsList
       self.compact = compact
-      self.suggested = suggested
       self.agendaDay = agendaDay
       self.onDelete = onDelete
       self.attention = attention
@@ -223,11 +220,7 @@
         alignment: attention == nil ? .center : .firstTextBaseline,
         spacing: attention == nil ? 10 : 0
       ) {
-        if let suggested {
-          TimeColumn(date: suggested, compact: attention != nil).dynamicTypeSize(
-            ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge)
-          ).opacity(0.6)
-        } else if showsTime, let start = time ?? task.plannedStart {
+        if showsTime, let start = time ?? task.due {
           TimeColumn(date: start, compact: attention != nil).dynamicTypeSize(
             ...(attention == nil ? DynamicTypeSize.accessibility5 : .xxxLarge))
         }
@@ -266,7 +259,6 @@
             .padding(.leading, attention == nil ? 0 : 6)
             .accessibilityLabel("Flagged")
         }
-        if let suggested { planButton(suggested) }
       }
       .frame(minHeight: 44)
       .contentShape(Rectangle())
@@ -329,9 +321,9 @@
           } label: {
             Label("Tomorrow", systemImage: "sunrise")
           }
-          if task.plannedStart != nil {
+          if task.due != nil {
             Button {
-              actions.setPlanned(task, to: nil, context: context)
+              actions.setDue(task, to: nil, context: context)
             } label: {
               Label("Unschedule", systemImage: "calendar.badge.minus")
             }
@@ -349,38 +341,17 @@
       if let onDelete { onDelete() } else { actions.delete(task, context: context, toast: toast) }
     }
 
-    /// Today / Tomorrow from the menu: works out the new planned time on the task, then records it like any other move.
+    /// Today / Tomorrow from the menu: works out the new date on the task, then records it like any other move.
     private func plan(tomorrow: Bool) {
       let new = plannerMove(
         task, tomorrow: tomorrow, now: presentation.now, calendar: presentation.calendar)
-      actions.setPlanned(task, to: new, context: context)
+      actions.setDue(task, to: new, context: context)
     }
 
     private var title: Text {
       Text(task.title)
         .strikethrough(task.isDone)
-        .foregroundStyle(task.isDone || suggested != nil ? .secondary : .primary)
-    }
-
-    /// Sets the planned time only; the deadline stays where it is. Undo clears it again.
-    private func planButton(_ start: Date) -> some View {
-      let time = start.plannerFormatted(
-        date: .omitted, time: .shortened, runtime: presentation.runtime)
-      return Button("Plan") {
-        let entry = actions.setPlanned(task, to: start, context: context)
-        toast?.show("Planned “\(task.title)” at \(time)") {
-          guard var entry, !task.isDeleted, task.modelContext != nil,
-            !task.isDone, task.plannedStart == start
-          else { return }
-          entry.itemRef = Ledger.ref(task.persistentModelID)
-          _ = actions.undo(entry, context: context)
-        }
-      }
-      .font(.subheadline.weight(.semibold))
-      .buttonStyle(.bordered)
-      .buttonBorderShape(.capsule)
-      .controlSize(.small)
-      .accessibilityLabel("Plan \(task.title) at \(time)")
+        .foregroundStyle(task.isDone ? .secondary : .primary)
     }
 
     @ViewBuilder private var detailText: some View {
@@ -395,27 +366,22 @@
       }
     }
 
-    /// Most important first, so truncation drops the least useful bits: deadline, plan, repeat, list, tags.
+    /// Most important first, so truncation drops the least useful bits: date, repeat, list, tags.
     private var detail: String? {
       if let agendaDay {
-        let planned = showsTime ? nil : task.plannedStart.flatMap { $0 != task.due ? $0 : nil }
-        let shown = suggested ?? (showsTime ? (time ?? task.plannedStart) : nil)
+        let shown = showsTime ? (time ?? task.due) : nil
         return plannerRowSubtitle(
           .init(
-            isSuggested: suggested != nil, due: task.due,
+            due: task.due,
             dueHasTime: plannerDueHasTime(task, calendar: presentation.calendar),
-            shownTime: shown, planned: planned, repeats: task.repeats != nil,
+            shownTime: shown, repeats: task.repeats != nil,
             stepsDone: task.checklist.filter(\.done).count, stepsTotal: task.checklist.count,
             listName: showsList ? task.listName : ""),
           day: agendaDay, runtime: presentation.runtime)
       }
       var parts: [String] = []
-      if suggested != nil { parts.append("Suggested") }
       if let due = task.due {
         parts.append("Due " + plannerDayLabel(due, runtime: presentation.runtime))
-      }
-      if !showsTime, let start = task.plannedStart, start != task.due {
-        parts.append("Planned " + plannerDayLabel(start, runtime: presentation.runtime))
       }
       if task.repeats != nil { parts.append("↻") }
       if !task.checklist.isEmpty {

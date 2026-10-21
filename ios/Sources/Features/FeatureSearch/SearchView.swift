@@ -368,8 +368,8 @@
           SearchMatch.matches(q, in: [$0.title, $0.note, $0.listName] + $0.tags)
         }
         .sorted {
-          ($0.isDone ? 1 : 0, $0.due ?? $0.plannedStart ?? .distantFuture) < (
-            $1.isDone ? 1 : 0, $1.due ?? $1.plannedStart ?? .distantFuture
+          ($0.isDone ? 1 : 0, $0.due ?? .distantFuture) < (
+            $1.isDone ? 1 : 0, $1.due ?? .distantFuture
           )
         }
       }
@@ -426,7 +426,6 @@
         out.tasks = tasks.filter { t in
           guard !t.isDone else { return false }
           if let d = t.due, cal.isDate(d, inSameDayAs: presentation.now) { return true }
-          if let p = t.plannedStart, cal.isDate(p, inSameDayAs: presentation.now) { return true }
           return false
         }
       case .flagged:
@@ -466,8 +465,6 @@
       var parts: [String] = []
       if let due = t.due {
         parts.append("Due " + dateLabel(due))
-      } else if let p = t.plannedStart {
-        parts.append(dateLabel(p))
       }
       if !t.listName.isEmpty { parts.append(ListName.display(t.listName)) }
       return parts.joined(separator: " · ")

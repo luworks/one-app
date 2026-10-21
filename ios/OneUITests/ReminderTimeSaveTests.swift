@@ -78,7 +78,6 @@ final class ReminderTimeSaveTests: XCTestCase {
     app.staticTexts[title].firstMatch.tap()
     XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 5))
     if app.buttons["task.more"].exists { app.buttons["task.more"].tap() }
-    XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
     XCTAssertEqual(app.switches["Deadline"].value as? String, "1")
     shot(app, "time-save-before-14-00")
     let picker = app.datePickers.firstMatch
@@ -120,7 +119,6 @@ final class ReminderTimeSaveTests: XCTestCase {
     )
     app.staticTexts[title].firstMatch.tap()
     if app.buttons["task.more"].exists { app.buttons["task.more"].tap() }
-    XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
     let savedTime = app.datePickers.firstMatch.buttons.matching(
       NSPredicate(format: "label CONTAINS ':'")
     ).firstMatch
@@ -141,7 +139,6 @@ final class ReminderTimeSaveTests: XCTestCase {
     XCTAssertEqual(metadata.label, expectedMetadata)
     app.staticTexts[title].firstMatch.tap()
     if app.buttons["task.more"].exists { app.buttons["task.more"].tap() }
-    XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
     shot(app, "time-save-after-relaunch-13-10")
   }
 }

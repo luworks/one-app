@@ -1,8 +1,8 @@
 {
   "version": 1,
   "reminders": [
-    { "title": "Year reminder 0", "planned": { "day": 0, "time": "10:00" } },
-    { "title": "Year reminder 400", "planned": { "day": 400, "time": "10:00" } }
+    { "title": "Year reminder 0", "due": { "day": 0, "time": "10:00" } },
+    { "title": "Year reminder 400", "due": { "day": 400, "time": "10:00" } }
   ],
   "events": [
     { "title": "Year event 0", "start": { "day": 0 }, "minutes": 1440, "allDay": true },

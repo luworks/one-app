@@ -627,10 +627,8 @@
       switch self {
       case .today:
         return plannerIsOverdue(task, now: now, calendar: calendar)
-          || [task.due, task.plannedStart].contains {
-            $0.map { calendar.isDate($0, inSameDayAs: now) } ?? false
-          }
-      case .scheduled: return task.due != nil || task.plannedStart != nil
+          || (task.due.map { calendar.isDate($0, inSameDayAs: now) } ?? false)
+      case .scheduled: return task.due != nil
       case .all: return true
       case .flagged: return task.flagged
       case .completed: return task.isDone

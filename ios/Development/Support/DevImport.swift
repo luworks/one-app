@@ -123,13 +123,7 @@ import One
       var taskCount = 0
       for r in export.reminders {
         let due = parts(r.due)
-        let start = parts(r.start)
-        // A timed start is when you plan to do it; the due stays the deadline.
-        // Reminders' start date mostly mirrors the due date; use it as a plan only when it's a distinct timed slot.
-        let planned = start.flatMap { $0.1 && $0.0 != due?.0 ? $0.0 : nil }
-        let task = OneTask(
-          title: r.title ?? "Untitled", note: r.notes ?? "", plannedStart: planned,
-          due: due?.0)
+        let task = OneTask(title: r.title ?? "Untitled", note: r.notes ?? "", due: due?.0)
         task.listName = lists[r.listId] ?? ""
         task.isDone = r.isCompleted
         task.doneAt = date(r.completionDate)

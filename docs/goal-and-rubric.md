@@ -6,7 +6,7 @@
 
 A minimal, AI-native planner for iPhone that puts calendar, reminders and alarms in one app, so people need fewer apps.
 
-- **Data:** local. Apple Calendar and Apple Reminders are the source of truth, read and written live through EventKit. Alarms use AlarmKit. (Status, October 2026: Apple Calendar events are read and written through EventKit, and reminders and lists sync both ways with Apple Reminders through EventKit (`RemindersSync`; Apple wins on conflict). The app keeps a local SwiftData copy, and planned time stays local.)
+- **Data:** local. Apple Calendar and Apple Reminders are the source of truth, read and written live through EventKit. Alarms use AlarmKit. (Status, October 2026: Apple Calendar events are read and written through EventKit, and reminders and lists sync both ways with Apple Reminders through EventKit (`RemindersSync`; Apple wins on conflict). The app keeps a local SwiftData copy. Reminders have one date, the deadline; the separate planned time was retired in October 2026.)
 - **Roadmap (Yuan's words):** first **aggregate** (calendar + reminders + alarms in one place, with a very good Today tab that keeps people focused on now), then **optimize**, then **surpass**. Gestures and screens match Apple Calendar / Reminders as closely as possible before we improve on them.
 - **Information architecture (4 tabs):** Today · Calendar · Reminders · Clock. No habits. Calendar is Week (default), Month and Year (Year day taps open Month with that date selected and its agenda below; Week day headers and selected Month day taps open Today). Alarms lists real alarms (AlarmKit) plus items marked "Ring as alarm", with a kitchen timer on top. The bottom-right button is a **+**: tap adds what fits the page (alarm on the Clock tab, event on Calendar, otherwise a reminder); press and hold for the menu (built). Top left is a menu button that opens the sidebar: Search, AI chat history, New chat, Settings.
 - **Gestures follow Apple:** tap the circle to complete; swipe left for Delete (with Undo) and Flag, with one shared look for swipe actions in every list; long-press menu (Show Details / Flag / Today / Tomorrow / Delete); system events open in Apple's own event viewer. Events are never moved by drag; only flexible tasks move.
@@ -69,9 +69,9 @@ Humans set direction: Yuan decides product questions (what a claim should mean, 
 
 ### 2. Tasks (benchmark: Reminders, OmniFocus)
 1. Create a task from one line
-2. Edit title, notes, planned time, deadline
+2. Edit title, notes, deadline
 3. Complete and un-complete, with undo
-4. Planned time and deadline are separate (moving one never moves the other)
+4. One date per reminder, its deadline, like Apple Reminders (the separate planned time was retired in October 2026)
 5. Inbox of unscheduled tasks
 6. Lists / projects
 7. Tags

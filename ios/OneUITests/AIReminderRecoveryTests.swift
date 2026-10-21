@@ -53,7 +53,6 @@ final class AIReminderRecoveryTests: XCTestCase {
     XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 5))
     XCTAssertEqual(app.textFields["task.title"].value as? String, title)
     if app.buttons["task.more"].exists { app.buttons["task.more"].tap() }
-    XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
     XCTAssertEqual(app.switches["Deadline"].value as? String, "1")
     let clock = app.datePickers.firstMatch.buttons.matching(
       NSPredicate(format: "label CONTAINS '11:00'")

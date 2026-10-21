@@ -191,34 +191,9 @@
       activity.clear(tiers: nil, context: context)
     }
 
-    /// Reminders the AI changed within the last 24 hours (applied or undone), and reminders whose planned time the
-    /// user set or cleared themselves (within `ActivityWindows.userChoseDays`, not the ledger's retention): the policy asks
-    /// before changing them again. Two indexed queries on the store.
-    package func protectedRefs(_ context: ModelContext, now: Date) -> (
-      aiRecent: Set<String>, userChose: Set<String>
-    )? {
-      flush(context)
-      guard pending.isEmpty, let store = activity.store, !activity.recorder.hasWriteFailures,
-        activity.recorder.bufferedCount == 0
-      else { return nil }
-      let since = ActivityClock.ms(now.addingTimeInterval(-AutonomyPolicy.recentWindow))
-      let cutoff = ActivityWindows.cutoffMs(
-        days: ActivityWindows.userChoseDays, now: now, calendar: runtime.calendar)
-      let timeKinds = [LedgerAction.planned, .moved, .unscheduled].map {
-        ActivityKind.changePrefix + $0.rawValue
-      }
-      do {
-        let ai = try store.subjectRefs(actor: LedgerActor.todayAI.raw, sinceMs: since)
-        let mine = try store.subjectRefs(
-          actor: LedgerActor.you.raw, kinds: timeKinds, sinceMs: cutoff)
-        return (Set(ai.map(Self.comparisonKey)), Set(mine.map(Self.comparisonKey)))
-      } catch { return nil }
-    }
-
     package static func snapshot(of t: OneTask) -> TaskSnapshot {
       TaskSnapshot(
         title: t.title, note: t.note, isDone: t.isDone, doneAt: t.doneAt,
-        plannedStart: t.plannedStart,
         durationMinutes: t.durationMinutes, due: t.due, createdAt: t.createdAt,
         reminderOffsetMinutes: t.reminderOffsetMinutes, listName: t.listName, tags: t.tags,
         flagged: t.flagged,
@@ -227,8 +202,7 @@
 
     package func task(from s: TaskSnapshot) -> OneTask {
       let t = OneTask(
-        title: s.title, note: s.note, plannedStart: s.plannedStart,
-        durationMinutes: s.durationMinutes, due: s.due)
+        title: s.title, note: s.note, durationMinutes: s.durationMinutes, due: s.due)
       t.isDone = s.isDone
       t.doneAt = s.doneAt
       // A new creation date, so it is written to Apple Reminders again when that is connected (as TaskActions' Undo does).
@@ -316,9 +290,11 @@
         }
         reminders.didPersistCompletion(t)
       case .planned, .moved, .unscheduled:
-        t.plannedStart = entry.beforeDate
+        // Retired planned-time entries from before a reminder had one date: nothing to put back.
+        return false
       case .redated:
         t.due = entry.beforeDate
+        reminders.scheduleReconcile()
       case .renamed:
         guard t.title == entry.after else { return false }
         t.title = entry.before
@@ -359,167 +335,5 @@
       if let outcome, !outcome.verified { print("LEDGER import not verified: \(outcome)") }
     }
 
-  }
-
-  /// Grants in the store (SwiftData: in memory under `-uiTesting`, so a test's grant never leaks into the next run).
-  @MainActor
-  package enum GrantStore {
-    package static func all(_ context: ModelContext) -> [AIGrant] {
-      (try? context.fetch(
-        FetchDescriptor<AIGrant>(sortBy: [SortDescriptor(\.expires, order: .reverse)]))) ?? []
-    }
-
-    package static func infos(_ context: ModelContext) -> [GrantInfo] {
-      all(context).compactMap(\.info)
-    }
-
-    package static func active(_ scope: GrantScope, context: ModelContext, now: Date) -> AIGrant? {
-      all(context).first { $0.info.map { $0.scope == scope && $0.isActive(at: now) } ?? false }
-    }
-
-    /// Settings grants the same scope as a plan card. Turning off revokes every active copy of that scope.
-    package static func setEnabled(
-      _ enabled: Bool, scope: GrantScope, context: ModelContext, ledger: Ledger,
-      runtime: PlannerRuntime
-    ) throws {
-      let now = runtime.now()
-      let changed: [AIGrant]
-      if enabled {
-        guard active(scope, context: context, now: now) == nil else { return }
-        let g = AIGrant(scope: scope, granted: now)
-        g.id = runtime.nextID()
-        g.expires = Grants.expiry(from: now, calendar: runtime.calendar)
-        context.insert(g)
-        changed = [g]
-      } else {
-        changed = all(context).filter {
-          $0.info.map { $0.scope == scope && $0.isActive(at: now) } ?? false
-        }
-        for g in changed { g.revoked = now }
-      }
-      do {
-        try context.save()
-      } catch {
-        context.rollback()
-        throw error
-      }
-      // Publish successful grant changes only after persistence; rollback must not leave a success in Activity.
-      for g in changed { record(g, granted: enabled, context: context, ledger: ledger) }
-    }
-
-    private static func record(_ g: AIGrant, granted: Bool, context: ModelContext, ledger: Ledger) {
-      let title = GrantScope(rawValue: g.scope)?.title ?? g.scope
-      if granted {
-        ledger.record(
-          .granted, kind: "grant", title: title, after: "Until " + ledger.dayLabel(g.expires),
-          channel: .ask, context: context)
-      } else {
-        ledger.record(.revoked, kind: "grant", title: title, context: context)
-      }
-    }
-
-    @discardableResult
-    package static func grant(
-      _ scope: GrantScope, context: ModelContext, ledger: Ledger, runtime: PlannerRuntime
-    ) -> AIGrant {
-      let g = AIGrant(scope: scope, granted: runtime.now())
-      g.id = runtime.nextID()
-      g.expires = Grants.expiry(from: g.granted, calendar: runtime.calendar)
-      context.insert(g)
-      record(g, granted: true, context: context, ledger: ledger)
-      return g
-    }
-
-    package static func revoke(
-      _ g: AIGrant, context: ModelContext, ledger: Ledger, runtime: PlannerRuntime
-    ) {
-      g.revoked = runtime.now()
-      record(g, granted: false, context: context, ledger: ledger)
-    }
-  }
-
-  /// Under a "Plan reminders into free time" grant: when the app becomes active, reminders due today without a time get
-  /// the free-gap time Today already suggests for them (`DaySchedule`), each one checked by `AutonomyPolicy`. One toast with
-  /// Undo, one Activity entry per reminder. Planned time only: deadlines, events and Apple Reminders are never touched.
-  @MainActor
-  package enum AutoPlan {
-    /// The injected session clock supplies both the plan day and policy look-back windows.
-    package static func run(
-      context: ModelContext, toast: UndoToast, calendar: any CalendarService, ledger: Ledger,
-      runtime: PlannerRuntime
-    ) {
-      let now = runtime.now()
-      guard GrantStore.active(.planFreeTime, context: context, now: now) != nil else { return }
-      // Nothing applies by itself without an Activity entry and an Undo: when changes are not being recorded (Settings →
-      // Activity data), the plan waits for a tap like any other card.
-      guard ledger.activity.recordsChanges else { return }
-      // Fetched here, not taken from a view's @Query, which may not have caught up yet at launch.
-      let tasks =
-        (try? context.fetch(FetchDescriptor<OneTask>(predicate: #Predicate { !$0.isDone }))) ?? []
-      let events = (try? context.fetch(FetchDescriptor<OneEvent>())) ?? []
-      let cal = runtime.calendar
-      let day = cal.startOfDay(for: now)
-      // The same busy time and order as Today's own suggestions (DayAgenda), so what lands is what was shown.
-      var busy: [DateInterval] = []
-      for e in events where !e.isAllDay {
-        for start in Recurrence.occurrences(
-          start: e.start, duration: e.duration, rule: e.repeats,
-          in: DateInterval(start: day, end: cal.date(byAdding: .day, value: 1, to: day) ?? day),
-          calendar: cal)
-        { busy.append(DateInterval(start: start, duration: e.duration)) }
-      }
-      let external = calendar.events(on: day, excluding: Set(events.compactMap(\.externalID)))
-      busy += external.filter { !$0.isAllDay }.map {
-        DateInterval(start: $0.start, end: max($0.start, $0.end))
-      }
-      var untimed: [OneTask] = []
-      for t in tasks where !t.isDone && !(t.due.map { $0 < day } ?? false) {
-        if let s = t.plannedStart {
-          if cal.isDate(s, inSameDayAs: day) {
-            busy.append(DateInterval(start: s, duration: TimeInterval(t.durationMinutes * 60)))
-          }
-        } else if let due = t.due, cal.isDate(due, inSameDayAs: day) {
-          if cal.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0) {
-            busy.append(DateInterval(start: due, duration: TimeInterval(t.durationMinutes * 60)))
-          } else {
-            untimed.append(t)
-          }
-        }
-      }
-      guard !untimed.isEmpty else { return }
-      untimed.sort { ($0.flagged ? 0 : 1, $0.createdAt) < ($1.flagged ? 0 : 1, $1.createdAt) }
-      let starts = DaySchedule.suggestedStarts(
-        minutes: untimed.map(\.durationMinutes), busy: busy, day: day, now: now, calendar: cal)
-      let grants = GrantStore.infos(context)
-      guard let protected = ledger.protectedRefs(context, now: now) else { return }
-      var applied: [(task: OneTask, start: Date, entry: LedgerItem)] = []
-      for (task, start) in zip(untimed, starts) {
-        guard let start else { continue }
-        let ref = Ledger.ref(task.persistentModelID).map(Ledger.comparisonKey)
-        let change = ProposedChange(
-          target: .reminder, operation: .setPlannedTime,
-          isOverdue: task.due.map { $0 < day } ?? false, isDone: task.isDone,
-          ringsAsAlarm: task.ringsAsAlarm,
-          aiChangedRecently: ref.map(protected.aiRecent.contains) ?? false,
-          userChoseTime: ref.map(protected.userChose.contains) ?? false)
-        guard AutonomyPolicy.decide(change, grants: grants, now: now) == .auto else { continue }
-        task.plannedStart = start
-        let entry = ledger.record(
-          .planned, task: task, title: task.title, before: ledger.timeLabel(nil),
-          after: ledger.timeLabel(start), beforeDate: nil, afterDate: start,
-          actor: .todayAI, channel: .automatic, approval: .autoUnderGrant, context: context)
-        applied.append((task, start, entry))
-      }
-      guard !applied.isEmpty else { return }
-      try? context.save()
-      toast.show(LedgerFormat.autoPlanned(applied.count)) {
-        for a in applied
-        where !a.task.isDeleted && a.task.modelContext != nil && a.task.plannedStart == a.start {
-          a.task.plannedStart = nil
-          ledger.recordUndo(of: a.entry, context: context)
-        }
-        try? context.save()
-      }
-    }
   }
 #endif

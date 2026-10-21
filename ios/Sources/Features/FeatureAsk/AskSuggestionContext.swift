@@ -52,18 +52,18 @@
       ctx.events = dayEvents(today)
       ctx.tomorrowFirst = dayEvents(tomorrow).first
 
-      // Reminders that matter now: overdue, due or planned today and tomorrow, flagged, plus what was done today.
+      // Reminders that matter now: overdue, due today and tomorrow, flagged, plus what was done today.
       ctx.tasks = tasks.compactMap { t -> SuggestionContext.Task? in
         let relevant: Bool
         if t.isDone {
           relevant = t.doneAt.map { cal.isDate($0, inSameDayAs: now) } ?? false
         } else {
           let inWindow = { (d: Date?) in d.map { $0 < afterTomorrow } ?? false }
-          relevant = t.flagged || inWindow(t.due) || inWindow(t.plannedStart)
+          relevant = t.flagged || inWindow(t.due)
         }
         guard relevant else { return nil }
         return .init(
-          title: t.title, due: t.due, plannedStart: t.plannedStart, minutes: t.durationMinutes,
+          title: t.title, due: t.due, minutes: t.durationMinutes,
           flagged: t.flagged,
           repeats: t.repeats != nil, ringsAsAlarm: t.ringsAsAlarm, isDone: t.isDone,
           doneAt: t.doneAt)
@@ -77,7 +77,7 @@
         }
       }
       fires += tasks.compactMap { t in
-        guard !t.isDone, t.ringsAsAlarm, let s = t.plannedStart, s > now, s < afterTomorrow else {
+        guard !t.isDone, t.ringsAsAlarm, let s = t.due, s > now, s < afterTomorrow else {
           return nil
         }
         return s

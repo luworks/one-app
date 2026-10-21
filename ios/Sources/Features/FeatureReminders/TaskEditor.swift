@@ -23,9 +23,6 @@
 
     @State private var title: String
     @State private var note: String
-    @State private var hasStart: Bool
-    @State private var start: Date
-    @State private var duration: Int
     @State private var hasDue: Bool
     @State private var due: Date
     @State private var reminder: Int?
@@ -37,7 +34,6 @@
     @State private var ringsAsAlarm: Bool
     @State private var detent: PresentationDetent = .height(366)
     @State private var advanced = false
-    @State private var editingPlanned = false
     @State private var showsDatePicker = false
     @State private var saving = false
     @State private var saveError: String?
@@ -59,18 +55,10 @@
       self.reminders = reminders
       self.alarms = alarms
       self.task = task
-      let nextHour =
-        presentation.calendar.nextDate(
-          after: presentation.now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime)
-        ?? presentation.now
       _baseline = State(initialValue: task.map { Ledger.snapshot(of: $0) })
       _baselineExternalID = State(initialValue: task?.externalID)
-      _editingPlanned = State(initialValue: task?.due == nil && task?.plannedStart != nil)
       _title = State(initialValue: task?.title ?? "")
       _note = State(initialValue: task?.note ?? "")
-      _hasStart = State(initialValue: task?.plannedStart != nil)
-      _start = State(initialValue: task?.plannedStart ?? nextHour)
-      _duration = State(initialValue: task?.durationMinutes ?? 25)
       _hasDue = State(initialValue: task?.due != nil)
       _due = State(
         initialValue: task?.due ?? presentation.calendar.startOfDay(for: presentation.now))
@@ -131,7 +119,6 @@
         }
       }
       .presentationDetents(advanced ? [.large] : [.height(366), .large], selection: $detent)
-      .onChange(of: editingPlanned) { _, _ in showsDatePicker = false }
       .onChange(of: advanced) { _, expanded in detent = expanded ? .large : .height(366) }
       .presentationDragIndicator(.hidden)
       .presentationCornerRadius(48)
@@ -176,15 +163,6 @@
           Text("Checklist")
         }
         Section {
-          Toggle(isOn: $hasStart.animation()) { Label("Plan a time", systemImage: "clock") }
-          if hasStart {
-            DatePicker("Starts", selection: $start)
-            Stepper("Duration \(duration) min", value: $duration, in: 5...480, step: 5)
-          }
-        } footer: {
-          Text("When you plan to work on it. Moving it never changes the deadline.")
-        }
-        Section {
           Toggle(isOn: $hasDue.animation()) {
             Label("Deadline", systemImage: "calendar.badge.exclamationmark")
           }
@@ -200,7 +178,7 @@
             Label("Repeat", systemImage: "repeat")
           }
         }
-        if hasStart || hasDue {
+        if hasDue {
           Section {
             Picker(selection: $reminder) {
               ForEach(ReminderOffset.choices, id: \.0) { label, value in Text(label).tag(value) }
@@ -254,14 +232,12 @@
       .scrollDismissesKeyboard(.interactively)
     }
 
-    private var selectedDate: Date? {
-      editingPlanned ? (hasStart ? start : nil) : (hasDue ? due : nil)
-    }
+    private var selectedDate: Date? { hasDue ? due : nil }
 
     private var selectedHasTime: Bool {
       guard let selectedDate else { return false }
       let parts = presentation.calendar.dateComponents([.hour, .minute], from: selectedDate)
-      return editingPlanned || parts.hour != 0 || parts.minute != 0
+      return parts.hour != 0 || parts.minute != 0
     }
 
     private var compact: some View {
@@ -269,16 +245,6 @@
         HStack(spacing: 0) {
           icon("xmark", label: "Cancel") { dismiss() }
           Spacer(minLength: 8)
-          Menu {
-            Picker("Adjust", selection: $editingPlanned) {
-              Text("Deadline").tag(false)
-              Text("Planned time").tag(true)
-            }
-          } label: {
-            Image(systemName: editingPlanned ? "clock" : "calendar")
-              .frame(width: 44, height: 44)
-          }
-          .accessibilityLabel(editingPlanned ? "Adjust planned time" : "Adjust deadline")
           Menu {
             Picker("Repeat", selection: $repeatRule) {
               Text("Never").tag(RepeatRule?.none)
@@ -329,7 +295,7 @@
                 showsDatePicker.toggle()
               } label: {
                 HStack(spacing: 4) {
-                  Text(editingPlanned ? "Planned" : "Deadline").font(.caption.weight(.semibold))
+                  Text("Deadline").font(.caption.weight(.semibold))
                   if let selectedDate {
                     if selectedHasTime {
                       Text(
@@ -358,19 +324,13 @@
                 .background(
                   selectedDate == nil
                     ? Color(.systemGray)
-                    : (!editingPlanned && selectedHasTime
+                    : (selectedHasTime
                       && (selectedDate.map { $0 <= presentation.now } ?? false)
                       ? Color.red : Color.accentColor))
               }
               .buttonStyle(.plain)
               .accessibilityIdentifier("task.when")
               if showsDatePicker {
-                Picker("Adjust", selection: $editingPlanned) {
-                  Text("Deadline").tag(false)
-                  Text("Planned time").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .padding(8)
                 DatePicker(
                   "Date",
                   selection: Binding(
@@ -383,10 +343,8 @@
                 )
                 .padding(.horizontal, 10)
                 .frame(minHeight: 44)
-                Button("Remove \(editingPlanned ? "planned time" : "deadline")") {
-                  if editingPlanned { hasStart = false } else { hasDue = false }
-                }
-                .frame(minHeight: 44)
+                Button("Remove deadline") { hasDue = false }
+                  .frame(minHeight: 44)
               }
               QuickTimeGrid(
                 date: selectedDate, now: presentation.now,
@@ -444,13 +402,8 @@
 
     private func setSelectedDate(_ date: Date) {
       titleFocused = false
-      if editingPlanned {
-        start = date
-        hasStart = true
-      } else {
-        due = date
-        hasDue = true
-      }
+      due = date
+      hasDue = true
     }
 
     private var cleanedTags: [String] {
@@ -464,7 +417,7 @@
       TaskSnapshot(
         title: title.trimmingCharacters(in: .whitespacesAndNewlines), note: note,
         isDone: baseline?.isDone ?? false, doneAt: baseline?.doneAt,
-        plannedStart: hasStart ? start : nil, durationMinutes: duration, due: hasDue ? due : nil,
+        durationMinutes: baseline?.durationMinutes ?? 25, due: hasDue ? due : nil,
         createdAt: baseline?.createdAt ?? presentation.now, reminderOffsetMinutes: reminder,
         listName: listName, tags: cleanedTags, flagged: flagged, repeatRule: repeatRule?.rawValue,
         checklist: checklist, ringsAsAlarm: ringsAsAlarm)
@@ -545,15 +498,6 @@
       }
       t.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
       t.note = note
-      // Only a deadline moved on its own takes the old day's plan with it; a plan edited here is kept.
-      let plan = hasStart ? start : nil
-      t.plannedStart =
-        plan == previous?.plannedStart
-        ? DeadlineMove.plannedStart(
-          plan, deadlineMovedFrom: previous?.due, to: hasDue ? due : nil,
-          calendar: presentation.calendar)
-        : plan
-      t.durationMinutes = duration
       t.due = hasDue ? due : nil
       t.reminderOffsetMinutes = reminder
       t.listName = listName
@@ -585,7 +529,7 @@
         savedTask = t
         ledger.record(
           .created, task: t, title: t.title,
-          after: ledger.timeLabel(t.plannedStart ?? t.due, none: ""), context: context)
+          after: ledger.timeLabel(t.due, none: ""), context: context)
       }
       baseline = Ledger.snapshot(of: t)
       baselineExternalID = t.externalID
@@ -596,7 +540,6 @@
     private func restore(_ value: TaskSnapshot, to task: OneTask) {
       task.title = value.title
       task.note = value.note
-      task.plannedStart = value.plannedStart
       task.durationMinutes = value.durationMinutes
       task.due = value.due
       task.reminderOffsetMinutes = value.reminderOffsetMinutes

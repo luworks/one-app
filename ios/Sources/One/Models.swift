@@ -6,20 +6,21 @@
   import Foundation
   import SwiftData
 
-  /// A task. Its planned time is flexible and can move; its deadline (`due`) never moves with it.
+  /// A reminder. It has one date, its deadline (`due`), like Apple Reminders.
   @Model
   package final class OneTask {
     package var title: String
     package var note: String
     package var isDone: Bool
     package var doneAt: Date?
-    /// When you plan to work on it. nil = not scheduled.
+    /// Retired: Today no longer has a separate planned time. The column stays so existing installs migrate;
+    /// nothing reads or writes it.
     package var plannedStart: Date?
     package var durationMinutes: Int
-    /// Deadline. Moving planned time never changes this.
+    /// The reminder's date (and time, when it has one).
     package var due: Date?
     package var createdAt: Date
-    /// Minutes before the planned time (or a timed deadline) to remind. nil = no reminder.
+    /// Minutes before a timed deadline to remind. nil = no reminder.
     package var reminderOffsetMinutes: Int? = 0
     /// "" = Inbox.
     package var listName: String = ""
@@ -34,14 +35,12 @@
     package var externalID: String? = nil
 
     package init(
-      title: String, note: String = "", plannedStart: Date? = nil, durationMinutes: Int = 25,
-      due: Date? = nil
+      title: String, note: String = "", durationMinutes: Int = 25, due: Date? = nil
     ) {
       self.title = title
       self.note = note
       self.isDone = false
       self.doneAt = nil
-      self.plannedStart = plannedStart
       self.durationMinutes = durationMinutes
       self.due = due
       self.createdAt = .now
@@ -59,18 +58,10 @@
         != DateComponents(hour: 0, minute: 0)
     }
 
-    /// When the reminder fires: planned time, else a deadline that has a time of day.
+    /// When the reminder fires: a deadline that has a time of day, minus the offset.
     package var reminderDate: Date? {
-      guard let offset = reminderOffsetMinutes else { return nil }
-      let base: Date?
-      if let plannedStart {
-        base = plannedStart
-      } else if let due, dueHasTime {
-        base = due
-      } else {
-        base = nil
-      }
-      return base?.addingTimeInterval(TimeInterval(-offset * 60))
+      guard let offset = reminderOffsetMinutes, let due, dueHasTime else { return nil }
+      return due.addingTimeInterval(TimeInterval(-offset * 60))
     }
 
     package func toggleDone() {
@@ -84,11 +75,8 @@
     package func nextOccurrence() -> OneTask? {
       guard let rule = repeats else { return nil }
       let next = OneTask(
-        title: title, note: note,
-        plannedStart: plannedStart.map { rule.next(after: $0) },
-        durationMinutes: durationMinutes,
-        due: due.map { rule.next(after: $0) }
-          ?? (plannedStart == nil ? rule.next(after: Calendar.current.startOfDay(for: .now)) : nil))
+        title: title, note: note, durationMinutes: durationMinutes,
+        due: rule.next(after: due ?? Calendar.current.startOfDay(for: .now)))
       next.reminderOffsetMinutes = reminderOffsetMinutes
       next.listName = listName
       next.tags = tags
@@ -101,9 +89,7 @@
 
     /// Everything needed to recreate a deleted task (for Undo).
     package func copy() -> OneTask {
-      let t = OneTask(
-        title: title, note: note, plannedStart: plannedStart, durationMinutes: durationMinutes,
-        due: due)
+      let t = OneTask(title: title, note: note, durationMinutes: durationMinutes, due: due)
       t.isDone = isDone
       t.doneAt = doneAt
       t.createdAt = createdAt
@@ -115,35 +101,6 @@
       t.checklist = checklist
       t.ringsAsAlarm = ringsAsAlarm
       return t
-    }
-
-    package func postpone(minutes: Int) {
-      guard let start = plannedStart else { return }
-      plannedStart = start.addingTimeInterval(TimeInterval(minutes * 60))
-    }
-
-    /// Today at the same time of day, or the next full hour when it has no planned time yet.
-    package func moveToToday() {
-      let cal = Calendar.current
-      if let start = plannedStart {
-        let t = cal.dateComponents([.hour, .minute], from: start)
-        plannedStart = cal.date(
-          bySettingHour: t.hour ?? 9, minute: t.minute ?? 0, second: 0, of: .now)
-      } else {
-        let next = cal.date(byAdding: .hour, value: 1, to: .now) ?? .now
-        plannedStart = cal.date(bySetting: .minute, value: 0, of: next).map {
-          cal.date(bySetting: .second, value: 0, of: $0) ?? $0
-        }
-      }
-    }
-
-    package func moveToTomorrow() {
-      let cal = Calendar.current
-      if let start = plannedStart {
-        plannedStart = cal.date(byAdding: .day, value: 1, to: start)
-      } else if let tomorrow = cal.date(byAdding: .day, value: 1, to: .now) {
-        plannedStart = cal.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)
-      }
     }
   }
 

@@ -309,8 +309,8 @@
       }
       for (index, row) in fixture.reminders.enumerated() {
         let task = OneTask(
-          title: row.title, note: row.note ?? "", plannedStart: date(row.planned),
-          durationMinutes: row.minutes ?? 25, due: date(row.due))
+          title: row.title, note: row.note ?? "",
+          durationMinutes: row.minutes ?? 25, due: date(row.due) ?? date(row.planned))
         task.createdAt = now.addingTimeInterval(-Double(index))
         task.listName = row.list ?? ""
         task.flagged = row.flagged ?? false
@@ -640,8 +640,6 @@
       case .settingsAlarms: settings(.alarms)
       case .settingsAI: settings(.ai)
       case .settingsAbout: settings(.about)
-      case .settingsAutomaticChanges:
-        NavigationStack { AutomaticChangesView(ledger: session.services.ledger) }
       case .settingsActivity: NavigationStack { activityData }
       case .settingsHolidays:
         NavigationStack { YearHolidaysSettingsView(presentation: session.presentation) }

@@ -43,9 +43,9 @@ final class RowSubtitleTests: XCTestCase {
     XCTAssertFalse(s!.contains("Today"))
   }
 
-  func testSuggestedAndNonDefaultList() {
-    // Buy milk: due today (implied), suggested time, Home list, #errands tag is never shown.
-    XCTAssertEqual(line(.init(isSuggested: true, due: today, listName: "Home")), "Suggested · Home")
+  func testNonDefaultList() {
+    // Buy milk: due today (implied), Home list, #errands tag is never shown.
+    XCTAssertEqual(line(.init(due: today, listName: "Home")), "Home")
   }
 
   func testDueTomorrowKeepsItsDayAndTime() {
@@ -69,12 +69,11 @@ final class RowSubtitleTests: XCTestCase {
 
   func testNeverMoreThanTwoFactsAndOrderIsStable() {
     let all = RowSubtitle.Input(
-      isSuggested: true, due: date(3), planned: date(0, 9), repeats: true,
-      stepsDone: 0, stepsTotal: 2, listName: "Home")
+      due: date(3), repeats: true, stepsDone: 0, stepsTotal: 2, listName: "Home")
     let facts = RowSubtitle.facts(all, day: today, calendar: cal)
     XCTAssertEqual(facts.count, 2)
-    XCTAssertEqual(facts.first, "Suggested")
-    XCTAssertTrue(facts[1].hasPrefix("Due "))
+    XCTAssertTrue(facts[0].hasPrefix("Due "))
+    XCTAssertEqual(facts[1], "↻")
   }
 
   func testRepeatIconCountsAsAFact() {

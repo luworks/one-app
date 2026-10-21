@@ -49,7 +49,6 @@ final class ReminderRecoveryTests: XCTestCase {
         calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: preview.day).day,
         entry.day, entry.name)
       XCTAssertEqual(preview.taskTiming.due, preview.day, entry.name)
-      XCTAssertNil(preview.taskTiming.plannedStart, entry.name)
     }
   }
 }

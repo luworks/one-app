@@ -132,23 +132,5 @@ final class PerformanceBaselineTests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Buy milk'"))
           .firstMatch.waitForExistence(timeout: 5))
     }
-    // A fresh test store isolates planning from the create/complete journey above.
-    app.terminate()
-    app.launch()
-    app.buttons["Ask AI or add anything"].tap()
-    let field = app.textViews["Ask AI or add anything"].firstMatch
-    XCTAssertTrue(field.waitForExistence(timeout: 5))
-    sample("plan_preview_including_typing") {
-      field.tap()
-      field.typeText("Plan my day\n")
-      XCTAssertTrue(app.buttons["plan.apply"].waitForExistence(timeout: 10))
-    }
-    sample("apply_plan") {
-      app.buttons["plan.apply"].tap()
-      XCTAssertTrue(
-        app.staticTexts.matching(
-          NSPredicate(format: "label BEGINSWITH 'Planned ' AND label ENDSWITH 'for today.'")
-        ).firstMatch.waitForExistence(timeout: 5))
-    }
   }
 }

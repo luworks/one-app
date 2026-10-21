@@ -118,8 +118,8 @@
         }
       }
 
-      // Reminders with a time on their deadline but no planned time (most Apple Reminders look like this).
-      for t in tasks where !t.isDone && t.plannedStart == nil {
+      // Reminders with a time on their deadline.
+      for t in tasks where !t.isDone {
         guard let due = t.due, due >= today, due < end,
           calendar.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0)
         else { continue }

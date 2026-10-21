@@ -115,15 +115,15 @@ If no time is given, leave hour and minute empty.
 4. 代码校验：
    - `targetID` 必须在候选里（否则当作没听懂，让用户重说）；
    - 目标是事件 → 不走 `editTask`，转到 §2.6 的 `moveEvent`（原则 2 已改）；
-   - 只改 `plannedStart`，**不动 `due`/`dueTime`**（原则 3）；
+   - 只改这条提醒唯一的日期 `due`（原则 3：一条提醒只有一个日期，没有单独的计划时间）；
    - 闹钟跟随任务（`ringsAsAlarm` + `Ringer.sync`）。
 5. 出一张 ChangeCard：「Send Q3 report: 3:00 PM → 5:00 PM」，Apply / Undo。
 
-「帮我把今天重新排一下」这类：**不让模型排**，继续走 `DayPlanner`（确定性、可测试）。模型最多负责决定「哪些任务要排」（比如「只排工作任务」→ 筛选条件），而不是输出时间。
+「帮我安排今天」这类：不再是一个功能（提醒没有单独的计划时间，`DayPlanner` 和 Plan card 已删除），按普通对话回答。
 
 ### 2.4 闹钟
 
-不需要新机制：「明早 7 点叫我」→ `addAlarm` → 生成 `OneTask(plannedStart: 7:00)` 且 `ringsAsAlarm = true`，沿用 `Ringer`（AlarmKit，iOS 26，要 `NSAlarmKitUsageDescription`，首次会请求授权——项目已具备）。原则 4 不变：停闹钟 ≠ 完成任务。
+不需要新机制：「明早 7 点叫我」→ `addAlarm` → 生成 `OneTask(due: 7:00)` 且 `ringsAsAlarm = true`，沿用 `Ringer`（AlarmKit，iOS 26，要 `NSAlarmKitUsageDescription`，首次会请求授权——项目已具备）。原则 4 不变：停闹钟 ≠ 完成任务。
 
 ### 2.5 问答
 

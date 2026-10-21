@@ -45,22 +45,15 @@ public enum SuggestionLanguage: String, Sendable {
 
 // MARK: - Routing mirror
 
-/// Where a sentence goes when it is sent from the Ask page, in the order `AskView.send` tries: tidy, plan,
+/// Where a sentence goes when it is sent from the Ask page, in the order `AskView.send` tries: tidy,
 /// question, edit of an existing item, else a new item. Pure, so a suggestion can be checked before it is shown.
 public enum SentenceRoute: Equatable {
-  case tidy, plan, question
+  case tidy, question
   case edit(EditDecision)
   case capture(Capture)
 
   private static func has(_ text: String, _ pattern: String) -> Bool {
     text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
-  }
-
-  public static func isPlanRequest(_ text: String) -> Bool {
-    let t = text.lowercased()
-    return ["plan my day", "plan today", "schedule my day", "安排今天", "规划今天", "帮我安排"].contains {
-      t.contains($0)
-    }
   }
 
   /// Same words `Understanding.asksForAlarmStrict` looks for (that file needs the model framework, this one does not).
@@ -73,7 +66,6 @@ public enum SentenceRoute: Equatable {
   ) -> SentenceRoute {
     let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     if OverdueTidy.isRequest(text) { return .tidy }
-    if isPlanRequest(text) { return .plan }
     if Editing.isQuestion(text) { return .question }
     if Editing.looksLikeEdit(text, items: items, now: now, calendar: calendar) {
       let d = Editing.decide(text: text, plan: nil, items: items, now: now, calendar: calendar)
@@ -86,7 +78,7 @@ public enum SentenceRoute: Equatable {
   /// A "which one?" question or "when?" question is not enough for a suggestion, because the point is one tap.
   public var isActionable: Bool {
     switch self {
-    case .tidy, .plan, .question: return true
+    case .tidy, .question: return true
     case .edit(let d):
       return (d.op == .move && d.target != nil && d.newStart != nil)
         || (d.op == .delete && d.target != nil)
@@ -110,7 +102,6 @@ public enum SentenceRoute: Equatable {
   public var family: String {
     switch self {
     case .tidy: return "tidy"
-    case .plan: return "plan"
     case .question: return "question"
     case .edit(let d): return "edit:" + (d.target ?? "?")
     case .capture(let c): return "capture:" + c.title.lowercased()
@@ -120,7 +111,7 @@ public enum SentenceRoute: Equatable {
 
 /// What a candidate's sentence must land on. Checked against `SentenceRoute`, for the rule sentence and for any rewording.
 public enum SuggestionExpectation: Equatable, Sendable {
-  case tidy, plan, question
+  case tidy, question
   /// Move this item (by title) to this time.
   case move(title: String, to: Date)
   /// A new reminder at this time of day (not an alarm), `day` days from today.
@@ -134,7 +125,7 @@ public enum SuggestionExpectation: Equatable, Sendable {
   ) -> Bool {
     guard route.isActionable else { return false }
     switch (self, route) {
-    case (.tidy, .tidy), (.plan, .plan), (.question, .question): return true
+    case (.tidy, .tidy), (.question, .question): return true
     case (.move(let title, let to), .edit(let d)):
       guard d.op == .move, let new = d.newStart, let id = d.target,
         items.first(where: { $0.id == id })?.title == title
@@ -192,7 +183,6 @@ public struct SuggestionContext: Equatable {
   public struct Task: Equatable {
     public var title: String
     public var due: Date? = nil
-    public var plannedStart: Date? = nil
     public var minutes = 25
     public var flagged = false
     public var repeats = false
@@ -201,13 +191,12 @@ public struct SuggestionContext: Equatable {
     public var doneAt: Date? = nil
 
     public init(
-      title: String, due: Date? = nil, plannedStart: Date? = nil, minutes: Int = 25,
+      title: String, due: Date? = nil, minutes: Int = 25,
       flagged: Bool = false, repeats: Bool = false, ringsAsAlarm: Bool = false,
       isDone: Bool = false, doneAt: Date? = nil
     ) {
       self.title = title
       self.due = due
-      self.plannedStart = plannedStart
       self.minutes = minutes
       self.flagged = flagged
       self.repeats = repeats
@@ -259,22 +248,11 @@ public struct SuggestionContext: Equatable {
     return tasks.filter { !$0.isDone && ($0.due.map { $0 < today } ?? false) }
   }
 
-  /// What "Plan my day" would place: open, no planned time, overdue or due today or flagged.
-  func placeable(_ cal: Calendar = .current) -> [Task] {
-    tasks.filter { t in
-      guard !t.isDone, t.plannedStart == nil, !t.ringsAsAlarm else { return false }
-      if t.flagged { return true }
-      guard let due = t.due else { return false }
-      return due < startOfToday(cal) || cal.isDate(due, inSameDayAs: now)
-    }
-  }
-
-  /// Still open for today: planned today, or no plan and due today (planned work takes precedence over the deadline).
+  /// Still open for today: due today and not overdue.
   func leftToday(_ cal: Calendar = .current) -> [Task] {
     tasks.filter { t in
       guard !t.isDone else { return false }
       if let due = t.due, due < startOfToday(cal) { return false }
-      if let s = t.plannedStart { return cal.isDate(s, inSameDayAs: now) }
       return t.due.map { cal.isDate($0, inSameDayAs: now) } ?? false
     }
   }
@@ -291,7 +269,9 @@ public struct SuggestionContext: Equatable {
   public func busy(_ cal: Calendar = .current) -> [DateInterval] {
     var out = events.filter { $0.end > $0.start }.map { DateInterval(start: $0.start, end: $0.end) }
     for t in tasks where !t.isDone {
-      if let s = t.plannedStart, cal.isDate(s, inSameDayAs: now) {
+      if let s = t.due, cal.isDate(s, inSameDayAs: now),
+        cal.dateComponents([.hour, .minute], from: s) != DateComponents(hour: 0, minute: 0)
+      {
         out.append(DateInterval(start: s, duration: TimeInterval(max(t.minutes, 5) * 60)))
       }
     }
@@ -334,7 +314,7 @@ public struct SuggestionContext: Equatable {
 
 public struct SuggestionCandidate: Equatable, Identifiable, Sendable {
   public enum Kind: String, Sendable {
-    case plan, tidy, whatsLeft, moveTask, moveEvent, habit, prepare, leave, wake,
+    case tidy, whatsLeft, moveEvent, habit, prepare, leave, wake,
       fallbackReminder
   }
 
@@ -412,23 +392,6 @@ public enum SuggestionRules {
     let h = ctx.hour(cal)
     var out: [SuggestionCandidate] = []
 
-    // Plan my day: there is work without a time and real free time left today.
-    let placeable = ctx.placeable(cal)
-    let free = ctx.freeMinutes(cal)
-    if !placeable.isEmpty, free >= 30, h < 20 {
-      var s = 55 + Double(min(placeable.count, 5)) * 2 + Double(min(free / 60, 4)) * 2
-      s += h < 12 ? 30 : (h < 15 ? 15 : 0)
-      if h >= 17 { s -= 15 }
-      let hours = free >= 90 ? "\(free / 60) h" : "\(free) min"
-      out.append(
-        .init(
-          id: "plan", kind: .plan, text: zh ? "帮我安排今天" : "Plan my day", score: s,
-          expectation: .plan,
-          why:
-            "\(placeable.count) reminder\(placeable.count == 1 ? "" : "s") without a time and \(hours) free today"
-        ))
-    }
-
     // Tidy overdue.
     let overdue = ctx.overdue(cal)
     if !overdue.isEmpty {
@@ -457,32 +420,6 @@ public enum SuggestionRules {
         why: remaining == 0
           ? "Nothing is left today"
           : "\(left.count) reminders and \(upcomingToday) events still ahead today"))
-
-    // Move a task whose planned time passed into the next free gap.
-    let slipped = ctx.tasks.filter { t in
-      guard !t.isDone, !t.ringsAsAlarm, let s = t.plannedStart else { return false }
-      return cal.isDate(s, inSameDayAs: ctx.now) && s < ctx.now.addingTimeInterval(-600)
-    }.sorted { ($0.plannedStart ?? .distantFuture) < ($1.plannedStart ?? .distantFuture) }
-    if let t = slipped.first {
-      let need = TimeInterval(max(t.minutes, 5) * 60)
-      let slot = ctx.freeGaps(cal).first { $0.duration >= need }.map {
-        roundUp5(max($0.start, ctx.now).addingTimeInterval(300), cal)
-      }
-      if let slot, let planned = t.plannedStart {
-        let hoursLate = ctx.now.timeIntervalSince(planned) / 3600
-        out.append(
-          .init(
-            id: "move:" + t.title, kind: .moveTask,
-            text: zh
-              ? "把\(t.title)改到\(clock(slot, lang, cal))"
-              : "Move \(t.title) to \(clock(slot, lang, cal))",
-            score: 72 + min(hoursLate, 3) * 3 - (h >= 18 ? 25 : 0),
-            expectation: .move(title: t.title, to: slot),
-            why:
-              "\(t.title) was planned for \(clock(planned, .en, cal)) and is not done; next free time \(clock(slot, .en, cal))"
-          ))
-      }
-    }
 
     // Two events overlap: offer to move the later, non-repeating one right after the other.
     let events = ctx.events.sorted { $0.start < $1.start }
@@ -658,7 +595,7 @@ public enum SuggestionRules {
         asked.contains(norm(c.text))
         || routes.contains { r in
           switch (r, c.expectation) {
-          case (.tidy, .tidy), (.plan, .plan), (.question, .question):
+          case (.tidy, .tidy), (.question, .question):
             return true
           default: return false
           }

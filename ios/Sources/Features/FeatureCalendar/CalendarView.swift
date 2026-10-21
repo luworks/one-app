@@ -699,7 +699,6 @@
         h.combine(e.externalID)
       }
       for t in tasks {
-        h.combine(t.plannedStart)
         h.combine(t.due)
         h.combine(t.repeatRule)
         h.combine(t.isDone)
@@ -763,7 +762,7 @@
               isSubscription: false, isBirthday: false, title: $0.calendarTitle)
         )
       }
-      // A reminder that is still due counts on its due day, unless it is already planned for that day (then it is counted above).
+      // A reminder that is still due counts on its due day, unless it has a time (then it is counted above as an entry).
       let today = cal.startOfDay(for: presentation.now)
       for t in tasks where !t.isDone && t.repeatRule == nil {
         guard let due = t.due else { continue }
@@ -771,7 +770,9 @@
         guard dueDay >= today, interval.contains(dueDay),
           let next = cal.date(byAdding: .day, value: 1, to: dueDay)
         else { continue }
-        if let planned = t.plannedStart, cal.isDate(planned, inSameDayAs: dueDay) { continue }
+        if cal.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0) {
+          continue
+        }
         items.append(
           YearLoadItem(
             start: dueDay, end: next, isAllDay: true, repeats: false, isBackground: false))
@@ -987,7 +988,7 @@
 
   // MARK: - Week
 
-  /// 7-day time grid. Events are tinted blocks in their calendar's color (fixed); planned tasks are accent outlines (flexible).
+  /// 7-day time grid. Events are tinted blocks in their calendar's color; reminders with a time are accent outlines.
   private struct WeekView: View {
     let calendar: any CalendarService
     @Environment(PlannerPresentation.self) private var presentation
@@ -1430,8 +1431,8 @@
     private func block(_ e: CalEntry, colW: CGFloat, width: CGFloat, height: CGFloat, lines: Int)
       -> some View
     {
-      if case .task(let task) = e.source {
-        DraggableTaskBlock(task: task, colWidth: colW, hourHeight: hourHeight) {
+      if case .task = e.source {
+        Group {
           Text(e.title)
             .font(.system(size: 10, weight: .semibold))
             .lineLimit(lines)
@@ -1439,7 +1440,6 @@
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 3)
             .padding(.top, 2)
-            // Constrain the static content before DraggableTaskBlock applies its lift and drag offset.
             .frame(width: width, height: height, alignment: .topLeading)
             .clipped()
             .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
@@ -1632,66 +1632,6 @@
         default: break
         }
       }
-    }
-  }
-
-  /// Long-press, then drag a planned task to another time (15-minute steps) or day. Events never move.
-  /// Moving changes only the planned time, never the deadline.
-  private struct DraggableTaskBlock<Content: View>: View {
-    @Environment(PlannerActions.self) private var actions
-    @Environment(\.modelContext) private var context
-    @Environment(PlannerPresentation.self) private var presentation
-    let task: OneTask
-    let colWidth: CGFloat
-    let hourHeight: CGFloat
-    @ViewBuilder var content: Content
-
-    @GestureState private var translation: CGSize = .zero
-    @State private var lifted = false
-
-    var body: some View {
-      content
-        .scaleEffect(lifted ? 1.04 : 1)
-        .shadow(color: .black.opacity(lifted ? 0.2 : 0), radius: 6, y: 3)
-        .offset(snapped(translation))
-        .zIndex(lifted ? 1 : 0)
-        .gesture(
-          LongPressGesture(minimumDuration: 0.3)
-            .onEnded { _ in withAnimation(.snappy) { lifted = true } }
-            .sequenced(before: DragGesture())
-            .updating($translation) { value, state, _ in
-              if case .second(true, let drag?) = value { state = drag.translation }
-            }
-            .onEnded { value in
-              defer { withAnimation(.snappy) { lifted = false } }
-              guard case .second(true, let drag?) = value, let start = task.plannedStart else {
-                return
-              }
-              let (days, minutes) = steps(drag.translation)
-              let cal = presentation.calendar
-              let moved = cal.date(byAdding: .minute, value: minutes, to: start)
-                .flatMap { cal.date(byAdding: .day, value: days, to: $0) }
-              _ = withAnimation(.snappy) {
-                actions.setPlanned(task, to: moved ?? start, context: context)
-              }
-            }
-        )
-        .sensoryFeedback(.impact(weight: .medium), trigger: lifted) { _, up in up }
-        .accessibilityLabel(
-          "\(task.title), planned \(task.plannedStart.map { plannerDayLabel($0, runtime: presentation.runtime) } ?? "")"
-        )
-        .accessibilityHint("Long-press and drag to move it")
-    }
-
-    private func steps(_ t: CGSize) -> (days: Int, minutes: Int) {
-      let days = Int((t.width / colWidth).rounded())
-      let minutes = Int((t.height / hourHeight * 60 / 15).rounded()) * 15
-      return (days, minutes)
-    }
-
-    private func snapped(_ t: CGSize) -> CGSize {
-      let (days, minutes) = steps(t)
-      return CGSize(width: CGFloat(days) * colWidth, height: CGFloat(minutes) / 60 * hourHeight)
     }
   }
 

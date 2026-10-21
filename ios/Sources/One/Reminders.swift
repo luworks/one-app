@@ -110,12 +110,9 @@
         else { continue }
         if rings, task.ringsAsAlarm { continue }
         // A synced reminder with only a due time is alerted by Apple Reminders itself; ours would be a duplicate.
-        if task.externalID != nil, task.plannedStart == nil { continue }
+        if task.externalID != nil { continue }
         let id = Self.key(task.persistentModelID)
-        let when =
-          task.plannedStart.map { plannerDayLabel($0, runtime: runtime) } ?? task.due.map {
-            "Due " + plannerDayLabel($0, runtime: runtime)
-          } ?? ""
+        let when = task.due.map { "Due " + plannerDayLabel($0, runtime: runtime) } ?? ""
         requests.append(
           (
             fire,
@@ -228,17 +225,14 @@
             runtime: runtime, channel: .notification)
         }
       case .tomorrow:
-        let old = task.plannedStart
         let cal = runtime.calendar
-        let new: Date?
-        if let old {
-          new = cal.date(byAdding: .day, value: 1, to: old)
-        } else if let tomorrow = cal.date(byAdding: .day, value: 1, to: runtime.now()) {
-          new = cal.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow)
-        } else {
-          new = nil
+        // Tomorrow, at the same time of day (a date-only reminder stays date-only).
+        let time = task.due.map { cal.dateComponents([.hour, .minute], from: $0) }
+        let new = cal.date(byAdding: .day, value: 1, to: runtime.now()).flatMap {
+          cal.date(
+            bySettingHour: time?.hour ?? 0, minute: time?.minute ?? 0, second: 0, of: $0)
         }
-        TaskActions.setPlanned(
+        TaskActions.setDue(
           task, to: new, context: context, ledger: ledger, channel: .notification)
       default:
         return
@@ -276,7 +270,7 @@
       runtime.calendar.dateComponents([.hour, .minute], from: due)
         == DateComponents(hour: 0, minute: 0) ? nil : due
     }
-    return (task.plannedStart ?? timedDue)?.addingTimeInterval(TimeInterval(-offset * 60))
+    return timedDue?.addingTimeInterval(TimeInterval(-offset * 60))
   }
 
   @MainActor

@@ -286,16 +286,6 @@
 
     private var aiSection: some View {
       Section {
-        AutomaticChangesToggle(ledger: ledger)
-        NavigationLink("Scope and duration") {
-          AutomaticChangesView(ledger: ledger).performanceDestination("settings.automaticChanges")
-        }
-        .performanceControlledNavigation("settings.automaticChanges") {
-          AutomaticChangesView(ledger: ledger).performanceDestination("settings.automaticChanges")
-        } label: {
-          Text("Scope and duration")
-        }
-        .accessibilityIdentifier("settings.automaticChanges")
         AskSuggestionsSettingRow()
         explainedToggle(
           "Archive finished chats", isOn: $autoArchiveChats,
@@ -304,10 +294,6 @@
         )
       } header: {
         Text("AI")
-      } footer: {
-        Text(
-          "Turn on for 7 days to plan untimed reminders due today into free time. Only Today’s own planned times change. Every automatic change has Undo and an Activity entry."
-        )
       }
     }
 
@@ -487,157 +473,6 @@
       }
       .presentationDetents([.medium])
     }
-  }
-
-  /// Both Settings entry points edit the existing bounded grant, without a second preference.
-  private struct AutomaticChangesToggle: View {
-    let ledger: Ledger
-    @Environment(PlannerPresentation.self) private var presentation
-    @Environment(\.modelContext) private var context
-    @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
-    @AppStorage(ActivitySettings.pausedKey) private var paused = false
-    @AppStorage(ActivitySettings.tierKey(.changes)) private var recordsChanges = true
-    @State private var saveFailed = false
-
-    var body: some View {
-      TimelineView(.periodic(from: presentation.now, by: 60)) { _ in
-        let active = Grants.active(
-          grants.compactMap(\.info), scope: .planFreeTime, now: presentation.now)
-        VStack(alignment: .leading, spacing: 4) {
-          Toggle(
-            isOn: Binding(
-              get: { active != nil },
-              set: { enabled in
-                do {
-                  try GrantStore.setEnabled(
-                    enabled, scope: .planFreeTime, context: context, ledger: ledger,
-                    runtime: presentation.runtime)
-                } catch {
-                  saveFailed = true
-                }
-              })
-          ) {
-            Label("Automatic changes", systemImage: "sparkles")
-          }
-          .accessibilityIdentifier("settings.automaticChanges.toggle")
-          if let active {
-            Text(
-              "Until "
-                + active.expires.formatted(
-                  Date.FormatStyle(
-                    locale: presentation.locale, calendar: presentation.calendar,
-                    timeZone: presentation.calendar.timeZone
-                  ).month(.abbreviated).day().hour().minute())
-            )
-            .font(.footnote).foregroundStyle(.secondary)
-            .accessibilityIdentifier("grant.expiry")
-          } else {
-            Text("Off. Turn on for 7 days.").font(.footnote).foregroundStyle(.secondary)
-          }
-          if paused || !recordsChanges {
-            Text("Automatic changes wait while Activity recording is paused or Changes is off.")
-              .font(.footnote).foregroundStyle(.secondary)
-              .accessibilityIdentifier("grant.recordingWarning")
-          }
-        }
-      }
-      .alert("Couldn’t save automatic changes", isPresented: $saveFailed) {
-        Button("OK", role: .cancel) {}
-      } message: {
-        Text("Please try again.")
-      }
-    }
-  }
-
-  /// Settings → AI → Automatic changes: the same seven-day scope as the plan card, with its end date and Revoke.
-  /// What no grant can ever cover is listed too (see `AutonomyPolicy`).
-  package struct AutomaticChangesView: View {
-    private let ledger: Ledger
-    package init(ledger: Ledger) { self.ledger = ledger }
-    @Environment(PlannerPresentation.self) private var presentation
-    @State private var saveFailed = false
-    @Environment(\.modelContext) private var context
-    @Query(sort: \AIGrant.expires, order: .reverse) private var grants: [AIGrant]
-
-    private var active: [AIGrant] {
-      grants.filter { $0.info?.isActive(at: presentation.now) ?? false }
-    }
-
-    package var body: some View {
-      Form {
-        Section {
-          AutomaticChangesToggle(ledger: ledger)
-        } footer: {
-          Text(
-            "Turn on for 7 days. Only Today’s own planned times change; every automatic change has Undo and an Activity entry."
-          )
-        }
-        Section {
-          if active.isEmpty {
-            Text("None. AI changes wait for your tap.").foregroundStyle(.secondary)
-          }
-          ForEach(active) { g in
-            HStack(spacing: 12) {
-              VStack(alignment: .leading, spacing: 2) {
-                Text(GrantScope(rawValue: g.scope)?.title ?? g.scope)
-                Text(
-                  "Until "
-                    + g.expires.formatted(
-                      Date.FormatStyle(
-                        locale: presentation.locale, calendar: presentation.calendar,
-                        timeZone: presentation.calendar.timeZone
-                      ).weekday(.abbreviated).month(.abbreviated).day())
-                )
-                .font(.footnote).foregroundStyle(.secondary)
-              }
-              Spacer()
-              Button("Revoke", role: .destructive) {
-                guard let scope = GrantScope(rawValue: g.scope) else { return }
-                do {
-                  try GrantStore.setEnabled(
-                    false, scope: scope, context: context,
-                    ledger: ledger, runtime: presentation.runtime)
-                } catch { saveFailed = true }
-              }
-              .buttonStyle(.bordered)
-              .controlSize(.small)
-              .accessibilityIdentifier("grant.revoke")
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("grant.row")
-          }
-        } header: {
-          Text("Allowed")
-        } footer: {
-          Text(
-            GrantScope.planFreeTime.detail
-              + " Overdue reminders, ones that ring as alarms, and ones you placed yourself still ask."
-          )
-        }
-        Section {
-          ForEach(Self.never, id: \.self) { Label($0, systemImage: "lock").font(.subheadline) }
-        } header: {
-          Text("Always asks")
-        } footer: {
-          Text("No grant covers these. Each one is a card you apply with a tap.")
-        }
-      }
-      .alert("Couldn’t save automatic changes", isPresented: $saveFailed) {
-        Button("OK", role: .cancel) {}
-      } message: {
-        Text("Please try again.")
-      }
-      .navigationTitle("Automatic changes")
-      .navigationBarTitleDisplayMode(.inline)
-    }
-
-    static let never = [
-      "Writing Apple Calendar or Apple Reminders",
-      "Moving or changing events",
-      "Changing deadlines",
-      "Deleting anything",
-      "Anything that notifies other people",
-    ]
   }
 
 #endif

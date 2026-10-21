@@ -96,7 +96,7 @@
     private enum ResponseTarget: Equatable {
       case reply(UUID)
       case capture(UUID)
-      case plan, tidy
+      case tidy
       case change(UUID)
       case choices([UUID])
     }
@@ -107,7 +107,6 @@
       let followup: Followup?
       let change: PendingChange?
       let changeStart: Date?
-      let plan: [Date]
       let tidy: [String]
     }
 
@@ -116,7 +115,7 @@
       return ResponseSignature(
         messages: messages, proposals: proposals, followup: followup, change: change,
         changeStart: change?.newStart,
-        plan: plan.map(\.start), tidy: tidy.map { "\($0.id):\($0.choice)" })
+        tidy: tidy.map { "\($0.id):\($0.choice)" })
     }
 
     /// A state mutation alone cannot finish a turn. Its own synchronous/async handler must first emit a result.
@@ -134,8 +133,6 @@
         })
       {
         responseTarget = .capture(proposal.batch)
-      } else if !plan.isEmpty && signature.plan != baseline.plan {
-        responseTarget = .plan
       } else if !tidy.isEmpty && signature.tidy != baseline.tidy {
         responseTarget = .tidy
       } else if let change,
@@ -178,9 +175,6 @@
       }
       AIResponseTrace.shared.backend(backend, token: token)
     }
-    @State private var plan: [(task: OneTask, start: Date)] = []
-    /// The "Plan reminders into free time" grant, while one is active (the plan card then says so instead of offering it).
-    @State private var planGrant: AIGrant?
     /// "Tidy overdue": a new date per overdue reminder, waiting for Apply.
     @State private var tidy: [TidyRow] = []
     @State private var voice: VoiceInput
@@ -449,18 +443,6 @@
 
     private var inputArea: some View {
       VStack(spacing: 8) {
-        if !plan.isEmpty {
-          PlanCard(
-            plan: plan, grantUntil: planGrant?.expires, onApply: { applyPlan() },
-            onAlways: applyPlanAlways,
-            onCancel: {
-              recordCard(resolved: "plan", "cancelled", items: plan.count)
-              plan = []
-            }
-          )
-          .background { responseProbe(.plan) }
-          .transition(cardTransition)
-        }
         if !tidy.isEmpty {
           TidyCard(
             rows: $tidy, onApply: applyTidy,
@@ -560,7 +542,6 @@
       .padding(.horizontal, 12)
       .padding(.bottom, 6)
       .background(Color(.systemBackground))
-      .animation(reduceMotion ? nil : .snappy, value: plan.count)
       .animation(reduceMotion ? nil : .snappy, value: change)
       .animation(reduceMotion ? nil : .snappy, value: followup)
       .animation(reduceMotion ? nil : .snappy, value: undoRow?.id)
@@ -706,10 +687,6 @@
         recordTurn("tidy", text)
         clearPreviews()
         proposeTidy()
-      } else if isPlanRequest(text) {
-        recordTurn("plan", text)
-        clearPreviews()
-        proposePlan()
       } else if Editing.looksLikeEdit(
         text, items: editCandidates().items, now: now(), calendar: runtime.calendar)
       {
@@ -784,10 +761,9 @@
 
     /// Moving on drops pending cards in place, recording their resolution without removing chat history.
     private func clearPreviews() {
-      closeOpenCards("ignored", plansOnly: false)
+      closeOpenCards("ignored")
       dropOpenCards()
       change = nil
-      plan = []
       tidy = []
       undoRow = nil
       followup = nil
@@ -825,10 +801,8 @@
     }
 
     /// Cards still waiting for a tap when they go away (a new message, the screen closing) are recorded as ignored.
-    private func closeOpenCards(_ outcome: String, plansOnly: Bool = false) {
-      if !plan.isEmpty { recordCard(resolved: "plan", outcome, items: plan.count) }
+    private func closeOpenCards(_ outcome: String) {
       if !tidy.isEmpty { recordCard(resolved: "tidy", outcome, items: tidy.count) }
-      guard !plansOnly else { return }
       let open = proposals.filter { $0.status == .open }.count
       if open > 0 { recordCard(resolved: "capture", outcome, items: open) }
       if change != nil { recordCard(resolved: "change", outcome) }
@@ -1143,14 +1117,14 @@
         var notes: [String] = []
         if d.op == .move {
           notes.append(
-            "Only the planned time changes." + (task.due != nil ? " The deadline stays." : ""))
+            "Only this reminder's date changes.")
           if task.ringsAsAlarm { notes.append("Its alarm follows the new time.") }
         }
         lastTouched = task.title
         change = PendingChange(
           subject: .task(task), delete: d.op == .delete, title: task.title,
-          oldText: task.plannedStart.map { plannerDayLabel($0, runtime: runtime) }
-            ?? "Not scheduled", newStart: d.newStart, notes: notes,
+          oldText: task.due.map { plannerDayLabel($0, runtime: runtime) }
+            ?? "No date", newStart: d.newStart, notes: notes,
           attendees: 0)
       } else {
         return
@@ -1478,108 +1452,6 @@
       !task.isDone && (task.due.map { $0 < runtime.calendar.startOfDay(for: now()) } ?? false)
     }
 
-    private func isPlanRequest(_ text: String) -> Bool { SentenceRoute.isPlanRequest(text) }
-
-    /// Proposes start times for today's flexible tasks around fixed events. Nothing moves until Apply.
-    private func proposePlan() {
-      let cal = runtime.calendar
-      let now = now()
-      guard let endOfDay = cal.date(bySettingHour: 21, minute: 0, second: 0, of: now),
-        endOfDay > now
-      else {
-        messages.append(reply("It's late. Ask me to plan tomorrow instead."))
-        return
-      }
-      let start = max(now, cal.date(bySettingHour: 8, minute: 0, second: 0, of: now) ?? now)
-      let window = DateInterval(start: start, end: endOfDay)
-      var busy = events.filter { !$0.isAllDay }.flatMap { e in
-        askOccurrences(e, on: now, calendar: cal).map {
-          DateInterval(start: $0, duration: e.duration)
-        }
-      }
-      busy += calendarSync.events(on: now).filter { !$0.isAllDay }.map {
-        DateInterval(start: $0.start, end: $0.end)
-      }
-      busy += tasks.compactMap { t in
-        guard !t.isDone, let s = t.plannedStart, cal.isDate(s, inSameDayAs: now) else { return nil }
-        return DateInterval(start: s, duration: TimeInterval(t.durationMinutes * 60))
-      }
-      func rank(_ t: OneTask) -> Int {
-        if isOverdue(t) { return 0 }
-        if let d = t.due, cal.isDate(d, inSameDayAs: now) { return 1 }
-        if t.flagged { return 2 }
-        return 3
-      }
-      let candidates = tasks.filter { !$0.isDone && $0.plannedStart == nil && rank($0) < 3 }
-        .sorted { (rank($0), $0.createdAt) < (rank($1), $1.createdAt) }
-      let items = candidates.enumerated().map {
-        DayPlanner.Item(id: $0.offset, minutes: $0.element.durationMinutes)
-      }
-      let result = DayPlanner.plan(items, busy: busy, window: window)
-      plan = result.map { (candidates[$0.id], $0.start) }
-      planGrant = GrantStore.active(.planFreeTime, context: context, now: now)
-      if planGrant != nil, ledger.activity.recordsChanges, !plan.isEmpty,
-        let protected = ledger.protectedRefs(context, now: now)
-      {
-        // Under the grant, what the policy allows applies by itself; the rest (overdue, …) stays on the card.
-        let grants = GrantStore.infos(context)
-        let auto = plan.filter { p in
-          guard let due = p.task.due, cal.isDate(due, inSameDayAs: now),
-            cal.dateComponents([.hour, .minute], from: due) == DateComponents(hour: 0, minute: 0)
-          else { return false }
-          let ref = Ledger.ref(p.task.persistentModelID).map(Ledger.comparisonKey)
-          let change = ProposedChange(
-            target: .reminder, operation: .setPlannedTime, isOverdue: isOverdue(p.task),
-            isDone: p.task.isDone, ringsAsAlarm: p.task.ringsAsAlarm,
-            aiChangedRecently: ref.map(protected.aiRecent.contains) ?? false,
-            userChoseTime: ref.map(protected.userChose.contains) ?? false)
-          return AutonomyPolicy.decide(change, grants: grants, now: now) == .auto
-        }
-        if !auto.isEmpty {
-          let autoIDs = Set(auto.map { ObjectIdentifier($0.task) })
-          plan.removeAll { autoIDs.contains(ObjectIdentifier($0.task)) }
-          applyPlan(auto, approval: .autoUnderGrant)
-          return
-        }
-      }
-      if plan.isEmpty {
-        messages.append(
-          reply(
-            candidates.isEmpty
-              ? "Nothing urgent to place: no overdue, due-today or flagged tasks without a time."
-              : "Your day is full. Nothing fits before 9 PM."))
-      } else {
-        let skipped = candidates.count - plan.count
-        recordCard(shown: "plan", items: plan.count)
-        messages.append(
-          reply(
-            "Here's a plan around your meetings. Meetings stay fixed; only tasks move. Nothing changes until you apply it."
-              + (skipped > 0 ? " \(skipped) task\(skipped == 1 ? "" : "s") didn't fit." : "")))
-      }
-    }
-
-    /// Writes the plan's planned times (never deadlines) and records each in Activity. `rows` defaults to the card's.
-    private func applyPlan(
-      _ rows: [(task: OneTask, start: Date)]? = nil, approval: LedgerApproval = .asked
-    ) {
-      if rows == nil { recordCard(resolved: "plan", "applied", items: plan.count) }
-      show(
-        AskNativeActions.applyPlan(
-          rows, plan: &plan, grant: planGrant, approval: approval, context: context,
-          actions: actions, ledger: ledger, runtime: runtime), card: "plan")
-    }
-
-    /// "Always for 7 days": applies this card now (the user's tap) and lets the same kind of change apply by itself for
-    /// 7 days, under `AutonomyPolicy`. Revoke in Settings → AI → Automatic changes.
-    private func applyPlanAlways() {
-      show(
-        AskNativeActions.applyPlanAlways(
-          plan: &plan, grant: &planGrant, context: context, actions: actions, ledger: ledger,
-          runtime: runtime,
-          onApproved: { count in recordCard(resolved: "plan", "applied", items: count) }),
-        card: "plan")
-    }
-
     /// Suggests a new date for every overdue reminder (see `OverdueTidy`). Nothing changes until Apply.
     private func proposeTidy() {
       let overdue = tasks.filter { isOverdue($0) }
@@ -1618,7 +1490,6 @@
       let open = tasks.filter { task in
         guard !task.isDone else { return false }
         if isOverdue(task) { return true }
-        if let s = task.plannedStart, cal.isDate(s, inSameDayAs: now) { return true }
         if let d = task.due, cal.isDate(d, inSameDayAs: now) { return true }
         return false
       }
@@ -1774,75 +1645,6 @@
     ) {
       _rows = rows
       self.onApply = onApply
-      self.onCancel = onCancel
-    }
-  }
-
-  /// AI plan preview: proposed start times, applied only on tap.
-  package struct PlanCard: View {
-    @Environment(PlannerPresentation.self) private var presentation
-    package let plan: [(task: OneTask, start: Date)]
-    /// Set while a "Plan reminders into free time" grant is active: the card then only offers Apply.
-    package var grantUntil: Date? = nil
-    package var onApply: () -> Void
-    /// "Always for 7 days": apply now and allow this kind of change by itself (only Today's own planned times).
-    package var onAlways: () -> Void
-    package var onCancel: () -> Void
-
-    package var body: some View {
-      VStack(alignment: .leading, spacing: 8) {
-        Label("Plan for today", systemImage: "sparkles")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-        ForEach(Array(plan.enumerated()), id: \.offset) { _, p in
-          HStack(spacing: 10) {
-            Text(askTimeLabel(p.start, runtime: presentation.runtime))
-              .font(.subheadline.monospacedDigit())
-              .foregroundStyle(.secondary)
-              .frame(width: 64, alignment: .leading)
-            Text(p.task.title).font(.subheadline)
-            Spacer(minLength: 0)
-            Text(DurationLabel.text(minutes: p.task.durationMinutes))
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-        }
-        Text(
-          grantUntil.map {
-            "Only Today's planned times change; deadlines stay. Automatic until \(plannerDayLabel($0, runtime: presentation.runtime, includeTime: false))."
-          }
-            ?? "Only Today's planned times change; deadlines stay."
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        HStack(spacing: 8) {
-          Button("Cancel", action: onCancel).buttonStyle(.bordered)
-          Spacer(minLength: 0)
-          if grantUntil == nil {
-            Button("Always for 7 days", action: onAlways)
-              .buttonStyle(.bordered)
-              .accessibilityIdentifier("plan.always")
-          }
-          Button("Apply", action: onApply)
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier("plan.apply")
-        }
-        .lineLimit(1)
-        .padding(.top, 4)
-      }
-      .padding(14)
-      .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
-      .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.secondary.opacity(0.25)))
-    }
-
-    package init(
-      plan: [(task: OneTask, start: Date)], grantUntil: Date? = nil,
-      onApply: @escaping () -> Void, onAlways: @escaping () -> Void, onCancel: @escaping () -> Void
-    ) {
-      self.plan = plan
-      self.grantUntil = grantUntil
-      self.onApply = onApply
-      self.onAlways = onAlways
       self.onCancel = onCancel
     }
   }
@@ -2023,7 +1825,7 @@
               })
           }
         } else if let new = c.newStart {
-          if let entry = actions.setPlanned(
+          if let entry = actions.setDue(
             task, to: new, context: context, actor: .todayAI, channel: .ask, approval: .asked)
           {
             feedback.messages.append(reply("Moved “\(task.title)” to \(ledger.timeLabel(new))."))
@@ -2031,7 +1833,7 @@
               label: "Moved “\(task.title)”.",
               action: {
                 guard !task.isDeleted, task.modelContext != nil,
-                  !task.isDone, task.plannedStart == new
+                  !task.isDone, task.due == new
                 else { return }
                 var recorded = entry
                 recorded.itemRef = Ledger.ref(task.persistentModelID)
@@ -2140,100 +1942,6 @@
 
     private static func recallNote(_ c: PendingChange) -> String {
       c.attendees > 0 ? " Attendee updates already sent can't be recalled." : ""
-    }
-
-    package static func applyPlan(
-      _ rows: [(task: OneTask, start: Date)]? = nil,
-      plan: inout [(task: OneTask, start: Date)], grant: AIGrant?,
-      approval: LedgerApproval = .asked, context: ModelContext, actions: PlannerActions,
-      ledger: Ledger, runtime: PlannerRuntime
-    ) -> AskActionFeedback {
-      func reply(_ text: String) -> ChatMessage {
-        ChatMessage(role: .ai, text: text, timestamp: runtime.now())
-      }
-      var feedback = AskActionFeedback()
-
-      let auto = approval == .autoUnderGrant
-      let anchor = runtime.now()
-      let cal = runtime.calendar
-      let protected =
-        auto
-        ? ledger.protectedRefs(context, now: anchor)
-        : (aiRecent: Set<String>(), userChose: Set<String>())
-      let applied = (rows ?? plan).filter { row in
-        guard !row.task.isDeleted, row.task.modelContext != nil, !row.task.isDone else {
-          return false
-        }
-        guard auto else { return true }
-        guard let protected, ledger.activity.recordsChanges, row.task.plannedStart == nil,
-          let due = row.task.due, cal.isDate(due, inSameDayAs: anchor),
-          cal.isDate(row.start, inSameDayAs: anchor),
-          cal.dateComponents([.hour, .minute], from: due) == DateComponents(hour: 0, minute: 0)
-        else { return false }
-        let ref = Ledger.ref(row.task.persistentModelID).map(Ledger.comparisonKey)
-        let change = ProposedChange(
-          target: .reminder, operation: .setPlannedTime,
-          isDone: row.task.isDone, ringsAsAlarm: row.task.ringsAsAlarm,
-          aiChangedRecently: ref.map(protected.aiRecent.contains) ?? false,
-          userChoseTime: ref.map(protected.userChose.contains) ?? false)
-        return AutonomyPolicy.decide(change, grants: GrantStore.infos(context), now: anchor)
-          == .auto
-      }
-      let entries = applied.compactMap { p -> (task: OneTask, start: Date, entry: LedgerItem)? in
-        guard
-          let entry = actions.setPlanned(
-            p.task, to: p.start, context: context, actor: .todayAI,
-            channel: auto ? .automatic : .ask, approval: approval)
-        else { return nil }
-        return (p.task, p.start, entry)
-      }
-      if rows == nil { plan = [] }
-      let n = applied.count
-      let label =
-        auto ? LedgerFormat.autoPlanned(n) + "." : "Planned \(n) task\(n == 1 ? "" : "s")."
-      var text =
-        auto
-        ? label + " Automatic until \(ledger.dayLabel(grant?.expires ?? runtime.now()))."
-        : "Planned \(n) task\(n == 1 ? "" : "s") for today."
-      if auto, !plan.isEmpty {
-        text += " \(plan.count) more need\(plan.count == 1 ? "s" : "") your OK."
-      }
-      feedback.messages.append(reply(text))
-      feedback.undo = UndoRow(
-        label: label,
-        action: {
-          for row in entries {
-            guard !row.task.isDeleted, row.task.modelContext != nil,
-              !row.task.isDone, row.task.plannedStart == row.start
-            else { continue }
-            // Record returns before flush resolves its pending model reference.
-            // Retain the exact applied task rather than matching the unhydrated value copy.
-            var entry = row.entry
-            entry.itemRef = Ledger.ref(row.task.persistentModelID)
-            _ = actions.undo(entry, context: context)
-          }
-        })
-      return feedback
-    }
-
-    package static func applyPlanAlways(
-      plan: inout [(task: OneTask, start: Date)], grant: inout AIGrant?,
-      context: ModelContext, actions: PlannerActions, ledger: Ledger, runtime: PlannerRuntime,
-      onApproved: (Int) -> Void
-    ) -> AskActionFeedback {
-      func reply(_ text: String) -> ChatMessage {
-        ChatMessage(role: .ai, text: text, timestamp: runtime.now())
-      }
-      grant = GrantStore.grant(.planFreeTime, context: context, ledger: ledger, runtime: runtime)
-      onApproved(plan.count)
-      var feedback = applyPlan(
-        plan: &plan, grant: grant, context: context, actions: actions, ledger: ledger,
-        runtime: runtime)
-      feedback.messages.append(
-        reply(
-          "For the next 7 days I'll plan reminders due today into free time by myself "
-            + "and tell you each time. Only Today's planned times change. Revoke it in Settings."))
-      return feedback
     }
 
     package static func applyTidy(

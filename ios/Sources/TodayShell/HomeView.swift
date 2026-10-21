@@ -631,7 +631,6 @@
             importShared()
             session.activity.importOutbox()
             session.timers.refresh()
-            autoPlan()
             Task { await session.notifications.resync() }
           }
           if phase == .background {
@@ -687,16 +686,6 @@
       LedgerMigration.run(context: context, ledger: session.ledger)
       session.activity.importOutbox()
       session.ledger.prune(context, now: session.runtime.now())
-      #if DEBUG
-        // UI tests: `-uiTestingGrant` starts with "Plan reminders into free time" allowed (in-memory store).
-        if ProcessInfo.processInfo.arguments.contains("-uiTestingGrant"),
-          GrantStore.active(.planFreeTime, context: context, now: session.runtime.now()) == nil
-        {
-          GrantStore.grant(
-            .planFreeTime, context: context, ledger: session.ledger, runtime: session.runtime)
-        }
-      #endif
-      autoPlan()
       await FirstRun.calendar(
         session.calendar, defaults: session.defaults, arguments: composition.arguments)
       if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
@@ -708,14 +697,6 @@
       session.widget.update(
         tasks: allTasks, events: allEvents, alarms: allAlarms, now: session.runtime.now(),
         calendar: session.runtime.calendar)
-    }
-
-    /// Under a "Plan reminders into free time" grant, today's untimed reminders take their suggested free time by
-    /// themselves, with a toast and Undo (see `AutoPlan`). Without a grant this does nothing.
-    private func autoPlan() {
-      AutoPlan.run(
-        context: context, toast: toast, calendar: session.calendar, ledger: session.ledger,
-        runtime: session.runtime)
     }
 
     private func dropDeletedMirrors() {
@@ -736,7 +717,6 @@
       for t in allTasks {
         h.combine(t.title)
         h.combine(t.isDone)
-        h.combine(t.plannedStart)
         h.combine(t.due)
         h.combine(t.reminderOffsetMinutes)
         h.combine(t.ringsAsAlarm)

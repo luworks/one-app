@@ -65,7 +65,7 @@
         }
         Button {
           _ = withAnimation {
-            actions.setPlanned(
+            actions.setDue(
               task,
               to: plannerMove(
                 task, tomorrow: false, now: presentation.now, calendar: presentation.calendar),
@@ -76,7 +76,7 @@
         }
         Button {
           _ = withAnimation {
-            actions.setPlanned(
+            actions.setDue(
               task,
               to: plannerMove(
                 task, tomorrow: true, now: presentation.now, calendar: presentation.calendar),
@@ -86,7 +86,7 @@
           Label("Tomorrow", systemImage: "sunrise")
         }
         Button {
-          _ = withAnimation { actions.setPlanned(task, to: nil, context: context) }
+          _ = withAnimation { actions.setDue(task, to: nil, context: context) }
         } label: {
           Label("Unschedule", systemImage: "calendar.badge.minus")
         }

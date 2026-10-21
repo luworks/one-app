@@ -45,7 +45,7 @@ final class AskSuggestionsTests: XCTestCase {
     items += tasks.filter { !$0.isDone }.enumerated().map {
       EditItem(
         id: "t\($0.offset + 1)", type: "task", title: $0.element.title,
-        start: $0.element.plannedStart, minutes: $0.element.minutes, attendees: 0)
+        start: $0.element.due, minutes: $0.element.minutes, attendees: 0)
     }
     return SuggestionContext(
       now: now, systemIsChinese: systemZh, events: events, tomorrowFirst: tomorrowFirst,
@@ -54,12 +54,12 @@ final class AskSuggestionsTests: XCTestCase {
   }
 
   private func task(
-    _ title: String, due: Date? = nil, planned: Date? = nil, flagged: Bool = false,
+    _ title: String, due: Date? = nil, flagged: Bool = false,
     done: Bool = false, doneAt: Date? = nil,
     minutes: Int = 30
   ) -> SuggestionContext.Task {
     SuggestionContext.Task(
-      title: title, due: due, plannedStart: planned, minutes: minutes, flagged: flagged,
+      title: title, due: due, minutes: minutes, flagged: flagged,
       isDone: done, doneAt: doneAt)
   }
 
@@ -69,7 +69,7 @@ final class AskSuggestionsTests: XCTestCase {
 
   // MARK: Scenarios
 
-  func testMorningWithFreeTimePlansTheDayFirst() {
+  func testMorningOffersTidyAndWhatsLeft() {
     let ctx = make(
       now: at(8, 30),
       events: [
@@ -82,30 +82,22 @@ final class AskSuggestionsTests: XCTestCase {
       ])
     let top = SuggestionRules.top(ctx, calendar: cal)
     XCTAssertTrue((2...3).contains(top.count))
-    XCTAssertEqual(top.first?.kind, .plan, "free time and unplanned work in the morning")
-    XCTAssertEqual(top.first?.text, "Plan my day")
     XCTAssertTrue(kinds(top).contains(.tidy), "one overdue reminder")
     XCTAssertEqual(top.first(where: { $0.kind == .tidy })?.text, "Tidy 1 overdue")
   }
 
-  func testAfternoonWithOverdueOffersTidyAndMovesTheSlippedTask() {
+  func testAfternoonWithOverdueOffersTidy() {
     let ctx = make(
       now: at(15, 10),
       events: [event("Dentist", 17, 0)],
       tasks: [
-        task("Write up design notes", planned: at(11, 0), minutes: 45),
         task("Pay studio invoice", due: at(0, day: -2)),
         task("Renew parking permit", due: at(0, day: -3), flagged: true),
         task("Call the bank", due: at(0, day: -1)),
       ])
     let top = SuggestionRules.top(ctx, calendar: cal)
     XCTAssertTrue(kinds(top).contains(.tidy))
-    let move = SuggestionRules.candidates(ctx, calendar: cal).first { $0.kind == .moveTask }
-    XCTAssertEqual(
-      move?.text, "Move Write up design notes to 3:15pm",
-      "next free time after now, in 5-minute steps")
     XCTAssertEqual(top.first(where: { $0.kind == .tidy })?.text, "Tidy 3 overdue")
-    XCTAssertEqual(kinds(top).first, .moveTask, "a slipped plan is the most useful thing to fix")
   }
 
   func testEveningOffersAnAlarmForAnEarlyStart() {
@@ -122,7 +114,6 @@ final class AskSuggestionsTests: XCTestCase {
     XCTAssertEqual(
       top.first(where: { $0.kind == .wake })?.text, "Wake me at 6:30am tomorrow",
       "an hour and a half before the flight")
-    XCTAssertFalse(kinds(top).contains(.plan), "too late to plan today")
   }
 
   func testNoAlarmSuggestedWhenOneAlreadyRingsBeforeTheFirstEvent() {
@@ -138,7 +129,6 @@ final class AskSuggestionsTests: XCTestCase {
     XCTAssertEqual(top.count, 2, "no third chip without something worth showing")
     XCTAssertTrue(kinds(top).contains(.whatsLeft))
     XCTAssertTrue(kinds(top).contains(.fallbackReminder))
-    XCTAssertFalse(kinds(top).contains(.plan))
     XCTAssertFalse(kinds(top).contains(.tidy))
   }
 
@@ -159,7 +149,6 @@ final class AskSuggestionsTests: XCTestCase {
         c.text.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) },
         "Chinese: \(c.text)")
     }
-    XCTAssertEqual(SuggestionRules.top(ctx, calendar: cal).first?.text, "帮我安排今天")
     XCTAssertTrue(all.contains { $0.text == "整理1条过期提醒" })
     XCTAssertTrue(all.contains { $0.text == "10:30提醒我准备产品周会" })
   }
@@ -177,24 +166,25 @@ final class AskSuggestionsTests: XCTestCase {
     let base = make(
       now: at(8, 30), events: [event("Standup", 9, 30)],
       tasks: [task("Buy milk", due: at(0)), task("Pay studio invoice", due: at(0, day: -1))])
-    XCTAssertEqual(SuggestionRules.top(base, calendar: cal).first?.kind, .plan)
+    XCTAssertTrue(kinds(SuggestionRules.top(base, calendar: cal)).contains(.tidy))
 
     var justUsed = base
-    justUsed.chats = [.init(title: "Plan my day", userTexts: ["Plan my day"], at: at(8, 15))]
-    let top = SuggestionRules.top(justUsed, calendar: cal)
-    XCTAssertFalse(kinds(top).contains(.plan), "asked 15 minutes ago")
-    XCTAssertTrue(kinds(top).contains(.tidy))
+    justUsed.chats = [.init(title: "Tidy 1 overdue", userTexts: ["Tidy 1 overdue"], at: at(8, 15))]
+    XCTAssertFalse(
+      kinds(SuggestionRules.top(justUsed, calendar: cal)).contains(.tidy), "asked 15 minutes ago")
 
     var worded = base
-    worded.chats = [.init(title: "plan today", userTexts: ["plan today please"], at: at(8, 20))]
+    worded.chats = [
+      .init(title: "tidy", userTexts: ["clean up overdue please"], at: at(8, 20))
+    ]
     XCTAssertFalse(
-      kinds(SuggestionRules.top(worded, calendar: cal)).contains(.plan),
+      kinds(SuggestionRules.top(worded, calendar: cal)).contains(.tidy),
       "another way of asking the same thing counts")
 
     var old = base
-    old.chats = [.init(title: "Plan my day", userTexts: ["Plan my day"], at: at(6, 0))]
-    XCTAssertEqual(
-      SuggestionRules.top(old, calendar: cal).first?.kind, .plan,
+    old.chats = [.init(title: "Tidy 1 overdue", userTexts: ["Tidy 1 overdue"], at: at(6, 0))]
+    XCTAssertTrue(
+      kinds(SuggestionRules.top(old, calendar: cal)).contains(.tidy),
       "two and a half hours ago is old enough")
   }
 
@@ -202,9 +192,11 @@ final class AskSuggestionsTests: XCTestCase {
     let tasks = [task("Buy milk", due: at(0)), task("Pay studio invoice", due: at(0, day: -1))]
     let morning = SuggestionRules.chips(
       make(now: at(8, 30), events: [event("Standup", 9, 30)], tasks: tasks), calendar: cal)
-    let night = SuggestionRules.chips(
-      make(now: at(21, 30), events: [event("Standup", 9, 30)], tasks: tasks), calendar: cal)
-    XCTAssertNotEqual(morning.map(\.text), night.map(\.text))
+    let nothingOverdue = SuggestionRules.chips(
+      make(
+        now: at(8, 30), events: [event("Standup", 9, 30)], tasks: [task("Buy milk", due: at(0))]),
+      calendar: cal)
+    XCTAssertNotEqual(morning.map(\.text), nothingOverdue.map(\.text))
     let more = SuggestionRules.chips(
       make(
         now: at(8, 30), events: [event("Standup", 9, 30)],
@@ -278,7 +270,7 @@ final class AskSuggestionsTests: XCTestCase {
       (at(20, 30), false), (at(20, 30), true), (at(10, 0), false),
     ] {
       let t = [
-        task("Write up design notes", planned: at(11, 0), minutes: 45),
+        task("Write up design notes", due: at(11, 0), minutes: 45),
         task("Pay studio invoice", due: at(0, day: -2), flagged: true),
         task("Buy milk", due: at(0)), task("Prepare the demo", flagged: true),
         task("Buy milk done", done: true, doneAt: at(9)),
@@ -325,8 +317,6 @@ final class AskSuggestionsTests: XCTestCase {
     func route(_ s: String) -> SentenceRoute {
       SentenceRoute.route(s, items: items, now: at(15), calendar: cal)
     }
-    XCTAssertEqual(route("Plan my day"), .plan)
-    XCTAssertEqual(route("帮我安排今天"), .plan)
     XCTAssertEqual(route("Tidy 3 overdue"), .tidy)
     XCTAssertEqual(route("整理3条过期提醒"), .tidy)
     XCTAssertEqual(route("What's left today?"), .question)
@@ -361,7 +351,6 @@ final class AskSuggestionsTests: XCTestCase {
     let ctx = make(
       now: at(15, 10), events: [event("Dentist", 17, 0)],
       tasks: [
-        task("Write up design notes", planned: at(11, 0), minutes: 45),
         task("Pay studio invoice", due: at(0, day: -2)),
         task("Call the bank", due: at(0, day: -1)),
       ])
@@ -372,17 +361,17 @@ final class AskSuggestionsTests: XCTestCase {
   func testModelCanReorderAndRephraseWhenTheRouteStaysTheSame() {
     let (ctx, pool, rules) = blendSetup()
     let tidyID = pool.first { $0.kind == .tidy }!.id
-    let moveID = pool.first { $0.kind == .moveTask }!.id
+    let leftID = pool.first { $0.kind == .whatsLeft }!.id
     let blended = SuggestionBlend.apply(
       rules: rules, pool: pool,
       picks: [
         .init(id: tidyID, message: "Tidy 2 overdue please"),
-        .init(id: moveID, message: "Move Write up design notes to 3:15pm"),
+        .init(id: leftID, message: "What's left today?"),
       ],
       invented: nil, ctx: ctx, calendar: cal)
     XCTAssertEqual(blended.count, rules.count, "same count, so the page does not jump")
     XCTAssertEqual(blended.first?.text, "Tidy 2 overdue please")
-    XCTAssertEqual(blended[1].text, "Move Write up design notes to 3:15pm")
+    XCTAssertEqual(blended[1].text, "What's left today?")
   }
 
   func testModelWordingThatChangesTheRouteIsReplacedByTheRuleSentence() {

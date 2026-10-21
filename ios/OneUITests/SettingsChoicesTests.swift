@@ -2,7 +2,7 @@ import UIKit
 import XCTest
 
 /// The Settings choices added with `Preferences`: Dim past days, no weekend shading, first day of the week, week numbers,
-/// where Calendar opens, the Today choices (Tomorrow, evening hour, free time, suggested times), and new-item defaults.
+/// where Calendar opens, the Today choices (Tomorrow, evening hour, free time), and new-item defaults.
 /// `-uiTesting` starts every launch from the defaults; `-uiTestingPrefs key=value,...` sets what a test needs up front,
 /// and the tests that say "in Settings" flip the real switches.
 @MainActor
@@ -329,43 +329,6 @@ final class SettingsChoicesTests: XCTestCase {
     closeSettings()
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     XCTAssertFalse(free.waitForExistence(timeout: 2), "no Free rows with the setting off")
-  }
-
-  func testSuggestedTimesCanBeSwitchedOff() {
-    launch(prefs: "suggestTimes=0", now: "09:41")
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-    XCTAssertFalse(
-      app.staticTexts["Suggested · Home"].waitForExistence(timeout: 2), "no faint suggested time")
-    // The native List materializes Anytime only after all timed rows, including Wind down.
-    let today = app.collectionViews.allElementsBoundByIndex.first {
-      $0.frame.minX == app.frame.minX && $0.frame.width == app.frame.width && $0.isHittable
-    }
-    XCTAssertNotNil(today, "the visible Today list is available")
-    guard let today else { return }
-    let anytime = today.staticTexts["Anytime today"]
-    let milk = today.staticTexts["Buy milk"].firstMatch
-    func visible(_ element: XCUIElement) -> Bool {
-      guard element.exists, element.isHittable else { return false }
-      let viewport = today.frame.intersection(app.frame)
-      let composer = app.buttons["Ask AI or add anything"].firstMatch
-      let bottom = composer.exists ? min(viewport.maxY, composer.frame.minY) : viewport.maxY
-      let frame = element.frame
-      return frame.width > 0 && frame.height > 0 && viewport.contains(frame) && frame.maxY <= bottom
-    }
-    for attempt in 0...8 {
-      if visible(anytime) && visible(milk) { break }
-      if attempt < 8 { today.swipeUp() }
-    }
-    XCTAssertTrue(visible(anytime), "the reminder waits under Anytime today")
-    XCTAssertTrue(
-      visible(milk), "the untimed Buy milk reminder is visible with its Anytime heading")
-    XCTAssertFalse(
-      today.staticTexts["Suggested · Home"].exists,
-      "no suggested time after revealing the untimed reminder")
-    XCTAssertFalse(
-      today.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Plan Buy milk at '")).firstMatch
-        .exists,
-      "the untimed reminder has no suggestion to Plan")
   }
 
   // MARK: Reminders, alarms, AI

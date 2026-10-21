@@ -73,7 +73,7 @@ final class AICaptureMappingTests: XCTestCase {
   func testMissingTimeKeepsDueDate() throws {
     let c = try XCTUnwrap(map(.init(kind: "task", title: "Send report", date: "2026-10-16")))
     XCTAssertNil(c.hour)
-    XCTAssertNil(c.plannedStart)
+    XCTAssertNil(c.clockTime)
     XCTAssertTrue(c.summary.hasPrefix("Due "), c.summary)
   }
 

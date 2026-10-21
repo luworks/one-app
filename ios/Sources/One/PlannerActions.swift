@@ -71,19 +71,18 @@
     }
 
     @discardableResult
-    package func setPlanned(
-      _ task: OneTask, to start: Date?, context: ModelContext,
+    package func setDue(
+      _ task: OneTask, to due: Date?, context: ModelContext,
       actor: LedgerActor = .you, channel: LedgerChannel = .app,
       approval: LedgerApproval = .userMade
     ) -> LedgerItem? {
-      TaskActions.setPlanned(
-        task, to: start, context: context, ledger: ledger,
+      let entry = TaskActions.setDue(
+        task, to: due, context: context, ledger: ledger,
         actor: actor, channel: channel, approval: approval)
-    }
-
-    package func autoPlan(context: ModelContext, toast: UndoToast) {
-      AutoPlan.run(
-        context: context, toast: toast, calendar: calendar, ledger: ledger, runtime: runtime)
+      if entry != nil, task.externalID != nil {
+        reminders.scheduleReconcile(after: .milliseconds(300))
+      }
+      return entry
     }
 
     @discardableResult

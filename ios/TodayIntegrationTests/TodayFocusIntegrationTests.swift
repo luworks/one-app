@@ -316,7 +316,7 @@
       var rangeReads = 0
       let reminder = OneTask(title: "Rendered imported Reminder")
       reminder.externalID = "rendered-reminder"
-      reminder.plannedStart = today.addingTimeInterval(9 * 3600)
+      reminder.due = today.addingTimeInterval(9 * 3600)
       a.context.insert(reminder)
       try a.context.save()
       let remote = RemindersSync.Remote(
@@ -720,7 +720,6 @@
       task.title = "Changed in Apple Reminders"
       task.note = "Refreshed source note"
       task.due = a.now.addingTimeInterval(7200)
-      task.plannedStart = a.now.addingTimeInterval(1800)
       task.isDone = true
       task.doneAt = a.now
       try a.context.save()
@@ -966,8 +965,7 @@
 
     func addTask() throws -> OneTask {
       let task = OneTask(
-        title: "Source reminder", note: "Original note",
-        plannedStart: now.addingTimeInterval(900), due: now.addingTimeInterval(3600))
+        title: "Source reminder", note: "Original note", due: now.addingTimeInterval(3600))
       task.externalID = "reminder-fixture"
       task.repeatRule = "weekly:1"
       task.listName = "Source list"

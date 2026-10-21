@@ -20,12 +20,12 @@ public enum ChatRouting {
   /// also find words inside explanations, so they are not sufficient at this boundary.
   public static func isSupportedOperationRequest(_ text: String) -> Bool {
     guard
-      SentenceRoute.isPlanRequest(text) || OverdueTidy.isRequest(text)
+      OverdueTidy.isRequest(text)
     else { return false }
     let body = requestBody(text.trimmingCharacters(in: .whitespacesAndNewlines))
     return has(
       body,
-      #"^(?:plan my day|plan today|schedule my day|(?:tidy(?: up)?|clean up|clear|reschedule|sort out) (?:my )?(?:\d+ )?overdue(?: reminders)?)\s*[.!?]*$|^(?:安排今天|规划今天|帮我安排今天|(?:整理|处理|清理)(?:\d+条)?过期(?:提醒)?)(?:好吗|可以吗)?[。！？?]*$"#
+      #"^(?:(?:tidy(?: up)?|clean up|clear|reschedule|sort out) (?:my )?(?:\d+ )?overdue(?: reminders)?)\s*[.!?]*$|^(?:(?:整理|处理|清理)(?:\d+条)?过期(?:提醒)?)(?:好吗|可以吗)?[。！？?]*$"#
     )
   }
 

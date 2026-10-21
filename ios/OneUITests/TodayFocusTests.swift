@@ -13,7 +13,7 @@ final class TodayFocusTests: XCTestCase {
       TestData.fixtureArguments(seed ? "today-focus.json" : "empty-relaunch.json")
       + [
         "-uiTestingNow", time, "-uiTestingPrefs",
-        "showTomorrow=0,showSnooze=1,suggestTimes=1,showFreeTime=1",
+        "showTomorrow=0,showSnooze=1,showFreeTime=1",
       ]
     if let store { app.launchArguments += ["-uiTestingStore", store] }
     app.launch()
@@ -130,7 +130,6 @@ final class TodayFocusTests: XCTestCase {
     let deadline = app.switches["Deadline"]
     reveal(deadline, in: app)
     XCTAssertEqual(deadline.value as? String, "1")
-    XCTAssertEqual(app.switches["Plan a time"].value as? String, "0")
     let due = app.datePickers.firstMatch
     XCTAssertTrue(due.exists)
     let values = due.descendants(matching: .button).allElementsBoundByIndex.map { $0.label }
@@ -170,7 +169,7 @@ final class TodayFocusTests: XCTestCase {
     func arguments(_ fixture: String, _ now: Date) -> [String] {
       TestData.fixtureArguments(fixture) + [
         "-uiTestingStore", store, "-uiTestingNow", ISO8601DateFormatter().string(from: now),
-        "-uiTestingPrefs", "showTomorrow=1,showSettle=1,showSnooze=1,showFreeTime=0,suggestTimes=0",
+        "-uiTestingPrefs", "showTomorrow=1,showSettle=1,showSnooze=1,showFreeTime=0",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ]
     }

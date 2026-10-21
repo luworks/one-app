@@ -10,7 +10,7 @@ final class TodayTomorrowTests: XCTestCase {
     app.launchArguments =
       TestData.fixtureArguments("today-disclosure-sections.json") + [
         "-uiTestingNow", time, "-today.setting.jumpToNow", "NO",
-        "-uiTestingPrefs", "suggestTimes=0,showFreeTime=0,showSnooze=1",
+        "-uiTestingPrefs", "showFreeTime=0,showSnooze=1",
       ]
     app.launch()
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))

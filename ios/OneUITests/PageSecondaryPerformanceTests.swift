@@ -107,15 +107,6 @@ final class PageSecondaryPerformanceTests: XCTestCase {
         ready: app.navigationBars["Holidays in Year"])
       app.navigationBars.buttons["Settings"].tap()
 
-      // Existing LedgerTests entry; read scope only, never touch the grant toggle or Revoke.
-      let automatic = app.buttons["settings.automaticChanges"]
-      app.revealSettingsRow(automatic)
-      tap(
-        automatic, route: "settings.automaticChanges", visit: visit,
-        ready: app.navigationBars["Automatic changes"])
-      XCTAssertTrue(app.staticTexts["None. AI changes wait for your tap."].exists)
-      XCTAssertFalse(app.buttons["grant.revoke"].exists)
-      app.navigationBars.buttons["Settings"].tap()
       app.navigationBars["Settings"].buttons["Done"].tap()
       app.closeSidebar()
       // Reopening Settings starts its Form at the top; no backwards scan of lazy off-screen rows.

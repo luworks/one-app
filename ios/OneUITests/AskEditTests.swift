@@ -117,11 +117,11 @@ final class AskEditTests: XCTestCase {
     shot("edit-1-undone")
   }
 
-  func testEdit_moveTaskKeepsDeadline() {
+  func testEdit_moveTaskChangesItsOneDate() {
     send("Prepare the demo 推迟两小时")
     XCTAssertTrue(app.otherElements["change-card"].waitForExistence(timeout: 90))
     XCTAssertTrue(label(containing: "Move task").exists)
-    XCTAssertTrue(label(containing: "deadline stays").exists, "due is not moved")
+    XCTAssertTrue(label(containing: "date changes").exists, "a reminder has one date")
     shot("edit-2-task-card")
     app.buttons["Apply"].tap()
     XCTAssertTrue(label(containing: "Moved “Prepare the demo”").waitForExistence(timeout: 5))
