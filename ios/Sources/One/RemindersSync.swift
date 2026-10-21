@@ -1169,9 +1169,12 @@
       }
       if t.due != r.due {
         // Apple rolled a repeating reminder to its next occurrence: the finished one's plan does not follow (see RepeatAdvance).
-        let plan = RepeatAdvance.plannedStart(
+        var plan = RepeatAdvance.plannedStart(
           t.plannedStart, dueMovedFrom: t.due, to: r.due, repeats: r.repeats, isDone: r.isDone,
           now: runtime.now(), calendar: runtime.calendar)
+        // Moved to another day in Apple Reminders: it is no longer today's, so its plan for the old day goes.
+        plan = DeadlineMove.plannedStart(
+          plan, deadlineMovedFrom: t.due, to: r.due, calendar: runtime.calendar)
         if t.plannedStart != plan { t.plannedStart = plan }
         t.due = r.due
       }
