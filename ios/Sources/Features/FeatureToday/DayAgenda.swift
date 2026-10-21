@@ -248,7 +248,6 @@
           Section { timelineContent(items) }
         }
         if !showsWeekStrip {
-          returnedSection(items)
           if isTodayTab, showsOverdue { overdueSection }
           if showsSnooze { focusSection(snoozed: true) }
           if showsSettle { focusSection(snoozed: false) }
@@ -758,71 +757,6 @@
           identity: record.identity, reference: record.localReference, title: event.title)
       }
       return nil
-    }
-
-    private func visibleIdentities(_ items: DayItems) -> Set<FocusIdentity> {
-      var identities = Set<FocusIdentity>()
-      for e in items.allDay {
-        if let id = target(e, start: e.occurs(on: day, calendar: cal).first ?? e.start).identity {
-          identities.insert(id)
-        }
-      }
-      for e in items.externalAllDay {
-        if let id = target(e).identity { identities.insert(id) }
-      }
-      for task in items.anytime + overdue {
-        if let id = target(task).identity { identities.insert(id) }
-      }
-      for item in items.timeline {
-        let identity: FocusIdentity?
-        switch item {
-        case .event(let e, let start): identity = target(e, start: start).identity
-        case .external(let e): identity = target(e).identity
-        case .task(let t), .due(let t), .suggested(let t, _): identity = target(t).identity
-        case .alarm(let alarm, let date): identity = target(alarm, fireDate: date).identity
-        case .gap, .nowMarker: identity = nil
-        }
-        if let identity { identities.insert(identity) }
-      }
-      return identities
-    }
-
-    /// A snoozed item returns to the attention inbox even if its original schedule is on an earlier day.
-    private func returned(_ items: DayItems) -> [FocusTarget] {
-      guard isTodayTab else { return [] }
-      let visible = visibleIdentities(items)
-      return actions.focus.records.compactMap { record in
-        guard !visible.contains(record.identity) else { return nil }
-        switch record.state {
-        case .active: return resolved(record)
-        case .snoozed(let until) where until <= now: return resolved(record)
-        default: return nil
-        }
-      }
-    }
-
-    @ViewBuilder private func returnedSection(_ items: DayItems) -> some View {
-      let returned = returned(items)
-      if !returned.isEmpty {
-        Section {
-          ForEach(returned) { target in
-            HStack {
-              Button {
-                openAttentionItem(target)
-              } label: {
-                Text(target.title).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-              }
-              .buttonStyle(.plain)
-              .accessibilityLabel("Show details for " + target.title)
-            }
-            .modifier(TodayItemSurface(enabled: true))
-            .modifier(focusActions(target))
-            .listRowSeparator(.hidden)
-          }
-        } header: {
-          AgendaHeader(title: "Returned to Today")
-        }
-      }
     }
 
     private func openAttentionItem(_ target: FocusTarget) {

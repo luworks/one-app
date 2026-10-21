@@ -26,6 +26,7 @@
         LaunchTestConfiguration.appearanceOverride(arguments: arguments), defaults: defaults)
       let cal = Calendar.current
       let fixedNow = Self.value("-uiTestingNow", arguments).flatMap { raw -> Date? in
+        if let date = ISO8601DateFormatter().date(from: raw) { return date }
         let parts = raw.split(separator: ":").compactMap { Int($0) }
         guard parts.count == 2 else { return nil }
         return cal.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: .now)
