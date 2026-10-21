@@ -57,7 +57,7 @@ final class PopulatedHistoryTests: XCTestCase {
     if dismiss.exists { dismiss.tap() }
     XCTAssertFalse(
       app.keyboards.firstMatch.exists, "Compare reading positions with the keyboard hidden")
-    let restored = app.staticTexts[label].firstMatch
+    let restored = app.staticTexts.matching(NSPredicate(format: "label == %@", label)).firstMatch
     XCTAssertTrue(restored.isHittable)
     XCTAssertEqual(
       restored.frame.minY, before, accuracy: 35,
