@@ -7,7 +7,7 @@ struct SceneRegistryTests {
   @Test func persistedAutomationHandlesStayAvailable() throws {
     // External launch contract, grouped by user journeys rather than a tautological case count.
     let journeys = [
-      ["today", "today.review"],
+      ["today"],
       [
         "calendar.week", "calendar.month", "calendar.year", "calendar.year.key",
         "calendar.event.editor",

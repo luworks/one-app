@@ -159,9 +159,18 @@ final class TodayTomorrowTests: XCTestCase {
     XCTAssertEqual(header.value as? String, "Collapsed")
     XCTAssertFalse(app.buttons["reviewToday"].exists)
     header.tap()
-    let review = app.buttons["reviewToday"]
-    reveal(review, in: app)
-    XCTAssertTrue(review.exists, "Review today remains available inside the disclosure")
+    let first = app.buttons.matching(
+      NSPredicate(format: "label BEGINSWITH %@", "Tomorrow all-day event,")
+    ).firstMatch
+    reveal(first, in: app)
+    XCTAssertFalse(app.buttons["reviewToday"].exists)
+    XCTAssertGreaterThanOrEqual(first.frame.minY, header.frame.maxY)
+    XCTAssertLessThan(first.frame.minY - header.frame.maxY, 32, "No removed-entry-sized gap")
+    let today = app.buttons["Today"].firstMatch
+    let navigation = today.frame.union(app.buttons["New"].frame)
+    XCTAssertEqual(
+      navigation.midX, app.frame.midX, accuracy: 2, "Bottom navigation stays centered")
+    screenshot("tomorrow-evening-without-review")
     assertCompleteTomorrow(app)
   }
 }

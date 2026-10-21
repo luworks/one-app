@@ -93,7 +93,7 @@ configuration data; they do not assert these app-only integration seams exist.
 
 | Journey | Registry handles | Existing native implementation |
 | --- | --- | --- |
-| Today | `today`, `today.review` | DayAgenda, EveningReviewSheet |
+| Today | `today` | DayAgenda |
 | Calendar | `calendar.week`, `.month`, `.year`, `.year.key`, `.sources`, `.event.editor` | CalendarView with real mode binding, YearKeySheet, CalendarsSheet, EventEditor |
 | Reminders | `reminders`, `.today`, `.scheduled`, `.all`, `.flagged`, `.completed`, `.list`, `.editor`, `.quickAdd`, `.listEditor` | RemindersView, ReminderListScreen, TaskEditor, QuickReminderSheet, ListEditor |
 | Clock | `clock.alarms`, `.alarm.editor`, `.alarm.sound`, `.world`, `.world.cityPicker`, `.stopwatch`, `.timer` | AlarmsView, AlarmEditor, SoundScreen, WorldClockView, CityPicker, StopwatchView, TimerSection |

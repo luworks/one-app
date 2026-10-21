@@ -356,7 +356,6 @@
       }
       try context.save()
     }
-
   }
 
   @MainActor
@@ -540,12 +539,6 @@
       switch session.configuration.scene {
       case .today:
         NavigationStack { agenda }
-      case .todayReview:
-        EveningReviewSheet(
-          now: day,
-          tomorrow: session.configuration.calendar.date(byAdding: .day, value: 1, to: day)!,
-          peek: [], actions: session.services.actions, reminders: session.services.reminders,
-          ledger: session.services.ledger)
       case .calendarWeek, .calendarMonth, .calendarYear:
         NavigationStack {
           CalendarView(
@@ -957,7 +950,6 @@
           actions: session.services.actions, ledger: session.services.ledger,
           runtime: session.runtime))
     }
-
   }
 
   struct SceneFailure: View {

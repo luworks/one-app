@@ -21,12 +21,11 @@ public enum ChatRouting {
   public static func isSupportedOperationRequest(_ text: String) -> Bool {
     guard
       SentenceRoute.isPlanRequest(text) || OverdueTidy.isRequest(text)
-        || SentenceRoute.isReviewRequest(text)
     else { return false }
     let body = requestBody(text.trimmingCharacters(in: .whitespacesAndNewlines))
     return has(
       body,
-      #"^(?:plan my day|plan today|schedule my day|(?:tidy(?: up)?|clean up|clear|reschedule|sort out) (?:my )?(?:\d+ )?overdue(?: reminders)?|(?:review|recap) (?:my )?(?:today|the day|day))\s*[.!?]*$|^(?:安排今天|规划今天|帮我安排今天|(?:整理|处理|清理)(?:\d+条)?过期(?:提醒)?|(?:回顾|复盘|总结)(?:一下)?今天|今天(?:回顾|复盘|总结))(?:好吗|可以吗)?[。！？?]*$"#
+      #"^(?:plan my day|plan today|schedule my day|(?:tidy(?: up)?|clean up|clear|reschedule|sort out) (?:my )?(?:\d+ )?overdue(?: reminders)?)\s*[.!?]*$|^(?:安排今天|规划今天|帮我安排今天|(?:整理|处理|清理)(?:\d+条)?过期(?:提醒)?)(?:好吗|可以吗)?[。！？?]*$"#
     )
   }
 
@@ -172,7 +171,7 @@ public enum ChatRouting {
       )
         ? .capture : .conversation
     }
-    // Existing plan/tidy/review dispatch, not capture.
+    // Existing plan/tidy dispatch, not capture.
     if isSupportedOperationRequest(text) { return .unsure }
     if has(
       text,

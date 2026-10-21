@@ -44,8 +44,6 @@ final class PreferencesTests: XCTestCase {
 
   func testEmptyDefaultsReadAsTheDefaults() {
     let d = freshDefaults()
-    XCTAssertEqual(Preferences.eveningStart(d), 18)
-    XCTAssertEqual(Preferences.reviewStart(d), 18)
     XCTAssertEqual(Preferences.firstWeekdayChoice(d), .system)
     XCTAssertEqual(Preferences.calendarStartChoice(d), .lastUsed)
     XCTAssertNil(Preferences.newReminderList(existing: ["Inbox", "Work"], d))
@@ -138,25 +136,6 @@ final class PreferencesTests: XCTestCase {
 
   // MARK: Evening hour
 
-  func testEveningHourChoicesAndOff() {
-    let d = freshDefaults()
-    d.set(20, forKey: Preferences.eveningHourKey)
-    XCTAssertEqual(Preferences.eveningStart(d), 20)
-    d.set(Preferences.off, forKey: Preferences.eveningHourKey)
-    XCTAssertNil(Preferences.eveningStart(d), "off")
-    d.set(3, forKey: Preferences.eveningHourKey)
-    XCTAssertEqual(
-      Preferences.eveningStart(d), 18, "a value that is no longer offered falls back to 18:00")
-  }
-
-  func testTheReviewFollowsTomorrow() {
-    let d = freshDefaults()
-    d.set(false, forKey: Preferences.showTomorrowKey)
-    XCTAssertNil(Preferences.reviewStart(d), "the Review row lives in the Tomorrow section")
-    d.set(true, forKey: Preferences.showTomorrowKey)
-    XCTAssertEqual(Preferences.reviewStart(d), 18)
-  }
-
   func testTomorrowOpensAtTheChosenHour() {
     XCTAssertFalse(
       TomorrowPreview.opensByItself(
@@ -178,12 +157,6 @@ final class PreferencesTests: XCTestCase {
       TomorrowPreview.opensByItself(
         now: date(16, 22), todayStarts: [date(16, 9)], eveningHour: nil, calendar: cal),
       "nothing left today")
-  }
-
-  func testReviewRowShowsFromTheChosenHour() {
-    XCTAssertFalse(EveningReview.shows(now: date(16, 18, 30), eveningHour: 19, calendar: cal))
-    XCTAssertTrue(EveningReview.shows(now: date(16, 19), eveningHour: 19, calendar: cal))
-    XCTAssertFalse(EveningReview.shows(now: date(16, 23), eveningHour: nil, calendar: cal), "off")
   }
 
   // MARK: Default list
