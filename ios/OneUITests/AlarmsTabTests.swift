@@ -36,7 +36,7 @@ final class AlarmsTabTests: XCTestCase {
   @discardableResult
   private func addAlarm(days: [String] = []) -> XCUIElement {
     let before = rows.count
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(
       app.staticTexts["Add Alarm"].waitForExistence(timeout: 5), "the editor is titled Add Alarm")
     if !days.isEmpty {
@@ -151,7 +151,7 @@ final class AlarmsTabTests: XCTestCase {
 
   /// Sound opens a list of the app's tones (the system sound, then ours); a choice sticks after saving.
   func testChoosingATone() {
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     XCTAssertEqual(
       app.switches["alarm.snooze"].value as? String, "1", "Snooze is on by default, like Clock")
@@ -202,7 +202,7 @@ final class AlarmsTabTests: XCTestCase {
   }
 
   func testSnoozeOffHidesDuration() {
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     XCTAssertTrue(
       app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
@@ -221,7 +221,7 @@ final class AlarmDefaultTimeTests: XCTestCase {
     app.launch()
     app.buttons["Clock"].firstMatch.tap()
     XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     let wheels = app.pickerWheels
     XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))

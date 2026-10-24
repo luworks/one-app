@@ -811,15 +811,6 @@
           calendar: session.runtime.calendar), end: nil, fullOptions: false, onComplete: nil)
     }
 
-    /// What + adds right now: the thing this page is about.
-    private var smartNewItem: NewItem {
-      switch tab {
-      case .calendar: .event
-      case .clock: .alarm
-      case .today, .tasks: .task
-      }
-    }
-
     /// On World Clock, + adds a city.
     private var plusAddsCity: Bool { tab == .clock && clockSection == .worldClock }
 
@@ -904,21 +895,6 @@
       newItem = item
     }
 
-    /// Stopwatch and Timer retain their own start controls; + offers the other creation routes.
-    private var plusShowsChoices: Bool {
-      tab == .today || (tab == .clock && (clockSection == .stopwatch || clockSection == .timer))
-    }
-
-    private var plusCaption: String {
-      if plusShowsChoices { return "Add" }
-      if plusAddsCity { return "City" }
-      switch smartNewItem {
-      case .task: return "Reminder"
-      case .event: return "Event"
-      case .alarm: return "Alarm"
-      }
-    }
-
     private var plusLabel: some View {
       Image(systemName: "plus")
         .font(ButtonConfiguration.Icon.font)
@@ -959,41 +935,18 @@
       }
     }
 
+    /// + is the same menu on every page (alarm, reminder, event; plus Add city on World Clock), so what it
+    /// offers never depends on where you are.
     private var plusButton: some View {
-      Group {
-        if plusShowsChoices {
-          Menu {
-            Section(tab == .today ? "Add to Today" : "Add an item") { creationChoices }
-          } label: {
-            plusLabel
-          }
-        } else {
-          Menu {
-            creationChoices
-          } label: {
-            plusLabel
-          } primaryAction: {
-            if plusAddsCity {
-              PerformanceTrace.shared.beginPage("clock.cityPicker")
-              addingCity = true
-            } else if smartNewItem == .event {
-              newEvent()
-            } else {
-              presentNewItem(smartNewItem)
-            }
-          }
-        }
+      Menu {
+        Section(tab == .today ? "Add to Today" : "Add an item") { creationChoices }
+      } label: {
+        plusLabel
       }
       .tint(.primary)
       .accessibilityIdentifier("New")
-      .accessibilityLabel(
-        plusShowsChoices
-          ? (tab == .today ? "Add to Today" : "Add an item") : "New \(plusCaption.lowercased())"
-      )
-      .accessibilityHint(
-        plusShowsChoices
-          ? "Choose an alarm, reminder or event."
-          : "Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
+      .accessibilityLabel(tab == .today ? "Add to Today" : "Add an item")
+      .accessibilityHint("Choose an alarm, reminder or event.")
     }
 
   }

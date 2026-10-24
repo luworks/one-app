@@ -61,7 +61,7 @@ final class CalendarDeleteSyncTests: XCTestCase {
     app.buttons["Calendar"].firstMatch.tap()
     if !pills.waitForExistence(timeout: 5) { app.buttons["Calendar"].firstMatch.tap() }
     XCTAssertTrue(pills.waitForExistence(timeout: 5), "on the Calendar tab")
-    app.buttons["New"].tap()
+    app.addNew("New event")
     let field = app.textFields["Title"]
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.typeText(title)

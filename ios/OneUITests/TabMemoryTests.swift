@@ -34,7 +34,7 @@ final class TabMemoryTests: XCTestCase {
     app = navigationApp(["-appearance", "dark"])
     app.buttons["Calendar"].tap()
     XCTAssertTrue(app.buttons["Calendar"].isSelected)
-    XCTAssertEqual(app.buttons["New"].label, "New event")
+    XCTAssertEqual(app.buttons["New"].label, "Add an item")
     capture("navigation-final-calendar-dark")
     app.terminate()
 

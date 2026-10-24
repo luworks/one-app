@@ -109,7 +109,10 @@ final class PerformanceBaselineTests: XCTestCase {
   func testCreateCompleteSearchAndApply() {
     app.launch()
     app.buttons["Reminders"].firstMatch.tap()
-    sample("open_quick_create") { tap(app.buttons["New"], ready: element("quick.title")) }
+    sample("open_quick_create") {
+      app.buttons["New"].tap()
+      tap(app.buttons["New reminder"], ready: element("quick.title"))
+    }
     element("quick.title").typeText("Performance baseline reminder")
     sample("save_quick_create") {
       app.buttons["quick.save"].tap()
