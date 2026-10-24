@@ -1135,6 +1135,20 @@
       for t in tasks where t.externalID == nil && t.createdAt >= uploadFrom {
         let cal = (t.listName.isEmpty ? nil : calendarByTitle[t.listName]) ?? defaultCal
         guard let cal else { continue }
+        // Apple needs a date on a repeating reminder (code 18); like Apple's own app, it gets today.
+        switch RecurringUploadDate.plan(
+          repeats: t.repeats != nil, due: t.due, isDone: t.isDone, today: runtime.now(),
+          calendar: runtime.calendar)
+        {
+        case .upload: break
+        case .keepLocal: continue
+        case .uploadDated(let day):
+          t.due = day
+          ledger.record(
+            .redated, task: t, title: t.title, before: "No date",
+            after: ledger.timeLabel(day, none: "No date"), beforeDate: nil, afterDate: day,
+            actor: .agent("Apple Reminders"), channel: .sync, approval: .observed, context: context)
+        }
         debugLog("upload \(t.title)")
         let ek = EKReminder(eventStore: store)
         ek.calendar = cal
