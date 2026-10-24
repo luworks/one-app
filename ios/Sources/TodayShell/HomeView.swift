@@ -131,7 +131,7 @@
 
     public var body: some View {
       #if DEBUG
-        let _ = StoreChurnProbe.shellBodies += 1
+        let _ = StoreChurnProbe.countShellBody()
       #endif
       GeometryReader { geo in
         // The sidebar takes most of the width; the page slides aside and stays visible beside it.

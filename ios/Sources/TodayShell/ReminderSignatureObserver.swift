@@ -64,6 +64,7 @@
     /// so a UI test can check that saves under an open sheet stay off the shell.
     struct StoreChurnProbe: View {
       @MainActor static var shellBodies = 0
+      @MainActor static func countShellBody() { shellBodies += 1 }
       @Environment(\.modelContext) private var context
       @State private var report = ""
 
