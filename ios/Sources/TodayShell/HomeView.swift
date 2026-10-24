@@ -83,9 +83,6 @@
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Query private var allTasks: [OneTask]
-    @Query private var allEvents: [OneEvent]
-    @Query private var allAlarms: [OneAlarm]
 
     @State private var tab: HomeTab
     @State private var calendarDay: Date
@@ -133,6 +130,9 @@
     @State private var keyboardUp = false
 
     public var body: some View {
+      #if DEBUG
+        let _ = StoreChurnProbe.countShellBody()
+      #endif
       GeometryReader { geo in
         // The sidebar takes most of the width; the page slides aside and stays visible beside it.
         let full = geo.size.width
@@ -561,6 +561,7 @@
             ).accessibilityLabel(String(ms))
           }
           #if DEBUG
+            if composition.arguments.contains("-uiTestingStoreChurn") { StoreChurnProbe() }
             if composition.arguments.contains("-uiTestingSyncDump"),
               let sync = session.reminders as? RemindersSync
             {
@@ -580,13 +581,8 @@
           guard scenePhase == .active else { return }
           await session.calendar.hydrateFocus(session.actions.focus.records)
         }
-        .task(id: reminderSignature) {
-          try? await Task.sleep(for: .milliseconds(300))
-          allAlarms.forEach { $0.retireIfRung(now: session.runtime.now()) }
-          await session.notifications.resync()
-          await session.alarms.sync(context)
-          updateWidgets()
-        }
+        // Store observation lives in a child so a save doesn't re-run this whole shell (and the sheet over it).
+        .background { ReminderSignatureObserver(session: session) }
         .onChange(of: QuickAction.shared.pending, initial: true) { _, type in
           guard let type else { return }
           QuickAction.shared.pending = nil
@@ -694,13 +690,12 @@
 
     /// Rewrites the Lock Screen / Home Screen widget snapshot (skipped when nothing changed).
     private func updateWidgets() {
-      session.widget.update(
-        tasks: allTasks, events: allEvents, alarms: allAlarms, now: session.runtime.now(),
-        calendar: session.runtime.calendar)
+      ReminderSignatureObserver.updateWidgets(session: session, context: context)
     }
 
     private func dropDeletedMirrors() {
-      let gone = session.calendar.removedMirrors(allEvents)
+      let gone = session.calendar.removedMirrors(
+        (try? context.fetch(FetchDescriptor<OneEvent>())) ?? [])
       guard !gone.isEmpty else { return }
       for event in gone {
         session.ledger.record(
@@ -709,28 +704,6 @@
         context.delete(event)
       }
       try? context.save()
-    }
-
-    /// Changes whenever anything that affects reminders changes.
-    private var reminderSignature: Int {
-      var h = Hasher()
-      for t in allTasks {
-        h.combine(t.title)
-        h.combine(t.isDone)
-        h.combine(t.due)
-        h.combine(t.reminderOffsetMinutes)
-        h.combine(t.ringsAsAlarm)
-      }
-      for a in allAlarms { h.combine(a.scheduleSignature) }
-      for e in allEvents {
-        h.combine(e.title)
-        h.combine(e.start)
-        h.combine(e.reminderOffsetMinutes)
-        h.combine(e.repeatRule)
-        h.combine(e.isAllDay)
-        h.combine(e.ringsAsAlarm)
-      }
-      return h.finalize()
     }
 
     // MARK: Top: avatar + tab pills
