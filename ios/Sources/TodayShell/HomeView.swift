@@ -823,49 +823,60 @@
     /// On World Clock, + adds a city.
     private var plusAddsCity: Bool { tab == .clock && clockSection == .worldClock }
 
+    /// A chat field that fills the bar, then Today and + on the right.
     private var bottomButtons: some View {
-      HStack(spacing: 12) {
-        HStack(spacing: 4) {
-          Button {
-            traceTabAction(to: .today)
-            tab = .today
-          } label: {
-            bottomDestinationLabel(icon: "sun.max", selected: tab == .today && !askVisible)
-          }
-          .buttonStyle(PressScale())
-          .accessibilityLabel("Today")
-          .accessibilityAddTraits(tab == .today && !askVisible ? .isSelected : [])
-          Button {
-            openAsk(nil)
-          } label: {
-            bottomDestinationLabel(icon: "bubble.left.and.bubble.right", selected: false)
-          }
-          .buttonStyle(PressScale())
-          .accessibilityLabel("Chat")
-          // Keep the existing automation entry while giving VoiceOver the visible control's name.
-          .accessibilityIdentifier("Ask AI or add anything")
-          .accessibilityHint("Opens your conversation. New and past chats are in the menu.")
+      HStack(spacing: 10) {
+        Button {
+          openAsk(nil)
+        } label: {
+          Text("Ask AI or add anything")
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(
+              maxWidth: .infinity, minHeight: ButtonConfiguration.minimumHitSize,
+              alignment: .leading
+            )
+            .padding(.horizontal, 16)
+            .background(ButtonConfiguration.Icon.background, in: Capsule())
+            .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
+            .contentShape(Capsule())
         }
-        .padding(3)
-        .background(ButtonConfiguration.Icon.background, in: Capsule())
-        .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.25), lineWidth: 0.5) }
+        .buttonStyle(PressScale())
+        .accessibilityLabel("Chat")
+        // Keep the existing automation entry while giving VoiceOver the visible control's name.
+        .accessibilityIdentifier("Ask AI or add anything")
+        .accessibilityHint("Opens your conversation. New and past chats are in the menu.")
+        Button {
+          traceTabAction(to: .today)
+          tab = .today
+        } label: {
+          todayLabel(selected: tab == .today && !askVisible)
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel("Today")
+        .accessibilityAddTraits(tab == .today && !askVisible ? .isSelected : [])
         plusButton
       }
-      .frame(maxWidth: 280)
-      .frame(maxWidth: .infinity)
-      .padding(.horizontal, 20)
+      .padding(.horizontal, 16)
       .padding(.top, 6)
       .padding(.bottom, 4)
     }
 
-    private func bottomDestinationLabel(icon: String, selected: Bool) -> some View {
-      Image(systemName: icon)
+    private func todayLabel(selected: Bool) -> some View {
+      Image(systemName: "sun.max")
         .font(ButtonConfiguration.Icon.font)
-        .frame(maxWidth: .infinity, minHeight: ButtonConfiguration.minimumHitSize)
-        .background(selected ? ButtonConfiguration.Icon.selectedFill : .clear, in: Capsule())
         .foregroundStyle(selected ? Color.primary : Color.secondary)
+        .frame(
+          width: ButtonConfiguration.minimumHitSize, height: ButtonConfiguration.minimumHitSize
+        )
+        .background(
+          selected ? ButtonConfiguration.Icon.selectedFill : ButtonConfiguration.Icon.background,
+          in: Circle()
+        )
+        .overlay { Circle().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
         .animation(reduceMotion ? nil : PillStyle.selectionAnimation, value: selected)
-        .contentShape(Capsule())
+        .contentShape(Circle())
     }
 
     private var newReminderUsesPreferredList: Bool {

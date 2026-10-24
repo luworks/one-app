@@ -166,10 +166,14 @@ final class TodayTomorrowTests: XCTestCase {
     XCTAssertFalse(app.buttons["reviewToday"].exists)
     XCTAssertGreaterThanOrEqual(first.frame.minY, header.frame.maxY)
     XCTAssertLessThan(first.frame.minY - header.frame.maxY, 32, "No removed-entry-sized gap")
+    let chat = app.buttons["Ask AI or add anything"].firstMatch
     let today = app.buttons["Today"].firstMatch
-    let navigation = today.frame.union(app.buttons["New"].frame)
+    let plus = app.buttons["New"]
+    XCTAssertLessThan(chat.frame.maxX, today.frame.minX, "Chat field comes first")
+    XCTAssertLessThan(today.frame.maxX, plus.frame.minX, "Today sits next to +")
     XCTAssertEqual(
-      navigation.midX, app.frame.midX, accuracy: 2, "Bottom navigation stays centered")
+      chat.frame.minX - app.frame.minX, app.frame.maxX - plus.frame.maxX, accuracy: 2,
+      "Bottom bar keeps equal side margins")
     screenshot("tomorrow-evening-without-review")
     assertCompleteTomorrow(app)
   }
