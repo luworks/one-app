@@ -1,0 +1,98 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>方向 C · 一条时间线</title><!-- Today UI/UX overhaul research mockup, 2026-10-24. Fictional data from tests/fixtures/today-dataset.json. --><style>:root{--fg:var(--foreground,#1a1a1a);--mfg:var(--muted-foreground,#666);--bd:var(--border,#ddd);--cd:var(--card,#fff);--acc:#2A64A6}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:14px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;color:var(--fg)}
+.page{max-width:1240px;margin:0 auto}
+h1{font-size:22px;margin:4px 0 6px;letter-spacing:-.01em} h2{font-size:16px;margin:22px 0 8px} p{margin:6px 0}
+a{color:var(--acc)}
+.lead{color:var(--mfg);max-width:860px}
+.nav{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}.nav a{padding:5px 11px;border:1px solid var(--bd);border-radius:999px;text-decoration:none;font-size:13px}.nav a.on{background:var(--fg);color:var(--cd,#fff);border-color:var(--fg)}
+.row3{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+.col{display:flex;flex-direction:column;gap:10px;width:320px}
+.cap{font-size:13px;color:var(--mfg)} .cap b{color:var(--fg)}
+.ctl{display:flex;gap:6px;flex-wrap:wrap}.ctl button{font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--cd);color:var(--fg);cursor:pointer}
+/* phone */
+.ph{width:320px;height:660px;border-radius:40px;background:#F5F5F2;box-shadow:0 0 0 8px #18191a,0 14px 40px rgba(0,0,0,.18);overflow:hidden;position:relative;display:flex;flex-direction:column;color:#1A1C1B;font-size:14px}
+.ph .sb{height:40px;flex:none;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-weight:600;font-size:13px}
+.ph .tb{flex:none;display:flex;align-items:center;gap:6px;padding:0 10px 6px}
+.ic{width:34px;height:34px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:15px;border:.5px solid #ddd;flex:none;cursor:pointer}
+.pills{display:flex;gap:4px;margin-left:auto}.pill{padding:6px 10px;border-radius:999px;background:#fff;border:.5px solid #ddd;font-size:12px;cursor:pointer}.pill.on{background:#1A1C1B;color:#fff;border-color:#1A1C1B}
+.body{flex:1;overflow-y:auto;padding:0 14px 90px;position:relative}
+.ttl{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:4px 2px 2px}.sub{color:#6b706d;font-size:12px;margin:0 2px 8px}
+.sec{font-size:11px;font-weight:600;color:#6b706d;text-transform:uppercase;letter-spacing:.04em;margin:14px 2px 4px;display:flex;justify-content:space-between;align-items:center}
+.it{display:flex;gap:10px;align-items:center;background:#fff;border-radius:12px;padding:9px 11px;margin:4px 0;position:relative;overflow:hidden;cursor:pointer;transition:transform .2s}
+.it .t{width:44px;font-size:12px;color:#6b706d;flex:none;font-variant-numeric:tabular-nums}
+.it .x{flex:1;min-width:0}.it .x div:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.it .m{font-size:11px;color:#7a807c}
+.ck{width:18px;height:18px;border-radius:50%;border:1.6px solid #9aa09c;flex:none}
+.ck.done{background:#257050;border-color:#257050}
+.ev{border-left:3px solid #2A64A6}.al{border-left:3px solid #9E540B}
+.od{color:#B93525}
+.now{display:flex;align-items:center;gap:6px;color:#B93525;font-size:11px;margin:2px 0}.now:after{content:"";flex:1;height:1px;background:#B93525}
+.free{font-size:11px;color:#8a908c;padding:3px 13px}
+.banner{display:flex;align-items:center;gap:8px;background:#FAE7E3;color:#B93525;border-radius:12px;padding:9px 12px;margin:6px 0;font-size:13px}
+.banner .b{margin-left:auto;background:#B93525;color:#fff;border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer}
+.bb{position:absolute;left:0;right:0;bottom:0;padding:10px 12px 22px;display:flex;gap:8px;align-items:center;background:linear-gradient(transparent,#F5F5F2 30%)}
+.cap2{flex:1;display:flex;justify-content:center}.cap2 span{background:#fff;border:.5px solid #ddd;border-radius:999px;padding:8px 14px;font-size:12px;margin:0 2px}
+.plus{width:42px;height:42px;border-radius:50%;background:#fff;border:.5px solid #ccc;display:grid;place-items:center;font-size:22px;cursor:pointer;flex:none}
+.field{flex:1;background:#fff;border:.5px solid #ccc;border-radius:999px;padding:10px 14px;color:#8a908c;font-size:13px;cursor:text;display:flex;gap:6px;align-items:center}
+.field.typing{color:#1A1C1B}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.15);padding:14px 16px 26px;transform:translateY(105%);transition:transform .25s;z-index:5}
+.sheet.open{transform:none}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:4}.scrim.open{opacity:1;pointer-events:auto}
+.sh-h{display:flex;justify-content:space-between;align-items:center;font-weight:600;margin-bottom:8px}.sh-h .a{color:#2A64A6;font-weight:600;cursor:pointer}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.chip{padding:6px 10px;border-radius:999px;background:#EDEEE8;font-size:12px;cursor:pointer}.chip.on{background:#1A1C1B;color:#fff}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}.grid4 div{background:#EDEEE8;border-radius:10px;padding:8px 0;text-align:center;font-size:12px;cursor:pointer}.grid4 .on{background:#257050;color:#fff}
+.menu{position:absolute;background:rgba(250,250,250,.97);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.2);width:210px;font-size:13px;z-index:6;display:none;overflow:hidden}
+.menu div{padding:9px 14px;border-bottom:.5px solid #e4e4e4;cursor:pointer}.menu .r{color:#B93525}.menu .g{height:6px;background:#eee;padding:0}
+.acts{position:absolute;right:0;top:0;bottom:0;display:flex;transform:translateX(100%);transition:transform .2s}
+.acts span{display:grid;place-items:center;width:64px;color:#fff;font-size:11px}
+.it.sw{transform:translateX(-192px);overflow:visible}.it.sw .acts{transform:translateX(100%)}
+.tidyrow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:.5px solid #eee;font-size:13px}
+.sel{background:#EDEEE8;border-radius:8px;padding:3px 8px;font-size:12px}
+.card{background:#fff;border-radius:16px;padding:12px;box-shadow:0 4px 18px rgba(0,0,0,.08);margin:8px 0}
+.kind{display:flex;gap:4px;margin:6px 0}.kind span{flex:1;text-align:center;padding:5px 0;border-radius:8px;background:#EDEEE8;font-size:12px;cursor:pointer}.kind .on{background:#E2F0E8;color:#257050;font-weight:600}
+.btns{display:flex;gap:8px;margin-top:8px}.btns span{flex:1;text-align:center;padding:8px;border-radius:10px;background:#EDEEE8;font-size:13px;cursor:pointer}.btns .p{background:#1A1C1B;color:#fff}
+.strip{display:flex;gap:2px;margin:2px 0 6px}.strip div{flex:1;text-align:center;padding:4px 0;border-radius:10px;font-size:11px;color:#6b706d;cursor:pointer}.strip b{display:block;font-size:15px;color:#1A1C1B}.strip .on{background:#1A1C1B;color:#ddd}.strip .on b{color:#fff}
+.toast{position:absolute;left:16px;right:16px;bottom:84px;background:#1A1C1B;color:#fff;border-radius:12px;padding:10px 12px;font-size:12px;display:none;z-index:7;justify-content:space-between}.toast u{color:#9fc3ff;text-decoration:none}
+.daydiv{position:sticky;top:0;background:#F5F5F2;z-index:1;font-weight:700;font-size:15px;padding:8px 2px 4px;display:flex;justify-content:space-between}
+.daydiv small{font-weight:400;color:#6b706d;font-size:11px}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:11px;text-align:center}.mgrid div{padding:6px 0;border-radius:8px}.mgrid .d{background:#fff}.mgrid .on{background:#1A1C1B;color:#fff}.mgrid .dot:after{content:"•";display:block;line-height:4px;color:#2A64A6}
+/* table */
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{border-bottom:1px solid var(--bd);padding:7px 8px;text-align:left;vertical-align:top}th{font-size:12px;color:var(--mfg);font-weight:600}
+td.n{text-align:center;white-space:nowrap}.best{font-weight:700;color:#257050}.worse{color:#B93525;font-weight:600}
+.bars{display:flex;flex-direction:column;gap:8px;max-width:640px}.bar{display:flex;align-items:center;gap:10px;font-size:13px}.bar .l{width:150px;flex:none}.bar .tr{flex:1;height:18px;background:var(--bd);border-radius:6px;overflow:hidden}.bar .f{height:100%;border-radius:6px}.bar .v{width:70px;text-align:right;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.box{border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
+.box h3{margin:0 0 6px;font-size:15px}.box ul{margin:4px 0;padding-left:18px}.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--bd);color:var(--mfg);margin-left:6px}
+</style></head>
+<body><div class="page"><div class="nav"><a href="index.html" class="">总览</a><a href="a-tidy.html" class="">A 整理</a><a href="b-one-bar.html" class="">B 一个输入框</a><a href="c-one-timeline.html" class="on">C 一条时间线</a></div><h1>方向 C · 一条时间线（激进）</h1>
+<p class="lead">只剩 2 个 tab：「日程」是一条连续的时间线（逾期 → 今天 → 明天 → 往后），events、提醒和闹钟都在上面；「列表」管没有日期的东西和 My Lists。月历和年历是点标题就能展开的“缩放”，不再单独做一个 tab；Clock 工具移进侧栏。点击数和 B 一样（18），但地点更少：要决定“去哪个 tab”的情况从 4 个降到 2 个。代价是放弃“先在屏幕和手势上对齐 Apple”这条路线。</p>
+<div class="row3">
+<div class="col"><div class="ph"><div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="tb"><div class="ic" onclick="C.side()">☰</div><div class="pills"><span class="pill on">日程</span><span class="pill ">列表</span></div></div><div class="body" id="cag">
+<div class="ttl" onclick="C.zoom()" style="cursor:pointer">10月 <span style="font-size:14px;color:#6b706d">▾</span></div>
+<div id="cmonth" style="display:none;margin-bottom:8px"><div class="mgrid"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div class="d  " onclick="C.pick(1)">1</div><div class="d  " onclick="C.pick(2)">2</div><div class="d  " onclick="C.pick(3)">3</div><div class="d  " onclick="C.pick(4)">4</div><div class="d  " onclick="C.pick(5)">5</div><div class="d  " onclick="C.pick(6)">6</div><div class="d  " onclick="C.pick(7)">7</div><div class="d  " onclick="C.pick(8)">8</div><div class="d  " onclick="C.pick(9)">9</div><div class="d  " onclick="C.pick(10)">10</div><div class="d  " onclick="C.pick(11)">11</div><div class="d on dot" onclick="C.pick(12)">12</div><div class="d  dot" onclick="C.pick(13)">13</div><div class="d  dot" onclick="C.pick(14)">14</div><div class="d  dot" onclick="C.pick(15)">15</div><div class="d  dot" onclick="C.pick(16)">16</div><div class="d  " onclick="C.pick(17)">17</div><div class="d  " onclick="C.pick(18)">18</div><div class="d  " onclick="C.pick(19)">19</div><div class="d  dot" onclick="C.pick(20)">20</div><div class="d  " onclick="C.pick(21)">21</div><div class="d  " onclick="C.pick(22)">22</div><div class="d  dot" onclick="C.pick(23)">23</div><div class="d  " onclick="C.pick(24)">24</div><div class="d  " onclick="C.pick(25)">25</div><div class="d  " onclick="C.pick(26)">26</div><div class="d  " onclick="C.pick(27)">27</div><div class="d  " onclick="C.pick(28)">28</div><div class="d  " onclick="C.pick(29)">29</div><div class="d  " onclick="C.pick(30)">30</div><div class="d  " onclick="C.pick(31)">31</div></div><div class="cap" style="color:#6b706d;font-size:11px;margin-top:4px">再捏合 → 年视图；周网格在 ⋯ 里</div></div>
+<div class="daydiv"><span><span class="od">逾期 · 2</span></span><small><span style="color:#B93525">整理 ›</span></small></div><div class="it od" ><div class="t">昨天</div><div class="ck"></div><div class="x"><div>Pay studio invoice</div><div class="m">17:00</div></div></div><div class="it " ><div class="t">3天前</div><div class="ck"></div><div class="x"><div>Renew parking permit</div></div></div><div class="daydiv"><span>今天 · 周一 12日</span><small>4 项待办 · 空闲 1 h 30</small></div><div class="it ev" ><div class="t">9:45</div><div class="x"><div>Standup</div></div></div><div class="now">9:41</div><div class="it " ><div class="t">11:30</div><div class="ck"></div><div class="x"><div>Call the bank</div><div class="m">Work</div></div></div><div class="it ev" ><div class="t">12:15</div><div class="x"><div>Lunch with Priya</div></div></div><div class="it ev" ><div class="t">15:00</div><div class="x"><div>Dentist</div></div></div><div class="it " ><div class="t">16:00</div><div class="ck"></div><div class="x"><div>Write up design review notes</div><div class="m">Work</div></div></div><div class="it ev" ><div class="t">18:30</div><div class="x"><div>Gym</div></div></div><div class="it " ><div class="t">21:00</div><div class="ck"></div><div class="x"><div>Take out the trash</div></div></div><div class="daydiv"><span>明天 · 周二 13日</span><small></small></div><div class="it al" ><div class="t">6:30</div><div class="x"><div>Wake up</div><div class="m">闹钟</div></div></div><div class="it ev" ><div class="t">10:00</div><div class="x"><div>Weekly review</div></div></div><div class="it ev" ><div class="t">14:00</div><div class="x"><div>Design review</div></div></div><div class="it " ><div class="t">17:00</div><div class="ck"></div><div class="x"><div>Prepare the demo</div><div class="m">Work</div></div></div><div class="daydiv"><span>周三 14日</span><small></small></div><div class="it ev" ><div class="t">全天</div><div class="x"><div>Team offsite</div></div></div><div class="it ev" ><div class="t">11:00</div><div class="x"><div>1:1 with Sam</div></div></div><div class="daydiv"><span>周四 15日</span><small></small></div><div class="it " ><div class="t">12:00</div><div class="ck"></div><div class="x"><div>Order birthday gift</div></div></div><div class="it ev" ><div class="t">19:00</div><div class="x"><div>Dinner with Mia</div></div></div></div><div class="bb"><div class="field">✦ <span>添加或提问…</span></div><div class="ic">🎙</div></div>
+<div class="scrim" id="cs" onclick="C.side()"></div>
+<div class="sheet" id="cside" style="top:0;bottom:0;right:auto;width:250px;border-radius:0 22px 22px 0;transform:translateX(-105%)">
+<div style="font-weight:700;font-size:17px;margin:30px 0 10px">Today</div>
+<div class="sec">工具</div><div class="it">⏰ 闹钟</div><div class="it">🌍 世界时钟</div><div class="it">⏱ 秒表 · 计时器</div>
+<div class="sec">聊天</div><div class="it">Plan my day</div><div class="it">Move the dentist to tomorrow</div>
+<div class="sec"></div><div class="it">⚙ 设置</div></div>
+</div><div class="cap"><b>Agenda：Fantastical DayTicker / Things Upcoming 的写法。</b>明天就在今天下面，滚一下就到。逾期置顶，点“整理”打开 Tidy。点标题“10月”展开月历，点某一天就滚到那天。</div>
+<div class="ctl"><button onclick="C.zoom()">点标题展开月历</button><button onclick="C.pick(14)">点 14 日</button><button onclick="C.side()">打开侧栏</button></div></div>
+<div class="col"><div class="ph"><div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="tb"><div class="ic" onclick="C.side()">☰</div><div class="pills"><span class="pill ">日程</span><span class="pill on">列表</span></div></div><div class="body">
+<div class="ttl">列表</div>
+<div class="chips"><span class="chip">全部 19</span><span class="chip">旗标 2</span><span class="chip">已完成 201</span></div>
+<div class="cap" style="color:#6b706d;font-size:11px">“今天”和“计划”智能列表并入「日程」，这里不再重复</div>
+<div class="sec">我的列表</div><div class="it " ><div class="t"></div><div class="x"><div>● Reminders</div><div class="m">6</div></div></div><div class="it " ><div class="t"></div><div class="x"><div>● Home</div><div class="m">5</div></div></div><div class="it " ><div class="t"></div><div class="x"><div>● Work</div><div class="m">8</div></div></div>
+<div class="sec">无日期</div><div class="it " ><div class="t"></div><div class="ck"></div><div class="x"><div>Buy a new kettle</div><div class="m">Home</div></div></div><div class="it " ><div class="t"></div><div class="ck"></div><div class="x"><div>Research standing desks</div><div class="m">Work</div></div></div>
+</div><div class="bb"><div class="field">✦ <span>添加或提问…</span></div><div class="ic">🎙</div></div></div><div class="cap"><b>Lists：</b>Reminders 的 5 个智能列表减到 3 个；无日期的提醒有了固定的家，相当于 Things 的 Anytime。</div></div>
+</div>
+<h2>C 会破坏的东西（需要卢元拍板）</h2>
+<div class="kv"><div class="box"><h3>和原则 / 路线冲突<span class="tag">原则</span></h3><ul><li>CLAUDE.md 的路线是先对齐 Apple 的屏幕和手势，证明对齐之后再超越。C 拿掉了 Apple 式的 Week 网格默认页和 Clock tab，等于提前进入“超越”阶段</li><li>Rubric 维度 1（Calendar）中的 Week/Month 主屏、维度 3 的 Alarms 页都需要重写</li></ul></div>
+<div class="box"><h3>工程代价</h3><ul><li>新的无限 agenda（跨天分页，跨天数据要按区间加载，不能一次读完）</li><li>Calendar 改成缩放：CalendarView 大改，Year 缓存要重新接</li><li>TabMemory、widget 深链、Quick Actions、大约 40% 的 UI 测试需要重写</li></ul></div>
+<div class="box"><h3>好处</h3><ul><li>“今天”只剩一个地方。现在有 Today tab、Reminders 的 Today 智能列表、Calendar 的日视图三处</li><li>“看明天 / 下周”不用切换任何东西</li><li>概念数量最少</li></ul></div></div></div><script>const $=id=>document.getElementById(id);let so=false;const C={
+zoom(){const m=$('cmonth');m.style.display=m.style.display==='none'?'block':'none'},
+pick(n){const t=[...document.querySelectorAll('#cag .daydiv')].find(d=>d.textContent.includes(n+'日'));document.querySelectorAll('.mgrid .d').forEach(d=>d.classList.toggle('on',d.textContent==String(n)));if(t)$('cag').scrollTo({top:t.offsetTop-4,behavior:'smooth'})},
+side(){so=!so;$('cs').classList.toggle('open',so);$('cside').style.transform=so?'none':'translateX(-105%)'}};</script></body></html>
