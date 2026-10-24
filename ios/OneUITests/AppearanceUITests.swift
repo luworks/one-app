@@ -177,7 +177,7 @@ final class AppearanceUITests: XCTestCase {
       app.buttons["Reminders"].firstMatch.tap()
       app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Home'")).firstMatch.tap()
       shot("13-list", mode)
-      app.buttons["New"].firstMatch.tap()
+      app.addNew("New reminder")
       shot("14-quick-reminder", mode)
       if app.buttons["Cancel"].firstMatch.exists { app.buttons["Cancel"].firstMatch.tap() }
       app.terminate()
@@ -189,7 +189,7 @@ final class AppearanceUITests: XCTestCase {
       app.buttons["Timer"].firstMatch.tap()
       shot("16-timer", mode)
       app.buttons.matching(NSPredicate(format: "label == 'Alarms'")).element(boundBy: 0).tap()
-      app.buttons["New"].firstMatch.tap()
+      app.addNew("New alarm")
       shot("17-alarm-editor", mode)
     }
   }

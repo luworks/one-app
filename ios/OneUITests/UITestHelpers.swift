@@ -2,6 +2,14 @@ import XCTest
 
 @MainActor
 extension XCUIApplication {
+  /// + is one menu on every page; open it and pick `choice` ("New alarm", "New reminder", "New event", "Add city").
+  func addNew(_ choice: String, file: StaticString = #filePath, line: UInt = #line) {
+    buttons["New"].firstMatch.tap()
+    let item = buttons[choice].firstMatch
+    XCTAssertTrue(item.waitForExistence(timeout: 3), "+ offers \(choice)", file: file, line: line)
+    item.tap()
+  }
+
   /// There is no avatar button: the sidebar opens with a swipe from the left edge, like in ChatGPT or Claude.
   func openSidebar() {
     let start = coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))

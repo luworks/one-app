@@ -35,7 +35,7 @@ final class ClockTests: XCTestCase {
   /// Opens the picker and searches. `typeText` with Chinese characters needs the simulator to accept them;
   /// the English searches are the reliable ones.
   private func search(_ text: String) {
-    plus.tap()
+    app.addNew("Add city")
     XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
     let field = app.searchFields.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 3))
@@ -337,7 +337,7 @@ final class ClockTests: XCTestCase {
           withVelocity: .slow, thenHoldForDuration: 0.1)
       shot("2b-world-clock-scrubbed")
       pill.tap()
-      plus.tap()
+      app.addNew("Add city")
       XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
       shot("3-choose-city")
       app.buttons["Cancel"].tap()

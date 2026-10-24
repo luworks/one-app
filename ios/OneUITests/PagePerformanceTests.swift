@@ -218,7 +218,10 @@ final class PagePerformanceTests: XCTestCase {
       tap(
         app.buttons["clock.section.worldClock"], route: "clock.worldClock",
         ready: element("worldClock.home"))
-      tap(app.buttons["New"], route: "clock.cityPicker", ready: app.navigationBars["Choose a City"])
+      app.buttons["New"].tap()
+      tap(
+        app.buttons["Add city"], route: "clock.cityPicker",
+        ready: app.navigationBars["Choose a City"])
       XCTAssertTrue(app.searchFields.firstMatch.exists)
       app.buttons["Cancel"].firstMatch.tap()
       tap(
@@ -246,7 +249,8 @@ final class PagePerformanceTests: XCTestCase {
       XCTAssertTrue(milk.waitForExistence(timeout: 5))
       app.buttons["Close search"].tap()
       app.buttons["Close sidebar"].tap()
-      tap(app.buttons["New"], route: "reminder.quick", ready: element("quick.title"))
+      app.buttons["New"].tap()
+      tap(app.buttons["New reminder"], route: "reminder.quick", ready: element("quick.title"))
       // Cancel preserves the Add/Apply boundary and creates no reminder or user data.
       app.buttons["Cancel"].firstMatch.tap()
       app.buttons["Reminders"].firstMatch.tap()

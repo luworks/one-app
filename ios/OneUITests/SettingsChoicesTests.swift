@@ -354,7 +354,7 @@ final class SettingsChoicesTests: XCTestCase {
 
     // Add from the Reminders home, without choosing a list in the draft.
     app.buttons["Reminders"].firstMatch.tap()
-    app.buttons["New"].firstMatch.tap()
+    app.addNew("New reminder")
     XCTAssertTrue(element("quick.title").waitForExistence(timeout: 5))
     XCTAssertTrue(
       app.buttons["List, Work"].waitForExistence(timeout: 3),
@@ -387,7 +387,7 @@ final class SettingsChoicesTests: XCTestCase {
     closeSettings()
 
     app.buttons["Clock"].firstMatch.tap()
-    app.buttons["New"].firstMatch.tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     let sound = element("alarm.sound")
     reveal(sound)
@@ -451,7 +451,7 @@ final class SettingsChoicesTests: XCTestCase {
   func testNewAlarmStartsWithTheChosenSnoozeLength() {
     launch(prefs: "newAlarmSnooze=15")
     app.buttons["Clock"].firstMatch.tap()
-    app.buttons["New"].firstMatch.tap()
+    app.addNew("New alarm")
     let duration = element("alarm.snoozeDuration")
     XCTAssertTrue(duration.waitForExistence(timeout: 5))
     XCTAssertTrue(

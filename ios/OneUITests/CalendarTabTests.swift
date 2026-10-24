@@ -326,7 +326,7 @@ final class CalendarTabTests: XCTestCase {
 
     // An all-day event sorts first in the day's list, so it is on screen without scrolling.
     let name = "Filter check \(Int(Date.now.timeIntervalSince1970) % 100000)"
-    app.buttons["New"].tap()
+    app.addNew("New event")
     let title = app.textFields["Title"]
     XCTAssertTrue(title.waitForExistence(timeout: 5))
     title.typeText(name)
