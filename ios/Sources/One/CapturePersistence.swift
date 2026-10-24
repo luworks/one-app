@@ -7,7 +7,9 @@
   extension Capture {
     package func makeTask(calendar: Calendar) -> OneTask {
       let timing = taskTiming(calendar: calendar)
-      let t = OneTask(title: title, durationMinutes: durationMinutes ?? 25, due: timing.due)
+      // A repeating reminder needs a date (Apple Reminders refuses one without): like Apple's app, today.
+      let due = timing.due ?? (repeatRule == nil ? nil : calendar.startOfDay(for: .now))
+      let t = OneTask(title: title, durationMinutes: durationMinutes ?? 25, due: due)
       t.note = notes ?? ""
       if let minutes = timing.alertMinutesBefore { t.reminderOffsetMinutes = minutes }
       t.repeatRule = repeatRule

@@ -1060,6 +1060,23 @@
             apply(r, to: t)
             fp[r.id] = r.fingerprint
           } else if local != agreed {
+            // A repeating reminder whose date was cleared needs one again (code 18): today, like the upload.
+            switch RecurringUploadDate.plan(
+              repeats: t.repeats != nil, due: t.due, isDone: t.isDone, today: runtime.now(),
+              calendar: runtime.calendar)
+            {
+            case .upload: break
+            case .keepLocal:
+              base.insert(r.id)
+              continue
+            case .uploadDated(let day):
+              t.due = day
+              ledger.record(
+                .redated, task: t, title: t.title, before: "No date",
+                after: ledger.timeLabel(day, none: "No date"), beforeDate: nil, afterDate: day,
+                actor: .agent("Apple Reminders"), channel: .sync, approval: .observed,
+                context: context)
+            }
             // One reminder Apple refuses must not stop the rest of the pass (or its uploads).
             do {
               try push(t, remote: r)

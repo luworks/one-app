@@ -498,7 +498,10 @@
       }
       t.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
       t.note = note
-      t.due = hasDue ? due : nil
+      // A repeating reminder needs a date (Apple Reminders refuses one without): like Apple's app, today.
+      t.due =
+        hasDue
+        ? due : (repeatRule == nil ? nil : presentation.calendar.startOfDay(for: presentation.now))
       t.reminderOffsetMinutes = reminder
       t.listName = listName
       t.tags = cleanedTags
