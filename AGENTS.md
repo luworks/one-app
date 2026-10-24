@@ -2,17 +2,12 @@
 
 Read `CLAUDE.md` and `ios/README.md` before changing the app. Their product principles remain hard constraints. Reply to Yuan in Chinese; keep code, UI copy, comments and commit messages in English.
 
-## Proportionate testing
+## Testing: CI owns it
 
-- Optimize for delivering a working change, not accumulating test runs. Choose the smallest meaningful checks that demonstrate the changed behavior before running them.
-- Write or update tests for real behavior and regression risks. Avoid tests that merely mirror implementation, duplicate existing coverage, or check reversible documentation/cosmetic changes.
-- Use `./dev` from the repository root as the sole local/CI engineering entry. Run logic with `./dev test unit`; run affected UI journeys with `./dev test ui --only TodayUITests/<Suite>/<Method>` (repeat `--only` as needed). Reuse one build; normally select 3–5 representative methods rather than every related suite. See [ios/README.md](ios/README.md) for command routing and prerequisites.
-- Budget about 10 minutes for routine verification. If testing consumes that budget, stop expanding coverage, group the evidence, diagnose the blocker and choose a focused next check. Do not spend another long cycle repeating equivalent failures.
-- When several failures share a helper, selector, scrolling or timing problem, rerun one representative failure alone and repair the common cause. Do not rerun every equivalent failure separately. Preserve the behavior being asserted; do not weaken assertions merely to obtain green results.
-- Once the relevant checks pass, continue delivery. Do not repeat passing checks without a new change, failure or concrete unresolved risk.
-- Run the full UI suite only when explicitly requested or required for a release milestone. Run it once at the final integrated revision, alone; subsequent repairs use targeted checks, not another full run.
-- For ordinary changes, use one focused review and resolve its concrete findings together. Avoid serial broad review rounds and speculative edge-case expansion. Re-review only a substantive unresolved risk or a requested acceptance condition.
-- Report what actually ran, its result and any important unchecked behavior. Clearly distinguish build, logic, simulator UI and physical-device evidence. Do not hold unrelated delivery hostage to unavailable screenshots or phone-only checks.
+- Do not run builds or tests locally by default. Push the branch, open the PR and let CI (`.github/workflows/today.yml`: `checks` and `today-required`) verify it; merge when both are green.
+- Still update the tests a change breaks and add tests for real new behavior. Avoid tests that mirror implementation or check documentation/cosmetic changes. Preserve the behavior being asserted; do not weaken assertions to get green results.
+- Run something locally only when the owner asks, when CI cannot do it (phone install, signing), or to reproduce a CI failure its logs do not explain; then run just the failing method with `./dev test ui --only TodayUITests/<Suite>/<Method>` or `./dev test unit`.
+- Report what CI ran and what it does not cover (the merge gate does not run the UI journeys).
 
 ## Delivery coordination
 
@@ -26,7 +21,7 @@ For authorized multi-task Today iOS coordination, follow [Zhugeliang](docs/opera
 - Diagnose selectors, accessibility types, actual frames and elapsed-time assertions before repeatedly scrolling, retrying or changing product behavior.
 - Do not add approval steps for routine reversible work. Ask before force-pushes, branch deletion or signing changes, as required by the owner.
 
-- For supported UI layout, text and color tweaks, prefer the [axe visual feedback workflow](docs/swiftui-preview-workflow.md) when suitable; fall back to the full Simulator if support fails. Do not restructure production logic for axe. Functional acceptance still follows the proportionate testing rules above; coordinate shared resources directly with the performance owner.
+- For supported UI layout, text and color tweaks, prefer the [axe visual feedback workflow](docs/swiftui-preview-workflow.md) when suitable; fall back to the full Simulator if support fails. Do not restructure production logic for axe. Testing follows "Testing: CI owns it" above; coordinate shared resources directly with the performance owner.
 
 ## Durable test data and action history
 
