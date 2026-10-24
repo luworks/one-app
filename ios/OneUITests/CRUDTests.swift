@@ -208,7 +208,7 @@ final class CRUDTests: XCTestCase {
   /// + on Reminders opens the quick-add sheet: a title, a day chip and a time from the grid, Save.
   func testReminderQuickAddWithPlus() {
     openTab("Reminders")
-    app.buttons["New"].tap()
+    app.addNew("New reminder")
     let title =
       app.textFields["quick.title"].exists
       ? app.textFields["quick.title"] : app.textViews["quick.title"]
@@ -392,7 +392,7 @@ final class CRUDTests: XCTestCase {
   func testEventCreateEditDeleteInEditor() {
     openTab("Calendar")
     let start = nextFullHour
-    app.buttons["New"].tap()
+    app.addNew("New event")
     XCTAssertTrue(
       app.navigationBars["New event"].waitForExistence(timeout: 5), "+ on Calendar adds an event")
     app.textFields["event.title"].typeText("Piano lesson")
@@ -541,7 +541,7 @@ final class CRUDTests: XCTestCase {
     XCTAssertEqual(alarmRows.count, 4)
 
     // Create.
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(
       app.staticTexts["Add Alarm"].waitForExistence(timeout: 5), "+ on Alarms adds an alarm")
     let label = app.textFields["alarm.label"]

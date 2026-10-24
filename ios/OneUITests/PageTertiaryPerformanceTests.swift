@@ -115,8 +115,10 @@ final class PageTertiaryPerformanceTests: XCTestCase {
   func testAlarmAndTimerSoundEndpoints() {
     app.buttons["Clock"].firstMatch.tap()
     for visit in 1...3 {
+      app.buttons["New"].tap()
       tap(
-        app.buttons["New"], route: "alarm.editor", visit: visit, ready: app.staticTexts["Add Alarm"]
+        app.buttons["New alarm"], route: "alarm.editor", visit: visit,
+        ready: app.staticTexts["Add Alarm"]
       )
       let alarmSound = app.buttons["alarm.sound"]
       for _ in 0..<4 where !(alarmSound.exists && alarmSound.isHittable) { app.swipeUp() }

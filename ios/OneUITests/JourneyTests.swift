@@ -81,7 +81,7 @@ final class JourneyTests: XCTestCase {
   /// J4: add an event. (Under -uiTesting there is no Calendar permission, so the in-app editor is used, not Apple's.)
   func testJ4_addEvent() {
     tab("Calendar")
-    tap(app.buttons["New"])  // + adds an event on the Calendar page (Month is the default view)
+    app.addNew("New event")
     let title = app.textFields["Title"]
     XCTAssertTrue(title.waitForExistence(timeout: 5))
     title.typeText("Design review")
@@ -122,7 +122,7 @@ final class JourneyTests: XCTestCase {
   func testJ6_addAlarmAndSeeItInToday() {
     // The pinned morning clock keeps the next-quarter-hour alarm in today.
     tab("Clock")
-    tap(app.buttons["New"])  // + adds an alarm on the Alarms page
+    app.addNew("New alarm")
     tap(app.buttons["Save"])
     XCTAssertTrue(
       app.buttons["alarm.row"].waitForExistence(timeout: 5),
