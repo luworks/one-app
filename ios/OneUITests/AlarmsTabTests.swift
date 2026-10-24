@@ -234,3 +234,39 @@ final class AlarmDefaultTimeTests: XCTestCase {
       "minutes: \(wheels.element(boundBy: 1).value ?? "")")  // "00 minutes"
   }
 }
+
+/// Saves made while Add Alarm is open (sync, widgets, another device) must not re-render the shell under the sheet:
+/// each re-render cost frames while the wheel was spinning, so the minute column stuttered on a phone.
+@MainActor
+final class AlarmWheelStoreChurnTests: XCTestCase {
+  func testSavesUnderAddAlarmLeaveTheShellAlone() {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launchArguments = ["-uiTesting", "-uiTestingNow", "10:56", "-uiTestingStoreChurn"]
+    app.launch()
+    app.buttons["Clock"].firstMatch.tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+    app.buttons["New"].tap()
+    XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+    let minutes = app.pickerWheels.element(boundBy: 1)
+    XCTAssertTrue(minutes.waitForExistence(timeout: 5))
+    let report = app.staticTexts["storeChurn.report"]
+    let before = Self.parse(report.label)
+    for step in 0..<4 {
+      let (from, to) = step.isMultiple(of: 2) ? (0.85, 0.15) : (0.15, 0.85)
+      minutes.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from)).press(
+        forDuration: 0.02,
+        thenDragTo: minutes.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to)),
+        withVelocity: .default, thenHoldForDuration: 0.1)
+    }
+    let after = Self.parse(report.label)
+    XCTAssertGreaterThanOrEqual(after.saves - before.saves, 5, "saves kept coming: \(report.label)")
+    XCTAssertLessThanOrEqual(
+      after.shell - before.shell, 1, "the shell re-rendered on saves: \(before) → \(after)")
+  }
+
+  private static func parse(_ label: String) -> (saves: Int, shell: Int) {
+    let values = label.split(separator: " ").map { Int($0.split(separator: "=").last ?? "") ?? 0 }
+    return (values.first ?? 0, values.count > 1 ? values[1] : 0)
+  }
+}
