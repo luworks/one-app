@@ -843,6 +843,9 @@
       } catch {
         lastError = error.localizedDescription
         log.error("sync failed: \((error as NSError).code, privacy: .public)")
+        ledger?.activity.record(
+          ActivityEvents.error(
+            source: "reminders.sync", code: String((error as NSError).code), at: runtime.now()))
       }
       version += 1
     }
@@ -1057,8 +1060,13 @@
             apply(r, to: t)
             fp[r.id] = r.fingerprint
           } else if local != agreed {
-            try push(t, remote: r)
-            fp[r.id] = Self.fingerprint(of: t)
+            // One reminder Apple refuses must not stop the rest of the pass (or its uploads).
+            do {
+              try push(t, remote: r)
+              fp[r.id] = Self.fingerprint(of: t)
+            } catch {
+              skipped(error, ledger: ledger)
+            }
           }
           base.insert(r.id)
         } else if pending.contains(r.id) {
@@ -1130,7 +1138,13 @@
         debugLog("upload \(t.title)")
         let ek = EKReminder(eventStore: store)
         ek.calendar = cal
-        try write(t, to: ek)
+        do {
+          try write(t, to: ek)
+        } catch {
+          // Left unlinked: the next pass tries again.
+          skipped(error, ledger: ledger)
+          continue
+        }
         if t.listName.isEmpty { t.listName = cal.title }
         t.externalID = ek.calendarItemIdentifier
         base.insert(ek.calendarItemIdentifier)
@@ -1170,6 +1184,14 @@
       if t.listName != r.listTitle { t.listName = r.listTitle }
       if t.flagged != r.flagged { t.flagged = r.flagged }
       if t.repeatRule != r.repeatRule { t.repeatRule = r.repeatRule }
+    }
+
+    /// A per-reminder write Apple refused: logged and recorded by code, then retried on the next pass.
+    private func skipped(_ error: Error, ledger: Ledger) {
+      let code = (error as NSError).code
+      log.error("reminder write skipped: \(code, privacy: .public)")
+      ledger.activity.record(
+        ActivityEvents.error(source: "reminders", code: String(code), at: runtime.now()))
     }
 
     /// App -> Apple for an existing reminder.
