@@ -394,6 +394,16 @@ final class TimeWheelTests: XCTestCase {
     XCTAssertGreaterThan(f.ticks, 0)
   }
 
+  func testNumbersThinOutWhenCompressedWithHysteresis() {
+    XCTAssertEqual(TimeWheelColumn.labelStep(current: 1, pointsPerUnit: 34, gap: 28), 1)
+    XCTAssertEqual(TimeWheelColumn.labelStep(current: 1, pointsPerUnit: 7, gap: 28), 5)
+    XCTAssertEqual(TimeWheelColumn.labelStep(current: 1, pointsPerUnit: 1.5, gap: 28), 15)
+    XCTAssertEqual(
+      TimeWheelColumn.labelStep(current: 5, pointsPerUnit: 29, gap: 28), 5,
+      "just above the threshold the coarser step holds")
+    XCTAssertEqual(TimeWheelColumn.labelStep(current: 5, pointsPerUnit: 33, gap: 28), 1)
+  }
+
   func testValueShownConfirmedAndSpokenAgree() {
     var f = minutes(58, adaptive: true)
     f.down()

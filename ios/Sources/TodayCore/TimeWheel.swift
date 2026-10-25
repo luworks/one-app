@@ -392,6 +392,23 @@ public struct TimeWheelColumn: Equatable, Sendable {
     return true
   }
 
+  /// Which values get a number when the spacing is `pointsPerUnit`: every one, every 5th or every 15th, so numbers
+  /// never overlap (`gap` is a number's height). Hysteresis: a denser step only returns with 15% room to spare, so a
+  /// speed hovering near a threshold does not make the numbers flicker. The selected value always keeps its number.
+  public static func labelStep(current: Int, pointsPerUnit: Double, gap: Double) -> Int {
+    let steps = [1, 5, 15]
+    var step = steps.contains(current) ? current : 1
+    while pointsPerUnit * Double(step) < gap, let bigger = steps.first(where: { $0 > step }) {
+      step = bigger
+    }
+    while let smaller = steps.last(where: { $0 < step }),
+      pointsPerUnit * Double(smaller) >= gap * 1.15
+    {
+      step = smaller
+    }
+    return step
+  }
+
   static func smoothstep(_ x: Double) -> Double {
     let t = min(max(x, 0), 1)
     return t * t * (3 - 2 * t)
