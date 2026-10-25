@@ -101,6 +101,14 @@ jobs:
         run: python3 scripts/ci/smoke.py
         env:
           SIM_CACHE_HIT: ${{ steps.sim.outputs.cache-hit }}
+      - if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: smoke-screens-${{ github.sha }}
+          path: ${{ runner.temp }}/today-smoke/screens
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
       # Save whenever the device was shut down cleanly: a failed cold run must not stay cold.
       - if: always() && steps.smoke.outputs.device == 'clean'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
