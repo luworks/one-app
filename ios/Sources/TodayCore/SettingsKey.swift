@@ -1,6 +1,5 @@
 /// Keys for the choices in Settings (read by the screens they affect).
 package enum SettingsKey {
-  package static let showOverdue = "today.setting.showOverdue"
   package static let showAlarms = "today.setting.showAlarmsInToday"
   package static let jumpToNow = "today.setting.jumpToNow"
   package static let autoArchiveChats = "today.setting.autoArchiveChats"

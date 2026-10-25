@@ -75,7 +75,6 @@
     @Environment(\.modelContext) private var context
 
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.default.rawValue
-    @AppStorage(SettingsKey.showOverdue) private var showOverdue = true
     @AppStorage(SettingsKey.showAlarms) private var showAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpToNow = true
     @AppStorage(SettingsKey.autoArchiveChats) private var autoArchiveChats = true
@@ -244,7 +243,6 @@
 
     private var todaySection: some View {
       Section {
-        Toggle("Show overdue reminders", isOn: $showOverdue)
         Toggle("Show alarms in Today and Calendar", isOn: $showAlarms)
         Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
         TodayTimelineSettings()
