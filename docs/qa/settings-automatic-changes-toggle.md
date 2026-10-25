@@ -1,6 +1,6 @@
 # Settings automatic changes toggle
 
-Implementation base: `d8a15f2` in isolated worktree `t3-d2d6af47`. Health changes from that base are already on main; this change edits no Health, Calendar or World Clock files. Related handoff: https://github.com/luworks/one-app/issues/32.
+Implementation base: `d8a15f2` in isolated worktree `t3-d2d6af47`. Health changes from that base are already on main; this change edits no Health, Calendar or World Clock files. Related handoff: https://github.com/luworks/today/issues/32.
 
 Settings → AI now exposes a real Automatic changes switch and a separate Scope and duration link. Both entry points reflect the existing `planFreeTime` grant. Explicit ON creates a seven-day grant only when none is active. OFF revokes every active grant in that scope. The end date/time is visible; the switch refreshes expiry while Settings stays open. Save failure rolls back and reports an error without publishing successful grant events. Existing plan-card grant/revoke behavior shares the same Activity formatting.
 

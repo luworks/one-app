@@ -8,7 +8,7 @@ Frozen baseline `fc7fc84aeb6b641ae4d926c2cc839fba7ef71db2` (merged page baseline
 - Eight named28-second mono IMA4 CAF choices remain. Beacon/MorningPiano use16kHz, other six22.05kHz; synthesis remains44.1kHz with the same melody/timing/envelope/gain/reverb. Source resource bytes5280736→2445686 (-53.69%). Generator and resource contracts are retained; no assets removed by guessed reachability.
 - No Year/Activity algorithm or historical app instrumentation is transplanted from PR72. Current main instrumentation is retained.
 
-The historical package/audio delta is `fc683a7..3db91dd`; evidence remains in [PR72](https://github.com/luworks/one-app/pull/72), its [packaging report](https://github.com/luworks/one-app/blob/3db91dd/docs/performance/packaging-candidate.md) and [audio report](https://github.com/luworks/one-app/blob/3db91dd/docs/performance/audio-candidate.md). Historical unsigned device Release app23374117→9390496B (-59.83%) and local ZIP7621937→4557045B (-40.21%) do not describe this new source. The ZIP51% reduction goal was not reached there.
+The historical package/audio delta is `fc683a7..3db91dd`; evidence remains in [PR72](https://github.com/luworks/today/pull/72), its [packaging report](https://github.com/luworks/today/blob/3db91dd/docs/performance/packaging-candidate.md) and [audio report](https://github.com/luworks/today/blob/3db91dd/docs/performance/audio-candidate.md). Historical unsigned device Release app23374117→9390496B (-59.83%) and local ZIP7621937→4557045B (-40.21%) do not describe this new source. The ZIP51% reduction goal was not reached there.
 
 ## Current reproducible verification
 

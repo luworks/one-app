@@ -1,7 +1,7 @@
 # Today iOS QA coverage and repeatable runner
 
 Source inventory baseline: `55e73d571f57987e5adc57d5d6b710bcec7a998a` (2026-10-18).
-Read [issue #32](https://github.com/luworks/one-app/issues/32), [AGENTS.md](../../AGENTS.md),
+Read [issue #32](https://github.com/luworks/today/issues/32), [AGENTS.md](../../AGENTS.md),
 [CLAUDE.md](../../CLAUDE.md) and [iOS README](../../ios/README.md) before interpreting results.
 This is a coverage map, **not a green-suite report**. The overnight coordinator owns the only full UI run;
 adding this runner does not require restarting or replacing that run.

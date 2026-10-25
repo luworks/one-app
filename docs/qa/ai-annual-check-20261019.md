@@ -98,7 +98,7 @@ Earlier completed evidence remains intact:
 Production changes are in commit `4479a4399d95633a0fedbae4b1ca0e587c45fb4c`.
 Live captures were made from its working-tree implementation before commit;
 later changes only repair test selectors and update evidence. PR:
-https://github.com/luworks/one-app/pull/105.
+https://github.com/luworks/today/pull/105.
 
 Final focused logic command passed 11 tests, zero missing executions:
 

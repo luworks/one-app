@@ -83,21 +83,21 @@ def references(root):
             documents.append(path.read_text(errors='replace'))
     for kind in ('issues', 'pulls'):
         data = json.loads(probe(['gh', 'api', '--paginate', '--slurp',
-                                 f'repos/luworks/one-app/{kind}?state=open&per_page=100'], cwd=root, timeout=30))
+                                 f'repos/luworks/today/{kind}?state=open&per_page=100'], cwd=root, timeout=30))
         for page in data:
             for item in page:
                 documents.append(item.get('body') or '')
                 number = item['number']
                 comments = probe(['gh', 'api', '--paginate', '--slurp',
-                                  f'repos/luworks/one-app/issues/{number}/comments?per_page=100'],
+                                  f'repos/luworks/today/issues/{number}/comments?per_page=100'],
                                  cwd=root, timeout=30)
                 documents.append(comments)
                 if kind == 'pulls':
                     documents.append(probe(['gh', 'api', '--paginate', '--slurp',
-                                            f'repos/luworks/one-app/pulls/{number}/comments?per_page=100'],
+                                            f'repos/luworks/today/pulls/{number}/comments?per_page=100'],
                                            cwd=root, timeout=30))
                     documents.append(probe(['gh', 'api', '--paginate', '--slurp',
-                                            f'repos/luworks/one-app/pulls/{number}/reviews?per_page=100'],
+                                            f'repos/luworks/today/pulls/{number}/reviews?per_page=100'],
                                            cwd=root, timeout=30))
     return '\n'.join(documents)
 

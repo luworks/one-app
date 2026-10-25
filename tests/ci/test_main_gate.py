@@ -76,7 +76,7 @@ class MainInstallTests(unittest.TestCase):
     def test_exact_main_positive_does_not_install_and_rechecks_main(self):
         self.assertEqual(self.check()['sha'], self.sha)
         self.assertEqual(sum(p.endswith('commits/main') for p in self.calls), 2)
-        self.assertTrue(all(p.startswith('repos/luworks/one-app/') for p in self.calls))
+        self.assertTrue(all(p.startswith('repos/luworks/today/') for p in self.calls))
 
     def test_branch_old_main_running_or_failed_run_blocks(self):
         for run_id in ('42', '43'):

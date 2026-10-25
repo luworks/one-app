@@ -1,6 +1,6 @@
 # Capture titles and title editing
 
-Issue: https://github.com/luworks/one-app/issues/64
+Issue: https://github.com/luworks/today/issues/64
 
 The owner screenshot shows an Added 23:00 alarm titled `的时候，必须要睡觉`
 from `今天晚上11点的时候提醒我，必须要睡觉`. Source inspection confirms the

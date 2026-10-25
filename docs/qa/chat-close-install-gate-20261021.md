@@ -6,7 +6,7 @@ Clean owned checkout `t3-80d007cc` fast-forwarded from parent `a56646b2` to actu
 `origin/main` `4bf0bc74080ec024379c360f67f0797188cdc68a` before edits.
 Other worktrees, protected user Simulator and phone data were untouched.
 
-Install-smoke [39555819367](https://github.com/luworks/one-app/actions/runs/39555819367)
+Install-smoke [39555819367](https://github.com/luworks/today/actions/runs/39555819367)
 failed its original Close disappearance assertion. The exported first-failure hierarchy
 shows `ask-input` at `(40,2370,318,22)`, Disabled, with `Navigation check` retained;
 the final screen-recording frame shows the underlying Today page without the panel.

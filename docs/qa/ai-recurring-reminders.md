@@ -1,6 +1,6 @@
 # Recurring reminder intent and weekday retention
 
-Issue: https://github.com/luworks/one-app/issues/70
+Issue: https://github.com/luworks/today/issues/70
 
 ## Source and delivery boundary
 

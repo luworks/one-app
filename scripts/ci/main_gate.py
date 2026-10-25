@@ -62,7 +62,7 @@ def check_install(root, args, run):
             not re.fullmatch(r'[1-9][0-9]*', str(run_id)) for run_id in runs.values()):
         raise ValueError('main_gate_exact_commit_and_runs_required')
     def api(path):
-        return run(['gh', 'api', 'repos/luworks/one-app/' + path], root)
+        return run(['gh', 'api', 'repos/luworks/today/' + path], root)
     def require_current():
         if json.loads(api('commits/main'))['sha'] != sha:
             raise ValueError('main_gate_current_main_mismatch')
