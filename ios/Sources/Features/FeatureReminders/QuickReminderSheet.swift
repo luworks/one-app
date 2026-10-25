@@ -164,8 +164,10 @@
 
         Spacer(minLength: 0)
 
+        // The sheet's tint is .primary (white in Dark): the fill follows it, so the label takes the inverse.
         Button("Save", action: save)
           .font(.body.weight(.semibold))
+          .foregroundStyle(Color(.systemBackground))
           .buttonStyle(.borderedProminent)
           .buttonBorderShape(.capsule)
           .disabled(!canSave)
