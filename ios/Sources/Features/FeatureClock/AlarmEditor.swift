@@ -162,9 +162,7 @@
         ScrollView {
           VStack(spacing: 0) {
             header
-            DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
-              .datePickerStyle(.wheel)
-              .labelsHidden()
+            AlarmTimePicker(time: $time)
               .frame(maxWidth: .infinity)
               .padding(.horizontal, 19)
               .padding(.top, 14)

@@ -2,13 +2,15 @@ import Foundation
 
 /// The alarm wheel lab (a Debug-only page): three time pickers compared on the same set-a-time tasks. Nothing here
 /// creates an alarm; trials are only recorded on this iPhone and exported by hand.
-public enum WheelLabVariant: String, Codable, CaseIterable, Sendable {
+public enum WheelLabVariant: String, Codable, CaseIterable, Sendable, Identifiable {
   /// Today's real alarm picker: the system wheel `DatePicker`, configured as in the alarm editor.
   case a = "A"
   /// The custom wheel with fixed spacing.
   case b = "B"
   /// The same custom wheel; only the minute column's spacing follows the finger speed.
   case c = "C"
+
+  public var id: String { rawValue }
 
   public var title: String {
     switch self {

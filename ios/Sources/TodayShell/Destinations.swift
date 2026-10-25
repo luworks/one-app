@@ -100,7 +100,16 @@
             toast?.showNotice(
               "Couldn't clear saved Focus choices. Your local data was kept. Try again.")
           }
-        })
+        }, wheelLab: wheelLab)
+    }
+
+    private var wheelLab: (@MainActor () -> AnyView)? {
+      #if DEBUG
+        let runtime = session.runtime
+        return { AnyView(AlarmWheelLab(runtime: runtime)) }
+      #else
+        return nil
+      #endif
     }
   }
 
