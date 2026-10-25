@@ -98,9 +98,10 @@ final class TodayTomorrowTests: XCTestCase {
   func testMorningSectionsStartCollapsedAndExpandAllOfTomorrow() {
     let app = launch(at: "09:41")
     XCTAssertFalse(app.buttons["focus.active"].exists)
+    // Overdue sits above the timeline; the other disclosures follow it.
+    let overdueLine = app.buttons["today.overdueShortcut"]
     let headers = [
-      app.buttons["focus.overdue"], app.buttons["focus.snoozed"], app.buttons["focus.settled"],
-      tomorrow(app),
+      overdueLine, app.buttons["focus.snoozed"], app.buttons["focus.settled"], tomorrow(app),
     ]
     for header in headers {
       reveal(header, in: app)
@@ -109,7 +110,8 @@ final class TodayTomorrowTests: XCTestCase {
     for (first, second) in zip(headers, headers.dropFirst()) {
       XCTAssertLessThan(first.frame.minY, second.frame.minY, "Trailing section order")
     }
-    XCTAssertTrue(headers[0].label.hasPrefix("Overdue (1)"))
+    XCTAssertEqual(headers[0].label, "1 overdue")
+    XCTAssertTrue(app.buttons["today.tidyOverdue"].exists, "Tidy sits beside the overdue line")
     XCTAssertTrue(headers[3].label.hasPrefix("Tomorrow (5)"))
     XCTAssertFalse(app.staticTexts["Section overdue"].exists)
     XCTAssertFalse(app.staticTexts["Tomorrow anytime task"].exists)
@@ -120,7 +122,6 @@ final class TodayTomorrowTests: XCTestCase {
       XCTAssertGreaterThanOrEqual(button.frame.width, 44)
       XCTAssertGreaterThanOrEqual(button.frame.height, 44)
     }
-    XCTAssertFalse(app.buttons["today.overdueShortcut"].exists)
     reveal(headers[0], in: app)
     headers[0].tap()
     XCTAssertEqual(headers[0].value as? String, "Expanded")
