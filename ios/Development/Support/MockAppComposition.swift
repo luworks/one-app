@@ -73,7 +73,7 @@
       if let native = reminders as? RemindersSync { native.configure(container, ledger: ledger) }
       let actions = PlannerActions(
         calendar: calendar, reminders: reminders, alarms: services.alarms, ledger: ledger,
-        runtime: runtime)
+        runtime: runtime, defaults: defaults)
       let widget = WidgetFeed(
         container: container, calendar: calendar, reminders: reminders, runtime: runtime,
         enabled: false, travel: { _, _, _, _, _ in nil }, save: { _ in false }, reload: {})

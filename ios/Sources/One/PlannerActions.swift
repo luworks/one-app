@@ -21,11 +21,14 @@
     private let alarms: any AlarmService
     private let ledger: Ledger
     private let runtime: PlannerRuntime
+    private let defaults: UserDefaults
 
     package init(
       calendar: any CalendarService, reminders: any ReminderService,
-      alarms: any AlarmService, ledger: Ledger, runtime: PlannerRuntime
+      alarms: any AlarmService, ledger: Ledger, runtime: PlannerRuntime,
+      defaults: UserDefaults = .standard
     ) {
+      self.defaults = defaults
       focus = TodayFocus(ledger: ledger, runtime: runtime)
       self.calendar = calendar
       self.reminders = reminders
@@ -93,7 +96,7 @@
     ) throws -> (id: PersistentIdentifier, entry: LedgerItem) {
       try capture.insertRecorded(
         into: context, actor: actor, channel: channel, approval: approval,
-        ledger: ledger, runtime: runtime)
+        ledger: ledger, runtime: runtime, alarmDefaults: AlarmPlan.newAlarmDefaults(defaults))
     }
 
     /// Narrow submitted-chat authority; does not grant background autonomy or recurrence writes.

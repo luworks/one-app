@@ -29,7 +29,6 @@ public enum TodaySceneID: String, CaseIterable, Codable, Sendable, Identifiable 
   case ask = "ask"
   case askCapture = "ask.card.capture"
   case askStack = "ask.card.stack"
-  case askPlan = "ask.card.plan"
   case askChange = "ask.card.change"
   case askTidy = "ask.card.tidy"
   case activity = "activity"

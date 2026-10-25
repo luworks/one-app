@@ -10,6 +10,7 @@
   import os
   #if canImport(AlarmKit)
     import AlarmKit
+    import AppIntents
   #endif
 
   /// Where the user stands on letting Today schedule alarms (AlarmKit, iOS 26+).
@@ -194,7 +195,8 @@
             title: alarm.label.isEmpty ? AlarmPlan.defaultLabel : alarm.label,
             schedule: AlarmScheduler.schedule(
               hour: alarm.hour, minute: alarm.minute, weekdays: alarm.weekdays),
-            snooze: alarm.snooze, sound: alarm.sound, snoozeMinutes: alarm.snoozeMinutes)
+            snooze: alarm.snooze, sound: alarm.sound, snoozeMinutes: alarm.snoozeMinutes,
+            entity: EntityIdentifier(for: AlarmEntity.self, identifier: id))
         }
       #else
         throw AlarmActions.Failure.unavailable
@@ -300,7 +302,8 @@
             driver: driver, id: id,
             title: alarm.label.isEmpty ? AlarmPlan.defaultLabel : alarm.label,
             schedule: schedule(hour: alarm.hour, minute: alarm.minute, weekdays: alarm.weekdays),
-            snooze: alarm.snooze, sound: alarm.sound, snoozeMinutes: alarm.snoozeMinutes)
+            snooze: alarm.snooze, sound: alarm.sound, snoozeMinutes: alarm.snoozeMinutes,
+            entity: EntityIdentifier(for: AlarmEntity.self, identifier: id))
           alarm.alarmKitSignature = ok ? signature : nil
         }
 
@@ -348,12 +351,12 @@
 
       private static func schedule(
         driver: Ringer, id: UUID, title: String, schedule: Alarm.Schedule, snooze: Bool,
-        sound: String = "", snoozeMinutes: Int = 9
+        sound: String = "", snoozeMinutes: Int = 9, entity: EntityIdentifier? = nil
       ) async -> Bool {
         do {
           try await scheduleThrowing(
             driver: driver, id: id, title: title, schedule: schedule,
-            snooze: snooze, sound: sound, snoozeMinutes: snoozeMinutes)
+            snooze: snooze, sound: sound, snoozeMinutes: snoozeMinutes, entity: entity)
           return true
         } catch {
           log.error("schedule failed \((error as NSError).code, privacy: .public)")
@@ -361,9 +364,10 @@
         }
       }
 
+      /// `entity` ties an alarm from the Alarms tab to its Siri entity (`AlarmEntity`), so Siri knows which one rings.
       package static func scheduleThrowing(
         driver: Ringer, id: UUID, title: String, schedule: Alarm.Schedule, snooze: Bool,
-        sound: String = "", snoozeMinutes: Int = 9
+        sound: String = "", snoozeMinutes: Int = 9, entity: EntityIdentifier? = nil
       ) async throws {
         let resource = LocalizedStringResource(stringLiteral: title)
         let snoozeButton = AlarmButton(text: "Snooze", textColor: .white, systemImageName: "zzz")
@@ -393,6 +397,7 @@
               postAlert: TimeInterval(AlarmPlan.snoozeMinutes(nearest: snoozeMinutes) * 60)) : nil,
           schedule: schedule,
           attributes: attributes,
+          appEntityIdentifier: entity,
           sound: AlarmSound.named(sound)?.alertSound ?? .default)
         _ = try await driver.manager.schedule(id: id, configuration: configuration)
       }
