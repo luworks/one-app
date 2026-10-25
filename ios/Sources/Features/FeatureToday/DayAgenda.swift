@@ -102,7 +102,16 @@
 
     package var body: some View {
       ScrollViewReader { proxy in
-        list
+        VStack(spacing: 0) {
+          // Any day is one tap away: tomorrow, later this week, or another week with the arrows.
+          if !showsWeekStrip {
+            WeekStrip(selected: $day, calendar: cal)
+              .padding(.horizontal, 8)
+              .padding(.bottom, 2)
+              .accessibilityIdentifier("today.weekStrip")
+          }
+          list
+        }
           .onAppear {
             refreshClock()
             scrollToNow(proxy)
@@ -170,14 +179,6 @@
             Label("Back to today", systemImage: "arrow.uturn.backward").font(.subheadline)
               .frame(minHeight: 44)
           }
-          .listRowSeparator(.hidden)
-        }
-        if showsWeekStrip {
-          Section {
-            WeekStrip(selected: $day)
-          }
-          .listRowInsets(EdgeInsets(top: 6, leading: 4, bottom: 6, trailing: 4))
-          .listRowBackground(Color.clear)
           .listRowSeparator(.hidden)
         }
 
