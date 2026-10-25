@@ -310,10 +310,10 @@
       let info = Bundle.main.infoDictionary
       let version = info?["CFBundleShortVersionString"] as? String ?? "?"
       let number = info?["CFBundleVersion"] as? String ?? "?"
-      let built = (Bundle.main.executableURL)
-        .flatMap { try? $0.resourceValues(forKeys: [.contentModificationDateKey]) }?
-        .contentModificationDate
-        .map { $0.formatted(.iso8601) } ?? "?"
+      let values = try? Bundle.main.executableURL?.resourceValues(forKeys: [
+        .contentModificationDateKey
+      ])
+      let built = values?.contentModificationDate?.formatted(.iso8601) ?? "?"
       return "\(version) (\(number)) built \(built)"
     }()
   }
@@ -396,8 +396,8 @@
           ShareLink(items: files) {
             Label("Export CSV and JSON", systemImage: "square.and.arrow.up")
           }
-            .disabled(files.isEmpty)
-            .accessibilityIdentifier("wheelLab.export")
+          .disabled(files.isEmpty)
+          .accessibilityIdentifier("wheelLab.export")
           Button("Clear Results…", role: .destructive) { clearing = true }
             .disabled(log.trials.isEmpty && log.ratings.isEmpty)
         } footer: {
