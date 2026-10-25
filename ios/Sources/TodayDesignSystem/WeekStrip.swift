@@ -63,7 +63,8 @@
           .accessibilityLabel(
             d.formatted(
               Date.FormatStyle(locale: presentation.locale, calendar: cal, timeZone: cal.timeZone)
-                .weekday(.wide).month(.wide).day()))
+                .weekday(.wide).month(.wide).day())
+          )
           .accessibilityAddTraits(isSelected ? .isSelected : [])
           .accessibilityIdentifier("weekStrip." + Self.key(d, cal))
         }

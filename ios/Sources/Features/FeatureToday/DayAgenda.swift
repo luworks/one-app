@@ -111,15 +111,15 @@
           }
           list
         }
-          .onAppear {
-            refreshClock()
-            scrollToNow(proxy)
-          }
-          .onChange(of: day) { _, _ in
-            showsAllOverdue = false
-            expandsTomorrow = false
-            scrollToNow(proxy)
-          }
+        .onAppear {
+          refreshClock()
+          scrollToNow(proxy)
+        }
+        .onChange(of: day) { _, _ in
+          showsAllOverdue = false
+          expandsTomorrow = false
+          scrollToNow(proxy)
+        }
       }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { refreshClock() }
