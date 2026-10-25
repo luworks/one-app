@@ -8,15 +8,15 @@ import XCTest
 /// Clock tab reads (nothing is set until the user taps Add). Also the intro card's shown-once flag.
 final class AlarmImportTests: XCTestCase {
   private var defaults: UserDefaults!
-  private var name = ""
+  private var suite = ""
 
   override func setUp() {
-    name = "AlarmImportTests-\(UUID().uuidString)"
-    defaults = UserDefaults(suiteName: name)
+    suite = "AlarmImportTests-\(UUID().uuidString)"
+    defaults = UserDefaults(suiteName: suite)
   }
 
   override func tearDown() {
-    defaults.removePersistentDomain(forName: name)
+    defaults.removePersistentDomain(forName: suite)
   }
 
   func testRepeatTextInEnglishAndChinese() {
