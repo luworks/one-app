@@ -22,7 +22,7 @@ struct SceneRegistryTests {
         "clock.world.cityPicker", "clock.stopwatch", "clock.timer",
       ],
       [
-        "ask", "ask.card.capture", "ask.card.stack", "ask.card.plan", "ask.card.change",
+        "ask", "ask.card.capture", "ask.card.stack", "ask.card.change",
         "ask.card.tidy",
       ],
       [

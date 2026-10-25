@@ -619,7 +619,7 @@
               opened = .alarm(alarm)
             })
         }
-      case .askCapture, .askStack, .askPlan, .askChange, .askTidy:
+      case .askCapture, .askStack, .askChange, .askTidy:
         SceneAskCards(session: session)
       case .activity:
         ActivityView(
@@ -800,12 +800,6 @@
       (try? session.container.mainContext.fetch(
         FetchDescriptor<OneTask>(sortBy: [SortDescriptor(\.createdAt)]))) ?? []
     }
-    private var plan: [(task: OneTask, start: Date)] {
-      tasks.filter { !$0.isDone }.prefix(3).enumerated().map {
-        ($0.element, session.configuration.now.addingTimeInterval(Double($0.offset + 1) * 3600))
-      }
-    }
-
     var body: some View {
       NavigationStack {
         ScrollView {
@@ -829,19 +823,6 @@
                 onSkip: { id in update(id, status: .dropped) },
                 onAddAll: { for p in proposals where p.status == .open { add(p.id) } },
                 onUndo: undo, onOpen: open, onRename: rename)
-            case .askPlan:
-              PlanCard(
-                plan: plan, onApply: applyPlan,
-                onAlways: {
-                  var rows = plan
-                  var grant: AIGrant?
-                  feedback(
-                    AskNativeActions.applyPlanAlways(
-                      plan: &rows, grant: &grant,
-                      context: session.container.mainContext, actions: session.services.actions,
-                      ledger: session.services.ledger, runtime: session.runtime,
-                      onApproved: session.planApproved))
-                }, onCancel: { resolved = true })
             case .askChange:
               if let task = tasks.first {
                 let change = PendingChange(
@@ -939,14 +920,6 @@
       } else if let message = feedback.messages.last {
         session.toast.showNotice(message.text)
       }
-    }
-    private func applyPlan() {
-      var rows = plan
-      feedback(
-        AskNativeActions.applyPlan(
-          plan: &rows, grant: nil, context: session.container.mainContext,
-          actions: session.services.actions, ledger: session.services.ledger,
-          runtime: session.runtime))
     }
   }
 
