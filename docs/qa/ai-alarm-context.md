@@ -1,6 +1,6 @@
 # IMG6815: relative alarm and chat context
 
-Issue [#95](https://github.com/luworks/one-app/issues/95), PR [#97](https://github.com/luworks/one-app/pull/97).
+Issue [#95](https://github.com/luworks/today/issues/95), PR [#97](https://github.com/luworks/today/pull/97).
 Source baseline `79ddde8` was the fetched `origin/main` and contains installed-main
 `aa7c7c8`, PR80's fast conversation fallback and PR84's reminder recovery.
 Primary checkout's local main was separately `c944436`; it was not treated as the

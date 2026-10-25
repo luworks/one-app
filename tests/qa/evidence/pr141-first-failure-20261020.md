@@ -1,9 +1,9 @@
 # PR141 first hosted failure
 
-- PR: https://github.com/luworks/one-app/pull/141
+- PR: https://github.com/luworks/today/pull/141
 - Original head: `ec5610b2838902478f3b790a41d95df9e043e659`.
-- Run: https://github.com/luworks/one-app/actions/runs/39499431994 (attempt 1).
-- Failed job: https://github.com/luworks/one-app/actions/runs/39499431994/job/118892853577.
+- Run: https://github.com/luworks/today/actions/runs/39499431994 (attempt 1).
+- Failed job: https://github.com/luworks/today/actions/runs/39499431994/job/118892853577.
 - Captured job status: completed / failure, 21:19:40–21:20:22 UTC on 2026-10-20.
 - First failed command: `python3 scripts/ci/smoke.py --command ./dev test helpers`, exit 1.
 - Format and lint steps passed. No compiler or infrastructure cause is established.
@@ -16,7 +16,7 @@ The original files and hashes are indexed through `tests/qa/journal.py`, session
 
 - `job-raw.log` SHA256: `f5c4110544003725837023c1f79745c9a4dc1141c79472b27f4db3eff5f4bffd`.
 - `checks-failure.zip` SHA256: `799b89bf480786bc0a8b802e702caad67d344b4be9453b7fd07cb2c01c17939f`.
-- Artifact: https://github.com/luworks/one-app/actions/runs/39499431994/artifacts/12298503581.
+- Artifact: https://github.com/luworks/today/actions/runs/39499431994/artifacts/12298503581.
 - `run.json`, `job.json`, `artifacts.json`, extracted exports and a separate
   `job-redacted.log` are retained alongside the originals.
 - Checkout merge SHA in artifact: `adbd80348c9aaa7faaadd7d5219b15a60d614105`;

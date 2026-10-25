@@ -6,7 +6,7 @@ Source base: `c513fe3b12d97c28283f4f88f69dd4f5304f6a04` in the sole CI writer
 ## Actual prior runs
 
 - PR122 head `135e0a74caefecccfecc05ff241017718f018cd1`, run
-  [39355902283](https://github.com/luworks/one-app/actions/runs/39355902283):
+  [39355902283](https://github.com/luworks/today/actions/runs/39355902283):
   cancelled by GitHub's 30-minute job limit. The retained evidence establishes
   build 159.145s, business 701, integration 28/28 (including both Health model
   tests), and snapshots 6/6 passed. Core UI report/raw log is absent. An orphan
@@ -14,7 +14,7 @@ Source base: `c513fe3b12d97c28283f4f88f69dd4f5304f6a04` in the sole CI writer
   Artifact 12235987785 SHA-256:
   `bf1c252961a3dd926e776ef7782c67e9aa9b4315898af0c50835099bf5ff346f`.
 - Main-critical `c513fe3`, run
-  [39349072159](https://github.com/luworks/one-app/actions/runs/39349072159):
+  [39349072159](https://github.com/luworks/today/actions/runs/39349072159):
   completed **failure**, helpers exit 1 in 20.221s. The subsequent main usability
   validation was skipped. The downloaded job log lacks the underlying helpers
   failure detail; this candidate does not diagnose it or claim positive main

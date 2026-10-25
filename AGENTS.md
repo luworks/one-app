@@ -2,6 +2,12 @@
 
 Read `CLAUDE.md` and `ios/README.md` before changing the app. Their product principles remain hard constraints. Reply to Yuan in Chinese; keep code, UI copy, comments and commit messages in English.
 
+## Dev hosts
+
+- The GitHub repo is `luworks/today` (renamed from `luworks/one-app`); local checkouts are still named `one-app` (`/home/sn0admin/code/one-app` on ubuntu03, `/Users/yuanlu/code/one-app` on the MacBook Pro). Keep those paths.
+- **ubuntu03** is the default host: agents edit code, open PRs and watch CI there. It has no Xcode or Swift toolchain, so it cannot build or run the app; `./dev test helpers`, `./dev test qa` and the Python tests run, and CI (macOS runners) does the rest.
+- **MacBook Pro** only for what needs Xcode on a real device: signed device builds, installing to the owner's iPhone with `devicectl`, real-device checks, and occasional simulator measurement.
+
 ## Testing: CI owns it
 
 - Do not run builds or tests locally by default. Push the branch, open the PR and let CI (`.github/workflows/today.yml`: `checks` and `today-required`) verify it; merge when both are green.
