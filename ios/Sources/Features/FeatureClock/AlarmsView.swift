@@ -17,6 +17,7 @@
   /// The Timer section (`TimerSection`) is a copy of Apple's Timers screen: wheel picker, Recents, running timers (AlarmKit countdowns).
   package struct AlarmsView: View {
     @Binding var section: ClockSection
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var context
@@ -242,12 +243,16 @@
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .leading)
           if let button = notice.button {
-            Button(button) { resolvePermission() }
-              .font(.subheadline.weight(.semibold))
-              .buttonStyle(.borderedProminent)
-              .buttonBorderShape(.capsule)
-              .controlSize(.small)
-              .accessibilityIdentifier("alarms.permission")
+            Button {
+              resolvePermission()
+            } label: {
+              Text(button).foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
+            }
+            .font(.subheadline.weight(.semibold))
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
+            .accessibilityIdentifier("alarms.permission")
           }
         }
         .padding(.horizontal, 12)

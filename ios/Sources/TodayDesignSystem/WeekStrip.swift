@@ -6,6 +6,7 @@
     package init(selected: Binding<Date>) { _selected = selected }
     @Binding package var selected: Date
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
 
     private var cal: Calendar {
       var c = presentation.calendar
@@ -46,7 +47,7 @@
                 .background(isSelected ? Color.accentColor : Color.clear, in: Circle())
                 .foregroundStyle(
                   isSelected
-                    ? Color.white
+                    ? Color.accentColor.contrastForeground(for: colorScheme)
                     : (cal.isDate(d, inSameDayAs: now) ? Color.accentColor : Color.primary))
             }
             .frame(maxWidth: .infinity)

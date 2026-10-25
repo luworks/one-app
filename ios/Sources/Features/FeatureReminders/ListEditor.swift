@@ -148,7 +148,7 @@
               TextField("List Name", text: $name)
                 .focused($nameFocused)
                 .font(.title2.weight(.bold))
-                .foregroundStyle(color)
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .submitLabel(.done)
                 .onSubmit { nameFocused = false }
@@ -163,7 +163,7 @@
                     Button {
                       name = ""
                     } label: {
-                      Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                      Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
                     .padding(.trailing, 12)

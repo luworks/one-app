@@ -5,6 +5,7 @@
   /// AI preview: what will be created. The user can switch reminder / event / alarm before tapping Add.
   package struct CaptureCard: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     package init(
       capture: Binding<Capture>, lists: [String] = [], status: CardStatus = .open,
       onAdd: @escaping () -> Void, onCancel: @escaping () -> Void, cancelTitle: String = "Cancel",
@@ -77,7 +78,7 @@
           if capture.fromAppleIntelligence {
             Text("· Apple Intelligence")
               .font(.caption)
-              .foregroundStyle(.tertiary)
+              .foregroundStyle(.secondary)
               .lineLimit(1)
           }
         }
@@ -124,7 +125,9 @@
           HStack {
             Button(cancelTitle, action: onCancel).buttonStyle(.bordered)
             Spacer()
-            Button("Add", action: onAdd).buttonStyle(.borderedProminent).disabled(
+            Button(action: onAdd) {
+              Text("Add").foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
+            }.buttonStyle(.borderedProminent).disabled(
               !capture.isReadyToAdd(calendar: presentation.calendar))
           }
           .padding(.top, 4)
@@ -237,6 +240,7 @@
   /// The bottom line of a card once it is decided: a green check "Added" with Undo and Open, "Undone" with Add again, or a
   /// quiet "Dropped" with nothing to tap. The same on the full card and on a row of a list.
   package struct CardFooter: View {
+    @Environment(\.colorScheme) private var colorScheme
     package init(
       status: CardStatus, compact: Bool = false, onAdd: @escaping () -> Void = {},
       onUndo: @escaping () -> Void = {}, onOpen: @escaping () -> Void = {}
@@ -277,11 +281,14 @@
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("capture-undone")
           Spacer(minLength: 8)
-          Button("Add again", action: onAdd)
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .controlSize(.small)
-            .accessibilityIdentifier("capture-add-again")
+          Button(action: onAdd) {
+            Text("Add again")
+              .foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
+          }
+          .buttonStyle(.borderedProminent)
+          .buttonBorderShape(.capsule)
+          .controlSize(.small)
+          .accessibilityIdentifier("capture-add-again")
         case .dropped:
           Label("Dropped", systemImage: "xmark.circle")
             .font(font)

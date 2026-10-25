@@ -981,7 +981,7 @@
     package var body: some View {
       Text(DaySchedule.freeLabel(free.duration))
         .font(.caption)
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(Color(.secondaryLabel))
         .padding(.leading, 68)
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)

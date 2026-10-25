@@ -60,6 +60,7 @@
   /// Add and Skip, one "Add all", and a tap to open a row for editing. Added items keep their place with a check, Undo and Open.
   package struct CaptureStack: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     @Binding package var proposals: [CaptureProposal]
     /// The user's Reminders lists, for the list menu on tasks.
     package let lists: [String]
@@ -123,15 +124,18 @@
             .foregroundStyle(.secondary)
           Spacer()
           if openCount > 1 {
-            Button("Add all", action: onAddAll)
-              .disabled(
-                !proposals.contains {
-                  $0.status == .open && $0.capture.isReadyToAdd(calendar: presentation.calendar)
-                }
-              )
-              .buttonStyle(.borderedProminent)
-              .controlSize(.small)
-              .accessibilityIdentifier("capture-add-all")
+            Button(action: onAddAll) {
+              Text("Add all")
+                .foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
+            }
+            .disabled(
+              !proposals.contains {
+                $0.status == .open && $0.capture.isReadyToAdd(calendar: presentation.calendar)
+              }
+            )
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .accessibilityIdentifier("capture-add-all")
           }
         }
         VStack(spacing: 8) {
@@ -177,6 +181,7 @@
   /// Once decided it keeps its place with the state it ended in (see `CardFooter`).
   struct CompactCaptureRow: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var capture: Capture
     let lists: [String]
     var status: CardStatus = .open
@@ -217,8 +222,9 @@
         .tint(.secondary)
         .accessibilityLabel("Skip")
         Button(action: onAdd) {
-          Image(systemName: "plus").font(.subheadline.weight(.semibold)).frame(
-            width: 32, height: 32)
+          Image(systemName: "plus").font(.subheadline.weight(.semibold))
+            .foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
+            .frame(width: 32, height: 32)
         }
         .buttonStyle(.borderedProminent)
         .buttonBorderShape(.circle)

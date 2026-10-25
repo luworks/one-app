@@ -394,17 +394,20 @@
       HStack(alignment: .firstTextBaseline, spacing: 10) {
         Image(systemName: "circle")
           .font(.title3)
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(.secondary)
           .frame(minWidth: 24)
           .accessibilityHidden(true)
         VStack(alignment: .leading, spacing: 6) {
-          TextField("New Reminder", text: $draft.title)
-            .focused($focus, equals: .title)
-            .submitLabel(.done)
-            .onSubmit {
-              if commit() { DispatchQueue.main.async { focus = .title } }
-            }
-            .accessibilityIdentifier("newReminderField")
+          TextField(
+            "", text: $draft.title,
+            prompt: Text("New Reminder").foregroundColor(Color(.label).opacity(0.65))
+          )
+          .focused($focus, equals: .title)
+          .submitLabel(.done)
+          .onSubmit {
+            if commit() { DispatchQueue.main.async { focus = .title } }
+          }
+          .accessibilityIdentifier("newReminderField")
           if isEditing {
             TextField("Add Note", text: $draft.note, axis: .vertical)
               .font(.subheadline)

@@ -178,6 +178,7 @@
   /// The Calendars list: Apple's own EKCalendarChooser (accounts, color dots, checkmarks) when access is on.
   package struct CalendarsSheet: View {
     let calendar: any CalendarService
+    @Environment(\.colorScheme) private var colorScheme
 
     package init(calendar: any CalendarService) {
       self.calendar = calendar
@@ -226,8 +227,13 @@
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
-            Button("Turn On") { Task { await calendar.setEnabled(true) } }
-              .buttonStyle(.borderedProminent)
+            Button {
+              Task { await calendar.setEnabled(true) }
+            } label: {
+              Text("Turn On")
+                .foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
+            }
+            .buttonStyle(.borderedProminent)
           }
           .padding(32)
           .navigationTitle("Calendars")
@@ -331,7 +337,7 @@
           }
           Text(number.map(String.init) ?? "")
             .font(.system(size: 11, weight: .medium).monospacedDigit())
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
             .frame(width: Self.weekNumberWidth, height: rowHeight)
             .accessibilityLabel(number.map { "Week \($0)" } ?? "")
             .accessibilityIdentifier("calendar.weekNumber")
@@ -544,6 +550,7 @@
   /// All-day events lead with a calendar glyph and say "all-day".
   private struct AgendaRow: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     let entry: CalEntry
     let day: Date
     @Environment(\.displayScale) private var scale
@@ -572,7 +579,7 @@
         } else if span.allDay {
           Image(systemName: "calendar")
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(entry.color.contrastForeground(for: colorScheme))
             .frame(width: 28, height: 28)
             .background(entry.color, in: Circle())
         } else {
@@ -865,6 +872,7 @@
   /// as a red circle (see `YearMarks.swift` and docs/design/year-view.md). Month keeps Apple's dots.
   private struct MiniMonth: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     let month: Date
     /// Unusually busy days (start of day).
     var busy: Set<Date> = []
@@ -937,7 +945,11 @@
       } label: {
         Text("\(cal.component(.day, from: d))")
           .font(.system(size: 10.5, weight: holiday ? .bold : .semibold).monospacedDigit())
-          .foregroundStyle(today ? Color.white : (holiday ? DayTint.holiday : Color.primary))
+          .foregroundStyle(
+            today
+              ? Color.red.contrastForeground(for: colorScheme)
+              : (holiday ? DayTint.holiday : Color.primary)
+          )
           .frame(maxWidth: .infinity, minHeight: 16)
           .background {
             if today {
@@ -1077,6 +1089,7 @@
   private struct WeekPage: View {
     let calendar: any CalendarService
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     let weekStart: Date
     let dayCount: Int
     let selected: Date
@@ -1130,7 +1143,7 @@
         let showsNumber = showsWeekNumbers && dayCount == 7
         Text(showsNumber ? "W\(CalendarMath.weekNumber(of: weekStart, calendar: cal))" : "")
           .font(.system(size: 10, weight: .medium).monospacedDigit())
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(.secondary)
           .frame(width: gutter)
           .accessibilityLabel("Week \(CalendarMath.weekNumber(of: weekStart, calendar: cal))")
           .accessibilityHidden(!showsNumber)
@@ -1154,7 +1167,7 @@
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(
                   isToday
-                    ? Color.white
+                    ? Color.red.contrastForeground(for: colorScheme)
                     : (isSelected
                       ? Color(.systemBackground)
                       : (past ? Color(.tertiaryLabel) : Color(.label)))
@@ -1334,7 +1347,7 @@
           .offset(x: gutter + CGFloat(index) * colW, y: y - 0.5)
         Text(now.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))
           .font(.system(size: 10, weight: .semibold).monospacedDigit())
-          .foregroundStyle(.white)
+          .foregroundStyle(Color.red.contrastForeground(for: colorScheme))
           .padding(.horizontal, 4)
           .frame(height: 16)
           .background(Color.red, in: Capsule())
@@ -1549,7 +1562,7 @@
           start.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime)
         ).font(.system(size: 10).monospacedDigit())
       }
-      .foregroundStyle(.white)
+      .foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
       .padding(3)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))

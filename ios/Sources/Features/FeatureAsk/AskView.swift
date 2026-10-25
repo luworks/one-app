@@ -499,7 +499,7 @@
             .overlay(alignment: .topLeading) {
               if draft.isEmpty {
                 Text("Ask AI or add anything")
-                  .foregroundStyle(.tertiary)
+                  .foregroundStyle(.secondary)
                   .allowsHitTesting(false)
                   .accessibilityHidden(true)
               }
@@ -1579,6 +1579,7 @@
   /// "Tidy overdue" preview: a suggested date per reminder, each changeable from its menu; Apply writes them all.
   package struct TidyCard: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     @Binding package var rows: [TidyRow]
     package var onApply: () -> Void
     package var onCancel: () -> Void
@@ -1596,10 +1597,12 @@
         HStack {
           Button("Cancel", action: onCancel).buttonStyle(.bordered)
           Spacer()
-          Button("Apply", action: onApply)
-            .buttonStyle(.borderedProminent)
-            .disabled(rows.allSatisfy { $0.choice == .keep })
-            .accessibilityIdentifier("tidy.apply")
+          Button(action: onApply) {
+            Text("Apply").foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
+          }
+          .buttonStyle(.borderedProminent)
+          .disabled(rows.allSatisfy { $0.choice == .keep })
+          .accessibilityIdentifier("tidy.apply")
         }
         .padding(.top, 4)
       }
@@ -1696,6 +1699,7 @@
   /// AI change preview: old → new, who is affected, applied only on tap.
   package struct ChangeCard: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     package let change: PendingChange
     package var onApply: () -> Void
     package var onCancel: () -> Void
@@ -1719,8 +1723,11 @@
         HStack {
           Button("Cancel", action: onCancel).buttonStyle(.bordered)
           Spacer()
-          Button(change.delete ? "Delete" : "Apply", action: onApply).buttonStyle(
-            .borderedProminent)
+          Button(action: onApply) {
+            Text(change.delete ? "Delete" : "Apply")
+              .foregroundStyle(Color.accentColor.contrastForeground(for: colorScheme))
+          }
+          .buttonStyle(.borderedProminent)
         }
         .padding(.top, 4)
       }

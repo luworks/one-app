@@ -484,6 +484,7 @@
   }
 
   private struct ResultRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     let symbol: String
     let tint: Color
     let title: String
@@ -494,7 +495,7 @@
       HStack(spacing: 12) {
         Image(systemName: symbol)
           .font(.body.weight(.semibold))
-          .foregroundStyle(.white)
+          .foregroundStyle(tint.contrastForeground(for: colorScheme))
           .frame(width: 30, height: 30)
           .background(tint.gradient, in: Circle())
         VStack(alignment: .leading, spacing: 2) {
