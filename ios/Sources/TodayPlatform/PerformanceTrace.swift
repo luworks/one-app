@@ -29,13 +29,15 @@
     /// Composer and keyboard timings relative to the latest `begin`, appended to its sample (opt-in only).
     private var lastStart: UInt64?
     private var extras = ""
+    /// The shared instance lives for the process; its keyboard observers are kept, never removed.
+    private var observers: [NSObjectProtocol] = []
 
     private init() {
       guard Self.enabled else { return }
-      for (name, event) in [
+      observers = [
         (UIResponder.keyboardWillShowNotification, "keyboard_will_show"),
         (UIResponder.keyboardDidShowNotification, "keyboard_did_show"),
-      ] {
+      ].map { name, event in
         NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
           [weak self] _ in MainActor.assumeIsolated { self?.mark(event) }
         }
