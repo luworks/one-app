@@ -35,6 +35,8 @@
     private let exportDiagnostics: @MainActor () throws -> URL
     private let shareDiagnostics: @MainActor (URL) -> AnyView
     private let reset: @MainActor (ModelContext) -> Void
+    /// Debug builds only: the alarm wheel lab (Developer section).
+    private let wheelLab: (@MainActor () -> AnyView)?
 
     package init(
       selection: Selection = .all,
@@ -49,7 +51,8 @@
       holidays: @escaping @MainActor () -> AnyView,
       activityData: @escaping @MainActor () -> AnyView,
       shareDiagnostics: @escaping @MainActor (URL) -> AnyView,
-      reset: @escaping @MainActor (ModelContext) -> Void
+      reset: @escaping @MainActor (ModelContext) -> Void,
+      wheelLab: (@MainActor () -> AnyView)? = nil
     ) {
       self.alarms = alarms
       self.ledger = ledger
@@ -66,6 +69,7 @@
       self.activityData = activityData
       self.shareDiagnostics = shareDiagnostics
       self.reset = reset
+      self.wheelLab = wheelLab
       _calendarOn = State(initialValue: calendar.isOn)
       _remindersOn = State(initialValue: reminders.isConnected)
     }
@@ -108,6 +112,9 @@
           if includes(.holidays) { holidaysSection }
           if includes(.ai) { aiSection }
           if includes(.activity) { activitySection }
+          #if DEBUG
+            if selection == .all, let wheelLab { developerSection(wheelLab) }
+          #endif
           if includes(.about) { aboutSection }
           if includes(.data) { dataSection }
         }
@@ -324,6 +331,23 @@
         )
       }
     }
+
+    #if DEBUG
+      private func developerSection(_ wheelLab: @escaping @MainActor () -> AnyView) -> some View {
+        Section {
+          NavigationLink {
+            wheelLab()
+          } label: {
+            Label("Alarm wheel lab", systemImage: "dial.medium")
+          }
+          .accessibilityIdentifier("settings.wheelLab")
+        } header: {
+          Text("Developer")
+        } footer: {
+          Text("Debug builds only. Compares alarm time pickers; never creates an alarm.")
+        }
+      }
+    #endif
 
     private var aboutSection: some View {
       Section {
