@@ -33,7 +33,8 @@
             id: i, fields: [t.title, t.note, t.listName] + t.tags, date: t.due, isDone: t.isDone)
         }
         + events.enumerated().map { i, e in
-          DraftMatch.Candidate(id: tasks.count + i, fields: [e.title, e.calendarName], date: e.start)
+          DraftMatch.Candidate(
+            id: tasks.count + i, fields: [e.title, e.calendarName], date: e.start)
         }
       return DraftMatch.pick(draft, from: candidates, now: now).map {
         $0 < tasks.count ? .task(tasks[$0]) : .event(events[$0 - tasks.count])
