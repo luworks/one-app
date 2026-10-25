@@ -12,7 +12,7 @@ final class TodayDensityTests: XCTestCase {
       TestData.fixtureArguments("today-density.json") + [
         "-uiTestingNow", "10:30", "-today.setting.jumpToNow", "NO",
         "-today.setting.healthSummary", "YES",
-        "-uiTestingPrefs", "showFreeTime=1,showSnooze=1",
+        "-uiTestingPrefs", "showFreeTime=1",
         "-AppleLanguages", "(en)", "-AppleLocale", "en_GB", "-appearance",
         largeText ? "dark" : "light",
         "-UIPreferredContentSizeCategoryName",
@@ -75,7 +75,7 @@ final class TodayDensityTests: XCTestCase {
     XCTAssertTrue(title.waitForExistence(timeout: 4))
     title.swipeLeft()
     XCTAssertTrue(app.buttons["Settle"].firstMatch.waitForExistence(timeout: 3))
-    XCTAssertTrue(app.buttons["Snooze"].firstMatch.exists)
+    XCTAssertTrue(app.buttons["Tomorrow"].firstMatch.exists)
     XCTAssertTrue(app.buttons["Delete"].firstMatch.exists)
     capture(app, name: "today-density-swipe")
     // The swiped title is shifted toward the left edge, where a right drag opens the sidebar.

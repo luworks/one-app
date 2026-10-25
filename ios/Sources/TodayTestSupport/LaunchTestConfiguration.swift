@@ -89,14 +89,14 @@ public enum LaunchTestConfiguration {
 
   private static let switchKeys: Set<String> = [
     Preferences.dimPastDaysKey, Preferences.weekNumbersKey, Preferences.showTomorrowKey,
-    Preferences.showSettleKey, Preferences.showSnoozeKey,
+    Preferences.showSettleKey,
     Preferences.showFreeTimeKey, Preferences.askSuggestionsKey,
   ]
 
   private static let allKeys = [
     Preferences.dimPastDaysKey, Preferences.firstWeekdayKey, Preferences.weekNumbersKey,
     Preferences.calendarStartKey, Preferences.showTomorrowKey, Preferences.eveningHourKey,
-    Preferences.showSettleKey, Preferences.showSnoozeKey,
+    Preferences.showSettleKey,
     Preferences.showFreeTimeKey, Preferences.newReminderListKey,
     Preferences.newAlarmSnoozeKey, Preferences.newAlarmSoundKey, Preferences.askSuggestionsKey,
   ]

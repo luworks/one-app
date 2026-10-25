@@ -54,21 +54,15 @@ final class PreferencesTests: XCTestCase {
     let d = freshDefaults()
     XCTAssertEqual(
       d.object(forKey: Preferences.showSettleKey) as? Bool ?? Preferences.showSettle, true)
-    XCTAssertEqual(
-      d.object(forKey: Preferences.showSnoozeKey) as? Bool ?? Preferences.showSnooze, false)
     d.set(false, forKey: Preferences.showSettleKey)
-    d.set(true, forKey: Preferences.showSnoozeKey)
     LaunchTestConfiguration.applyPreferenceOverrides(arguments: [], defaults: d)
     XCTAssertEqual(d.object(forKey: Preferences.showSettleKey) as? Bool, false)
-    XCTAssertEqual(d.object(forKey: Preferences.showSnoozeKey) as? Bool, true)
     LaunchTestConfiguration.applyPreferenceOverrides(
       arguments: ["-uiTesting", "-uiTestingKeepPreferences"], defaults: d)
     XCTAssertEqual(d.object(forKey: Preferences.showSettleKey) as? Bool, false)
-    XCTAssertEqual(d.object(forKey: Preferences.showSnoozeKey) as? Bool, true)
     LaunchTestConfiguration.applyPreferenceOverrides(
-      arguments: ["-uiTesting", "-uiTestingPrefs", "showSettle=1,showSnooze=0"], defaults: d)
+      arguments: ["-uiTesting", "-uiTestingPrefs", "showSettle=1"], defaults: d)
     XCTAssertEqual(d.object(forKey: Preferences.showSettleKey) as? Bool, true)
-    XCTAssertEqual(d.object(forKey: Preferences.showSnoozeKey) as? Bool, false)
   }
 
   func testEveryKeyIsListedOnceAndSharesThePrefix() {
