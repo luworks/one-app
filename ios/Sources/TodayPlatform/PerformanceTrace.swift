@@ -26,6 +26,36 @@
     public private(set) var launchComplete = false
     public private(set) var generation = 0
     public private(set) var report = ""
+    /// Composer and keyboard timings relative to the latest `begin`, appended to its sample (opt-in only).
+    private var lastStart: UInt64?
+    private var extras = ""
+
+    private init() {
+      guard Self.enabled else { return }
+      for (name, event) in [
+        (UIResponder.keyboardWillShowNotification, "keyboard_will_show"),
+        (UIResponder.keyboardDidShowNotification, "keyboard_did_show"),
+      ] {
+        NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
+          [weak self] _ in MainActor.assumeIsolated { self?.mark(event) }
+        }
+      }
+    }
+
+    /// Events whose first occurrence after a `begin` is added to that sample, in ms since the begin.
+    private static let relative: Set = [
+      "first_frame", "chat.revealed", "chat.shown", "chat.native_shown", "chat.composer_laid_out",
+      "chat.focus_end",
+      "keyboard_will_show", "keyboard_did_show",
+    ]
+
+    private func since(_ event: String, at now: UInt64) {
+      let key = event.replacingOccurrences(of: "chat.", with: "")
+      guard let lastStart, !extras.contains(";\(key)_ms=") else { return }
+      let field = ";\(key)_ms=\(Double(now - lastStart) / 1_000_000)"
+      extras += field
+      if pending == nil { report += field }
+    }
 
     public func mark(_ event: String) {
       guard Self.enabled else { return }
@@ -37,6 +67,7 @@
         .event, log: log, name: "PerformanceEndpoint", "%{public}@ uptime_ns=%llu",
         event as NSString, now)
       print("PERF_TRACE v=1 event=\(event) uptime_ns=\(now)")
+      if Self.relative.contains(event) { since(event, at: now) }
     }
 
     public func beginLaunch() {
@@ -56,6 +87,8 @@
       if let pending { mark("cancel.\(pending.name)") }
       pending = Pending(
         name: name, destination: destination, start: DispatchTime.now().uptimeNanoseconds)
+      lastStart = pending?.start
+      extras = ""
       generation += 1
       mark("begin.\(name)")
       if PageResourceTrace.enabled, let pending {
@@ -77,6 +110,7 @@
       let ms = Double(end - pending.start) / 1_000_000
       report =
         "v=1;seq=\(sequence);name=\(pending.name);route=\(route);start_ns=\(pending.start);end_ns=\(end);ms=\(ms)"
+        + extras
       if pending.name.hasPrefix("page.") {
         let visit = (pageVisits[route] ?? 0) + 1
         pageVisits[route] = visit
@@ -165,6 +199,8 @@
           convert(bounds, to: window).intersects(window.bounds)
         else { return }
         ticks += 1
+        // The first callback after the content is on screen: about when its first frame was handed to display.
+        if ticks == 1 { PerformanceTrace.shared.mark("first_frame") }
         if ticks >= 2 {
           PerformanceTrace.shared.finishLayout(route, generation: generation)
           stop()

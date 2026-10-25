@@ -1,45 +1,9 @@
 import XCTest
 
+/// Chat is a full-screen page (like ChatGPT). The bottom field starts a new conversation every time; Close goes back
+/// to the page, the conversation stays in the sidebar and an unsent draft is dropped with it.
 @MainActor
 final class ChatPanelTests: XCTestCase {
-  /// Three fresh processes distinguish first presentation from retained-editor reopening.
-  /// App trace marks measure layout; XCTest's typing interval is reported separately.
-  func testPopulatedFirstOpenAndReopenEvidence() {
-    continueAfterFailure = false
-    let app = XCUIApplication()
-    app.launchArguments =
-      TestData.launchArguments + ["-performanceTrace", "-uiTestingNow", "09:41"]
-    for process in 0..<3 {
-      app.launch()
-      let chat = app.buttons["Ask AI or add anything"]
-      XCTAssertTrue(chat.waitForExistence(timeout: 5))
-      let start = ProcessInfo.processInfo.systemUptime
-      chat.tap()
-      let field = app.textViews["ask-input"].firstMatch
-      XCTAssertTrue(field.waitForExistence(timeout: 5))
-      field.tap()
-      let draft = "Unsent populated draft \(process)"
-      field.typeText(draft)
-      XCTAssertEqual(field.value as? String, draft)
-      print(
-        "CHAT_UI process=\(process) tap_call_to_verified_text_ms=\((ProcessInfo.processInfo.systemUptime - start) * 1000) includes_XCTest_lookup_idle_tap_and_typing=true"
-      )
-      app.buttons["Close"].firstMatch.tap()
-      XCTAssertTrue(field.waitForNonExistence(timeout: 5))
-      XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
-      chat.tap()
-      XCTAssertTrue(field.waitForExistence(timeout: 5))
-      XCTAssertEqual(field.value as? String, draft)
-      XCTAssertFalse(app.buttons["capture-open"].exists)
-      XCTAssertFalse(app.buttons["Add"].exists)
-      let shot = XCTAttachment(screenshot: app.screenshot())
-      shot.name = "Populated Chat process \(process), retained unsent draft"
-      shot.lifetime = .keepAlways
-      add(shot)
-      app.terminate()
-    }
-  }
-
   func testTapToUsableComposerEvidence() {
     continueAfterFailure = false
     let app = XCUIApplication()
@@ -51,19 +15,29 @@ final class ChatPanelTests: XCTestCase {
     button.tap()
     let field = app.textViews["ask-input"].firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
-    field.tap()
-    field.typeText("Unsent panel draft")
-    XCTAssertEqual(field.value as? String, "Unsent panel draft")
+    XCTAssertTrue(
+      app.keyboards.firstMatch.waitForExistence(timeout: 5), "a new chat is ready to type")
+    field.typeText("Unsent draft")
+    XCTAssertEqual(field.value as? String, "Unsent draft")
     print(
       "CHAT_UI tap_call_to_verified_text_ms=\((ProcessInfo.processInfo.systemUptime - start) * 1000) includes_XCTest_lookup_idle_tap_and_typing=true"
     )
+    // Full screen: the page's bottom bar and tabs are covered, the menu and Close are at the top.
+    XCTAssertFalse(button.isHittable)
+    XCTAssertFalse(app.buttons["Today"].firstMatch.isHittable)
+    let menu = app.buttons["chat.menu"]
+    let close = app.buttons["Close"]
+    XCTAssertTrue(menu.isHittable)
+    XCTAssertTrue(close.isHittable)
+    XCTAssertLessThan(close.frame.maxY, app.frame.midY)
+    XCTAssertGreaterThan(field.frame.minY, app.frame.midY)
     let shot = XCTAttachment(screenshot: app.screenshot())
-    shot.name = "Chat composer with unsent draft"
+    shot.name = "Full-screen Chat with keyboard and unsent draft"
     shot.lifetime = .keepAlways
     add(shot)
   }
 
-  func testCloseReopenPreservesExactDraftAndConversation() {
+  func testEveryOpenStartsANewChatAndKeepsThePastOne() {
     continueAfterFailure = false
     let app = XCUIApplication()
     app.launchArguments = ["-uiTesting", "-performanceTrace"]
@@ -72,7 +46,6 @@ final class ChatPanelTests: XCTestCase {
     chat.tap()
     let field = app.textViews["ask-input"].firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 5))
-    field.tap()
     field.typeText("Hello\n")
     XCTAssertTrue(app.staticTexts["Hello"].waitForExistence(timeout: 5))
     let reply = app.staticTexts.containing(
@@ -80,40 +53,42 @@ final class ChatPanelTests: XCTestCase {
     )
     .firstMatch
     XCTAssertTrue(reply.waitForExistence(timeout: 8))
-    let exact = "Unsent: call Alex at 3pm — 中文草稿"
-    field.tap()
-    field.typeText(exact)
+    let draft = "Unsent: call Alex at 3pm — 中文草稿"
+    field.typeText(draft)
     app.buttons["Close"].firstMatch.tap()
-    XCTAssertTrue(chat.waitForExistence(timeout: 5))
-    let closed = XCTAttachment(screenshot: app.screenshot())
-    closed.name = "Underlying page after Close"
-    closed.lifetime = .keepAlways
-    add(closed)
     XCTAssertTrue(field.waitForNonExistence(timeout: 5))
-    XCTAssertFalse(field.isHittable)
+    XCTAssertTrue(chat.isHittable, "Close goes back to the page")
+    XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
+
     chat.tap()
     XCTAssertTrue(field.waitForExistence(timeout: 5))
-    XCTAssertEqual(field.value as? String, exact)
-    XCTAssertTrue(app.staticTexts["Hello"].exists)
-    XCTAssertTrue(reply.exists)
+    XCTAssertTrue(app.staticTexts["What do you want to plan?"].exists, "a new, empty chat")
+    XCTAssertFalse(app.staticTexts["Hello"].exists)
+    XCTAssertFalse(reply.exists)
+    XCTAssertNotEqual(field.value as? String, draft, "the unsent draft is not carried over")
+    XCTAssertFalse(app.staticTexts[draft].exists, "the draft was never sent")
     XCTAssertFalse(app.buttons["capture-open"].exists)
     XCTAssertFalse(app.buttons["Add"].exists)
-    let dismissKeyboard = app.buttons["Dismiss keyboard"].firstMatch
-    print(
-      "CHAT_UI dismiss_keyboard_frame=\(dismissKeyboard.frame) hittable=\(dismissKeyboard.isHittable)"
-    )
-    XCTAssertTrue(dismissKeyboard.isHittable)
-    dismissKeyboard.tap()
-    XCTAssertFalse(app.keyboards.firstMatch.exists)
-    XCTAssertFalse(app.buttons["Dismiss keyboard"].exists)
-    XCTAssertEqual(field.value as? String, exact)
+
+    // Chat's menu opens the sidebar, where the first conversation is kept and reopens.
+    app.buttons["chat.menu"].tap()
+    let row = app.buttons.matching(
+      NSPredicate(format: "identifier == 'conversation.row' AND label == 'Hello'")
+    ).firstMatch
+    XCTAssertTrue(row.waitForExistence(timeout: 5), "the past chat is in the sidebar")
+    XCTAssertEqual(
+      app.buttons.matching(NSPredicate(format: "identifier == 'conversation.row'")).count, 1,
+      "opening and closing an empty chat saves nothing")
+    row.tap()
+    XCTAssertTrue(app.staticTexts["Hello"].waitForExistence(timeout: 5))
+    XCTAssertTrue(reply.exists)
     let shot = XCTAttachment(screenshot: app.screenshot())
-    shot.name = "Floating conversation restored with exact draft and keyboard down"
+    shot.name = "Past chat reopened from the sidebar"
     shot.lifetime = .keepAlways
     add(shot)
   }
 
-  func testLargeTextKeepsInsetComposerAndCloseReachable() {
+  func testLargeTextKeepsComposerAndCloseReachable() {
     continueAfterFailure = false
     let app = XCUIApplication()
     app.launchArguments = [
@@ -130,15 +105,13 @@ final class ChatPanelTests: XCTestCase {
     XCTAssertGreaterThan(close.frame.minY, app.frame.minY + 50)
     XCTAssertGreaterThan(input.frame.minX, app.frame.minX)
     XCTAssertLessThan(input.frame.maxX, app.frame.maxX)
-    input.tap()
     input.typeText("Large text draft")
     XCTAssertEqual(input.value as? String, "Large text draft")
     let shot = XCTAttachment(screenshot: app.screenshot())
-    shot.name = "Accessibility text floating panel with keyboard"
+    shot.name = "Accessibility text full-screen Chat with keyboard"
     shot.lifetime = .keepAlways
     add(shot)
     close.tap()
     XCTAssertTrue(app.buttons["Ask AI or add anything"].isHittable)
   }
-
 }

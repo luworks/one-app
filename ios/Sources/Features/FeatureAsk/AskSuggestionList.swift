@@ -36,13 +36,15 @@
     private let intelligence: AskIntelligence
     private let memory: AskSuggestionMemory
     private let now: () -> Date
+    /// The page is on screen; only then do shown chips count for Activity data.
+    private let isVisible: Bool
     var onSend: (String) -> Void
 
     init(
       calendar: any CalendarService, now: @escaping () -> Date, presentation: PlannerPresentation,
       travel: any TravelTimeProviding,
       activity: ActivityCenter, intelligence: AskIntelligence, memory: AskSuggestionMemory,
-      onSend: @escaping (String) -> Void
+      isVisible: Bool = true, onSend: @escaping (String) -> Void
     ) {
       self.calendarSync = calendar
       self.now = now
@@ -51,6 +53,7 @@
       self.activity = activity
       self.intelligence = intelligence
       self.memory = memory
+      self.isVisible = isVisible
       self.onSend = onSend
     }
 
@@ -145,8 +148,8 @@
       }
       .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: chips)
       // Which chips were on screen, in rank order (a changed set counts again): the base for tap rates.
-      .task(id: chips.map(\.id).joined(separator: "|")) {
-        guard !chips.isEmpty else { return }
+      .task(id: "\(isVisible)|" + chips.map(\.id).joined(separator: "|")) {
+        guard isVisible, !chips.isEmpty else { return }
         activity.record(
           ActivityEvents.chipsShown(
             ids: chips.map(\.id), source: source,

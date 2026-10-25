@@ -107,7 +107,8 @@
     /// The day Today shows. Picking a day in Calendar opens it here.
     @State private var todayDay: Date
     @State private var todayReferenceNow: Date
-    /// The mounted conversation survives panel dismissal; nil means Chat has not opened yet.
+    /// The full-screen Chat page. A fresh one is built hidden ahead of time (after launch and after each Close), so a
+    /// tap on the bottom field only reveals it; nil until the first one is built.
     @State private var ask: AskRoute?
     @State private var askVisible = false
     @State private var showsSearch = false
@@ -201,54 +202,48 @@
           }
         }
       }
-      .overlay(alignment: .bottom) {
+      .overlay {
         GeometryReader { geometry in
-          ZStack(alignment: .bottom) {
-            if askVisible {
-              Color.black.opacity(0.12)
-                .contentShape(Rectangle())
-                .onTapGesture { closeAsk() }
-                .accessibilityHidden(true)
-            }
-            if let route = ask {
-              AskScreen(
-                thread: route.thread, toast: toast, composition: composition,
-                isPresented: askVisible,
-                maximumHeight: max(0, geometry.size.height - 64),
-                onClose: closeAsk,
-                onBack: { _ in },
-                onAdded: { capture in
-                  if capture.hasDay { calendarDay = capture.day }
-                },
-                onOpenDay: { day in
-                  closeAsk()
-                  drawer.set(open: false, animated: false)
-                  tab = .today
-                  todayDay = session.runtime.calendar.startOfDay(for: day)
-                }
-              )
-              .id(route.id)
-              .accessibilityAddTraits(.isModal)
-              .frame(maxWidth: 620)
-              .background(Color(.systemBackground))
-              .clipShape(RoundedRectangle(cornerRadius: 24))
-              .overlay {
-                RoundedRectangle(cornerRadius: 24)
-                  .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
-                  .allowsHitTesting(false)
+          if let route = ask {
+            AskScreen(
+              thread: route.thread, toast: toast, composition: composition,
+              isPresented: askVisible,
+              onClose: closeAsk,
+              onMenu: openSidebarFromAsk,
+              onBack: { _ in },
+              onAdded: { capture in
+                if capture.hasDay { calendarDay = capture.day }
+              },
+              onOpenDay: { day in
+                closeAsk()
+                drawer.set(open: false, animated: false)
+                tab = .today
+                todayDay = session.runtime.calendar.startOfDay(for: day)
               }
-              .shadow(color: .black.opacity(0.16), radius: 20, y: 6)
-              .padding(.horizontal, 12)
-              .padding(.bottom, 12)
-              // Keep native subviews outside the hit-test region while retaining conversation state.
-              .offset(y: askVisible ? 0 : geometry.size.height + 640)
-              .opacity(askVisible ? 1 : 0)
-              .transaction { if !askVisible { $0.disablesAnimations = true } }
-              .allowsHitTesting(askVisible)
-              .accessibilityHidden(!askVisible)
+            )
+            .id(route.id)
+            .background(Color(.systemBackground).ignoresSafeArea())
+            // Like the page under it, a swipe right from the left edge opens the sidebar.
+            .overlay(alignment: .leading) {
+              Color.clear
+                .frame(width: 20)
+                .contentShape(Rectangle())
+                .gesture(
+                  DragGesture(minimumDistance: 20).onEnded { v in
+                    if v.translation.width > 60, v.translation.width > 2 * abs(v.translation.height)
+                    {
+                      openSidebarFromAsk()
+                    }
+                  })
             }
+            // A hidden page stays mounted below the screen, out of hit testing; AskView drops its header and editor.
+            .offset(y: askVisible ? 0 : geometry.size.height + 640)
+            .opacity(askVisible ? 1 : 0)
+            .transaction { if !askVisible { $0.disablesAnimations = true } }
+            .allowsHitTesting(askVisible)
+            .accessibilityAddTraits(askVisible ? .isModal : [])
+            .accessibilityHidden(!askVisible)
           }
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
         .allowsHitTesting(askVisible)
       }
@@ -316,28 +311,47 @@
 
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
 
-    /// Bottom Chat resumes the conversation; sidebar actions select a new or saved conversation.
+    /// The bottom field and sidebar New chat start a new conversation; a sidebar row reopens that one.
+    /// A new conversation uses the page built hidden ahead of time, so opening only reveals it.
     private func openAsk(_ thread: ChatThread?, fromSidebar: Bool = false) {
       PerformanceTrace.shared.beginPage("ai")
-      // A history selection keeps its sidebar context underneath the panel.
+      // Opened from the sidebar, the sidebar stays underneath: Close goes back to it.
       if !fromSidebar { drawer.set(open: false, animated: false) }
       var transaction = Transaction()
       transaction.disablesAnimations = true
       withTransaction(transaction) {
-        // Bottom Chat resumes the mounted conversation, including its unsent draft.
-        // Sidebar New chat and history selections intentionally choose a different conversation.
-        if ask == nil || fromSidebar {
-          ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
-        }
+        if thread != nil || ask == nil || ask?.used == true { ask = AskRoute(thread: thread) }
+        ask?.used = true
         askVisible = true
       }
     }
 
+    /// Back to the page. The conversation is already saved in the sidebar (from its first message); an unsent draft
+    /// goes with it, since the next tap starts a new chat.
     private func closeAsk() {
       if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.close_requested") }
       var transaction = Transaction()
       transaction.disablesAnimations = true
       withTransaction(transaction) { askVisible = false }
+      // Once this page is off screen, build the next new chat hidden.
+      Task {
+        try? await Task.sleep(for: .milliseconds(350))
+        prepareNewAsk()
+      }
+    }
+
+    /// Builds a new, hidden Chat page unless an unused one is ready or Chat is on screen.
+    private func prepareNewAsk() {
+      guard !askVisible, ask == nil || ask?.used == true else { return }
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) { ask = AskRoute(thread: nil) }
+    }
+
+    /// Chat's menu button: past chats are in the sidebar beside the page.
+    private func openSidebarFromAsk() {
+      closeAsk()
+      drawer.set(open: true)
     }
 
     /// Reminders added from the Share sheet wait in the App Group (`ShareInbox`) until the app is active; they come in
@@ -503,7 +517,8 @@
       .onReceive(
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
       ) { _ in
-        keyboardUp = true
+        // Chat covers the page and owns its keyboard; the page does not re-lay out under it.
+        if !askVisible, !KeyboardWarmup.isRunning { keyboardUp = true }
       }
       .onReceive(
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
@@ -615,7 +630,7 @@
             todayReferenceNow = session.runtime.now()
             if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
               // Covered roots cannot prove the visible page resumed. Keep those samples absent.
-              if ask == nil, !showsSettings, !showsActivity, !showsSearch, newItem == nil,
+              if !askVisible, !showsSettings, !showsActivity, !showsSearch, newItem == nil,
                 !addingCity, !drawer.isOpen, remindersPath.isEmpty
               {
                 PerformanceTrace.shared.begin("resume_to_content_layout", destination: traceRoute)
@@ -685,7 +700,15 @@
       await FirstRun.calendar(
         session.calendar, defaults: session.defaults, arguments: composition.arguments)
       if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
-
+      // Off the cold-start path, build the Chat page hidden so even the first tap only reveals it.
+      try? await Task.sleep(for: .milliseconds(250))
+      prepareNewAsk()
+      // The first keyboard of the process is slow to load; load it now so the first Chat tap is as quick as later ones.
+      if !askVisible, editor == nil, newItem == nil, !showsSearch, !showsSettings, !showsActivity,
+        !addingCity
+      {
+        KeyboardWarmup.run()
+      }
     }
 
     /// Rewrites the Lock Screen / Home Screen widget snapshot (skipped when nothing changed).
@@ -810,7 +833,7 @@
         .accessibilityLabel("Chat")
         // Keep the existing automation entry while giving VoiceOver the visible control's name.
         .accessibilityIdentifier("Ask AI or add anything")
-        .accessibilityHint("Opens your conversation. New and past chats are in the menu.")
+        .accessibilityHint("Starts a new chat. Past chats are in the menu.")
         Button {
           traceTabAction(to: .today)
           tab = .today
@@ -955,12 +978,12 @@
     }
   }
 
-  /// What the AI screen opens on. A fresh id per presentation, so "New chat" always starts clean.
+  /// What the AI screen opens on. A fresh id per conversation, so a new chat always starts clean.
   struct AskRoute: Identifiable {
     let id = UUID()
     let thread: ChatThread?
-    /// Opened from the sidebar: going back returns there instead of to the page.
-    var fromSidebar = false
+    /// Shown at least once: the next new chat needs a new page.
+    var used = false
   }
 
   enum NewItem: Identifiable {
