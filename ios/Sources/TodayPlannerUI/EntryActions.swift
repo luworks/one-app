@@ -124,7 +124,7 @@
     }
 
     private func requestDelete() {
-      if attention != nil || isRepeating {
+      if isRepeating {
         pendingDelete = entry
       } else {
         actions.delete(entry, span: .futureEvents, context: context, toast: toast)
