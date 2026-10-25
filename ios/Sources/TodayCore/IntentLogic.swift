@@ -72,18 +72,15 @@ public enum IntentTimer {
 
 public enum IntentAlarm {
   /// What "Set Alarm" saves for `text`, the time the way people say it ("7am tomorrow", "weekdays at 6:30",
-  /// "in 20 minutes", "明早7点叫我"). The chat's parser reads it, so Siri and the chat make the same alarm; a sentence
-  /// with no alarm words is read as if it started with "alarm". A given `label` wins over a name in the sentence.
+  /// "in 20 minutes", "明早7点"). It is read the way the chat reads an alarm request (`CaptureConversation.parse`, then
+  /// the alarm kind), so Siri and the chat make the same alarm. A given `label` wins over a name in the sentence.
   /// nil when there is no time of day.
   public static func capture(
     text: String, label: String? = nil, now: Date = .now, calendar: Calendar = .current
   ) -> Capture? {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return nil }
-    let parsed = CaptureParser.parse(trimmed, now: now, calendar: calendar)
-    var c =
-      parsed.ringsAsAlarm
-      ? parsed : CaptureParser.parse("alarm " + trimmed, now: now, calendar: calendar)
+    var c = CaptureConversation.parse(trimmed, now: now, calendar: calendar)
     guard c.hour != nil else { return nil }
     c.kind = .task
     c.isAllDay = false

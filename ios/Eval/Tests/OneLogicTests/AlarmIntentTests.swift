@@ -26,8 +26,10 @@ final class AlarmIntentTests: XCTestCase {
   func testSiriAndTheChatReadTheSameSentenceTheSameWay() throws {
     for text in ["wake me at 6:30", "alarm in 20 minutes", "明早7点叫醒我"] {
       let siri = try XCTUnwrap(IntentAlarm.capture(text: text, now: now, calendar: cal), text)
-      let chat = CaptureParser.parse(text, now: now, calendar: cal)
-      XCTAssertTrue(chat.ringsAsAlarm, text)
+      // The chat's rule path for an alarm request (`Understanding.combine`): the parse, then the alarm kind.
+      var chat = CaptureConversation.parse(text, now: now, calendar: cal)
+      chat.kind = .task
+      chat.ringsAsAlarm = true
       XCTAssertEqual(siri.hour, chat.hour, text)
       XCTAssertEqual(siri.minute, chat.minute, text)
       XCTAssertEqual(siri.title, chat.title, text)
