@@ -480,6 +480,13 @@
           .background { responseProbe(.change(change.id)) }
           .transition(cardTransition)
         }
+        if isPresented, !isEmpty {
+          DraftMatches(
+            draft: draft, tasks: tasks, events: events, now: now(),
+            label: { ledger.timeLabel($0, none: "No date") },
+            openTask: { onOpenTask($0, refreshCardTitles) },
+            openEvent: { onOpenDay($0.start) })
+        }
         HStack(alignment: .bottom, spacing: 8) {
           // Keep draft/conversation state mounted, but remove the hidden UIKit editor from AX.
           if isPresented {
