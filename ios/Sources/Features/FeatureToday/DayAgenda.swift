@@ -98,8 +98,6 @@
     @State private var now: Date
     /// A repeating system event whose Delete is waiting for "this event or the series?".
     @State private var pendingDelete: CalEntry?
-    @State private var deleteTarget: OneTask?
-    @State private var alarmDeleteTarget: OneAlarm?
     @State private var snoozeTarget: FocusTarget?
     @State private var snoozedExpanded = false
     @State private var settledExpanded = false
@@ -258,39 +256,6 @@
       .listSectionSpacing(showsWeekStrip ? 6 : 0)
       .scrollContentBackground(.hidden)
       .entryDeleteDialog($pendingDelete)
-      .confirmationDialog(
-        deleteTarget?.repeats == nil ? "Delete Reminder" : "Delete Repeating Reminder",
-        isPresented: Binding(
-          get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }),
-        titleVisibility: .visible
-      ) {
-        if let task = deleteTarget {
-          Button(
-            task.repeats == nil ? "Delete Reminder" : "Delete Reminder and Future Repeats",
-            role: .destructive
-          ) { deleteConfirmed(task) }
-        }
-        Button("Cancel", role: .cancel) { deleteTarget = nil }
-      } message: {
-        Text(
-          showsSettle
-            ? "This deletes the reminder from its source. Use Settle to hide it in Today only."
-            : "This deletes the reminder from its source."
-        )
-      }
-      .confirmationDialog(
-        "Delete Alarm",
-        isPresented: Binding(
-          get: { alarmDeleteTarget != nil }, set: { if !$0 { alarmDeleteTarget = nil } }),
-        titleVisibility: .visible, presenting: alarmDeleteTarget
-      ) { alarm in
-        Button("Delete Alarm", role: .destructive) {
-          if actions.delete(alarm, context: context, toast: toast) { alarmDeleteTarget = nil }
-        }
-        Button("Cancel", role: .cancel) { alarmDeleteTarget = nil }
-      } message: { _ in
-        Text("This cancels the system alarm and deletes its saved row.")
-      }
       .sheet(item: $snoozeTarget) { target in
         TodaySnoozeSheet(now: presentation.runtime.now, calendar: cal) { until in
           changeFocus(.snoozed(until: until), target: target)
@@ -338,7 +303,8 @@
         AlarmMarkRow(
           alarm: alarm, date: date, open: openAlarm,
           attention: attention(target(alarm, fireDate: date)),
-          onDelete: showsWeekStrip ? nil : { alarmDeleteTarget = alarm })
+          onDelete: showsWeekStrip
+            ? nil : { _ = actions.delete(alarm, context: context, toast: toast) })
       case .gap(let free): FreeRow(free: free)
       case .nowMarker(let date): NowRow(date: date).id("now-line")
       }
@@ -446,18 +412,12 @@
         anytime: anytime.filter { !isHidden(target($0)) })
     }
 
-    private func requestDelete(_ task: OneTask) {
-      if showsWeekStrip, task.repeats == nil {
-        deleteConfirmed(task)
-      } else {
-        deleteTarget = task
-      }
-    }
+    /// Deleting a reminder never asks: the Undo toast is the safety net.
+    private func requestDelete(_ task: OneTask) { deleteConfirmed(task) }
 
     private func deleteConfirmed(_ task: OneTask) {
       do {
         try actions.deleteConfirmed(task, context: context, toast: toast)
-        deleteTarget = nil
       } catch {
         toast?.showNotice(
           "Couldn't delete this reminder. " + error.localizedDescription + " Try again.")
@@ -843,6 +803,15 @@
       }
     }
 
+    /// A one-off event is deleted at once (Undo toast); only a repeating one asks "this event or the series?".
+    private func requestEventDelete(_ entry: CalEntry) {
+      if entry.repeats {
+        pendingDelete = entry
+      } else {
+        actions.delete(entry, span: .futureEvents, context: context, toast: toast)
+      }
+    }
+
     private func requestDeleteAttention(_ target: FocusTarget) {
       guard canDeleteAttention(target), let entry = attentionEntry(target) else {
         toast?.showNotice("This source is unavailable or read-only. Its item was kept.")
@@ -850,8 +819,8 @@
       }
       switch entry.source {
       case .task(let task): requestDelete(task)
-      case .alarm(let alarm): alarmDeleteTarget = alarm
-      case .local, .system: pendingDelete = entry
+      case .alarm(let alarm): _ = actions.delete(alarm, context: context, toast: toast)
+      case .local, .system: requestEventDelete(entry)
       }
     }
 

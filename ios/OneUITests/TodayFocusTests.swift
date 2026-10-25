@@ -313,19 +313,16 @@ final class TodayFocusTests: XCTestCase {
     assertFocusSections(app, snoozed: 0, settled: 0)
     reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
     screenshot("active-always-visible-after-restore.png")
-    // Explicit Delete is separate from Settle and uses the confirmed action; its local-only Undo restores a source row.
+    // Explicit Delete is separate from Settle and asks nothing (the Undo toast is the safety net); its local-only Undo restores a source row.
     app.staticTexts["Focus invoice"].firstMatch.swipeLeft()
     app.buttons["Delete"].firstMatch.tap()
-    let confirm = app.buttons["Delete Reminder"].firstMatch
-    XCTAssertTrue(confirm.waitForExistence(timeout: 3))
-    confirm.tap()
     XCTAssertTrue(app.staticTexts["Focus invoice"].firstMatch.waitForNonExistence(timeout: 3))
     XCTAssertTrue(app.buttons["Undo"].firstMatch.waitForExistence(timeout: 3))
     app.buttons["Undo"].firstMatch.tap()
     assertFocusSections(app, snoozed: 0, settled: 0)
   }
 
-  func testAlarmAttentionRestoresAndDeleteRequiresConfirmation() {
+  func testAlarmAttentionRestoresAndDeleteAsksNothing() {
     let app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments("today-alarm-actions.json") + [
@@ -356,12 +353,9 @@ final class TodayFocusTests: XCTestCase {
     reveal(row, in: app)
     row.swipeLeft()
     app.buttons["Delete"].firstMatch.tap()
-    XCTAssertTrue(app.buttons["Delete Alarm"].waitForExistence(timeout: 3))
-    screenshot("alarm-confirmed-delete")
-    // Native confirmation popovers omit Cancel at this size; tapping outside cancels.
-    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
-    XCTAssertTrue(app.buttons["Delete Alarm"].waitForNonExistence(timeout: 3))
-    XCTAssertTrue(row.exists, "Cancelling Delete keeps the source alarm")
+    XCTAssertTrue(app.buttons["Delete Alarm"].waitForNonExistence(timeout: 2), "no confirmation")
+    XCTAssertTrue(row.waitForNonExistence(timeout: 3), "Delete removes the alarm at once")
+    XCTAssertTrue(app.buttons["Undo"].firstMatch.waitForExistence(timeout: 3))
   }
 
   func testAttentionRowsRemainReachableAtLargestTypeInDark() {

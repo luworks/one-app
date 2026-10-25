@@ -74,9 +74,6 @@ final class TodayAlarmActionsTests: XCTestCase {
     if delete.waitForExistence(timeout: 1) {
       shot("alarm-after-swipe")
       delete.tap()
-      let confirm = app.buttons["Delete Alarm"].firstMatch
-      XCTAssertTrue(confirm.waitForExistence(timeout: 3))
-      confirm.tap()
     }
     XCTAssertTrue(row().waitForNonExistence(timeout: 5))
     XCTAssertTrue(row("Keep this alarm").exists)
