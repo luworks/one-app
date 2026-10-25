@@ -11,8 +11,8 @@
   import SwiftData
 
   /// One day's view: active events, tasks and alarms stay directly visible in a single timeline.
-  /// Today ends with collapsed Overdue, Snoozed, Settled and Tomorrow disclosures;
-  /// overdue tasks appear only in the disclosure below today's timeline.
+  /// On today a red "N overdue" line sits above the timeline (tap to show the rows, Tidy to reschedule them all);
+  /// collapsed Snoozed, Settled and Tomorrow disclosures follow the timeline.
   /// The Calendar tab adds the week strip to pick a day.
   package struct DayAgenda: View {
     private let actions: PlannerActions
@@ -29,6 +29,8 @@
     let openTask: @MainActor (OneTask) -> Void
     let openEvent: @MainActor (OneEvent) -> Void
     let openAlarm: @MainActor (OneAlarm) -> Void
+    /// Opens "Tidy overdue" for these reminders (a preview; nothing changes until Apply). Nil hides the button.
+    let openTidy: (@MainActor ([OneTask]) -> Void)?
 
     package init(
       day: Binding<Date>, showsWeekStrip: Bool, openTask: @escaping @MainActor (OneTask) -> Void,
@@ -36,7 +38,8 @@
       openAlarm: @escaping @MainActor (OneAlarm) -> Void,
       openTimer: @escaping @MainActor () -> Void, actions: PlannerActions,
       calendar: any CalendarService, timers: any TimerService, reminders: any ReminderService,
-      ledger: Ledger, travel: any TravelTimeProviding, presentation: PlannerPresentation
+      ledger: Ledger, travel: any TravelTimeProviding, presentation: PlannerPresentation,
+      openTidy: (@MainActor ([OneTask]) -> Void)? = nil
     ) {
       self.actions = actions
       self.calendar = calendar
@@ -71,6 +74,7 @@
       self.openEvent = openEvent
       self.openAlarm = openAlarm
       self.openTimer = openTimer
+      self.openTidy = openTidy
     }
 
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
@@ -92,8 +96,6 @@
     }
     @State private var showsAllOverdue = false
     @State private var expandsTomorrow = false
-    @State private var overdueRevealRequest = 0
-    @AccessibilityFocusState private var overdueSectionFocused: Bool
     /// Refreshed every minute for the Now line and time-dependent timeline content.
     @State private var now: Date
     /// A repeating system event whose Delete is waiting for "this event or the series?".
@@ -115,13 +117,6 @@
             showsAllOverdue = false
             expandsTomorrow = false
             scrollToNow(proxy)
-          }
-          .onChange(of: overdueRevealRequest) {
-            withAnimation(reduceMotion ? nil : .snappy) {
-              proxy.scrollTo("overdue-section", anchor: .top)
-            } completion: {
-              overdueSectionFocused = true
-            }
           }
       }
       .onChange(of: scenePhase) { _, phase in
@@ -197,6 +192,8 @@
             Text(error).font(.footnote).foregroundStyle(.secondary)
           }
         }
+        // Overdue first: never moved silently, and one tap from a new date.
+        if isTodayTab, showsOverdue, !overdue.isEmpty { overdueSection }
         if !items.allDay.isEmpty || !items.externalAllDay.isEmpty {
           Section {
             if !showsWeekStrip {
@@ -223,12 +220,6 @@
             if showsWeekStrip { AgendaHeader(title: "All day") }
           }
         }
-        if showsWeekStrip, cal.isDate(day, inSameDayAs: now), showsOverdue, !overdue.isEmpty {
-          Section {
-            overdueShortcut
-            if showsAllOverdue { overdueRows }
-          }
-        }
         // The Today tab names its day in the row at the top; the timeline needs no label of its own.
         if showsWeekStrip {
           Section {
@@ -242,7 +233,6 @@
           Section { timelineContent(items) }
         }
         if !showsWeekStrip {
-          if isTodayTab, showsOverdue { overdueSection }
           if showsSnooze { focusSection(snoozed: true) }
           if showsSettle { focusSection(snoozed: false) }
         }
@@ -533,32 +523,6 @@
       .accessibilityHint("Changes visibility in Today only")
     }
 
-    private var overdueShortcut: some View {
-      Button {
-        if showsWeekStrip {
-          withAnimation(reduceMotion ? nil : .snappy) { showsAllOverdue.toggle() }
-        } else {
-          showsAllOverdue = true
-          overdueSectionFocused = false
-          overdueRevealRequest += 1
-        }
-      } label: {
-        HStack {
-          Text("\(overdue.count) overdue").font(.subheadline.weight(.semibold))
-            .foregroundStyle(.red)
-          Spacer()
-          Image(systemName: showsWeekStrip && showsAllOverdue ? "chevron.down" : "chevron.right")
-            .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-        }
-        .frame(minHeight: 44).contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-      .accessibilityIdentifier("today.overdueShortcut")
-      .accessibilityHint(
-        showsWeekStrip ? "Shows or hides overdue tasks" : "Opens Overdue below today's schedule")
-    }
-
     private var overdueRows: some View {
       ForEach(overdue) { task in
         TaskRow(
@@ -569,18 +533,37 @@
     }
 
     @ViewBuilder private var overdueSection: some View {
-      focusHeader("Overdue", count: overdue.count, id: "overdue", expanded: $showsAllOverdue)
-        .id("overdue-section")
-        .accessibilityFocused($overdueSectionFocused)
-      if showsAllOverdue {
-        Section {
-          if overdue.isEmpty {
-            Text("No overdue reminders").foregroundStyle(.secondary).listRowSeparator(.hidden)
-          } else {
-            overdueRows
+      HStack(spacing: 12) {
+        Button {
+          withAnimation(reduceMotion ? nil : .snappy) { showsAllOverdue.toggle() }
+        } label: {
+          HStack(spacing: 6) {
+            Text("\(overdue.count) overdue").font(.subheadline.weight(.semibold))
+              .foregroundStyle(.red)
+            Image(systemName: showsAllOverdue ? "chevron.down" : "chevron.right")
+              .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
           }
+          .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityIdentifier("today.overdueShortcut")
+        .accessibilityLabel("\(overdue.count) overdue")
+        .accessibilityValue(showsAllOverdue ? "Expanded" : "Collapsed")
+        if let openTidy {
+          Button("Tidy") { openTidy(overdue) }
+            .font(.subheadline.weight(.semibold))
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint(.red)
+            .accessibilityIdentifier("today.tidyOverdue")
+            .accessibilityHint(
+              "Suggests a new date for each overdue reminder. Nothing changes until Apply.")
         }
       }
+      .listRowSeparator(.hidden)
+      .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+      if showsAllOverdue { overdueRows }
     }
 
     private func hiddenRecords(snoozed: Bool) -> [FocusRecord] {

@@ -120,6 +120,7 @@
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
     @State private var remindersPushed = false
     @State private var toast = UndoToast()
+    @State private var tidying: TidyRoute?
     #if DEBUG
       @State private var shareImportTestState = ""
     #endif
@@ -471,7 +472,7 @@
                 tab = .clock
               }, actions: session.actions, calendar: session.calendar, timers: session.timers,
               reminders: session.reminders, ledger: session.ledger, travel: session.travel,
-              presentation: presentation)
+              presentation: presentation, openTidy: { tidying = TidyRoute(overdue: $0) })
           case .calendar:
             CalendarView(
               day: $calendarDay,
@@ -530,6 +531,11 @@
         SearchView(calendar: session.calendar, defaults: session.defaults) { destination in
           PlannerEditor(destination: destination, toast: toast, composition: composition)
         }
+      }
+      .sheet(item: $tidying) { route in
+        TidySheet(
+          overdue: route.overdue, actions: session.actions, ledger: session.ledger,
+          presentation: presentation, toast: toast)
       }
       .sheet(isPresented: $addingCity) {
         CityPicker(store: composition.world, now: session.runtime.now)
@@ -979,6 +985,12 @@
   }
 
   /// What the AI screen opens on. A fresh id per conversation, so a new chat always starts clean.
+  /// Today's overdue reminders waiting in the Tidy sheet.
+  struct TidyRoute: Identifiable {
+    let id = UUID()
+    let overdue: [OneTask]
+  }
+
   struct AskRoute: Identifiable {
     let id = UUID()
     let thread: ChatThread?

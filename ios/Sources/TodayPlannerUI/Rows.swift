@@ -280,6 +280,14 @@
       .swipeActions(edge: .trailing, allowsFullSwipe: attention == nil) {
         if let attention {
           attention.swipeButtons(delete: deleteTask).labelStyle(.titleAndIcon)
+          // Postpone in one swipe: the reminder's one date moves to tomorrow, keeping its time.
+          Button {
+            plan(tomorrow: true)
+          } label: {
+            Label("Tomorrow", systemImage: "sunrise")
+          }
+          .tint(.blue)
+          .labelStyle(.titleAndIcon)
         } else {
           // Confirmed Today deletion must not let SwiftUI remove a row before the source accepts it.
           RowAction.delete(asksFirst: onDelete != nil) { deleteTask() }
@@ -293,45 +301,38 @@
         } label: {
           Label("Show Details", systemImage: "info.circle")
         }
-        if let attention {
-          Section { attention.menu }
-          if attention.canDelete {
-            Section {
-              Button(role: .destructive, action: deleteTask) {
-                Label("Delete", systemImage: "trash")
-              }
+        // Today adds Settle to the same date commands every list has; it never replaces them.
+        Button {
+          task.flagged.toggle()
+        } label: {
+          Label(
+            task.flagged ? "Remove Flag" : "Flag",
+            systemImage: task.flagged ? "flag.slash" : "flag"
+          )
+        }
+        Button {
+          plan(tomorrow: false)
+        } label: {
+          Label("Today", systemImage: "calendar")
+        }
+        Button {
+          plan(tomorrow: true)
+        } label: {
+          Label("Tomorrow", systemImage: "sunrise")
+        }
+        if task.due != nil {
+          Button {
+            actions.setDue(task, to: nil, context: context)
+          } label: {
+            Label("Unschedule", systemImage: "calendar.badge.minus")
+          }
+        }
+        if let attention { Section { attention.menu } }
+        if attention?.canDelete ?? true {
+          Section {
+            Button(role: .destructive, action: deleteTask) {
+              Label("Delete", systemImage: "trash")
             }
-          }
-        } else {
-          Button {
-            task.flagged.toggle()
-          } label: {
-            Label(
-              task.flagged ? "Remove Flag" : "Flag",
-              systemImage: task.flagged ? "flag.slash" : "flag"
-            )
-          }
-          Button {
-            plan(tomorrow: false)
-          } label: {
-            Label("Today", systemImage: "calendar")
-          }
-          Button {
-            plan(tomorrow: true)
-          } label: {
-            Label("Tomorrow", systemImage: "sunrise")
-          }
-          if task.due != nil {
-            Button {
-              actions.setDue(task, to: nil, context: context)
-            } label: {
-              Label("Unschedule", systemImage: "calendar.badge.minus")
-            }
-          }
-          Button(role: .destructive) {
-            deleteTask()
-          } label: {
-            Label("Delete", systemImage: "trash")
           }
         }
       }
