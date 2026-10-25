@@ -56,6 +56,17 @@ jobs:
           path: ${{ runner.temp }}/today-smoke/dd/SourcePackages
           key: spm-${{ hashFiles('ios/Dependencies/Package.resolved') }}
       - run: python3 scripts/ci/smoke.py --build-only
+      # TodayMock simulator build (arm64) for agents without Xcode; launch with -uiTesting -dataset <path>.
+      # Simulator only: never on a phone, never next to One.app in the same simulator.
+      - run: ditto -c -k --keepParent "$RUNNER_TEMP/today-smoke/dd/Build/Products/Debug-iphonesimulator/TodayMock.app" "$RUNNER_TEMP/TodayMock.app.zip"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: TodayMock-sim-${{ github.sha }}
+          path: ${{ runner.temp }}/TodayMock.app.zip
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+          retention-days: 7
       # Export allowlisted diagnostics only; raw command bytes remain runner-local/private.
       - if: failure() || cancelled()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
