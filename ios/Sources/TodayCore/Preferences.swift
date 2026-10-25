@@ -144,6 +144,19 @@ public enum Preferences {
   public static func newAlarmSoundName(_ defaults: UserDefaults = .standard) -> String {
     defaults.string(forKey: newAlarmSoundKey) ?? newAlarmSound
   }
+
+  // MARK: One-time notices (not Settings)
+
+  /// The Clock tab's "Alarms live in Today now" card: shown once, then never again (also after Delete All Data).
+  public static let alarmIntroSeenKey = "today.notice.alarmIntroSeen"
+
+  public static func alarmIntroSeen(_ defaults: UserDefaults = .standard) -> Bool {
+    defaults.bool(forKey: alarmIntroSeenKey)
+  }
+
+  public static func markAlarmIntroSeen(_ defaults: UserDefaults = .standard) {
+    defaults.set(true, forKey: alarmIntroSeenKey)
+  }
 }
 
 extension Calendar {
