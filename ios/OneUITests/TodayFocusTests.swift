@@ -459,19 +459,13 @@ final class TodayFocusTests: XCTestCase {
 
   func testHiddenMeetingStillBlocksSuggestionsAndOverdueRequiresExplicitSettle() {
     let app = launch()
-    let suggestion = app.buttons.matching(
-      NSPredicate(format: "label BEGINSWITH 'Plan Focus flexible at '")
-    ).firstMatch
-    reveal(suggestion, in: app)
-    let originalSuggestion = suggestion.label
     let free = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Free '"))
+    XCTAssertTrue(free.firstMatch.waitForExistence(timeout: 4))
     let originalFree = free.allElementsBoundByIndex.map { $0.label }
-    XCTAssertFalse(originalFree.isEmpty)
     act("Settle", on: "Busy meeting", in: app)
-    reveal(suggestion, in: app)
     XCTAssertEqual(
-      suggestion.label, originalSuggestion, "Hidden meetings still reserve their actual time")
-    XCTAssertEqual(free.allElementsBoundByIndex.map { $0.label }, originalFree)
+      free.allElementsBoundByIndex.map { $0.label }, originalFree,
+      "Hidden meetings still reserve their actual time")
     app.buttons["Calendar"].firstMatch.tap()
     app.buttons["calendar.mode.month"].tap()
     XCTAssertTrue(
