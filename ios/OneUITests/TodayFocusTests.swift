@@ -203,8 +203,9 @@ final class TodayFocusTests: XCTestCase {
         NSPredicate(format: "label CONTAINS %@", "Old explicitly restored occurrence")
       ).firstMatch.exists)
     XCTAssertEqual(section("settled", in: app).label, "Settled (0)")
-    reveal(section("overdue", in: app), in: app)
-    section("overdue", in: app).tap()
+    let overdueLine = app.buttons["today.overdueShortcut"].firstMatch
+    reveal(overdueLine, in: app)
+    overdueLine.tap()
     reveal(app.buttons["Complete Normal overdue"].firstMatch, in: app)
     act("Settle", on: "New day meeting", in: app)
     reveal(section("settled", in: app), in: app)
