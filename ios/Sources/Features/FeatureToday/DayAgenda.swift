@@ -108,7 +108,6 @@
             WeekStrip(selected: $day, calendar: cal)
               .padding(.horizontal, 8)
               .padding(.bottom, 2)
-              .accessibilityIdentifier("today.weekStrip")
           }
           list
         }
