@@ -28,44 +28,31 @@ final class PopulatedHistoryTests: XCTestCase {
     add(tree)
   }
 
-  func testExistingLongChatKeepsReadingPositionAfterClose() throws {
+  /// Close goes back to the sidebar it was opened from; the row reopens the conversation at its end.
+  func testExistingLongChatReopensAtItsEndFromSidebar() throws {
     let app = launchHistory()
-    let dismiss = app.buttons["Dismiss keyboard"].firstMatch
-    if dismiss.exists { dismiss.tap() }
-    XCTAssertFalse(
-      app.keyboards.firstMatch.exists, "Compare reading positions with the keyboard hidden")
+    let tail = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "History 099:"))
+      .firstMatch
+    XCTAssertTrue(tail.waitForExistence(timeout: 5), "A saved conversation opens at its end")
     let scroll = try XCTUnwrap(
       app.scrollViews.allElementsBoundByIndex.max {
         $0.frame.height < $1.frame.height
       })
-    XCTAssertGreaterThan(scroll.frame.height, 200)
     scroll.swipeDown(velocity: .fast)
     scroll.swipeDown(velocity: .fast)
-    let earlier = try XCTUnwrap(
-      scroll.staticTexts.matching(
-        NSPredicate(format: "label BEGINSWITH %@", "History ")
-      ).allElementsBoundByIndex.first { $0.isHittable && scroll.frame.contains($0.frame) })
-    XCTAssertFalse(earlier.label.hasPrefix("History 099:"), "Read an earlier message, not the tail")
-    let label = earlier.label
-    let before = earlier.frame.minY
     retain(app, "Populated history reading before Close")
     app.buttons["Close"].firstMatch.tap()
     XCTAssertTrue(app.textViews["ask-input"].waitForNonExistence(timeout: 5))
-    app.buttons["Close sidebar"].tap()
-    app.buttons["Ask AI or add anything"].tap()
+    let row = app.buttons["Quarterly planning history"].firstMatch
+    XCTAssertTrue(row.waitForExistence(timeout: 5), "Close returns to the sidebar")
+    row.tap()
     XCTAssertTrue(app.textViews["ask-input"].waitForExistence(timeout: 5))
-    if dismiss.exists { dismiss.tap() }
-    XCTAssertFalse(
-      app.keyboards.firstMatch.exists, "Compare reading positions with the keyboard hidden")
-    let restored = app.staticTexts.matching(NSPredicate(format: "label == %@", label)).firstMatch
-    XCTAssertTrue(restored.isHittable)
-    XCTAssertEqual(
-      restored.frame.minY, before, accuracy: 35,
-      "Closing and reopening must preserve the message being read")
-    retain(app, "Populated history reading restored")
+    XCTAssertTrue(tail.waitForExistence(timeout: 5))
+    XCTAssertTrue(tail.isHittable, "Reopened at its end")
+    retain(app, "Populated history reopened at its end")
   }
 
-  func testMultilineCJKPasteRemainsExactAndUnsentAfterClose() throws {
+  func testMultilineCJKPasteRemainsExactAndIsNotSentOnClose() throws {
     let app = launchHistory()
     let field = app.textViews["ask-input"].firstMatch
     let draft = try String(
@@ -90,11 +77,11 @@ final class PopulatedHistoryTests: XCTestCase {
     app.buttons["Close sidebar"].tap()
     app.buttons["Ask AI or add anything"].tap()
     XCTAssertTrue(field.waitForExistence(timeout: 5))
-    XCTAssertEqual(field.value as? String, draft)
+    XCTAssertNotEqual(field.value as? String, draft, "A new chat does not carry the unsent draft")
     XCTAssertFalse(
       app.staticTexts.matching(NSPredicate(format: "label == %@", draft)).firstMatch.exists)
     XCTAssertFalse(app.buttons["capture-open"].exists)
     XCTAssertFalse(app.buttons["Add"].exists)
-    retain(app, "Populated multiline CJK draft restored")
+    retain(app, "New chat after closing the unsent CJK draft")
   }
 }

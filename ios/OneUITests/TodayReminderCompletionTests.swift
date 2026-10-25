@@ -211,7 +211,8 @@ final class TodayReminderCompletionTests: XCTestCase {
     chat.tap()
     let reopened = app.textViews["ask-input"].firstMatch
     XCTAssertTrue(reopened.waitForExistence(timeout: 5))
-    XCTAssertEqual(reopened.value as? String, draft, "Close/reopen retains the exact unsent draft")
+    XCTAssertNotEqual(
+      reopened.value as? String, draft, "Each tap starts a new chat; the unsent draft is dropped")
     XCTAssertFalse(app.staticTexts[draft].exists, "Reopening does not submit the draft")
     app.buttons["Close"].firstMatch.tap()
     XCTAssertTrue(reopened.waitForNonExistence(timeout: 5))

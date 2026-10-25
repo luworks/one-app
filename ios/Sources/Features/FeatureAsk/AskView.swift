@@ -7,16 +7,16 @@
   import SwiftUI
   import SwiftData
 
-  /// Conversation content hosted by the shell in a floating panel.
+  /// Full-screen AI page, modeled on ChatGPT / Claude mobile. The shell builds it hidden ahead of time and reveals it.
   /// Conversation stays conversational; only requests to add items become capture previews.
   /// Explicit Send approves a clear one-off reminder; other changes keep their Add / Apply gate.
   package struct AskView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let isPresented: Bool
-    private let maximumHeight: CGFloat?
     private let onClose: (() -> Void)?
+    /// Opens the sidebar (past chats); no menu button when nil.
+    private let onMenu: (() -> Void)?
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
@@ -187,8 +187,8 @@
     @State private var focused = false
 
     package init(
-      thread: ChatThread? = nil, isPresented: Bool = true, maximumHeight: CGFloat? = nil,
-      onClose: (() -> Void)? = nil, calendar: any CalendarService, now: @escaping () -> Date,
+      thread: ChatThread? = nil, isPresented: Bool = true, onClose: (() -> Void)? = nil,
+      onMenu: (() -> Void)? = nil, calendar: any CalendarService, now: @escaping () -> Date,
       actions: PlannerActions, ledger: Ledger, activity: ActivityCenter,
       intelligence: AskIntelligence, voice: VoiceInput, presentation: PlannerPresentation,
       travel: any TravelTimeProviding, suggestionMemory: AskSuggestionMemory,
@@ -198,8 +198,8 @@
       onOpenAlarm: @escaping (OneAlarm, @escaping () -> Void) -> Void
     ) {
       self.isPresented = isPresented
-      self.maximumHeight = maximumHeight
       self.onClose = onClose
+      self.onMenu = onMenu
       self.calendarSync = calendar
       self.now = now
       self.actions = actions
@@ -227,12 +227,14 @@
 
     package var body: some View {
       VStack(spacing: 0) {
-        panelHeader
+        // The header and editor exist only on screen: hidden pages must not leave controls in the accessibility tree.
+        if isPresented { panelHeader }
         conversation
           .safeAreaInset(edge: .bottom) { inputArea }
           .task {
-            // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type.
-            if isPresented, messages.isEmpty { focused = true }
+            // A reopened conversation starts at its end with the keyboard down; a new chat is ready to type
+            // (built hidden, it takes focus in the same update that reveals it).
+            if messages.isEmpty { focused = true }
             refreshCardTitles()
             intelligence.prewarm()
           }
@@ -265,47 +267,37 @@
       .environment(presentation)
       .defaultAppStorage(presentation.defaults)
       .background(Color(.systemBackground))
-      .frame(
-        height: maximumHeight.map {
-          min($0, messages.isEmpty ? (dynamicTypeSize.isAccessibilitySize ? 480 : 320) : 640)
-        }
-      )
       .accessibilityAction(.escape) { close() }
       .overlay(alignment: .topTrailing) { AIResponseTraceHistory() }
     }
 
+    /// Menu (past chats) on the left, Close back to the page on the right, like ChatGPT's top bar.
     private var panelHeader: some View {
       HStack(spacing: 8) {
-        Button(action: close) {
-          Image(systemName: "xmark")
-            .font(.system(size: 20, weight: .medium))
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
+        if let onMenu {
+          CircleButton(
+            systemImage: "line.3.horizontal", label: "Show chats",
+            size: ButtonConfiguration.minimumHitSize
+          ) {
+            focused = false
+            voice.stop()
+            onMenu()
+          }
+          .accessibilityIdentifier("chat.menu")
+        } else {
+          Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
         }
-        .accessibilityLabel("Close")
         Spacer(minLength: 0)
         Text("AI").font(.headline)
         Spacer(minLength: 0)
-        Group {
-          if focused {
-            Button {
-              focused = false
-            } label: {
-              Image(systemName: "keyboard.chevron.compact.down")
-                .font(.system(size: 20, weight: .medium))
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-            }
-            .accessibilityLabel("Dismiss keyboard")
-          } else {
-            Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
-          }
+        CircleButton(systemImage: "xmark", label: "Close", size: ButtonConfiguration.minimumHitSize)
+        {
+          close()
         }
       }
-      .buttonStyle(.plain)
-      .foregroundStyle(.primary)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 4)
+      .padding(.horizontal, 20)
+      .padding(.vertical, 8)
+      .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private var conversation: some View {
@@ -430,10 +422,12 @@
       VStack(alignment: .leading, spacing: 24) {
         Text("What do you want to plan?")
           .font(.title2.weight(.medium))
-        if showsSuggestions, isPresented {
+        // Built with the hidden page, so the chips are ready when it opens.
+        if showsSuggestions {
           AskSuggestionList(
             calendar: calendarSync, now: now, presentation: presentation, travel: travel,
-            activity: activity, intelligence: intelligence, memory: suggestionMemory, onSend: send)
+            activity: activity, intelligence: intelligence, memory: suggestionMemory,
+            isVisible: isPresented, onSend: send)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
