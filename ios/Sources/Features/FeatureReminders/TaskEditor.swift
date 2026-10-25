@@ -10,6 +10,7 @@
   /// Planned time and deadline are separate: changing one never changes the other.
   package struct TaskEditor: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
@@ -271,7 +272,9 @@
           Button(action: save) {
             Text("Save").font(.body.weight(.semibold))
               .frame(minWidth: 68, minHeight: 44)
-              .foregroundStyle(canSave ? Color.white : Color.secondary)
+              .foregroundStyle(
+                canSave ? Color.accentColor.contrastForeground(for: colorScheme) : Color.secondary
+              )
               .background(canSave ? Color.accentColor : Color(.tertiarySystemFill), in: Capsule())
           }
           .buttonStyle(.plain)
@@ -320,10 +323,17 @@
                 }
                 .padding(.horizontal, 10)
                 .frame(minHeight: 44)
-                .foregroundStyle(.white)
+                .foregroundStyle(
+                  selectedDate == nil
+                    ? Color(.label)
+                    : (selectedHasTime
+                      && (selectedDate.map { $0 <= presentation.now } ?? false)
+                      ? Color.red.contrastForeground(for: colorScheme)
+                      : Color.accentColor.contrastForeground(for: colorScheme))
+                )
                 .background(
                   selectedDate == nil
-                    ? Color(.systemGray)
+                    ? Color(.tertiarySystemFill)
                     : (selectedHasTime
                       && (selectedDate.map { $0 <= presentation.now } ?? false)
                       ? Color.red : Color.accentColor))

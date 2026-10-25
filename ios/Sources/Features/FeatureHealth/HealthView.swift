@@ -293,7 +293,7 @@
             if !isLoading {
               Text(item.dateLabel)
                 .font(.footnote)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .padding(.leading, 4)
             }
           }

@@ -1,8 +1,9 @@
 #if os(iOS)
   import SwiftUI
 
-  /// The colored circle with a white glyph that stands for a list (cards, rows, the editor preview).
+  /// The colored circle with a contrasting glyph that stands for a list (cards, rows, the editor preview).
   package struct ListGlyph: View {
+    @Environment(\.colorScheme) private var colorScheme
     package let color: Color
     package let symbol: String
     package var size: CGFloat
@@ -20,9 +21,13 @@
         .overlay {
           Image(systemName: symbol)
             .font(.system(size: size * 0.47, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(symbolColor)
         }
         .accessibilityHidden(true)
+    }
+
+    private var symbolColor: Color {
+      color.contrastForeground(for: colorScheme)
     }
   }
 
