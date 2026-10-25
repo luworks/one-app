@@ -63,8 +63,9 @@ final class TodayDensityTests: XCTestCase {
         gap.frame.height, 18, "Free is a caption rather than an interactive row")
     }
     let complete = app.buttons["Complete Buy groceries and fill the car"]
-    XCTAssertGreaterThanOrEqual(complete.frame.width, 44)
-    XCTAssertGreaterThanOrEqual(complete.frame.height, 44)
+    // Rounded: layout above the list can leave a sub-point fraction (43.99999…).
+    XCTAssertGreaterThanOrEqual(complete.frame.width.rounded(), 44)
+    XCTAssertGreaterThanOrEqual(complete.frame.height.rounded(), 44)
     XCTAssertTrue(app.staticTexts["16:45"].exists, "the row sits at its due time")
     XCTAssertTrue(app.staticTexts["Work"].firstMatch.exists)
     // Opening a reminder must still target the editor rather than its completion circle.

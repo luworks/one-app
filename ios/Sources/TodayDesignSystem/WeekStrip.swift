@@ -3,12 +3,18 @@
   import TodayCore
 
   package struct WeekStrip: View {
-    package init(selected: Binding<Date>) { _selected = selected }
+    /// `calendar` sets the first day of the week; without it the week starts on Monday.
+    package init(selected: Binding<Date>, calendar: Calendar? = nil) {
+      _selected = selected
+      self.calendar = calendar
+    }
     @Binding package var selected: Date
+    private let calendar: Calendar?
     @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.colorScheme) private var colorScheme
 
     private var cal: Calendar {
+      if let calendar { return calendar }
       var c = presentation.calendar
       c.firstWeekday = 2  // Monday
       return c
@@ -27,6 +33,7 @@
         } label: {
           Image(systemName: "chevron.left").padding(6)
         }
+        .accessibilityLabel("Previous week")
         ForEach(days, id: \.self) { d in
           let isSelected = cal.isDate(d, inSameDayAs: selected)
           Button {
@@ -53,15 +60,29 @@
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
           }
+          .accessibilityLabel(
+            d.formatted(
+              Date.FormatStyle(locale: presentation.locale, calendar: cal, timeZone: cal.timeZone)
+                .weekday(.wide).month(.wide).day())
+          )
+          .accessibilityAddTraits(isSelected ? .isSelected : [])
+          .accessibilityIdentifier("weekStrip." + Self.key(d, cal))
         }
         Button {
           shift(7)
         } label: {
           Image(systemName: "chevron.right").padding(6)
         }
+        .accessibilityLabel("Next week")
       }
       .buttonStyle(.borderless)
       .tint(.primary)
+    }
+
+    /// "weekStrip.2026-10-26": a stable handle for UI tests.
+    private static func key(_ d: Date, _ cal: Calendar) -> String {
+      let c = cal.dateComponents([.year, .month, .day], from: d)
+      return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
     private func shift(_ days: Int) {
