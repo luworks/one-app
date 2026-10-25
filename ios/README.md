@@ -209,6 +209,14 @@ uses the development TimerService instead of the live AlarmKit driver; see `Toda
 "set a timer" to Today. What iOS allows and what it does not (timers made in the Clock app or by Siri's built-in "set a
 timer" cannot be read by any app): `docs/research/timer-siri-sync.md`.
 
+**Alarms** (`AlarmIntents.swift`): **Set Alarm** ("Set an alarm in Today", "Wake me up with Today": Siri asks "What time?";
+`IntentAlarm` reads "7am tomorrow", "weekdays at 6:30", "in 20 minutes", "明早7点" with the chat's parser) sets a real
+AlarmKit alarm directly, made like one from Add Alarm or the chat (`OneAlarm.new`, Settings → Alarms sound and snooze;
+a one-off must ring within a day, as in the chat). Also adopts the iOS 27 Clock schema for alarms
+(`@AppIntent(schema: .clock.createAlarm / updateAlarm / dismissAlarm)`, `.clock.alarm` entity keyed by the AlarmKit id,
+which each scheduled alarm carries as `appEntityIdentifier`). Today still can't read or change the Clock app's alarms;
+whether Siri's plain "set an alarm" goes to Today rather than Clock can only be checked on a phone. Tests: `AlarmIntentTests`.
+
 Tests: `ios/Eval/Tests/OneLogicTests/` and `ios/OneUITests/`; use `./dev test unit` and focused `./dev test ui --only TodayUITests/<Suite>/<Method>`. Historical eval scripts are not a second entry.
 
 ## Next
