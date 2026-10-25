@@ -10,7 +10,7 @@ final class TodayTomorrowTests: XCTestCase {
     app.launchArguments =
       TestData.fixtureArguments("today-disclosure-sections.json") + [
         "-uiTestingNow", time, "-today.setting.jumpToNow", "NO",
-        "-uiTestingPrefs", "showFreeTime=0,showSnooze=1",
+        "-uiTestingPrefs", "showFreeTime=0",
       ]
     app.launch()
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
@@ -101,7 +101,7 @@ final class TodayTomorrowTests: XCTestCase {
     // Overdue sits above the timeline; the other disclosures follow it.
     let overdueLine = app.buttons["today.overdueShortcut"]
     let headers = [
-      overdueLine, app.buttons["focus.snoozed"], app.buttons["focus.settled"], tomorrow(app),
+      overdueLine, app.buttons["focus.settled"], tomorrow(app),
     ]
     for header in headers {
       reveal(header, in: app)
@@ -112,7 +112,7 @@ final class TodayTomorrowTests: XCTestCase {
     }
     XCTAssertEqual(headers[0].label, "1 overdue")
     XCTAssertTrue(app.buttons["today.tidyOverdue"].exists, "Tidy sits beside the overdue line")
-    XCTAssertTrue(headers[3].label.hasPrefix("Tomorrow (5)"))
+    XCTAssertTrue(headers[2].label.hasPrefix("Tomorrow (5)"))
     XCTAssertFalse(app.staticTexts["Section overdue"].exists)
     XCTAssertFalse(app.staticTexts["Tomorrow anytime task"].exists)
     screenshot("today-sections-collapsed")

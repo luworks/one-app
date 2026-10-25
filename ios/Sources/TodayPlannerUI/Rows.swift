@@ -9,12 +9,10 @@
   /// Optional Today-only attention commands; source deletion stays with the existing row owner.
   package struct TodayRowAttention {
     package var settle: (() -> Void)?
-    package var snooze: (() -> Void)?
     package var canDelete = true
 
-    package init(settle: (() -> Void)?, snooze: (() -> Void)?, canDelete: Bool = true) {
+    package init(settle: (() -> Void)?, canDelete: Bool = true) {
       self.settle = settle
-      self.snooze = snooze
       self.canDelete = canDelete
     }
 
@@ -22,9 +20,6 @@
       // SwiftUI lays trailing actions out from the outside edge: Delete stays rightmost.
       if canDelete {
         Button(action: delete) { Label("Delete", systemImage: "trash") }.tint(.red)
-      }
-      if let snooze {
-        Button(action: snooze) { Label("Snooze", systemImage: "clock.circle.fill") }.tint(.gray)
       }
       if let settle {
         Button(action: settle) { Label("Settle", systemImage: "checkmark.circle.fill") }.tint(
@@ -37,7 +32,6 @@
         Button(action: settle) { Label("Settle", systemImage: "checkmark.circle.fill") }
           .accessibilityHint("Hides this item in Today only. Alerts stay unchanged.")
       }
-      if let snooze { Button(action: snooze) { Label("Snooze", systemImage: "clock.circle.fill") } }
     }
   }
 

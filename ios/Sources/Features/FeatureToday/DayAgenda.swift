@@ -12,7 +12,7 @@
 
   /// One day's view: active events, tasks and alarms stay directly visible in a single timeline.
   /// On today a red "N overdue" line sits above the timeline (tap to show the rows, Tidy to reschedule them all);
-  /// collapsed Snoozed, Settled and Tomorrow disclosures follow the timeline.
+  /// collapsed Settled and Tomorrow disclosures follow the timeline.
   /// The Calendar tab adds the week strip to pick a day.
   package struct DayAgenda: View {
     private let actions: PlannerActions
@@ -59,9 +59,6 @@
       _showsSettle = AppStorage(
         wrappedValue: Preferences.showSettle, Preferences.showSettleKey,
         store: presentation.defaults)
-      _showsSnooze = AppStorage(
-        wrappedValue: Preferences.showSnooze, Preferences.showSnoozeKey,
-        store: presentation.defaults)
       _showsTomorrow = AppStorage(
         wrappedValue: Preferences.showTomorrow, Preferences.showTomorrowKey,
         store: presentation.defaults)
@@ -85,7 +82,6 @@
     @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
     @AppStorage(SettingsKey.healthSummary) private var showsHealth = true
     @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
-    @AppStorage(Preferences.showSnoozeKey) private var showsSnooze = Preferences.showSnooze
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @Environment(\.scenePhase) private var scenePhase
@@ -100,8 +96,6 @@
     @State private var now: Date
     /// A repeating system event whose Delete is waiting for "this event or the series?".
     @State private var pendingDelete: CalEntry?
-    @State private var snoozeTarget: FocusTarget?
-    @State private var snoozedExpanded = false
     @State private var settledExpanded = false
     @Environment(\.modelContext) private var context
     @Environment(UndoToast.self) private var toast: UndoToast?
@@ -233,8 +227,7 @@
           Section { timelineContent(items) }
         }
         if !showsWeekStrip {
-          if showsSnooze { focusSection(snoozed: true) }
-          if showsSettle { focusSection(snoozed: false) }
+          if showsSettle { settledSection }
         }
         if !showsWeekStrip, showsTomorrow, cal.isDate(day, inSameDayAs: now) {
           tomorrowSection()
@@ -246,11 +239,6 @@
       .listSectionSpacing(showsWeekStrip ? 6 : 0)
       .scrollContentBackground(.hidden)
       .entryDeleteDialog($pendingDelete)
-      .sheet(item: $snoozeTarget) { target in
-        TodaySnoozeSheet(now: presentation.runtime.now, calendar: cal) { until in
-          changeFocus(.snoozed(until: until), target: target)
-        }
-      }
     }
 
     @ViewBuilder
@@ -457,12 +445,12 @@
       return TodayRowAttention(
         settle: target.identity == nil || !showsSettle
           ? nil : { _ = changeFocus(.settled, target: target) },
-        snooze: target.identity == nil || !showsSnooze ? nil : { snoozeTarget = target },
         canDelete: canDeleteAttention(target))
     }
 
+    /// Settled items leave Today's timeline. (An older Snooze record no longer hides anything.)
     private func isHidden(_ target: FocusTarget) -> Bool {
-      !showsWeekStrip && actions.focus.state(for: target.identity, now: now) != nil
+      !showsWeekStrip && actions.focus.state(for: target.identity, now: now) == .settled
     }
 
     private func isHidden(_ item: TimelineItem) -> Bool {
@@ -473,16 +461,6 @@
       case .alarm(let alarm, let date): isHidden(target(alarm, fireDate: date))
       case .gap, .nowMarker: false
       }
-    }
-
-    private func focusActions(_ target: FocusTarget) -> TodayFocusRowActions {
-      TodayFocusRowActions(
-        enabled: !showsWeekStrip,
-        settle: { _ = changeFocus(.settled, target: target) },
-        snooze: { snoozeTarget = target },
-        open: { openAttentionItem(target) },
-        delete: canDeleteAttention(target) ? { requestDeleteAttention(target) } : nil,
-        showSettle: showsSettle, showSnooze: showsSnooze)
     }
 
     @discardableResult
@@ -566,24 +544,17 @@
       if showsAllOverdue { overdueRows }
     }
 
-    private func hiddenRecords(snoozed: Bool) -> [FocusRecord] {
-      actions.focus.records.filter {
-        guard let state = actions.focus.state(for: $0.identity, now: now) else { return false }
-        if case .snoozed = state { return snoozed }
-        return !snoozed
-      }
+    private var settledRecords: [FocusRecord] {
+      actions.focus.records.filter { actions.focus.state(for: $0.identity, now: now) == .settled }
     }
 
-    @ViewBuilder private func focusSection(snoozed: Bool) -> some View {
-      let records = hiddenRecords(snoozed: snoozed)
-      let expanded = snoozed ? $snoozedExpanded : $settledExpanded
-      focusHeader(
-        snoozed ? "Snoozed" : "Settled", count: records.count,
-        id: snoozed ? "snoozed" : "settled", expanded: expanded)
-      if expanded.wrappedValue {
+    @ViewBuilder private var settledSection: some View {
+      let records = settledRecords
+      focusHeader("Settled", count: records.count, id: "settled", expanded: $settledExpanded)
+      if settledExpanded {
         ForEach(records, id: \.identity) { record in
           let source = resolved(record)
-          let restoreLabel = source == nil ? "Clear choice" : (snoozed ? "Restore" : "Unsettle")
+          let restoreLabel = source == nil ? "Clear choice" : "Unsettle"
           let target =
             source
             ?? FocusTarget(
@@ -592,19 +563,14 @@
           HStack {
             VStack(alignment: .leading, spacing: 3) {
               Text(target.title).foregroundStyle(.primary)
-              if case .snoozed(let until) = record.state {
-                Text("Returns " + ledger.timeLabel(until)).font(.caption).foregroundStyle(
-                  .secondary)
-              } else {
-                Text("Hidden in Today only").font(.caption).foregroundStyle(.secondary)
-              }
+              Text("Hidden in Today only").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             Button {
               changeFocus(source == nil ? nil : .active, target: target)
             } label: {
               Group {
-                if !snoozed && source != nil {
+                if source != nil {
                   Image(systemName: "arrow.uturn.backward")
                     .font(ButtonConfiguration.Icon.actionFont)
                     .frame(minWidth: ButtonConfiguration.minimumHitSize)
@@ -623,12 +589,11 @@
           .modifier(TodayItemSurface(enabled: true))
           .modifier(
             TodayFocusRowActions(
-              enabled: true, settle: {}, snooze: { snoozeTarget = target },
+              enabled: true, settle: {},
               open: source == nil ? nil : { openAttentionItem(target) },
               delete: source != nil && canDeleteAttention(target)
                 ? { requestDeleteAttention(target) } : nil,
               restore: { _ = changeFocus(source == nil ? nil : .active, target: target) },
-              showSnooze: snoozed && source != nil,
               restoreLabel: restoreLabel)
           )
           .listRowSeparator(.hidden)
