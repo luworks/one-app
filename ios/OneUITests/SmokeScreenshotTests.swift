@@ -11,6 +11,12 @@ final class SmokeScreenshotTests: XCTestCase {
     continueAfterFailure = false
     try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
     let app = XCUIApplication()
+    let ask = app.buttons["Ask AI or add anything"].firstMatch
+    // The dataset scrolls Today to now, so the date header can be outside the lazy list.
+    func assertToday() {
+      XCTAssertTrue(ask.waitForExistence(timeout: 10))
+      XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected, "Today is the selected tab")
+    }
     func shot(_ name: String, _ mode: String) throws {
       usleep(700_000)
       try XCUIScreen.main.screenshot().pngRepresentation.write(
@@ -19,7 +25,7 @@ final class SmokeScreenshotTests: XCTestCase {
     for mode in ["light", "dark"] {
       app.launchArguments = TestData.launchArguments + ["-appearance", mode]
       app.launch()
-      XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 10))
+      assertToday()
       try shot("1-today", mode)
       let tabs: [(String, XCUIElement)] = [
         ("Calendar", app.descendants(matching: .any)["calendar.weekGrid"]),
@@ -32,8 +38,8 @@ final class SmokeScreenshotTests: XCTestCase {
         try shot("\(index + 2)-\(tab.lowercased())", mode)
       }
       app.buttons["Today"].firstMatch.tap()
-      XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
-      app.buttons["Ask AI or add anything"].firstMatch.tap()
+      assertToday()
+      ask.tap()
       let field = app.textViews["Ask AI or add anything"].firstMatch
       XCTAssertTrue(field.waitForExistence(timeout: 5))
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
@@ -41,6 +47,7 @@ final class SmokeScreenshotTests: XCTestCase {
       try shot("5-chat-draft", mode)
       app.buttons["Close"].firstMatch.tap()
       XCTAssertTrue(field.waitForNonExistence(timeout: 5))
+      XCTAssertTrue(ask.isHittable, "Today is usable after Close")
       try shot("6-after-close", mode)
       app.terminate()
     }
