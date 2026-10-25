@@ -168,6 +168,12 @@
       }
       .onChange(of: tasks.count) { refresh() }
       .onChange(of: events.count) { refresh() }
+      // Built hidden, the rules are ready; the model words them once the page is on screen.
+      .onChange(of: isVisible) { _, visible in
+        guard visible else { return }
+        upgradeTask?.cancel()
+        upgradeTask = Task { await upgrade() }
+      }
     }
 
     // MARK: Freshness
@@ -194,7 +200,7 @@
 
     /// Asks the on-device model to choose and word these chips (rules stay if it is unavailable, slow or off).
     private func upgrade() async {
-      guard !memory.isDisposed, intelligence.isAvailable() else { return }
+      guard isVisible, !memory.isDisposed, intelligence.isAvailable() else { return }
       guard let ctx = held.ctx, held.upgradedKey != key else { return }
       let generation = memory.generation
       let contextGeneration = held.contextGeneration

@@ -228,7 +228,7 @@
               Color.clear
                 .frame(width: 20)
                 .contentShape(Rectangle())
-                .gesture(
+                .simultaneousGesture(
                   DragGesture(minimumDistance: 20).onEnded { v in
                     if v.translation.width > 60, v.translation.width > 2 * abs(v.translation.height)
                     {

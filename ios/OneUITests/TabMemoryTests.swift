@@ -98,7 +98,7 @@ final class TabMemoryTests: XCTestCase {
     // Cancelling every creation route leaves the fixture's alarm rows unchanged.
     app.buttons["Clock"].tap()
     let before = app.buttons.matching(identifier: "alarm.row").count
-    plus.tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     app.buttons["Cancel"].firstMatch.tap()
     XCTAssertTrue(plus.waitForExistence(timeout: 5))
@@ -116,8 +116,8 @@ final class TabMemoryTests: XCTestCase {
       XCTAssertGreaterThanOrEqual(button.frame.height, 44)
       XCTAssertTrue(app.frame.contains(button.frame))
     }
-    XCTAssertLessThanOrEqual(today.frame.maxX, chat.frame.minX)
-    XCTAssertLessThanOrEqual(chat.frame.maxX, plus.frame.minX)
+    XCTAssertLessThanOrEqual(chat.frame.maxX, today.frame.minX)
+    XCTAssertLessThanOrEqual(today.frame.maxX, plus.frame.minX)
     capture("navigation-after-largest-type")
   }
 
