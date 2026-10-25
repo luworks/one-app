@@ -48,8 +48,6 @@
       self.ledger = ledger
       self.travel = travel
       _now = State(initialValue: presentation.now)
-      _showsOverdue = AppStorage(
-        wrappedValue: true, SettingsKey.showOverdue, store: presentation.defaults)
       _showsAlarms = AppStorage(
         wrappedValue: true, SettingsKey.showAlarms, store: presentation.defaults)
       _jumpsToNow = AppStorage(
@@ -77,7 +75,6 @@
     @Query(sort: \OneEvent.start) private var events: [OneEvent]
     @Query(sort: \OneTask.createdAt) private var tasks: [OneTask]
     @Query private var alarms: [OneAlarm]
-    @AppStorage(SettingsKey.showOverdue) private var showsOverdue = true
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
     @AppStorage(SettingsKey.healthSummary) private var showsHealth = true
@@ -187,7 +184,7 @@
           }
         }
         // Overdue first: never moved silently, and one tap from a new date.
-        if isTodayTab, showsOverdue, !overdue.isEmpty { overdueSection }
+        if isTodayTab, !overdue.isEmpty { overdueSection }
         if !items.allDay.isEmpty || !items.externalAllDay.isEmpty {
           Section {
             if !showsWeekStrip {
