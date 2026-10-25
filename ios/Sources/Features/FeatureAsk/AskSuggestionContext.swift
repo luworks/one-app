@@ -83,6 +83,8 @@
         return s
       }
       ctx.alarms = fires.sorted()
+      ctx.usualAlarm = AlarmQuickPicks.usualTime(
+        history: alarms.map { AlarmQuickPicks.Time(hour: $0.hour, minute: $0.minute) })
 
       // Recent chats, newest first: what was asked and when.
       var recent = FetchDescriptor<ChatThread>(sortBy: [

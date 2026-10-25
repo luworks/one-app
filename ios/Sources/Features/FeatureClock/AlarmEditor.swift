@@ -123,6 +123,8 @@
     @State private var errorMessage: String?
     @State private var snoozeMinutes: Int
     @FocusState private var labelFocused: Bool
+    /// The user's alarms, for the quick picks (their usual times and names).
+    @Query private var allAlarms: [OneAlarm]
     @Environment(\.colorScheme) private var colorScheme
 
     static let snoozeChoices = AlarmPlan.snoozeChoices
@@ -147,12 +149,12 @@
         } ?? AlarmPlan.nextQuarterHour(after: runtime.now(), calendar: runtime.calendar))
       _label = State(initialValue: alarm?.label ?? "")
       _weekdays = State(initialValue: Set(alarm?.weekdays ?? []))
-      _snooze = State(initialValue: alarm?.snooze ?? true)
-      // A new alarm starts with the sound and snooze length chosen in Settings > Alarms; an existing one keeps its own.
-      _sound = State(initialValue: alarm?.sound ?? Preferences.newAlarmSoundName(defaults))
+      // A new alarm starts like one made in the chat or by Siri (Settings > Alarms); an existing one keeps its own.
+      let fresh = AlarmPlan.newAlarmDefaults(defaults)
+      _snooze = State(initialValue: alarm?.snooze ?? fresh.snooze)
+      _sound = State(initialValue: alarm?.sound ?? fresh.sound)
       _snoozeMinutes = State(
-        initialValue: AlarmPlan.snoozeMinutes(
-          nearest: alarm?.snoozeMinutes ?? Preferences.newAlarmSnoozeMinutes(defaults)))
+        initialValue: AlarmPlan.snoozeMinutes(nearest: alarm?.snoozeMinutes ?? fresh.snoozeMinutes))
     }
 
     package var body: some View {
@@ -167,7 +169,9 @@
               .padding(.horizontal, 19)
               .padding(.top, 14)
               .accessibilityIdentifier("alarm.time")
+            if alarm == nil { quickTimes.padding(.top, 6) }
             labelCard.padding(.top, 20)
+            if alarm == nil { quickLabels.padding(.top, 8) }
             repeatCard.padding(.top, 20)
             optionsCard.padding(.top, 33)
             if let alarm { deleteButton(alarm).padding(.top, 33) }
@@ -248,6 +252,18 @@
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("alarm.repeat")
         Divider().padding(.horizontal, 18)
+        HStack(spacing: 8) {
+          ForEach(AlarmQuickPicks.RepeatPreset.allCases, id: \.self) { preset in
+            let isOn = AlarmQuickPicks.RepeatPreset.matching(weekdays) == preset
+            QuickChip(title: AlarmPlan.repeatValue(weekdays: Array(preset.weekdays)), isOn: isOn) {
+              weekdays = isOn ? [] : preset.weekdays
+            }
+            .accessibilityIdentifier("alarm.repeat.\(preset.rawValue)")
+          }
+          Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
         HStack(spacing: 0) {
           ForEach(AlarmPlan.orderedWeekdays(), id: \.self) { day in
             DayCircle(day: day, isOn: weekdays.contains(day)) {
@@ -259,6 +275,57 @@
         .padding(.horizontal, 18)
         .padding(.vertical, 13)
       }
+    }
+
+    // MARK: Quick picks (Add Alarm only)
+
+    /// Your usual times and a nap "in 20 / 30 min": a tap sets the wheel; ✓ still saves.
+    private var quickTimes: some View {
+      let history = allAlarms.map { AlarmQuickPicks.Time(hour: $0.hour, minute: $0.minute) }
+      return ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 8) {
+          ForEach(AlarmQuickPicks.times(history: history), id: \.self) { pick in
+            let parts = AlarmPlan.timeParts(
+              hour: pick.hour, minute: pick.minute, locale: runtime.locale)
+            QuickChip(title: [parts.time, parts.suffix].compactMap { $0 }.joined(separator: " ")) {
+              setTime(pick)
+            }
+            .accessibilityIdentifier(
+              "alarm.quick.\(String(format: "%02d%02d", pick.hour, pick.minute))")
+          }
+          ForEach(AlarmQuickPicks.napMinutes, id: \.self) { minutes in
+            QuickChip(title: "In \(minutes) min", tint: Color(.systemOrange)) {
+              setTime(
+                AlarmQuickPicks.time(
+                  inMinutes: minutes, from: runtime.now(), calendar: runtime.calendar))
+            }
+            .accessibilityIdentifier("alarm.quick.in\(minutes)")
+          }
+        }
+        .padding(.horizontal, 19)
+      }
+    }
+
+    /// Names you have given alarms before; a tap fills the Label.
+    @ViewBuilder private var quickLabels: some View {
+      let picks = AlarmQuickPicks.labels(history: allAlarms.map(\.label))
+      if !picks.isEmpty {
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 8) {
+            ForEach(Array(picks.enumerated()), id: \.offset) { index, name in
+              QuickChip(title: name, isOn: label == name) { label = name }
+                .accessibilityIdentifier("alarm.quick.label.\(index)")
+            }
+          }
+          .padding(.horizontal, 19)
+        }
+      }
+    }
+
+    private func setTime(_ pick: AlarmQuickPicks.Time) {
+      time =
+        runtime.calendar.date(
+          bySettingHour: pick.hour, minute: pick.minute, second: 0, of: runtime.now()) ?? time
     }
 
     /// The name gets its own card right under the time: the whole card is a text field, so it reads as a place to type.
@@ -426,6 +493,33 @@
         .padding(.horizontal, 18)
         .frame(minHeight: 47)
         .contentShape(Rectangle())
+    }
+  }
+
+  /// A small capsule for a quick pick; outlined in orange when it is what the alarm has now.
+  private struct QuickChip: View {
+    let title: String
+    var isOn = false
+    var tint: Color = .primary
+    let action: () -> Void
+
+    var body: some View {
+      Button(action: action) {
+        Text(title)
+          .font(.subheadline.weight(.medium))
+          .foregroundStyle(tint)
+          .lineLimit(1)
+          .padding(.horizontal, 12)
+          .frame(minHeight: 32)
+          .background(Color(.tertiarySystemFill), in: Capsule())
+          .overlay {
+            if isOn { Capsule().strokeBorder(Color(.systemOrange), lineWidth: 1.5) }
+          }
+          .frame(minHeight: 44)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityAddTraits(isOn ? .isSelected : [])
     }
   }
 

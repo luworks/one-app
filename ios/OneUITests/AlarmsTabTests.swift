@@ -103,6 +103,32 @@ final class AlarmsTabTests: XCTestCase {
       rows.firstMatch.label.hasSuffix(", Alarm, Mon, Wed"), "Cancel keeps the alarm as it was")
   }
 
+  /// Add Alarm's quick picks: a usual time, Weekdays and a past name, then ✓ (4 taps, no typing on the second alarm).
+  func testQuickPicksFillTheEditor() {
+    let first = addAlarm()
+    first.tap()
+    XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
+    let field = app.textFields["alarm.label"]
+    field.tap()
+    field.typeText("Wake up\n")
+    app.buttons["alarm.save"].tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+
+    app.addNew("New alarm")
+    XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+    app.buttons["alarm.quick.0700"].tap()
+    let wheels = app.pickerWheels
+    XCTAssertTrue((wheels.element(boundBy: 1).value as? String ?? "").hasPrefix("00"))
+    app.buttons["alarm.repeat.weekdays"].tap()
+    XCTAssertEqual(app.descendants(matching: .any)["alarm.repeat"].label, "Repeat, Weekdays")
+    app.buttons["alarm.quick.label.0"].tap()
+    XCTAssertEqual(field.value as? String, "Wake up")
+    app.buttons["alarm.save"].tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+    let saved = rows.matching(NSPredicate(format: "label ENDSWITH %@", ", Wake up, Weekdays"))
+    XCTAssertTrue(saved.firstMatch.waitForExistence(timeout: 5), "the picks were saved")
+  }
+
   func testEditTimeAndLabel() {
     addAlarm()
     rows.firstMatch.tap()

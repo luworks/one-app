@@ -20,7 +20,11 @@
 
     /// An alarm request becomes a real alarm (Alarms tab) when it can be one: it rings within the next day, or repeats
     /// daily / on selected weekdays / weekly. Anything else ("alarm next Friday at 7") stays a reminder that rings, on its own date.
-    package func makeAlarm(now: Date, calendar cal: Calendar) -> OneAlarm? {
+    /// It starts like one made in Add Alarm or by Siri: `defaults` from Settings → Alarms.
+    package func makeAlarm(
+      now: Date, calendar cal: Calendar,
+      defaults: AlarmPlan.NewAlarmDefaults = AlarmPlan.newAlarmDefaults()
+    ) -> OneAlarm? {
       guard kind == .task, ringsAsAlarm, let start = clockTime(calendar: cal) else { return nil }
       let weekdays: [Int]
       switch repeatRule.flatMap(RepeatRule.init(rawValue:)) {
@@ -34,10 +38,10 @@
       default: return nil
       }
       let c = cal.dateComponents([.hour, .minute], from: start)
-      let alarm = OneAlarm(
-        hour: c.hour ?? 0, minute: c.minute ?? 0, label: title, weekdays: weekdays)
+      let alarm = OneAlarm.new(
+        hour: c.hour ?? 0, minute: c.minute ?? 0, label: title, weekdays: weekdays,
+        defaults: defaults, now: now)
       alarm.note = notes ?? ""
-      alarm.createdAt = now
       return alarm
     }
 
@@ -60,11 +64,12 @@
     @MainActor @discardableResult
     package func insert(
       into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
-      approval: LedgerApproval = .userMade, ledger: Ledger, runtime: PlannerRuntime
+      approval: LedgerApproval = .userMade, ledger: Ledger, runtime: PlannerRuntime,
+      alarmDefaults: AlarmPlan.NewAlarmDefaults = AlarmPlan.newAlarmDefaults()
     ) throws -> PersistentIdentifier {
       try insertRecorded(
         into: context, actor: actor, channel: channel, approval: approval, ledger: ledger,
-        runtime: runtime
+        runtime: runtime, alarmDefaults: alarmDefaults
       ).id
     }
 
@@ -72,12 +77,15 @@
     @MainActor
     package func insertRecorded(
       into context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app,
-      approval: LedgerApproval = .userMade, ledger: Ledger, runtime: PlannerRuntime
+      approval: LedgerApproval = .userMade, ledger: Ledger, runtime: PlannerRuntime,
+      alarmDefaults: AlarmPlan.NewAlarmDefaults = AlarmPlan.newAlarmDefaults()
     ) throws -> (id: PersistentIdentifier, entry: LedgerItem) {
       let model: any PersistentModel
       switch kind {
       case .task:
-        if let alarm = makeAlarm(now: runtime.now(), calendar: runtime.calendar) {
+        if let alarm = makeAlarm(
+          now: runtime.now(), calendar: runtime.calendar, defaults: alarmDefaults)
+        {
           model = alarm
         } else {
           model = makeTask(calendar: runtime.calendar)

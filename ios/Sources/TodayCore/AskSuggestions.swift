@@ -228,6 +228,8 @@ public struct SuggestionContext: Equatable {
   public var tasks: [Task] = []
   /// Alarm fire times in the next 36 hours (Alarms tab and reminders that ring).
   public var alarms: [Date] = []
+  /// The time the user sets alarms for most (`AlarmQuickPicks.usualTime`): the morning alarm the fallback offers.
+  public var usualAlarm = AlarmQuickPicks.Time(hour: 7, minute: 0)
   /// Newest first.
   public var chats: [Chat] = []
   /// Reminders you tend to add around now (`ReminderSuggest`).
@@ -558,11 +560,19 @@ public enum SuggestionRules {
           expectation: .reminder(hour: 9, minute: 0, day: 1), why: "A reminder to look at the day"))
     }
     if h >= 17 {
+      let usual = ctx.usualAlarm
+      let tomorrow = cal.date(byAdding: .day, value: 1, to: ctx.startOfToday(cal)) ?? ctx.now
+      let at =
+        cal.date(bySettingHour: usual.hour, minute: usual.minute, second: 0, of: tomorrow)
+        ?? tomorrow
       out.append(
         .init(
-          id: "fallback:wake", kind: .wake, text: zh ? "明天7:00叫我起床" : "Wake me at 7am tomorrow",
+          id: "fallback:wake", kind: .wake,
+          text: zh
+            ? "明天\(clock(at, lang, cal))叫我起床" : "Wake me at \(clock(at, lang, cal)) tomorrow",
           score: h >= 20 ? 18 : 14,
-          expectation: .alarm(hour: 7, minute: 0, day: 1), why: "A morning alarm"))
+          expectation: .alarm(hour: usual.hour, minute: usual.minute, day: 1),
+          why: "Your usual alarm time"))
     }
 
     // Keep only what lands on what it promises (the tap would otherwise make a wrong card).
