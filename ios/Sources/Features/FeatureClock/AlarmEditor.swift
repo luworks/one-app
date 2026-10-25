@@ -99,9 +99,9 @@
     }
   }
 
-  /// Add Alarm / Edit Alarm, copied from Clock's sheet: a round close button, the title and an orange round check; a full-width
-  /// wheel; a card with Repeat and the seven weekday circles; a card with Label, Sound, Snooze and Snooze Duration; and a red
-  /// Delete Alarm when editing.
+  /// Add Alarm / Edit Alarm, after Clock's sheet: a round close button, the title and an orange round check; a full-width
+  /// wheel; the Label as its own text-field card; a card with Repeat and the seven weekday circles; a card with Sound, Snooze
+  /// and Snooze Duration (rarely changed, so last); and a red Delete Alarm when editing.
   package struct AlarmEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -122,6 +122,8 @@
     @State private var saving = false
     @State private var errorMessage: String?
     @State private var snoozeMinutes: Int
+    @FocusState private var labelFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     static let snoozeChoices = AlarmPlan.snoozeChoices
 
@@ -165,6 +167,7 @@
               .padding(.horizontal, 19)
               .padding(.top, 14)
               .accessibilityIdentifier("alarm.time")
+            labelCard.padding(.top, 20)
             repeatCard.padding(.top, 20)
             optionsCard.padding(.top, 33)
             if let alarm { deleteButton(alarm).padding(.top, 33) }
@@ -217,7 +220,7 @@
           Button(action: save) {
             Image(systemName: "checkmark")
               .font(.system(size: 19, weight: .semibold))
-              .foregroundStyle(.white)
+              .foregroundStyle(Color(.systemOrange).contrastForeground(for: colorScheme))
               .frame(width: 44, height: 44)
               .background(Color(.systemOrange), in: Circle())
               .contentShape(Circle())
@@ -258,22 +261,42 @@
       }
     }
 
-    private var optionsCard: some View {
+    /// The name gets its own card right under the time: the whole card is a text field, so it reads as a place to type.
+    private var labelCard: some View {
       Card {
         Row {
-          Text("Label")
-          TextField(AlarmPlan.defaultLabel, text: $label)
-            .multilineTextAlignment(.trailing)
+          Image(systemName: "pencil")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(Color(.systemOrange))
+            .accessibilityHidden(true)
+          TextField("Label", text: $label, prompt: Text("What’s this alarm for?"))
+            .focused($labelFocused)
             .submitLabel(.done)
+            .accessibilityLabel("Label")
             .accessibilityIdentifier("alarm.label")
+          if !label.isEmpty {
+            Button {
+              label = ""
+            } label: {
+              Image(systemName: "xmark.circle.fill").foregroundStyle(Color(.tertiaryLabel))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clear Label")
+          }
         }
+        .onTapGesture { labelFocused = true }
         if let alarm, !alarm.note.isEmpty {
           Divider().padding(.horizontal, 18)
           Row {
             Text(alarm.note).foregroundStyle(.secondary).accessibilityIdentifier("alarm.notes")
           }
         }
-        Divider().padding(.horizontal, 18)
+      }
+    }
+
+    /// Sound and snooze: rarely changed, so they sit below Repeat.
+    private var optionsCard: some View {
+      Card {
         NavigationLink {
           SoundScreen(sound: $sound, preview: soundPreview).performanceDestination("alarm.sound")
         } label: {
@@ -409,6 +432,7 @@
   /// A weekday circle: gray, orange when the alarm repeats that day. Reads as "Every Monday".
   private struct DayCircle: View {
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     let day: Int
     let isOn: Bool
     let action: () -> Void
@@ -418,7 +442,9 @@
       Button(action: action) {
         Text(presentation.calendar.veryShortWeekdaySymbols[day - 1])
           .font(.system(size: 17, weight: .medium))
-          .foregroundStyle(isOn ? Color.white : Color.primary)
+          .foregroundStyle(
+            isOn ? Color(.systemOrange).contrastForeground(for: colorScheme) : Color.primary
+          )
           .frame(width: 32, height: 32)
           .background(isOn ? Color(.systemOrange) : Color(.tertiarySystemFill), in: Circle())
           .frame(width: 40, height: 44)
