@@ -56,7 +56,7 @@
       ledger = Ledger(activity: activity, reminders: reminders, runtime: runtime)
       actions = PlannerActions(
         calendar: calendar, reminders: reminders, alarms: alarms,
-        ledger: ledger, runtime: runtime)
+        ledger: ledger, runtime: runtime, defaults: defaults)
     }
 
     /// Cancel view-owned tasks/toasts first. Remove defaults only after this method returns.

@@ -47,7 +47,7 @@
         let sound = SoundPreview()
         let actions = PlannerActions(
           calendar: calendar, reminders: reminders, alarms: alarms,
-          ledger: ledger, runtime: runtime)
+          ledger: ledger, runtime: runtime, defaults: defaults)
         let widget = WidgetFeed(
           container: container, calendar: calendar, reminders: reminders,
           runtime: runtime, enabled: true,
