@@ -296,3 +296,35 @@ final class AlarmWheelStoreChurnTests: XCTestCase {
     return (values.first ?? 0, values.count > 1 ? values[1] : 0)
   }
 }
+
+/// The one-time "Set your alarms in Today" card and alarms a Shortcut brought over from the Clock app.
+@MainActor
+final class AlarmIntroTests: XCTestCase {
+  func testIntroShowsOnceAndStagedClockAlarmsAreAddedByTap() {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-uiTesting", "-uiTestingAlarmIntro",
+      "-uiTestingStagedClockAlarms", "07:00|Wake up|Weekdays;22:30||Never",
+    ]
+    app.launch()
+    app.buttons["Clock"].firstMatch.tap()
+    let intro = app.descendants(matching: .any)["alarms.intro"]
+    XCTAssertTrue(intro.waitForExistence(timeout: 5), "the card shows the first time")
+    app.buttons["alarms.intro.import"].tap()
+    XCTAssertTrue(app.buttons["alarms.intro.shortcuts"].waitForExistence(timeout: 3))
+    app.buttons["alarms.intro.done"].tap()
+    XCTAssertTrue(intro.waitForNonExistence(timeout: 3))
+
+    let staged = app.descendants(matching: .any).matching(identifier: "alarms.import.row")
+    XCTAssertEqual(staged.count, 2, "both Clock alarms wait for a tap; none is set yet")
+    XCTAssertFalse(app.buttons["alarm.row"].exists)
+    app.buttons["alarms.import.addAll"].tap()
+    XCTAssertTrue(staged.firstMatch.waitForNonExistence(timeout: 5))
+    let rows = app.buttons.matching(identifier: "alarm.row")
+    XCTAssertEqual(rows.count, 2)
+    XCTAssertTrue(
+      rows.matching(NSPredicate(format: "label ENDSWITH %@", ", Wake up, Weekdays")).firstMatch
+        .exists)
+  }
+}

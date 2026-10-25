@@ -28,6 +28,12 @@
     @State private var notificationStatus: UNAuthorizationStatus = .authorized
     @State private var editing: OneAlarm?
     @State private var adding = false
+    /// The one-time "Alarms live in Today" card, decided once when the tab first appears.
+    @State private var showsIntro = false
+    @State private var showsImportHelp = false
+    /// Alarms the user's Shortcut brought over from the Clock app, waiting for Add or Skip.
+    @State private var staged: [AlarmImport.Staged] = []
+    @State private var importing = false
     private let center: any AlarmService
     private let timers: any TimerService
     @Environment(PlannerActions.self) private var actions
@@ -94,8 +100,10 @@
           defaults: defaults, onCreated: onAlarmCreated)
       }
       .task { await center.watch(context: context) }
+      .onAppear(perform: decideIntro)
       .task(id: scenePhase) {
         guard scenePhase == .active else { return }
+        loadStaged()
         await FirstRun.alarms(center, notifications: notifications, arguments: arguments)
         notificationStatus = await notifications.authorizationStatus()
         await center.sync(context)
@@ -104,6 +112,8 @@
 
     private var alarmsList: some View {
       List {
+        if showsIntro { introCard }
+        importSection
         nextAlarmRow
         permissionRow
         Section {
@@ -139,6 +149,204 @@
         }
       }
       .listStyle(.plain)
+    }
+
+    // MARK: Alarms live in Today (once)
+
+    /// Shown once, the first time the Clock tab opens after this arrived; UI tests opt in with `-uiTestingAlarmIntro`.
+    private func decideIntro() {
+      guard !Preferences.alarmIntroSeen(defaults) else { return }
+      if arguments.contains("-uiTesting") && !arguments.contains("-uiTestingAlarmIntro") { return }
+      showsIntro = true
+      Preferences.markAlarmIntroSeen(defaults)
+    }
+
+    private var introCard: some View {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack(alignment: .firstTextBaseline) {
+          Text("Set your alarms in Today").font(.headline)
+          Spacer()
+          Button {
+            withAnimation(.snappy) { showsIntro = false }
+          } label: {
+            Image(systemName: "xmark")
+              .font(.footnote.weight(.semibold))
+              .foregroundStyle(.secondary)
+              .frame(width: 30, height: 30)
+              .background(Color(.tertiarySystemFill), in: Circle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Close")
+          .accessibilityIdentifier("alarms.intro.close")
+        }
+        introLine("plus", "Tap + and choose New alarm.")
+        introLine("mic", "Say “Hey Siri, set an alarm in Today”.")
+        introLine("bubble.left", "Or tell the chat: “wake me at 7”.")
+        Divider()
+        Button {
+          withAnimation(.snappy) { showsImportHelp.toggle() }
+        } label: {
+          HStack {
+            Text("Bring alarms over from Clock (optional)")
+            Spacer()
+            Image(systemName: showsImportHelp ? "chevron.up" : "chevron.down")
+              .font(.footnote.weight(.semibold))
+          }
+          .font(.subheadline)
+          .foregroundStyle(Color(.systemOrange))
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("alarms.intro.import")
+        if showsImportHelp {
+          Text(
+            "Today can’t see the Clock app’s alarms. To bring them over once, make a Shortcut: “Get All Alarms”, then “Import Alarm” from Today for each one, and run it. They show up here to add; nothing changes in Clock."
+          )
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          Button("Open Shortcuts") {
+            if let url = URL(string: "shortcuts://create-shortcut") { openURL(url) }
+          }
+          .font(.subheadline.weight(.semibold))
+          .accessibilityIdentifier("alarms.intro.shortcuts")
+        }
+        Button("Got It") { withAnimation(.snappy) { showsIntro = false } }
+          .font(.subheadline.weight(.semibold))
+          .frame(maxWidth: .infinity, alignment: .trailing)
+          .accessibilityIdentifier("alarms.intro.done")
+      }
+      .padding(14)
+      .background(
+        Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+      )
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier("alarms.intro")
+      .plainRow(top: 4, bottom: 10)
+    }
+
+    private func introLine(_ symbol: String, _ text: String) -> some View {
+      Label {
+        Text(text).font(.subheadline)
+      } icon: {
+        Image(systemName: symbol).foregroundStyle(Color(.systemOrange))
+      }
+    }
+
+    // MARK: From the Clock app (staged by the user's Shortcut)
+
+    @ViewBuilder private var importSection: some View {
+      if !staged.isEmpty {
+        Section {
+          ForEach(staged) { item in
+            let parts = AlarmPlan.timeParts(
+              hour: item.hour, minute: item.minute, locale: presentation.locale)
+            HStack(spacing: 12) {
+              VStack(alignment: .leading, spacing: 2) {
+                Text([parts.time, parts.suffix].compactMap { $0 }.joined(separator: " "))
+                  .font(.title3.monospacedDigit())
+                Text(
+                  AlarmPlan.rowSubtitle(
+                    label: item.label, weekdays: item.weekdays, calendar: presentation.calendar)
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+              }
+              Spacer()
+              if isInToday(item) {
+                Text("In Today").font(.subheadline).foregroundStyle(.secondary)
+              } else {
+                Button("Add") { add([item]) }
+                  .font(.subheadline.weight(.semibold))
+                  .buttonStyle(.bordered)
+                  .buttonBorderShape(.capsule)
+                  .disabled(importing)
+                  .accessibilityIdentifier("alarms.import.add")
+              }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("alarms.import.row")
+          }
+          HStack {
+            Button("Skip") { skipImport() }
+              .accessibilityIdentifier("alarms.import.skip")
+            Spacer()
+            Button("Add All") { add(staged) }
+              .fontWeight(.semibold)
+              .disabled(importing)
+              .accessibilityIdentifier("alarms.import.addAll")
+          }
+          .font(.subheadline)
+          .buttonStyle(.borderless)
+        } header: {
+          SectionTitle("From the Clock app")
+        } footer: {
+          Text("After adding, turn these off in the Clock app so they don’t ring twice.")
+            .font(.footnote)
+        }
+      }
+    }
+
+    private func isInToday(_ item: AlarmImport.Staged) -> Bool {
+      alarms.contains { item.matches(hour: $0.hour, minute: $0.minute, weekdays: $0.weekdays) }
+    }
+
+    #if DEBUG
+      @MainActor private static var seededStaged = false
+    #endif
+
+    private func loadStaged() {
+      #if DEBUG
+        // `-uiTestingStagedClockAlarms "07:00|Wake up|Weekdays;22:30||Never"`: what a run of the Shortcut leaves.
+        if !Self.seededStaged, let i = arguments.firstIndex(of: "-uiTestingStagedClockAlarms"),
+          i + 1 < arguments.count
+        {
+          Self.seededStaged = true
+          for entry in arguments[i + 1].split(separator: ";") {
+            let f = entry.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            let hm = (f.first ?? "").split(separator: ":").compactMap { Int($0) }
+            guard hm.count == 2 else { continue }
+            AlarmImport.stage(
+              .init(
+                hour: hm[0], minute: hm[1], label: f.count > 1 ? f[1] : "",
+                weekdays: AlarmImport.weekdays(fromRepeat: f.count > 2 ? f[2] : nil), isOn: true),
+              defaults)
+          }
+        }
+      #endif
+      staged = AlarmImport.staged(defaults)
+    }
+
+    /// Adds what the user tapped as real alarms (the new-alarm sound and snooze from Settings), then forgets them.
+    private func add(_ items: [AlarmImport.Staged]) {
+      guard !importing else { return }
+      importing = true
+      Task { @MainActor in
+        defer { importing = false }
+        var done = Set<UUID>()
+        for item in items {
+          if !isInToday(item) {
+            let alarm = OneAlarm.new(
+              hour: item.hour, minute: item.minute, label: item.label, weekdays: item.weekdays,
+              defaults: AlarmPlan.newAlarmDefaults(defaults), now: now())
+            alarm.isOn = item.isOn
+            do {
+              try await center.commit(alarm, context: context)
+              onAlarmCreated(alarm, context)
+            } catch {
+              continue  // Stays staged; the permission row says why alarms can't be set.
+            }
+          }
+          done.insert(item.id)
+        }
+        AlarmImport.remove(done, defaults)
+        withAnimation(.snappy) { staged = AlarmImport.staged(defaults) }
+      }
+    }
+
+    private func skipImport() {
+      AlarmImport.save([], defaults)
+      withAnimation(.snappy) { staged = [] }
     }
 
     // MARK: Next alarm
