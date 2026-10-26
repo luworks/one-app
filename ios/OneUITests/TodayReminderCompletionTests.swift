@@ -144,14 +144,14 @@ final class TodayReminderCompletionTests: XCTestCase {
       case "Calendar": destination = app.descendants(matching: .any)["calendar.weekGrid"]
       case "Reminders": destination = app.staticTexts["My Lists"]
       case "Clock": destination = app.buttons["World Clock"]
-      default: destination = app.staticTexts["todayDate"]
+      default: destination = app.staticTexts["weekStrip.month"]
       }
       XCTAssertTrue(destination.waitForExistence(timeout: 5), "the tap presents " + tab)
     }
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
     app.buttons["Ask AI or add anything"].firstMatch.tap()
     try assertChatDraftAndClose(in: app, draft: XCTUnwrap(fixture["chatDraft"]))
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
     assertState(app, done: false)
   }
 

@@ -16,7 +16,7 @@ final class HealthStallTests: XCTestCase {
   }
 
   private func openSheet(_ app: XCUIApplication) {
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
     let line = app.buttons["health.summary"]
     for _ in 0..<4 where !(line.exists && line.isHittable) { app.swipeDown() }
     XCTAssertTrue(line.waitForExistence(timeout: 5))
