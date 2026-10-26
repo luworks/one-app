@@ -294,6 +294,7 @@
         {
           close()
         }
+        .accessibilityIdentifier("chat.close")
       }
       .padding(.horizontal, 20)
       .padding(.vertical, 8)

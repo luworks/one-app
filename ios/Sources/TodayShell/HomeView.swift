@@ -779,8 +779,10 @@
     }
 
     /// The days whose month the top bar names: Today's day, what Calendar shows, else this month. Nil in
-    /// Calendar's Year, which names each year in its own heading.
+    /// Calendar's Year, which names each year in its own heading, and under Chat: the label would sit beneath
+    /// Chat's Close in accessibility and take its taps there (XCTest, Voice Control).
     private var shownDays: ClosedRange<Date>? {
+      if askVisible { return nil }
       switch tab {
       case .today: return todayDay...todayDay
       case .calendar: return calendarMode == .year ? nil : calendarShown
