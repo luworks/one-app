@@ -192,4 +192,42 @@ final class ActivityUndoTests: XCTestCase {
           alreadyUndone: false), "\(a): an older row, a list in Apple Reminders, or past 30 days")
     }
   }
+
+  // MARK: Events
+
+  func testOnlyAOneOffWithNobodyElseOnItCanComeBack() {
+    XCTAssertTrue(EventUndo.canRestore(repeats: false, inAppleCalendar: true, attendees: 0))
+    XCTAssertFalse(
+      EventUndo.canRestore(repeats: false, inAppleCalendar: true, attendees: 3),
+      "adding it back would invite people again")
+    XCTAssertFalse(
+      EventUndo.canRestore(repeats: false, inAppleCalendar: true, attendees: nil),
+      "the event could not be read")
+    XCTAssertFalse(
+      EventUndo.canRestore(repeats: true, inAppleCalendar: true, attendees: 0), "a series")
+    XCTAssertFalse(EventUndo.canRestore(repeats: true, inAppleCalendar: false, attendees: 0))
+    XCTAssertTrue(
+      EventUndo.canRestore(repeats: false, inAppleCalendar: false, attendees: nil),
+      "a Today-only event")
+  }
+
+  func testEventSnapshotRoundTripsAndOnlyDeletesAreUndone() throws {
+    let s = EventSnapshot(
+      title: "Dentist", start: Date(timeIntervalSince1970: 1_800_000_000), durationMinutes: 45,
+      calendarName: "Home", externalID: "EK-1")
+    XCTAssertEqual(try JSONDecoder().decode(EventSnapshot.self, from: JSONEncoder().encode(s)), s)
+    func can(
+      _ a: LedgerAction, snapshot: Bool = true, approval: LedgerApproval = .userMade
+    ) -> Bool {
+      LedgerFormat.canUndo(
+        action: a, itemKind: "event", approval: approval, hasItem: false, hasSnapshot: snapshot,
+        alreadyUndone: false)
+    }
+    XCTAssertTrue(can(.deleted))
+    XCTAssertFalse(can(.deleted, snapshot: false), "a series, attendees, or an old row")
+    XCTAssertFalse(can(.deleted, approval: .observed), "deleted in Apple Calendar")
+    XCTAssertFalse(can(.moved), "an AI move goes to attendees; no Undo from Activity")
+    XCTAssertFalse(can(.created))
+    XCTAssertEqual(EventUndo.restoresAsNew, "Restores as a new event")
+  }
 }

@@ -314,6 +314,9 @@
             Text(change).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
           }
           Text(meta).font(.caption).foregroundStyle(.secondary)
+          if canUndo && item.itemKind == "event" {
+            Text(EventUndo.restoresAsNew).font(.caption).foregroundStyle(.secondary)
+          }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         if canUndo && failure == nil {

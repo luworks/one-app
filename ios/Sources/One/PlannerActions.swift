@@ -70,6 +70,8 @@
       case "list":
         return ListActions.undo(
           entry, context: context, reminders: reminders, ledger: ledger, runtime: runtime)
+      case "event":
+        return EntryDeletion.undo(entry, context: context, calendar: calendar, ledger: ledger)
       default:
         return ledger.undo(entry, context: context) ? nil : ActivityUndoMessage.changedSince
       }
