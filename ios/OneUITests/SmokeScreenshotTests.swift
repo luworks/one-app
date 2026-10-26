@@ -45,7 +45,7 @@ final class SmokeScreenshotTests: XCTestCase {
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
       field.typeText("Smoke draft, not sent")
       try shot("5-chat-draft", mode)
-      app.buttons["Close"].firstMatch.tap()
+      app.buttons["chat.close"].tap()
       XCTAssertTrue(field.waitForNonExistence(timeout: 5))
       XCTAssertTrue(ask.isHittable, "Today is usable after Close")
       try shot("6-after-close", mode)
