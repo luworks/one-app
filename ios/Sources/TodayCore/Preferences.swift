@@ -50,7 +50,7 @@ public enum Preferences {
 
   // MARK: Choices
 
-  /// Which day the week starts on in Calendar (Month, Week and Year). System follows the region set on the iPhone.
+  /// Which day the week starts on in Calendar (Month and Year, and the week numbers). System follows the region set on the iPhone.
   public enum FirstWeekday: String, CaseIterable, Identifiable, Sendable {
     case system, sunday, monday
     public var id: String { rawValue }
@@ -87,27 +87,35 @@ public enum Preferences {
 
   /// Which Calendar view opens when the app starts. Last used keeps the view you left it in.
   public enum CalendarStart: String, CaseIterable, Identifiable, Sendable {
-    case lastUsed, week, month, year
+    case lastUsed, threeDay, month, year
     public var id: String { rawValue }
 
+    /// `week` was the 7-day Week grid, replaced by 3 Day in October 2026: an install that chose it opens on 3 Day.
     public init(stored: String?) {
-      self = stored.flatMap(CalendarStart.init(rawValue:)) ?? Preferences.calendarStart
+      self =
+        stored.flatMap { CalendarStart(rawValue: $0 == "week" ? "threeDay" : $0) }
+        ?? Preferences.calendarStart
     }
 
     public var title: String {
       switch self {
       case .lastUsed: "Last used"
-      case .week: "Week"
+      case .threeDay: "3 Day"
       case .month: "Month"
       case .year: "Year"
       }
     }
 
-    /// The view to open: this choice when it names one, else the last used (Week the very first time).
+    /// The view to open (a `CalendarView.Mode` raw value): this choice when it names one, else the last used
+    /// (3 Day the very first time, and for a last used Week, the 7-day grid 3 Day replaced).
     public func view(lastUsed: String?) -> String {
       switch self {
-      case .lastUsed: lastUsed ?? "Week"
-      case .week: "Week"
+      case .lastUsed:
+        switch lastUsed {
+        case nil, "Week": "ThreeDay"
+        case let last?: last
+        }
+      case .threeDay: "ThreeDay"
       case .month: "Month"
       case .year: "Year"
       }

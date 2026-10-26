@@ -3,7 +3,7 @@ import Foundation
 /// Stable automation handles. Changing a raw value breaks saved launch configurations.
 public enum TodaySceneID: String, CaseIterable, Codable, Sendable, Identifiable {
   case today = "today"
-  case calendarWeek = "calendar.week"
+  case calendarThreeDay = "calendar.threeday"
   case calendarMonth = "calendar.month"
   case calendarYear = "calendar.year"
   case calendarKey = "calendar.year.key"
@@ -186,7 +186,7 @@ public enum SceneRegistry {
     ]
 
     switch id {
-    case .today, .calendarWeek, .calendarMonth, .calendarYear,
+    case .today, .calendarThreeDay, .calendarMonth, .calendarYear,
       .reminders, .remindersToday, .remindersScheduled, .remindersAll, .remindersFlagged,
       .remindersCompleted, .remindersList:
       states.formUnion([.empty, .dense])

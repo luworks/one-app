@@ -71,12 +71,12 @@
         initialValue: Self.restored(
           ClockSection.self, key: Self.clockSectionKey, defaults: defaults, arguments: args)
           ?? .alarms)
-      let last = Self.restored(
-        CalendarView.Mode.self, key: Self.calendarModeKey, defaults: defaults, arguments: args)?
-        .rawValue
+      // Read raw: a Calendar last left on the retired Week grid ("Week") opens on 3 Day (`CalendarStart.view`).
+      let last =
+        args.contains("-uiTesting") ? nil : defaults.string(forKey: Self.calendarModeKey)
       _calendarMode = State(
         initialValue: CalendarView.Mode(
-          rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .week)
+          rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .threeDay)
     }
     @State private var editor: OpenedEntry?
 
@@ -87,7 +87,7 @@
     @State private var tab: HomeTab
     @State private var calendarDay: Date
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
-    // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
+    // (the open list in Reminders, 3 Day / Month / Year in Calendar, the day in Today).
     @State private var calendarMode: CalendarView.Mode
     /// Alarms · World Clock · Stopwatch · Timer inside the Clock tab.
     @State private var clockSection: ClockSection

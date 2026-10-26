@@ -27,7 +27,7 @@
     @Binding package var pendingDelete: CalEntry?
     package var open: (CalEntry) -> Void
     package var edit: (CalEntry) -> Void
-    /// Rows in a list get the swipe; blocks on the week grid only get the long-press menu.
+    /// Rows in a list get the swipe; blocks on the 3 Day grid only get the long-press menu.
     package var swipes = true
     package var attention: TodayRowAttention? = nil
 

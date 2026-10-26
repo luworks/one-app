@@ -58,7 +58,7 @@ final class PerformanceBaselineTests: XCTestCase {
     app.launch()
     for _ in 0..<3 {
       sample("today_to_week") {
-        tap(app.buttons["Calendar"].firstMatch, ready: element("calendar.weekGrid"))
+        tap(app.buttons["Calendar"].firstMatch, ready: element("calendar.dayGrid"))
       }
       sample("week_to_month") {
         tap(app.buttons["calendar.mode.month"], ready: element("calendar.monthPager"))
@@ -66,7 +66,7 @@ final class PerformanceBaselineTests: XCTestCase {
       sample("month_to_year") {
         tap(app.buttons["calendar.mode.year"], ready: element("calendar.year.scroll"))
       }
-      app.buttons["calendar.mode.week"].tap()
+      app.buttons["calendar.mode.threeday"].tap()
       sample("calendar_to_reminders") {
         tap(app.buttons["Reminders"].firstMatch, ready: element("list.Work"))
       }

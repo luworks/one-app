@@ -335,7 +335,7 @@ public enum CalendarMath {
   }
 }
 
-/// Layout helpers for the Week grid. Pure, so they can be tested.
+/// Layout helpers for the 3 Day grid. Pure, so they can be tested.
 public enum CalendarLayout {
   public struct TimedLanes {
     public let eventWidth: Double
@@ -364,7 +364,7 @@ public enum CalendarLayout {
     return TimedLanes(eventWidth: eventWidth, alarmX: 1 + eventWidth + gap, alarmWidth: alarmWidth)
   }
 
-  /// Lane (row) for each banner in the all-day strip. `spans` are inclusive day columns (0...6) of one week.
+  /// Lane (row) for each banner in the all-day strip. `spans` are inclusive day columns (any day numbering, e.g. days from today).
   /// Banners that overlap in days never share a lane; earlier and longer banners go first.
   public static func lanes(for spans: [(start: Int, end: Int)]) -> [Int] {
     let order = spans.indices.sorted {
@@ -419,7 +419,7 @@ public enum CalendarLayout {
     return result
   }
 
-  /// The slot under a point on the Week grid, for a long-press that makes a new event: the day column and the start
+  /// The slot under a point on the 3 Day grid, for a long-press that makes a new event: the day column and the start
   /// minute, snapped down to 15 minutes like Apple Calendar. `x` and `y` are in the grid's space (hour 0 at y = 0,
   /// the hour labels in the first `gutter` points). Clamped to the visible days and to a start no later than 23:45.
   public static func slot(
@@ -430,7 +430,7 @@ public enum CalendarLayout {
     return (day, min(max(minute, 0), 24 * 60 - 15))
   }
 
-  /// Hour heights the Week grid can be pinched to, in points: compact enough for a whole day, roomy enough to read short events.
+  /// Hour heights the 3 Day grid can be pinched to, in points: compact enough for a whole day, roomy enough to read short events.
   public static let hourHeights: ClosedRange<Double> = 28...120
 
   /// The hour height after a pinch of `scale` that started at `start`, kept inside `hourHeights`.

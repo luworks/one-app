@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Calendar tab (modeled on Apple Calendar): Month grid with the day's list, paging, Year, Week, and the Calendars filter.
+/// The Calendar tab (modeled on Apple Calendar): Month grid with the day's list, paging, Year, 3 Day, and the Calendars filter.
 /// Launched with -uiTesting: a fresh in-memory store with sample data (events today and tomorrow, "Team offsite" in two days).
 @MainActor
 final class CalendarTabTests: XCTestCase {
@@ -22,7 +22,7 @@ final class CalendarTabTests: XCTestCase {
   /// The Calendar tab opens on the next 3 days; the Month tests switch to Month first.
   private func showMonth() { modeButton("Month").tap() }
 
-  /// The Week / Month / Year pills (buttons, not a segmented control).
+  /// The 3 Day / Month / Year pills (buttons, not a segmented control), by identifier: "ThreeDay", "Month", "Year".
   private func modeButton(_ title: String) -> XCUIElement {
     app.buttons["calendar.mode.\(title.lowercased())"]
   }
@@ -34,21 +34,71 @@ final class CalendarTabTests: XCTestCase {
     return String(format: "day.%04d-%02d-%02d", c.year!, c.month!, c.day!)
   }
 
-  /// The default view is Week: one switcher row (Week / Month / Year), no Day segment, no Today or Calendars buttons.
-  func testWeekIsTheDefault() {
-    XCTAssertTrue(modeButton("Week").waitForExistence(timeout: 5))
+  /// The default view is 3 Day: one switcher row (3 Day / Month / Year), no Day segment, no Today or Calendars
+  /// buttons, and the grid starts on today.
+  func testThreeDayIsTheDefault() {
+    XCTAssertTrue(modeButton("ThreeDay").waitForExistence(timeout: 5))
     let pills = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'calendar.mode.'"))
     XCTAssertEqual(
-      pills.allElementsBoundByIndex.map({ $0.label }), ["Week", "Month", "Year"],
-      "one switcher: Week / Month / Year (Day is the Today tab)")
+      pills.allElementsBoundByIndex.map({ $0.label }), ["3 Day", "Month", "Year"],
+      "one switcher: 3 Day / Month / Year (Day is the Today tab, no 7-day Week)")
     XCTAssertFalse(app.segmentedControls.buttons["Month"].exists, "pills, not a segmented control")
-    XCTAssertTrue(modeButton("Week").isSelected, "Week is selected when the tab opens")
+    XCTAssertTrue(modeButton("ThreeDay").isSelected, "3 Day is selected when the tab opens")
     XCTAssertFalse(modeButton("Month").isSelected)
     XCTAssertTrue(
-      element("calendar.weekTitle").waitForExistence(timeout: 5), "a time grid with a month title")
+      element("calendar.daysTitle").waitForExistence(timeout: 5), "a time grid with a month title")
+    for offset in 0..<3 {
+      XCTAssertTrue(
+        onScreen(dayHeader(offset)), "today and the next two days are the columns (day \(offset))")
+    }
+    XCTAssertFalse(dayHeader(3).isFullyVisible(in: app.frame), "only three columns")
     XCTAssertFalse(
       app.buttons["calendar.today"].exists || app.buttons["calendar.calendars"].exists
         || app.buttons["calendar.year"].exists)
+  }
+
+  /// The header button of the day `offset` days from today (its label is the full date).
+  private func dayHeader(_ offset: Int) -> XCUIElement {
+    let day = cal.date(byAdding: .day, value: offset, to: .now)!
+    return app.buttons[day.formatted(date: .complete, time: .omitted)].firstMatch
+  }
+
+  /// Waits until the element is entirely on screen (columns off to either side exist but are clipped).
+  private func onScreen(_ e: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+    let end = Date.now.addingTimeInterval(timeout)
+    repeat {
+      if e.isFullyVisible(in: app.frame) { return true }
+      RunLoop.current.run(until: .now.addingTimeInterval(0.2))
+    } while Date.now < end
+    return false
+  }
+
+  /// A swipe moves the grid by one day, like Apple Calendar's multi-day view; a swipe back returns to today.
+  func testThreeDaySwipeMovesOneDay() {
+    let grid = element("calendar.dayGrid")
+    XCTAssertTrue(grid.waitForExistence(timeout: 5))
+    grid.swipeLeft()
+    XCTAssertTrue(onScreen(dayHeader(3)), "the day after the third comes in from the right")
+    XCTAssertFalse(dayHeader(0).isFullyVisible(in: app.frame), "today moved off to the left")
+    XCTAssertFalse(
+      dayHeader(4).isFullyVisible(in: app.frame), "one day per swipe, not a page of three")
+    grid.swipeRight()
+    XCTAssertTrue(onScreen(dayHeader(0)), "back to today")
+  }
+
+  /// A day picked in Month opens 3 Day on that day.
+  func testThreeDayStartsOnTheDayPickedInMonth() {
+    showMonth()
+    let target = cal.date(byAdding: .day, value: 5, to: .now)!
+    if !cal.isDate(target, equalTo: .now, toGranularity: .month) {
+      element("calendar.monthPager").swipeLeft()
+    }
+    let cell = element(dayID(target))
+    XCTAssertTrue(cell.waitForExistence(timeout: 5))
+    cell.tap()
+    modeButton("ThreeDay").tap()
+    XCTAssertTrue(onScreen(dayHeader(5)), "the picked day is the first column")
+    XCTAssertFalse(dayHeader(0).isFullyVisible(in: app.frame), "not today")
   }
 
   /// Month: big month title, weekday letters, grid, and today's events below.
@@ -258,17 +308,14 @@ final class CalendarTabTests: XCTestCase {
       ).firstMatch.waitForExistence(timeout: 5))
   }
 
-  /// Week keeps the time grid with all-day banners on top.
-  func testWeekShowsAllDayBanner() {
-    modeButton("Week").tap()
-    XCTAssertTrue(element("calendar.weekTitle").waitForExistence(timeout: 5))
-    // "Team offsite" is two days from now: this week or, near the weekend, the next one.
+  /// 3 Day keeps the time grid with all-day banners on top.
+  func testThreeDayShowsAllDayBanner() {
+    modeButton("ThreeDay").tap()
+    XCTAssertTrue(element("calendar.daysTitle").waitForExistence(timeout: 5))
+    // "Team offsite" is two days from now: the third column.
     let banner = app.descendants(matching: .any).matching(
       NSPredicate(format: "label BEGINSWITH 'Team offsite'")
     ).firstMatch
-    if !banner.waitForExistence(timeout: 3) {
-      app.swipeLeft()
-    }
     XCTAssertTrue(banner.waitForExistence(timeout: 5), "multi-day all-day event shows in the strip")
     XCTAssertTrue(banner.label.contains("all-day"))
   }

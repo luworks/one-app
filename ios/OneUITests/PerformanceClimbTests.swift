@@ -112,9 +112,9 @@ final class PerformanceClimbTests: XCTestCase {
   func testYearEntryAllocationDiagnostic() {
     app.launch()
     sample("app_init_to_content_layout")
-    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap("Calendar", sample: "today_to_calendar.threeday", ready: element("calendar.dayGrid"))
     tap(
-      "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+      "calendar.mode.month", sample: "calendar.threeday_to_calendar.month",
       ready: element("calendar.monthPager"))
     tap(
       "calendar.mode.year", sample: "calendar.month_to_calendar.year",
@@ -130,17 +130,17 @@ final class PerformanceClimbTests: XCTestCase {
     app.launch()
     sample("app_init_to_content_layout")
     for _ in 0..<3 {
-      tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+      tap("Calendar", sample: "today_to_calendar.threeday", ready: element("calendar.dayGrid"))
       tap(
-        "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+        "calendar.mode.month", sample: "calendar.threeday_to_calendar.month",
         ready: element("calendar.monthPager"))
       tap(
         "calendar.mode.year", sample: "calendar.month_to_calendar.year",
         ready: element("calendar.year.scroll"))
       tap(
-        "calendar.mode.week", sample: "calendar.year_to_calendar.week",
-        ready: element("calendar.weekGrid"))
-      tap("Reminders", sample: "calendar.week_to_tasks", ready: element("list.Work"))
+        "calendar.mode.threeday", sample: "calendar.year_to_calendar.threeday",
+        ready: element("calendar.dayGrid"))
+      tap("Reminders", sample: "calendar.threeday_to_tasks", ready: element("list.Work"))
       tap("Clock", sample: "tasks_to_clock", ready: app.buttons["World Clock"])
       tap("Today", sample: "clock_to_today", ready: app.staticTexts["weekStrip.month"])
     }
@@ -168,11 +168,11 @@ final class PerformanceClimbTests: XCTestCase {
     app.launch()
     sample("app_init_to_content_layout")
     for visit in 0..<3 {
-      tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+      tap("Calendar", sample: "today_to_calendar.threeday", ready: element("calendar.dayGrid"))
       XCTAssertTrue(app.buttons["Calendar"].firstMatch.isSelected)
-      XCTAssertTrue(app.buttons["calendar.mode.week"].isSelected)
+      XCTAssertTrue(app.buttons["calendar.mode.threeday"].isSelected)
       if visit == 0 { captureNavigation("week-light") }
-      tap("Today", sample: "calendar.week_to_today", ready: app.staticTexts["weekStrip.month"])
+      tap("Today", sample: "calendar.threeday_to_today", ready: app.staticTexts["weekStrip.month"])
       XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
     }
   }
@@ -181,17 +181,17 @@ final class PerformanceClimbTests: XCTestCase {
     app.launchArguments += ["-appearance", "dark"]
     app.launch()
     sample("app_init_to_content_layout")
-    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap("Calendar", sample: "today_to_calendar.threeday", ready: element("calendar.dayGrid"))
     for visit in 0..<3 {
       tap(
-        "calendar.mode.year", sample: "calendar.week_to_calendar.year",
+        "calendar.mode.year", sample: "calendar.threeday_to_calendar.year",
         ready: element("calendar.year.scroll"))
       XCTAssertTrue(app.buttons["calendar.mode.year"].isSelected)
       if visit == 0 { captureNavigation("year-dark") }
       tap(
-        "calendar.mode.week", sample: "calendar.year_to_calendar.week",
-        ready: element("calendar.weekGrid"))
-      XCTAssertTrue(app.buttons["calendar.mode.week"].isSelected)
+        "calendar.mode.threeday", sample: "calendar.year_to_calendar.threeday",
+        ready: element("calendar.dayGrid"))
+      XCTAssertTrue(app.buttons["calendar.mode.threeday"].isSelected)
       if visit == 0 { captureNavigation("week-dark") }
     }
   }
@@ -199,9 +199,9 @@ final class PerformanceClimbTests: XCTestCase {
   func testRepeatedNavigationRetainsCalendarSelection() {
     app.launch()
     sample("app_init_to_content_layout")
-    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap("Calendar", sample: "today_to_calendar.threeday", ready: element("calendar.dayGrid"))
     tap(
-      "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+      "calendar.mode.month", sample: "calendar.threeday_to_calendar.month",
       ready: element("calendar.monthPager"))
     for _ in 0..<3 {
       tap("Today", sample: "calendar.month_to_today", ready: app.staticTexts["weekStrip.month"])
@@ -211,7 +211,7 @@ final class PerformanceClimbTests: XCTestCase {
       tap("Calendar", sample: "today_to_calendar.month", ready: element("calendar.monthPager"))
       app.buttons["calendar.mode.month"].doubleTap()
       XCTAssertTrue(app.buttons["calendar.mode.month"].isSelected)
-      XCTAssertFalse(element("calendar.weekGrid").exists)
+      XCTAssertFalse(element("calendar.dayGrid").exists)
     }
   }
 
@@ -222,9 +222,9 @@ final class PerformanceClimbTests: XCTestCase {
       ]
     app.launch()
     sample("app_init_to_content_layout")
-    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap("Calendar", sample: "today_to_calendar.threeday", ready: element("calendar.dayGrid"))
     tap(
-      "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+      "calendar.mode.month", sample: "calendar.threeday_to_calendar.month",
       ready: element("calendar.monthPager"))
     let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
     let parts = Calendar.current.dateComponents([.year, .month, .day], from: tomorrow)
@@ -271,7 +271,7 @@ final class PerformanceClimbTests: XCTestCase {
     app.buttons["calendar.mode.year"].tap()
     let scroll = element("calendar.year.scroll")
     XCTAssertTrue(scroll.waitForExistence(timeout: 5))
-    sample("calendar.week_to_calendar.year")
+    sample("calendar.threeday_to_calendar.year")
     let options = XCTMeasureOptions()
     options.iterationCount = 3
     measure(
