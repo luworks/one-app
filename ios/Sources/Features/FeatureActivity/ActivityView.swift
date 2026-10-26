@@ -58,7 +58,8 @@
         }
         .searchable(
           text: $search, placement: .navigationBarDrawer(displayMode: .always),
-          prompt: "Search Activity")
+          prompt: "Search Activity"
+        )
         .performanceDestination("activity")
         .navigationTitle("Activity")
         .navigationBarTitleDisplayMode(.inline)
