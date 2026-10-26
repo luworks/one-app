@@ -264,6 +264,7 @@
             "Shows one line from Apple Health on Today: your steps and last night's sleep, or the first metrics you chose. Today only reads them."
         )
         HealthMetricsLink()
+        OpenHealthButton()
       } header: {
         Text("Today")
       }
