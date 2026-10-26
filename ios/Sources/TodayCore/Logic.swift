@@ -339,13 +339,36 @@ public enum CalendarMath {
 public enum CalendarLayout {
   /// Where the timed things of one day column go. `blocks` are events (they have a duration); `marks` are reminders
   /// and alarm rings (a moment): one-line chips at their time, never a box of made-up length.
+  /// A rectangle in a day column, in points (TodayCore is Foundation only, so not CGRect).
+  public struct Frame: Equatable, Sendable {
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
+    public var minX: Double { x }
+    public var maxX: Double { x + width }
+    public var minY: Double { y }
+    public var maxY: Double { y + height }
+    public var midX: Double { x + width / 2 }
+    public var midY: Double { y + height / 2 }
+    public func contains(x px: Double, y py: Double) -> Bool {
+      px >= x && px < maxX && py >= y && py < maxY
+    }
+    public init(x: Double, y: Double, width: Double, height: Double) {
+      self.x = x
+      self.y = y
+      self.width = width
+      self.height = height
+    }
+  }
+
   public struct TimedDay: Equatable {
     /// One frame per block, in the input order, inside the column (1 pt in from each edge).
-    public let blocks: [CGRect]
+    public let blocks: [Frame]
     /// How deep each block is staggered: 0 sits at the left, deeper ones are indented and drawn on top.
     public let depths: [Int]
     /// One frame per mark, in the input order; nil when the mark is folded into the "+N" of the chip above it.
-    public let marks: [CGRect?]
+    public let marks: [Frame?]
     /// For each shown mark, the marks folded into it (empty for most).
     public let folded: [[Int]]
   }
@@ -410,27 +433,28 @@ public enum CalendarLayout {
     let shownY = markY.compactMap { $0 }
     let halved = groups.map { g in shownY.contains { meets($0, g) } }
 
-    var rects = [CGRect](repeating: .zero, count: blocks.count)
+    var rects = [Frame](repeating: Frame(x: 0, y: 0, width: 0, height: 0), count: blocks.count)
     var depths = [Int](repeating: 0, count: blocks.count)
     for (g, group) in groups.enumerated() {
-      let area = halved[g] ? content / 2 : content
-      let indent = min(44, area * 0.4)
-      let left = min(Double(group.depth) * indent, area * 0.6)
-      let share = (area - left) / Double(group.members.count)
-      let width = min(share, max(8, share - 1))
+      let area: Double = halved[g] ? content / 2 : content
+      let indent: Double = min(44, area * 0.4)
+      let left: Double = min(Double(group.depth) * indent, area * 0.6)
+      let share: Double = (area - left) / Double(group.members.count)
+      let width: Double = min(share, max(8, share - 1))
       for (k, i) in group.members.enumerated() {
-        rects[i] = CGRect(
-          x: 1 + left + share * Double(k), y: blocks[i].y, width: width, height: blocks[i].height)
+        let x: Double = 1 + left + share * Double(k)
+        rects[i] = Frame(x: x, y: blocks[i].y, width: width, height: blocks[i].height)
         depths[i] = group.depth
       }
     }
 
-    let markRects: [CGRect?] = markY.map { y in
+    let half: Double = content / 2
+    let markRects: [Frame?] = markY.map { y -> Frame? in
       guard let y else { return nil }
-      let beside = groups.contains { meets(y, $0) }
-      return beside
-        ? CGRect(x: 2 + content / 2, y: y, width: content / 2 - 1, height: chipHeight)
-        : CGRect(x: 1, y: y, width: content, height: chipHeight)
+      if groups.contains(where: { meets(y, $0) }) {
+        return Frame(x: 2 + half, y: y, width: half - 1, height: chipHeight)
+      }
+      return Frame(x: 1, y: y, width: content, height: chipHeight)
     }
     return TimedDay(blocks: rects, depths: depths, marks: markRects, folded: folded)
   }

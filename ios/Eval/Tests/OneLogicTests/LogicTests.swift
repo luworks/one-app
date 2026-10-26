@@ -462,7 +462,7 @@ final class CalendarLayoutTests: XCTestCase {
     guard let beside = d.marks[0], let alone = d.marks[1] else { return XCTFail("both chips show") }
     XCTAssertLessThan(d.blocks[0].maxX, beside.minX, "the event keeps the left half")
     XCTAssertEqual(beside.maxX, 99, accuracy: 0.001)
-    XCTAssertFalse(d.blocks[0].contains(CGPoint(x: beside.midX, y: beside.midY)))
+    XCTAssertFalse(d.blocks[0].contains(x: beside.midX, y: beside.midY))
     XCTAssertEqual(alone.minX, 1)
     XCTAssertEqual(alone.width, 98)
   }
@@ -485,7 +485,7 @@ final class CalendarLayoutTests: XCTestCase {
 
   func testEmptyDayHasNothingToPlace() {
     let d = day()
-    XCTAssertEqual(d, CalendarLayout.TimedDay(blocks: [], depths: [], marks: [], folded: []))
+    XCTAssertTrue(d.blocks.isEmpty && d.depths.isEmpty && d.marks.isEmpty && d.folded.isEmpty)
   }
 
   func testAllDayLanesStackOverlappingBanners() {

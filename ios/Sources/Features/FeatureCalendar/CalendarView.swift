@@ -1377,17 +1377,22 @@
           blocks: placed.map {
             (y: Double($0.y(hourHeight)), height: Double(max(18, $0.height(hourHeight))))
           },
-          marks: marks.map { $0.start.timeIntervalSince(interval.start) / 3600 * Double(hourHeight) },
+          marks: marks.map {
+            $0.start.timeIntervalSince(interval.start) / 3600 * Double(hourHeight)
+          },
           columnWidth: Double(width), chipHeight: Double(Self.chipHeight),
           foldAfter: max(24, Double(hourHeight) * 0.75))
-        let shown = marks.indices.filter { layout.marks[$0] != nil }
+        let blockRects = layout.blocks.map { CGRect($0) }
+        let markRects = layout.marks.map { $0.map { CGRect($0) } }
+        let shown = marks.indices.filter { markRects[$0] != nil }
+        // Deeper (later) events are drawn over the ones they overlap, as in Apple Calendar.
+        let drawOrder = placed.indices.sorted { layout.depths[$0] < layout.depths[$1] }
         ZStack(alignment: .topLeading) {
           hourLines
           // Bottom layer: long-press an empty slot to make an event there. Blocks and chips keep their own taps and menus.
-          pressLayer(layout.blocks + layout.marks.compactMap { $0 }, width: width)
-          // Deeper (later) events are drawn over the ones they overlap, as in Apple Calendar.
-          ForEach(placed.indices.sorted { layout.depths[$0] < layout.depths[$1] }, id: \.self) { i in
-            let r = layout.blocks[i]
+          pressLayer(blockRects + markRects.compactMap { $0 }, width: width)
+          ForEach(drawOrder, id: \.self) { i in
+            let r = blockRects[i]
             block(
               placed[i].entry, width: r.width, height: r.height, lines: placed[i].titleLines,
               outlined: layout.depths[i] > 0
@@ -1396,7 +1401,7 @@
             .offset(x: r.minX, y: r.minY)
           }
           ForEach(shown, id: \.self) { i in
-            if let r = layout.marks[i] {
+            if let r = markRects[i] {
               chip(marks[i], more: layout.folded[i].map { marks[$0] })
                 .opacity(past ? DayTint.past : 1)
                 .frame(width: r.width, height: r.height)
@@ -1491,7 +1496,8 @@
         .contentShape(Rectangle())
         .onTapGesture { open(e) }
         .entryActions(
-          e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false, calendar: calendar
+          e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false,
+          calendar: calendar
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(plannerEntrySpeech(e, runtime: presentation.runtime))
@@ -1506,12 +1512,12 @@
     private func moreMenu(_ more: [CalEntry]) -> some View {
       Menu {
         ForEach(more) { e in
+          let time = e.start.plannerFormatted(
+            date: .omitted, time: .shortened, runtime: presentation.runtime)
           Button {
             open(e)
           } label: {
-            Label(
-              "\(e.start.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))  \(e.title)",
-              systemImage: e.isAlarm ? "alarm" : "circle")
+            Label("\(time)  \(e.title)", systemImage: e.isAlarm ? "alarm" : "circle")
           }
         }
       } label: {
@@ -1675,6 +1681,12 @@
         default: break
         }
       }
+    }
+  }
+
+  extension CGRect {
+    init(_ f: CalendarLayout.Frame) {
+      self.init(x: f.x, y: f.y, width: f.width, height: f.height)
     }
   }
 
