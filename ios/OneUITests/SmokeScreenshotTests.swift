@@ -28,7 +28,7 @@ final class SmokeScreenshotTests: XCTestCase {
       assertToday()
       try shot("1-today", mode)
       let tabs: [(String, XCUIElement)] = [
-        ("Calendar", app.descendants(matching: .any)["calendar.weekGrid"]),
+        ("Calendar", app.descendants(matching: .any)["calendar.dayGrid"]),
         ("Reminders", app.staticTexts["My Lists"]),
         ("Clock", app.buttons["World Clock"]),
       ]

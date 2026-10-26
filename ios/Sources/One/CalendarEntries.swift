@@ -187,7 +187,7 @@
     case task(OneTask)
     /// An alarm opens in the Alarms tab's editor.
     case alarm(OneAlarm)
-    /// A new event at a slot picked on the Week grid (long-press), when our editor is used.
+    /// A new event at a slot picked on the 3 Day grid (long-press), when our editor is used.
     case new(start: Date, end: Date)
 
     package var id: String {

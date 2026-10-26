@@ -56,7 +56,7 @@ final class CalendarDeleteSyncTests: XCTestCase {
 
   private func addEvent(_ app: XCUIApplication) {
     // On the Calendar tab "New" adds an event (elsewhere a reminder). Right after the sidebar closes the tab tap can be
-    // lost, so check the tab is showing (its Week / Month / Year pills) before tapping New.
+    // lost, so check the tab is showing (its 3 Day / Month / Year pills) before tapping New.
     let pills = app.buttons["calendar.mode.month"]
     app.buttons["Calendar"].firstMatch.tap()
     if !pills.waitForExistence(timeout: 5) { app.buttons["Calendar"].firstMatch.tap() }

@@ -141,7 +141,7 @@ final class TodayReminderCompletionTests: XCTestCase {
       app.buttons[tab].firstMatch.tap()
       let destination: XCUIElement
       switch tab {
-      case "Calendar": destination = app.descendants(matching: .any)["calendar.weekGrid"]
+      case "Calendar": destination = app.descendants(matching: .any)["calendar.dayGrid"]
       case "Reminders": destination = app.staticTexts["My Lists"]
       case "Clock": destination = app.buttons["World Clock"]
       default: destination = app.staticTexts["weekStrip.month"]

@@ -7,24 +7,26 @@
   import SwiftUI
   import SwiftData
 
-  /// Calendar tab, modeled on Apple Calendar: Week (time grid, the default), Month (a compact grid with the selected
-  /// day's events listed below) and Year (twelve mini months). The day view is the Today tab: tapping a day's header
+  /// Calendar tab, modeled on Apple Calendar: 3 Day (a time grid of three days, the default), Month (a compact grid with
+  /// the selected day's events listed below) and Year (twelve mini months). The day view is the Today tab: tapping a day's header
   /// opens it there. One control row under the tab pills: the view switcher. Which calendars show is a Setting.
   /// System events open in Apple's own viewer; new events use Apple's own editor when Calendar access is on.
   package struct CalendarView: View {
     @Environment(PlannerPresentation.self) private var presentation
     package enum Mode: String, CaseIterable, Identifiable {
-      case week = "Week"
+      // Raw values are stored (`today.last.calendarMode`) and name identifiers ("calendar.mode.threeday").
+      case threeDay = "ThreeDay"
       case month = "Month"
       case year = "Year"
       package var id: Self { self }
+      package var title: String { self == .threeDay ? "3 Day" : rawValue }
     }
 
     private let actions: PlannerActions
     private let ledger: Ledger
     private let alarms: any AlarmService
     @Binding var day: Date
-    /// Week / Month / Year. Kept by `HomeView`, so switching tabs and back keeps the view.
+    /// 3 Day / Month / Year. Kept by `HomeView`, so switching tabs and back keeps the view.
     @Binding var mode: Mode
     let calendar: any CalendarService
     let onOpenTask: @MainActor (OneTask) -> Void
@@ -44,7 +46,7 @@
       }
     }
 
-    /// The month title of the visible week / month page, published by the page and shown in the control row.
+    /// The month title of the visible days / month page, published by the page and shown in the control row.
     @State private var title = ""
     private var cal: Calendar {
       Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
@@ -74,10 +76,10 @@
         controlRow
         Group {
           switch mode {
-          case .week:
-            WeekView(
-              calendar: calendar, day: $day, title: $title, dayCount: 7, open: open, edit: edit,
-              create: create, openDay: openDay)
+          case .threeDay:
+            ThreeDayView(
+              calendar: calendar, day: $day, title: $title, open: open, edit: edit, create: create,
+              openDay: openDay)
           case .month:
             MonthView(
               calendar: calendar, day: $day, title: $title, open: open, edit: edit, openDay: openDay
@@ -122,7 +124,7 @@
 
     private func edit(_ entry: CalEntry) { open(entry) }
 
-    /// A long-press on an empty slot of the Week grid: Apple's editor when Calendar access is on, else ours, prefilled.
+    /// A long-press on an empty slot of the 3 Day grid: Apple's editor when Calendar access is on, else ours, prefilled.
     private func create(start: Date, end: Date) {
       if calendar.usesNativeEditor, let native = calendar as? any NativeCalendarService {
         native.edit(identifier: nil, start: start, end: end, fullOptions: false, onComplete: nil)
@@ -142,14 +144,14 @@
 
     // MARK: One control row: the view switcher
 
-    /// Week / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned, with the
+    /// 3 Day / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned, with the
     /// month title of the visible page on the same row, right-aligned (Year has no title).
     private var controlRow: some View {
       HStack(spacing: PillStyle.spacing) {
         HStack(spacing: PillStyle.spacing) {
           ForEach(Mode.allCases) { item in
             PillButton(
-              title: item.rawValue, isSelected: item == mode,
+              title: item.title, isSelected: item == mode,
               identifier: "calendar.mode.\(item.rawValue.lowercased())"
             ) {
               mode = item
@@ -167,7 +169,8 @@
             .minimumScaleFactor(0.5)
             .multilineTextAlignment(.trailing)
             .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier(mode == .week ? "calendar.weekTitle" : "calendar.monthTitle")
+            .accessibilityIdentifier(
+              mode == .threeDay ? "calendar.daysTitle" : "calendar.monthTitle")
         }
       }
       .padding(.horizontal, 20)
@@ -998,16 +1001,25 @@
     }
   }
 
-  // MARK: - Week
+  // MARK: - 3 Day
 
-  /// 7-day time grid. Events are tinted blocks in their calendar's color; reminders with a time are accent outlines.
-  private struct WeekView: View {
+  /// The 3 Day grid's sideways scroll, in day columns from today (1.5 = halfway between tomorrow and the day after as
+  /// the first column). Observed apart from the grid, so only the header and the all-day row redraw while the finger moves.
+  @Observable private final class DayScroll {
+    var columns: CGFloat = 0
+  }
+
+  /// Three days side by side on a time grid, like Apple Calendar's multi-day view on iPhone: swipe sideways to move one
+  /// day. The first column is the selected day: today when Calendar opens, the picked day when coming from Month or Year.
+  /// Events are tinted blocks in their calendar's color, reminders with a time accent outlines, alarms thin markers.
+  /// Nothing on the grid moves by drag.
+  private struct ThreeDayView: View {
+    static let columns = 3
     let calendar: any CalendarService
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var day: Date
     @Binding var title: String
-    /// 7 = a calendar week; 3 = the next 3 days starting today.
-    var dayCount = 7
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void
     var create: (Date, Date) -> Void
@@ -1017,198 +1029,283 @@
     @Query private var tasks: [OneTask]
     @Query private var allAlarms: [OneAlarm]
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
+    @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday
       .rawValue
+    @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
+    /// Days from today of the first column.
     @State private var pos: Int? = 0
-    /// The hour at the top of the grid, shared by all pages so paging keeps your place.
+    @State private var scroll = DayScroll()
+    /// The hour at the top of the grid.
     @State private var topHour: Int? = 7
-    /// Points per hour; pinch the grid to change it (shared by all pages).
+    /// Points per hour; pinch the grid to change it.
     @State private var hourHeight: CGFloat = 48
+    /// The hour height when the current pinch started.
+    @State private var pinchStart: CGFloat?
+    @State private var pendingDelete: CalEntry?
+    private let gutter: CGFloat = 44
+    private let range = -800...800
     private var cal: Calendar {
       Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
     }
-    private var base: Date {
-      dayCount == 7
-        ? CalendarMath.weekStart(of: presentation.now, calendar: cal)
-        : cal.startOfDay(for: presentation.now)
-    }
-    private let range = -800...800
+    private var today: Date { cal.startOfDay(for: presentation.now) }
+    private var first: Int { pos ?? 0 }
+    private var alarms: [OneAlarm] { showsAlarms ? allAlarms : [] }
 
-    private func weekStart(_ offset: Int) -> Date {
-      cal.date(byAdding: .day, value: offset * dayCount, to: base) ?? base
+    private func date(_ offset: Int) -> Date {
+      cal.date(byAdding: .day, value: offset, to: today) ?? today
     }
     private func offset(of date: Date) -> Int {
-      let start =
-        dayCount == 7 ? CalendarMath.weekStart(of: date, calendar: cal) : cal.startOfDay(for: date)
-      let days = cal.dateComponents([.day], from: base, to: start).day ?? 0
-      return Int((Double(days) / Double(dayCount)).rounded(.down))
+      cal.dateComponents([.day], from: today, to: cal.startOfDay(for: date)).day ?? 0
     }
 
     var body: some View {
+      // The all-day items around the visible days, read once per day moved, not per frame of the swipe.
+      let near = DateInterval(start: date(first - 2), end: date(first + Self.columns + 2))
+      let allDay = CalendarEntries.make(
+        in: near, events: events, tasks: tasks, alarms: alarms, calendarService: calendar,
+        now: presentation.now, calendar: cal
+      ).filter(\.isAllDay)
       VStack(spacing: 0) {
-        ScrollView(.horizontal, showsIndicators: false) {
-          LazyHStack(spacing: 0) {
-            ForEach(range, id: \.self) { o in
-              WeekPage(
-                calendar: calendar, weekStart: weekStart(o), dayCount: dayCount, selected: day,
-                events: events, tasks: tasks,
-                alarms: showsAlarms ? allAlarms : [], topHour: $topHour, hourHeight: $hourHeight,
-                open: open, edit: edit, create: create, openDay: openDay
-              )
-              .containerRelativeFrame([.horizontal, .vertical])
-              .id(o)
-            }
-          }
-          .scrollTargetLayout()
+        HStack(spacing: 0) {
+          weekNumber
+          DayStrip(scroll: scroll) { header(date($0)) }
         }
-        .scrollTargetBehavior(.paging)
-        .scrollPosition(id: $pos)
+        .frame(height: 52)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        AllDayRow(
+          scroll: scroll, items: allDay, today: today, gutter: gutter, calendar: calendar,
+          pendingDelete: $pendingDelete, open: open, edit: edit)
+        Rectangle().fill(Color(.separator)).frame(height: 0.5)
+        grid
       }
+      .entryDeleteDialog($pendingDelete)
       .onChange(of: day) { _, new in
         let target = offset(of: new)
         if target != pos { withAnimation(.snappy) { pos = target } }
       }
       .onChange(of: pos) { _, new in
         guard let new, offset(of: day) != new else { return }
-        // Keep the same weekday in the new week.
-        let shift = new - offset(of: day)
-        day = cal.date(byAdding: .day, value: shift * dayCount, to: day) ?? day
+        day = date(new)
       }
-      .onChange(of: weekTitle, initial: true) { _, new in title = new }
-      // A new first day of the week moves every page: stay on the week that holds the selected day.
-      .onChange(of: firstWeekday) { _, _ in pos = offset(of: day) }
-      .onAppear { pos = offset(of: day) }
-    }
-
-    private var weekTitle: String {
-      weekStart(pos ?? 0).addingTimeInterval(Double(dayCount / 2) * 86400).plannerFormatted(
-        .dateTime.month(.wide), runtime: presentation.runtime)
-    }
-  }
-
-  private struct WeekPage: View {
-    let calendar: any CalendarService
-    @Environment(PlannerPresentation.self) private var presentation
-    @Environment(\.colorScheme) private var colorScheme
-    let weekStart: Date
-    let dayCount: Int
-    let selected: Date
-    let events: [OneEvent]
-    let tasks: [OneTask]
-    let alarms: [OneAlarm]
-    @Binding var topHour: Int?
-    @Binding var hourHeight: CGFloat
-    var open: (CalEntry) -> Void
-    var edit: (CalEntry) -> Void
-    var create: (Date, Date) -> Void
-    var openDay: (Date) -> Void
-    @State private var pendingDelete: CalEntry?
-    /// The new event being placed by a long-press on an empty slot: day column and start minute.
-    @State private var draft: Slot?
-    /// The hour height when the current pinch started.
-    @State private var pinchStart: CGFloat?
-    private let gutter: CGFloat = 44
-    private var cal: Calendar {
-      Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
-    }
-    @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
-    @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday
-      .rawValue
-    @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
-
-    var body: some View {
-      let days = (0..<dayCount).compactMap { cal.date(byAdding: .day, value: $0, to: weekStart) }
-      let interval = DateInterval(
-        start: weekStart, end: cal.date(byAdding: .day, value: dayCount, to: weekStart) ?? weekStart
-      )
-      let entries = CalendarEntries.make(
-        in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar,
-        now: presentation.now, calendar: cal)
-      VStack(spacing: 0) {
-        header(days)
-        allDayStrip(days, entries.filter(\.isAllDay))
-        Rectangle().fill(Color(.separator)).frame(height: 0.5)
-        // Alarms have no duration and never move; timed blocks yield to their narrow lane.
-        grid(days, entries.filter { !$0.isAllDay && !$0.isAlarm }, entries.filter(\.isAlarm))
+      .onChange(of: daysTitle, initial: true) { _, new in title = new }
+      .onAppear {
+        pos = offset(of: day)
+        scroll.columns = CGFloat(offset(of: day))
       }
-      .entryDeleteDialog($pendingDelete)
+    }
+
+    /// "October", or "Oct – Nov" when the three days cross into the next month.
+    private var daysTitle: String {
+      let start = date(first)
+      let end = date(first + Self.columns - 1)
+      if cal.isDate(start, equalTo: end, toGranularity: .month) {
+        return start.plannerFormatted(.dateTime.month(.wide), runtime: presentation.runtime)
+      }
+      let months = [start, end].map {
+        $0.plannerFormatted(.dateTime.month(.abbreviated), runtime: presentation.runtime)
+      }
+      return months.joined(separator: " – ")
     }
 
     // MARK: Header
 
-    private func header(_ days: [Date]) -> some View {
-      let letters = CalendarMath.weekdayLetters(calendar: cal)
-      return HStack(spacing: 0) {
-        // Settings > Calendar > "Show week numbers": "W42" over the hour labels (a 7-day week only).
-        let showsNumber = showsWeekNumbers && dayCount == 7
-        Text(showsNumber ? "W\(CalendarMath.weekNumber(of: weekStart, calendar: cal))" : "")
-          .font(.system(size: 10, weight: .medium).monospacedDigit())
-          .foregroundStyle(.secondary)
-          .frame(width: gutter)
-          .accessibilityLabel("Week \(CalendarMath.weekNumber(of: weekStart, calendar: cal))")
-          .accessibilityHidden(!showsNumber)
-          .accessibilityIdentifier("calendar.weekNumber")
-        ForEach(Array(days.enumerated()), id: \.offset) { i, d in
-          let isToday = cal.isDate(d, inSameDayAs: presentation.now)
-          let isSelected = cal.isDate(d, inSameDayAs: selected)
-          let past = dimsPast && d < cal.startOfDay(for: presentation.now)
-          Button {
-            openDay(d)
-          } label: {
-            VStack(spacing: 2) {
-              Text(
-                dayCount == 7
-                  ? letters[i]
-                  : d.plannerFormatted(
-                    .dateTime.weekday(.abbreviated), runtime: presentation.runtime)
-              )
-              .font(.system(size: 11, weight: .semibold))
-              Text("\(cal.component(.day, from: d))")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(
-                  isToday
-                    ? Color.red.contrastForeground(for: colorScheme)
-                    : (isSelected
-                      ? Color(.systemBackground)
-                      : (past ? Color(.tertiaryLabel) : Color(.label)))
-                )
-                .frame(width: 29, height: 29)
-                .background(
-                  isToday ? Color.red : (isSelected ? Color(.label) : Color.clear), in: Circle())
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel(
-            d.plannerFormatted(date: .complete, time: .omitted, runtime: presentation.runtime)
-          )
-          .accessibilityHint("Opens the day")
-          .accessibilityAddTraits(isSelected ? .isSelected : [])
-        }
-        Color.clear.frame(width: 8, height: 1)
-      }
-      .padding(.vertical, 4)
-      .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    /// Settings > Calendar > "Show week numbers": "W43", the week of the first column, over the hour labels.
+    private var weekNumber: some View {
+      let number = CalendarMath.weekNumber(of: date(first), calendar: cal)
+      return Text(showsWeekNumbers ? "W\(number)" : "")
+        .font(.system(size: 10, weight: .medium).monospacedDigit())
+        .foregroundStyle(.secondary)
+        .frame(width: gutter)
+        .accessibilityLabel("Week \(number)")
+        .accessibilityHidden(!showsWeekNumbers)
+        .accessibilityIdentifier("calendar.weekNumber")
     }
 
-    // MARK: All-day strip
-
-    @ViewBuilder
-    private func allDayStrip(_ days: [Date], _ items: [CalEntry]) -> some View {
-      if !items.isEmpty {
-        let spans: [(start: Int, end: Int)] = items.map { e in
-          let first =
-            cal.dateComponents([.day], from: weekStart, to: cal.startOfDay(for: e.start)).day ?? 0
-          let last =
-            (cal.dateComponents(
-              [.day], from: weekStart, to: cal.startOfDay(for: e.end.addingTimeInterval(-1))
-            ).day ?? 0)
-          return (max(0, first), min(dayCount - 1, max(first, last)))
+    /// Weekday letter over the date; today in a red circle, days that are over dimmed. Tap opens the day in Today.
+    private func header(_ d: Date) -> some View {
+      let isToday = cal.isDate(d, inSameDayAs: presentation.now)
+      let past = dimsPast && d < today
+      let letter = cal.veryShortStandaloneWeekdaySymbols[cal.component(.weekday, from: d) - 1]
+      return Button {
+        openDay(d)
+      } label: {
+        VStack(spacing: 2) {
+          Text(letter)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(past ? Color(.tertiaryLabel) : Color(.label))
+          Text("\(cal.component(.day, from: d))")
+            .font(.system(size: 17, weight: .medium))
+            .foregroundStyle(
+              isToday
+                ? Color.red.contrastForeground(for: colorScheme)
+                : (past ? Color(.tertiaryLabel) : Color(.label))
+            )
+            .frame(width: 29, height: 29)
+            .background(isToday ? Color.red : Color.clear, in: Circle())
         }
-        let lanes = CalendarLayout.lanes(for: spans)
-        let laneCount = min((lanes.max() ?? 0) + 1, 4)
-        let rowHeight: CGFloat = 21
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(
+        d.plannerFormatted(date: .complete, time: .omitted, runtime: presentation.runtime)
+      )
+      .accessibilityHint("Opens the day")
+    }
+
+    // MARK: Time grid
+
+    /// Hour labels stay put on the left; the day columns scroll sideways and snap to a day, one day per swipe.
+    private var grid: some View {
+      ScrollView {
+        HStack(alignment: .top, spacing: 0) {
+          hourLabels
+          ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 0) {
+              ForEach(range, id: \.self) { o in
+                DayColumn(
+                  calendar: calendar, day: date(o), fromToday: o, events: events, tasks: tasks,
+                  alarms: alarms, hourHeight: hourHeight, pendingDelete: $pendingDelete,
+                  open: open, edit: edit, create: create
+                )
+                .containerRelativeFrame(.horizontal, count: Self.columns, span: 1, spacing: 0)
+                .id(o)
+              }
+            }
+            .scrollTargetLayout()
+          }
+          .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
+          .scrollPosition(id: $pos, anchor: .leading)
+          .onScrollGeometryChange(for: CGFloat.self) { geo in
+            let column = geo.containerSize.width / CGFloat(Self.columns)
+            return column > 0 ? geo.contentOffset.x / column : 0
+          } action: { _, x in
+            scroll.columns = CGFloat(range.lowerBound) + x
+          }
+          .frame(height: 24 * hourHeight)
+        }
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+      }
+      .scrollPosition(id: $topHour, anchor: .top)
+      .scrollIndicators(.hidden)
+      // Two fingers zoom the hours; one finger still scrolls, swipes days, taps and long-presses.
+      .simultaneousGesture(
+        MagnifyGesture(minimumScaleDelta: 0.02)
+          .onChanged { value in
+            let start = pinchStart ?? hourHeight
+            pinchStart = start
+            hourHeight = CGFloat(
+              CalendarLayout.zoomedHourHeight(Double(start), scale: Double(value.magnification)))
+          }
+          .onEnded { _ in pinchStart = nil }
+      )
+      .accessibilityIdentifier("calendar.dayGrid")
+    }
+
+    private var hourLabels: some View {
+      VStack(spacing: 0) {
+        ForEach(0..<24, id: \.self) { h in
+          Text(hourLabel(h))
+            .font(.system(size: 10).monospacedDigit())
+            .foregroundStyle(.secondary)
+            .frame(width: gutter - 4, alignment: .trailing)
+            .offset(y: -6)
+            .frame(width: gutter, height: hourHeight, alignment: .topLeading)
+            .id(h)
+        }
+      }
+      .scrollTargetLayout()
+      .accessibilityHidden(true)
+      .overlay(alignment: .topLeading) {
+        // The time, over the hour labels, while today is one of the three columns.
+        if (1 - Self.columns...0).contains(first) {
+          TimelineView(.everyMinute) { _ in nowLabel }
+        }
+      }
+    }
+
+    private var nowLabel: some View {
+      let c = cal.dateComponents([.hour, .minute], from: presentation.now)
+      let y = CGFloat((c.hour ?? 0) * 60 + (c.minute ?? 0)) / 60 * hourHeight
+      return Text(
+        presentation.now.plannerFormatted(
+          date: .omitted, time: .shortened, runtime: presentation.runtime)
+      )
+      .font(.system(size: 10, weight: .semibold).monospacedDigit())
+      .foregroundStyle(Color.red.contrastForeground(for: colorScheme))
+      .padding(.horizontal, 4)
+      .frame(height: 16)
+      .background(Color.red, in: Capsule())
+      .fixedSize()
+      .frame(width: gutter, alignment: .trailing)
+      .offset(y: y - 8)
+      .accessibilityHidden(true)
+      .allowsHitTesting(false)
+    }
+
+    private func hourLabel(_ h: Int) -> String {
+      h == 0
+        ? ""
+        : (cal.date(bySettingHour: h, minute: 0, second: 0, of: presentation.now)
+          ?? presentation.now)
+          .plannerFormatted(
+            .dateTime.hour(.defaultDigits(amPM: .abbreviated)), runtime: presentation.runtime)
+    }
+  }
+
+  /// Day cells that follow the 3 Day grid's sideways scroll: the visible days and one on either side, clipped.
+  private struct DayStrip<Cell: View>: View {
+    let scroll: DayScroll
+    let cell: (Int) -> Cell
+
+    var body: some View {
+      GeometryReader { geo in
+        let width = geo.size.width / CGFloat(ThreeDayView.columns)
+        let at = scroll.columns
+        let first = Int(at.rounded(.down))
+        ForEach(first - 1...first + ThreeDayView.columns, id: \.self) { o in
+          cell(o)
+            .frame(width: width, height: geo.size.height)
+            .offset(x: (CGFloat(o) - at) * width)
+        }
+      }
+      .clipped()
+    }
+  }
+
+  /// The 3 Day all-day row: banners across the days they cover, following the grid's sideways scroll.
+  private struct AllDayRow: View {
+    let scroll: DayScroll
+    /// All-day items of the days around the visible ones.
+    let items: [CalEntry]
+    let today: Date
+    let gutter: CGFloat
+    let calendar: any CalendarService
+    @Binding var pendingDelete: CalEntry?
+    var open: (CalEntry) -> Void
+    var edit: (CalEntry) -> Void
+    @Environment(PlannerPresentation.self) private var presentation
+    private let rowHeight: CGFloat = 21
+    private var cal: Calendar {
+      Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
+    }
+
+    var body: some View {
+      // Days from today, inclusive. Lanes are laid out over all the nearby days, so the row keeps its height mid-swipe.
+      let spans: [(start: Int, end: Int)] = items.map { e in
+        let first =
+          cal.dateComponents([.day], from: today, to: cal.startOfDay(for: e.start)).day ?? 0
+        let last =
+          cal.dateComponents(
+            [.day], from: today, to: cal.startOfDay(for: e.end.addingTimeInterval(-1))
+          ).day ?? 0
+        return (first, max(first, last))
+      }
+      let lanes = CalendarLayout.lanes(for: spans)
+      let laneCount = min((lanes.max() ?? 0) + 1, 4)
+      if !items.isEmpty {
         HStack(alignment: .top, spacing: 0) {
           Text("all-day")
             .font(.system(size: 10))
@@ -1216,7 +1313,8 @@
             .frame(width: gutter - 4, height: rowHeight, alignment: .trailing)
             .padding(.trailing, 4)
           GeometryReader { geo in
-            let colW = (geo.size.width - 8) / CGFloat(dayCount)
+            let colW = geo.size.width / CGFloat(ThreeDayView.columns)
+            let at = scroll.columns
             ForEach(Array(items.enumerated()), id: \.offset) { i, e in
               if lanes[i] < laneCount {
                 Text(e.title)
@@ -1229,7 +1327,8 @@
                     height: rowHeight - 2, alignment: .leading
                   )
                   .background(EventTint.fill(e.color), in: RoundedRectangle(cornerRadius: 5))
-                  .offset(x: CGFloat(spans[i].start) * colW + 1, y: CGFloat(lanes[i]) * rowHeight)
+                  .offset(
+                    x: (CGFloat(spans[i].start) - at) * colW + 1, y: CGFloat(lanes[i]) * rowHeight)
                   .onTapGesture { open(e) }
                   .entryActions(
                     e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false,
@@ -1242,121 +1341,116 @@
             }
           }
           .frame(height: CGFloat(laneCount) * rowHeight)
+          .clipped()
         }
         .padding(.bottom, 4)
       }
     }
+  }
 
-    // MARK: Time grid
-
-    private func grid(_ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry]) -> some View {
-      ScrollViewReader { proxy in
-        gridContent(days, timed, alarms)
-          .onAppear { proxy.scrollTo(topHour ?? 7, anchor: .top) }
-      }
+  /// One day of the 3 Day grid: hour lines, timed blocks side by side where they overlap, alarm markers, the now line,
+  /// and a long-press on empty space that places a new event.
+  private struct DayColumn: View {
+    let calendar: any CalendarService
+    @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
+    /// Start of the day.
+    let day: Date
+    /// Days from today: 0 is today.
+    let fromToday: Int
+    let events: [OneEvent]
+    let tasks: [OneTask]
+    let alarms: [OneAlarm]
+    let hourHeight: CGFloat
+    @Binding var pendingDelete: CalEntry?
+    var open: (CalEntry) -> Void
+    var edit: (CalEntry) -> Void
+    var create: (Date, Date) -> Void
+    /// The start minute of the new event being placed by a long-press.
+    @State private var draft: Int?
+    @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
+    private var cal: Calendar {
+      Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
     }
 
-    private func gridContent(_ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry]) -> some View
-    {
-      ScrollView {
+    var body: some View {
+      let interval =
+        cal.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 86400)
+      let entries = CalendarEntries.make(
+        in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar,
+        now: presentation.now, calendar: cal)
+      let placed = place(entries.filter { !$0.isAllDay && !$0.isAlarm }, in: interval)
+      // Alarms have no duration and never move; timed blocks yield to their narrow lane.
+      let markers = placeAlarms(entries.filter(\.isAlarm), in: interval)
+      let past = dimsPast && fromToday < 0
+      GeometryReader { geo in
+        let width = geo.size.width
+        let lanes = CalendarLayout.timedLanes(
+          columnWidth: Double(width), hasAlarms: !markers.isEmpty)
+        let rects: [CGRect] =
+          placed.map { p in
+            let span = lanes.block(column: p.column, count: p.count)
+            return CGRect(
+              x: CGFloat(span.x), y: p.y(hourHeight), width: CGFloat(span.width),
+              height: max(18, p.height(hourHeight)))
+          }
+          + markers.map { m in
+            CGRect(
+              x: CGFloat(lanes.alarmX), y: m.y, width: CGFloat(lanes.alarmWidth),
+              height: Self.markerHeight)
+          }
         ZStack(alignment: .topLeading) {
-          VStack(spacing: 0) {
-            ForEach(0..<24, id: \.self) { h in
-              HStack(alignment: .top, spacing: 4) {
-                Text(hourLabel(h))
-                  .font(.system(size: 10).monospacedDigit())
-                  .foregroundStyle(.secondary)
-                  .frame(width: gutter - 4, alignment: .trailing)
-                  .offset(y: -6)
-                Rectangle().fill(Color(.separator)).frame(height: 0.5)
-              }
-              .frame(height: hourHeight, alignment: .top)
-              .id(h)
-            }
+          hourLines
+          // Bottom layer: long-press an empty slot to make an event there. Blocks above keep their own taps and menus.
+          pressLayer(rects, width: width)
+          ForEach(placed, id: \.entry.id) { p in
+            let span = lanes.block(column: p.column, count: p.count)
+            block(
+              p.entry, width: CGFloat(span.width), height: max(18, p.height(hourHeight)),
+              lines: p.titleLines
+            )
+            .opacity(past ? DayTint.past : 1)
+            .offset(x: CGFloat(span.x), y: p.y(hourHeight))
           }
-          .scrollTargetLayout()
-          .accessibilityHidden(true)
-
-          GeometryReader { geo in
-            let colW = (geo.size.width - gutter - 8) / CGFloat(dayCount)
-            // Bottom layer: long-press an empty slot to make an event there. Blocks above keep their own taps and menus.
-            pressLayer(days, timed, alarms, colW: colW)
-            ForEach(Array(days.enumerated()), id: \.offset) { index, d in
-              let x = gutter + CGFloat(index) * colW
-              let placed = place(timed, on: d)
-              let markers = placeAlarms(alarms, on: d)
-              let lanes = CalendarLayout.timedLanes(
-                columnWidth: Double(colW), hasAlarms: !markers.isEmpty)
-              let past = dimsPast && d < cal.startOfDay(for: presentation.now)
-              ForEach(placed, id: \.entry.id) { p in
-                let span = lanes.block(column: p.column, count: p.count)
-                block(
-                  p.entry, colW: colW, width: CGFloat(span.width),
-                  height: max(18, p.height(hourHeight)), lines: p.titleLines
-                )
-                .opacity(past ? DayTint.past : 1)
-                .offset(x: x + CGFloat(span.x), y: p.y(hourHeight))
-              }
-              // Beside the blocks: a thin marker at the alarm's time (no duration).
-              ForEach(markers, id: \.entry.id) { m in
-                alarmMarker(m.entry)
-                  .opacity(past ? DayTint.past : 1)
-                  .frame(width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
-                  .offset(x: x + CGFloat(lanes.alarmX), y: m.y)
-              }
-            }
-            if days.contains(where: { cal.isDate($0, inSameDayAs: presentation.now) }) {
-              TimelineView(.everyMinute) { _ in
-                nowLine(presentation.now, days: days, colW: colW)
-              }
-            }
-            if let draft, draft.day < days.count {
-              draftBlock(draft, on: days[draft.day], colW: colW)
-            }
+          // Beside the blocks: a thin marker at the alarm's time (no duration).
+          ForEach(markers, id: \.entry.id) { m in
+            alarmMarker(m.entry)
+              .opacity(past ? DayTint.past : 1)
+              .frame(width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
+              .offset(x: CGFloat(lanes.alarmX), y: m.y)
           }
-
+          // The now line: strong on today, faint across the other days on screen with it.
+          if abs(fromToday) < ThreeDayView.columns {
+            TimelineView(.everyMinute) { _ in nowLine(strong: fromToday == 0) }
+          }
+          if let draft { draftBlock(draft, width: width) }
         }
-        .padding(.top, 10)
-        .padding(.bottom, 12)
+        .frame(width: width, height: 24 * hourHeight, alignment: .topLeading)
       }
-      .scrollPosition(id: $topHour, anchor: .top)
-      .scrollIndicators(.hidden)
-      // Two fingers zoom the hours; one finger still scrolls, pages, taps, long-presses and drags tasks.
-      .simultaneousGesture(
-        MagnifyGesture(minimumScaleDelta: 0.02)
-          .onChanged { value in
-            let start = pinchStart ?? hourHeight
-            pinchStart = start
-            hourHeight = CGFloat(
-              CalendarLayout.zoomedHourHeight(Double(start), scale: Double(value.magnification)))
-          }
-          .onEnded { _ in pinchStart = nil }
-      )
-      .accessibilityIdentifier("calendar.weekGrid")
+      .frame(height: 24 * hourHeight)
     }
 
-    private func nowLine(_ now: Date, days: [Date], colW: CGFloat) -> some View {
-      let y = minutes(now) / 60 * hourHeight
-      let index = days.firstIndex(where: { cal.isDate($0, inSameDayAs: presentation.now) }) ?? 0
-      return ZStack(alignment: .topLeading) {
-        Rectangle().fill(Color.red.opacity(0.35)).frame(
-          width: colW * CGFloat(days.count), height: 1
-        )
-        .offset(x: gutter, y: y)
-        Rectangle().fill(Color.red).frame(width: colW, height: 1.5)
-          .offset(x: gutter + CGFloat(index) * colW, y: y - 0.5)
-        Text(now.plannerFormatted(date: .omitted, time: .shortened, runtime: presentation.runtime))
-          .font(.system(size: 10, weight: .semibold).monospacedDigit())
-          .foregroundStyle(Color.red.contrastForeground(for: colorScheme))
-          .padding(.horizontal, 4)
-          .frame(height: 16)
-          .background(Color.red, in: Capsule())
-          .fixedSize()
-          .frame(width: gutter, alignment: .trailing)
-          .offset(x: 0, y: y - 8)
+    private var hourLines: some View {
+      VStack(spacing: 0) {
+        ForEach(0..<24, id: \.self) { _ in
+          Rectangle().fill(Color(.separator)).frame(height: 0.5)
+            .frame(height: hourHeight, alignment: .top)
+        }
       }
+      .overlay(alignment: .leading) { Rectangle().fill(Color(.separator)).frame(width: 0.5) }
       .accessibilityHidden(true)
       .allowsHitTesting(false)
+    }
+
+    private func nowLine(strong: Bool) -> some View {
+      let c = cal.dateComponents([.hour, .minute], from: presentation.now)
+      let y = CGFloat((c.hour ?? 0) * 60 + (c.minute ?? 0)) / 60 * hourHeight
+      return Rectangle()
+        .fill(strong ? Color.red : Color.red.opacity(0.35))
+        .frame(height: strong ? 1.5 : 1)
+        .offset(y: strong ? y - 0.5 : y)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 
     struct Placed {
@@ -1371,9 +1465,8 @@
       var titleLines: Int { lengthMinutes >= 45 ? 3 : 1 }
     }
 
-    /// Timed entries on `d`, clipped to the day, side by side where they overlap.
-    private func place(_ timed: [CalEntry], on d: Date) -> [Placed] {
-      guard let interval = cal.dateInterval(of: .day, for: d) else { return [] }
+    /// Timed entries on the day, clipped to it, side by side where they overlap.
+    private func place(_ timed: [CalEntry], in interval: DateInterval) -> [Placed] {
       let items = timed.filter {
         $0.start < interval.end && max($0.end, $0.start.addingTimeInterval(900)) > interval.start
       }
@@ -1399,9 +1492,8 @@
       let y: CGFloat
     }
 
-    /// The alarms ringing on `d`, each at its time; a marker that would cover the one above it moves down just enough to stay readable.
-    private func placeAlarms(_ alarms: [CalEntry], on d: Date) -> [Marker] {
-      guard let interval = cal.dateInterval(of: .day, for: d) else { return [] }
+    /// The alarms ringing on the day, each at its time; a marker that would cover the one above it moves down just enough to stay readable.
+    private func placeAlarms(_ alarms: [CalEntry], in interval: DateInterval) -> [Marker] {
       var lastY = -CGFloat.infinity
       return alarms.filter { interval.contains($0.start) }.sorted { $0.start < $1.start }.map { e in
         let y = max(
@@ -1413,7 +1505,7 @@
     }
 
     /// An alarm on the grid: a thin accent line and bell, with a label when it fits. Tap opens the alarm editor;
-    /// it has no duration and no drag (only flexible tasks move).
+    /// it has no duration and no drag.
     private func alarmMarker(_ e: CalEntry) -> some View {
       ViewThatFits(in: .horizontal) {
         HStack(spacing: 2) {
@@ -1441,9 +1533,7 @@
     }
 
     @ViewBuilder
-    private func block(_ e: CalEntry, colW: CGFloat, width: CGFloat, height: CGFloat, lines: Int)
-      -> some View
-    {
+    private func block(_ e: CalEntry, width: CGFloat, height: CGFloat, lines: Int) -> some View {
       if case .task = e.source {
         Group {
           Text(e.title)
@@ -1492,61 +1582,30 @@
       }
     }
 
-    struct Slot: Equatable {
-      let day: Int
-      let minute: Int
-    }
-
-    /// Where the timed blocks are drawn (the same layout as the grid's `ForEach`).
-    private func blockRects(
-      _ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry], colW: CGFloat
-    ) -> [CGRect] {
-      days.enumerated().flatMap { index, d in
-        let markers = placeAlarms(alarms, on: d)
-        let lanes = CalendarLayout.timedLanes(
-          columnWidth: Double(colW), hasAlarms: !markers.isEmpty)
-        return place(timed, on: d).map { p in
-          let span = lanes.block(column: p.column, count: p.count)
-          return CGRect(
-            x: gutter + CGFloat(index) * colW + CGFloat(span.x), y: p.y(hourHeight),
-            width: CGFloat(span.width), height: max(18, p.height(hourHeight)))
-        }
-          + markers.map { m in
-            CGRect(
-              x: gutter + CGFloat(index) * colW + CGFloat(lanes.alarmX), y: m.y,
-              width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
-          }
-      }
-    }
-
     /// Long-press an empty slot: a one-hour placeholder appears there (snapped to 15 minutes) and follows the finger;
-    /// releasing opens the new-event editor for that time. Like Apple Calendar's Week and Day views. The same gesture shape
-    /// A UIKit long-press (see `SlotPressView`): moving before it is recognized fails it, so scrolling and week paging are
-    /// untouched; once it is recognized, the scroll views don't take the finger.
-    private func pressLayer(
-      _ days: [Date], _ timed: [CalEntry], _ alarms: [CalEntry], colW: CGFloat
-    ) -> some View {
-      let blocks = blockRects(days, timed, alarms, colW: colW)
+    /// releasing opens the new-event editor for that time, like Apple Calendar's day grids. A UIKit long-press (see
+    /// `SlotPressView`): moving before it is recognized fails it, so scrolling and day swipes are untouched; once it is
+    /// recognized, the scroll views don't take the finger.
+    private func pressLayer(_ blocks: [CGRect], width: CGFloat) -> some View {
+      func minute(_ point: CGPoint) -> Int {
+        CalendarLayout.slot(
+          x: point.x, y: point.y, gutter: 0, columnWidth: width, hourHeight: hourHeight,
+          dayCount: 1
+        ).minute
+      }
       return SlotPressView { point in
-        // A press on an event or task is theirs (menu, or drag the task); only empty space makes an event.
+        // A press on an event or alarm is theirs (its menu); only empty space makes an event.
         !blocks.contains { $0.contains(point) }
       } changed: { point in
-        let s = CalendarLayout.slot(
-          x: point.x, y: point.y, gutter: gutter, columnWidth: colW,
-          hourHeight: hourHeight, dayCount: dayCount)
-        draft = Slot(day: s.day, minute: s.minute)
+        draft = minute(point)
       } ended: { point in
         draft = nil
-        guard let point else { return }
-        let s = CalendarLayout.slot(
-          x: point.x, y: point.y, gutter: gutter, columnWidth: colW,
-          hourHeight: hourHeight, dayCount: dayCount)
-        guard s.day < days.count,
-          let start = cal.date(byAdding: .minute, value: s.minute, to: days[s.day])
+        guard let point, let start = cal.date(byAdding: .minute, value: minute(point), to: day)
         else { return }
         create(start, start.addingTimeInterval(3600))
       }
-      .sensoryFeedback(trigger: draft) { (old: Slot?, new: Slot?) -> SensoryFeedback? in
+      .frame(width: width, height: 24 * hourHeight)
+      .sensoryFeedback(trigger: draft) { (old: Int?, new: Int?) -> SensoryFeedback? in
         // A thump when the placeholder appears, a tick each time it moves to another slot.
         guard new != nil else { return nil }
         return old == nil ? .impact(weight: .medium) : .selection
@@ -1554,8 +1613,8 @@
     }
 
     /// The placeholder under the finger while a new event is placed, like Apple's "New Event" block.
-    private func draftBlock(_ slot: Slot, on day: Date, colW: CGFloat) -> some View {
-      let start = cal.date(byAdding: .minute, value: slot.minute, to: day) ?? day
+    private func draftBlock(_ minute: Int, width: CGFloat) -> some View {
+      let start = cal.date(byAdding: .minute, value: minute, to: day) ?? day
       return VStack(alignment: .leading, spacing: 0) {
         Text("New Event").font(.system(size: 10, weight: .semibold))
         Text(
@@ -1567,30 +1626,16 @@
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))
       .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-      .frame(width: colW - 2, height: hourHeight - 1)
-      .offset(x: gutter + CGFloat(slot.day) * colW + 1, y: CGFloat(slot.minute) / 60 * hourHeight)
+      .frame(width: width - 2, height: hourHeight - 1)
+      .offset(x: 1, y: CGFloat(minute) / 60 * hourHeight)
       .allowsHitTesting(false)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("New Event, \(plannerDayLabel(start, runtime: presentation.runtime))")
       .accessibilityIdentifier("calendar.newEventDraft")
     }
-
-    private func minutes(_ date: Date) -> CGFloat {
-      let c = cal.dateComponents([.hour, .minute], from: date)
-      return CGFloat((c.hour ?? 0) * 60 + (c.minute ?? 0))
-    }
-
-    private func hourLabel(_ h: Int) -> String {
-      h == 0
-        ? ""
-        : (cal.date(bySettingHour: h, minute: 0, second: 0, of: presentation.now)
-          ?? presentation.now)
-          .plannerFormatted(
-            .dateTime.hour(.defaultDigits(amPM: .abbreviated)), runtime: presentation.runtime)
-    }
   }
 
-  /// The Week grid's empty space, as a UIKit view with a long-press recognizer. SwiftUI gestures that track a drag (a
+  /// The 3 Day grid's empty space, as a UIKit view with a long-press recognizer. SwiftUI gestures that track a drag (a
   /// long-press sequenced with a drag), attached to the grid's content, kept the grid from scrolling at all; a UIKit
   /// long-press on a view inside the scroll view behaves like Apple Calendar's: a swipe scrolls, a still press and drag places.
   /// `changed` gets the point (in this view, which fills the grid) from the moment the press is recognized; `ended` gets
@@ -1648,7 +1693,7 @@
     }
   }
 
-  /// Quiet cues on the Week and Month grids: days that are over are dimmed (a Setting). Weekends look like any other day.
+  /// Quiet cues on the 3 Day and Month grids: days that are over are dimmed (a Setting). Weekends look like any other day.
   enum DayTint {
     /// Opacity of event blocks on days that are over.
     static let past = 0.55

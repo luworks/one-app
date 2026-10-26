@@ -40,7 +40,7 @@
         after: base, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? base
     }
 
-    /// `start` / `end`: a new event at a slot picked on the Week grid (instead of the default time on `day`).
+    /// `start` / `end`: a new event at a slot picked on the 3 Day grid (instead of the default time on `day`).
     package init(
       event: OneEvent? = nil, day: Date? = nil, start slotStart: Date? = nil,
       end slotEnd: Date? = nil,
