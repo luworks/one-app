@@ -40,7 +40,8 @@ final class MonthLabelTests: XCTestCase {
 
   func testDaysAcrossTwoYears() {
     XCTAssertEqual(label(date(2026, 12, 31), date(2027, 1, 2), .full), "Dec 2026 – Jan 2027")
-    XCTAssertEqual(label(date(2026, 12, 31), date(2027, 1, 2), .short), "Dec – Jan")
+    // The years differ, so the interval keeps them even in the short form.
+    XCTAssertEqual(label(date(2026, 12, 31), date(2027, 1, 2), .short), "Dec 2026 – Jan 2027")
   }
 
   func testOrderDoesNotMatter() {

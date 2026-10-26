@@ -2,7 +2,8 @@ import Foundation
 
 /// The top bar's quiet month label: the month (or months) the page shows, in the user's locale.
 /// Full: "October 2026"; "Oct – Nov 2026" when the days cross a month; "Dec 2026 – Jan 2027" across a year.
-/// Short, the fallback when the full one doesn't fit beside the tab pills: "Oct 2026"; "Oct – Nov"; "Dec – Jan".
+/// Short, the fallback when the full one doesn't fit beside the tab pills: "Oct 2026"; "Oct – Nov" (a span
+/// across years keeps its years).
 public enum MonthLabel {
   public enum Length: Sendable { case full, short }
 
