@@ -27,6 +27,8 @@
     func calendars() -> [SystemCalendar]
     func setVisibleCalendars(_ selected: Set<String>)
     func events(in interval: DateInterval, excluding: Set<String>) -> [ExternalEvent]
+    /// The same events, read off the main actor where the adapter can (a whole year for the Year view).
+    func loadEvents(in interval: DateInterval, excluding: Set<String>) async -> [ExternalEvent]
     func events(on day: Date, excluding: Set<String>) -> [ExternalEvent]
     func focusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution
     /// Display-only import snapshots. These never query EventKit and never authorize a write.
@@ -152,6 +154,11 @@
     }
     package func events(in interval: DateInterval) -> [ExternalEvent] {
       events(in: interval, excluding: [])
+    }
+    package func loadEvents(in interval: DateInterval, excluding: Set<String>) async
+      -> [ExternalEvent]
+    {
+      events(in: interval, excluding: excluding)
     }
     package func events(on day: Date) -> [ExternalEvent] { events(on: day, excluding: []) }
     package func save(_ event: OneEvent) -> String? { save(event, span: .futureEvents) }

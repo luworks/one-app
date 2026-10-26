@@ -90,10 +90,11 @@
     /// Everything overlapping `interval`, merged from the system calendar, Today's own events and timed reminders.
     /// Events hidden in the Calendars list are left out. Pass `alarms` (already empty when "Show alarms in the day" is off)
     /// to add their rings by the same rule as the Today timeline (see `CalendarAlarms`); reminders that ring as alarms stay reminders.
+    /// `systemEvents`: the system events already read for `interval` (excluding Today's own), instead of reading them here.
     package static func make(
       in interval: DateInterval, events: [OneEvent], tasks: [OneTask], alarms: [OneAlarm] = [],
       calendarService: any CalendarService, now: Date, calendar: Calendar,
-      forYearMarks: Bool = false
+      forYearMarks: Bool = false, systemEvents: [ExternalEvent]? = nil
     ) -> [CalEntry] {
       let sync = calendarService
       var result: [CalEntry] = []
@@ -125,7 +126,7 @@
       }
 
       // Every view preserves EventKit's exclusive all-day end.
-      for x in sync.events(in: interval, excluding: mirrors) {
+      for x in systemEvents ?? sync.events(in: interval, excluding: mirrors) {
         let end = CalendarEntryDates.systemEnd(
           x.end, isAllDay: x.isAllDay,
           forYearMarks: forYearMarks, calendar: calendar)
