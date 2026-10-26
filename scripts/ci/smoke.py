@@ -28,11 +28,12 @@ SCREENS = TEMP / 'screens'
 # launch/editor/tab/Chat journey and the Light/Dark dataset screenshots (uploaded to
 # smoke-screens-<sha>). Swift Testing identifiers keep their "()".
 TESTS = (
-    'TodayTests/PlannerSessionTests/populatedDayAgendaRenderUsesImportedSnapshotsWithoutNativeLookups()',
-    'TodayTests/PlannerSessionTests/importedFocusRenderingNeverOpensNativeStoreAndWritesStillRevalidate()',
-    'TodayTests/PlannerSessionTests/savedCalendarSnoozeHydratesOutsideOriginalDayAndRejectsStaleImports()',
-    'TodayUITests/TodayReminderCompletionTests/testPreconnectedImportedTimelineStaysResponsive',
-    'TodayUITests/SmokeScreenshotTests/testTabsAndChatInBothModes',
+    'TodayUITests/PerformanceClimbTests/testNavigationEndpointsAndKeptState',
+    'TodayUITests/CalendarTabTests/testYearViewOpensAMonth',
+    'TodayUITests/CalendarTabTests/testYearMarksHolidaysAndHasAKey',
+    'TodayUITests/CalendarTabTests/testYearDayOpensMonthWithChosenDateAndItsItems',
+    'TodayUITests/CalendarTabTests/testYearReadsTripDaysButLeavesLocalBirthdayInMonth',
+    'TodayUITests/SinglePresentationTests/testYearShowsBusyDays',
 )
 PRODUCTS = {'One.app': 'com.luworks.one',
             'One.app/PlugIns/TodayWidgets.appex': 'com.luworks.one.widgets',
