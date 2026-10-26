@@ -26,7 +26,7 @@ final class CalendarRecurringDeleteTests: XCTestCase {
       // A slow simulator can fail the relaunch ("Failed to terminate"); that is not the test's result.
       XCTExpectFailure("cleanup only", options: .nonStrict()) {
         let app = launch(["-debugDeleteSystemEvent", title])
-        _ = app.staticTexts["weekStrip.month"].waitForExistence(timeout: 10)
+        _ = app.weekStripDay(.now).waitForExistence(timeout: 10)
         sleep(2)
         app.terminate()
       }
@@ -212,7 +212,7 @@ final class CalendarRecurringDeleteTests: XCTestCase {
     app.terminate()
     app = launch(["-debugDeleteSystemEvent", title])
     app.buttons["Today"].firstMatch.tap()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 10), "Today loaded")
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 10), "Today loaded")
     sleep(2)
     XCTAssertFalse(isListedToday(app), "gone from Today")
   }

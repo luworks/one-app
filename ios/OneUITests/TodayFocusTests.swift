@@ -17,7 +17,7 @@ final class TodayFocusTests: XCTestCase {
       ]
     if let store { app.launchArguments += ["-uiTestingStore", store] }
     app.launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     return app
   }
 
@@ -171,14 +171,14 @@ final class TodayFocusTests: XCTestCase {
     }
     app.launchArguments = arguments("remove-returned-to-today.json", first)
     app.launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     act("Settle", on: "Old settled occurrence", in: app)
     act("Settle", on: "Old explicitly restored occurrence", in: app)
     restore("Old explicitly restored occurrence", section: "settled", in: app)
     app.terminate()
     app.launchArguments = arguments("empty-relaunch.json", second)
     app.launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     reveal(
       app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "New day meeting,"))
         .firstMatch, in: app)
@@ -228,7 +228,7 @@ final class TodayFocusTests: XCTestCase {
         "-uiTestingStore", store, "-uiTestingNow", "09:00", "-uiTestingKeepPreferences",
       ]
     app.launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     XCTAssertFalse(section("settled", in: app).exists)
     let row = app.staticTexts["Focus flexible"].firstMatch
     reveal(row, in: app)
@@ -247,7 +247,7 @@ final class TodayFocusTests: XCTestCase {
     app.launchArguments =
       TestData.fixtureArguments("today-focus.json") + ["-uiTestingNow", "09:00"]
     app.launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     let title = app.staticTexts["Focus invoice"].firstMatch
     reveal(title, in: app)
     title.press(forDuration: 1)

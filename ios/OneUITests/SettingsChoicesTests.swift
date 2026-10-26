@@ -314,7 +314,7 @@ final class SettingsChoicesTests: XCTestCase {
 
   func testShowTomorrowOffHidesTheSection() {
     launch(prefs: "showTomorrow=0", now: "09:41")
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     for _ in 0..<4 { app.swipeUp() }
     XCTAssertFalse(app.buttons["tomorrowHeader"].exists)
   }
@@ -328,7 +328,7 @@ final class SettingsChoicesTests: XCTestCase {
     openSettings()
     reveal(app.switches["Show free time"]).toggleSwitch()
     closeSettings()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     XCTAssertFalse(free.waitForExistence(timeout: 2), "no Free rows with the setting off")
   }
 

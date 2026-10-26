@@ -19,7 +19,7 @@ final class TodayDensityTests: XCTestCase {
         largeText ? "UICTContentSizeCategoryAccessibilityL" : "UICTContentSizeCategoryL",
       ]
     app.launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     XCTAssertTrue(app.buttons["health.summary"].waitForExistence(timeout: 5))
     return app
   }

@@ -467,7 +467,7 @@ final class HealthMetricsTests: XCTestCase {
 
   func testSettingsOpensTheSameSheet() {
     let app = launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     app.openSidebar()
     let settings = app.buttons["Settings"].firstMatch
     XCTAssertTrue(settings.waitForExistence(timeout: 5))

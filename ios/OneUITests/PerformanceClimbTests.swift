@@ -85,13 +85,13 @@ final class PerformanceClimbTests: XCTestCase {
       app.terminate()
       app.launch()
       let launch = sample("app_init_to_content_layout")
-      XCTAssertTrue(app.staticTexts["weekStrip.month"].exists)
+      XCTAssertTrue(app.weekStripDay(.now).exists)
       XCTAssertTrue(app.buttons["New"].isHittable)
       XCTAssertTrue(app.buttons["Ask AI or add anything"].isHittable)
       XCUIDevice.shared.press(.home)
       app.activate()
       sample("resume_to_content_layout", after: launch)
-      XCTAssertTrue(app.staticTexts["weekStrip.month"].exists)
+      XCTAssertTrue(app.weekStripDay(.now).exists)
       XCTAssertTrue(app.buttons["New"].isHittable)
     }
   }
@@ -142,7 +142,7 @@ final class PerformanceClimbTests: XCTestCase {
         ready: element("calendar.dayGrid"))
       tap("Reminders", sample: "calendar.threeday_to_tasks", ready: element("list.Work"))
       tap("Clock", sample: "tasks_to_clock", ready: app.buttons["World Clock"])
-      tap("Today", sample: "clock_to_today", ready: app.staticTexts["weekStrip.month"])
+      tap("Today", sample: "clock_to_today", ready: app.weekStripDay(.now))
     }
     app.buttons["Reminders"].firstMatch.tap()
     let home = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Home, '")).firstMatch
@@ -172,7 +172,7 @@ final class PerformanceClimbTests: XCTestCase {
       XCTAssertTrue(app.buttons["Calendar"].firstMatch.isSelected)
       XCTAssertTrue(app.buttons["calendar.mode.threeday"].isSelected)
       if visit == 0 { captureNavigation("week-light") }
-      tap("Today", sample: "calendar.threeday_to_today", ready: app.staticTexts["weekStrip.month"])
+      tap("Today", sample: "calendar.threeday_to_today", ready: app.weekStripDay(.now))
       XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
     }
   }
@@ -204,7 +204,7 @@ final class PerformanceClimbTests: XCTestCase {
       "calendar.mode.month", sample: "calendar.threeday_to_calendar.month",
       ready: element("calendar.monthPager"))
     for _ in 0..<3 {
-      tap("Today", sample: "calendar.month_to_today", ready: app.staticTexts["weekStrip.month"])
+      tap("Today", sample: "calendar.month_to_today", ready: app.weekStripDay(.now))
       // Repeated taps on the selected destination must not toggle it or schedule a later switch.
       app.buttons["Today"].firstMatch.doubleTap()
       XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
@@ -250,7 +250,7 @@ final class PerformanceClimbTests: XCTestCase {
       tap("Calendar", sample: "today_to_calendar.month", ready: element("calendar.monthPager"))
       XCTAssertTrue(day.isSelected)
       // The Today button always shows today itself; Calendar keeps its own selected day.
-      tap("Today", sample: "calendar.month_to_today", ready: app.staticTexts["weekStrip.month"])
+      tap("Today", sample: "calendar.month_to_today", ready: app.weekStripDay(.now))
       XCTAssertTrue(app.weekStripDay(.now).waitForSelected())
       XCTAssertFalse(app.staticTexts["Tomorrow agenda event"].exists)
     }

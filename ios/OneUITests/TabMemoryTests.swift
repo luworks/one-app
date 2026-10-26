@@ -231,12 +231,11 @@ final class TabMemoryTests: XCTestCase {
       ? app.segmentedControls.buttons["Month"] : app.buttons["Month"].firstMatch
     XCTAssertTrue(month.waitForExistence(timeout: 5))
     month.tap()
-    XCTAssertTrue(
-      app.descendants(matching: .any)["calendar.monthTitle"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["calendar.mode.month"].waitForSelected())
     app.buttons["Clock"].firstMatch.tap()
     app.buttons["Calendar"].firstMatch.tap()
     XCTAssertTrue(
-      app.descendants(matching: .any)["calendar.monthTitle"].waitForExistence(timeout: 5),
+      app.buttons["calendar.mode.month"].waitForSelected(),
       "Calendar comes back in Month, not reset to 3 Day")
   }
 }
