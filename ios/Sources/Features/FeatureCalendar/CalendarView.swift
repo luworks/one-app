@@ -7,26 +7,26 @@
   import SwiftUI
   import SwiftData
 
-  /// Calendar tab, modeled on Apple Calendar: 3 Day (a time grid of three days, the default), Month (a compact grid with
+  /// Calendar tab, modeled on Apple Calendar: 2 Day (a time grid of two days, the default), Month (a compact grid with
   /// the selected day's events listed below) and Year (twelve mini months). The day view is the Today tab: tapping a day's header
   /// opens it there. One control row under the tab pills: the view switcher. Which calendars show is a Setting.
   /// System events open in Apple's own viewer; new events use Apple's own editor when Calendar access is on.
   package struct CalendarView: View {
     @Environment(PlannerPresentation.self) private var presentation
     package enum Mode: String, CaseIterable, Identifiable {
-      // Raw values are stored (`today.last.calendarMode`) and name identifiers ("calendar.mode.threeday").
-      case threeDay = "ThreeDay"
+      // Raw values are stored (`today.last.calendarMode`) and name identifiers ("calendar.mode.twoday").
+      case twoDay = "TwoDay"
       case month = "Month"
       case year = "Year"
       package var id: Self { self }
-      package var title: String { self == .threeDay ? "3 Day" : rawValue }
+      package var title: String { self == .twoDay ? "2 Day" : rawValue }
     }
 
     private let actions: PlannerActions
     private let ledger: Ledger
     private let alarms: any AlarmService
     @Binding var day: Date
-    /// 3 Day / Month / Year. Kept by `HomeView`, so switching tabs and back keeps the view.
+    /// 2 Day / Month / Year. Kept by `HomeView`, so switching tabs and back keeps the view.
     @Binding var mode: Mode
     let calendar: any CalendarService
     let onOpenTask: @MainActor (OneTask) -> Void
@@ -80,8 +80,8 @@
         controlRow
         Group {
           switch mode {
-          case .threeDay:
-            ThreeDayView(
+          case .twoDay:
+            TwoDayView(
               calendar: calendar, day: $day, onVisibleDays: onVisibleDays, open: open, edit: edit,
               create: create, openDay: openDay)
           case .month:
@@ -128,7 +128,7 @@
 
     private func edit(_ entry: CalEntry) { open(entry) }
 
-    /// A long-press on an empty slot of the 3 Day grid: Apple's editor when Calendar access is on, else ours, prefilled.
+    /// A long-press on an empty slot of the 2 Day grid: Apple's editor when Calendar access is on, else ours, prefilled.
     private func create(start: Date, end: Date) {
       if calendar.usesNativeEditor, let native = calendar as? any NativeCalendarService {
         native.edit(identifier: nil, start: start, end: end, fullOptions: false, onComplete: nil)
@@ -148,7 +148,7 @@
 
     // MARK: One control row: the view switcher
 
-    /// 3 Day / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned. The month on
+    /// 2 Day / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned. The month on
     /// screen is named once, in the top bar (`onVisibleDays`).
     private var controlRow: some View {
       HStack(spacing: PillStyle.spacing) {
@@ -997,20 +997,20 @@
     }
   }
 
-  // MARK: - 3 Day
+  // MARK: - 2 Day
 
-  /// The 3 Day grid's sideways scroll, in day columns from today (1.5 = halfway between tomorrow and the day after as
+  /// The 2 Day grid's sideways scroll, in day columns from today (1.5 = halfway between tomorrow and the day after as
   /// the first column). Observed apart from the grid, so only the header and the all-day row redraw while the finger moves.
   @Observable private final class DayScroll {
     var columns: CGFloat = 0
   }
 
-  /// Three days side by side on a time grid, like Apple Calendar's multi-day view on iPhone: swipe sideways to move one
+  /// Two days side by side on a time grid, like Apple Calendar's multi-day view on iPhone: swipe sideways to move one
   /// day. The first column is the selected day: today when Calendar opens, the picked day when coming from Month or Year.
-  /// Events are tinted blocks in their calendar's color, reminders with a time accent outlines, alarms thin markers.
+  /// Events are tinted blocks in their calendar's color; reminders with a time and alarms are one-line chips.
   /// Nothing on the grid moves by drag.
-  private struct ThreeDayView: View {
-    static let columns = 3
+  private struct TwoDayView: View {
+    static let columns = 2
     let calendar: any CalendarService
     @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.colorScheme) private var colorScheme
@@ -1204,7 +1204,7 @@
       .scrollTargetLayout()
       .accessibilityHidden(true)
       .overlay(alignment: .topLeading) {
-        // The time, over the hour labels, while today is one of the three columns.
+        // The time, over the hour labels, while today is one of the columns on screen.
         if (1 - Self.columns...0).contains(first) {
           TimelineView(.everyMinute) { _ in nowLabel }
         }
@@ -1240,17 +1240,17 @@
     }
   }
 
-  /// Day cells that follow the 3 Day grid's sideways scroll: the visible days and one on either side, clipped.
+  /// Day cells that follow the 2 Day grid's sideways scroll: the visible days and one on either side, clipped.
   private struct DayStrip<Cell: View>: View {
     let scroll: DayScroll
     let cell: (Int) -> Cell
 
     var body: some View {
       GeometryReader { geo in
-        let width = geo.size.width / CGFloat(ThreeDayView.columns)
+        let width = geo.size.width / CGFloat(TwoDayView.columns)
         let at = scroll.columns
         let first = Int(at.rounded(.down))
-        ForEach(first - 1...first + ThreeDayView.columns, id: \.self) { o in
+        ForEach(first - 1...first + TwoDayView.columns, id: \.self) { o in
           cell(o)
             .frame(width: width, height: geo.size.height)
             .offset(x: (CGFloat(o) - at) * width)
@@ -1260,7 +1260,7 @@
     }
   }
 
-  /// The 3 Day all-day row: banners across the days they cover, following the grid's sideways scroll.
+  /// The 2 Day all-day row: banners across the days they cover, following the grid's sideways scroll.
   private struct AllDayRow: View {
     let scroll: DayScroll
     /// All-day items of the days around the visible ones.
@@ -1298,7 +1298,7 @@
             .frame(width: gutter - 4, height: rowHeight, alignment: .trailing)
             .padding(.trailing, 4)
           GeometryReader { geo in
-            let colW = geo.size.width / CGFloat(ThreeDayView.columns)
+            let colW = geo.size.width / CGFloat(TwoDayView.columns)
             let at = scroll.columns
             ForEach(Array(items.enumerated()), id: \.offset) { i, e in
               if lanes[i] < laneCount {
@@ -1335,7 +1335,7 @@
     }
   }
 
-  /// One day of the 3 Day grid: hour lines, events as blocks (staggered where they overlap), reminders and alarm rings
+  /// One day of the 2 Day grid: hour lines, events as blocks (staggered where they overlap), reminders and alarm rings
   /// as one-line chips at their time, the now line, and a long-press on empty space that places a new event.
   private struct DayColumn: View {
     let calendar: any CalendarService
@@ -1409,7 +1409,7 @@
             }
           }
           // The now line: strong on today, faint across the other days on screen with it.
-          if abs(fromToday) < ThreeDayView.columns {
+          if abs(fromToday) < TwoDayView.columns {
             TimelineView(.everyMinute) { _ in nowLine(strong: fromToday == 0) }
           }
           if let draft { draftBlock(draft, width: width) }
@@ -1626,7 +1626,7 @@
     }
   }
 
-  /// The 3 Day grid's empty space, as a UIKit view with a long-press recognizer. SwiftUI gestures that track a drag (a
+  /// The 2 Day grid's empty space, as a UIKit view with a long-press recognizer. SwiftUI gestures that track a drag (a
   /// long-press sequenced with a drag), attached to the grid's content, kept the grid from scrolling at all; a UIKit
   /// long-press on a view inside the scroll view behaves like Apple Calendar's: a swipe scrolls, a still press and drag places.
   /// `changed` gets the point (in this view, which fills the grid) from the moment the press is recognized; `ended` gets
@@ -1690,7 +1690,7 @@
     }
   }
 
-  /// Quiet cues on the 3 Day and Month grids: days that are over are dimmed (a Setting). Weekends look like any other day.
+  /// Quiet cues on the 2 Day and Month grids: days that are over are dimmed (a Setting). Weekends look like any other day.
   enum DayTint {
     /// Opacity of event blocks on days that are over.
     static let past = 0.55

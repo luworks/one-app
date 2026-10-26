@@ -34,7 +34,7 @@
 
   // MARK: - Calendar
 
-  /// Settings > Calendar: how 3 Day, Month and Year look and where Calendar opens.
+  /// Settings > Calendar: how 2 Day, Month and Year look and where Calendar opens.
   package struct CalendarSettingsSection: View {
     package init() {}
     @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
@@ -49,7 +49,7 @@
         ExplainedToggle(
           title: "Dim past days", isOn: $dimsPast,
           caption:
-            "Days that are over show in light grey in 3 Day and Month, and so do their events.")
+            "Days that are over show in light grey in 2 Day and Month, and so do their events.")
         PillChoiceRow(
           title: "First day of the week",
           items: Preferences.FirstWeekday.allCases,
@@ -60,7 +60,7 @@
           label: { $0.title }, identifier: { "settings.firstWeekday.\($0.rawValue)" })
         ExplainedToggle(
           title: "Show week numbers", isOn: $showsWeekNumbers,
-          caption: "Beside each row in Month, and over the hours in 3 Day (the first day's week).")
+          caption: "Beside each row in Month, and over the hours in 2 Day (the first day's week).")
         PillChoiceRow(
           title: "Open Calendar on",
           items: Preferences.CalendarStart.allCases,

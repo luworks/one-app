@@ -66,7 +66,7 @@ final class RemindersListsTests: XCTestCase {
       "My Lists follows the pills closely")
   }
 
-  /// The smart lists use the shared pill look (like 3 Day / Month / Year and Alarms / World Clock): one row, never
+  /// The smart lists use the shared pill look (like 2 Day / Month / Year and Alarms / World Clock): one row, never
   /// wrapped, the same 44pt tap height, left-aligned at the page gutter, and the row scrolls when it is too wide.
   func testSmartListPillsAreOneRowAndTappable() {
     let ids = ["smart.today", "smart.scheduled", "smart.all", "smart.flagged", "smart.completed"]

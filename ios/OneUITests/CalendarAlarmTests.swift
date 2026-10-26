@@ -1,6 +1,6 @@
 import XCTest
 
-/// Alarms in the Calendar tab: Month's day list and grid marks, the 3 Day grid's chips, and Settings → "Show alarms in
+/// Alarms in the Calendar tab: Month's day list and grid marks, the 2 Day grid's chips, and Settings → "Show alarms in
 /// Today and Calendar". Launched with the test dataset (alarms: 06:30 Wake up weekdays, 08:30 Weekend run off,
 /// 13:00 Take medicine once, 22:30 Wind down Sun-Thu) and the clock pinned at 09:00, so "Take medicine" rings today.
 @MainActor
@@ -69,9 +69,9 @@ final class CalendarAlarmTests: XCTestCase {
     shot("month")
   }
 
-  /// 3 Day: the alarm is a one-line chip in today's column; tapping it opens the editor.
-  func testThreeDayGridShowsTheAlarmMarker() {
-    mode("ThreeDay").tap()
+  /// 2 Day: the alarm is a one-line chip in today's column; tapping it opens the editor.
+  func testTwoDayGridShowsTheAlarmMarker() {
+    mode("TwoDay").tap()
     XCTAssertTrue(element("calendar.dayGrid").waitForExistence(timeout: 5))
     sleep(1)
     shot("week")
@@ -93,31 +93,31 @@ final class CalendarAlarmTests: XCTestCase {
       + ["-uiTestingNow", "09:00"] + Self.pinAlarmsOn
     app.launch()
     app.buttons["Calendar"].firstMatch.tap()
-    mode("ThreeDay").tap()
+    mode("TwoDay").tap()
     XCTAssertTrue(medicineMarker.waitForExistence(timeout: 5))
     medicineMarker.tap()
     XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
     XCTAssertEqual(app.textFields["alarm.label"].value as? String, "Take medicine")
   }
 
-  /// 3 Day: a ring during an event takes the right half beside it, and remains a working tap target.
-  func testThreeDayOverlappingEventAndAlarmHaveDisjointFramesAndOpenAlarmEditor() throws {
-    try assertThreeDayOverlap(eventCount: 1)
+  /// 2 Day: a ring during an event takes the right half beside it, and remains a working tap target.
+  func testTwoDayOverlappingEventAndAlarmHaveDisjointFramesAndOpenAlarmEditor() throws {
+    try assertTwoDayOverlap(eventCount: 1)
   }
 
-  func testThreeDayDenseOverlapClusterStaysInsideAssignedFramesAndOpensAlarmEditor() throws {
-    try assertThreeDayOverlap(eventCount: 8)
+  func testTwoDayDenseOverlapClusterStaysInsideAssignedFramesAndOpensAlarmEditor() throws {
+    try assertTwoDayOverlap(eventCount: 8)
   }
 
-  private func assertThreeDayOverlap(eventCount: Int) throws {
-    // Keep the one-event regression and also exercise columns narrower than the block's stripe and padding.
+  private func assertTwoDayOverlap(eventCount: Int) throws {
+    // One event, and eight that start together: each keeps its share of the left half, the chip the right.
     app.terminate()
     app.launchArguments =
       TestData.fixtureArguments("week-alarm-overlap-\(eventCount).json")
       + ["-uiTestingNow", "09:00"] + Self.pinAlarmsOn
     app.launch()
     app.buttons["Calendar"].firstMatch.tap()
-    mode("ThreeDay").tap()
+    mode("TwoDay").tap()
 
     let grids = app.descendants(matching: .any).matching(identifier: "calendar.dayGrid")
     XCTAssertTrue(grids.firstMatch.waitForExistence(timeout: 5))
@@ -126,7 +126,7 @@ final class CalendarAlarmTests: XCTestCase {
         $0.isFullyVisible(in: app.frame) && $0.isHittable
       })
     else {
-      XCTFail("The 3 Day grid is visible")
+      XCTFail("The 2 Day grid is visible")
       return
     }
     let event = grid.descendants(matching: .any)
@@ -141,7 +141,7 @@ final class CalendarAlarmTests: XCTestCase {
       }, object: nil)
     XCTAssertEqual(
       XCTWaiter().wait(for: [visible], timeout: 5), .completed,
-      "both overlapping items must be fully visible in the 3 Day grid: event \(event.exists ? event.frame : .null), alarm \(marker.exists ? marker.frame : .null), grid \(grid.frame)"
+      "both overlapping items must be fully visible in the 2 Day grid: event \(event.exists ? event.frame : .null), alarm \(marker.exists ? marker.frame : .null), grid \(grid.frame)"
     )
 
     let eventFrame = event.frame
@@ -164,10 +164,6 @@ final class CalendarAlarmTests: XCTestCase {
       XCTAssertTrue(block.exists)
       XCTAssertTrue(block.isHittable)
       XCTAssertGreaterThan(block.frame.width, 0)
-      if eventCount == 8 {
-        XCTAssertLessThan(
-          block.frame.width, 9, "the dense fixture exercises the former minimum-content overflow")
-      }
       XCTAssertLessThanOrEqual(
         block.frame.maxX, alarmFrame.minX,
         "even a dense block stays left of the alarm chip: \(block.frame)")
@@ -184,7 +180,7 @@ final class CalendarAlarmTests: XCTestCase {
       "the tap opens this alarm, even beside an event")
   }
 
-  /// Turning off "Show alarms in Today and Calendar" hides them from Month and 3 Day.
+  /// Turning off "Show alarms in Today and Calendar" hides them from Month and 2 Day.
   func testTheSettingHidesAlarmsInTheCalendar() {
     mode("Month").tap()
     XCTAssertTrue(medicineRow.waitForExistence(timeout: 5))
@@ -213,9 +209,9 @@ final class CalendarAlarmTests: XCTestCase {
     XCTAssertTrue(medicineRow.waitForNonExistence(timeout: 5), "no alarm rows in Month")
     XCTAssertFalse(
       element(calendarDayID(.now)).label.contains("alarm"), "and no alarm in the day cell")
-    mode("ThreeDay").tap()
+    mode("TwoDay").tap()
     XCTAssertTrue(element("calendar.dayGrid").waitForExistence(timeout: 5))
-    XCTAssertTrue(medicineMarker.waitForNonExistence(timeout: 3), "and no markers in 3 Day")
+    XCTAssertTrue(medicineMarker.waitForNonExistence(timeout: 3), "and no markers in 2 Day")
   }
 
   /// Set TEST_RUNNER_ALARM_SHOTS=<folder> to save screenshots (for design review).

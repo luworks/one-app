@@ -72,12 +72,12 @@
         initialValue: Self.restored(
           ClockSection.self, key: Self.clockSectionKey, defaults: defaults, arguments: args)
           ?? .alarms)
-      // Read raw: a Calendar last left on the retired Week grid ("Week") opens on 3 Day (`CalendarStart.view`).
+      // Read raw: a view that no longer exists (the 7-day "Week", "ThreeDay") is not a mode and opens on 2 Day.
       let last =
         args.contains("-uiTesting") ? nil : defaults.string(forKey: Self.calendarModeKey)
       _calendarMode = State(
         initialValue: CalendarView.Mode(
-          rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .threeDay)
+          rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .twoDay)
     }
     @State private var editor: OpenedEntry?
 
@@ -88,7 +88,7 @@
     @State private var tab: HomeTab
     @State private var calendarDay: Date
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
-    // (the open list in Reminders, 3 Day / Month / Year in Calendar, the day in Today).
+    // (the open list in Reminders, 2 Day / Month / Year in Calendar, the day in Today).
     @State private var calendarMode: CalendarView.Mode
     /// The first and last day the Calendar page shows, published by it for the top bar's month label.
     @State private var calendarShown: ClosedRange<Date>

@@ -47,7 +47,7 @@ final class RepeatingReminderTests: XCTestCase {
 
     // Its next occurrence is tomorrow's own day.
     app.buttons["Calendar"].firstMatch.tap()
-    app.buttons["calendar.mode.threeday"].tap()
+    app.buttons["calendar.mode.twoday"].tap()
     let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
     let day = app.buttons[tomorrow.formatted(date: .complete, time: .omitted)].firstMatch
     XCTAssertTrue(day.waitForExistence(timeout: 5))

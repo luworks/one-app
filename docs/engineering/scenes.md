@@ -94,7 +94,7 @@ configuration data; they do not assert these app-only integration seams exist.
 | Journey | Registry handles | Existing native implementation |
 | --- | --- | --- |
 | Today | `today` | DayAgenda |
-| Calendar | `calendar.threeday`, `.month`, `.year`, `.year.key`, `.sources`, `.event.editor` | CalendarView with real mode binding, YearKeySheet, CalendarsSheet, EventEditor |
+| Calendar | `calendar.twoday`, `.month`, `.year`, `.year.key`, `.sources`, `.event.editor` | CalendarView with real mode binding, YearKeySheet, CalendarsSheet, EventEditor |
 | Reminders | `reminders`, `.today`, `.scheduled`, `.all`, `.flagged`, `.completed`, `.list`, `.editor`, `.quickAdd`, `.listEditor` | RemindersView, ReminderListScreen, TaskEditor, QuickReminderSheet, ListEditor |
 | Clock | `clock.alarms`, `.alarm.editor`, `.alarm.sound`, `.world`, `.world.cityPicker`, `.stopwatch`, `.timer` | AlarmsView, AlarmEditor, SoundScreen, WorldClockView, CityPicker, StopwatchView, TimerSection |
 | Ask | `ask`, `ask.card.capture`, `.stack`, `.plan`, `.change`, `.tidy` | AskView, CaptureCard, CaptureStack, PlanCard, ChangeCard, TidyCard |
@@ -139,7 +139,7 @@ legacy static-clock readers, locale-sensitive static formatters or system servic
 ## Launch, interaction and preview
 
 ```text
--scene calendar.threeday -scenario dense
+-scene calendar.twoday -scenario dense
 -scene clock.world -scenario empty -sceneTimeZone Asia/Shanghai -sceneLocale zh_CN
 -scene health.detail -scenario normal
 ```
