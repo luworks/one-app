@@ -895,11 +895,11 @@
             month.start.plannerFormatted(
               .dateTime.month(.abbreviated), runtime: presentation.runtime)
           )
-            .font(.title3.bold())
-            .foregroundStyle(isCurrent ? Color.red : Color.primary)
-            .padding(.leading, 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+          .font(.title3.bold())
+          .foregroundStyle(isCurrent ? Color.red : Color.primary)
+          .padding(.leading, 2)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .contentShape(Rectangle())
         }
         .accessibilityLabel(
           month.start.plannerFormatted(.dateTime.month(.wide).year(), runtime: presentation.runtime)
