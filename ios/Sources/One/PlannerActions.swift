@@ -67,6 +67,9 @@
       case "alarm":
         return await AlarmActions.undo(
           entry, context: context, alarms: alarms, ledger: ledger, runtime: runtime)
+      case "list":
+        return ListActions.undo(
+          entry, context: context, reminders: reminders, ledger: ledger, runtime: runtime)
       default:
         return ledger.undo(entry, context: context) ? nil : ActivityUndoMessage.changedSince
       }

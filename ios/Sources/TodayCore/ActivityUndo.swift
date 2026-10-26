@@ -79,3 +79,78 @@ public enum ActivityUndoMessage {
   /// The item changed again, or is gone.
   public static let changedSince = "Changed since"
 }
+
+/// A reminder list's look and place, as Activity keeps it for Undo.
+public struct ListSnapshot: Codable, Equatable, Sendable {
+  public var name: String
+  public var colorIndex: Int
+  public var symbol: String
+  public var order: Int
+  public var pinned: Bool
+
+  public init(
+    name: String, colorIndex: Int, symbol: String, order: Int = 0, pinned: Bool = false
+  ) {
+    self.name = name
+    self.colorIndex = colorIndex
+    self.symbol = symbol
+    self.order = order
+    self.pinned = pinned
+  }
+}
+
+/// One list change: before (nil when added) and after (nil when deleted), and for a delete the reminders that went with it.
+/// A delete keeps them only when the list lived in Today alone (never in Apple Reminders), so putting it back is exact.
+public struct ListChange: Codable, Equatable {
+  public var before: ListSnapshot?
+  public var after: ListSnapshot?
+  public var tasks: [TaskSnapshot]
+
+  public init(before: ListSnapshot?, after: ListSnapshot?, tasks: [TaskSnapshot] = []) {
+    self.before = before
+    self.after = after
+    self.tasks = tasks
+  }
+}
+
+public enum ListUndo {
+  public enum Step: Equatable {
+    /// Delete the list (Undo of an add; it is still empty).
+    case remove
+    /// Add the list and its reminders back (Undo of a delete).
+    case recreate(ListSnapshot, [TaskSnapshot])
+    /// Give the list its old name back (its reminders follow).
+    case rename(String)
+    /// Give the list its old color and symbol back.
+    case restyle(colorIndex: Int, symbol: String)
+  }
+
+  /// What Undo does, given the list now (nil when it no longer exists), how many reminders it has, and whether another
+  /// list already uses the name Undo would bring back. nil when it can't.
+  public static func step(
+    for action: LedgerAction, change: ListChange, current: ListSnapshot?, taskCount: Int = 0,
+    nameTaken: Bool = false
+  ) -> Step? {
+    switch action {
+    case .deleted:
+      guard let before = change.before, current == nil, !nameTaken else { return nil }
+      return .recreate(before, change.tasks)
+    case .created:
+      guard let current, let after = change.after, current.name == after.name, taskCount == 0
+      else { return nil }
+      return .remove
+    case .renamed:
+      guard let current, let before = change.before, let after = change.after,
+        current.name == after.name, !nameTaken
+      else { return nil }
+      return .rename(before.name)
+    case .edited:
+      guard let current, let before = change.before, let after = change.after,
+        current.colorIndex == after.colorIndex, current.symbol == after.symbol
+      else { return nil }
+      return .restyle(colorIndex: before.colorIndex, symbol: before.symbol)
+    default:
+      return nil
+    }
+  }
+}

@@ -262,6 +262,11 @@ public enum LedgerFormat {
       case .created, .deleted, .edited, .moved, .switchedOn, .switchedOff: return hasSnapshot
       default: return false
       }
+    case "list":
+      switch action {
+      case .created, .deleted, .renamed, .edited: return hasSnapshot
+      default: return false
+      }
     default:
       return false
     }
