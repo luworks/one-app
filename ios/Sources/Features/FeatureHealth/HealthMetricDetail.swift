@@ -63,6 +63,7 @@
             if !metric.isCumulative { legend }
             chart
             facts
+            OpenHealthButton()
           }
           .padding(.horizontal, 20)
           .padding(.top, 8)

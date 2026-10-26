@@ -56,6 +56,11 @@
               }
             }
           }
+          Section {
+            OpenHealthButton()
+          } footer: {
+            Text("Everything else lives in Apple Health.")
+          }
         }
         .listStyle(.insetGrouped)
         .searchable(text: $search, prompt: "Search Metrics")

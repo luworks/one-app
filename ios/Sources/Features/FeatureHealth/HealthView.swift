@@ -7,7 +7,6 @@
   /// A globally ordered read-only dashboard. Customize uses native List dragging and accessible move actions.
   public struct HealthView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.openURL) private var openURL
     private let model: HealthModel
     @State private var detail: HealthMetric?
     @State private var adding = false
@@ -65,6 +64,9 @@
             .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
             .accessibilityIdentifier("health.add")
+            // Today shows the simplest view; Apple Health has everything else, one tap away.
+            OpenHealthButton()
+              .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 16))
           }
           if model.recordSource != nil {
             Section {
@@ -220,12 +222,6 @@
         Text(
           "Today only reads Apple Health; nothing leaves your iPhone. \"No data\" can also mean Today isn't allowed to read it: check Health → Profile → Apps → Today."
         )
-        Button {
-          if let url = URL(string: "x-apple-health://") { openURL(url) }
-        } label: {
-          Label("Open Health", systemImage: "heart.text.square")
-        }
-        .font(.subheadline.weight(.semibold))
       }
       .font(.footnote)
       .foregroundStyle(.secondary)
