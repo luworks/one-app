@@ -34,11 +34,12 @@
     private let pageSize = 150
     private let activity: ActivityCenter
     private let flush: @MainActor () -> Void
-    private let undo: @MainActor (LedgerItem) -> Bool
+    private let undo: @MainActor (LedgerItem) async -> String?
 
+    /// `undo` returns nil when it put the change back, else what the row says instead (e.g. "Changed since").
     package init(
       activity: ActivityCenter, flush: @escaping @MainActor () -> Void,
-      undo: @escaping @MainActor (LedgerItem) -> Bool
+      undo: @escaping @MainActor (LedgerItem) async -> String?
     ) {
       self.activity = activity
       self.flush = flush
@@ -151,9 +152,9 @@
         Section {
           ForEach(group.items) { item in
             ActivityRow(item: item, undone: undone.contains(item.id)) {
-              let ok = undo(item)
+              let failure = await undo(item)
               reload()
-              return ok
+              return failure
             }
           }
         } header: {
@@ -283,9 +284,10 @@
     @Environment(PlannerPresentation.self) private var presentation
     let item: LedgerItem
     let undone: Bool
-    /// Runs Undo; false when it could not (the reminder is gone or changed again).
-    let onUndo: @MainActor () -> Bool
-    @State private var failed = false
+    /// Runs Undo; nil when done, else why it could not (the item is gone or changed again, or AlarmKit refused).
+    let onUndo: @MainActor () async -> String?
+    @State private var failure: String?
+    @State private var working = false
 
     private var actor: LedgerActor { item.actorValue }
 
@@ -314,10 +316,16 @@
           Text(meta).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        if canUndo && !failed {
+        if canUndo && failure == nil {
           Button("Undo") {
-            withAnimation(.snappy) { failed = !onUndo() }
+            working = true
+            Task { @MainActor in
+              let result = await onUndo()
+              working = false
+              withAnimation(.snappy) { failure = result }
+            }
           }
+          .disabled(working)
           .font(.subheadline.weight(.semibold))
           .buttonStyle(.bordered)
           .buttonBorderShape(.capsule)
@@ -326,8 +334,9 @@
           .accessibilityIdentifier("activity.undo")
         } else if undone {
           Text("Undone").font(.caption).foregroundStyle(.secondary)
-        } else if failed {
-          Text("Changed since").font(.caption).foregroundStyle(.secondary)
+        } else if let failure {
+          Text(failure).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+            .frame(maxWidth: 120, alignment: .trailing)
         }
       }
       .padding(.vertical, 4)

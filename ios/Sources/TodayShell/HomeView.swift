@@ -260,7 +260,7 @@
       .sheet(isPresented: $showsActivity) {
         ActivityView(
           activity: session.activity, flush: { session.ledger.flush(context) },
-          undo: { session.ledger.undo($0, context: context) })
+          undo: { await session.actions.undo($0, context: context) })
       }
       .environment(toast)
       .environment(session.actions)

@@ -243,9 +243,9 @@
       }
     }
     func alarmCreated(_ alarm: OneAlarm, context: ModelContext) {
-      services.ledger.record(
-        .created, kind: "alarm", title: alarm.label.isEmpty ? "Alarm" : alarm.label,
-        context: context)
+      AlarmActions.recordCreated(
+        alarm, title: alarm.label.isEmpty ? "Alarm" : alarm.label, ledger: services.ledger,
+        runtime: runtime, context: context)
     }
 
     /// Explicitly apply at UIKit hosting roots as well as the SwiftUI entry and detached sheets.
@@ -625,7 +625,9 @@
         ActivityView(
           activity: session.services.activity,
           flush: { session.services.ledger.flush(session.container.mainContext) },
-          undo: { session.services.ledger.undo($0, context: session.container.mainContext) })
+          undo: {
+            await session.services.actions.undo($0, context: session.container.mainContext)
+          })
       case .search:
         SearchView(calendar: session.services.calendar, defaults: session.defaults) {
           session.host(editor($0))
