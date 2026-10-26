@@ -1,6 +1,6 @@
 import XCTest
 
-/// Alarms in the Calendar tab: Month's day list and grid marks, the 3 Day grid's markers, and Settings → "Show alarms in
+/// Alarms in the Calendar tab: Month's day list and grid marks, the 3 Day grid's chips, and Settings → "Show alarms in
 /// Today and Calendar". Launched with the test dataset (alarms: 06:30 Wake up weekdays, 08:30 Weekend run off,
 /// 13:00 Take medicine once, 22:30 Wind down Sun-Thu) and the clock pinned at 09:00, so "Take medicine" rings today.
 @MainActor
@@ -69,7 +69,7 @@ final class CalendarAlarmTests: XCTestCase {
     shot("month")
   }
 
-  /// 3 Day: the alarm is a thin marker in today's column; tapping it opens the editor.
+  /// 3 Day: the alarm is a one-line chip in today's column; tapping it opens the editor.
   func testThreeDayGridShowsTheAlarmMarker() {
     mode("ThreeDay").tap()
     XCTAssertTrue(element("calendar.dayGrid").waitForExistence(timeout: 5))
@@ -79,10 +79,10 @@ final class CalendarAlarmTests: XCTestCase {
     medicineMarker.tap()
     XCTAssertTrue(
       app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5),
-      "tapping the marker opens the alarm editor")
+      "tapping the chip opens the alarm editor")
     XCTAssertEqual(
       app.textFields["alarm.label"].value as? String, "Take medicine",
-      "the marker opens its own alarm")
+      "the chip opens its own alarm")
   }
 
   /// Even an otherwise empty afternoon grid must let the alarm receive its tap.
@@ -100,7 +100,7 @@ final class CalendarAlarmTests: XCTestCase {
     XCTAssertEqual(app.textFields["alarm.label"].value as? String, "Take medicine")
   }
 
-  /// 3 Day: a ring during an event has its own horizontal lane, and remains a working tap target.
+  /// 3 Day: a ring during an event takes the right half beside it, and remains a working tap target.
   func testThreeDayOverlappingEventAndAlarmHaveDisjointFramesAndOpenAlarmEditor() throws {
     try assertThreeDayOverlap(eventCount: 1)
   }
@@ -153,7 +153,7 @@ final class CalendarAlarmTests: XCTestCase {
     XCTAssertLessThan(alarmFrame.maxY, eventFrame.maxY, "the fixture exercises vertical overlap")
     XCTAssertLessThanOrEqual(
       eventFrame.maxX, alarmFrame.minX,
-      "the event must yield horizontally to the trailing alarm: event \(eventFrame), alarm \(alarmFrame)"
+      "the event keeps the left half, the alarm chip the right: event \(eventFrame), alarm \(alarmFrame)"
     )
     let eventFrames = (0..<eventCount).map { index in
       grid.descendants(matching: .any)
@@ -170,7 +170,7 @@ final class CalendarAlarmTests: XCTestCase {
       }
       XCTAssertLessThanOrEqual(
         block.frame.maxX, alarmFrame.minX,
-        "even a dense block must stay outside the alarm lane: \(block.frame)")
+        "even a dense block stays left of the alarm chip: \(block.frame)")
     }
     let sortedFrames = eventFrames.map({ $0.frame }).sorted { $0.minX < $1.minX }
     for (left, right) in zip(sortedFrames, sortedFrames.dropFirst()) {

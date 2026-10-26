@@ -1335,8 +1335,8 @@
     }
   }
 
-  /// One day of the 3 Day grid: hour lines, timed blocks side by side where they overlap, alarm markers, the now line,
-  /// and a long-press on empty space that places a new event.
+  /// One day of the 3 Day grid: hour lines, events as blocks (staggered where they overlap), reminders and alarm rings
+  /// as one-line chips at their time, the now line, and a long-press on empty space that places a new event.
   private struct DayColumn: View {
     let calendar: any CalendarService
     @Environment(PlannerPresentation.self) private var presentation
@@ -1366,45 +1366,47 @@
       let entries = CalendarEntries.make(
         in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar,
         now: presentation.now, calendar: cal)
-      let placed = place(entries.filter { !$0.isAllDay && !$0.isAlarm }, in: interval)
-      // Alarms have no duration and never move; timed blocks yield to their narrow lane.
-      let markers = placeAlarms(entries.filter(\.isAlarm), in: interval)
+      let placed = place(entries.filter { !$0.isAllDay && !$0.isAlarm && !$0.isTask }, in: interval)
+      // Reminders and alarms are a moment, not a span: a chip at their time, never a box of made-up length.
+      let marks = entries.filter { ($0.isTask || $0.isAlarm) && interval.contains($0.start) }
+        .sorted { $0.start < $1.start }
       let past = dimsPast && fromToday < 0
       GeometryReader { geo in
         let width = geo.size.width
-        let lanes = CalendarLayout.timedLanes(
-          columnWidth: Double(width), hasAlarms: !markers.isEmpty)
-        let rects: [CGRect] =
-          placed.map { p in
-            let span = lanes.block(column: p.column, count: p.count)
-            return CGRect(
-              x: CGFloat(span.x), y: p.y(hourHeight), width: CGFloat(span.width),
-              height: max(18, p.height(hourHeight)))
-          }
-          + markers.map { m in
-            CGRect(
-              x: CGFloat(lanes.alarmX), y: m.y, width: CGFloat(lanes.alarmWidth),
-              height: Self.markerHeight)
-          }
+        let layout = CalendarLayout.timedDay(
+          blocks: placed.map {
+            (y: Double($0.y(hourHeight)), height: Double(max(18, $0.height(hourHeight))))
+          },
+          marks: marks.map {
+            $0.start.timeIntervalSince(interval.start) / 3600 * Double(hourHeight)
+          },
+          columnWidth: Double(width), chipHeight: Double(Self.chipHeight),
+          foldAfter: max(24, Double(hourHeight) * 0.75))
+        let blockRects = layout.blocks.map { CGRect($0) }
+        let markRects = layout.marks.map { $0.map { CGRect($0) } }
+        let shown = marks.indices.filter { markRects[$0] != nil }
+        // Deeper (later) events are drawn over the ones they overlap, as in Apple Calendar.
+        let drawOrder = placed.indices.sorted { layout.depths[$0] < layout.depths[$1] }
         ZStack(alignment: .topLeading) {
           hourLines
-          // Bottom layer: long-press an empty slot to make an event there. Blocks above keep their own taps and menus.
-          pressLayer(rects, width: width)
-          ForEach(placed, id: \.entry.id) { p in
-            let span = lanes.block(column: p.column, count: p.count)
+          // Bottom layer: long-press an empty slot to make an event there. Blocks and chips keep their own taps and menus.
+          pressLayer(blockRects + markRects.compactMap { $0 }, width: width)
+          ForEach(drawOrder, id: \.self) { i in
+            let r = blockRects[i]
             block(
-              p.entry, width: CGFloat(span.width), height: max(18, p.height(hourHeight)),
-              lines: p.titleLines
+              placed[i].entry, width: r.width, height: r.height, lines: placed[i].titleLines,
+              outlined: layout.depths[i] > 0
             )
             .opacity(past ? DayTint.past : 1)
-            .offset(x: CGFloat(span.x), y: p.y(hourHeight))
+            .offset(x: r.minX, y: r.minY)
           }
-          // Beside the blocks: a thin marker at the alarm's time (no duration).
-          ForEach(markers, id: \.entry.id) { m in
-            alarmMarker(m.entry)
-              .opacity(past ? DayTint.past : 1)
-              .frame(width: CGFloat(lanes.alarmWidth), height: Self.markerHeight)
-              .offset(x: CGFloat(lanes.alarmX), y: m.y)
+          ForEach(shown, id: \.self) { i in
+            if let r = markRects[i] {
+              chip(marks[i], more: layout.folded[i].map { marks[$0] })
+                .opacity(past ? DayTint.past : 1)
+                .frame(width: r.width, height: r.height)
+                .offset(x: r.minX, y: r.minY)
+            }
           }
           // The now line: strong on today, faint across the other days on screen with it.
           if abs(fromToday) < ThreeDayView.columns {
@@ -1442,8 +1444,6 @@
 
     struct Placed {
       let entry: CalEntry
-      let column: Int
-      let count: Int
       let startMinute: CGFloat
       let lengthMinutes: CGFloat
       func y(_ hourHeight: CGFloat) -> CGFloat { startMinute / 60 * hourHeight }
@@ -1452,7 +1452,7 @@
       var titleLines: Int { lengthMinutes >= 45 ? 3 : 1 }
     }
 
-    /// Timed entries on the day, clipped to it, side by side where they overlap.
+    /// Timed events on the day, clipped to it; `CalendarLayout.timedDay` decides where they go.
     private func place(_ timed: [CalEntry], in interval: DateInterval) -> [Placed] {
       let items = timed.filter {
         $0.start < interval.end && max($0.end, $0.start.addingTimeInterval(900)) > interval.start
@@ -1463,100 +1463,36 @@
         let t = min(max(e.end, e.start.addingTimeInterval(1800)), interval.end)
         return (s.timeIntervalSince(interval.start) / 60, t.timeIntervalSince(interval.start) / 60)
       }
-      let cols = CalendarLayout.columns(for: spans)
       return items.indices.map { i in
         Placed(
-          entry: items[i], column: cols[i].column, count: cols[i].count,
+          entry: items[i],
           startMinute: CGFloat(spans[i].start),
           lengthMinutes: CGFloat(spans[i].end - spans[i].start))
       }
     }
 
-    static let markerHeight: CGFloat = 14
+    static let chipHeight: CGFloat = 18
 
-    struct Marker {
-      let entry: CalEntry
-      let y: CGFloat
-    }
-
-    /// The alarms ringing on the day, each at its time; a marker that would cover the one above it moves down just enough to stay readable.
-    private func placeAlarms(_ alarms: [CalEntry], in interval: DateInterval) -> [Marker] {
-      var lastY = -CGFloat.infinity
-      return alarms.filter { interval.contains($0.start) }.sorted { $0.start < $1.start }.map { e in
-        let y = max(
-          CGFloat(e.start.timeIntervalSince(interval.start) / 3600) * hourHeight,
-          lastY + Self.markerHeight + 1)
-        lastY = y
-        return Marker(entry: e, y: y)
-      }
-    }
-
-    /// An alarm on the grid: a thin accent line and bell, with a label when it fits. Tap opens the alarm editor;
-    /// it has no duration and no drag.
-    private func alarmMarker(_ e: CalEntry) -> some View {
-      ViewThatFits(in: .horizontal) {
-        HStack(spacing: 2) {
-          Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
-          Text(e.title).font(.system(size: 9, weight: .semibold)).lineLimit(1)
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        Image(systemName: "alarm").font(.system(size: 10, weight: .bold))
-      }
-      .foregroundStyle(EventTint.text(e.color))
-      .padding(.horizontal, 3)
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .background(EventTint.fill(e.color))
-      .overlay(alignment: .top) { Rectangle().fill(e.color).frame(height: 1.5) }
-      .clipShape(RoundedRectangle(cornerRadius: 3))
-      .contentShape(Rectangle())
-      .onTapGesture { open(e) }
-      .entryActions(
-        e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false, calendar: calendar
-      )
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(plannerEntrySpeech(e, runtime: presentation.runtime))
-      .accessibilityAddTraits(.isButton)
-      .accessibilityIdentifier("calendar.alarmMarker")
-    }
-
-    @ViewBuilder
-    private func block(_ e: CalEntry, width: CGFloat, height: CGFloat, lines: Int) -> some View {
-      if case .task = e.source {
-        Group {
-          Text(e.title)
-            .font(.system(size: 10, weight: .semibold))
-            .lineLimit(lines)
-            .lineSpacing(-1)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 3)
-            .padding(.top, 2)
-            .frame(width: width, height: height, alignment: .topLeading)
-            .clipped()
-            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
-            .overlay(
-              RoundedRectangle(cornerRadius: 4).strokeBorder(Color.accentColor, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-      } else {
-        HStack(spacing: 0) {
-          Rectangle().fill(e.color).frame(width: min(3, width))
-          if width >= 12 {
-            Text(e.title)
-              .font(.system(size: 10, weight: .semibold))
-              .foregroundStyle(EventTint.text(e.color))
-              .lineLimit(lines)
-              .lineSpacing(-1)
-              .fixedSize(horizontal: false, vertical: true)
-              .padding(.horizontal, 3)
-              .padding(.top, 2)
-              .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    /// A reminder or alarm ring on the grid: one line at its time (circle or alarm symbol and the title), on the page's
+    /// background so it reads over the hour lines. Tap opens it, long-press has its usual menu; nothing is dragged.
+    /// `more` are the items folded under it on a crowded hour, behind a "+N" menu.
+    private func chip(_ e: CalEntry, more: [CalEntry]) -> some View {
+      HStack(spacing: 3) {
+        HStack(spacing: 3) {
+          if e.isAlarm {
+            Image(systemName: "alarm").font(.system(size: 10, weight: .semibold))
+              .foregroundStyle(e.color)
+          } else {
+            Circle().strokeBorder(e.color, lineWidth: 1.2).frame(width: 9, height: 9)
           }
+          Text(e.title)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+          Spacer(minLength: 0)
         }
-        .frame(width: width, height: height, alignment: .leading)
-        .clipped()
-        .background(EventTint.fill(e.color))
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .padding(.leading, 2)
+        .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { open(e) }
         .entryActions(
@@ -1566,7 +1502,75 @@
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(plannerEntrySpeech(e, runtime: presentation.runtime))
         .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier(e.isAlarm ? "calendar.alarmMarker" : "calendar.reminderChip")
+        if !more.isEmpty { moreMenu(more) }
       }
+      .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 3))
+    }
+
+    /// "+N": the items folded on a crowded hour. Picking one opens it.
+    private func moreMenu(_ more: [CalEntry]) -> some View {
+      Menu {
+        ForEach(more) { e in
+          let time = e.start.plannerFormatted(
+            date: .omitted, time: .shortened, runtime: presentation.runtime)
+          Button {
+            open(e)
+          } label: {
+            Label("\(time)  \(e.title)", systemImage: e.isAlarm ? "alarm" : "circle")
+          }
+        }
+      } label: {
+        Text("+\(more.count)")
+          .font(.system(size: 10, weight: .semibold).monospacedDigit())
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 4)
+          .frame(maxHeight: .infinity)
+          .background(Color(.tertiarySystemFill), in: Capsule())
+      }
+      .accessibilityLabel("\(more.count) more")
+      .accessibilityIdentifier("calendar.moreMarks")
+    }
+
+    /// An event on the grid: a color stripe and the title. A staggered block (drawn over an earlier one) gets a thin
+    /// outline in the page's color so its edge stays visible.
+    private func block(
+      _ e: CalEntry, width: CGFloat, height: CGFloat, lines: Int, outlined: Bool
+    ) -> some View {
+      HStack(spacing: 0) {
+        Rectangle().fill(e.color).frame(width: min(3, width))
+        if width >= 12 {
+          Text(e.title)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(EventTint.text(e.color))
+            .lineLimit(lines)
+            .lineSpacing(-1)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 3)
+            .padding(.top, 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+      }
+      .frame(width: width, height: height, alignment: .leading)
+      .clipped()
+      .background(EventTint.fill(e.color))
+      // The tint is see-through; a staggered block hides the one under it.
+      .background(outlined ? Color(.systemBackground) : .clear)
+      .clipShape(RoundedRectangle(cornerRadius: 4))
+      .overlay {
+        if outlined {
+          RoundedRectangle(cornerRadius: 4).strokeBorder(Color(.systemBackground), lineWidth: 1.5)
+        }
+      }
+      .contentShape(Rectangle())
+      .onTapGesture { open(e) }
+      .entryActions(
+        e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false,
+        calendar: calendar
+      )
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(plannerEntrySpeech(e, runtime: presentation.runtime))
+      .accessibilityAddTraits(.isButton)
     }
 
     /// Long-press an empty slot: a one-hour placeholder appears there (snapped to 15 minutes) and follows the finger;
@@ -1677,6 +1681,12 @@
         default: break
         }
       }
+    }
+  }
+
+  extension CGRect {
+    init(_ f: CalendarLayout.Frame) {
+      self.init(x: f.x, y: f.y, width: f.width, height: f.height)
     }
   }
 
