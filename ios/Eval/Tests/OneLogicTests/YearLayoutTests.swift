@@ -96,7 +96,7 @@ final class YearLayoutTests: XCTestCase {
     XCTAssertFalse(
       year[11].days[28].isHoliday, "a multi-day holiday-calendar event is not a holiday")
     XCTAssertTrue(year[11].bands.isEmpty, "background calendars draw no bands")
-    XCTAssertEqual(year[10].summary, "Thanksgiving")
+    XCTAssertEqual(year[10].summary, "Veterans Day; Thanksgiving")
     XCTAssertTrue(year[11].summary.contains("Christmas Eve; Christmas Day"))
   }
 
