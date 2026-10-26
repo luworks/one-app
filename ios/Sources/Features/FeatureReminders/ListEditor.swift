@@ -14,6 +14,8 @@
     let list: OneList
     let name: String
     let count: Int
+    /// Today alone holds the list and its reminders, so Activity can put them back.
+    var undoable = false
     var afterDelete: (() -> Void)?
 
     @MainActor
@@ -22,13 +24,17 @@
     {
       PendingListDeletion(
         list: list, name: ListName.display(list.name),
-        count: ListActions.taskCount(in: list.name, context: context), afterDelete: afterDelete)
+        count: ListActions.taskCount(in: list.name, context: context),
+        undoable: ListActions.deleteIsUndoable(list, keepingTasks: false, context: context),
+        afterDelete: afterDelete)
     }
 
     var message: String {
       count == 0
         ? "This list is empty."
-        : "It has \(reminderCountText(count)). Keep them in your default list, or delete them with the list. Deleting can't be undone."
+        : "It has \(reminderCountText(count)). Keep them in your default list, or delete them with the list. "
+          + (undoable
+            ? "Deleting them can be undone in Activity." : "Deleting can't be undone.")
     }
   }
 
@@ -280,8 +286,8 @@
     private func save() {
       if let list {
         guard ListActions.rename(list, to: name, in: context, ledger: ledger) else { return }
-        list.colorIndex = colorIndex
-        list.symbol = symbol
+        ListActions.restyle(
+          list, colorIndex: colorIndex, symbol: symbol, in: context, ledger: ledger)
       } else if let created = ListActions.create(
         name: name, colorIndex: colorIndex, symbol: symbol, in: context, ledger: ledger,
         runtime: presentation.runtime)

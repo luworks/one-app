@@ -116,4 +116,80 @@ final class ActivityUndoTests: XCTestCase {
       LedgerFormat.headline(.switchedOff, title: "Alarm 07:00"), "Turned off “Alarm 07:00”")
     XCTAssertEqual(LedgerAction(rawValue: "switchedOn"), .switchedOn)
   }
+
+  // MARK: Lists
+
+  let groceries = ListSnapshot(name: "Groceries", colorIndex: 3, symbol: "cart", order: 2)
+
+  private var shops: ListSnapshot {
+    var s = groceries
+    s.name = "Shops"
+    return s
+  }
+
+  private var greenBag: ListSnapshot {
+    var s = groceries
+    s.colorIndex = 8
+    s.symbol = "bag"
+    return s
+  }
+
+  func testListChangeKeepsItsRemindersThroughTheStore() throws {
+    let change = ListChange(
+      before: groceries, after: nil,
+      tasks: [TaskSnapshot(title: "Milk", listName: "Groceries", flagged: true)])
+    let back = try JSONDecoder().decode(ListChange.self, from: JSONEncoder().encode(change))
+    XCTAssertEqual(back, change)
+  }
+
+  func testListDeleteComesBackWithItsReminders() {
+    let milk = TaskSnapshot(title: "Milk", listName: "Groceries")
+    let change = ListChange(before: groceries, after: nil, tasks: [milk])
+    XCTAssertEqual(
+      ListUndo.step(for: .deleted, change: change, current: nil), .recreate(groceries, [milk]))
+    XCTAssertNil(
+      ListUndo.step(for: .deleted, change: change, current: nil, nameTaken: true),
+      "a new list took the name")
+    XCTAssertNil(
+      ListUndo.step(for: .deleted, change: ListChange(before: nil, after: nil), current: nil))
+  }
+
+  func testNewListIsTakenAwayOnlyWhileEmpty() {
+    let change = ListChange(before: nil, after: groceries)
+    XCTAssertEqual(ListUndo.step(for: .created, change: change, current: groceries), .remove)
+    XCTAssertNil(
+      ListUndo.step(for: .created, change: change, current: groceries, taskCount: 1),
+      "reminders were added since")
+    XCTAssertNil(ListUndo.step(for: .created, change: change, current: shops), "renamed since")
+    XCTAssertNil(ListUndo.step(for: .created, change: change, current: nil), "already gone")
+  }
+
+  func testRenameAndLookGoBack() {
+    let rename = ListChange(before: groceries, after: shops)
+    XCTAssertEqual(
+      ListUndo.step(for: .renamed, change: rename, current: shops), .rename("Groceries"))
+    XCTAssertNil(ListUndo.step(for: .renamed, change: rename, current: groceries), "changed since")
+    XCTAssertNil(
+      ListUndo.step(for: .renamed, change: rename, current: shops, nameTaken: true),
+      "another list is called Groceries now")
+    let look = ListChange(before: groceries, after: greenBag)
+    XCTAssertEqual(
+      ListUndo.step(for: .edited, change: look, current: greenBag),
+      .restyle(colorIndex: 3, symbol: "cart"))
+    XCTAssertNil(ListUndo.step(for: .edited, change: look, current: groceries), "changed since")
+    XCTAssertNil(ListUndo.step(for: .settled, change: look, current: greenBag))
+  }
+
+  func testUndoIsOfferedForListsWithASnapshot() {
+    for a: LedgerAction in [.created, .deleted, .renamed, .edited] {
+      XCTAssertTrue(
+        LedgerFormat.canUndo(
+          action: a, itemKind: "list", approval: .userMade, hasItem: false, hasSnapshot: true,
+          alreadyUndone: false), "\(a)")
+      XCTAssertFalse(
+        LedgerFormat.canUndo(
+          action: a, itemKind: "list", approval: .userMade, hasItem: true, hasSnapshot: false,
+          alreadyUndone: false), "\(a): an older row, a list in Apple Reminders, or past 30 days")
+    }
+  }
 }

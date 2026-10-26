@@ -62,7 +62,9 @@
       list.createdAt = runtime.now()
       context.insert(list)
       try? context.save()
-      ledger.record(.created, kind: "list", title: list.name, context: context)
+      ledger.record(
+        .created, item: list, kind: "list", title: list.name,
+        snapshot: ListChange(before: nil, after: list.activitySnapshot), context: context)
       return list
     }
 
@@ -77,12 +79,43 @@
       guard nameProblem(trimmed, existing: existing, excluding: list) == nil else { return false }
       let old = list.name
       guard old != trimmed else { return true }
-      for task in tasks(in: old, context: context) { task.listName = trimmed }
-      list.name = trimmed
+      let before = list.activitySnapshot
+      move(list, to: trimmed, context: context)
+      ledger.record(
+        .renamed, item: list, kind: "list", title: trimmed, before: old, after: trimmed,
+        snapshot: ListChange(before: before, after: list.activitySnapshot), context: context)
+      return true
+    }
+
+    /// Sets a list's color and symbol (the list editor) and records the change so Activity can put the old look back.
+    package static func restyle(
+      _ list: OneList, colorIndex: Int, symbol: String, in context: ModelContext, ledger: Ledger
+    ) {
+      guard list.colorIndex != colorIndex || list.symbol != symbol else { return }
+      let before = list.activitySnapshot
+      list.colorIndex = colorIndex
+      list.symbol = symbol
       try? context.save()
       ledger.record(
-        .renamed, kind: "list", title: trimmed, before: old, after: trimmed, context: context)
-      return true
+        .edited, item: list, kind: "list", title: list.name,
+        snapshot: ListChange(before: before, after: list.activitySnapshot), context: context)
+    }
+
+    private static func move(_ list: OneList, to name: String, context: ModelContext) {
+      for task in tasks(in: list.name, context: context) { task.listName = name }
+      list.name = name
+      try? context.save()
+    }
+
+    /// Whether a delete can be put back exactly: the list and its reminders lived in Today only. A list in Apple
+    /// Reminders (or a reminder in one) would come back with new identifiers, and kept reminders may have changed since.
+    package static func deleteIsUndoable(
+      _ list: OneList, keepingTasks: Bool, context: ModelContext
+    ) -> Bool {
+      guard list.externalID == nil else { return false }
+      let tasks = tasks(in: list.name, context: context)
+      if keepingTasks { return tasks.isEmpty }
+      return tasks.allSatisfy { $0.externalID == nil }
     }
 
     /// Deletes the list (the UI asks first, with the count). Its reminders are deleted with it, or, with
@@ -92,6 +125,12 @@
       reminders: any ReminderService, ledger: Ledger, runtime: PlannerRuntime
     ) {
       guard !list.isDeleted else { return }
+      let change =
+        deleteIsUndoable(list, keepingTasks: keepingTasks, context: context)
+        ? ListChange(
+          before: list.activitySnapshot, after: nil,
+          tasks: keepingTasks ? [] : tasks(in: list.name, context: context).map(Ledger.snapshot))
+        : nil
       reminders.noteDeleted(list: list.externalID)
       for task in tasks(in: list.name, context: context) {
         if keepingTasks {
@@ -106,9 +145,65 @@
           context.delete(task)
         }
       }
-      ledger.record(.deleted, kind: "list", title: list.name, context: context)
+      ledger.record(.deleted, kind: "list", title: list.name, snapshot: change, context: context)
       context.delete(list)
       try? context.save()
+    }
+
+    /// Undo from Activity of a list change: takes an added (still empty) list away, puts a deleted one back with its
+    /// reminders, or gives back its old name or look. With Apple Reminders connected a rename or a new look goes up to the
+    /// same Apple list. Returns nil when done, else why it could not.
+    package static func undo(
+      _ entry: LedgerItem, context: ModelContext, reminders: any ReminderService, ledger: Ledger,
+      runtime: PlannerRuntime
+    ) -> String? {
+      guard entry.itemKind == "list", !ledger.isUndone(entry),
+        let change = ledger.undoSnapshot(ListChange.self, of: entry, context: context)
+      else { return ActivityUndoMessage.changedSince }
+      let list = ledger.model(OneList.self, for: entry, in: context).flatMap {
+        $0.isDeleted ? nil : $0
+      }
+      let existing = (try? context.fetch(FetchDescriptor<OneList>())) ?? []
+      let nameTaken =
+        change.before.map { nameProblem($0.name, existing: existing, excluding: list) != nil }
+        ?? false
+      guard
+        let step = ListUndo.step(
+          for: entry.actionValue, change: change, current: list?.activitySnapshot,
+          taskCount: list.map { taskCount(in: $0.name, context: context) } ?? 0,
+          nameTaken: nameTaken)
+      else { return ActivityUndoMessage.changedSince }
+      switch step {
+      case .remove:
+        guard let list else { return ActivityUndoMessage.changedSince }
+        reminders.noteDeleted(list: list.externalID)
+        context.delete(list)
+        try? context.save()
+        ledger.recordUndo(of: entry, context: context)
+      case .recreate(let s, let saved):
+        let restored = OneList(
+          name: s.name, colorIndex: s.colorIndex, symbol: s.symbol, order: s.order)
+        restored.pinned = s.pinned
+        restored.createdAt = runtime.now()
+        context.insert(restored)
+        for t in saved { context.insert(ledger.task(from: t)) }
+        try? context.save()
+        ledger.recordUndo(of: entry, item: restored, context: context)
+      case .rename(let name):
+        guard let list else { return ActivityUndoMessage.changedSince }
+        move(list, to: name, context: context)
+        reminders.scheduleReconcile()
+        ledger.recordUndo(of: entry, item: list, context: context)
+      case .restyle(let colorIndex, let symbol):
+        guard let list else { return ActivityUndoMessage.changedSince }
+        list.colorIndex = colorIndex
+        list.symbol = symbol
+        try? context.save()
+        reminders.scheduleReconcile()
+        ledger.recordUndo(of: entry, item: list, context: context)
+      }
+      ledger.flush(context)
+      return nil
     }
 
     /// Pins the list as a card at the top of Reminders, or unpins it.
@@ -132,6 +227,14 @@
     private static func tasks(in name: String, context: ModelContext) -> [OneTask] {
       (try? context.fetch(FetchDescriptor<OneTask>(predicate: #Predicate { $0.listName == name })))
         ?? []
+    }
+  }
+
+  extension OneList {
+    /// The name and look Activity keeps for Undo.
+    package var activitySnapshot: ListSnapshot {
+      ListSnapshot(
+        name: name, colorIndex: colorIndex, symbol: symbol, order: order, pinned: pinned)
     }
   }
 #endif
