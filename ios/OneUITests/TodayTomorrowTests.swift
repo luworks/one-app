@@ -95,7 +95,7 @@ final class TodayTomorrowTests: XCTestCase {
       app.buttons.matching(NSPredicate(format: "label ENDSWITH ' more'")).firstMatch.exists)
   }
 
-  /// The week strip on Today opens tomorrow in one tap, and "Back to today" returns.
+  /// The week strip on Today opens tomorrow in one tap; the bottom bar's Today button returns, with no extra row.
   func testWeekStripOpensTomorrowInOneTap() {
     let app = launch(at: "09:41")
     let cal = Calendar.current
@@ -107,11 +107,14 @@ final class TodayTomorrowTests: XCTestCase {
     XCTAssertTrue(next.waitForExistence(timeout: 3))
     let before = app.staticTexts["todayDate"].label
     next.tap()
-    XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 3))
+    XCTAssertTrue(next.waitForSelected(timeout: 3))
     XCTAssertNotEqual(app.staticTexts["todayDate"].label, before)
     XCTAssertTrue(app.staticTexts["Tomorrow anytime task"].waitForExistence(timeout: 3))
-    app.buttons["Back to today"].tap()
-    XCTAssertTrue(app.buttons["Back to today"].waitForNonExistence(timeout: 3))
+    XCTAssertFalse(
+      app.buttons["Back to today"].exists, "no Back to today row: the Today button is the way back")
+    app.returnToToday()
+    // Tapping it again on today keeps today.
+    app.returnToToday()
   }
 
   func testMorningSectionsStartCollapsedAndExpandAllOfTomorrow() {

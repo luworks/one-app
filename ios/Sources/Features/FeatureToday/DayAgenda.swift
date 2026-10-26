@@ -166,18 +166,6 @@
         if isTodayTab, showsHealth, let line = health.line {
           TodayHealthLine(line: line)
         }
-        if !showsWeekStrip, !cal.isDate(day, inSameDayAs: now) {
-          Button {
-            withAnimation(reduceMotion ? nil : .snappy) {
-              day = cal.startOfDay(for: presentation.now)
-            }
-          } label: {
-            Label("Back to today", systemImage: "arrow.uturn.backward").font(.subheadline)
-              .frame(minHeight: 44)
-          }
-          .listRowSeparator(.hidden)
-        }
-
         if !showsWeekStrip {
           if let error = actions.focus.errorMessage {
             Text(error).font(.footnote).foregroundStyle(.secondary)

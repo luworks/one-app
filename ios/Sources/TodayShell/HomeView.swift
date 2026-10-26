@@ -840,8 +840,10 @@
         // Keep the existing automation entry while giving VoiceOver the visible control's name.
         .accessibilityIdentifier("Ask AI or add anything")
         .accessibilityHint("Starts a new chat. Past chats are in the menu.")
+        // Always today itself: from another tab, and from another day on the Today tab.
         Button {
           traceTabAction(to: .today)
+          todayDay = session.runtime.calendar.startOfDay(for: session.runtime.now())
           tab = .today
         } label: {
           todayLabel(selected: tab == .today && !askVisible)
@@ -856,20 +858,25 @@
       .padding(.bottom, 4)
     }
 
+    /// The word "Today", like Apple Calendar's button: a capsule as tall as +.
     private func todayLabel(selected: Bool) -> some View {
-      Image(systemName: "sun.max")
-        .font(ButtonConfiguration.Icon.font)
+      Text("Today")
+        .font(.subheadline.weight(.semibold))
+        .lineLimit(1)
+        .fixedSize()
         .foregroundStyle(selected ? Color.primary : Color.secondary)
+        .padding(.horizontal, 14)
         .frame(
-          width: ButtonConfiguration.minimumHitSize, height: ButtonConfiguration.minimumHitSize
+          minWidth: ButtonConfiguration.minimumHitSize,
+          minHeight: ButtonConfiguration.minimumHitSize
         )
         .background(
           selected ? ButtonConfiguration.Icon.selectedFill : ButtonConfiguration.Icon.background,
-          in: Circle()
+          in: Capsule()
         )
-        .overlay { Circle().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
+        .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
         .animation(reduceMotion ? nil : PillStyle.selectionAnimation, value: selected)
-        .contentShape(Circle())
+        .contentShape(Capsule())
     }
 
     private var newReminderUsesPreferredList: Bool {

@@ -51,7 +51,7 @@ final class HealthReviewTests: XCTestCase {
     let day = app.buttons[tomorrow.formatted(date: .complete, time: .omitted)].firstMatch
     XCTAssertTrue(day.waitForExistence(timeout: 5))
     day.tap()
-    XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(tomorrow).waitForSelected())
     for _ in 0..<3 { app.swipeDown() }
     XCTAssertFalse(app.buttons["health.summary"].exists, "another day has no health line")
   }

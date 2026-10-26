@@ -53,10 +53,9 @@ final class RepeatingReminderTests: XCTestCase {
     XCTAssertTrue(day.waitForExistence(timeout: 5))
     day.tap()
     XCTAssertTrue(
-      app.buttons["Back to today"].waitForExistence(timeout: 5),
-      "tomorrow opens as a day of its own")
+      app.weekStripDay(tomorrow).waitForSelected(), "tomorrow opens as a day of its own")
     XCTAssertTrue(circle.waitForExistence(timeout: 3), "the next occurrence is on tomorrow")
-    app.buttons["Back to today"].tap()
+    app.returnToToday()
     XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
     XCTAssertEqual(rowsOnToday(), 0, "and still not on today")
 
