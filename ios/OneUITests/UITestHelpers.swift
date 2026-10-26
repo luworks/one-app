@@ -208,7 +208,30 @@ extension CGRect {
 }
 
 @MainActor
+extension XCUIApplication {
+  /// The Today tab's week strip button for a day ("weekStrip.2026-10-26"); it is selected while Today shows that day.
+  func weekStripDay(_ date: Date) -> XCUIElement {
+    let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+    return buttons[String(format: "weekStrip.%04d-%02d-%02d", c.year!, c.month!, c.day!)]
+  }
+
+  /// Taps the bottom bar's Today button and waits until Today shows today itself.
+  func returnToToday(file: StaticString = #filePath, line: UInt = #line) {
+    buttons["Today"].firstMatch.tap()
+    XCTAssertTrue(
+      weekStripDay(.now).waitForSelected(), "the Today button shows today", file: file, line: line)
+  }
+}
+
+@MainActor
 extension XCUIElement {
+  /// Waits for the selected trait, e.g. the week strip day Today is showing.
+  func waitForSelected(timeout: TimeInterval = 5) -> Bool {
+    let selected = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "isSelected == true"), object: self)
+    return XCTWaiter().wait(for: [selected], timeout: timeout) == .completed
+  }
+
   /// Check geometry before isHittable: XCTest can throw while deriving an off-screen element's activation point.
   func isFullyVisible(in viewport: CGRect) -> Bool {
     guard exists else { return false }

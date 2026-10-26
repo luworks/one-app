@@ -243,18 +243,17 @@ final class PerformanceClimbTests: XCTestCase {
     XCTAssertFalse(agenda.staticTexts["Today meeting 00"].exists)
     day.tap()
     XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
-    XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(tomorrow).waitForSelected())
     XCTAssertTrue(app.staticTexts["Tomorrow agenda event"].exists)
     captureNavigation("populated-selected-tomorrow")
     for _ in 0..<2 {
       tap("Calendar", sample: "today_to_calendar.month", ready: element("calendar.monthPager"))
       XCTAssertTrue(day.isSelected)
+      // The Today button always shows today itself; Calendar keeps its own selected day.
       tap("Today", sample: "calendar.month_to_today", ready: app.staticTexts["todayDate"])
-      XCTAssertTrue(app.staticTexts["Tomorrow agenda event"].exists)
+      XCTAssertTrue(app.weekStripDay(.now).waitForSelected())
+      XCTAssertFalse(app.staticTexts["Tomorrow agenda event"].exists)
     }
-    app.buttons["Back to today"].tap()
-    XCTAssertFalse(app.buttons["Back to today"].exists)
-    XCTAssertFalse(app.staticTexts["Tomorrow agenda event"].exists)
     captureNavigation("populated-back-to-today")
   }
 
