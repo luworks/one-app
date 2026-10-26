@@ -19,7 +19,7 @@ final class TodayDensityTests: XCTestCase {
         largeText ? "UICTContentSizeCategoryAccessibilityL" : "UICTContentSizeCategoryL",
       ]
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 8))
     XCTAssertTrue(app.buttons["health.summary"].waitForExistence(timeout: 5))
     return app
   }
@@ -80,7 +80,9 @@ final class TodayDensityTests: XCTestCase {
     XCTAssertTrue(app.buttons["Delete"].firstMatch.exists)
     capture(app, name: "today-density-swipe")
     // The swiped title is shifted toward the left edge, where a right drag opens the sidebar.
-    app.staticTexts["todayDate"].tap()
+    app.collectionViews.firstMatch.cells.containing(
+      NSPredicate(format: "label BEGINSWITH %@", "Free ")
+    ).firstMatch.tap()
     XCTAssertTrue(app.buttons["Settle"].firstMatch.waitForNonExistence(timeout: 3))
     complete.tap()
     XCTAssertTrue(app.staticTexts["Buy groceries and fill the car"].waitForNonExistence(timeout: 3))

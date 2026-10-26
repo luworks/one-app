@@ -160,7 +160,6 @@
     private var list: some View {
       let items = items(on: day, now: now)
       return List {
-        if !showsWeekStrip { DateTitle(day: day) }
         // Running timers: a live countdown at the top of today.
         if isTodayTab { TodayTimerRows(controller: timers, open: openTimer) }
         if isTodayTab, showsHealth, let line = health.line {
@@ -199,7 +198,7 @@
             if showsWeekStrip { AgendaHeader(title: "All day") }
           }
         }
-        // The Today tab names its day in the row at the top; the timeline needs no label of its own.
+        // The Today tab's week strip names its day; the timeline needs no label of its own.
         if showsWeekStrip {
           Section {
             timelineContent(items)
@@ -833,23 +832,6 @@
   }
 
   /// Small section label for the day view, so headers take less space than the default plain-list header.
-  /// The day this page shows, in the system's own style ("Saturday, Oct 17"); the first row of the Today tab.
-  struct DateTitle: View {
-    @Environment(PlannerPresentation.self) private var presentation
-    let day: Date
-    package var body: some View {
-      Text(
-        day.plannerFormatted(
-          .dateTime.weekday(.wide).month(.abbreviated).day(), runtime: presentation.runtime)
-      )
-      .font(.subheadline.weight(.bold))
-      .listRowSeparator(.hidden)
-      .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 0, trailing: 20))
-      .accessibilityAddTraits(.isHeader)
-      .accessibilityIdentifier("todayDate")
-    }
-  }
-
   struct AgendaHeader: View {
     let title: String
     var isInline = false

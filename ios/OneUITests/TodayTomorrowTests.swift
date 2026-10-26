@@ -13,7 +13,7 @@ final class TodayTomorrowTests: XCTestCase {
         "-uiTestingPrefs", "showFreeTime=0",
       ]
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
     return app
   }
 
@@ -105,10 +105,9 @@ final class TodayTomorrowTests: XCTestCase {
     let next = app.buttons[id]
     if !next.exists { app.buttons["Next week"].firstMatch.tap() }
     XCTAssertTrue(next.waitForExistence(timeout: 3))
-    let before = app.staticTexts["todayDate"].label
     next.tap()
     XCTAssertTrue(next.waitForSelected(timeout: 3))
-    XCTAssertNotEqual(app.staticTexts["todayDate"].label, before)
+    XCTAssertFalse(app.weekStripDay(.now).isSelected, "only the shown day is selected")
     XCTAssertTrue(app.staticTexts["Tomorrow anytime task"].waitForExistence(timeout: 3))
     XCTAssertFalse(
       app.buttons["Back to today"].exists, "no Back to today row: the Today button is the way back")

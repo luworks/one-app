@@ -21,7 +21,7 @@ final class PageSecondaryPerformanceTests: XCTestCase {
       // No -uiTestingCalendarSync: the existing test hook keeps EventKit sync off.
       XCTAssertFalse(app.launchArguments.contains("-uiTestingCalendarSync"))
       app.launch()
-      XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+      XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
     }
   }
 

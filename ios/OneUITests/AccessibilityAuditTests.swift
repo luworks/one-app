@@ -31,7 +31,7 @@ final class AccessibilityAuditTests: XCTestCase {
       ]
     app.launch()
     addTeardownBlock { app.terminate() }
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 10))
     return app
   }
 

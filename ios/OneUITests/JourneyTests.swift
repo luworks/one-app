@@ -60,7 +60,7 @@ final class JourneyTests: XCTestCase {
         .waitForExistence(timeout: 5))
     XCTAssertFalse(
       app.staticTexts["Due today"].exists, "one timeline: no separate Due today section")
-    XCTAssertTrue(app.staticTexts["todayDate"].exists)
+    XCTAssertTrue(app.staticTexts["weekStrip.month"].exists)
     XCTAssertTrue(app.staticTexts["Buy milk"].exists)
     XCTAssertEqual(taps, 0, "J2 needs no taps")
   }

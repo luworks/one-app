@@ -15,7 +15,7 @@ final class TodayTimerTests: XCTestCase {
     app.launchArguments =
       TestData.launchArguments + (timers.map { ["-uiTestingTimers", $0] } ?? [])
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
   }
 
   private var rows: XCUIElementQuery {
@@ -41,9 +41,9 @@ final class TodayTimerTests: XCTestCase {
       rows.element(boundBy: 1).label.hasPrefix("Timer"), "an unnamed timer is called Timer")
     XCTAssertTrue(more.exists)
     XCTAssertEqual(more.label, "+2 more")
-    // The rows sit at the top of the day, under its title.
+    // The rows sit at the top of the day, right under the week strip.
     XCTAssertLessThanOrEqual(
-      app.staticTexts["todayDate"].frame.maxY, rows.element(boundBy: 0).frame.minY + 1)
+      app.weekStripDay(.now).frame.maxY, rows.element(boundBy: 0).frame.minY + 1)
   }
 
   func testPauseResumeAndStopFromTheRow() {

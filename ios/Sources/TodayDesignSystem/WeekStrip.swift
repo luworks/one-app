@@ -20,21 +20,38 @@
       return c
     }
 
-    private var days: [Date] {
+    private var weekDays: [Date] {
       let start = cal.dateInterval(of: .weekOfYear, for: selected)?.start ?? selected
       return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
     }
 
     package var body: some View {
+      VStack(alignment: .leading, spacing: 0) {
+        // The week's month and year, quiet like Apple Calendar's week header.
+        Text(
+          selected.formatted(
+            Date.FormatStyle(locale: presentation.locale, calendar: cal, timeZone: cal.timeZone)
+              .month(.wide).year())
+        )
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(Color(.secondaryLabel))
+        .padding(.leading, 12)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("weekStrip.month")
+        days
+      }
+    }
+
+    private var days: some View {
       let now = presentation.now
-      HStack(spacing: 2) {
+      return HStack(spacing: 2) {
         Button {
           shift(-7)
         } label: {
           Image(systemName: "chevron.left").padding(6)
         }
         .accessibilityLabel("Previous week")
-        ForEach(days, id: \.self) { d in
+        ForEach(weekDays, id: \.self) { d in
           let isSelected = cal.isDate(d, inSameDayAs: selected)
           Button {
             selected = cal.startOfDay(for: d)
