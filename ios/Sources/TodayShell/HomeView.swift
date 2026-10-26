@@ -753,21 +753,22 @@
         // The month on screen sits right of the pills; when it doesn't fit it gets shorter, then goes, before the
         // pills shrink. Only scrolls when the pills alone don't fit (very large text). Otherwise there is no scroll
         // view to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
-        ViewThatFits(in: .horizontal) {
+        // Only the label picks its length: the pills stay one view, so switching tabs never swaps the whole row
+        // (a swapped row left the old selected pill fading out over the new one, e.g. Reminders → Clock).
+        HStack(spacing: 12) {
+          ViewThatFits(in: .horizontal) {
+            pills
+            ScrollView(.horizontal, showsIndicators: false) { pills }
+          }
+          .layoutPriority(1)
+          Spacer(minLength: 0)
           if let days = shownDays {
-            HStack(spacing: 12) {
-              pills
-              Spacer(minLength: 0)
+            ViewThatFits(in: .horizontal) {
               monthLabel(days, .full)
-            }
-            HStack(spacing: 12) {
-              pills
-              Spacer(minLength: 0)
               monthLabel(days, .short)
+              Color.clear.frame(width: 0, height: 0)
             }
           }
-          pills
-          ScrollView(.horizontal, showsIndicators: false) { pills }
         }
         Spacer(minLength: 0)
       }
