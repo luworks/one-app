@@ -13,7 +13,7 @@ final class TodayTimelineTests: XCTestCase {
       app = XCUIApplication()
       app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "09:41"]
       app.launch()
-      XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+      XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     }
   }
 
@@ -27,8 +27,9 @@ final class TodayTimelineTests: XCTestCase {
     let day = app.weekStripDay(.now)
     XCTAssertTrue(day.waitForSelected())
     XCTAssertEqual(day.label, Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+    // Its month sits in the top bar, on the row of the tab pills.
     XCTAssertEqual(
-      app.staticTexts["weekStrip.month"].label, Date.now.formatted(.dateTime.month(.wide).year()))
+      app.staticTexts["topBar.month"].label, Date.now.formatted(.dateTime.month(.wide).year()))
     XCTAssertFalse(app.staticTexts["Schedule"].exists, "the timeline needs no label of its own")
   }
 

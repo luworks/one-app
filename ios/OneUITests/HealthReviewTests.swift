@@ -19,7 +19,7 @@ final class HealthReviewTests: XCTestCase {
 
   /// Today scrolls to the Now line; the health line sits above everything, so scroll back to the top for it.
   private func healthLine(_ app: XCUIApplication) -> XCUIElement {
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     let line = app.buttons["health.summary"]
     for _ in 0..<4 where !(line.exists && line.isHittable) { app.swipeDown() }
     return line
@@ -58,7 +58,7 @@ final class HealthReviewTests: XCTestCase {
 
   func testSettingTurnsTheLineOff() {
     let app = launch(at: "09:41", healthOn: false)
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     func openSetting() -> XCUIElement {
       app.openSidebar()
       let settings = app.buttons["Settings"].firstMatch

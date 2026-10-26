@@ -23,7 +23,7 @@ final class CalendarDeleteSyncTests: XCTestCase {
       // A slow simulator can fail the relaunch ("Failed to terminate"); that is not the test's result.
       XCTExpectFailure("cleanup only", options: .nonStrict()) {
         let app = launch(["-debugDeleteSystemEvent", title])
-        _ = app.staticTexts["weekStrip.month"].waitForExistence(timeout: 10)
+        _ = app.weekStripDay(.now).waitForExistence(timeout: 10)
         sleep(2)
         app.terminate()
       }
@@ -83,7 +83,7 @@ final class CalendarDeleteSyncTests: XCTestCase {
 
     // Now it is deleted in Apple Calendar (the hook removes the system copy, as the Calendar app would).
     app = launch(["-debugDeleteSystemEvent", title])
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 10), "Today loaded")
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 10), "Today loaded")
     sleep(3)
     for _ in 0..<8 { app.swipeUp() }
     XCTAssertFalse(row(app).exists, "the local copy went with the Apple Calendar event")
@@ -104,7 +104,7 @@ final class CalendarDeleteSyncTests: XCTestCase {
 
     // A new store would show the system copy if it were still there: this store has the local copy deleted too.
     app = launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 10))
     sleep(3)
     for _ in 0..<8 { app.swipeUp() }
     XCTAssertFalse(row(app).exists, "gone from Apple Calendar as well")

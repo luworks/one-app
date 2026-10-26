@@ -13,7 +13,7 @@ final class TodayTomorrowTests: XCTestCase {
         "-uiTestingPrefs", "showFreeTime=0",
       ]
     app.launch()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     return app
   }
 

@@ -17,7 +17,7 @@ final class RepeatingReminderTests: XCTestCase {
         TestData.fixtureArguments("repeating-reminder-daily-home.json")
         + ["-uiTestingNow", "09:41"]
       app.launch()
-      XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+      XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     }
   }
 
@@ -56,7 +56,7 @@ final class RepeatingReminderTests: XCTestCase {
       app.weekStripDay(tomorrow).waitForSelected(), "tomorrow opens as a day of its own")
     XCTAssertTrue(circle.waitForExistence(timeout: 3), "the next occurrence is on tomorrow")
     app.returnToToday()
-    XCTAssertTrue(app.staticTexts["weekStrip.month"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     XCTAssertEqual(rowsOnToday(), 0, "and still not on today")
 
     // Scheduled lists it once, with the new date.

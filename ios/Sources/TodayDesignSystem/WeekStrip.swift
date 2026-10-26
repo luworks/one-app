@@ -26,23 +26,6 @@
     }
 
     package var body: some View {
-      VStack(alignment: .leading, spacing: 0) {
-        // The week's month and year, quiet like Apple Calendar's week header.
-        Text(
-          selected.formatted(
-            Date.FormatStyle(locale: presentation.locale, calendar: cal, timeZone: cal.timeZone)
-              .month(.wide).year())
-        )
-        .font(.footnote.weight(.semibold))
-        .foregroundStyle(Color(.secondaryLabel))
-        .padding(.leading, 12)
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityIdentifier("weekStrip.month")
-        days
-      }
-    }
-
-    private var days: some View {
       let now = presentation.now
       return HStack(spacing: 2) {
         Button {

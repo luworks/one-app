@@ -32,6 +32,8 @@
     let onOpenTask: @MainActor (OneTask) -> Void
     let onOpenAlarm: @MainActor (OneAlarm) -> Void
     let onOpenDay: @MainActor (Date) -> Void
+    /// The first and last day on screen (one month's start in Month), for the top bar's month label.
+    let onVisibleDays: @MainActor (ClosedRange<Date>) -> Void
 
     @State private var opened: EventPresentation?
     /// Outlives Year itself, so Month ↔ Year reuses the computed marks.
@@ -48,8 +50,6 @@
       }
     }
 
-    /// The month title of the visible days / month page, published by the page and shown in the control row.
-    @State private var title = ""
     private var cal: Calendar {
       Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
     }
@@ -60,7 +60,8 @@
       actions: PlannerActions, ledger: Ledger, alarms: any AlarmService,
       onOpenTask: @escaping @MainActor (OneTask) -> Void,
       onOpenAlarm: @escaping @MainActor (OneAlarm) -> Void,
-      onOpenDay: @escaping @MainActor (Date) -> Void
+      onOpenDay: @escaping @MainActor (Date) -> Void,
+      onVisibleDays: @escaping @MainActor (ClosedRange<Date>) -> Void = { _ in }
     ) {
       _day = day
       _mode = mode
@@ -71,6 +72,7 @@
       self.onOpenTask = onOpenTask
       self.onOpenAlarm = onOpenAlarm
       self.onOpenDay = onOpenDay
+      self.onVisibleDays = onVisibleDays
     }
 
     package var body: some View {
@@ -80,12 +82,12 @@
           switch mode {
           case .threeDay:
             ThreeDayView(
-              calendar: calendar, day: $day, title: $title, open: open, edit: edit, create: create,
-              openDay: openDay)
+              calendar: calendar, day: $day, onVisibleDays: onVisibleDays, open: open, edit: edit,
+              create: create, openDay: openDay)
           case .month:
             MonthView(
-              calendar: calendar, day: $day, title: $title, open: open, edit: edit, openDay: openDay
-            )
+              calendar: calendar, day: $day, onVisibleDays: onVisibleDays, open: open, edit: edit,
+              openDay: openDay)
           case .year:
             YearView(day: $day, calendar: calendar, marks: yearMarks, openDay: showMonth) { month in
               day = CalendarMath.landingDay(
@@ -146,8 +148,8 @@
 
     // MARK: One control row: the view switcher
 
-    /// 3 Day / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned, with the
-    /// month title of the visible page on the same row, right-aligned (Year has no title).
+    /// 3 Day / Month / Year as pills, the same style as the top tab pills (one size down), left-aligned. The month on
+    /// screen is named once, in the top bar (`onVisibleDays`).
     private var controlRow: some View {
       HStack(spacing: PillStyle.spacing) {
         HStack(spacing: PillStyle.spacing) {
@@ -163,17 +165,7 @@
         .fixedSize()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("View")
-        Spacer(minLength: 8)
-        if mode != .year, !title.isEmpty {
-          Text(title)
-            .font(.title2.bold())
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .multilineTextAlignment(.trailing)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier(
-              mode == .threeDay ? "calendar.daysTitle" : "calendar.monthTitle")
-        }
+        Spacer(minLength: 0)
       }
       .padding(.horizontal, 20)
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -256,7 +248,7 @@
     let calendar: any CalendarService
     @Environment(PlannerPresentation.self) private var presentation
     @Binding var day: Date
-    @Binding var title: String
+    var onVisibleDays: @MainActor (ClosedRange<Date>) -> Void
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void
     var openDay: (Date) -> Void
@@ -309,9 +301,7 @@
         }
         day = CalendarMath.landingDay(inMonthOf: month(new), today: presentation.now, calendar: cal)
       }
-      .onChange(of: current, initial: true) { _, new in
-        title = month(new).plannerFormatted(.dateTime.month(.wide), runtime: presentation.runtime)
-      }
+      .onChange(of: current, initial: true) { _, new in onVisibleDays(month(new)...month(new)) }
       .onAppear { pos = CalendarMath.monthOffset(of: day, from: base, calendar: cal) }
     }
 
@@ -1025,7 +1015,7 @@
     @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.colorScheme) private var colorScheme
     @Binding var day: Date
-    @Binding var title: String
+    var onVisibleDays: @MainActor (ClosedRange<Date>) -> Void
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void
     var create: (Date, Date) -> Void
@@ -1094,25 +1084,14 @@
         guard let new, offset(of: day) != new else { return }
         day = date(new)
       }
-      .onChange(of: daysTitle, initial: true) { _, new in title = new }
+      .onChange(of: visibleDays, initial: true) { _, new in onVisibleDays(new) }
       .onAppear {
         pos = offset(of: day)
         scroll.columns = CGFloat(offset(of: day))
       }
     }
 
-    /// "October", or "Oct – Nov" when the three days cross into the next month.
-    private var daysTitle: String {
-      let start = date(first)
-      let end = date(first + Self.columns - 1)
-      if cal.isDate(start, equalTo: end, toGranularity: .month) {
-        return start.plannerFormatted(.dateTime.month(.wide), runtime: presentation.runtime)
-      }
-      let months = [start, end].map {
-        $0.plannerFormatted(.dateTime.month(.abbreviated), runtime: presentation.runtime)
-      }
-      return months.joined(separator: " – ")
-    }
+    private var visibleDays: ClosedRange<Date> { date(first)...date(first + Self.columns - 1) }
 
     // MARK: Header
 

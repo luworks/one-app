@@ -62,6 +62,7 @@
       let today = composition.session.runtime.calendar.startOfDay(
         for: composition.session.runtime.now())
       _calendarDay = State(initialValue: today)
+      _calendarShown = State(initialValue: today...today)
       _todayDay = State(initialValue: today)
       _todayReferenceNow = State(initialValue: composition.session.runtime.now())
       _tab = State(
@@ -89,6 +90,8 @@
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
     // (the open list in Reminders, 3 Day / Month / Year in Calendar, the day in Today).
     @State private var calendarMode: CalendarView.Mode
+    /// The first and last day the Calendar page shows, published by it for the top bar's month label.
+    @State private var calendarShown: ClosedRange<Date>
     /// Alarms · World Clock · Stopwatch · Timer inside the Clock tab.
     @State private var clockSection: ClockSection
     @State private var addingCity = false
@@ -479,11 +482,12 @@
               mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode,
               calendar: session.calendar, actions: session.actions, ledger: session.ledger,
               alarms: session.alarms, onOpenTask: { editor = .task($0) },
-              onOpenAlarm: { editor = .alarm($0) }
-            ) { picked in
-              todayDay = picked
-              tab = .today
-            }
+              onOpenAlarm: { editor = .alarm($0) },
+              onOpenDay: { picked in
+                todayDay = picked
+                tab = .today
+              },
+              onVisibleDays: { calendarShown = $0 })
           case .tasks:
             RemindersView(
               isPushed: $remindersPushed,
@@ -746,9 +750,22 @@
         ) {
           drawer.set(open: true)
         }
-        // Only scrolls when the pills don't fit (very large text). Otherwise there is no scroll view
-        // to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
+        // The month on screen sits right of the pills; when it doesn't fit it gets shorter, then goes, before the
+        // pills shrink. Only scrolls when the pills alone don't fit (very large text). Otherwise there is no scroll
+        // view to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
         ViewThatFits(in: .horizontal) {
+          if let days = shownDays {
+            HStack(spacing: 12) {
+              pills
+              Spacer(minLength: 0)
+              monthLabel(days, .full)
+            }
+            HStack(spacing: 12) {
+              pills
+              Spacer(minLength: 0)
+              monthLabel(days, .short)
+            }
+          }
           pills
           ScrollView(.horizontal, showsIndicators: false) { pills }
         }
@@ -759,6 +776,32 @@
       .contentShape(Rectangle())
       // Chrome stays usable at the largest text sizes; content below still scales fully.
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    /// The days whose month the top bar names: Today's day, what Calendar shows, else this month. Nil in
+    /// Calendar's Year, which names each year in its own heading.
+    private var shownDays: ClosedRange<Date>? {
+      switch tab {
+      case .today: return todayDay...todayDay
+      case .calendar: return calendarMode == .year ? nil : calendarShown
+      case .tasks, .clock:
+        let now = session.runtime.now()
+        return now...now
+      }
+    }
+
+    /// Quiet, like Apple Calendar's month above its week; inert for now.
+    private func monthLabel(_ days: ClosedRange<Date>, _ length: MonthLabel.Length) -> some View {
+      Text(
+        MonthLabel.text(
+          first: days.lowerBound, last: days.upperBound, length: length,
+          calendar: presentation.calendar, locale: presentation.locale)
+      )
+      .font(.footnote.weight(.semibold))
+      .foregroundStyle(Color(.secondaryLabel))
+      .lineLimit(1)
+      .fixedSize()
+      .accessibilityIdentifier("topBar.month")
     }
 
     private var pills: some View {

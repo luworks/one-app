@@ -39,7 +39,7 @@ final class PerformanceBaselineTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Ask AI or add anything"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["New"].isHittable)
-        XCTAssertTrue(app.staticTexts["weekStrip.month"].exists)
+        XCTAssertTrue(app.weekStripDay(.now).exists)
       }
       let probe = app.staticTexts["coldStartMs"]
       XCTAssertTrue(probe.waitForExistence(timeout: 5))
@@ -74,7 +74,7 @@ final class PerformanceBaselineTests: XCTestCase {
         tap(app.buttons["Clock"].firstMatch, ready: app.buttons["World Clock"])
       }
       sample("clock_to_today") {
-        tap(app.buttons["Today"].firstMatch, ready: app.staticTexts["weekStrip.month"])
+        tap(app.buttons["Today"].firstMatch, ready: app.weekStripDay(.now))
       }
     }
     // Health may be above the automatic scroll-to-now position; reveal outside the timed interval.

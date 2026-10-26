@@ -351,7 +351,7 @@ final class CRUDTests: XCTestCase {
     let month = app.buttons["calendar.mode.month"]
     XCTAssertTrue(month.waitForExistence(timeout: 5))
     month.tap()
-    XCTAssertTrue(element("calendar.monthTitle").waitForExistence(timeout: 5))
+    XCTAssertTrue(element("calendar.monthPager").waitForExistence(timeout: 5))
   }
 
   /// In Month, selects `day` (paging to its month first if needed).
@@ -497,7 +497,7 @@ final class CRUDTests: XCTestCase {
     if app.buttons["Cancel"].exists {
       app.buttons["Cancel"].tap()
     } else {
-      dismissPopover(tapping: element("calendar.monthTitle"))
+      dismissPopover(tapping: element("topBar.month"))
     }
     XCTAssertTrue(
       app.buttons["Delete All Occurrences"].waitForNonExistence(timeout: 3), "the question closes")

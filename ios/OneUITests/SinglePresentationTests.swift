@@ -142,8 +142,7 @@ final class SinglePresentationTests: XCTestCase {
   private func showThreeDay() {
     app.buttons["Calendar"].firstMatch.tap()
     app.buttons["calendar.mode.threeday"].tap()
-    XCTAssertTrue(
-      app.descendants(matching: .any)["calendar.daysTitle"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["calendar.mode.threeday"].waitForSelected())
     XCTAssertTrue(labeled("Product sync").waitForExistence(timeout: 5))
     sleep(2)  // the grid scrolls to 7:00 when it appears; measure after that
   }
@@ -233,8 +232,7 @@ final class SinglePresentationTests: XCTestCase {
     showThreeDay()
     shot("week-tints")
     app.buttons["calendar.mode.month"].tap()
-    XCTAssertTrue(
-      app.descendants(matching: .any)["calendar.monthTitle"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["calendar.mode.month"].waitForSelected())
     shot("month-tints")
   }
 
