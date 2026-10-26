@@ -3,6 +3,7 @@
   import SwiftUI
   import SwiftData
   import TodayCore
+  import TodayData
   /// "Alarm 07:00" or "Alarm 07:00 · Gym", for Activity.
   @MainActor
   package func alarmTitle(_ a: OneAlarm, runtime: PlannerRuntime) -> String {
@@ -121,15 +122,20 @@
     ) -> Bool {
       do {
         var backup = try remove(alarm, context: context, alarms: alarms)
-        ledger.record(
-          .deleted, kind: "alarm", title: alarmTitle(backup, runtime: runtime), context: context)
+        let entry = ledger.record(
+          .deleted, kind: "alarm", title: alarmTitle(backup, runtime: runtime),
+          snapshot: AlarmChange(before: backup.activitySnapshot, after: nil), context: context)
         var restoring = false
         func restore() {
-          guard !restoring, backup.modelContext == nil else { return }
+          // Activity's Undo may have put it back already.
+          guard !restoring, backup.modelContext == nil, !ledger.isUndone(entry) else { return }
           restoring = true
           Task { @MainActor in
             defer { restoring = false }
-            do { try await alarms.commit(backup, context: context) } catch {
+            do {
+              try await alarms.commit(backup, context: context)
+              ledger.recordUndo(of: entry, item: backup, context: context)
+            } catch {
               backup = backup.snapshot()
               toast?.show(
                 "Couldn’t restore alarm. Check alarm access and try Undo again.", undo: restore)
@@ -142,6 +148,116 @@
         toast?.showNotice(error.localizedDescription)
         return false
       }
+    }
+
+    /// Records an edit made in the alarm editor, or a flip of its switch, with the settings before and after so Activity
+    /// can put them back. Nothing is recorded when nothing changed.
+    package static func recordChange(
+      _ alarm: OneAlarm, from before: AlarmSnapshot, ledger: Ledger, runtime: PlannerRuntime,
+      context: ModelContext, actor: LedgerActor = .you, channel: LedgerChannel = .app
+    ) {
+      let after = alarm.activitySnapshot
+      guard after != before else { return }
+      var onlySwitch = before
+      onlySwitch.isOn = after.isOn
+      let action: LedgerAction =
+        onlySwitch == after ? (after.isOn ? .switchedOn : .switchedOff) : .edited
+      ledger.record(
+        action, item: alarm, kind: "alarm", title: alarmTitle(alarm, runtime: runtime),
+        before: action == .edited ? summary(before, runtime: runtime) : "",
+        after: action == .edited ? summary(after, runtime: runtime) : "",
+        actor: actor, channel: channel,
+        snapshot: AlarmChange(before: before, after: after), context: context)
+    }
+
+    /// Records a new alarm (Add Alarm, the chat, Siri) with its settings, so Activity's Undo can take it away again.
+    @discardableResult
+    package static func recordCreated(
+      _ alarm: OneAlarm, title: String? = nil, after: String = "", ledger: Ledger,
+      runtime: PlannerRuntime, context: ModelContext, actor: LedgerActor = .you,
+      channel: LedgerChannel = .app, approval: LedgerApproval = .userMade
+    ) -> LedgerItem {
+      ledger.record(
+        .created, item: alarm, kind: "alarm", title: title ?? alarmTitle(alarm, runtime: runtime),
+        after: after, actor: actor, channel: channel, approval: approval,
+        snapshot: AlarmChange(before: nil, after: alarm.activitySnapshot), context: context)
+    }
+
+    /// "07:00 · Every day · Gym", for an edit's before → after.
+    private static func summary(_ s: AlarmSnapshot, runtime: PlannerRuntime) -> String {
+      let parts = AlarmPlan.timeParts(hour: s.hour, minute: s.minute, locale: runtime.locale)
+      let time = [parts.time, parts.suffix].compactMap { $0 }.joined(separator: " ")
+      let repeats = AlarmPlan.repeatValue(weekdays: s.weekdays, calendar: runtime.calendar)
+      return ([time, repeats] + (s.label.isEmpty ? [] : [s.label])).joined(separator: " · ")
+    }
+
+    private static var undoing: Set<UUID> = []
+
+    /// Undo from Activity of an alarm change: takes an added alarm away, adds a deleted one back as a new alarm, or puts
+    /// an edited one's settings back, and schedules it with AlarmKit. Returns nil when done, else why it could not.
+    package static func undo(
+      _ entry: LedgerItem, context: ModelContext, alarms: any AlarmService, ledger: Ledger,
+      runtime: PlannerRuntime
+    ) async -> String? {
+      guard entry.itemKind == "alarm", !undoing.contains(entry.id),
+        let change = ledger.undoSnapshot(AlarmChange.self, of: entry, context: context)
+      else { return ActivityUndoMessage.changedSince }
+      undoing.insert(entry.id)
+      defer { undoing.remove(entry.id) }
+      let alarm = ledger.model(OneAlarm.self, for: entry, in: context)
+      let current = alarm.flatMap { $0.isDeleted ? nil : $0.activitySnapshot }
+      guard let step = AlarmUndo.step(for: entry.actionValue, change: change, current: current)
+      else { return ActivityUndoMessage.changedSince }
+      switch step {
+      case .remove:
+        guard let alarm else { return ActivityUndoMessage.changedSince }
+        do { try remove(alarm, context: context, alarms: alarms) } catch {
+          return error.localizedDescription
+        }
+        ledger.recordUndo(of: entry, context: context)
+      case .recreate(let settings):
+        let restored = OneAlarm(hour: settings.hour, minute: settings.minute)
+        restored.apply(settings)
+        restored.createdAt = runtime.now()
+        do { try await alarms.commit(restored, context: context) } catch {
+          return error.localizedDescription
+        }
+        ledger.recordUndo(of: entry, item: restored, context: context)
+      case .restore(let settings):
+        guard let alarm else { return ActivityUndoMessage.changedSince }
+        alarm.apply(settings)
+        // A one-time alarm counts from now again, and exactly this alarm is rescheduled.
+        alarm.createdAt = runtime.now()
+        alarm.alarmKitSignature = nil
+        do { try await alarms.commit(alarm, context: context) } catch {
+          return error.localizedDescription
+        }
+        ledger.recordUndo(of: entry, item: alarm, context: context)
+      }
+      ledger.flush(context)
+      return nil
+    }
+  }
+
+  extension OneAlarm {
+    /// The settings Activity keeps for Undo.
+    package var activitySnapshot: AlarmSnapshot {
+      AlarmSnapshot(
+        hour: hour, minute: minute, label: label, note: note, weekdays: weekdays, isOn: isOn,
+        snooze: snooze, sound: sound, snoozeMinutes: snoozeMinutes)
+    }
+
+    /// Puts kept settings back. Identity (`alarmKitID`) and `createdAt` stay as they are.
+    package func apply(_ s: AlarmSnapshot) {
+      hour = s.hour
+      minute = s.minute
+      label = s.label
+      note = s.note
+      weekdays = s.weekdays
+      isOn = s.isOn
+      snooze = s.snooze
+      sound = s.sound
+      snoozeMinutes = s.snoozeMinutes
     }
   }
 #endif

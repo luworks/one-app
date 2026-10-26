@@ -45,7 +45,8 @@
     private struct Pending {
       var item: LedgerItem
       var snapshot: Data?
-      var task: OneTask?
+      /// The reminder or alarm it is about; its id goes in `subject_ref` once saved.
+      var model: (any PersistentModel)?
     }
 
     private var pending: [Pending] = []
@@ -53,11 +54,12 @@
 
     @discardableResult
     package func record(
-      _ action: LedgerAction, task: OneTask? = nil, kind: String = "task", title: String,
+      _ action: LedgerAction, task: OneTask? = nil, item model: (any PersistentModel)? = nil,
+      kind: String = "task", title: String,
       before: String = "", after: String = "", beforeDate: Date? = nil, afterDate: Date? = nil,
       actor: LedgerActor = .you, channel: LedgerChannel = .app,
       approval: LedgerApproval = .userMade,
-      snapshot: TaskSnapshot? = nil, undoOf: UUID? = nil, context: ModelContext
+      snapshot: (any Encodable)? = nil, undoOf: UUID? = nil, context: ModelContext
     ) -> LedgerItem {
       var item = LedgerItem(
         actor: actor, channel: channel, action: action, itemKind: kind, title: title,
@@ -70,7 +72,7 @@
       let data = snapshot.flatMap { try? JSONEncoder().encode($0) }
       item.hasSnapshot = data != nil
       guard !disposed else { return item }
-      pending.append(Pending(item: item, snapshot: data, task: task))
+      pending.append(Pending(item: item, snapshot: data, model: task ?? model))
       scheduleFlush(context)
       return item
     }
@@ -78,14 +80,14 @@
     /// Records that `entry` was undone (by you, unless said otherwise).
     @discardableResult
     package func recordUndo(
-      of entry: LedgerItem, task: OneTask? = nil, actor: LedgerActor = .you,
-      channel: LedgerChannel = .app,
+      of entry: LedgerItem, task: OneTask? = nil, item model: (any PersistentModel)? = nil,
+      actor: LedgerActor = .you, channel: LedgerChannel = .app,
       context: ModelContext
     ) -> LedgerItem {
       undoneIDs.insert(entry.id)
       return record(
-        .undone, task: task, kind: entry.itemKind, title: entry.title, before: entry.after,
-        after: entry.before,
+        .undone, task: task, item: model, kind: entry.itemKind, title: entry.title,
+        before: entry.after, after: entry.before,
         actor: actor, channel: channel, approval: .userMade, undoOf: entry.id, context: context)
     }
 
@@ -108,7 +110,7 @@
       pendingContext = nil
       flushScheduled = false
       if !pending.isEmpty {
-        if pending.contains(where: { $0.task != nil }) {
+        if pending.contains(where: { $0.model != nil }) {
           do { try context.save() } catch {
             pendingContext = context
             return
@@ -116,8 +118,8 @@
         }
         let recorder = activity.recorder
         for var p in pending {
-          if let task = p.task, !task.isDeleted, task.modelContext != nil {
-            p.item.itemRef = Self.ref(task.persistentModelID)
+          if let model = p.model, !model.isDeleted, model.modelContext != nil {
+            p.item.itemRef = Self.ref(model.persistentModelID)
           }
           recorder.record(p.item.event(snapshot: p.snapshot, calendar: runtime.calendar))
         }
@@ -150,12 +152,38 @@
 
     /// The reminder an entry points at, if it still exists.
     package func task(for entry: LedgerItem, in context: ModelContext) -> OneTask? {
+      model(OneTask.self, for: entry, in: context)
+    }
+
+    /// The reminder, alarm or list an entry points at, if it still exists.
+    package func model<T: PersistentModel>(
+      _ type: T.Type, for entry: LedgerItem, in context: ModelContext
+    ) -> T? {
       guard let ref = entry.itemRef, let data = ref.data(using: .utf8),
         let id = try? JSONDecoder().decode(PersistentIdentifier.self, from: data)
       else { return nil }
-      var d = FetchDescriptor<OneTask>(predicate: #Predicate { $0.persistentModelID == id })
+      var d = FetchDescriptor<T>(predicate: #Predicate { $0.persistentModelID == id })
       d.fetchLimit = 1
       return (try? context.fetch(d))?.first
+    }
+
+    /// Whether `entry` was undone already (here, or in the store by an earlier launch).
+    package func isUndone(_ entry: LedgerItem) -> Bool {
+      if undoneIDs.contains(entry.id) { return true }
+      let undone = try? activity.store?.undone(among: [entry.id.uuidString])
+      return undone?.contains(entry.id.uuidString) == true
+    }
+
+    /// The Undo snapshot stored with `entry`, decoded; nil when there is none (an old row, pruned after 30 days, or
+    /// already undone).
+    package func undoSnapshot<T: Decodable>(
+      _ type: T.Type, of entry: LedgerItem, context: ModelContext
+    ) -> T? {
+      flush(context)
+      guard !disposed, !isUndone(entry),
+        let data = try? activity.store?.snapshot(uid: entry.id.uuidString)
+      else { return nil }
+      return try? JSONDecoder().decode(T.self, from: data)
     }
 
     /// Drops expired activity (the changes ledger by the Settings choice: 90 days, 1 year or forever) and, in a launch after the
@@ -235,12 +263,7 @@
     @discardableResult
     package func undo(_ entry: LedgerItem, context: ModelContext) -> Bool {
       flush(context)
-      guard !disposed, !undoneIDs.contains(entry.id) else { return false }
-      if let undone = try? activity.store?.undone(among: [entry.id.uuidString]),
-        undone.contains(entry.id.uuidString)
-      {
-        return false
-      }
+      guard !disposed, entry.itemKind == "task", !isUndone(entry) else { return false }
       let action = entry.actionValue
       if action == .deleted {
         guard let stored = try? activity.store?.snapshot(uid: entry.id.uuidString),
@@ -303,7 +326,8 @@
       case .created:
         reminders.noteDeleted(reminder: t.externalID)
         context.delete(t)
-      case .deleted, .undone, .granted, .revoked, .settled, .snoozed, .restored:
+      case .deleted, .undone, .granted, .revoked, .settled, .snoozed, .restored, .edited,
+        .switchedOn, .switchedOff:
         return false
       }
       do { try context.save() } catch {

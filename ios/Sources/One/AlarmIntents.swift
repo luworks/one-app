@@ -67,9 +67,9 @@
         throw IntentMessage(
           "Couldn’t set the alarm. Check that Today may set alarms in Settings, then try again.")
       }
-      session.ledger.record(
-        .created, kind: "alarm", title: title(alarm), after: confirmation(alarm),
-        actor: .siri, channel: .intent, context: context)
+      AlarmActions.recordCreated(
+        alarm, title: title(alarm), after: confirmation(alarm), ledger: session.ledger,
+        runtime: session.runtime, context: context, actor: .siri, channel: .intent)
       session.activity.record(ActivityEvents.intentRun(name: name, outcome: "ok"))
       IntentSupport.refreshWidgets(context)
     }
@@ -210,6 +210,7 @@
       guard let target = AlarmIntentSupport.alarm(alarm.id) else {
         throw IntentMessage("That alarm is no longer in Today.")
       }
+      let before = target.activitySnapshot
       if let hour = time?.hour, (0...23).contains(hour) {
         target.hour = hour
         target.minute = time?.minute ?? 0
@@ -228,9 +229,9 @@
         throw IntentMessage("Couldn’t change the alarm. Try again in Today.")
       }
       session.ledger.record(
-        .moved, kind: "alarm", title: AlarmIntentSupport.title(target),
+        .moved, item: target, kind: "alarm", title: AlarmIntentSupport.title(target),
         after: AlarmIntentSupport.confirmation(target), actor: .siri, channel: .intent,
-        context: context)
+        snapshot: AlarmChange(before: before, after: target.activitySnapshot), context: context)
       session.activity.record(ActivityEvents.intentRun(name: "update_alarm", outcome: "ok"))
       IntentSupport.refreshWidgets(context)
       guard let entity = AlarmEntity(target) else {

@@ -37,9 +37,9 @@
     }
 
     package func recordCreatedAlarm(_ alarm: OneAlarm, context: ModelContext) {
-      session.ledger.record(
-        .created, kind: "alarm", title: alarm.label.isEmpty ? AlarmPlan.defaultLabel : alarm.label,
-        context: context)
+      AlarmActions.recordCreated(
+        alarm, title: alarm.label.isEmpty ? AlarmPlan.defaultLabel : alarm.label,
+        ledger: session.ledger, runtime: session.runtime, context: context)
     }
 
     package func dispose() {

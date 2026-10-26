@@ -61,6 +61,24 @@
       )
     }
 
+    /// Undo from Activity: reminders through the ledger, alarms through AlarmKit. Nil when done, else what the row says.
+    package func undo(_ entry: LedgerItem, context: ModelContext) async -> String? {
+      switch entry.itemKind {
+      case "alarm":
+        return await AlarmActions.undo(
+          entry, context: context, alarms: alarms, ledger: ledger, runtime: runtime)
+      default:
+        return ledger.undo(entry, context: context) ? nil : ActivityUndoMessage.changedSince
+      }
+    }
+
+    /// Records an alarm edit or switch flip (see `AlarmActions.recordChange`).
+    package func recordChange(_ alarm: OneAlarm, from before: AlarmSnapshot, context: ModelContext)
+    {
+      AlarmActions.recordChange(
+        alarm, from: before, ledger: ledger, runtime: runtime, context: context)
+    }
+
     @discardableResult
     package func delete(_ alarm: OneAlarm, context: ModelContext, toast: UndoToast?) -> Bool {
       AlarmActions.delete(

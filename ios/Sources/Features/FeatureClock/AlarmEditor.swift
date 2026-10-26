@@ -20,6 +20,7 @@
     let alarms: any AlarmService
     @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.modelContext) private var context
+    @Environment(PlannerActions.self) private var actions
     var onEdit: () -> Void
 
     @ScaledMetric(relativeTo: .largeTitle) private var timeSize = 48
@@ -67,12 +68,15 @@
             isOn: Binding(
               get: { alarm.isOn },
               set: { on in
+                let before = alarm.activitySnapshot
                 if on && !alarm.isOn {
                   alarm.createdAt = presentation.now
                   alarm.alarmKitSignature = nil
                 }
                 alarm.isOn = on
-                try? context.save()
+                if (try? context.save()) != nil {
+                  actions.recordChange(alarm, from: before, context: context)
+                }
                 Task { await alarms.sync(context) }
               })
           )
@@ -450,7 +454,11 @@
         defer { saving = false }
         do {
           try await alarms.commit(target, context: context)
-          if alarm == nil { onCreated(target, context) }
+          if let before {
+            actions.recordChange(target, from: before.activitySnapshot, context: context)
+          } else {
+            onCreated(target, context)
+          }
           dismiss()
         } catch {
           // A new unsaved row may have been removed after a failed disk write.

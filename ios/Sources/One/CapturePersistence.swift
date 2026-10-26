@@ -99,9 +99,16 @@
         throw error
       }  // A new model's id only becomes final on save; rows and sheets key on it.
       let kind = model is OneAlarm ? "alarm" : (model is OneEvent ? "event" : "task")
-      let entry = ledger.record(
-        .created, task: model as? OneTask, kind: kind, title: title, after: summary,
-        actor: actor, channel: channel, approval: approval, context: context)
+      let entry: LedgerItem
+      if let alarm = model as? OneAlarm {
+        entry = AlarmActions.recordCreated(
+          alarm, title: title, after: summary, ledger: ledger, runtime: runtime, context: context,
+          actor: actor, channel: channel, approval: approval)
+      } else {
+        entry = ledger.record(
+          .created, task: model as? OneTask, kind: kind, title: title, after: summary,
+          actor: actor, channel: channel, approval: approval, context: context)
+      }
       return (model.persistentModelID, entry)
     }
   }
