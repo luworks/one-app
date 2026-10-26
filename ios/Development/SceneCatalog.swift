@@ -506,7 +506,7 @@
       _day = State(initialValue: session.configuration.now)
       let id = session.configuration.scene
       _mode = State(
-        initialValue: id == .calendarYear ? .year : id == .calendarMonth ? .month : .threeDay)
+        initialValue: id == .calendarYear ? .year : id == .calendarMonth ? .month : .twoDay)
     }
 
     var body: some View {
@@ -539,7 +539,7 @@
       switch session.configuration.scene {
       case .today:
         NavigationStack { agenda }
-      case .calendarThreeDay, .calendarMonth, .calendarYear:
+      case .calendarTwoDay, .calendarMonth, .calendarYear:
         NavigationStack {
           CalendarView(
             day: $day, mode: $mode, calendar: session.services.calendar,

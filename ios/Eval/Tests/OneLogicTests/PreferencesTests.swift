@@ -119,24 +119,25 @@ final class PreferencesTests: XCTestCase {
   func testCalendarStartPicksAViewOrTheLastUsedOne() {
     XCTAssertEqual(Preferences.CalendarStart.lastUsed.view(lastUsed: "Month"), "Month")
     XCTAssertEqual(
-      Preferences.CalendarStart.lastUsed.view(lastUsed: nil), "ThreeDay",
-      "3 Day the very first time")
+      Preferences.CalendarStart.lastUsed.view(lastUsed: nil), "TwoDay",
+      "2 Day the very first time")
     XCTAssertEqual(Preferences.CalendarStart.year.view(lastUsed: "Month"), "Year")
-    XCTAssertEqual(Preferences.CalendarStart.threeDay.view(lastUsed: "Year"), "ThreeDay")
+    XCTAssertEqual(Preferences.CalendarStart.twoDay.view(lastUsed: "Year"), "TwoDay")
     XCTAssertEqual(
       Preferences.CalendarStart(stored: "garbage"), .lastUsed,
       "an unknown value falls back to the default")
   }
 
-  /// The 7-day Week grid became 3 Day: installs that chose Week, or last left Calendar on it, land on 3 Day.
-  func testWeekFromAnOlderInstallOpensThreeDay() {
+  /// The 7-day Week and then 3 Day grids became 2 Day: an install that chose one of them is back on Last used.
+  func testRetiredGridChoicesFallBackToLastUsed() {
     let d = freshDefaults()
-    d.set("week", forKey: Preferences.calendarStartKey)
-    XCTAssertEqual(Preferences.calendarStartChoice(d), .threeDay)
-    XCTAssertEqual(Preferences.calendarStartChoice(d).view(lastUsed: "Month"), "ThreeDay")
-    XCTAssertEqual(Preferences.CalendarStart.lastUsed.view(lastUsed: "Week"), "ThreeDay")
+    for retired in ["week", "threeDay"] {
+      d.set(retired, forKey: Preferences.calendarStartKey)
+      XCTAssertEqual(Preferences.calendarStartChoice(d), .lastUsed, retired)
+    }
     XCTAssertEqual(Preferences.CalendarStart(stored: "month"), .month)
-    XCTAssertFalse(Preferences.CalendarStart.allCases.map(\.title).contains("Week"))
+    XCTAssertEqual(
+      Preferences.CalendarStart.allCases.map(\.title), ["Last used", "2 Day", "Month", "Year"])
   }
 
   // MARK: Evening hour

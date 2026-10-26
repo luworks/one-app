@@ -193,12 +193,12 @@ final class SettingsChoicesTests: XCTestCase {
     XCTAssertEqual(background(sunday), background(wednesday), accuracy: 1, "no grey behind Sunday")
   }
 
-  func testWeekendColumnsAreNotShadedInThreeDay() throws {
+  func testWeekendColumnsAreNotShadedInTwoDay() throws {
     launch()
     app.buttons["Calendar"].firstMatch.tap()
     let grid = element("calendar.dayGrid")
     XCTAssertTrue(grid.waitForExistence(timeout: 5))
-    // Swipe a day at a time until a Saturday is one of the three columns.
+    // Swipe a day at a time until a Saturday is one of the two columns.
     let saturday = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] 'Saturday'"))
       .firstMatch
     for _ in 0..<6 where !saturday.isFullyVisible(in: app.frame) {
@@ -206,13 +206,13 @@ final class SettingsChoicesTests: XCTestCase {
       sleep(1)
     }
     XCTAssertTrue(saturday.isFullyVisible(in: app.frame), "a Saturday is on screen")
-    // Early morning is empty on every day: scroll the grid up to it and compare the three columns.
+    // Early morning is empty on every day: scroll the grid up to it and compare the two columns.
     for _ in 0..<3 { grid.swipeDown() }
     let frame = grid.frame
-    let colW = (frame.width - 44) / 3
+    let colW = (frame.width - 44) / 2
     let y = frame.minY + 10 + 2.5 * 48  // between the 2:00 and 3:00 lines
     let px = Pixels()
-    let lumas = (0..<3).map {
+    let lumas = (0..<2).map {
       px.luma(at: CGPoint(x: frame.minX + 44 + colW * (CGFloat($0) + 0.5), y: y))
     }
     XCTAssertEqual(
@@ -247,7 +247,7 @@ final class SettingsChoicesTests: XCTestCase {
 
   // MARK: Week numbers
 
-  func testWeekNumbersAppearInMonthAndThreeDayWhenSwitchedOn() {
+  func testWeekNumbersAppearInMonthAndTwoDayWhenSwitchedOn() {
     launch()
     showMonth()
     XCTAssertFalse(
@@ -265,9 +265,9 @@ final class SettingsChoicesTests: XCTestCase {
       numbers.allElementsBoundByIndex.map({ $0.label }).contains("Week \(week)"),
       "the row of the 5th-11th shows its week number")
 
-    app.buttons["calendar.mode.threeday"].tap()
+    app.buttons["calendar.mode.twoday"].tap()
     let header = element("calendar.weekNumber")
-    XCTAssertTrue(header.waitForExistence(timeout: 5), "the 3 Day grid shows its number too")
+    XCTAssertTrue(header.waitForExistence(timeout: 5), "the 2 Day grid shows its number too")
     XCTAssertEqual(
       header.label, "Week \(cal.component(.weekOfYear, from: .now))",
       "the week of the first column, today")
@@ -279,15 +279,15 @@ final class SettingsChoicesTests: XCTestCase {
     launch(prefs: "calendarStart=month")
     app.buttons["Calendar"].firstMatch.tap()
     XCTAssertTrue(app.buttons["calendar.mode.month"].waitForExistence(timeout: 5))
-    XCTAssertTrue(app.buttons["calendar.mode.month"].isSelected, "Month, not the default 3 Day")
+    XCTAssertTrue(app.buttons["calendar.mode.month"].isSelected, "Month, not the default 2 Day")
   }
 
-  /// "Open Calendar on: Week" from before 3 Day replaced the 7-day grid opens on 3 Day.
-  func testCalendarOpensOnThreeDayForAnOldWeekChoice() {
-    launch(prefs: "calendarStart=week")
+  /// "Open Calendar on: 3 Day" from before 2 Day replaced it is Last used now, which opens on 2 Day the first time.
+  func testCalendarOpensOnTwoDayForARetiredThreeDayChoice() {
+    launch(prefs: "calendarStart=threeDay")
     app.buttons["Calendar"].firstMatch.tap()
-    XCTAssertTrue(app.buttons["calendar.mode.threeday"].waitForExistence(timeout: 5))
-    XCTAssertTrue(app.buttons["calendar.mode.threeday"].isSelected)
+    XCTAssertTrue(app.buttons["calendar.mode.twoday"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["calendar.mode.twoday"].isSelected)
     XCTAssertTrue(element("calendar.dayGrid").waitForExistence(timeout: 5))
   }
 

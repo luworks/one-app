@@ -66,7 +66,7 @@ final class PerformanceBaselineTests: XCTestCase {
       sample("month_to_year") {
         tap(app.buttons["calendar.mode.year"], ready: element("calendar.year.scroll"))
       }
-      app.buttons["calendar.mode.threeday"].tap()
+      app.buttons["calendar.mode.twoday"].tap()
       sample("calendar_to_reminders") {
         tap(app.buttons["Reminders"].firstMatch, ready: element("list.Work"))
       }

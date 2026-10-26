@@ -1,6 +1,6 @@
 import XCTest
 
-/// Leaving a tab and coming back finds it where it was: the open list in Reminders, 3 Day / Month / Year in Calendar.
+/// Leaving a tab and coming back finds it where it was: the open list in Reminders, 2 Day / Month / Year in Calendar.
 @MainActor
 final class TabMemoryTests: XCTestCase {
   private func navigationApp(_ extra: [String] = []) -> XCUIApplication {
@@ -236,6 +236,6 @@ final class TabMemoryTests: XCTestCase {
     app.buttons["Calendar"].firstMatch.tap()
     XCTAssertTrue(
       app.buttons["calendar.mode.month"].waitForSelected(),
-      "Calendar comes back in Month, not reset to 3 Day")
+      "Calendar comes back in Month, not reset to 2 Day")
   }
 }

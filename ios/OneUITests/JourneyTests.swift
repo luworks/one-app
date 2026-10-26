@@ -95,7 +95,7 @@ final class JourneyTests: XCTestCase {
       for _ in 0..<5 where !row.exists { list.swipeUp() }
       XCTAssertTrue(row.waitForExistence(timeout: 3), "the new event shows in the day's list")
     }
-    tap(app.buttons["3 Day"])
+    tap(app.buttons["2 Day"])
     XCTAssertLessThanOrEqual(taps, 6)
   }
 
