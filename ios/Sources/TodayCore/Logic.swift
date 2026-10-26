@@ -337,31 +337,102 @@ public enum CalendarMath {
 
 /// Layout helpers for the 3 Day grid. Pure, so they can be tested.
 public enum CalendarLayout {
-  public struct TimedLanes {
-    public let eventWidth: Double
-    public let alarmX: Double
-    public let alarmWidth: Double
-
-    /// Keep even dense overlap clusters inside the event lane, including their minimum visual width.
-    public func block(column: Int, count: Int) -> (x: Double, width: Double) {
-      let width = eventWidth / Double(max(1, count))
-      return (1 + width * Double(column), min(width, max(8, width - 1)))
-    }
-
-    public init(eventWidth: Double, alarmX: Double, alarmWidth: Double) {
-      self.eventWidth = eventWidth
-      self.alarmX = alarmX
-      self.alarmWidth = alarmWidth
-    }
+  /// Where the timed things of one day column go. `blocks` are events (they have a duration); `marks` are reminders
+  /// and alarm rings (a moment): one-line chips at their time, never a box of made-up length.
+  public struct TimedDay: Equatable {
+    /// One frame per block, in the input order, inside the column (1 pt in from each edge).
+    public let blocks: [CGRect]
+    /// How deep each block is staggered: 0 sits at the left, deeper ones are indented and drawn on top.
+    public let depths: [Int]
+    /// One frame per mark, in the input order; nil when the mark is folded into the "+N" of the chip above it.
+    public let marks: [CGRect?]
+    /// For each shown mark, the marks folded into it (empty for most).
+    public let folded: [[Int]]
   }
 
-  /// A trailing alarm lane only on days with alarms. Insets and the gap belong to this shared drawing/hit-test geometry.
-  public static func timedLanes(columnWidth: Double, hasAlarms: Bool) -> TimedLanes {
-    let contentWidth = max(0, columnWidth - 2)
-    let alarmWidth = hasAlarms ? min(28, max(18, contentWidth * 0.24), contentWidth * 0.4) : 0
-    let gap = hasAlarms ? min(2, contentWidth * 0.05) : 0
-    let eventWidth = contentWidth - alarmWidth - gap
-    return TimedLanes(eventWidth: eventWidth, alarmX: 1 + eventWidth + gap, alarmWidth: alarmWidth)
+  /// Lays out one day column, like Apple Calendar's day grids but readable when a day has many reminders:
+  /// - A mark is a chip `chipHeight` tall at its time; a chip that would cover the one above moves down just enough.
+  ///   A chip pushed more than `foldAfter` below its time folds into the "+N" of the chip it would sit under.
+  /// - Events that start within `together` of each other share the width side by side; an event that starts later,
+  ///   while an earlier one is still on, is indented and drawn over it, so both titles stay readable (Apple's stagger).
+  /// - Where a chip runs beside an event, the event's group keeps the left half and the chip takes the right half.
+  /// `blocks` and `marks` are y positions in points; marks are expected in time order.
+  public static func timedDay(
+    blocks: [(y: Double, height: Double)], marks: [Double], columnWidth: Double,
+    chipHeight: Double = 18, foldAfter: Double = 36, together: Double = 18
+  ) -> TimedDay {
+    let content = max(0, columnWidth - 2)
+
+    // Marks: stack downwards, fold what would drift too far from its time.
+    var markY = [Double?](repeating: nil, count: marks.count)
+    var folded = [[Int]](repeating: [], count: marks.count)
+    var head: Int?
+    var lastY = -Double.infinity
+    for (i, y) in marks.enumerated() {
+      let placed = max(y, lastY + chipHeight + 1)
+      if let h = head, placed - y > foldAfter {
+        folded[h].append(i)
+        continue
+      }
+      markY[i] = placed
+      lastY = placed
+      head = i
+    }
+
+    // Blocks: groups of events that start together; a later overlapping group goes one level deeper.
+    struct Group {
+      var top: Double
+      var bottom: Double
+      var members: [Int]
+      var depth: Int
+    }
+    var groups: [Group] = []
+    var groupOf = [Int](repeating: 0, count: blocks.count)
+    let order = blocks.indices.sorted { (blocks[$0].y, $0) < (blocks[$1].y, $1) }
+    for i in order {
+      let b = blocks[i]
+      if let g = groups.indices.last(where: {
+        b.y - groups[$0].top < together && groups[$0].bottom > b.y
+      }) {
+        groups[g].members.append(i)
+        groups[g].bottom = max(groups[g].bottom, b.y + b.height)
+        groupOf[i] = g
+      } else {
+        let under = groups.filter { $0.bottom > b.y }.map(\.depth).max() ?? -1
+        groups.append(Group(top: b.y, bottom: b.y + b.height, members: [i], depth: under + 1))
+        groupOf[i] = groups.count - 1
+      }
+    }
+
+    func meets(_ y: Double, _ g: Group) -> Bool {
+      y < g.bottom - 0.5 && g.top < y + chipHeight - 0.5
+    }
+    let shownY = markY.compactMap { $0 }
+    let halved = groups.map { g in shownY.contains { meets($0, g) } }
+
+    var rects = [CGRect](repeating: .zero, count: blocks.count)
+    var depths = [Int](repeating: 0, count: blocks.count)
+    for (g, group) in groups.enumerated() {
+      let area = halved[g] ? content / 2 : content
+      let indent = min(44, area * 0.4)
+      let left = min(Double(group.depth) * indent, area * 0.6)
+      let share = (area - left) / Double(group.members.count)
+      let width = min(share, max(8, share - 1))
+      for (k, i) in group.members.enumerated() {
+        rects[i] = CGRect(
+          x: 1 + left + share * Double(k), y: blocks[i].y, width: width, height: blocks[i].height)
+        depths[i] = group.depth
+      }
+    }
+
+    let markRects: [CGRect?] = markY.map { y in
+      guard let y else { return nil }
+      let beside = groups.contains { meets(y, $0) }
+      return beside
+        ? CGRect(x: 2 + content / 2, y: y, width: content / 2 - 1, height: chipHeight)
+        : CGRect(x: 1, y: y, width: content, height: chipHeight)
+    }
+    return TimedDay(blocks: rects, depths: depths, marks: markRects, folded: folded)
   }
 
   /// Lane (row) for each banner in the all-day strip. `spans` are inclusive day columns (any day numbering, e.g. days from today).
@@ -383,39 +454,6 @@ public enum CalendarLayout {
         result[i] = laneEnds.count - 1
       }
     }
-    return result
-  }
-
-  /// Side-by-side placement for timed items in one day column: each item gets a column and the number of columns
-  /// in its overlap cluster, so overlapping items share the width instead of covering each other.
-  public static func columns(for items: [(start: Double, end: Double)]) -> [(
-    column: Int, count: Int
-  )] {
-    let order = items.indices.sorted {
-      (items[$0].start, items[$1].end, $0) < (items[$1].start, items[$0].end, $1)
-    }
-    var result = Array(repeating: (column: 0, count: 1), count: items.count)
-    var cluster: [Int] = []
-    var clusterEnd = -Double.infinity
-    var columnEnds: [Double] = []
-    func close() {
-      for i in cluster { result[i].count = max(1, columnEnds.count) }
-      cluster = []
-      columnEnds = []
-    }
-    for i in order {
-      if items[i].start >= clusterEnd { close() }
-      if let c = columnEnds.firstIndex(where: { $0 <= items[i].start }) {
-        columnEnds[c] = items[i].end
-        result[i].column = c
-      } else {
-        columnEnds.append(items[i].end)
-        result[i].column = columnEnds.count - 1
-      }
-      cluster.append(i)
-      clusterEnd = max(clusterEnd, items[i].end)
-    }
-    close()
     return result
   }
 
