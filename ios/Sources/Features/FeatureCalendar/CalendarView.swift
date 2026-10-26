@@ -1328,7 +1328,9 @@
                   )
                   .background(EventTint.fill(e.color), in: RoundedRectangle(cornerRadius: 5))
                   .offset(
-                    x: (CGFloat(spans[i].start) - at) * colW + 1, y: CGFloat(lanes[i]) * rowHeight)
+                    x: (CGFloat(spans[i].start) - at) * colW + 1,
+                    y: CGFloat(lanes[i]) * rowHeight
+                  )
                   .onTapGesture { open(e) }
                   .entryActions(
                     e, pendingDelete: $pendingDelete, open: open, edit: edit, swipes: false,

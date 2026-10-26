@@ -60,7 +60,7 @@
           label: { $0.title }, identifier: { "settings.firstWeekday.\($0.rawValue)" })
         ExplainedToggle(
           title: "Show week numbers", isOn: $showsWeekNumbers,
-          caption: "Beside each row in Month, and over the hours in 3 Day (the week of the first day).")
+          caption: "Beside each row in Month, and over the hours in 3 Day (the first day's week).")
         PillChoiceRow(
           title: "Open Calendar on",
           items: Preferences.CalendarStart.allCases,
