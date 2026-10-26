@@ -267,6 +267,9 @@ public enum LedgerFormat {
       case .created, .deleted, .renamed, .edited: return hasSnapshot
       default: return false
       }
+    case "event":
+      // Only a delete that kept a snapshot (a one-off without attendees); moves and series deletes have none.
+      return action == .deleted && hasSnapshot
     default:
       return false
     }

@@ -154,3 +154,46 @@ public enum ListUndo {
     }
   }
 }
+
+/// A deleted one-off event, as Activity keeps it so Undo can add it again. `externalID` is the deleted Apple Calendar
+/// event's identifier (Undo only runs while it is still gone); a restored event always gets a new one.
+public struct EventSnapshot: Codable, Equatable, Sendable {
+  public var title: String
+  public var start: Date
+  public var durationMinutes: Int
+  public var isAllDay: Bool
+  public var calendarName: String
+  public var note: String
+  public var externalID: String?
+  /// Today kept its own copy (a local event), which comes back too.
+  public var local: Bool
+
+  public init(
+    title: String, start: Date, durationMinutes: Int, isAllDay: Bool = false,
+    calendarName: String = "", note: String = "", externalID: String? = nil, local: Bool = false
+  ) {
+    self.title = title
+    self.start = start
+    self.durationMinutes = durationMinutes
+    self.isAllDay = isAllDay
+    self.calendarName = calendarName
+    self.note = note
+    self.externalID = externalID
+    self.local = local
+  }
+}
+
+public enum EventUndo {
+  /// What an event row says beside its Undo: a deleted event comes back as a new one, not the same one.
+  public static let restoresAsNew = "Restores as a new event"
+
+  /// Whether a deleted event may get Undo from Activity: a one-off with nobody else on it. A series has rules and
+  /// exceptions a copy would not carry, and adding back an event with attendees would send them a new invitation.
+  /// `attendees` is nil when the Apple Calendar event could not be read (no Undo then); `inAppleCalendar` false means a
+  /// Today-only event, which has no attendees.
+  public static func canRestore(repeats: Bool, inAppleCalendar: Bool, attendees: Int?) -> Bool {
+    guard !repeats else { return false }
+    guard inAppleCalendar else { return true }
+    return attendees == 0
+  }
+}
