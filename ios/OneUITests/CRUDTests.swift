@@ -117,6 +117,49 @@ final class CRUDTests: XCTestCase {
 
   // MARK: - Reminders
 
+  func testReminderRepeatWeekdaysCanBeChosenAndPersisted() {
+    openTab("Reminders")
+    let home = element("list.Home")
+    reveal(home)
+    home.tap()
+    let reminder = app.staticTexts["Buy milk"].firstMatch
+    reveal(reminder)
+    reminder.tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 5))
+
+    app.buttons["task.repeat"].tap()
+    let choose = app.buttons["task.repeat.chooseDays"]
+    XCTAssertTrue(choose.waitForExistence(timeout: 5))
+    choose.tap()
+    let monday = app.switches["task.repeat.weekday.2"]
+    let wednesday = app.switches["task.repeat.weekday.4"]
+    XCTAssertTrue(monday.waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["task.repeat.days.done"].isEnabled)
+    monday.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+    XCTAssertEqual(monday.value as? String, "1")
+    wednesday.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+    XCTAssertEqual(wednesday.value as? String, "1")
+    app.buttons["task.repeat.days.done"].tap()
+    XCTAssertTrue(
+      wait(app.buttons["task.repeat"], "label CONTAINS 'Every Mon, Wed'"),
+      app.buttons["task.repeat"].debugDescription)
+    app.buttons["task.save"].tap()
+
+    XCTAssertTrue(reminder.waitForExistence(timeout: 5))
+    reminder.tap()
+    XCTAssertTrue(wait(app.buttons["task.repeat"], "label CONTAINS 'Every Mon, Wed'"))
+    app.buttons["task.repeat"].tap()
+    choose.tap()
+    XCTAssertTrue(monday.waitForExistence(timeout: 5))
+    XCTAssertEqual(monday.value as? String, "1")
+    XCTAssertEqual(wednesday.value as? String, "1")
+    monday.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+    XCTAssertEqual(monday.value as? String, "0")
+    app.navigationBars["Repeat on"].buttons["Cancel"].tap()
+    XCTAssertTrue(wait(app.buttons["task.repeat"], "label CONTAINS 'Every Mon, Wed'"))
+    app.buttons["Cancel"].tap()
+  }
+
   /// New Reminder in a list, edit title and due date in its editor, flag, complete (shows in Completed), delete and Undo.
   func testReminderCreateEditFlagCompleteDeleteUndo() {
     openTab("Reminders")

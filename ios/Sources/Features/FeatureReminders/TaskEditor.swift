@@ -45,6 +45,7 @@
     @State private var baseline: TaskSnapshot?
     @State private var newItem = ""
     @State private var addingList = false
+    @State private var repeatDayDraft: RepeatDayDraft?
     @FocusState private var titleFocused: Bool
 
     package init(
@@ -118,6 +119,11 @@
             .environment(actions)
             .environment(presentation)
         }
+        .sheet(item: $repeatDayDraft) { draft in
+          RepeatWeekdayPicker(calendar: presentation.calendar, initialDays: draft.days) { days in
+            repeatRule = .weeklyOn(days.sorted())
+          }
+        }
       }
       .presentationDetents(advanced ? [.large] : [.height(366), .large], selection: $detent)
       .onChange(of: advanced) { _, expanded in detent = expanded ? .large : .height(366) }
@@ -178,6 +184,8 @@
           } label: {
             Label("Repeat", systemImage: "repeat")
           }
+          Button("Choose weekdays…", action: chooseRepeatDays)
+            .accessibilityIdentifier("task.repeat.chooseDays")
         }
         if hasDue {
           Section {
@@ -233,6 +241,20 @@
       .scrollDismissesKeyboard(.interactively)
     }
 
+    private func chooseRepeatDays() {
+      titleFocused = false
+      let days: Set<Int>
+      switch repeatRule {
+      case .weeklyOn(let selected): days = Set(selected)
+      case .weekdays: days = [2, 3, 4, 5, 6]
+      case .daily: days = Set(1...7)
+      case .weekly:
+        days = [presentation.calendar.component(.weekday, from: hasDue ? due : presentation.now)]
+      default: days = []
+      }
+      repeatDayDraft = RepeatDayDraft(days: days)
+    }
+
     private var selectedDate: Date? { hasDue ? due : nil }
 
     private var selectedHasTime: Bool {
@@ -253,10 +275,14 @@
                 Text($0.label).tag(RepeatRule?.some($0))
               }
             }
+            Button("Choose weekdays…", action: chooseRepeatDays)
+              .accessibilityIdentifier("task.repeat.chooseDays")
           } label: {
             Image(systemName: "repeat").frame(width: 44, height: 44)
               .foregroundStyle(repeatRule == nil ? Color.secondary : Color.accentColor)
-          }.accessibilityLabel(repeatRule.map { "Repeat, \($0.label)" } ?? "Repeat")
+          }
+          .accessibilityLabel(repeatRule.map { "Repeat, \($0.label)" } ?? "Repeat")
+          .accessibilityIdentifier("task.repeat")
           Menu {
             Picker("Remind me", selection: $reminder) {
               ForEach(ReminderOffset.choices, id: \.0) { label, value in Text(label).tag(value) }
@@ -562,6 +588,56 @@
       task.repeatRule = value.repeatRule
       task.checklist = value.checklist
       task.ringsAsAlarm = value.ringsAsAlarm
+    }
+  }
+
+  private struct RepeatDayDraft: Identifiable {
+    let id = UUID()
+    let days: Set<Int>
+  }
+
+  private struct RepeatWeekdayPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let calendar: Calendar
+    let onSave: (Set<Int>) -> Void
+    @State private var days: Set<Int>
+
+    init(calendar: Calendar, initialDays: Set<Int>, onSave: @escaping (Set<Int>) -> Void) {
+      self.calendar = calendar
+      self.onSave = onSave
+      _days = State(initialValue: initialDays)
+    }
+
+    var body: some View {
+      let orderedDays = (0..<7).map { (calendar.firstWeekday - 1 + $0) % 7 + 1 }
+      NavigationStack {
+        List(orderedDays, id: \.self) { day in
+          Toggle(
+            calendar.weekdaySymbols[day - 1],
+            isOn: Binding(
+              get: { days.contains(day) },
+              set: { selected in
+                if selected { days.insert(day) } else { days.remove(day) }
+              })
+          )
+          .accessibilityIdentifier("task.repeat.weekday.\(day)")
+        }
+        .navigationTitle("Repeat on")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { dismiss() }
+          }
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Done") {
+              onSave(days)
+              dismiss()
+            }
+            .disabled(days.isEmpty)
+            .accessibilityIdentifier("task.repeat.days.done")
+          }
+        }
+      }
     }
   }
 
