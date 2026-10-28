@@ -178,6 +178,62 @@ final class NativeSnapshotTests: XCTestCase {
     }
   }
 
+  func testTitleDetailLongTitleWithAndWithoutDetail() throws {
+    try checkTitleDetailGeometry(accessibility: false)
+  }
+
+  func testTitleDetailAccessibilityTypeStillUsesAtMostTwoLines() throws {
+    try checkTitleDetailGeometry(accessibility: true)
+    let long = String(repeating: "A long reminder title for the shared row ", count: 12)
+    for detail in [false, true] {
+      let normal = try titleDetailHeight(long, detail: detail, accessibility: false)
+      let large = try titleDetailHeight(long, detail: detail, accessibility: true)
+      XCTAssertGreaterThan(large, normal, "The row still scales with Dynamic Type")
+    }
+  }
+
+  private func checkTitleDetailGeometry(accessibility: Bool) throws {
+    let short = "Title"
+    let long = String(repeating: "A long reminder title for the shared row ", count: 12)
+    for detail in [false, true] {
+      let shortHeight = try titleDetailHeight(short, detail: detail, accessibility: accessibility)
+      let longHeight = try titleDetailHeight(long, detail: detail, accessibility: accessibility)
+      let longerHeight = try titleDetailHeight(
+        long + long, detail: detail, accessibility: accessibility)
+      XCTAssertGreaterThan(longHeight, shortHeight + 8, "Long content uses a second line")
+      XCTAssertEqual(longHeight, longerHeight, accuracy: 2, "More text cannot add a third line")
+      XCTAssertLessThan(longHeight, shortHeight * 2.5, "The row remains within two lines")
+    }
+  }
+
+  /// Measure the shared production view at a fixed row width without snapshot baselines.
+  private func titleDetailHeight(_ title: String, detail: Bool, accessibility: Bool) throws
+    -> CGFloat
+  {
+    let view = TitleDetail(title: Text(title), hasDetail: detail) {
+      if detail { Text("Work").font(.caption) }
+    }
+    .font(.callout)
+    .environment(\.dynamicTypeSize, accessibility ? .accessibility3 : .large)
+    .frame(width: 280, alignment: .leading)
+    .fixedSize(horizontal: false, vertical: true)
+    let host = UIHostingController(rootView: view)
+    let scene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+    let previousKey = scene.windows.first(where: \.isKeyWindow)
+    let window = UIWindow(windowScene: scene)
+    window.frame = CGRect(x: 0, y: 0, width: 320, height: 852)
+    window.rootViewController = host
+    window.makeKeyAndVisible()
+    defer {
+      window.isHidden = true
+      window.rootViewController = nil
+      previousKey?.makeKey()
+    }
+    window.layoutIfNeeded()
+    return host.sizeThatFits(in: CGSize(width: 280, height: 2000)).height
+  }
+
   /// Proves the real render/diff pipeline notices changed production data without writing baselines.
   func testHealthDataPerturbationChangesPixels() throws {
     let populated = try render(health(series))
