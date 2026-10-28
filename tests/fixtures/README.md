@@ -284,3 +284,11 @@ new-day task/meeting, overdue reminder and tomorrow event for
 `TodayFocusTests.testCrossDayReleaseUsesOriginalDatesWithoutReturnHistory`.
 The test pins local dates using ISO `-uiTestingNow`, which also supplies the Mock
 dataset load clock, then relaunches its isolated persistent store on the next day.
+
+## AI chat capability assessment
+
+[`ai-chat-capability-eval.json`](ai-chat-capability-eval.json) defines 24
+synthetic bilingual manual Live-app scenarios, with explicit expected outcomes
+and a simulator-only setup. [`ai-chat-capability-protocol.md`](../../docs/qa/ai-chat-capability-protocol.md)
+defines evidence, attribution and scoring; this authored set is development data,
+not a blind holdout or a claim of model execution. It has no automated consumer.

@@ -45,7 +45,7 @@ public enum Dialogue {
   static func startsNewItem(_ text: String) -> Bool {
     has(
       text,
-      #"提醒我|提醒一下|提醒(?=\s+\S)|记得|别忘了|帮我记|新建|添加|加一个|加个|\bremind me\b|\bdon'?t forget\b|\bnew (?:reminder|task|event)\b|\badd (?:a |an )?(?:reminder|task|event|to-?do)\b|\bset (?:a |an )?reminder\b"#
+      #"提醒我|提醒一下|提醒(?=\s+\S)|记得|别忘了|帮我记|新建|添加|(?:增加|新增)\s*(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒|待办事项|待办|任务)|加一个|加个|\bremind me\b|\bdon'?t forget\b|\bnew (?:reminder|task|event)\b|\badd (?:a |an )?(?:reminder|task|event|to-?do)\b|\bset (?:a |an )?reminder\b"#
     )
   }
 
@@ -280,7 +280,7 @@ public enum CaptureConversation {
   static func referencesReminder(_ raw: String) -> Bool {
     has(
       raw.trimmingCharacters(in: .whitespacesAndNewlines),
-      #"^(?:(?:就|只要|请|帮我|你|麻烦|\s))*(?:设定|设置|设|定|创建|添加|加)(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒)(?:就行|就可以|吧)?[。.!！]*$|^(?:(?:please|just|no|actually)[, ]+)*(?:set|setting|add|create|make)(?: it)? (?:a |the |that )?reminder(?: for (?:it|that))?[.!]*$"#
+      #"^(?:(?:就|只要|请|帮我|你|麻烦|\s))*(?:设定|设置|设|定|创建|添加|增加|新增|加)(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒)(?:就行|就可以|吧)?[。.!！]*$|^(?:(?:please|just|no|actually)[, ]+)*(?:set|setting|add|create|make)(?: it)? (?:a |the |that )?reminder(?: for (?:it|that))?[.!]*$"#
     )
   }
 
@@ -306,7 +306,7 @@ public enum CaptureConversation {
       capture.kind = .task
       capture.ringsAsAlarm = true
     } else if ChatRouting.intent(text) == .capture,
-      has(text, #"提醒我|\bremind me\b"#), !has(text, #"闹钟|\balarm\b|wake me"#)
+      has(text, #"提醒我|(?:增加|新增|添加|创建|新建|加)(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒)|\bremind me\b|\b(?:add|create|set) (?:a |an )?reminder\b"#), !has(text, #"闹钟|\balarm\b|wake me"#)
     {
       capture.kind = .task
       capture.ringsAsAlarm = false
