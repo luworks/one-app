@@ -77,6 +77,20 @@ Tests that need Apple Calendar (`CalendarSyncTests`, `CalendarDeleteSyncTests`, 
 
 The [scene registry](Sources/TodayScenes/SceneRegistry.swift) owns valid scene/scenario pairs. Workbench, previews and native captures use the real feature constructors through `SceneSession`; unsupported states fail validation. See [gallery](../docs/engineering/gallery.md), [visual testing](../docs/engineering/visual-testing.md) and [scene session boundaries](../docs/engineering/scene-session-integration.md). The older [axe workflow](../docs/swiftui-preview-workflow.md) retains measured history and limitations; use the `./dev ui` entry for current work. Functional acceptance still requires the focused native journey.
 
+## Weather on Today
+
+Settings → Today → Weather summary is off by default. When enabled on Today, the app requests
+foreground location permission and sends the location to Apple Weather through WeatherKit. A compact
+line opens current conditions, daily high/low, precipitation chance and an hourly forecast, with
+Apple Weather attribution and a data-sources link. Forecasts and location stay in memory; disabling
+the setting clears them and cancels the current request. Location denial offers iOS Settings; a service
+failure offers Retry. While Today is active, a successful forecast is reused for 15 minutes;
+automatic retries after a failure wait five minutes, while the Retry button acts immediately.
+
+Live WeatherKit requests require Apple Developer Program membership, the WeatherKit capability on
+the App ID, and a matching signed entitlement. Mock and Workbench use fixed sample data and do not
+request location or contact Apple Weather. A simulator sample is not evidence of a successful live request.
+
 ## Release and physical-device states
 
 `./dev release preflight-local --commit <full-sha> --version <version> --build <integer>` checks unsigned local readiness. `./dev release archive-local` forwards fastlane key/value options (`commit:`, `version:`, `build:`, `archive:`, `derived_data:`); `./dev release validate-local` uses the preflight options plus `--archive <path>`. Use a fresh archive outside the checkout and the owned cache. See [release integration](../docs/engineering/release-integration.md) and [release tooling](../scripts/release/README.md) for exact arguments and retained maps/provenance.

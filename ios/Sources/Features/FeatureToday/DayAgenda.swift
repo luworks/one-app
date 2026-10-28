@@ -9,6 +9,7 @@
   import FeatureHealth
   import SwiftUI
   import SwiftData
+  import UIKit
 
   /// One day's view: active events, tasks and alarms stay directly visible in a single timeline.
   /// On today a red "N overdue" line sits above the timeline (tap to show the rows, Tidy to reschedule them all);
@@ -54,6 +55,9 @@
         wrappedValue: true, SettingsKey.jumpToNow, store: presentation.defaults)
       _showsHealth = AppStorage(
         wrappedValue: true, SettingsKey.healthSummary, store: presentation.defaults)
+      _showsWeather = AppStorage(
+        wrappedValue: Preferences.weatherSummary, Preferences.weatherSummaryKey,
+        store: presentation.defaults)
       _showsSettle = AppStorage(
         wrappedValue: Preferences.showSettle, Preferences.showSettleKey,
         store: presentation.defaults)
@@ -78,12 +82,14 @@
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
     @AppStorage(SettingsKey.healthSummary) private var showsHealth = true
+    @AppStorage(Preferences.weatherSummaryKey) private var showsWeather = Preferences.weatherSummary
     @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
     @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(HealthLineModel.self) private var health
+    @Environment(WeatherModel.self) private var weather
     private var cal: Calendar {
       Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
     }
@@ -128,10 +134,20 @@
         guard showsHealth, isTodayTab, scenePhase == .active else { return }
         await health.load()
       }
+      .task(id: [showsWeather, isTodayTab, scenePhase == .active]) {
+        guard !showsWeekStrip else { return }
+        weather.update(enabled: showsWeather && isTodayTab && scenePhase == .active)
+      }
+      .onDisappear {
+        if !showsWeekStrip { weather.update(enabled: false) }
+      }
       .task {
         while !Task.isCancelled {
           try? await Task.sleep(for: .seconds(60))
           refreshClock()
+          if !Task.isCancelled, !showsWeekStrip, showsWeather, isTodayTab, scenePhase == .active {
+            weather.update(enabled: true)
+          }
         }
       }
     }
@@ -164,6 +180,36 @@
         if isTodayTab { TodayTimerRows(controller: timers, open: openTimer) }
         if isTodayTab, showsHealth, let line = health.line {
           TodayHealthLine(line: line)
+        }
+        if isTodayTab, showsWeather {
+          if let snapshot = weather.snapshot {
+            TodayWeatherLine(snapshot: snapshot)
+          } else if weather.state == .loading {
+            Text("Loading weather…")
+              .font(.footnote).foregroundStyle(.secondary)
+              .accessibilityIdentifier("weather.loading")
+              .listRowSeparator(.hidden)
+          } else if weather.state == .locationDenied || weather.state == .unavailable {
+            Button {
+              if weather.state == .locationDenied,
+                let url = URL(string: UIApplication.openSettingsURLString)
+              {
+                UIApplication.shared.open(url)
+              } else {
+                weather.update(enabled: true, force: true)
+              }
+            } label: {
+              Label(
+                weather.state == .locationDenied
+                  ? "Allow location for weather" : "Weather unavailable · Try again",
+                systemImage: "cloud"
+              )
+              .font(.footnote).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("weather.retry")
+            .listRowSeparator(.hidden)
+          }
         }
         if !showsWeekStrip {
           if let error = actions.focus.errorMessage {

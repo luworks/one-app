@@ -86,6 +86,8 @@
     @AppStorage(SmartListLayout.hiddenKey) private var smartHidden = ""
     @AppStorage(SettingsKey.travelTime) private var travelTime = true
     @AppStorage(SettingsKey.healthSummary) private var healthSummary = true
+    @AppStorage(Preferences.weatherSummaryKey) private var weatherSummary = Preferences
+      .weatherSummary
 
     @State private var systemColorScheme: ColorScheme = .light
     @State private var systemAppearanceObservation: (UIWindowScene, any UITraitChangeRegistration)?
@@ -265,6 +267,11 @@
         )
         HealthMetricsLink()
         OpenHealthButton()
+        explainedToggle(
+          "Weather summary", isOn: $weatherSummary,
+          caption:
+            "Shows current weather and an hourly forecast on Today. When enabled, your location is sent to Apple Weather to obtain the forecast."
+        )
       } header: {
         Text("Today")
       }
