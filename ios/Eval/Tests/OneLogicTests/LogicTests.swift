@@ -103,8 +103,6 @@ final class DayScheduleTests: XCTestCase {
     XCTAssertEqual(
       DaySchedule.freeGaps(busy: [], day: at(0, day: 11), now: at(9), calendar: cal), [])
   }
-
-
 }
 
 final class ListNameTests: XCTestCase {
