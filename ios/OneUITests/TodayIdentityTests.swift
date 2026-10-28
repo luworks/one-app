@@ -21,10 +21,7 @@ final class TodayIdentityTests: XCTestCase {
     let picker = app.descendants(matching: .any)["settings.todayButtonColor.custom"].firstMatch
     XCTAssertTrue(picker.waitForExistence(timeout: 5))
     XCTAssertEqual(picker.value as? String, "246BCE")
-    // ColorPicker exposes the full label row; its native well is at the trailing edge.
-    picker.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.5)).tap()
-    XCTAssertTrue(
-      app.buttons["close"].waitForExistence(timeout: 3)
-        || app.staticTexts["Colors"].waitForExistence(timeout: 3))
+    picker.tap()
+    XCTAssertTrue(app.buttons["todayColorPicker.done"].waitForExistence(timeout: 5))
   }
 }
