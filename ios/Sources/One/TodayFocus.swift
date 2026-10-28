@@ -88,10 +88,12 @@
       }
     }
 
-    package func state(for identity: FocusIdentity?, now: Date) -> TodayFocusState? {
+    package func state(for identity: FocusIdentity?, now: Date, on day: Date? = nil)
+      -> TodayFocusState?
+    {
       _ = revision
       guard let identity else { return nil }
-      return store?.state(for: identity, now: now, calendar: runtime.calendar)
+      return store?.state(for: identity, now: now, on: day, calendar: runtime.calendar)
     }
 
     package static func reference(_ id: PersistentIdentifier) -> String? {
@@ -101,48 +103,53 @@
     @discardableResult
     package func change(
       _ state: TodayFocusState?, identity: FocusIdentity?, localReference: String?,
-      title: String, context: ModelContext, toast: UndoToast?
+      title: String, context: ModelContext, toast: UndoToast?, on day: Date? = nil
     ) -> Bool {
       guard let store, let identity else {
         toast?.showNotice(
           errorMessage ?? "This source is unavailable. Refresh its connection and try again.")
         return false
       }
-      let oldRecord = store.records.first { $0.identity == identity }
+      let selectedDay = day ?? runtime.now()
+      let oldRecord = store.record(for: identity, on: selectedDay, calendar: runtime.calendar)
       let old = oldRecord?.state
       // An expired Settle can be chosen again today for the same overdue reminder.
       let expiredSettle =
         old == .settled
-        && store.state(for: identity, now: runtime.now(), calendar: runtime.calendar) == nil
+        && store.state(
+          for: identity, now: runtime.now(), on: selectedDay, calendar: runtime.calendar) == nil
       guard old != state || (state == .settled && expiredSettle) else { return true }
       do {
         try store.set(
-          state: state, for: identity, now: runtime.now(), localReference: localReference)
+          state: state, for: identity, now: runtime.now(), localReference: localReference,
+          on: selectedDay, calendar: runtime.calendar)
       } catch {
         toast?.showNotice("Couldn't save this Focus choice. Nothing was changed. Try again.")
         return false
       }
       revision += 1
-      let committed = store.records.first { $0.identity == identity }
+      let committed = store.record(for: identity, on: selectedDay, calendar: runtime.calendar)
       let action: LedgerAction
       let message: String
       switch state {
       case .settled:
         action = .settled
-        message = "Hidden in Today only: “\(title)”"
+        message = "Hidden on this day in Today: “\(title)”"
       case .snoozed:
         action = .snoozed
         message = "Snoozed in Today only: “\(title)”"
       case .active, nil:
         action = .restored
-        message = "Shown in Today only: “\(title)”"
+        message = "Shown on this day in Today: “\(title)”"
       }
       let entry = ledger.record(
         action, kind: "focus", title: title, before: label(old), after: label(state),
         context: context)
       toast?.show(message) { [weak self] in
         guard let self else { return }
-        guard store.records.first(where: { $0.identity == identity }) == committed else {
+        guard
+          store.record(for: identity, on: selectedDay, calendar: self.runtime.calendar) == committed
+        else {
           toast?.showNotice("This Focus choice changed again. Use Restore in Today.")
           return
         }
@@ -150,15 +157,18 @@
           let restored: TodayFocusState?
           if case .snoozed(let until) = old, until <= self.runtime.now() {
             restored = .active
-          } else if case .settled = old, let oldRecord,
-            !self.runtime.calendar.isDate(oldRecord.changedAt, inSameDayAs: self.runtime.now())
+          } else if case .settled = old,
+            let end = self.runtime.calendar.date(
+              byAdding: .day, value: 1, to: self.runtime.calendar.startOfDay(for: selectedDay)),
+            end <= self.runtime.now()
           {
             restored = nil
           } else {
             restored = old
           }
           try store.set(
-            state: restored, for: identity, now: self.runtime.now(), localReference: localReference)
+            state: restored, for: identity, now: self.runtime.now(), localReference: localReference,
+            on: selectedDay, calendar: self.runtime.calendar)
           self.revision += 1
           self.ledger.recordUndo(of: entry, context: context)
         } catch {
