@@ -540,7 +540,7 @@
 
     private var settledRecords: [FocusRecord] {
       actions.focus.records.filter {
-        cal.isDate($0.settledDay ?? $0.changedAt, inSameDayAs: day)
+        cal.isDate($0.agendaDay(calendar: cal), inSameDayAs: day)
           && actions.focus.state(for: $0.identity, now: now, on: day) == .settled
       }
     }
