@@ -203,6 +203,7 @@
     private var appearanceSection: some View {
       Section {
         AppearanceSettingsRow()
+        TodayButtonColorRow()
       }
     }
 
