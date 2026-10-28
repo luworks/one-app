@@ -14,7 +14,6 @@
   package struct TodayTimelineSettings: View {
     package init() {}
     @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
-    @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
 
     package var body: some View {
@@ -23,9 +22,6 @@
         caption:
           "Show Settle actions and Settled items in Today. Settle hides an item in Today only. Turn this back on to access settled items."
       )
-      ExplainedToggle(
-        title: "Show Tomorrow", isOn: $showsTomorrow,
-        caption: "Expand Tomorrow at the end of Today to see all its items.")
       ExplainedToggle(
         title: "Show free time", isOn: $showsFreeTime,
         caption: "Quiet “Free 1 h” lines in the gaps between your plans.")

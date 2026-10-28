@@ -2,7 +2,7 @@ import UIKit
 import XCTest
 
 /// The Settings choices added with `Preferences`: Dim past days, no weekend shading, first day of the week, week numbers,
-/// where Calendar opens, the Today choices (Tomorrow, evening hour, free time), and new-item defaults.
+/// where Calendar opens, the Today choices (free time), and new-item defaults.
 /// `-uiTesting` starts every launch from the defaults; `-uiTestingPrefs key=value,...` sets what a test needs up front,
 /// and the tests that say "in Settings" flip the real switches.
 @MainActor
@@ -302,22 +302,6 @@ final class SettingsChoicesTests: XCTestCase {
   }
 
   // MARK: Today
-
-  private func scrollToTomorrow() -> XCUIElement {
-    let header = app.buttons["tomorrowHeader"]
-    for _ in 0..<8 where !(header.exists && header.isHittable) { app.swipeUp() }
-    XCTAssertTrue(header.waitForExistence(timeout: 5), "Today ends with a Tomorrow section")
-    if header.value as? String == "Collapsed" { header.tap() }
-    app.swipeUp()
-    return header
-  }
-
-  func testShowTomorrowOffHidesTheSection() {
-    launch(prefs: "showTomorrow=0", now: "09:41")
-    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
-    for _ in 0..<4 { app.swipeUp() }
-    XCTAssertFalse(app.buttons["tomorrowHeader"].exists)
-  }
 
   func testFreeTimeRowsCanBeSwitchedOff() {
     launch(now: "09:41")

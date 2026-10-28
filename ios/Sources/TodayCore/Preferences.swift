@@ -15,8 +15,6 @@ public enum Preferences {
   public static let weekNumbersKey = "today.setting.weekNumbers"
   public static let calendarStartKey = "today.setting.calendarStart"
   public static let showSettleKey = "today.setting.showSettle"
-  public static let showTomorrowKey = "today.setting.showTomorrow"
-  public static let eveningHourKey = "today.setting.eveningHour"
   public static let showFreeTimeKey = "today.setting.showFreeTime"
   public static let newReminderListKey = "today.setting.newReminderList"
   public static let newAlarmSnoozeKey = "today.setting.newAlarmSnooze"
@@ -24,8 +22,7 @@ public enum Preferences {
   public static let askSuggestionsKey = "today.setting.askSuggestions"
 
   static let allKeys = [
-    dimPastDaysKey, firstWeekdayKey, weekNumbersKey, calendarStartKey, showTomorrowKey,
-    eveningHourKey,
+    dimPastDaysKey, firstWeekdayKey, weekNumbersKey, calendarStartKey,
     showFreeTimeKey, newReminderListKey, newAlarmSnoozeKey, newAlarmSoundKey,
     askSuggestionsKey, showSettleKey,
   ]
@@ -37,9 +34,6 @@ public enum Preferences {
   public static let weekNumbers = false
   public static let calendarStart = CalendarStart.lastUsed
   public static let showSettle = true
-  public static let showTomorrow = true
-  /// 18:00, Apple Reminders' "Tonight".
-  public static let eveningHour = TomorrowPreview.eveningHour
   public static let showFreeTime = true
   /// "" = Auto: the list the text clearly belongs to, else the Inbox (Ask), else the default list (quick add).
   public static let newReminderList = ""
