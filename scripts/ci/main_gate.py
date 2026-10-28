@@ -89,7 +89,8 @@ def check_install(root, args, run):
     if (build.get('source') != sha or build.get('tree') != tree or build.get('source_after') != sha
             or build.get('dirty_after') != '' or type(build.get('exit')) is not int or build.get('exit') != 0
             or build.get('toolchain') != tools or build.get('signing_changes') is not False
-            or build.get('automatic_provisioning_updates') is not False):
+            or type(build.get('automatic_provisioning_updates')) is not bool
+            or build['automatic_provisioning_updates'] != getattr(args, 'allow_provisioning_updates', False)):
         raise ValueError('main_gate_device_build_provenance_mismatch')
     app = Path(build.get('app', ''))
     if not app.is_absolute() or app.name != 'One.app' or app.parent.name != 'Debug-iphoneos':

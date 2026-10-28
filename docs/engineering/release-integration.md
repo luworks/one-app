@@ -121,7 +121,7 @@ Formal release `preflight` also reads the authoritative `tests/testing/groups.js
 is the mandatory check immediately before an explicitly authorized manual
 `xcrun devicectl device install app` of a new main build. It installs nothing.
 Do not use a source-only preflight or a PID/install success as functional
-acceptance. There is no second installer or automatic device deployment.
+acceptance. The guarded `./dev build Debug --device <UDID> --install --main-run <push-run-id> --smoke-run <install-smoke-run-id>` also performs this check under the build locks immediately before installation. Add `--allow-provisioning-updates` only with explicit authorization; the receipt and gate must match that choice.
 
 Both runs must be in `.github/workflows/today.yml` for the exact SHA of current `main`:
 the `push` run (merge gate) with `checks` and `today-required` successful, and an explicit
@@ -138,7 +138,7 @@ preflight immediately before installation. CI never cancels a manual install.
 The existing authorized device-build receipt (the `build-receipt.json` shape
 used for prior manual phone deliveries) must retain `source`, `tree`, `exit: 0`,
 `source_after`, empty `dirty_after`, `signing_changes: false`,
-`automatic_provisioning_updates: false`, absolute `app` ending in
+`automatic_provisioning_updates: false` by default (or `true` only with matching explicit authorization), absolute `app` ending in
 `Debug-iphoneos/One.app`, `toolchain` and `product_identity`. Record the latter
 two at the successful build's completion using `scripts.ci.main_gate.tool_identity()`
 and `product_identity(app)`; they read Xcode/SDK metadata and only the three

@@ -126,6 +126,16 @@ class MainInstallTests(unittest.TestCase):
             with self.subTest(field=field), patch.dict(self.build, {field: value}), self.assertRaises(ValueError):
                 self.check()
 
+    def test_provisioning_updates_require_explicit_matching_authorization(self):
+        self.build['automatic_provisioning_updates'] = True
+        with self.assertRaisesRegex(ValueError, 'provenance_mismatch'):
+            self.check()
+        self.args.allow_provisioning_updates = True
+        self.assertEqual(self.check()['sha'], self.sha)
+        self.build['automatic_provisioning_updates'] = False
+        with self.assertRaisesRegex(ValueError, 'provenance_mismatch'):
+            self.check()
+
     def test_offline_and_main_race_never_pass(self):
         with patch.object(self, 'github', side_effect=OSError('offline')), self.assertRaises(OSError):
             self.check()

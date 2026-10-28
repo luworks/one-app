@@ -8,7 +8,7 @@ import uuid
 
 from .bootstrap import bootstrap as bootstrap_tools, BootstrapError
 from .core import (atomic_json, dd_lock, derived_data, fingerprint, host_lock,
-                   record_build)
+                   record_build, probe, state_root)
 from .process import Evidence, Redactor, run_process
 
 
@@ -67,15 +67,29 @@ def generate(root, timeout=600, *, _locked=False):
     return 0
 
 
-def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=False):
+def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=False, device=None,
+          install=False, provisioning_updates=False, main_run=None, smoke_run=None):
+    if (device and (scheme != 'Today' or testing or configuration != 'Debug')) or (
+            (install or provisioning_updates) and not device) or (install and not (main_run and smoke_run)) or (
+            (main_run or smoke_run) and not install):
+        raise ValueError('Device install requires Debug Live Today, device and both CI run IDs')
     if timeout <= 0:
         raise ValueError('Positive build timeout required')
+    sdk = 'iphoneos' if device else 'iphonesimulator'
+    destination = 'platform=iOS,id=' + device if device else 'generic/platform=iOS Simulator'
     operation = 'build-for-testing' if testing else 'build'
     command = ['xcodebuild', operation, '-project', 'ios/Today.xcodeproj', '-scheme', scheme,
-               '-configuration', configuration, '-destination', 'generic/platform=iOS Simulator',
+               '-configuration', configuration, '-destination', destination,
                '-derivedDataPath', str(derived_data(root)), '-jobs', '2', 'ARCHS=arm64',
                '-showBuildTimingSummary']
+    if provisioning_updates:
+        command.append('-allowProvisioningUpdates')
     with host_lock(root), dd_lock(root):
+        if device:
+            from scripts.release.release import check_git
+            source = probe(['git', 'rev-parse', 'HEAD'], root)
+            check_git(root, source)
+            tree = probe(['git', 'rev-parse', 'HEAD^{tree}'], root)
         code = generate(root, timeout, _locked=True)
         if code:
             return code
@@ -90,7 +104,7 @@ def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=F
                 return error.returncode
             print(json.dumps({'test_products': str(path), 'tests_executed': 0}))
             return 0
-        current = fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64')
+        current = fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64', sdk=sdk)
         command += locked_arguments(root)
         maps = None
         if configuration == 'Release' and scheme == 'Today':
@@ -101,8 +115,8 @@ def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=F
         if result.returncode:
             return result.returncode
         product = {'Today': 'One', 'TodayMock': 'TodayMock', 'TodayWorkbench': 'TodayWorkbench'}[scheme]
-        executable = derived_data(root) / f'Build/Products/{configuration}-iphonesimulator/{product}.app'
-        if not executable.is_dir() or fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64') != current:
+        executable = derived_data(root) / f'Build/Products/{configuration}-{sdk}/{product}.app'
+        if not executable.is_dir() or fingerprint(root, configuration=configuration, scheme=scheme, architecture='arm64', sdk=sdk) != current:
             raise ValueError('Missing executable or source changed during build; provenance rejected')
         products = [executable]
         if maps is not None:
@@ -113,6 +127,25 @@ def build(root, configuration='Debug', *, scheme='Today', timeout=600, testing=F
             products += sorted(path for path in maps.iterdir() if path.is_file())
             print(json.dumps({'release_maps': str(maps), 'exclusion': 'actual_simulator_products', 'signing': 'not_checked'}))
         record_build(root, current, products, returncode=result.returncode)
+        if device:
+            from scripts.ci.main_gate import check_install, product_identity, tool_identity
+            from scripts.release.release import check_git, run
+            from types import SimpleNamespace
+            check_git(root, source)
+            receipt = state_root(root) / 'device-builds' / (uuid.uuid4().hex + '.json')
+            atomic_json(receipt, {'source': source, 'tree': tree, 'source_after': probe(['git', 'rev-parse', 'HEAD'], root),
+                                  'dirty_after': probe(['git', 'status', '--porcelain', '--untracked-files=all'], root),
+                                  'exit': result.returncode, 'toolchain': tool_identity(), 'signing_changes': False,
+                                  'automatic_provisioning_updates': provisioning_updates, 'device': device,
+                                  'app': str(executable.absolute()), 'product_identity': product_identity(executable),
+                                  'build_log': str(result.log)})
+            print(json.dumps({'device_build_receipt': str(receipt)}))
+            if install:
+                args = SimpleNamespace(commit=source, main_run=main_run, smoke_run=smoke_run,
+                                       build_receipt=receipt, allow_provisioning_updates=provisioning_updates)
+                check_install(root, args, run)
+                return execute(root, ['xcrun', 'devicectl', 'device', 'install', 'app', '--device', device,
+                                      str(executable)], timeout=timeout).returncode
     return 0
 
 
