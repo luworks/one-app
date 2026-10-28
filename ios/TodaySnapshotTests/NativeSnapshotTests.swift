@@ -198,7 +198,8 @@ final class NativeSnapshotTests: XCTestCase {
     for detail in [false, true] {
       let shortHeight = try titleDetailHeight(short, detail: detail, accessibility: accessibility)
       let longHeight = try titleDetailHeight(long, detail: detail, accessibility: accessibility)
-      let longerHeight = try titleDetailHeight(long + long, detail: detail, accessibility: accessibility)
+      let longerHeight = try titleDetailHeight(
+        long + long, detail: detail, accessibility: accessibility)
       XCTAssertGreaterThan(longHeight, shortHeight + 8, "Long content uses a second line")
       XCTAssertEqual(longHeight, longerHeight, accuracy: 2, "More text cannot add a third line")
       XCTAssertLessThan(longHeight, shortHeight * 2.5, "The row remains within two lines")
@@ -206,7 +207,9 @@ final class NativeSnapshotTests: XCTestCase {
   }
 
   /// Measure the shared production view at a fixed row width without snapshot baselines.
-  private func titleDetailHeight(_ title: String, detail: Bool, accessibility: Bool) throws -> CGFloat {
+  private func titleDetailHeight(_ title: String, detail: Bool, accessibility: Bool) throws
+    -> CGFloat
+  {
     let view = TitleDetail(title: Text(title), hasDetail: detail) {
       if detail { Text("Work").font(.caption) }
     }
