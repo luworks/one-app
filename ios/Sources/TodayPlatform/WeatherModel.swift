@@ -23,13 +23,17 @@
     @ObservationIgnored private var lastFailure: Date?
     @ObservationIgnored private var requestID = UUID()
 
-    /// A sample is supplied only by development compositions; Live always uses WeatherKit.
+    /// Live weather is held back until WeatherKit signing is configured.
+    public var isAvailable: Bool { sample != nil }
+
+    /// A sample is supplied only by development compositions.
     public init(sample: WeatherSnapshot? = nil) {
       self.sample = sample
       super.init()
     }
 
     public func update(enabled: Bool, force: Bool = false) {
+      let enabled = enabled && isAvailable
       self.enabled = enabled
       guard enabled else {
         requestID = UUID()

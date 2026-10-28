@@ -175,7 +175,7 @@
         if isTodayTab, showsHealth, let line = health.line {
           TodayHealthLine(line: line)
         }
-        if isTodayTab, showsWeather {
+        if isTodayTab, showsWeather, weather.isAvailable {
           if let snapshot = weather.snapshot {
             TodayWeatherLine(snapshot: snapshot)
           } else if weather.state == .loading {

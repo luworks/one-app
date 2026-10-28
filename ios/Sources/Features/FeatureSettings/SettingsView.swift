@@ -76,6 +76,7 @@
 
     @Environment(\.dismiss) private var dismiss
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(WeatherModel.self) private var weather
     @Environment(\.modelContext) private var context
 
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.default.rawValue
@@ -267,11 +268,13 @@
         )
         HealthMetricsLink()
         OpenHealthButton()
-        explainedToggle(
-          "Weather summary", isOn: $weatherSummary,
-          caption:
-            "Shows current weather and an hourly forecast on Today. When enabled, your location is sent to Apple Weather to obtain the forecast."
-        )
+        if weather.isAvailable {
+          explainedToggle(
+            "Weather summary", isOn: $weatherSummary,
+            caption:
+              "Shows current weather and an hourly forecast on Today. When enabled, your location is sent to Apple Weather to obtain the forecast."
+          )
+        }
       } header: {
         Text("Today")
       }

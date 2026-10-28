@@ -79,17 +79,12 @@ The [scene registry](Sources/TodayScenes/SceneRegistry.swift) owns valid scene/s
 
 ## Weather on Today
 
-Settings → Today → Weather summary is off by default. When enabled on Today, the app requests
-foreground location permission and sends the location to Apple Weather through WeatherKit. A compact
-line opens current conditions, daily high/low, precipitation chance and an hourly forecast, with
-Apple Weather attribution and a data-sources link. Forecasts and location stay in memory; disabling
-the setting clears them and cancels the current request. Location denial offers iOS Settings; a service
-failure offers Retry. While Today is active, a successful forecast is reused for 15 minutes;
-automatic retries after a failure wait five minutes, while the Retry button acts immediately.
-
-Live WeatherKit requests require Apple Developer Program membership, the WeatherKit capability on
-the App ID, and a matching signed entitlement. Mock and Workbench use fixed sample data and do not
-request location or contact Apple Weather. A simulator sample is not evidence of a successful live request.
+Weather is not available in the live app: its setting is hidden and requests are disabled even if
+an old preference is on. Mock and Workbench retain the opt-in summary with fixed offline sample data.
+The implementation is retained for later: live use requires Apple Developer Program membership,
+the WeatherKit capability on the App ID, a matching entitlement and provisioning profile, and a
+verified live request. Once enabled, the feature requests foreground location and sends it to Apple
+Weather; forecasts and location stay in memory. A simulator sample is not evidence of a live request.
 
 ## Release and physical-device states
 
