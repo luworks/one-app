@@ -9,6 +9,7 @@
   import TodayShared
   import TodayTestSupport
   import TodayDesignSystem
+  import TodayPlatform
   import TodayPlannerUI
   import FeatureToday
   import FeatureHealth
@@ -382,7 +383,7 @@
         travel: a.services.travel, presentation: presentation
       )
       .modelContainer(a.context.container)
-      .environment(presentation).environment(health)
+      .environment(presentation).environment(health).environment(WeatherModel())
       .environment(\.calendar, runtime.calendar).environment(\.locale, runtime.locale)
       .environment(\.timeZone, runtime.calendar.timeZone)
       let host = UIHostingController(rootView: view)
