@@ -53,7 +53,7 @@ final class TodayTomorrowTests: XCTestCase {
     let c = cal.dateComponents([.year, .month, .day], from: tomorrow)
     let id = String(format: "weekStrip.%04d-%02d-%02d", c.year!, c.month!, c.day!)
     let next = app.buttons[id]
-    if !next.exists { app.buttons["Next week"].firstMatch.tap() }
+    if !next.exists { app.weekStripDay(.now).swipeLeft() }
     XCTAssertTrue(next.waitForExistence(timeout: 3))
     next.tap()
     XCTAssertTrue(next.waitForSelected(timeout: 3))
@@ -64,6 +64,16 @@ final class TodayTomorrowTests: XCTestCase {
     app.returnToToday()
     // Tapping it again on today keeps today.
     app.returnToToday()
+  }
+
+  func testWeekStripSwipesSelectSameWeekday() {
+    let app = launch(at: "09:41")
+    let today = Calendar.current.startOfDay(for: Date())
+    let next = Calendar.current.date(byAdding: .day, value: 7, to: today)!
+    app.weekStripDay(today).swipeLeft()
+    XCTAssertTrue(app.weekStripDay(next).waitForSelected(timeout: 3))
+    app.weekStripDay(next).swipeRight()
+    XCTAssertTrue(app.weekStripDay(today).waitForSelected(timeout: 3))
   }
 
   func testTodayDoesNotShowTomorrowDisclosure() {
