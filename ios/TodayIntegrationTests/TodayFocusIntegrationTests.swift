@@ -310,7 +310,6 @@
       a.defaults.set(true, forKey: "one.calendarSync.enabled")
       a.defaults.set(false, forKey: SettingsKey.healthSummary)
       a.defaults.set(false, forKey: SettingsKey.jumpToNow)
-      a.defaults.set(false, forKey: Preferences.showTomorrowKey)
       a.defaults.set(false, forKey: Preferences.showFreeTimeKey)
       var nativeStoreCreations = 0
       var rangeReads = 0

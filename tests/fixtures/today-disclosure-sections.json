@@ -1,16 +1,14 @@
 {
   "version": 1,
-  "about": "Today disclosure layout. One overdue item, a current task and daily meeting/alarm; tomorrow has five entries across all-day, recurring event, timed task, anytime task and alarm. Local dates are relative to load day.",
+  "about": "Today section and day navigation layout. One overdue item, a current task and daily meeting/alarm; a next-day anytime task supports day navigation. Local dates are relative to load day.",
   "lists": [{ "name": "Section work", "color": 2 }],
   "reminders": [
     { "title": "Section overdue", "list": "Section work", "due": { "day": -1, "time": "17:00" } },
     { "title": "Section today", "list": "Section work", "due": { "day": 0, "time": "09:00" }, "minutes": 25 },
-    { "title": "Tomorrow timed task", "list": "Section work", "due": { "day": 1, "time": "12:00" } },
     { "title": "Tomorrow anytime task", "list": "Section work", "due": { "day": 1 } }
   ],
   "events": [
-    { "title": "Daily section meeting", "start": { "day": 0, "time": "10:00" }, "minutes": 30, "repeat": "daily" },
-    { "title": "Tomorrow all-day event", "start": { "day": 1, "time": "00:00" }, "minutes": 1440, "allDay": true }
+    { "title": "Daily section meeting", "start": { "day": 0, "time": "10:00" }, "minutes": 30, "repeat": "daily" }
   ],
   "alarms": [{ "time": "07:00", "label": "Daily section alarm", "weekdays": [1, 2, 3, 4, 5, 6, 7] }],
   "chats": []
