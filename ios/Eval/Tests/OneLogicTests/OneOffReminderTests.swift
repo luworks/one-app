@@ -37,8 +37,9 @@ final class OneOffReminderTests: XCTestCase {
     XCTAssertEqual(capture.minute, 0)
     XCTAssertNil(capture.repeatRule)
     let context = ConversationContext(turns: [.init(isUser: true, text: text, timestamp: now)])
-    let recovered = try XCTUnwrap(CaptureConversation.resolve(
-      "增加提醒", context: context, pending: nil, now: now, calendar: calendar))
+    let recovered = try XCTUnwrap(
+      CaptureConversation.resolve(
+        "增加提醒", context: context, pending: nil, now: now, calendar: calendar))
     XCTAssertEqual(recovered, capture)
   }
 
@@ -50,10 +51,13 @@ final class OneOffReminderTests: XCTestCase {
       ("Add a reminder to call Alex tomorrow at 9am", 9, 1),
     ]
     for (text, hour, dayOffset) in cases {
-      let capture = try XCTUnwrap(OneOffReminderRequest.capture(text, now: now, calendar: calendar), text)
+      let capture = try XCTUnwrap(
+        OneOffReminderRequest.capture(text, now: now, calendar: calendar), text)
       XCTAssertEqual(capture.kind, .task, text)
       XCTAssertEqual(capture.hour, hour, text)
-      XCTAssertEqual(calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: capture.day).day, dayOffset, text)
+      XCTAssertEqual(
+        calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: capture.day).day,
+        dayOffset, text)
     }
     XCTAssertNil(OneOffReminderRequest.capture("每周五下午两点提醒我买牛奶", now: now, calendar: calendar))
     XCTAssertNil(OneOffReminderRequest.capture("增加一个闹钟，明天早上8点", now: now, calendar: calendar))

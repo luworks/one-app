@@ -306,7 +306,10 @@ public enum CaptureConversation {
       capture.kind = .task
       capture.ringsAsAlarm = true
     } else if ChatRouting.intent(text) == .capture,
-      has(text, #"提醒我|(?:增加|新增|添加|创建|新建|加)(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒)|\bremind me\b|\b(?:add|create|set) (?:a |an )?reminder\b"#), !has(text, #"闹钟|\balarm\b|wake me"#)
+      has(
+        text,
+        #"提醒我|(?:增加|新增|添加|创建|新建|加)(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒)|\bremind me\b|\b(?:add|create|set) (?:a |an )?reminder\b"#
+      ), !has(text, #"闹钟|\balarm\b|wake me"#)
     {
       capture.kind = .task
       capture.ringsAsAlarm = false
