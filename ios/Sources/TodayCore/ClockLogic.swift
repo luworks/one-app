@@ -215,11 +215,11 @@ extension WorldClock {
     /// Points of horizontal drag per 15-minute step.
     public static let pointsPerStep: Double = 10
 
-    /// The offset (in minutes) for a drag: dragging right moves time forward; dragging left moves it backward.
+    /// The offset (in minutes) for a drag: dragging left moves time forward; dragging right moves it backward.
     /// `start` is the offset when the drag began.
     public static func offset(start: Int, dragWidth: Double) -> Int {
       let steps = Int((dragWidth / pointsPerStep).rounded(.towardZero))
-      return clamp(snap(start) + steps * stepMinutes)
+      return clamp(snap(start) - steps * stepMinutes)
     }
 
     /// Rounds to the nearest 15 minutes.
@@ -262,7 +262,7 @@ extension WorldClock {
 
     /// How many points the drag went past the end of the scale (positive both ways), for the rubber band.
     public static func excess(start: Int, dragWidth: Double) -> Double {
-      let raw = Double(snap(start)) + (dragWidth / pointsPerStep) * Double(stepMinutes)
+      let raw = Double(snap(start)) - (dragWidth / pointsPerStep) * Double(stepMinutes)
       let limit = Double(limitMinutes)
       let over = abs(raw) > limit ? abs(raw) - limit : 0
       return over / Double(stepMinutes) * pointsPerStep

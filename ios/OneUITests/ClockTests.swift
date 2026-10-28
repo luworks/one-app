@@ -165,13 +165,13 @@ final class ClockTests: XCTestCase {
     XCTAssertFalse(app.buttons["worldClock.overlap"].exists, "no Overlap capsule")
     let before = clocks.map({ $0.label })
 
-    // Start inside the card, clear of the sidebar's reserved 44pt edge: every city advances into the future.
+    // Start inside the card, clear of the sidebar's reserved 44pt edge: every city moves into the past.
     tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5))
       .press(
         forDuration: 0.05,
         thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)),
         withVelocity: .slow, thenHoldForDuration: 0.1)
-    XCTAssertTrue(pill.label.hasSuffix("AFTER NOW"), "the pill says how far: \(pill.label)")
+    XCTAssertTrue(pill.label.hasSuffix("BEFORE NOW"), "the pill says how far: \(pill.label)")
     for (clock, original) in zip(clocks, before) {
       XCTAssertNotEqual(clock.label, original, "every clock moved")
     }
@@ -182,13 +182,13 @@ final class ClockTests: XCTestCase {
     XCTAssertEqual(pill.label, "NOW", "tapping the pill goes back to NOW")
     XCTAssertEqual(clocks.map({ $0.label }), before)
 
-    // Drag left from Now: every city moves into the past.
+    // Drag left from Now: every city advances into the future.
     tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
       .press(
         forDuration: 0.05,
         thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)),
         withVelocity: .slow, thenHoldForDuration: 0.1)
-    XCTAssertTrue(pill.label.hasSuffix("BEFORE NOW"), pill.label)
+    XCTAssertTrue(pill.label.hasSuffix("AFTER NOW"), pill.label)
     for (clock, original) in zip(clocks, before) {
       XCTAssertNotEqual(clock.label, original, "every clock moved")
     }

@@ -111,15 +111,15 @@ final class OverlapTests: XCTestCase {
     for width in [-9.0, 9.0] {
       XCTAssertEqual(S.offset(start: 0, dragWidth: width), 0, "less than a step does nothing")
     }
-    XCTAssertEqual(S.offset(start: 0, dragWidth: 10), 15, "drag right = future")
-    XCTAssertEqual(S.offset(start: 0, dragWidth: -10), -15, "drag left = past")
-    XCTAssertEqual(S.offset(start: 0, dragWidth: 125), 180)
-    XCTAssertEqual(S.offset(start: 60, dragWidth: 20), 90, "advances from where the drag began")
-    XCTAssertEqual(S.offset(start: 60, dragWidth: -20), 30)
-    XCTAssertEqual(S.offset(start: 0, dragWidth: 100_000), 24 * 60, "a day at most")
-    XCTAssertEqual(S.offset(start: 0, dragWidth: -100_000), -24 * 60)
-    XCTAssertEqual(S.offset(start: S.limitMinutes, dragWidth: -10), S.limitMinutes - 15)
-    XCTAssertEqual(S.offset(start: -S.limitMinutes, dragWidth: 10), -S.limitMinutes + 15)
+    XCTAssertEqual(S.offset(start: 0, dragWidth: 10), -15, "drag right = past")
+    XCTAssertEqual(S.offset(start: 0, dragWidth: -10), 15, "drag left = future")
+    XCTAssertEqual(S.offset(start: 0, dragWidth: 125), -180)
+    XCTAssertEqual(S.offset(start: 60, dragWidth: -20), 90, "advances from where the drag began")
+    XCTAssertEqual(S.offset(start: 60, dragWidth: 20), 30)
+    XCTAssertEqual(S.offset(start: 0, dragWidth: 100_000), -24 * 60, "a day at most")
+    XCTAssertEqual(S.offset(start: 0, dragWidth: -100_000), 24 * 60)
+    XCTAssertEqual(S.offset(start: S.limitMinutes, dragWidth: 10), S.limitMinutes - 15)
+    XCTAssertEqual(S.offset(start: -S.limitMinutes, dragWidth: -10), -S.limitMinutes + 15)
     XCTAssertEqual(S.snap(7), 0)
     XCTAssertEqual(S.snap(8), 15)
     XCTAssertEqual(S.snap(-23), -30)
@@ -156,11 +156,11 @@ final class OverlapTests: XCTestCase {
     XCTAssertLessThan(S.rubberBand(10_000), 56.0001, "and it never goes further than the maximum")
     XCTAssertGreaterThan(S.rubberBand(200), S.rubberBand(100))
     XCTAssertEqual(S.excess(start: 0, dragWidth: -100), 0, "inside the scale there is no stretch")
-    XCTAssertEqual(S.excess(start: 24 * 60, dragWidth: 50), 50, "50 points past the end")
-    XCTAssertEqual(S.excess(start: -24 * 60, dragWidth: -30), 30, "either end")
+    XCTAssertEqual(S.excess(start: 24 * 60, dragWidth: -50), 50, "50 points past the end")
+    XCTAssertEqual(S.excess(start: -24 * 60, dragWidth: 30), 30, "either end")
     XCTAssertEqual(
-      S.excess(start: S.limitMinutes, dragWidth: -50), 0, "moving inward does not stretch")
-    XCTAssertEqual(S.excess(start: -S.limitMinutes, dragWidth: 30), 0)
+      S.excess(start: S.limitMinutes, dragWidth: 50), 0, "moving inward does not stretch")
+    XCTAssertEqual(S.excess(start: -S.limitMinutes, dragWidth: -30), 0)
   }
 
   func testDayBands() {
