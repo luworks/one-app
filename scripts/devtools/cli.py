@@ -55,6 +55,11 @@ def main(argv=None, root=ROOT):
     build_parser = sub.add_parser('build', help='build the real app and embedded extensions')
     build_parser.add_argument('configuration', nargs='?', choices=['Debug', 'Release'], default='Debug')
     build_parser.add_argument('--scheme', choices=['Today', 'TodayMock', 'TodayWorkbench'], default='Today')
+    build_parser.add_argument('--device', help='paired physical device identifier')
+    build_parser.add_argument('--install', action='store_true', help='install after exact-main CI preflight')
+    build_parser.add_argument('--allow-provisioning-updates', action='store_true')
+    build_parser.add_argument('--main-run', help='successful main push run ID')
+    build_parser.add_argument('--smoke-run', help='successful main install-smoke run ID')
     build_parser.add_argument('--for-testing', action='store_true', help='prepare authoritative test products without booting a device or running tests')
     build_parser.add_argument('--timeout', type=float, default=None, help='per-process seconds; default 600')
     test_parser = sub.add_parser('test', help='run an authoritative test group')
@@ -149,6 +154,9 @@ def main(argv=None, root=ROOT):
                 options = {} if args.timeout is None else {'timeout': args.timeout}
                 if args.for_testing:
                     options['testing'] = True
+                if args.device or args.install or args.allow_provisioning_updates or args.main_run or args.smoke_run:
+                    options.update(device=args.device, install=args.install, provisioning_updates=args.allow_provisioning_updates,
+                                   main_run=args.main_run, smoke_run=args.smoke_run)
                 return commands.build(root, args.configuration, scheme=args.scheme, **options)
             if args.command == 'test':
                 if args.full and args.group not in ('ui', 'release'):

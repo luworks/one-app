@@ -116,6 +116,10 @@ Four tabs: **Today · Calendar · Reminders · Clock** as pills on top (swipe si
 
 Planner list rows in Today, Calendar, Reminders and Search use at most two text lines: a title and detail share one line when they fit, otherwise each gets one truncated line. A title without detail can use two lines. Event travel information shares the detail line; the full item remains available on opening it and through VoiceOver. Text follows Dynamic Type.
 
+## Physical-device delivery
+
+For an explicitly authorized Live Debug installation, use `./dev build Debug --device <UDID> --install --main-run <push-run-id> --smoke-run <install-smoke-run-id>`. Add `--allow-provisioning-updates` only when explicitly authorized. The build, receipt, exact-current-main CI preflight and install share the host and derived-data locks. The receipt and logs are retained under the primary checkout's `tests/results/`. A failed preflight prevents installation. This command does not launch the app or establish usability.
+
 ## Source map
 
 [Architecture](../docs/engineering/architecture.md) owns the dependency contract. [Package.swift](Package.swift) owns actual links and source membership; production tests import these same implementations.
