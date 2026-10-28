@@ -12,6 +12,9 @@
     private let calendar: Calendar?
     @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.colorScheme) private var colorScheme
+    @GestureState private var dragging = false
+    @State private var swipe = WeekStripSwipe()
+    @State private var feedback = 0
 
     private var cal: Calendar {
       if let calendar { return calendar }
@@ -28,12 +31,6 @@
     package var body: some View {
       let now = presentation.now
       return HStack(spacing: 2) {
-        Button {
-          shift(-7)
-        } label: {
-          Image(systemName: "chevron.left").padding(6)
-        }
-        .accessibilityLabel("Previous week")
         ForEach(weekDays, id: \.self) { d in
           let isSelected = cal.isDate(d, inSameDayAs: selected)
           Button {
@@ -68,13 +65,25 @@
           .accessibilityAddTraits(isSelected ? .isSelected : [])
           .accessibilityIdentifier("weekStrip." + Self.key(d, cal))
         }
-        Button {
-          shift(7)
-        } label: {
-          Image(systemName: "chevron.right").padding(6)
-        }
-        .accessibilityLabel("Next week")
       }
+      .contentShape(Rectangle())
+      .simultaneousGesture(
+        DragGesture(minimumDistance: 10)
+          .updating($dragging) { _, state, _ in state = true }
+          .onChanged { value in
+            if let weeks = swipe.update(x: value.translation.width, y: value.translation.height) {
+              shift(weeks * 7)
+              feedback += 1
+            }
+          }
+      )
+      .onChange(of: dragging) { _, active in
+        if !active { swipe.reset() }
+      }
+      .sensoryFeedback(.selection, trigger: feedback)
+      .accessibilityElement(children: .contain)
+      .accessibilityAction(named: "Previous week") { shift(-7) }
+      .accessibilityAction(named: "Next week") { shift(7) }
       .buttonStyle(.borderless)
       .tint(.primary)
     }
