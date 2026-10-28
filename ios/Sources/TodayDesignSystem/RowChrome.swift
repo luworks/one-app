@@ -71,28 +71,31 @@
     }
   }
 
-  /// A row's title with its detail caption. Both sit on one line when they fit; otherwise the detail drops below.
-  /// Long titles stop at `titleLines` so one item can't fill the screen (the full title is in Show Details).
+  /// Title and detail share at most two lines, including at accessibility text sizes.
   package struct TitleDetail<Detail: View>: View {
-    package init(title: Text, titleLines: Int? = 2, @ViewBuilder detail: () -> Detail) {
+    package init(title: Text, hasDetail: Bool = true, @ViewBuilder detail: () -> Detail) {
       self.title = title
-      self.titleLines = titleLines
+      self.hasDetail = hasDetail
       self.detail = detail()
     }
     package let title: Text
-    package var titleLines: Int? = 2
+    package let hasDetail: Bool
     @ViewBuilder package var detail: Detail
 
-    package var body: some View {
-      ViewThatFits(in: .horizontal) {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-          title.lineLimit(1)
-          detail
+    @ViewBuilder package var body: some View {
+      if hasDetail {
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            title.lineLimit(1)
+            detail.lineLimit(1)
+          }
+          VStack(alignment: .leading, spacing: 1) {
+            title.lineLimit(1)
+            detail.lineLimit(1)
+          }
         }
-        VStack(alignment: .leading, spacing: 1) {
-          title.lineLimit(titleLines)
-          detail
-        }
+      } else {
+        title.lineLimit(2)
       }
     }
   }

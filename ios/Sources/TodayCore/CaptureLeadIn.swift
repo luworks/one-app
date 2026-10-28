@@ -43,7 +43,9 @@ public enum CaptureLeadIn {
       guard let r = t.range(of: pattern, options: [.regularExpression, .caseInsensitive]),
         r.lowerBound == t.startIndex, !r.isEmpty
       else { continue }
-      let rest = t[r.upperBound...].trimmingCharacters(
+      let rest = t[r.upperBound...].replacingOccurrences(
+        of: #"^\s*(?:吧|呀|啊|啦|哦|哈)[，,：:]\s*"#, with: "", options: .regularExpression
+      ).trimmingCharacters(
         in: CharacterSet(charactersIn: " \t\n,，。.、:：!！"))
       guard !rest.isEmpty else { return nil }
       return rest

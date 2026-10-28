@@ -42,7 +42,7 @@ public enum ChatRouting {
       with: "", options: .regularExpression)
     guard
       let verb = body.range(
-        of: #"^(?:创建|添加|新建|提醒(?:我|一下)?)"#,
+        of: #"^(?:创建|添加|增加|新增|新建|提醒(?:我|一下)?)"#,
         options: .regularExpression)
     else { return false }
     let remainder = String(body[verb.upperBound...])
@@ -159,7 +159,8 @@ public enum ChatRouting {
         let when = chineseTimeToken
         let direct =
           #"^(?:(?:请|麻烦|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?"#
-          + when + #"*(?:的时候)?(?:吧)?[，,]?\s*(?:就)?(?:提醒我|提醒一下|提醒(?=\s+\S)|记得|别忘了|帮我记|新建|添加|加一个|加个)"#
+          + when
+          + #"*(?:的时候)?(?:吧)?[，,]?\s*(?:就)?(?:提醒我|提醒一下|提醒(?=\s+\S)|记得|别忘了|帮我记|新建|添加|(?:增加|新增)\s*(?:一?个|一条)?\s*(?:reminder|提醒事项|提醒|待办事项|待办|任务)|加一个|加个)"#
         // A narrative can end in an explicit timed reminder clause. Its earlier words
         // need not be a command, but the reminder clause itself must start at a boundary.
         let timedClause = #"(?:^|[，,。；;]|然后)\s*"# + when + #"+(?:的时候)?提醒我"#
@@ -258,7 +259,7 @@ public enum ChatRouting {
     isQuestion(text)
       && has(
         text,
-        #"^(?:(?:what(?:['’]s| is)|anything) left|what(?:['’]s| is) on) today\s*[?？]*$|\b(?:my (?:schedule|agenda|tasks|events|meetings)|what(?:'s| is) (?:on my|next)|free time)\b|(?:今天|今日).*(?:安排|日程|待办|任务|会议)|接下来.*(?:安排|什么)|空闲"#
+        #"^(?:(?:what(?:['’]s| is)|anything) left|what(?:['’]s| is) on) today\s*[?？]*$|\b(?:my (?:schedule|agenda|tasks|events|meetings)|what(?:'s| is) (?:on my|next)|free time)\b|(?:今天|今日).*(?:安排|日程|待办|任务|会议|(?:还)?剩(?:下)?什么)|接下来.*(?:安排|什么)|空闲"#
       )
       && !has(text, #"activity|活动记录"#)
   }

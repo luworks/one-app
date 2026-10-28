@@ -103,14 +103,6 @@ final class DayScheduleTests: XCTestCase {
     XCTAssertEqual(
       DaySchedule.freeGaps(busy: [], day: at(0, day: 11), now: at(9), calendar: cal), [])
   }
-
-  func testTomorrowOpensInTheEveningOrWhenTodayIsDone() {
-    XCTAssertFalse(
-      TomorrowPreview.opensByItself(now: at(9, 41), todayStarts: [at(12)], calendar: cal))
-    XCTAssertTrue(TomorrowPreview.opensByItself(now: at(18), todayStarts: [at(21)], calendar: cal))
-    XCTAssertTrue(
-      TomorrowPreview.opensByItself(now: at(15), todayStarts: [at(9), at(14)], calendar: cal))
-  }
 }
 
 final class ListNameTests: XCTestCase {

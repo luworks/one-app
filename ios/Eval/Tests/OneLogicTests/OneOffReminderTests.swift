@@ -26,6 +26,45 @@ final class OneOffReminderTests: XCTestCase {
       calendar.date(bySettingHour: 11, minute: 0, second: 0, of: now))
   }
 
+  func testChineseMixedReminderRequestAndFollowUpPreserveSlots() throws {
+    let text = "增加一个 reminder，今天下午两点吧，我需要去学这个八段锦"
+    XCTAssertEqual(ChatRouting.intent(text), .capture)
+    let capture = try XCTUnwrap(OneOffReminderRequest.capture(text, now: now, calendar: calendar))
+    XCTAssertEqual(capture.title, "我需要去学这个八段锦")
+    XCTAssertEqual(capture.kind, .task)
+    XCTAssertEqual(capture.day, calendar.startOfDay(for: now))
+    XCTAssertEqual(capture.hour, 14)
+    XCTAssertEqual(capture.minute, 0)
+    XCTAssertNil(capture.repeatRule)
+    let context = ConversationContext(turns: [.init(isUser: true, text: text, timestamp: now)])
+    let recovered = try XCTUnwrap(
+      CaptureConversation.resolve(
+        "增加提醒", context: context, pending: nil, now: now, calendar: calendar))
+    XCTAssertEqual(recovered, capture)
+  }
+
+  func testExplicitRemindersKeepTheirKindAndTimeAcrossLanguages() throws {
+    let cases: [(String, Int, Int)] = [
+      ("明天早上8点提醒我参加会议", 8, 1),
+      ("增加一个 reminder，明天早上8点，交报告", 8, 1),
+      ("周五下午两点提醒我买牛奶", 14, 3),
+      ("Add a reminder to call Alex tomorrow at 9am", 9, 1),
+    ]
+    for (text, hour, dayOffset) in cases {
+      let capture = try XCTUnwrap(
+        OneOffReminderRequest.capture(text, now: now, calendar: calendar), text)
+      XCTAssertEqual(capture.kind, .task, text)
+      XCTAssertEqual(capture.hour, hour, text)
+      XCTAssertEqual(
+        calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: capture.day).day,
+        dayOffset, text)
+    }
+    XCTAssertNil(OneOffReminderRequest.capture("每周五下午两点提醒我买牛奶", now: now, calendar: calendar))
+    XCTAssertNil(OneOffReminderRequest.capture("增加一个闹钟，明天早上8点", now: now, calendar: calendar))
+    XCTAssertNil(OneOffReminderRequest.capture("今天还剩什么", now: now, calendar: calendar))
+    XCTAssertTrue(ChatRouting.isAgendaQuestion("今天还剩什么"))
+  }
+
   func testMixedLanguageFollowupsKeepOriginalSubjectAndTime() throws {
     var turns: [ConversationContext.Turn] = [.init(isUser: true, text: utterance, timestamp: now)]
     for text in ["setting reminder", "one off"] {
@@ -60,7 +99,7 @@ final class OneOffReminderTests: XCTestCase {
       "tomorrow at 11am", "setting reminder", "one off", "Remind me", "new task", "提醒我",
       "Remind me to buy milk every Monday", "每天11点提醒我买奶", "11点还是12点买奶",
       "Set an alarm for 11am", "Set an alarm", "Wake me up", "设置闹钟",
-      "Lunch with Alex tomorrow at 11am",
+      "Lunch with Alex tomorrow at 11am", "增加库存", "增加提醒了吗？",
     ] {
       XCTAssertNil(OneOffReminderRequest.capture(text, now: now, calendar: calendar), text)
     }

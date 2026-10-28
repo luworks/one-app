@@ -257,23 +257,6 @@ extension DaySchedule {
   }
 }
 
-/// When Today shows all of tomorrow instead of its first few items.
-public enum TomorrowPreview {
-  public static let limit = 3
-  /// Apple Reminders starts "Tonight" at 18:00; from then on tomorrow matters more than what's left of today.
-  public static let eveningHour = 18
-
-  /// Open in the evening, or once nothing timed is left today.
-  /// `eveningHour` is Settings → "Evening starts at"; nil (off) leaves only the "nothing left today" rule.
-  public static func opensByItself(
-    now: Date, todayStarts: [Date], eveningHour: Int? = TomorrowPreview.eveningHour,
-    calendar: Calendar = .current
-  ) -> Bool {
-    eveningHour.map { calendar.component(.hour, from: now) >= $0 } ?? false
-      || !todayStarts.contains { $0 > now }
-  }
-}
-
 /// Calendar tab: month grids, week starts and weekday letters. Follows the calendar's first weekday: the device setting, or the one chosen in Settings → Calendar (`Calendar.app`).
 public enum CalendarMath {
   /// The month containing `date` as rows of 7 slots, like Apple's Month: nil before the 1st and after the last day.
