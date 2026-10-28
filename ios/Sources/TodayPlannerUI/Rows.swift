@@ -56,7 +56,6 @@
     private let travelProvider: any TravelTimeProviding
     @Environment(PlannerPresentation.self) private var presentation
     @Environment(\.modelContext) private var context
-    @Environment(\.dynamicTypeSize) private var typeSize
     package let event: OneEvent
     package var start: Date? = nil
     /// The list that holds this row asks "this event or the series?" for a repeating one (see `entryDeleteDialog`).
@@ -104,21 +103,19 @@
           .frame(height: attention == nil ? nil : 20)
           .modifier(AgendaIconSlot(enabled: attention != nil))
         VStack(alignment: .leading, spacing: 1) {
-          TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2)
+          TitleDetail(title: Text(event.title))
           {
             Group {
               if attention != nil {
-                Text(detail)
+                Text(rowDetail)
               } else {
-                Label(detail, systemImage: "lock.fill")
+                Label(rowDetail, systemImage: "lock.fill")
                   .labelStyle(.titleAndIcon)
               }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-            .lineLimit(attention != nil && typeSize.isAccessibilitySize ? nil : 1)
           }
-          if let travel { TravelLine(text: travel) }
         }
         Spacer(minLength: 0)
       }
@@ -149,6 +146,8 @@
         entry, pendingDelete: $pendingDelete, open: { _ in open(event) },
         edit: { _ in open(event) }, calendar: calendar, attention: attention)
     }
+
+    private var rowDetail: String { detail + (travel.map { " · " + $0 } ?? "") }
 
     /// "Drive 18 min · Leave by 14:20" when the event's Apple Calendar copy has a location (Today's own events keep none).
     private var travel: String? {
@@ -184,7 +183,7 @@
     package var time: Date? = nil
     /// Add the list name to the detail line. Off inside a list, where it is the title.
     package var showsList = true
-    /// Day view: detail on the title's line when it fits, titles capped at two lines, tighter insets.
+    /// Day view uses tighter insets.
     package var compact = false
     /// Set on the Today tab: the day the row sits on. The detail line then keeps at most two facts (see `RowSubtitle`).
     package var agendaDay: Date? = nil
@@ -235,15 +234,8 @@
         .modifier(AgendaIconSlot(enabled: attention != nil))
         .sensoryFeedback(.success, trigger: task.isDone) { _, done in done }
         .accessibilityLabel(task.isDone ? "Reopen \(task.title)" : "Complete \(task.title)")
-        if compact {
-          TitleDetail(title: title, titleLines: typeSize.isAccessibilitySize ? nil : 2) {
-            detailText
-          }
-        } else {
-          VStack(alignment: .leading, spacing: 2) {
-            title
-            detailText
-          }
+        TitleDetail(title: title, hasDetail: detail != nil) {
+          detailText
         }
         Spacer(minLength: 0)
         if task.flagged {
@@ -357,7 +349,7 @@
             plannerIsOverdue(task, now: presentation.now, calendar: presentation.calendar)
               ? Color.red : Color.secondary
           )
-          .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
+          .lineLimit(1)
       }
     }
 
@@ -426,6 +418,7 @@
             .frame(width: attention == nil ? 4 + 6 : nil)
             .modifier(AgendaIconSlot(enabled: attention != nil))
           Text(alarm.label.isEmpty ? "Alarm" : alarm.label)
+            .lineLimit(2)
             .foregroundStyle(alarm.isOn ? Color.primary : Color.secondary)
           Spacer(minLength: 0)
         }

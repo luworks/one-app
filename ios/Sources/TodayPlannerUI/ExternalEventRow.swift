@@ -21,7 +21,6 @@
     private let attention: TodayRowAttention?
     private let calendar: any CalendarService
     private let travelProvider: any TravelTimeProviding
-    @Environment(\.dynamicTypeSize) private var typeSize
     package let event: ExternalEvent
     /// The list that holds this row asks "this event or the series?" (see `entryDeleteDialog`).
     @Binding package var pendingDelete: CalEntry?
@@ -50,21 +49,19 @@
           .frame(height: attention == nil ? nil : 20)
           .modifier(AgendaIconSlot(enabled: attention != nil))
         VStack(alignment: .leading, spacing: 1) {
-          TitleDetail(title: Text(event.title), titleLines: typeSize.isAccessibilitySize ? nil : 2)
+          TitleDetail(title: Text(event.title))
           {
             Group {
               if attention != nil {
-                Text(detail)
+                Text(rowDetail)
               } else {
-                Label(detail, systemImage: "calendar")
+                Label(rowDetail, systemImage: "calendar")
                   .labelStyle(.titleAndIcon)
               }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-            .lineLimit(attention != nil && typeSize.isAccessibilitySize ? nil : 1)
           }
-          if let travel { TravelLine(text: travel) }
         }
         Spacer(minLength: 0)
       }
@@ -112,6 +109,8 @@
         ? event.calendarTitle
         : "\(DurationLabel.text(minutes: event.durationMinutes)) · \(event.calendarTitle)"
     }
+
+    private var rowDetail: String { detail + (travel.map { " · " + $0 } ?? "") }
 
     /// "Drive 18 min · Leave by 14:20" for an upcoming event with a location (today or tomorrow).
     private var travel: String? {
