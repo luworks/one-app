@@ -905,19 +905,25 @@
     }
 
     /// The word "Today", like Apple Calendar's button: a capsule as tall as +.
+    @AppStorage(TodayButtonColor.storageKey) private var todayButtonColor = TodayButtonColor.green
+      .stored
+    @Environment(\.colorScheme) private var identityColorScheme
+
     private func todayLabel(selected: Bool) -> some View {
-      Text("Today")
+      let fill = TodayButtonColor(stored: todayButtonColor).color
+      return
+        Text("Today")
         .font(.subheadline.weight(.semibold))
         .lineLimit(1)
         .fixedSize()
-        .foregroundStyle(selected ? Color.primary : Color.secondary)
+        .foregroundStyle(fill.contrastForeground(for: identityColorScheme))
         .padding(.horizontal, 14)
         .frame(
           minWidth: ButtonConfiguration.minimumHitSize,
           minHeight: ButtonConfiguration.minimumHitSize
         )
         .background(
-          selected ? ButtonConfiguration.Icon.selectedFill : ButtonConfiguration.Icon.background,
+          fill,
           in: Capsule()
         )
         .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
