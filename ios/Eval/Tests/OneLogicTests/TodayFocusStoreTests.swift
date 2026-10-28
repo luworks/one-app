@@ -69,7 +69,8 @@ final class TodayFocusStoreTests: XCTestCase {
     try focus.set(state: .settled, for: identity(), now: now, on: selected, calendar: eastern)
     let reopened = try disk()
     XCTAssertNil(reopened.state(for: identity(), now: now, on: previous, calendar: pacific))
-    XCTAssertEqual(reopened.state(for: identity(), now: now, on: pacificDay, calendar: pacific), .settled)
+    XCTAssertEqual(
+      reopened.state(for: identity(), now: now, on: pacificDay, calendar: pacific), .settled)
     XCTAssertNil(reopened.state(for: identity(), now: end, on: pacificDay, calendar: pacific))
     try reopened.set(state: .active, for: identity(), now: now, on: pacificDay, calendar: pacific)
     XCTAssertEqual(reopened.records.count, 1)
