@@ -13,9 +13,11 @@
         self = .green
         return
       }
-      self.init(
-        rgb: UInt32((red * 255).rounded()) << 16
-          | UInt32((green * 255).rounded()) << 8 | UInt32((blue * 255).rounded()))
+      // Native picker colors may be outside sRGB; store an opaque, bounded sRGB choice.
+      func byte(_ component: CGFloat) -> UInt32 {
+        UInt32((min(1, max(0, component)) * 255).rounded())
+      }
+      self.init(rgb: byte(red) << 16 | byte(green) << 8 | byte(blue))
     }
   }
 #endif
