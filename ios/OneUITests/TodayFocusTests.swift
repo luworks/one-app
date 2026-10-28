@@ -48,7 +48,7 @@ final class TodayFocusTests: XCTestCase {
     for up in [true, false] {
       for _ in 0..<7 {
         let composer = app.buttons["Ask AI or add anything"].firstMatch
-        var viewport = list.frame.intersection(app.frame).insetBy(dx: 0, dy: 8)
+        var viewport = list.frame.intersection(app.frame)
         if composer.exists {
           viewport.size.height = max(0, min(viewport.maxY, composer.frame.minY) - viewport.minY)
         }
@@ -171,14 +171,38 @@ final class TodayFocusTests: XCTestCase {
     }
     app.launchArguments = arguments("remove-returned-to-today.json", first)
     app.launch()
-    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(first).waitForExistence(timeout: 8))
     act("Settle", on: "Old settled occurrence", in: app)
+    act("Settle", on: "Old settled reminder", in: app)
+    let previous = cal.date(byAdding: .day, value: -1, to: first)!
+    app.weekStripDay(previous).tap()
+    XCTAssertTrue(app.weekStripDay(previous).waitForSelected())
+    assertFocusSections(app, settled: 0)
+    app.weekStripDay(second).tap()
+    XCTAssertTrue(app.weekStripDay(second).waitForSelected())
+    assertFocusSections(app, settled: 0)
+    act("Settle", on: "New day meeting", in: app)
+    assertFocusSections(app, settled: 1)
+    app.weekStripDay(first).tap()
+    XCTAssertTrue(app.weekStripDay(first).waitForSelected())
+    assertFocusSections(app, settled: 2)
     act("Settle", on: "Old explicitly restored occurrence", in: app)
     restore("Old explicitly restored occurrence", section: "settled", in: app)
     app.terminate()
     app.launchArguments = arguments("empty-relaunch.json", second)
     app.launch()
-    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(second).waitForExistence(timeout: 8))
+    app.weekStripDay(first).tap()
+    XCTAssertTrue(app.weekStripDay(first).waitForSelected())
+    reveal(
+      app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Old settled occurrence,"))
+        .firstMatch, in: app)
+    reveal(app.staticTexts["Old settled reminder"].firstMatch, in: app)
+    assertFocusSections(app, settled: 0)
+    app.weekStripDay(second).tap()
+    XCTAssertTrue(app.weekStripDay(second).waitForSelected())
+    assertFocusSections(app, settled: 1)
+    restore("New day meeting", section: "settled", in: app)
     reveal(
       app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "New day meeting,"))
         .firstMatch, in: app)
@@ -267,7 +291,7 @@ final class TodayFocusTests: XCTestCase {
     let undo = app.buttons["Undo"].firstMatch
     XCTAssertTrue(undo.waitForExistence(timeout: 2))
     XCTAssertEqual(
-      app.staticTexts["undoToast.message"].label, "Hidden in Today only: “Focus invoice”")
+      app.staticTexts["undoToast.message"].label, "Hidden on this day in Today: “Focus invoice”")
     XCTAssertGreaterThanOrEqual(undo.frame.width, 44)
     XCTAssertGreaterThanOrEqual(undo.frame.height, 44)
     XCTAssertTrue(undo.isHittable)

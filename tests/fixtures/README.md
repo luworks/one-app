@@ -279,7 +279,7 @@ They are not reusable UI datasets; the production retention policy lives in
 
 `ChatPanelTests.swift` keeps its small unsent English/Chinese draft and Hello interaction inline. Long-history panel scrolling reuses `ask-reading-history.json`; failed creation and exact Undo/Open reuse `ai-oneoff-reminder-ui.json`. No private data is required.
 
-`remove-returned-to-today.json` supplies synthetic old settled/restored events,
+`remove-returned-to-today.json` supplies synthetic old settled/restored events and a settled reminder,
 new-day task/meeting, overdue reminder and tomorrow event for
 `TodayFocusTests.testCrossDayReleaseUsesOriginalDatesWithoutReturnHistory`.
 The test pins local dates using ISO `-uiTestingNow`, which also supplies the Mock

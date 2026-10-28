@@ -30,6 +30,65 @@ final class TodayFocusStoreTests: XCTestCase {
 
   private func disk() throws -> TodayFocusStore { try TodayFocusStore(location: .file(url)) }
 
+  func testSettleIsScopedToSelectedDayAndExpiresAfterThatDay() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+    let today = calendar.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 9))!
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+    let later = calendar.date(byAdding: .day, value: 2, to: today)!
+    let endTomorrow = calendar.startOfDay(for: later)
+    let focus = try disk()
+    let source = identity()
+    try focus.set(state: .settled, for: source, now: today, on: today, calendar: calendar)
+    try focus.set(state: .settled, for: source, now: today, on: tomorrow, calendar: calendar)
+    XCTAssertEqual(focus.records.count, 2)
+    XCTAssertEqual(focus.state(for: source, now: today, on: today, calendar: calendar), .settled)
+    XCTAssertEqual(focus.state(for: source, now: today, on: tomorrow, calendar: calendar), .settled)
+    XCTAssertNil(focus.state(for: source, now: today, on: later, calendar: calendar))
+    let reopened = try disk()
+    XCTAssertNil(reopened.state(for: source, now: tomorrow, on: today, calendar: calendar))
+    XCTAssertEqual(
+      reopened.state(for: source, now: tomorrow, on: tomorrow, calendar: calendar), .settled)
+    XCTAssertNil(reopened.state(for: source, now: endTomorrow, on: tomorrow, calendar: calendar))
+    try reopened.set(state: .active, for: source, now: today, on: tomorrow, calendar: calendar)
+    XCTAssertNil(reopened.state(for: source, now: today, on: tomorrow, calendar: calendar))
+    XCTAssertEqual(reopened.state(for: source, now: today, on: today, calendar: calendar), .settled)
+  }
+
+  func testSelectedCivilDaySurvivesTimeZoneChange() throws {
+    var eastern = Calendar(identifier: .gregorian)
+    eastern.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+    var pacific = eastern
+    pacific.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+    let now = eastern.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 12))!
+    let selected = eastern.date(from: DateComponents(year: 2026, month: 10, day: 29))!
+    let pacificDay = pacific.date(from: DateComponents(year: 2026, month: 10, day: 29))!
+    let previous = pacific.date(byAdding: .day, value: -1, to: pacificDay)!
+    let end = pacific.date(byAdding: .day, value: 1, to: pacificDay)!
+    let focus = try disk()
+    try focus.set(state: .settled, for: identity(), now: now, on: selected, calendar: eastern)
+    let reopened = try disk()
+    XCTAssertNil(reopened.state(for: identity(), now: now, on: previous, calendar: pacific))
+    XCTAssertEqual(
+      reopened.state(for: identity(), now: now, on: pacificDay, calendar: pacific), .settled)
+    XCTAssertNil(reopened.state(for: identity(), now: end, on: pacificDay, calendar: pacific))
+    try reopened.set(state: .active, for: identity(), now: now, on: pacificDay, calendar: pacific)
+    XCTAssertEqual(reopened.records.count, 1)
+    XCTAssertNil(reopened.state(for: identity(), now: now, on: pacificDay, calendar: pacific))
+  }
+
+  func testLegacySettleBelongsToTheDayItWasChanged() throws {
+    let record = FocusRecord(identity: identity(), state: .settled, changedAt: now)
+    let recordJSON = String(data: try JSONEncoder().encode(record), encoding: .utf8)!
+    try Data("{\"version\":1,\"records\":[\(recordJSON)]}".utf8).write(to: url)
+    let focus = try disk()
+    XCTAssertEqual(focus.state(for: identity(), now: now), .settled)
+    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now)!
+    XCTAssertNil(focus.state(for: identity(), now: now, on: tomorrow))
+    try focus.set(state: .settled, for: identity(), now: now, on: tomorrow)
+    XCTAssertEqual(try disk().records.count, 2)
+  }
+
   func testSettleExpiresOnNextLocalDayWhileOpenAndAfterReopen() throws {
     let calendar = Calendar.current
     let start = calendar.date(
@@ -128,7 +187,7 @@ final class TodayFocusStoreTests: XCTestCase {
   }
 
   func testCorruptAndNewerPayloadsAreRejectedWithoutOverwrite() throws {
-    for raw in ["not-json", "{\"version\":2,\"future\":true}", "{\"version\":1,\"records\":[{}]}"] {
+    for raw in ["not-json", "{\"version\":3,\"future\":true}", "{\"version\":1,\"records\":[{}]}"] {
       let bytes = Data(raw.utf8)
       try bytes.write(to: url)
       XCTAssertThrowsError(try disk())

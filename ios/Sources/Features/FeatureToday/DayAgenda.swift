@@ -210,9 +210,7 @@
         } else {
           Section { timelineContent(items) }
         }
-        if !showsWeekStrip {
-          if showsSettle { settledSection }
-        }
+        if !showsWeekStrip, showsSettle { settledSection }
         if !showsWeekStrip, showsTomorrow, cal.isDate(day, inSameDayAs: now) {
           tomorrowSection()
         }
@@ -249,22 +247,24 @@
       case .event(let event, let start):
         EventRow(
           event: event, start: start, pendingDelete: $pendingDelete, open: openEvent,
-          calendar: calendar, travel: travel, attention: attention(target(event, start: start))
+          calendar: calendar, travel: travel,
+          attention: attention(target(event, start: start), on: rowDay)
         )
       case .external(let e):
         ExternalEventRow(
           event: e, pendingDelete: $pendingDelete, calendar: calendar, travel: travel,
-          attention: attention(target(e))
+          attention: attention(target(e), on: rowDay)
         )
       case .due(let task):
         TaskRow(
           task: task, showsTime: true, time: task.due, compact: true, agendaDay: rowDay,
-          onDelete: { requestDelete(task) }, open: openTask, attention: attention(target(task))
+          onDelete: { requestDelete(task) }, open: openTask,
+          attention: attention(target(task), on: rowDay)
         )
       case .alarm(let alarm, let date):
         AlarmMarkRow(
           alarm: alarm, date: date, open: openAlarm,
-          attention: attention(target(alarm, fireDate: date)),
+          attention: attention(target(alarm, fireDate: date), on: rowDay),
           onDelete: showsWeekStrip
             ? nil : { _ = actions.delete(alarm, context: context, toast: toast) })
       case .gap(let free): FreeRow(free: free)
@@ -301,15 +301,15 @@
             case .allDay(let e):
               EventRow(
                 event: e, pendingDelete: $pendingDelete, open: openEvent, calendar: calendar,
-                travel: travel, attention: attention(target(e, start: tomorrow)))
+                travel: travel, attention: attention(target(e, start: tomorrow), on: tomorrow))
             case .externalAllDay(let e):
               ExternalEventRow(
                 event: e, pendingDelete: $pendingDelete, calendar: calendar, travel: travel,
-                attention: attention(target(e)))
+                attention: attention(target(e), on: tomorrow))
             case .anytime(let t):
               TaskRow(
                 task: t, compact: true, agendaDay: tomorrow, onDelete: { requestDelete(t) },
-                open: openTask, attention: attention(target(t)))
+                open: openTask, attention: attention(target(t), on: tomorrow))
             case .timeline(let item): timelineRow(item, on: tomorrow)
             }
           }
@@ -333,9 +333,12 @@
         timeline.append(.external(e))
         busy.append(DateInterval(start: e.start, end: max(e.start, e.end)))
       }
-      // Overdue reminders stay in the overdue line, never inside a day's timeline.
+      // Today shows overdue reminders in its overdue line; a browsed past day keeps its own timeline.
       // A completed task leaves the day (Undo in the toast brings it back).
-      let open = tasks.filter { !$0.isDone && !plannerIsOverdue($0, now: now, calendar: cal) }
+      let open = tasks.filter {
+        !$0.isDone
+          && (!cal.isDate(day, inSameDayAs: now) || !plannerIsOverdue($0, now: now, calendar: cal))
+      }
       var anytime: [OneTask] = []
       for task in open {
         guard let due = task.due, cal.isDate(due, inSameDayAs: day) else { continue }
@@ -364,14 +367,15 @@
       return DayItems(
         allDay: events.filter {
           $0.isAllDay && !$0.occurs(on: day, calendar: cal).isEmpty
-            && !isHidden(target($0, start: $0.occurs(on: day, calendar: cal).first ?? $0.start))
+            && !isHidden(
+              target($0, start: $0.occurs(on: day, calendar: cal).first ?? $0.start), on: day)
         },
-        externalAllDay: external.filter { $0.isAllDay && !isHidden(target($0)) },
+        externalAllDay: external.filter { $0.isAllDay && !isHidden(target($0), on: day) },
         // At the same minute the Now line comes first, so free time from now sits under it.
-        timeline: timeline.filter { !isHidden($0) }.sorted {
+        timeline: timeline.filter { !isHidden($0, on: day) }.sorted {
           ($0.start, $0.isNow ? 0 : 1) < ($1.start, $1.isNow ? 0 : 1)
         },
-        anytime: anytime.filter { !isHidden(target($0)) })
+        anytime: anytime.filter { !isHidden(target($0), on: day) })
     }
 
     /// Deleting a reminder never asks: the Undo toast is the safety net.
@@ -424,35 +428,39 @@
         reference: ref, title: alarm.label.isEmpty ? "Alarm" : alarm.label)
     }
 
-    private func attention(_ target: FocusTarget) -> TodayRowAttention? {
+    private func attention(_ target: FocusTarget, on rowDay: Date? = nil) -> TodayRowAttention? {
       guard !showsWeekStrip else { return nil }
       return TodayRowAttention(
         settle: target.identity == nil || !showsSettle
-          ? nil : { _ = changeFocus(.settled, target: target) },
+          || cal.startOfDay(for: rowDay ?? day) < cal.startOfDay(for: now)
+          ? nil : { _ = changeFocus(.settled, target: target, on: rowDay ?? day) },
         canDelete: canDeleteAttention(target))
     }
 
     /// Settled items leave Today's timeline. (An older Snooze record no longer hides anything.)
-    private func isHidden(_ target: FocusTarget) -> Bool {
-      !showsWeekStrip && actions.focus.state(for: target.identity, now: now) == .settled
+    private func isHidden(_ target: FocusTarget, on rowDay: Date? = nil) -> Bool {
+      !showsWeekStrip
+        && actions.focus.state(for: target.identity, now: now, on: rowDay ?? day) == .settled
     }
 
-    private func isHidden(_ item: TimelineItem) -> Bool {
+    private func isHidden(_ item: TimelineItem, on rowDay: Date) -> Bool {
       switch item {
-      case .event(let event, let start): isHidden(target(event, start: start))
-      case .external(let event): isHidden(target(event))
-      case .due(let task): isHidden(target(task))
-      case .alarm(let alarm, let date): isHidden(target(alarm, fireDate: date))
+      case .event(let event, let start): isHidden(target(event, start: start), on: rowDay)
+      case .external(let event): isHidden(target(event), on: rowDay)
+      case .due(let task): isHidden(target(task), on: rowDay)
+      case .alarm(let alarm, let date): isHidden(target(alarm, fireDate: date), on: rowDay)
       case .gap, .nowMarker: false
       }
     }
 
     @discardableResult
-    private func changeFocus(_ state: TodayFocusState?, target: FocusTarget) -> Bool {
+    private func changeFocus(_ state: TodayFocusState?, target: FocusTarget, on rowDay: Date? = nil)
+      -> Bool
+    {
       withAnimation(reduceMotion ? nil : .snappy) {
         actions.focus.change(
           state, identity: target.identity, localReference: target.reference,
-          title: target.title, context: context, toast: toast)
+          title: target.title, context: context, toast: toast, on: rowDay ?? day)
       }
     }
 
@@ -482,7 +490,9 @@
       .accessibilityIdentifier(identifier ?? "focus." + id)
       .accessibilityLabel("\(title) (\(count))" + (detail.map { ", " + $0 } ?? ""))
       .accessibilityValue(expanded.wrappedValue ? "Expanded" : "Collapsed")
-      .accessibilityHint("Changes visibility in Today only")
+      .accessibilityHint(
+        id == "settled"
+          ? "Changes visibility for this day in Today only" : "Shows or hides tomorrow's items")
     }
 
     private var overdueRows: some View {
@@ -529,7 +539,10 @@
     }
 
     private var settledRecords: [FocusRecord] {
-      actions.focus.records.filter { actions.focus.state(for: $0.identity, now: now) == .settled }
+      actions.focus.records.filter {
+        cal.isDate($0.agendaDay(calendar: cal), inSameDayAs: day)
+          && actions.focus.state(for: $0.identity, now: now, on: day) == .settled
+      }
     }
 
     @ViewBuilder private var settledSection: some View {
@@ -547,7 +560,7 @@
           HStack {
             VStack(alignment: .leading, spacing: 3) {
               Text(target.title).foregroundStyle(.primary)
-              Text("Hidden in Today only").font(.caption).foregroundStyle(.secondary)
+              Text("Hidden on this day in Today").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             Button {
