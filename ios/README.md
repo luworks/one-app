@@ -77,6 +77,15 @@ Tests that need Apple Calendar (`CalendarSyncTests`, `CalendarDeleteSyncTests`, 
 
 The [scene registry](Sources/TodayScenes/SceneRegistry.swift) owns valid scene/scenario pairs. Workbench, previews and native captures use the real feature constructors through `SceneSession`; unsupported states fail validation. See [gallery](../docs/engineering/gallery.md), [visual testing](../docs/engineering/visual-testing.md) and [scene session boundaries](../docs/engineering/scene-session-integration.md). The older [axe workflow](../docs/swiftui-preview-workflow.md) retains measured history and limitations; use the `./dev ui` entry for current work. Functional acceptance still requires the focused native journey.
 
+## Weather on Today
+
+Weather is not available in the live app: its setting is hidden and requests are disabled even if
+an old preference is on. Mock and Workbench retain the opt-in summary with fixed offline sample data.
+The implementation is retained for later: live use requires Apple Developer Program membership,
+the WeatherKit capability on the App ID, a matching entitlement and provisioning profile, and a
+verified live request. Once enabled, the feature requests foreground location and sends it to Apple
+Weather; forecasts and location stay in memory. A simulator sample is not evidence of a live request.
+
 ## Release and physical-device states
 
 `./dev release preflight-local --commit <full-sha> --version <version> --build <integer>` checks unsigned local readiness. `./dev release archive-local` forwards fastlane key/value options (`commit:`, `version:`, `build:`, `archive:`, `derived_data:`); `./dev release validate-local` uses the preflight options plus `--archive <path>`. Use a fresh archive outside the checkout and the owned cache. See [release integration](../docs/engineering/release-integration.md) and [release tooling](../scripts/release/README.md) for exact arguments and retained maps/provenance.

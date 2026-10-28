@@ -33,6 +33,7 @@
     let presentation: PlannerPresentation
     let health: HealthModel
     let healthLine: HealthLineModel
+    let weather: WeatherModel
     let healthSelection: HealthSelectionStore
     let healthGate: HealthAccessGate
     let world: WorldClockStore
@@ -120,6 +121,7 @@
         source: source, store: healthSelection, runtime: runtime, gate: healthGate,
         timeout: configuration.scenario == .error ? 0.05 : HealthTimeout.seconds)
       healthLine = HealthLineModel(model: health)
+      weather = WeatherModel(sample: WeatherTestData.snapshot(now: runtime.now()))
       guard let citiesURL else { throw SceneSessionError.missingCities }
       let cities = try CityDatabase.decode(Data(contentsOf: citiesURL))
       let keys =
@@ -252,7 +254,7 @@
     func host<V: View>(_ view: V) -> some View {
       view.modelContainer(container).defaultAppStorage(defaults)
         .environment(services.actions).environment(presentation).environment(toast)
-        .environment(health).environment(healthLine)
+        .environment(health).environment(healthLine).environment(weather)
         .environment(\.locale, runtime.locale).environment(\.calendar, runtime.calendar)
         .environment(\.timeZone, runtime.calendar.timeZone)
         .environment(
