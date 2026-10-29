@@ -16,7 +16,8 @@
     private var reminderCreationReceipts: [UUID: (id: PersistentIdentifier, entry: LedgerItem)] =
       [:]
     private var eventCreationDrafts: [UUID: OneEvent] = [:]
-    private var eventCreationReceipts: [UUID: (id: PersistentIdentifier, entry: LedgerItem, localOnly: Bool)] = [:]
+    private var eventCreationReceipts:
+      [UUID: (id: PersistentIdentifier, entry: LedgerItem, localOnly: Bool)] = [:]
     package let focus: TodayFocus
     private let calendar: any CalendarService
     private let reminders: any ReminderService
@@ -131,7 +132,8 @@
     ) throws -> (id: PersistentIdentifier, entry: LedgerItem, localOnly: Bool) {
       if let receipt = eventCreationReceipts[requestID] { return receipt }
       guard capture.kind == .event else { throw CocoaError(.coderInvalidValue) }
-      let event = eventCreationDrafts[requestID].flatMap { $0.externalID == nil ? nil : $0 }
+      let event =
+        eventCreationDrafts[requestID].flatMap { $0.externalID == nil ? nil : $0 }
         ?? capture.makeEvent(calendar: runtime.calendar)
       if event.externalID == nil { event.externalID = recoveryExternalID }
       eventCreationDrafts[requestID] = event

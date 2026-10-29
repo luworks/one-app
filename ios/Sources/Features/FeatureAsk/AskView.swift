@@ -1312,7 +1312,9 @@
           for p in new {
             if let i = proposals.firstIndex(where: { $0.id == p.id }),
               proposals[i].pendingExternalID == nil
-            { proposals[i] = p }
+            {
+              proposals[i] = p
+            }
           }
         })
     }
@@ -1366,7 +1368,8 @@
             capture, into: context, actor: .todayAI, channel: .ask, approval: .asked)
         }
       } catch {
-        proposals[i].pendingExternalID = capture.kind == .event
+        proposals[i].pendingExternalID =
+          capture.kind == .event
           ? actions.pendingEventCreationID(id) : actions.pendingReminderCreationID(id)
         persistCards()
         messages.append(
@@ -1432,8 +1435,11 @@
       if let ref = p.itemRef, let pid = CaptureUndo.decode(ref) {
         thread?.items.removeAll { $0 == pid }
       }
-      if p.capture.kind == .event { actions.didUndoEventCreation(id) }
-      else if p.retainsDraft { actions.didUndoReminderCreation(id) }
+      if p.capture.kind == .event {
+        actions.didUndoEventCreation(id)
+      } else if p.retainsDraft {
+        actions.didUndoReminderCreation(id)
+      }
       proposals[i].itemRef = nil
       proposals[i].entryID = nil
       proposals[i].status = next

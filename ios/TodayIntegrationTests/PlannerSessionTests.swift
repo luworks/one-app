@@ -51,14 +51,16 @@
       let persisted = try #require(try a.context.fetch(FetchDescriptor<OneEvent>()).first)
       #expect(persisted.externalID == externalID)
       a.services.calendar.deletionResult = false
-      #expect(!a.services.actions.undoCapture(
-        itemRef: Ledger.ref(receipt.id), entryID: receipt.entry.id, title: capture.title,
-        context: a.context))
+      #expect(
+        !a.services.actions.undoCapture(
+          itemRef: Ledger.ref(receipt.id), entryID: receipt.entry.id, title: capture.title,
+          context: a.context))
       #expect(try a.context.fetch(FetchDescriptor<OneEvent>()).count == 1)
       a.services.calendar.deletionResult = true
-      #expect(a.services.actions.undoCapture(
-        itemRef: Ledger.ref(receipt.id), entryID: receipt.entry.id, title: capture.title,
-        context: a.context))
+      #expect(
+        a.services.actions.undoCapture(
+          itemRef: Ledger.ref(receipt.id), entryID: receipt.entry.id, title: capture.title,
+          context: a.context))
       #expect(a.services.calendar.deletionRequests.last! == externalID)
       #expect(try a.context.fetch(FetchDescriptor<OneEvent>()).isEmpty)
       a.services.actions.didUndoEventCreation(id)
