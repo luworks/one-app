@@ -87,7 +87,7 @@ final class CalendarRecurringDeleteTests: XCTestCase {
     XCTAssertTrue(pager.waitForExistence(timeout: 5))
     // Yesterday or tomorrow can be in the next or previous month.
     if !cal.isDate(day, equalTo: .now, toGranularity: .month) {
-      if day > .now { pager.swipeLeft() } else { pager.swipeRight() }
+      if day > .now { pager.swipeUp() } else { pager.swipeDown() }
     }
     let cell = app.descendants(matching: .any)[calendarDayID(day)]
     XCTAssertTrue(cell.waitForExistence(timeout: 5), "the day is in the grid")

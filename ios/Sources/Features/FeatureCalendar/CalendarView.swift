@@ -283,10 +283,7 @@
       VStack(spacing: 0) {
         weekdayHeader
         Rectangle().fill(Color(.separator)).frame(height: 0.5)
-        HStack(spacing: 0) {
-          if showsWeekNumbers { weekNumberColumn }
-          pager
-        }
+        pager
         DayAgendaList(
           calendar: calendar, day: day, events: events, tasks: tasks, alarms: alarms, open: open,
           edit: edit)
@@ -323,8 +320,8 @@
     static let weekNumberWidth: CGFloat = 26
 
     /// Settings > Calendar > "Show week numbers": the week of the year at the start of each row of the visible month.
-    private var weekNumberColumn: some View {
-      let weeks = CalendarMath.monthWeeks(of: month(current), calendar: cal)
+    private func weekNumberColumn(for offset: Int) -> some View {
+      let weeks = CalendarMath.monthWeeks(of: month(offset), calendar: cal)
       return VStack(spacing: 0) {
         ForEach(weeks.indices, id: \.self) { w in
           let number = weeks[w].compactMap { $0 }.first.map {
@@ -342,20 +339,24 @@
     }
 
     private var pager: some View {
-      ScrollView(.horizontal, showsIndicators: false) {
-        LazyHStack(spacing: 0) {
+      ScrollView(.vertical, showsIndicators: false) {
+        LazyVStack(spacing: 0) {
           ForEach(range, id: \.self) { offset in
-            MonthPage(
-              calendar: calendar, month: month(offset), selected: day, rowHeight: rowHeight,
-              events: events, tasks: tasks, alarms: alarms
-            ) { picked in
-              if cal.isDate(picked, inSameDayAs: day) {
-                openDay(picked)
-              } else {
-                day = cal.startOfDay(for: picked)
+            HStack(alignment: .top, spacing: 0) {
+              if showsWeekNumbers { weekNumberColumn(for: offset) }
+              MonthPage(
+                calendar: calendar, month: month(offset), selected: day, rowHeight: rowHeight,
+                events: events, tasks: tasks, alarms: alarms
+              ) { picked in
+                if cal.isDate(picked, inSameDayAs: day) {
+                  openDay(picked)
+                } else {
+                  day = cal.startOfDay(for: picked)
+                }
               }
             }
-            .containerRelativeFrame(.horizontal)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .containerRelativeFrame(.vertical, alignment: .top)
             .id(offset)
           }
         }
