@@ -66,6 +66,16 @@ The raw UI, call records and manual verdicts are retained under
 primary checkout. These are first-repetition development observations, not a
 model comparison or a general Clock pass rate.
 
+The later closed `829dc4a` Live baseline integrates PR217 and has a separate
+Clock before/after check in `live-product-round5-20261029`. Four explicit
+timer/world-clock requests produced0/4 requested state changes: World Clock
+still had only Los Angeles and no timers existed. The recurring-timer case
+again became a daily reminder preview (0/1); the text-only timer explanation
+passed1/1. These are six distinct extension cases, one repetition. No timer or
+city Add/Start was confirmed, no system permission was broadened, and this
+does not measure a replacement model's product integration. Earlier interrupted
+observations remain unchanged rather than being retroactively marked verified.
+
 The shared production instruction already says not to promise an action without
 a preview. Repeating that sentence is insufficient protection against these
 observed replies. The next coherent product change should introduce explicit
