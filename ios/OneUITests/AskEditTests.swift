@@ -93,6 +93,28 @@ final class AskEditTests: XCTestCase {
 
   // MARK: Edit
 
+  func testSavedReminderDailyFollowupRequiresApplyAndSupportsUndo() {
+    send("Remind me to buy milk tomorrow at 3pm")
+    XCTAssertTrue(label(containing: "Added").waitForExistence(timeout: 20))
+    send("Actually make it every day.")
+    let card = app.descendants(matching: .any).matching(identifier: "change-card").firstMatch
+    XCTAssertTrue(card.waitForExistence(timeout: 10))
+    XCTAssertTrue(card.staticTexts["buy milk"].exists)
+    XCTAssertTrue(card.staticTexts["Repeat every day. Nothing changes until you tap Apply."].exists)
+    XCTAssertTrue(app.buttons["Apply"].exists)
+    shot("saved-reminder-daily-preview")
+    app.buttons["Apply"].tap()
+    XCTAssertTrue(
+      label(containing: "Updated “buy milk” to repeat every day.").waitForExistence(timeout: 10))
+    app.buttons["ask-undo"].tap()
+    XCTAssertFalse(app.buttons["ask-undo"].exists)
+    send("Make that reminder repeat every day at 3pm.")
+    XCTAssertTrue(card.waitForExistence(timeout: 10))
+    XCTAssertTrue(card.staticTexts["buy milk"].exists)
+    XCTAssertTrue(label(containing: "Tomorrow 15:00 → Tomorrow 15:00").exists)
+    app.buttons["Cancel"].tap()
+  }
+
   func testEdit_moveEventApplyUndo() {
     send("Dentist 推迟一小时")
     let card = app.otherElements["change-card"]

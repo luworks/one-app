@@ -599,6 +599,44 @@
         responseBaseline = responseSignature
       }
       turnStart = sentAt
+      if pending == nil, SavedReminderRefinement.isRequest(text) {
+        recordTurn("edit", text)
+        guard let receipt = proposals.last, receipt.status == .added,
+          let ref = receipt.itemRef,
+          case .task(let task)? = CaptureUndo.resolve(ref, in: context),
+          !task.isDone, let due = task.due, !task.ringsAsAlarm
+        else {
+          messages.append(
+            reply("Which saved reminder should repeat every day? Open it to edit its repeat rule."))
+          return
+        }
+        var capture = receipt.capture
+        capture.title = task.title
+        capture.day = runtime.calendar.startOfDay(for: due)
+        capture.hasDay = true
+        capture.hour = runtime.calendar.component(.hour, from: due)
+        capture.minute = runtime.calendar.component(.minute, from: due)
+        capture.repeatRule = task.repeatRule
+        guard
+          let refined = SavedReminderRefinement.preview(
+            capture, text: text, now: now(), calendar: runtime.calendar)
+        else {
+          messages.append(
+            reply(
+              "Should this reminder repeat every day at its current time? Please open it to confirm the repeat rule."
+            ))
+          return
+        }
+        clearPreviews()
+        change = PendingChange(
+          subject: .task(task), delete: false, title: task.title,
+          oldText: plannerDayLabel(due, runtime: runtime),
+          newStart: refined.taskTiming(calendar: runtime.calendar).due,
+          notes: ["Repeat every day. Nothing changes until you tap Apply."], attendees: 0)
+        change?.newRepeatRule = refined.repeatRule
+        change?.expectedTask = Ledger.snapshot(of: task)
+        return
+      }
       let intent = ChatRouting.intent(text)
       if intent != .conversation, ChatRouting.hasMaterialCorrection(text) {
         recordTurn("clarify", text)
@@ -1722,6 +1760,8 @@
     package var newStart: Date?
     package let notes: [String]
     package let attendees: Int
+    package var newRepeatRule: String?
+    package var expectedTask: TaskSnapshot?
 
     package static func == (a: PendingChange, b: PendingChange) -> Bool { a.id == b.id }
 
@@ -1795,11 +1835,12 @@
     }
 
     private var heading: String {
+      if change.newRepeatRule != nil { return "Change reminder" }
       switch (change.delete, change.isEvent) {
-      case (false, false): "Move task"
-      case (false, true): "Move event"
-      case (true, false): "Delete task"
-      case (true, true): "Delete event"
+      case (false, false): return "Move task"
+      case (false, true): return "Move event"
+      case (true, false): return "Delete task"
+      case (true, true): return "Delete event"
       }
     }
 
@@ -1886,6 +1927,36 @@
                   if undoManager.canUndo { undoManager.undo() }
                 }
               })
+          }
+        } else if let rule = c.newRepeatRule, let due = c.newStart {
+          let before = Ledger.snapshot(of: task)
+          guard c.expectedTask == before else {
+            feedback.applied = false
+            feedback.messages.append(
+              reply(
+                "This reminder changed since the preview. Ask again to prepare a current preview."))
+            return feedback
+          }
+          do {
+            let entry = try actions.setRepeat(task, rule: rule, due: due, context: context)
+            let after = Ledger.snapshot(of: task)
+            feedback.messages.append(reply("Updated “\(task.title)” to repeat every day."))
+            feedback.undo = UndoRow(
+              label: "Changed “\(task.title)”.",
+              action: {
+                guard !task.isDeleted, task.modelContext != nil,
+                  Ledger.snapshot(of: task) == after
+                else { return }
+                do {
+                  _ = try actions.setRepeat(
+                    task, rule: before.repeatRule, due: before.due, context: context)
+                  ledger.recordUndo(of: entry, task: task, channel: .ask, context: context)
+                } catch { return }
+              })
+          } catch {
+            feedback.applied = false
+            feedback.messages.append(
+              reply("Couldn't save the repeat change: \(error.localizedDescription)"))
           }
         } else if let new = c.newStart {
           if let entry = actions.setDue(
