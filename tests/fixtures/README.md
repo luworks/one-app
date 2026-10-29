@@ -32,6 +32,10 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 | [`week-alarm-afternoon.json`](week-alarm-afternoon.json) | `CalendarAlarmTests.testWeekLateAlarmOpensItsEditorWithoutOtherEntries`. Minimal issue #53 reproduction: one Take medicine alarm at 13:00, no events/reminders/chats; clock pinned to 09:00 and alarms on. Distinguishes late-grid touch delivery from event density or task gestures. |
 | [`repeating-reminder-daily-home.json`](repeating-reminder-daily-home.json) | `RepeatingReminderTests.setUp()` for `testCompletingARepeatingReminderMovesItToItsNextDay` and `testUndoBringsBackTheSameRowAtTheSameTime`. Replaces its temporary JSON generator: Home list (color 1), daily `Clean the drain filter`, due today at 07:00. Clock pinned to 09:41. |
 
+## Hosted model comparison
+
+`ai/luna-effort-20261029.json` freezes 16 capture and 8 edit cases sampled evenly from the historical r4 suites before calling GPT-6 Luna. `ios/Eval/open/eval_luna_effort.py` runs two repetitions at each of low, medium, high and xhigh. These are synthetic development cases, not a blind holdout or app UI coverage. Raw responses, usage and timings stay in the primary checkout QA results directory.
+
 ## Dates, defaults and isolation
 
 Dates are relative: `day: 0` means the local start of the day the fixture loads,
