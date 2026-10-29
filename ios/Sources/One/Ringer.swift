@@ -13,11 +13,6 @@
     import AppIntents
   #endif
 
-  /// Where the user stands on letting Today schedule alarms (AlarmKit, iOS 26+).
-  package enum AlarmAuthorization: Equatable {
-    case unavailable, notDetermined, denied, authorized
-  }
-
   /// Real alarms (AlarmKit, iOS 26+): full-screen, ring through Silent and Focus. Covers the alarms made on
   /// the Alarms tab (`OneAlarm`, one stable AlarmKit id each) and tasks/events marked "Ring as alarm".
   /// Stopping an alarm never completes the task; only Done does.
@@ -33,12 +28,39 @@
   package final class Ringer {
     private let defaults: UserDefaults
     package let runtime: PlannerRuntime
+    private let authorizationCache = AlarmAuthorizationCache()
+    private var authorizationTask: Task<Void, Never>?
+    private var foregroundTask: Task<Void, Never>?
     private var schedulingTimers: Set<UUID> = []
 
     /// The one AlarmKit owner shared by AlarmCenter and TimerController in live composition.
     package init(defaults: UserDefaults, runtime: PlannerRuntime) {
       self.defaults = defaults
       self.runtime = runtime
+      Task { [weak self] in await self?.refreshAuthorization() }
+      #if canImport(AlarmKit)
+        if #available(iOS 26, *) {
+          authorizationTask = Task { [weak self] in
+            for await state in AlarmManager.shared.authorizationUpdates {
+              guard !Task.isCancelled else { return }
+              self?.receiveAuthorization(Self.authorization(state))
+            }
+          }
+        }
+      #endif
+      foregroundTask = Task { [weak self] in
+        for await _ in NotificationCenter.default.notifications(
+          named: UIApplication.willEnterForegroundNotification)
+        {
+          guard !Task.isCancelled else { return }
+          await self?.refreshAuthorization()
+        }
+      }
+    }
+
+    deinit {
+      foregroundTask?.cancel()
+      authorizationTask?.cancel()
     }
 
     package func requireTimerDefaults(_ defaults: UserDefaults) {
@@ -62,32 +84,52 @@
       return false
     }
 
-    package var authorization: AlarmAuthorization {
+    package var authorization: AlarmAuthorization { authorizationCache.state }
+    package var isDenied: Bool { authorization == .denied }
+
+    #if canImport(AlarmKit)
+      @available(iOS 26, *)
+      package nonisolated static func authorization(_ state: AlarmManager.AuthorizationState)
+        -> AlarmAuthorization
+      {
+        switch state {
+        case .notDetermined: return .notDetermined
+        case .denied: return .denied
+        case .authorized: return .authorized
+        @unknown default: return .denied
+        }
+      }
+    #endif
+
+    package func receiveAuthorization(_ state: AlarmAuthorization) {
+      authorizationCache.receive(state)
+    }
+
+    private func refreshAuthorization() async {
       #if canImport(AlarmKit)
-        if #available(iOS 26, *) {
-          switch manager.authorizationState {
-          case .notDetermined: return .notDetermined
-          case .denied: return .denied
-          case .authorized: return .authorized
-          @unknown default: return .denied
+        guard #available(iOS 26, *) else {
+          authorizationCache.receive(.unavailable)
+          return
+        }
+        await authorizationCache.refresh {
+          await withCheckedContinuation { continuation in
+            // AlarmManager is nonisolated in the SDK. Its getter may wait on synchronous XPC;
+            // a dedicated dispatch work item keeps that wait off the main/cooperative executors.
+            DispatchQueue.global(qos: .utility).async {
+              continuation.resume(
+                returning: Self.authorization(AlarmManager.shared.authorizationState))
+            }
           }
         }
       #endif
-      return .unavailable
     }
 
-    /// True when the user turned alarms off for Today in Settings.
-    package var isDenied: Bool { authorization == .denied }
-
-    /// Shows iOS's own "Would Like to Schedule Alarms" prompt (only the first time).
+    /// Consume the returned decision directly; reading authorizationState here can deadlock after denial.
     package func requestAuthorization() async {
       #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
-        do {
-          let state = try await manager.requestAuthorization()
-          AlarmScheduler.log.info("auth result \(String(describing: state))")
-        } catch {
-          AlarmScheduler.log.error("auth failed \((error as NSError).code, privacy: .public)")
+        await authorizationCache.request {
+          try await Self.authorization(manager.requestAuthorization())
         }
       #endif
     }
@@ -264,12 +306,12 @@
         let manager = driver.manager
         let wantsAnything = alarms.contains(where: \.isOn) || !items.isEmpty
         log.info(
-          "sync: \(alarms.count) alarm(s), \(items.count) item(s), auth \(String(describing: manager.authorizationState))"
+          "sync: \(alarms.count) alarm(s), \(items.count) item(s), auth \(String(describing: driver.authorization))"
         )
-        if manager.authorizationState == .notDetermined, wantsAnything {
+        if driver.authorization == .notDetermined, wantsAnything {
           await driver.requestAuthorization()
         }
-        guard manager.authorizationState == .authorized else { return }
+        guard driver.authorization == .authorized else { return }
 
         var existing: [UUID: Alarm] = [:]
         for alarm in (try? manager.alarms) ?? [] { existing[alarm.id] = alarm }
