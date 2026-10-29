@@ -103,3 +103,14 @@ known context-recovery failure and release acceptance are unresolved.
 ## Accounting at handoff
 
 Usage-priced total including the original effort comparison: USD 0.021850. Conservative total including the retained unknown-call reservation: USD 0.023951. Relay calls: 42, with 41 completed and one earlier unknown failure. The closed usage snapshot is `usage-after-ui.sqlite`; the local relay remains running for the owner's visible simulator under the same persistent USD0.50 cap. Amounts are a snapshot, not a prediction of later owner requests. Client log capture and both recordings are closed.
+
+## Hosted CI regression follow-up
+
+The first complete hosted logic run on e3b16e5 executed792 tests and exposed two
+existing AlarmContextTests failures: `提醒 烘干衣服 45min 后 alarm` lost alarm kind
+and retained the trailing marker in its title. Restore this standalone trailing
+mixed-language kind marker in requestsAlarm, without restoring the old broad
+"any mention of alarm" rule. The existing mixed-language/context fixtures and
+new reminder-versus-alarm boundaries are unchanged. Targeted follow-up:27 tests
+passed, zero missing. No additional API requests or simulator acceptance is
+claimed for this CI-only correction; hosted checks on the new commit remain pending.
