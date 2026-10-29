@@ -15,6 +15,8 @@ public enum OneOffReminderRequest {
           #"[;；\n]|然后|另外还|\band then\b|\bevery\b|\brecurr|重复|每|还是|或者|\bor\b|\b(?:alarm|timer)\b|wake me|闹钟|计时器|叫醒|叫我起床"#,
         options: [.regularExpression, .caseInsensitive]) == nil
     else { return nil }
+    // A clock/date-only refinement needs conversation state, never a fresh creation grant.
+    guard !Dialogue.isOnlyWhen(text, now: now, calendar: calendar) else { return nil }
     // Operations matching existing candidates retain their edit/ambiguity boundary.
     // Ordinary new reminders never need a candidate lookup or a model call here.
     if Editing.hasOperationCue(text),

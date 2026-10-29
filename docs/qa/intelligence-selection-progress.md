@@ -14,7 +14,8 @@ The latest consolidated phone build is outside this thread's validation scope.
 | Pure routing/parser/open-preview rules export, corrected exporter | 27/27 observations | Inapplicable | 18/27 | Not the complete app reducer, existing-item resolution or saves |
 | Qwen3.5-2B Q4_K_M original 30-second smoke | 3/3 records | Not a formal quality score | UNKNOWN | One EOG success, two CPU deadline timeouts; pinned simulator-file hash verified |
 | Qwen3.5-2B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; two repetitions still required |
-| Qwen3.5-4B Q4_K_M 120-second smoke | 3/3 EOG | 3/3 strict JSON | 0/3 | Not a formal quality estimate; repetition1 is now running |
+| Qwen3.5-4B Q4_K_M 120-second smoke | 3/3 EOG | 3/3 strict JSON | 0/3 | Not a formal quality estimate; formal repetition1 completed |
+| Qwen3.5-4B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 6/27 | One complete repetition; two repetitions still required |
 | Remaining Qwen formal repetitions and all holdout | Not yet completed | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
 
 The semantic column is a **partial schema-based field rubric**, not an overall
@@ -35,6 +36,13 @@ P90 uses sorted sample index `floor(0.9*(n-1))`. Timings are simulator API-retur
 latency, not phone latency. Apple finish reason and token usage were not recorded;
 some raw replies visibly stop mid-output, so nonempty API returns must not be
 described as semantically complete generations.
+
+Qwen4B development repetition1 median was 73691.8 ms and p90 83875.3 ms
+(n=27); no turn completed within30 seconds. The matched Qwen2B repetition1
+median was30218.6 ms, p90 35438.5 ms, with9/27 within30 seconds. All27
+turns in each run reached EOG with no fallback or deadline timeout. These are
+CPU simulator measurements, not iPhone performance. Neither one-repetition
+comparison nor this partial field rubric establishes a final winner.
 
 ## Evidence and runtime
 
@@ -96,3 +104,15 @@ product save/Undo rate**. Fourteen focused unit methods passed, missing0.
 The earlier18/27 figure came from a narrower exporter and must not be presented
 as a behavior improvement to20/27. iOS compilation, Live UI reproduction and CI
 verification of the candidate remain outstanding.
+
+The original failed TodayMock conversation UI log also shows a time-only
+follow-up (`make it4pm`) being saved as a new one-off title `it`, replacing
+the recurring preview. This is an observed product routing failure, not a
+Foundation Models attribution. A generic guard now uses the existing
+`Dialogue.isOnlyWhen` parser before granting fresh creation. Fifteen focused
+unit methods passed (missing0), including zh/en refinements preserving the
+preview title, recurrence and kind. The same UI method now passed1/1 after versus0/1 before, with unchanged
+assertions: recurring preview, time refinement, explicit Add, and Added/Undo/Open
+receipt. Before evidence: `today-qa-20261028-144742-7ec725d2`; after evidence:
+`today-qa-20261029-031315-717f019f`. This single matched TodayMock journey
+checks product routing, not Live inference, Undo execution or general safety.

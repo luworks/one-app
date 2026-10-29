@@ -11,6 +11,22 @@ final class SubmittedReminderEditBoundaryTests: XCTestCase {
   }
   private let now = Date(timeIntervalSince1970: 1_792_314_000)
 
+  func testTimeOnlyRefinementsCannotBecomeNewOneOffReminders() throws {
+    let pending = CaptureConversation.parse(
+      "Every Friday at 3pm remind me to call Alex", now: now, calendar: calendar)
+    for text in ["make it 4pm", "改成下午4点", "Actually 4:30"] {
+      XCTAssertNil(OneOffReminderRequest.capture(text, now: now, calendar: calendar), text)
+      guard
+        case .updated(let updated) = Dialogue.refine(
+          pending, with: text, now: now, calendar: calendar)
+      else { return XCTFail("Expected a preview refinement: \(text)") }
+      XCTAssertEqual(updated.title, pending.title, text)
+      XCTAssertEqual(updated.repeatRule, pending.repeatRule, text)
+      XCTAssertEqual(updated.kind, pending.kind, text)
+      XCTAssertEqual(updated.ringsAsAlarm, pending.ringsAsAlarm, text)
+    }
+  }
+
   func testAmbiguousExistingEditCannotUseSubmittedCreationGrant() throws {
     let items = try [15, 16].map { hour in
       EditItem(

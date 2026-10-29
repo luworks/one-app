@@ -60,8 +60,9 @@ not semantic completion scores. Apple token usage and finish reason were not
 recorded, and visibly truncated text must not be called a complete answer.
 Qwen 2B smoke completed 3/3 with the pinned simulator-file hash, one success and
 two timeouts. Revised Qwen 120-second smoke completed 3/3 EOG generations;
-none passed all specified field checks. Formal batches, 4B adapter validation
-and holdout remain pending; this is not a model selection result. Before accepting
+none passed all specified field checks. First formal27-turn development runs for both2B and4B completed with EOG
+on27/27 turns each. Their remaining repetitions and holdout are pending; this
+is not a model selection result. Before accepting
 new adapter results, verify generation, two-turn context, error/timeout
 attribution, token accounting, fixture identity and pinned file hashing.
 
