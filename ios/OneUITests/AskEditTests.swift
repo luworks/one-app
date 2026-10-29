@@ -97,7 +97,7 @@ final class AskEditTests: XCTestCase {
     send("Remind me to buy milk tomorrow at 3pm")
     XCTAssertTrue(label(containing: "Added").waitForExistence(timeout: 20))
     send("Actually make it every day.")
-    let card = app.otherElements["change-card"]
+    let card = app.descendants(matching: .any).matching(identifier: "change-card").firstMatch
     XCTAssertTrue(card.waitForExistence(timeout: 10))
     XCTAssertTrue(card.staticTexts["buy milk"].exists)
     XCTAssertTrue(card.staticTexts["Repeat every day. Nothing changes until you tap Apply."].exists)
