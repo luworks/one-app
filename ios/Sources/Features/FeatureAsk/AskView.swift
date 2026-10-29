@@ -168,7 +168,7 @@
         backend = "rules"
       } else {
         switch intelligence.backend() {
-        case .onDevice: backend = "model_available_outcome_unobserved"
+        case .hosted: backend = "hosted_available_outcome_unobserved"
         case .rules: backend = "fallback_model_unavailable"
         case .scripted: backend = "development_scripted"
         }
@@ -576,7 +576,7 @@
       followsTail = true
       let token = AIResponseTrace.enabled ? UUID() : generationToken
       if AIResponseTrace.enabled {
-        AIResponseTrace.shared.begin(token, modelAvailable: intelligence.backend() == .onDevice)
+        AIResponseTrace.shared.begin(token, modelAvailable: intelligence.backend() == .hosted)
         generationToken = token
         emittedTurn = nil
         responseTurn = nil
@@ -999,7 +999,7 @@
       guard intelligence.unavailableReason(runtime.locale.identifier) == nil else {
         messages.append(
           reply(
-            "Apple Intelligence isn't available on this device, so I can't tell which item you mean from that sentence. Name the item, or open it to edit it."
+            "The AI service isn't available, so I can't tell which item you mean from that sentence. Name the item, or open it to edit it."
           ))
         return
       }
@@ -1022,7 +1022,7 @@
         if plan == nil {
           messages.append(
             reply(
-              "The on-device model didn't answer in time. Try again in a moment, or name the item.")
+              "The AI service didn't answer in time. Try again in a moment, or name the item.")
           )
           return
         }
@@ -1175,7 +1175,7 @@
       }
     }
 
-    /// A line that lists several things: the multi-item Apple Intelligence path when the model is available, else the parser.
+    /// A line that lists several things: the multi-item hosted model path when the model is available, else the parser.
     private func proposeList(_ text: String) {
       guard intelligence.isAvailable() else {
         show([CaptureParser.parse(text, now: now(), calendar: runtime.calendar)])

@@ -1,10 +1,9 @@
 #if os(iOS)
   import Foundation
   import TodayCore
-  import FoundationModels
 
   /// Turns a line of text into a `Capture` preview.
-  /// `CaptureParser` owns scheduling fields; the on-device classifier resolves uncertain kinds.
+  /// `CaptureParser` owns scheduling fields; the hosted classifier resolves uncertain kinds.
   /// One title-only refinement follows kind resolution, with a bounded contextual prompt and local fallback.
   /// Neither model step may change scheduling fields, and preview follow-ups do not repeat title generation.
   /// The result only feeds the preview card; nothing is written until the user taps Add.
@@ -47,74 +46,45 @@
 
   /// What the model extracts. Field names are part of the prompt, so they stay short.
   /// The model only gives relative numbers (`dayOffset`, `hour`); code turns them into real dates.
-  @Generable
-  enum ActionKind: String {
+  enum ActionKind: String, Codable, Sendable {
     case addTask, addEvent, addAlarm, other
   }
 
-  @Generable
-  struct ParsedAction {
+  struct ParsedAction: Codable, Sendable {
     var kind: ActionKind
-    @Guide(description: "Short title in the user's own language, without date or time words")
     var title: String
-    @Guide(
-      description: "Days from today: 0 today, 1 tomorrow. Empty if the user gave no day",
-      .range(0...365))
     var dayOffset: Int?
-    @Guide(description: "Hour on a 24-hour clock. Empty if the user gave no time", .range(0...23))
     var hour: Int?
-    @Guide(.range(0...59))
     var minute: Int?
-    @Guide(description: "Length in minutes, only if the user gave a length or a time range")
     var durationMinutes: Int?
   }
 
   /// Round 2, variant A: the parser owns day / time / duration / title; the model only classifies.
-  @Generable
-  struct KindIntent {
-    @Guide(
-      description:
-        "true if the user asks to be woken up or rung at a time: alarm, wake me, 叫我起床, 闹钟")
+  struct KindIntent: Codable, Sendable {
     var alarm: Bool
-    @Guide(description: "true for a meeting, appointment, meal, trip or class; false for a to-do")
     var event: Bool
   }
 
   /// Round 2, variant A2 (added after A's two flags over-said "event"): one enum instead of two booleans.
-  @Generable
-  struct KindOnly {
+  struct KindOnly: Codable, Sendable {
     var kind: SimpleKind
   }
 
   /// Round 2, variant B: the model copies the date/time words as text; the parser turns them into a date.
-  @Generable
-  enum SimpleKind: String {
+  enum SimpleKind: String, Codable, Sendable {
     case task, event, alarm
   }
 
-  @Generable
-  struct WhenAction {
+  struct WhenAction: Codable, Sendable {
     var kind: SimpleKind
-    @Guide(description: "Title in the user's original language, without date or time words")
     var title: String
-    @Guide(
-      description:
-        "The date and time words copied exactly from the message, e.g. 下周一上午10点. Empty if none")
     var when: String?
   }
 
   enum Understanding {
     /// Why the model path isn't used, or nil when it is ready.
     static func unavailableReason(localeID: String = "zh_CN") -> String? {
-      let model = SystemLanguageModel.default
-      guard case .available = model.availability else { return "\(model.availability)" }
-      guard
-        model.supportsLocale(Locale(identifier: localeID))
-          || model.supportsLocale(Locale(identifier: "en_US"))
-      else {
-        return "locale \(localeID) not supported"
-      }
-      return nil
+      HostedGPT.isAvailable ? nil : "GPT service is not configured"
     }
 
     /// Instructions only carry facts and rules. The user's text goes in the prompt, never in here.
@@ -160,15 +130,21 @@
       return lines.joined(separator: "\n")
     }
 
-    /// One request, one fresh session (the context window is only 4096 tokens). Throws on any model error.
+    /// One bounded hosted request. Throws on any model error.
     static func extract(
       _ text: String, now: Date, calendar: Calendar, localeID: String,
       calendarTable: Bool = true
     ) async throws -> ParsedAction {
-      let session = LanguageModelSession(
+      try await HostedGPT.generate(
+        ParsedAction.self, stage: "capture_extract",
         instructions: instructions(
-          now: now, calendar: calendar, localeID: localeID, calendarTable: calendarTable))
-      return try await session.respond(to: text, generating: ParsedAction.self).content
+          now: now, calendar: calendar, localeID: localeID, calendarTable: calendarTable),
+        input: text,
+        schema: .object([
+          "kind": .enumeration(["addTask", "addEvent", "addAlarm", "other"]), "title": .string,
+          "dayOffset": .nullable(.integer), "hour": .nullable(.integer),
+          "minute": .nullable(.integer), "durationMinutes": .nullable(.integer),
+        ]))
     }
 
     /// Model output → preview. Pure and testable. Nil means "didn't understand", so the caller falls back.
@@ -238,8 +214,9 @@
     }
 
     static func extractKind(_ text: String, localeID: String) async throws -> KindIntent {
-      let session = LanguageModelSession(instructions: kindInstructions(localeID: localeID))
-      return try await session.respond(to: text, generating: KindIntent.self).content
+      try await HostedGPT.generate(
+        KindIntent.self, stage: "kind_flags", instructions: kindInstructions(localeID: localeID),
+        input: text, schema: .object(["alarm": .boolean, "event": .boolean]))
     }
 
     static func kindOnlyInstructions(localeID: String, strict: Bool = false) -> String {
@@ -288,9 +265,10 @@
     static func extractKindOnly(
       _ text: String, localeID: String, strict: Bool = false, instructions: String? = nil
     ) async throws -> KindOnly {
-      let session = LanguageModelSession(
-        instructions: instructions ?? kindOnlyInstructions(localeID: localeID, strict: strict))
-      return try await session.respond(to: text, generating: KindOnly.self).content
+      try await HostedGPT.generate(
+        KindOnly.self, stage: "classify",
+        instructions: instructions ?? kindOnlyInstructions(localeID: localeID, strict: strict),
+        input: text, schema: .object(["kind": .enumeration(["task", "event", "alarm"])]))
     }
 
     /// "Wake me up", "alarm", 闹钟, 起床, 叫醒. An alarm answer from the model without one of these is treated as a task.
@@ -376,8 +354,13 @@
     }
 
     static func extractWhen(_ text: String, localeID: String) async throws -> WhenAction {
-      let session = LanguageModelSession(instructions: whenInstructions(localeID: localeID))
-      return try await session.respond(to: text, generating: WhenAction.self).content
+      try await HostedGPT.generate(
+        WhenAction.self, stage: "capture_when", instructions: whenInstructions(localeID: localeID),
+        input: text,
+        schema: .object([
+          "kind": .enumeration(["task", "event", "alarm"]), "title": .string,
+          "when": .nullable(.string),
+        ]))
     }
 
     /// Variant B: the model's kind and title; day / time / duration come from running the parser on the model's date words.
@@ -413,8 +396,7 @@
     }
 
     static func prewarm(localeID: String = Locale.current.identifier) {
-      guard unavailableReason(localeID: localeID) == nil else { return }
-      LanguageModelSession(instructions: kindOnlyInstructions(localeID: localeID)).prewarm()
+      // Hosted requests have no model prewarm and must never upload data in the background.
     }
   }
 

@@ -4,7 +4,7 @@
 
   /// Every model route is required. Development supplies all closures outside the production graph.
   package struct AskIntelligence: Sendable {
-    package enum Backend: Sendable, Equatable { case onDevice, rules, scripted }
+    package enum Backend: Sendable, Equatable { case hosted, rules, scripted }
     package let backend: @MainActor @Sendable () -> Backend
     package let parse: @MainActor @Sendable (String, String, Date, Calendar) async -> Capture
     package let propose: @MainActor @Sendable (String, Date, Calendar) async -> [Capture]?
@@ -62,7 +62,7 @@
     /// Selected only by live composition. Existing model timeouts, guards and rule fallbacks remain authoritative.
     @MainActor package static func live(locale: Locale) -> Self {
       Self(
-        backend: { AICapture.isAvailable ? .onDevice : .rules },
+        backend: { AICapture.isAvailable ? .hosted : .rules },
         parse: {
           await Understander.parse(
             $0, history: $1, now: $2, calendar: $3, localeID: locale.identifier)

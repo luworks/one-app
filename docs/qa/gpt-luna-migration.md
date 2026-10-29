@@ -9,10 +9,7 @@ edit selection and suggestion ranking. Rules, local validation, confirmation,
 EventKit commits, Activity receipts and Undo remain authoritative.
 
 A shared OpenAI API key must remain on a server. No production AI endpoint or
-mobile authentication configuration was found in this checkout. The owner has
-been asked whether an existing backend is available. Integration needs that
-endpoint/authentication contract or a new backend deployment, plus a clear
-product explanation of which chat/context fields leave the phone. Do not embed
+mobile authentication configuration was found in this checkout. The owner has authorized configuring a new backend and selected medium for simulator evaluation. A loopback-only evaluation relay and typed app transport are implemented; see scripts/ai/README.md. Public deployment still needs endpoint/session issuance and per-user quotas. Product documentation now explains that submitted messages and bounded context leave the phone. Do not embed
 the evaluation key into an application build or silently upload full local data.
 
 The replacement should use a single bounded typed Responses adapter, fixed
