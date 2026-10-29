@@ -750,24 +750,19 @@
         ) {
           drawer.set(open: true)
         }
-        // The month on screen sits right of the pills; when it doesn't fit it gets shorter, then goes, before the
-        // pills shrink. Only scrolls when the pills alone don't fit (very large text). Otherwise there is no scroll
-        // view to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
-        // Only the label picks its length: the pills stay one view, so switching tabs never swaps the whole row
-        // (a swapped row left the old selected pill fading out over the new one, e.g. Reminders → Clock).
-        HStack(spacing: 12) {
+        // Reserve the current month before adapting the pills. Keep their hit areas intact.
+        HStack(spacing: 8) {
           ViewThatFits(in: .horizontal) {
             pills
             ScrollView(.horizontal, showsIndicators: false) { pills }
           }
-          .layoutPriority(1)
           Spacer(minLength: 0)
-          if let days = shownDays {
-            ViewThatFits(in: .horizontal) {
-              monthLabel(days, .full)
-              monthLabel(days, .short)
-              Color.clear.frame(width: 0, height: 0)
+          if !askVisible {
+            TimelineView(.periodic(from: presentation.now, by: 60)) { _ in
+              monthLabel
             }
+            .id(headerTimeRevision)
+            .layoutPriority(1)
           }
         }
         Spacer(minLength: 0)
@@ -779,32 +774,36 @@
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// The days whose month the top bar names: Today's day, what Calendar shows, else this month. Nil in
-    /// Calendar's Year, which names each year in its own heading, and under Chat: the label would sit beneath
-    /// Chat's Close in accessibility and take its taps there (XCTest, Voice Control).
-    private var shownDays: ClosedRange<Date>? {
-      if askVisible { return nil }
-      switch tab {
-      case .today: return todayDay...todayDay
-      case .calendar: return calendarMode == .year ? nil : calendarShown
-      case .tasks, .clock:
-        let now = session.runtime.now()
-        return now...now
-      }
-    }
+    @State private var headerTimeRevision = 0
 
-    /// Quiet, like Apple Calendar's month above its week; inert for now.
-    private func monthLabel(_ days: ClosedRange<Date>, _ length: MonthLabel.Length) -> some View {
+    /// All tabs name the device's current month, independently of the browsed day.
+    private var monthLabel: some View {
       Text(
         MonthLabel.text(
-          first: days.lowerBound, last: days.upperBound, length: length,
-          calendar: presentation.calendar, locale: presentation.locale)
+          now: presentation.now, calendar: presentation.calendar,
+          locale: presentation.locale)
       )
       .font(.footnote.weight(.semibold))
       .foregroundStyle(Color(.secondaryLabel))
       .lineLimit(1)
       .fixedSize()
+      .accessibilityLabel(
+        MonthLabel.text(
+          now: presentation.now, length: .full,
+          calendar: presentation.calendar, locale: presentation.locale)
+      )
       .accessibilityIdentifier("topBar.month")
+      .onReceive(
+        NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)
+      ) { _ in
+        headerTimeRevision += 1
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+        headerTimeRevision += 1
+      }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .active { headerTimeRevision += 1 }
+      }
     }
 
     private var pills: some View {
