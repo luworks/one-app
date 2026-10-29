@@ -28,7 +28,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--native-log', type=Path, required=True)
     parser.add_argument('--fixture', choices=['ai-chat-capability-eval.json',
-        'intelligence-live-product-extension.json', 'intelligence-live-edit-seed.json'],
+        'intelligence-live-product-extension.json', 'intelligence-live-edit-seed.json',
+        'intelligence-product-blind-holdout-v2.json'],
         default='intelligence-live-product-extension.json')
     parser.add_argument('--case', action='append', required=True)
     parser.add_argument('--undo-created-oneoffs', action='store_true',
@@ -41,7 +42,7 @@ def main():
     raw = fixture.read_bytes()
     cases = {c['id']: c for c in json.loads(raw)['cases']}
     if len(set(args.case)) != len(args.case) or any(key not in cases for key in args.case):
-        raise SystemExit('Select distinct cases from the frozen development fixture')
+        raise SystemExit('Select distinct cases from the frozen fixture')
     journal = Journal()
     session = 'intelligence-selection-20261029'
     observations = []

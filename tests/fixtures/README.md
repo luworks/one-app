@@ -346,3 +346,11 @@ repair regressions, not replacements for or additions to the frozen model
 development/holdout inputs. No real records, model responses or API calls are
 used. Existing single-reminder and existing-item edit boundaries remain covered
 by `OneOffReminderTests` and `SubmittedReminderEditBoundaryTests`.
+
+- [`intelligence-product-blind-holdout-v2.json`](intelligence-product-blind-holdout-v2.json)
+  is an independent contract-only author's product holdout, frozen before observation:
+  24 cases /33 turns, eight cases each Chinese, English and mixed. The Live observer
+  records it without automatic Add/Apply; only five explicit one-off requests allow
+  automatic saves with exact receipt Undo. It is separate from both frozen model
+  fixtures and the cardinality repair regressions. Authoring restrictions and manual
+  rubric are in [the authoring note](../../docs/qa/intelligence-product-blind-holdout-v2-authoring.md).
