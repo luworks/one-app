@@ -129,7 +129,8 @@
             ? EventSnapshot(
               title: backup.title, start: backup.start, durationMinutes: backup.durationMinutes,
               isAllDay: backup.isAllDay, calendarName: backup.calendarName, note: backup.note,
-              externalID: externalID, local: true)
+              externalID: externalID, local: true, location: backup.location, url: backup.url,
+              busy: backup.busy)
             : nil,
           context: context)
         guard !alreadyAbsent else {
@@ -199,6 +200,9 @@
         calendarName: s.calendarName)
       event.isAllDay = s.isAllDay
       event.note = s.note
+      event.location = s.location
+      event.url = s.url
+      event.busy = s.busy
       if s.externalID != nil {
         guard let id = calendar.save(event) else {
           return "Couldn’t restore this event in Calendar. Try again."

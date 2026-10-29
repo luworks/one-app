@@ -457,7 +457,7 @@
         durationMinutes: baseline?.durationMinutes ?? 25, due: hasDue ? due : nil,
         createdAt: baseline?.createdAt ?? presentation.now, reminderOffsetMinutes: reminder,
         listName: listName, tags: cleanedTags, flagged: flagged, repeatRule: repeatRule?.rawValue,
-        checklist: checklist, ringsAsAlarm: ringsAsAlarm)
+        checklist: checklist, ringsAsAlarm: ringsAsAlarm, reminderAlert: baseline?.reminderAlert)
     }
 
     private var workingTask: OneTask? { task ?? savedTask }
@@ -589,6 +589,7 @@
       task.repeatRule = value.repeatRule
       task.checklist = value.checklist
       task.ringsAsAlarm = value.ringsAsAlarm
+      task.reminderAlert = value.reminderAlert
     }
   }
 

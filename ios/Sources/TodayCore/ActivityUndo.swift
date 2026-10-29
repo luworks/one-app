@@ -158,6 +158,9 @@ public enum ListUndo {
 /// A deleted one-off event, as Activity keeps it so Undo can add it again. `externalID` is the deleted Apple Calendar
 /// event's identifier (Undo only runs while it is still gone); a restored event always gets a new one.
 public struct EventSnapshot: Codable, Equatable, Sendable {
+  public var location: String?
+  public var url: String?
+  public var busy: Bool?
   public var title: String
   public var start: Date
   public var durationMinutes: Int
@@ -170,7 +173,8 @@ public struct EventSnapshot: Codable, Equatable, Sendable {
 
   public init(
     title: String, start: Date, durationMinutes: Int, isAllDay: Bool = false,
-    calendarName: String = "", note: String = "", externalID: String? = nil, local: Bool = false
+    calendarName: String = "", note: String = "", externalID: String? = nil, local: Bool = false,
+    location: String? = nil, url: String? = nil, busy: Bool? = nil
   ) {
     self.title = title
     self.start = start
@@ -180,6 +184,9 @@ public struct EventSnapshot: Codable, Equatable, Sendable {
     self.note = note
     self.externalID = externalID
     self.local = local
+    self.location = location
+    self.url = url
+    self.busy = busy
   }
 }
 

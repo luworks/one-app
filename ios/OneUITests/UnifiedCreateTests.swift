@@ -84,4 +84,26 @@ final class UnifiedCreateTests: XCTestCase {
     let app = openComposer()
     XCTAssertFalse(app.buttons["create.save"].isEnabled)
   }
+
+  func testKeyboardDismissDoesNotSubmitAndWeekdaysSurviveTypeSwitch() {
+    let app = openComposer()
+    app.descendants(matching: .any)["create.title"].typeText("Weekly draft")
+    app.buttons["Hide keyboard"].tap()
+    XCTAssertTrue(app.buttons["create.save"].exists)
+    app.buttons["create.type"].tap()
+    app.collectionViews.buttons["Alarm"].tap()
+    app.swipeUp()
+    let monday = app.buttons["create.day.2"]
+    XCTAssertTrue(monday.waitForExistence(timeout: 3))
+    monday.tap()
+    XCTAssertTrue(monday.isSelected)
+    app.buttons["create.type"].tap()
+    app.collectionViews.buttons["Reminder"].tap()
+    XCTAssertFalse(app.buttons["create.day.2"].isSelected)
+    app.buttons["create.type"].tap()
+    app.collectionViews.buttons["Alarm"].tap()
+    XCTAssertTrue(app.buttons["create.day.2"].isSelected)
+    XCTAssertEqual(app.descendants(matching: .any)["create.title"].value as? String, "Weekly draft")
+    app.buttons["Close"].tap()
+  }
 }

@@ -225,7 +225,8 @@
         durationMinutes: t.durationMinutes, due: t.due, createdAt: t.createdAt,
         reminderOffsetMinutes: t.reminderOffsetMinutes, listName: t.listName, tags: t.tags,
         flagged: t.flagged,
-        repeatRule: t.repeatRule, checklist: t.checklist, ringsAsAlarm: t.ringsAsAlarm)
+        repeatRule: t.repeatRule, checklist: t.checklist, ringsAsAlarm: t.ringsAsAlarm,
+        reminderAlert: t.reminderAlert)
     }
 
     package func task(from s: TaskSnapshot) -> OneTask {
@@ -242,6 +243,7 @@
       t.repeatRule = s.repeatRule
       t.checklist = s.checklist
       t.ringsAsAlarm = s.ringsAsAlarm
+      t.reminderAlert = s.reminderAlert
       return t
     }
 

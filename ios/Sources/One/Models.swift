@@ -31,6 +31,8 @@
     package var checklist: [ChecklistItem] = []
     /// Ring like an alarm (AlarmKit) instead of a quiet notification.
     package var ringsAsAlarm: Bool = false
+    /// Local notification settings; nil preserves the legacy notification actions.
+    package var reminderAlert: String? = nil
     /// EKReminder.calendarItemIdentifier when this task is synced with Apple Reminders.
     package var externalID: String? = nil
 
@@ -84,6 +86,7 @@
       next.repeatRule = repeatRule
       next.checklist = checklist.map { ChecklistItem(title: $0.title) }
       next.ringsAsAlarm = ringsAsAlarm
+      next.reminderAlert = reminderAlert
       return next
     }
 
@@ -100,6 +103,7 @@
       t.repeatRule = repeatRule
       t.checklist = checklist
       t.ringsAsAlarm = ringsAsAlarm
+      t.reminderAlert = reminderAlert
       return t
     }
   }
@@ -109,6 +113,9 @@
   @Model
   package final class OneEvent {
     package var note: String = ""
+    package var location: String? = nil
+    package var url: String? = nil
+    package var busy: Bool? = nil
     package var title: String
     package var start: Date
     package var durationMinutes: Int
@@ -156,6 +163,9 @@
       let e = OneEvent(
         title: title, start: start, durationMinutes: durationMinutes, calendarName: calendarName)
       e.note = note
+      e.location = location
+      e.url = url
+      e.busy = busy
       e.reminderOffsetMinutes = reminderOffsetMinutes
       e.isAllDay = isAllDay
       e.ringsAsAlarm = ringsAsAlarm

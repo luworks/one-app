@@ -1,9 +1,35 @@
 # Unified creation: design checkpoint
 
-Status: design reference, 2026-10-29. These images are generated mockups, not
+Status: design reference with round 7 implementation, 2026-10-29. These images are generated mockups, not
 screenshots of implemented UI or evidence of device behavior. This checkpoint
-changes documentation only. It does not replace the creation flow introduced
-in PR #214.
+originally changed documentation only. The round 7 implementation updates the
+creation flow introduced in PR #214 while retaining its explicit commit boundary.
+
+## Round 7 implementation
+
+- Independent shared name section and circular close/checkmark header. The type
+  menu preserves shared text and independent per-type settings. Keyboard Done
+  and Hide keyboard dismiss input without submitting.
+- Alarm has a native 24-hour wheel, without name suggestions or time shortcuts.
+- Alarm and Reminder share Monday-first M T W T F S S buttons, weekday presets
+  and a persisted Monday/Sunday start preference. Stored weekday identities
+  never change when display order changes. Full weekday accessibility labels
+  distinguish the repeated initials.
+- Reminder retains the 12-cell date/time grid, List, Flag, arbitrary date picker,
+  existing recurrence options and notes. Its due summary uses 24-hour time.
+- Local Today notifications persist Sound / Snooze / Snooze Duration, carried
+  through copies, recurrence and Undo. Snooze only schedules after an explicit
+  notification action. Synced reminders remain Apple-owned and do not get
+  duplicate Today notifications; these controls are disabled with an explanation
+  when Apple Reminders is connected.
+- Event exposes start/end, all-day, selected writable calendar, repeat, alert,
+  location, URL, availability and notes. Existing native event-edit routes remain.
+- Creation errors retain drafts and remote receipts. Alarm authorization remains
+  asynchronous. No device install or local simulator run is part of this change.
+
+CI owns unit/helper checks and compilation. The required merge checks do not
+execute UI journeys; neither the mockups nor a green compile prove pixel parity,
+notification delivery, Dynamic Type usability or physical-device behavior.
 
 ## Adjacent iteration review
 
