@@ -11,6 +11,18 @@ def trace(*events):
 
 
 class ProductionTraceTests(unittest.TestCase):
+    def test_routing_does_not_prove_response_completion_or_generation(self):
+        rows = []
+        turn = '7810a32f-e118-42b0-9d4a-d05835c00bf4'
+        for i, event in enumerate(['turn_started', 'rule_direct_grant_selected', 'turn_routed']):
+            rows.append('TODAY_MODEL_CALL ' + json.dumps(dict(
+                version=1, call='d2193b71-1cce-48dd-9760-c36f0af7f355',
+                turn=turn, stage='routing', event=event, elapsed_ms=i)))
+        result = collect('\n'.join(rows))
+        self.assertEqual(len(result['turns'][turn]), 1)
+        self.assertNotIn('api_returned', result['stages']['routing'])
+        self.assertIn('UNKNOWN', result['window_completeness'])
+
     def test_late_api_return_does_not_erase_deadline_or_fallback(self):
         result = collect(trace('api_started', 'deadline_timeout',
                                'chat_fallback_selected', 'api_returned'))

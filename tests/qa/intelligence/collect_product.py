@@ -2,6 +2,7 @@
 import argparse
 from collections import Counter, defaultdict
 import json
+import math
 from pathlib import Path
 import uuid
 
@@ -12,8 +13,10 @@ EVENTS = {
     'unavailable', 'model_title_selected', 'title_fallback_selected',
     'chat_fallback_selected', 'capture_route_selected', 'model_reply_selected',
     'proposals_unusable', 'model_proposals_selected',
+    'turn_started', 'turn_routed', 'rule_direct_grant_selected',
+    'context_resolution_selected', 'context_reply_selected', 'unavailable_chat_fallback',
 }
-STAGES = {'chat', 'kind', 'title', 'proposals', 'edit'}
+STAGES = {'routing', 'chat', 'kind', 'title', 'proposals', 'edit'}
 
 
 def collect(text):
@@ -22,15 +25,19 @@ def collect(text):
         if MARKER not in line:
             continue
         row = json.loads(line.split(MARKER, 1)[1])
-        if set(row) - {'version', 'call', 'stage', 'event', 'elapsed_ms', 'error_type'}:
+        if set(row) - {'version', 'call', 'stage', 'event', 'elapsed_ms', 'error_type',
+                       'turn', 'reported_context_size', 'reported_variant'}:
             raise ValueError('Unexpected trace fields; do not accept content-bearing telemetry')
         uuid.UUID(row['call'])
+        if 'turn' in row:
+            uuid.UUID(row['turn'])
         if row['version'] != 1 or row['stage'] not in STAGES or row['event'] not in EVENTS:
             raise ValueError('Unknown trace contract')
-        if not isinstance(row['elapsed_ms'], (int, float)) or row['elapsed_ms'] < 0:
+        if type(row['elapsed_ms']) not in (int, float) or not math.isfinite(row['elapsed_ms']) or row['elapsed_ms'] < 0:
             raise ValueError('Invalid elapsed time')
         prior = calls[row['call']]
         if prior and (row['stage'] != prior[0]['stage']
+                      or row.get('turn') != prior[0].get('turn')
                       or row['elapsed_ms'] < prior[-1]['elapsed_ms']):
             raise ValueError('Conflicting stage or nonmonotonic call trace')
         if row['event'].startswith('api_') and any(r['event'] == row['event'] for r in prior):
@@ -42,11 +49,15 @@ def collect(text):
                 raise ValueError('Multiple API completions')
         prior.append(row)
     stages = defaultdict(Counter)
+    turns = defaultdict(list)
     for rows in calls.values():
         stages[rows[0]['stage']].update(r['event'] for r in rows)
+        if rows[0].get('turn'):
+            turns[rows[0]['turn']].append(rows[0]['call'])
     return dict(scope='Observed production API lifecycle only; not response quality or save/Undo proof.',
                 window_completeness='UNKNOWN; requires the accompanying closed UI run evidence',
-                stages={k: dict(v) for k, v in stages.items()}, calls=dict(calls))
+                stages={k: dict(v) for k, v in stages.items()},
+                turns=dict(turns), calls=dict(calls))
 
 
 def main():

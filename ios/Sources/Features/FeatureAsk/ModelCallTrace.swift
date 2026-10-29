@@ -6,16 +6,30 @@
 
   /// Opt-in synthetic QA attribution. No prompts, replies, titles, item IDs or error descriptions.
   enum ModelCallTrace {
-    enum Stage: String, Sendable { case chat, kind, title, proposals, edit }
+    enum Stage: String, Sendable { case routing, chat, kind, title, proposals, edit }
     struct Scope: Sendable {
       let id = UUID()
       let stage: Stage
       let started = DispatchTime.now().uptimeNanoseconds
+      let turn = ModelCallTrace.turnID
     }
+    @TaskLocal static var turnID: UUID?
     @TaskLocal static var current: Scope?
     private static let enabled = ProcessInfo.processInfo.arguments.contains("-intelligenceTrace")
     private static let logger = Logger(
       subsystem: "com.luworks.today.intelligence", category: "calls")
+
+    /// Child tasks inherit the diagnostic turn, including work that finishes after a deadline.
+    static func withTurn<T>(_ work: () -> T) -> T {
+      guard enabled else { return work() }
+      return $turnID.withValue(UUID()) {
+        $current.withValue(Scope(stage: .routing)) {
+          selection("turn_started")
+          defer { selection("turn_routed") }
+          return work()
+        }
+      }
+    }
 
     static func scoped<T: Sendable>(
       _ stage: Stage, work: @Sendable () async -> T
@@ -29,7 +43,7 @@
       _ stage: Stage, work: () async throws -> T
     ) async rethrows -> T {
       guard enabled else { return try await work() }
-      let scope = current ?? Scope(stage: stage)
+      let scope = current.flatMap { $0.stage == stage ? $0 : nil } ?? Scope(stage: stage)
       emit("api_started", scope: scope)
       do {
         let value = try await work()
@@ -92,6 +106,13 @@
         "event": event,
         "elapsed_ms": Double(DispatchTime.now().uptimeNanoseconds - scope.started) / 1_000_000,
       ]
+      if let turn = scope.turn { fields["turn"] = turn.uuidString }
+      if event == "api_started" {
+        fields["reported_context_size"] = SystemLanguageModel.default.contextSize
+        if #available(iOS 27, *) {
+          fields["reported_variant"] = SystemLanguageModel.default.variant.displayName
+        }
+      }
       if let errorType { fields["error_type"] = errorType }
       guard let data = try? JSONSerialization.data(withJSONObject: fields, options: .sortedKeys),
         let line = String(data: data, encoding: .utf8)

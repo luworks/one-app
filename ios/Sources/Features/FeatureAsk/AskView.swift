@@ -573,6 +573,10 @@
     private func send(_ raw: String) {
       let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !text.isEmpty else { return }
+      ModelCallTrace.withTurn { sendRequest(text) }
+    }
+
+    private func sendRequest(_ text: String) {
       followsTail = true
       let token = AIResponseTrace.enabled ? UUID() : generationToken
       if AIResponseTrace.enabled {
@@ -603,6 +607,7 @@
       if let capture = OneOffReminderRequest.capture(
         text, now: sentAt, calendar: runtime.calendar, existingItems: { editCandidates().items })
       {
+        ModelCallTrace.selection("rule_direct_grant_selected")
         recordTurn("capture", text)
         clearPreviews()
         createSubmittedReminder(capture)
@@ -611,6 +616,7 @@
       if let resolved = CaptureConversation.resolve(
         text, context: turnContext, pending: pending, now: now(), calendar: runtime.calendar)
       {
+        ModelCallTrace.selection("context_resolution_selected")
         recordTurn("answer", text)
         if OneOffReminderRequest.eligible(resolved),
           OneOffReminderRequest.contextAllows(turnContext)
@@ -723,6 +729,7 @@
         AIResponseTrace.shared.stage("record_turn_after", token: generationToken)
       }
       if let reply = ChatRouting.contextReply(text, context: context) {
+        ModelCallTrace.selection("context_reply_selected")
         messages.append(self.reply(reply))
         return
       }
@@ -730,6 +737,7 @@
       traceBackend(generationToken, modelPath: intent != .capture)
       let token = generationToken
       if intent == .conversation && !intelligence.isAvailable() {
+        ModelCallTrace.selection("unavailable_chat_fallback")
         if AIResponseTrace.enabled { AIResponseTrace.shared.localReply(.before, token: token) }
         thinking = false
         messages.append(reply(ChatRouting.fallbackReply(text)))

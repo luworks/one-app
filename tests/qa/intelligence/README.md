@@ -82,3 +82,16 @@ closed job is graded and indexed only after the child has released its locks.
 The manifest pins source hashes; changing a frozen input stops further work.
 It does not build, install, or choose a device. Prepare the native holdout button
 and install the sample on the already opened owned simulator beforehand.
+
+Pure rules have separate fixed development and holdout export methods in
+`IntelligenceRulesExportTests`. Run only the chosen method with a fresh
+`AI_RULES_EVAL_OUTPUT` path, then grade its JSON with `score_rules.py --split
+holdout` for the holdout (development is the default). The scorer reconciles
+split identity, exact inputs and every case-turn; no model calls or product
+writes occur in this exporter. Do not inspect holdout outputs while tuning.
+
+Live manual acceptance additionally uses
+`tests/fixtures/intelligence-live-product-extension.json` for ordinary
+conversation, context recall and Clock intents. It is a development extension,
+not extra blind model-only cases. Preserve the actual app clock and receipt/
+Undo evidence and report unsupported chat-to-Clock operations honestly.

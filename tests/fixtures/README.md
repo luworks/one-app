@@ -287,6 +287,14 @@ dataset load clock, then relaunches its isolated persistent store on the next da
 
 ## AI chat capability assessment
 
+[`intelligence-live-product-extension.json`](intelligence-live-product-extension.json)
+defines12 additional manual Live-product development cases (15 turns) for
+natural zh/en/mixed conversation, memory follow-ups, timers and world clocks.
+It is authored before observing its outputs and is not a blind holdout. Use the
+actual app clock, existing confirmation boundaries and isolated synthetic data.
+No automated runner consumes this extension yet; model-only fixture hashes and
+expectations remain unchanged.
+
 [`intelligence-model-selection-models.json`](intelligence-model-selection-models.json)
 pins the evaluated Qwen conversion artifacts and runtime revision. The evidence
 collector checks model hashes against this catalog. Apple system-managed weights
@@ -305,8 +313,8 @@ and a simulator-only setup. [`ai-chat-capability-protocol.md`](../../docs/qa/ai-
 defines evidence, attribution and scoring; this authored set is development data,
 not a blind holdout or a claim of model execution. The standalone simulator
 adapter in `tests/qa/intelligence/` consumes these inputs for model-only batches.
-`IntelligenceRulesExportTests.testFrozenDevelopmentRulesAndPreviewFollowups`
-exports pure production parser, routing and open-preview refinement observations
+`IntelligenceRulesExportTests.testFrozenDevelopmentRulesAndPreviewFollowups` and
+`testFrozenHoldoutRulesAndPreviewFollowups` export pure production parser, routing and open-preview refinement observations
 at a fixed clock. Its execution success is not an accuracy score or product write
 acceptance; model calls, save and Undo remain outside that seam. Its two synthetic
 targets allow a separate pure edit-decision observation. `AI_RULES_EVAL_OUTPUT`

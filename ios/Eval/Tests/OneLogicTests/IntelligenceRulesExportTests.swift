@@ -7,9 +7,17 @@ import XCTest
 /// Measures pure production rules. This is not the app reducer, a model call, or a write test.
 final class IntelligenceRulesExportTests: XCTestCase {
   func testFrozenDevelopmentRulesAndPreviewFollowups() throws {
+    try exportRules(split: "development", fixtureName: "ai-chat-capability-eval.json")
+  }
+
+  func testFrozenHoldoutRulesAndPreviewFollowups() throws {
+    try exportRules(split: "holdout", fixtureName: "intelligence-model-selection-holdout.json")
+  }
+
+  private func exportRules(split: String, fixtureName: String) throws {
     var repository = URL(fileURLWithPath: #filePath)
     for _ in 0..<5 { repository.deleteLastPathComponent() }
-    let fixture = repository.appendingPathComponent("tests/fixtures/ai-chat-capability-eval.json")
+    let fixture = repository.appendingPathComponent("tests/fixtures/" + fixtureName)
     let suite = try XCTUnwrap(
       JSONSerialization.jsonObject(with: Data(contentsOf: fixture)) as? [String: Any])
     let cases = try XCTUnwrap(suite["cases"] as? [[String: Any]])
@@ -130,7 +138,10 @@ final class IntelligenceRulesExportTests: XCTestCase {
       }
     }
     XCTAssertEqual(rows.count, expectedCount, "Every fixture turn must be observed")
-    let result: [String: Any] = ["reference": "2026-10-28 09:00 America/Los_Angeles", "rows": rows]
+    let result: [String: Any] = [
+      "split": split, "fixture": fixtureName,
+      "reference": "2026-10-28 09:00 America/Los_Angeles", "rows": rows,
+    ]
     let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
     // XCTest can truncate a long stdout line; only the explicit file is complete evidence.
     if let path = ProcessInfo.processInfo.environment["AI_RULES_EVAL_OUTPUT"] {

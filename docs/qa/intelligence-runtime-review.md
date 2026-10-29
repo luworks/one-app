@@ -111,3 +111,17 @@ correlate the closed observation window with the synthetic UI action record.
 The collector never reports product pass rates or window completeness from API
 metadata alone. Actual simulator compilation and Live trace validation of this
 candidate are pending; source instrumentation is not runtime proof.
+
+The candidate also propagates a random diagnostic turn UUID into child tasks,
+so a late model completion stays associated with the original submitted turn.
+`turn_started`/`turn_routed` bracket synchronous routing only; neither proves an
+emitted answer, committed item or completed asynchronous work. Explicit rule
+creation, context resolution/reply and unavailable-chat branches are recorded
+without pretending they called a model.
+
+The installed iOS27.1 SDK exposes `SystemLanguageModel.variant.displayName`,
+`Variant.core3`/`coreAdvanced3`, and `contextSize`. Future traced API starts will
+record the reported variant and context size. Earlier batches did not record
+these values and remain UNKNOWN; neither a reported variant nor an OS version
+identifies an exact weight revision/hash. Runtime validation of this addition
+is pending. SDK declaration presence is not a measured model selection.
