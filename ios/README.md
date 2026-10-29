@@ -1,6 +1,6 @@
 # Today — iOS app (SwiftUI)
 
-The native app (formerly "one."). It puts calendar, reminders and alarms in one place. Direction: AI-native, data stays on the device, Apple Calendar and Apple Reminders are the source of truth (EventKit), alarms use AlarmKit. The HTML prototype in `src/` is the older design reference; the iOS app is now ahead of it. See [the goal and rubric](../docs/goal-and-rubric.md) for the goal, roadmap and eval.
+The native app (formerly "one."). It puts calendar, reminders and alarms in one place. Direction: AI-native, planner and health records stay on the device; GPT assistance sends messages and bounded relevant context to the configured AI service; Apple Calendar and Apple Reminders are the source of truth (EventKit), alarms use AlarmKit. The HTML prototype in `src/` is the older design reference; the iOS app is now ahead of it. See [the goal and rubric](../docs/goal-and-rubric.md) for the goal, roadmap and eval.
 
 ## Development entry
 

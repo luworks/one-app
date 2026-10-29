@@ -6,7 +6,8 @@ public enum OneOffReminderRequest {
   public static func capture(
     _ text: String, now: Date, calendar: Calendar
   ) -> Capture? {
-    guard ChatRouting.intent(text) == .capture,
+    guard ChatRouting.intent(text) == .capture, !ChatRouting.requestsEvent(text),
+      !ChatRouting.hasMultipleActions(text), !ChatRouting.hasMaterialCorrection(text),
       CaptureParser.leadingMonth(text) == nil,
       !CaptureConversation.referencesReminder(text),
       text.range(
@@ -30,7 +31,9 @@ public enum OneOffReminderRequest {
       {
         continue
       }
-      guard CaptureParser.leadingMonth(turn.text) == nil else { return false }
+      guard CaptureParser.leadingMonth(turn.text) == nil,
+        !ChatRouting.hasMultipleActions(turn.text), !ChatRouting.hasMaterialCorrection(turn.text)
+      else { return false }
       return turn.text.range(
         of: #"还是|或者|\bor\b|\bevery\b|\brecurr|重复|每"#,
         options: [.regularExpression, .caseInsensitive]) == nil

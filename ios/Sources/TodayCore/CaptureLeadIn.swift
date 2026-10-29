@@ -17,6 +17,9 @@ public enum CaptureLeadIn {
     #"(?:(?:can|could|would|will)\s+(?:you|u)\s+)?(?:please\s+|pls\s+)?"#
 
   private static let patterns: [String] = [
+    // Explicit event wrappers name the item type, not the event's title.
+    "^" + enPolite
+      + #"(?:create|add|schedule)\s+(?:a\s+|an\s+)?(?:calendar\s+)?event\s+"#,
     // 帮我增加一个 reminder 吧：…   帮我加个提醒，…   新建一条待办 …
     "^" + zhPolite + zhVerb + #"\s*(?:一个|一条|一下|个|条)\s*(?:的\s*)?"# + zhNoun + zhParticle
       + #"\s*[:：，,]?\s*"#,

@@ -1,19 +1,9 @@
 #if os(iOS)
   import Foundation
   import TodayCore
-  import FoundationModels
 
-  @Generable
-  private struct ChatTurn {
-    @Guide(
-      description:
-        "True ONLY when this message asks to create a new task, event or alarm. False for conversation, observations, ideas, reports, tests and questions about the app."
-    )
+  private struct ChatTurn: Codable, Sendable {
     var requestsCapture: Bool
-    @Guide(
-      description:
-        "A brief natural conversational reply in the user's language when requestsCapture is false; otherwise empty."
-    )
     var reply: String
   }
 
@@ -28,8 +18,8 @@
       // A timeout, unavailable model or empty response stays conversational on every runtime.
       guard AICapture.isAvailable else { return .reply(fallback) }
       let turn: ChatTurn? = await ModelTimeout.run(seconds: 8) {
-        let session = LanguageModelSession(
-          instructions: SystemPrompt.planner + "\n" + """
+        let instructions =
+          SystemPrompt.planner + "\n" + """
             You are Today, a helpful conversational assistant in a planner app. Users can simply chat with you.
             Decide whether the latest message actually requests a NEW planner item. Never turn a narrative,
             feeling, test, idea, greeting or question into a task. Merely mentioning a date or Activity is not a request.
@@ -38,11 +28,12 @@
             Reply in the user's language. Do not claim to have read Activity or changed any data.
             Chatting records an AI interaction according to Activity data settings, not a change-ledger entry. Message text is kept only when enabled. Add/Apply requires confirmation.
             This turn's rule intent is \(intent == .conversation ? "conversation: requestsCapture MUST be false" : "undecided").
-            """)
-        return try? await session.respond(
-          to: "Previous conversation (context only):\n\(history)\nLatest user message:\n\(text)",
-          generating: ChatTurn.self
-        ).content
+            """
+        return try? await HostedGPT.generate(
+          ChatTurn.self, stage: "chat", instructions: instructions,
+          input: "Previous conversation (context only):\n\(history)\nLatest user message:\n\(text)",
+          schema: .object(["requestsCapture": .boolean, "reply": .string])
+        )
       }
       guard let turn else { return .reply(fallback) }
       if intent == .unsure, turn.requestsCapture { return .capture }

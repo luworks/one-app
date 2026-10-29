@@ -76,7 +76,7 @@
             .font(.caption)
             .foregroundStyle(.secondary)
           if capture.fromAppleIntelligence {
-            Text("· Apple Intelligence")
+            Text("· AI")
               .font(.caption)
               .foregroundStyle(.secondary)
               .lineLimit(1)

@@ -168,7 +168,7 @@
         backend = "rules"
       } else {
         switch intelligence.backend() {
-        case .onDevice: backend = "model_available_outcome_unobserved"
+        case .hosted: backend = "hosted_available_outcome_unobserved"
         case .rules: backend = "fallback_model_unavailable"
         case .scripted: backend = "development_scripted"
         }
@@ -576,7 +576,7 @@
       followsTail = true
       let token = AIResponseTrace.enabled ? UUID() : generationToken
       if AIResponseTrace.enabled {
-        AIResponseTrace.shared.begin(token, modelAvailable: intelligence.backend() == .onDevice)
+        AIResponseTrace.shared.begin(token, modelAvailable: intelligence.backend() == .hosted)
         generationToken = token
         emittedTurn = nil
         responseTurn = nil
@@ -600,7 +600,19 @@
       }
       turnStart = sentAt
       let intent = ChatRouting.intent(text)
-      if let capture = OneOffReminderRequest.capture(text, now: sentAt, calendar: runtime.calendar)
+      if intent != .conversation, ChatRouting.hasMaterialCorrection(text) {
+        recordTurn("clarify", text)
+        messages.append(
+          reply(
+            text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+              ? "请重新说一次要提醒的事项、日期和时间，避免用错日期。还没有添加任何事项。"
+              : "Please restate the item, date and time so I use the corrected date. Nothing has been added."
+          ))
+        return
+      }
+      if !Editing.looksLikeEdit(
+        text, items: editCandidates().items, now: sentAt, calendar: runtime.calendar),
+        let capture = OneOffReminderRequest.capture(text, now: sentAt, calendar: runtime.calendar)
       {
         recordTurn("capture", text)
         clearPreviews()
@@ -968,6 +980,15 @@
         }
         thinking = false
         show([capture])
+        if capture.ringsAsAlarm, capture.hour == nil {
+          pending = capture
+          followup = .alarmTime
+          messages.append(
+            reply(
+              text.range(of: #"\p{Han}"#, options: .regularExpression) != nil
+                ? "闹钟要设在几点？确认添加后才会生效。"
+                : "What time should the alarm ring? Nothing is added until you confirm."))
+        }
       }
     }
 
@@ -999,7 +1020,7 @@
       guard intelligence.unavailableReason(runtime.locale.identifier) == nil else {
         messages.append(
           reply(
-            "Apple Intelligence isn't available on this device, so I can't tell which item you mean from that sentence. Name the item, or open it to edit it."
+            "The AI service isn't available, so I can't tell which item you mean from that sentence. Name the item, or open it to edit it."
           ))
         return
       }
@@ -1022,7 +1043,7 @@
         if plan == nil {
           messages.append(
             reply(
-              "The on-device model didn't answer in time. Try again in a moment, or name the item.")
+              "The AI service didn't answer in time. Try again in a moment, or name the item.")
           )
           return
         }
@@ -1164,21 +1185,20 @@
     /// One item per line: rules own scheduling, followed by kind classification and title-only refinement.
     /// A line that lists several things goes to the multi-item model path when it is available.
     private func propose(_ text: String, history: String = "") {
-      if intelligence.isAvailable(),
-        text.range(
-          of: #"[；;\n]|然后|另外还|\band then\b"#, options: [.regularExpression, .caseInsensitive])
-          != nil
-      {
+      if ChatRouting.hasMultipleActions(text) {
         proposeList(text)
       } else {
         understand(text, history: history)
       }
     }
 
-    /// A line that lists several things: the multi-item Apple Intelligence path when the model is available, else the parser.
+    /// A list needs separate previews; failed extraction asks for separate messages instead of collapsing actions.
     private func proposeList(_ text: String) {
       guard intelligence.isAvailable() else {
-        show([CaptureParser.parse(text, now: now(), calendar: runtime.calendar)])
+        messages.append(
+          reply(
+            "Please send one item at a time while the AI service is unavailable. Nothing has been added."
+          ))
         return
       }
       thinking = true
@@ -1191,7 +1211,14 @@
           return
         }
         thinking = false
-        show(proposed ?? [CaptureParser.parse(text, now: now(), calendar: runtime.calendar)])
+        guard let proposed, proposed.count >= 2 else {
+          messages.append(
+            reply(
+              "I couldn't separate those items. Please send them one at a time. Nothing has been added."
+            ))
+          return
+        }
+        show(proposed)
       }
     }
 
