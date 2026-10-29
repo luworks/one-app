@@ -131,6 +131,16 @@ def main():
                     # fresh chat must have exactly one current Added receipt and Undo.
                     if len(re.findall(r'\[other\] "Added:', snapshot)) != 1:
                         raise RuntimeError('Direct creation receipt is not uniquely identifiable')
+                    if not re.search(r'\[button\] "Undo"', snapshot):
+                        # A later follow-up can scroll its earlier receipt above the
+                        # viewport. One bounded reveal is allowed; never click blind
+                        # or retry a failed gesture, and reconcile the receipt again.
+                        if '[content above scroll-area hidden]' not in snapshot:
+                            raise RuntimeError('Undo absent without an observed clipped earlier receipt')
+                        step('scroll', 'up', '0.6', '--settle', '--timeout', '10000')
+                        snapshot = step('snapshot', '-i')
+                        if len(re.findall(r'\[other\] "Added:', snapshot)) != 1:
+                            raise RuntimeError('Revealed receipt is not uniquely identifiable')
                     step('click', ref(snapshot, 'button', 'Undo'), settle=1)
                     undone = step('snapshot', '-i')
                     if '[text] "Undone"' not in undone or '[button] "Add again"' not in undone:

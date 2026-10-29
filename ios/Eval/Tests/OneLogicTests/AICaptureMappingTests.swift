@@ -163,6 +163,22 @@ final class AICaptureMappingTests: XCTestCase {
     XCTAssertEqual(try XCTUnwrap(map(.init(kind: "reminder", title: "A"))).kind, .task)
   }
 
+  func testInvalidGeneratedItemRejectsWholeBatchInsteadOfDroppingAction() throws {
+    let first = CaptureDraft(
+      kind: "task", title: "Collect parcel", date: "2026-10-16", time: "09:00")
+    let second = CaptureDraft(kind: "task", title: "Email Dana", date: "2026-10-16", time: "16:00")
+    let invalid = CaptureDraft(kind: "task", title: "  ")
+    for drafts in [[invalid, first, second], [first, invalid, second], [first, second, invalid]] {
+      XCTAssertNil(CaptureDraftMapper.captures(from: drafts, now: now, calendar: cal))
+    }
+    XCTAssertNil(CaptureDraftMapper.captures(from: [], now: now, calendar: cal))
+    let result = try XCTUnwrap(
+      CaptureDraftMapper.captures(from: [first, second], now: now, calendar: cal))
+    XCTAssertEqual(result.map(\.title), ["Collect parcel", "Email Dana"])
+    XCTAssertEqual(result.map(\.hour), [9, 16])
+    XCTAssertTrue(result.allSatisfy { $0.day == date(2026, 10, 16) })
+  }
+
   func testEmptyTitleIsRejected() {
     XCTAssertNil(map(.init(kind: "task", title: "   ")))
     XCTAssertNil(map(.init(kind: "task", title: "")))

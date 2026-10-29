@@ -156,16 +156,20 @@
             try await session.respond(
               to: text, generating: ProposedItems.self, options: options)
           }
-          let captures = result.content.items.compactMap { item -> Capture? in
-            guard
-              var c = CaptureDraftMapper.capture(from: draft(item), now: now, calendar: calendar)
-            else { return nil }
-            c.title = CaptureDraftMapper.userWording(c.title, source: text)
-            return c
+          guard
+            let mapped = CaptureDraftMapper.captures(
+              from: result.content.items.map(draft), now: now, calendar: calendar)
+          else {
+            ModelCallTrace.selection("proposals_incomplete")
+            return nil
           }
-          ModelCallTrace.selection(
-            captures.isEmpty ? "proposals_unusable" : "model_proposals_selected")
-          return captures.isEmpty ? nil : captures
+          let captures = mapped.map { item in
+            var capture = item
+            capture.title = CaptureDraftMapper.userWording(capture.title, source: text)
+            return capture
+          }
+          ModelCallTrace.selection("model_proposals_selected")
+          return captures
         } catch {
           // Guardrails, unsupported language, context size, cancelled, model went away: use the rule parser.
           return nil

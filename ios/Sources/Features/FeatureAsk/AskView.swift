@@ -613,13 +613,28 @@
         createSubmittedReminder(capture)
         return
       }
+      if intent == .capture, !Editing.hasOperationCue(text),
+        !SubmittedActionAnalysis.analyze(text).permitsDirectCreation
+      {
+        recordTurn("capture", text)
+        propose(text, history: history)
+        return
+      }
       if let resolved = CaptureConversation.resolve(
         text, context: turnContext, pending: pending, now: now(), calendar: runtime.calendar)
       {
+        if let analysis = OneOffReminderRequest.contextAnalysis(
+          turnContext, now: sentAt, calendar: runtime.calendar),
+          !analysis.permitsDirectCreation
+        {
+          recordTurn("answer", text)
+          clarifySubmittedActions()
+          return
+        }
         ModelCallTrace.selection("context_resolution_selected")
         recordTurn("answer", text)
         if OneOffReminderRequest.eligible(resolved),
-          OneOffReminderRequest.contextAllows(turnContext)
+          OneOffReminderRequest.contextAllows(turnContext, now: sentAt, calendar: runtime.calendar)
         {
           // A subjectless continuation never duplicates a previously decided card, including
           // after reopening the chat. Undo/Cancel require a deliberate Add again/new request.
@@ -1170,38 +1185,29 @@
         })
     }
 
-    /// One item per line: rules own scheduling, followed by kind classification and title-only refinement.
-    /// A line that lists several things goes to the multi-item model path when it is available.
+    /// Cardinality is established before generation, including unavailable/failed models.
     private func propose(_ text: String, history: String = "") {
-      if intelligence.isAvailable(),
-        text.range(
-          of: #"[；;\n]|然后|另外还|\band then\b"#, options: [.regularExpression, .caseInsensitive])
-          != nil
-      {
-        proposeList(text)
-      } else {
+      let analysis = SubmittedActionAnalysis.analyze(text)
+      switch analysis {
+      case .single:
         understand(text, history: history)
+      case .multiple:
+        if let captures = analysis.previews(now: now(), calendar: runtime.calendar) {
+          show(captures)
+        } else {
+          clarifySubmittedActions(timeScope: true)
+        }
+      case .uncertain:
+        clarifySubmittedActions()
       }
     }
 
-    /// A line that lists several things: the multi-item Apple Intelligence path when the model is available, else the parser.
-    private func proposeList(_ text: String) {
-      guard intelligence.isAvailable() else {
-        show([CaptureParser.parse(text, now: now(), calendar: runtime.calendar)])
-        return
-      }
-      thinking = true
-      traceBackend(generationToken, modelPath: true)
-      let token = generationToken
-      captureTask = Task { @MainActor in
-        defer { finishEmission(token) }
-        let proposed = await intelligence.propose(text, now(), runtime.calendar)
-        guard !Task.isCancelled, !AIResponseTrace.enabled || token == generationToken else {
-          return
-        }
-        thinking = false
-        show(proposed ?? [CaptureParser.parse(text, now: now(), calendar: runtime.calendar)])
-      }
+    private func clarifySubmittedActions(timeScope: Bool = false) {
+      messages.append(
+        reply(
+          timeScope
+            ? "Does that schedule apply to every action, or does each action have its own? Nothing has been added."
+            : "Should this be one reminder or separate actions? Nothing has been added."))
     }
 
     /// The Send tap is the scoped approval for a clear one-off reminder. Save errors leave

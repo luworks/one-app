@@ -288,11 +288,11 @@ public enum CaptureConversation {
     has(text, #"^\s*(?:one[ -]?off|one time|just once|一次性|一次|单次)[。.!！]*\s*$"#)
   }
 
-  private static func proceeds(_ text: String) -> Bool {
+  static func proceeds(_ text: String) -> Bool {
     has(text, #"^\s*(?:你做吧|你来吧|就这样做吧|do it|please do|go ahead)[。.!！]*\s*$"#)
   }
 
-  private static func acknowledges(_ text: String) -> Bool {
+  static func acknowledges(_ text: String) -> Bool {
     has(text, #"^\s*(?:够|够了|好的|好|嗯|ok|okay|enough|that's enough)[。.!！]*\s*$"#)
   }
 

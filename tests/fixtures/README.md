@@ -334,3 +334,15 @@ Today button color tests keep small opaque RGB inputs inline in
 `ios/Eval/Tests/OneLogicTests/TodayButtonColorTests.swift`; the simulator journey
 `ios/OneUITests/TodayIdentityTests.swift` uses the built-in Blue preset and native
 custom picker, without personal calendar data.
+
+## Submitted action cardinality regressions
+
+[`SubmittedActionAnalysisTests.swift`](../../ios/Eval/Tests/OneLogicTests/SubmittedActionAnalysisTests.swift)
+keeps small synthetic zh/en/mixed clauses inline beside authorization assertions:
+separate and shared times, local overrides, multiple clauses, object/title
+conjunction ambiguity, balanced quoted titles, correction wording, recurrence
+weekday sets and time/acknowledgment/proceed follow-ups. These are independent
+repair regressions, not replacements for or additions to the frozen model
+development/holdout inputs. No real records, model responses or API calls are
+used. Existing single-reminder and existing-item edit boundaries remain covered
+by `OneOffReminderTests` and `SubmittedReminderEditBoundaryTests`.

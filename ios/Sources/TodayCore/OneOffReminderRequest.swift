@@ -7,7 +7,8 @@ public enum OneOffReminderRequest {
     _ text: String, now: Date, calendar: Calendar,
     existingItems: () -> [EditItem] = { [] }
   ) -> Capture? {
-    guard ChatRouting.intent(text) == .capture,
+    guard SubmittedActionAnalysis.analyze(text).permitsDirectCreation,
+      ChatRouting.intent(text) == .capture,
       CaptureParser.leadingMonth(text) == nil,
       !CaptureConversation.referencesReminder(text),
       text.range(
@@ -30,22 +31,52 @@ public enum OneOffReminderRequest {
 
   /// Recovery can use the original subject, but never erase ambiguity or recurrence words
   /// just because the parsed result omitted them.
-  public static func contextAllows(_ context: ConversationContext) -> Bool {
+  public static func contextAllows(
+    _ context: ConversationContext, now: Date = .now, calendar: Calendar = .current
+  ) -> Bool {
+    guard let text = contextSubject(context, now: now, calendar: calendar),
+      SubmittedActionAnalysis.analyze(text).permitsDirectCreation,
+      CaptureParser.leadingMonth(text) == nil
+    else { return false }
+    return text.range(
+      of: #"还是|或者|\bor\b|\bevery\b|\brecurr|重复|每"#,
+      options: [.regularExpression, .caseInsensitive]) == nil
+  }
+
+  public static func contextAnalysis(
+    _ context: ConversationContext, now: Date, calendar: Calendar
+  ) -> SubmittedActionAnalysis? {
+    guard let text = contextSubject(context, now: now, calendar: calendar) else { return nil }
+    return SubmittedActionAnalysis.analyze(text)
+  }
+
+  private static func contextSubject(
+    _ context: ConversationContext, now: Date, calendar: Calendar
+  ) -> String? {
     for turn in context.userTurns.reversed() {
-      if CaptureConversation.referencesReminder(turn.text)
-        || CaptureConversation.isOneOffAnswer(turn.text)
-        || turn.text.range(
-          of: #"^\s*(?:你做吧|你来吧|go ahead|do it|please do)[.!。]*\s*$"#,
-          options: [.regularExpression, .caseInsensitive]) != nil
+      let text = turn.text
+      // A timing answer cannot establish the action count. Keep looking for the
+      // actual user subject instead of laundering a previously merged draft.
+      if ChatRouting.isContextQuestion(text)
+        || CaptureConversation.referencesReminder(text)
+        || CaptureConversation.isOneOffAnswer(text)
+        || CaptureConversation.referencesAlarm(text)
+        || CaptureConversation.proceeds(text)
+        || CaptureConversation.acknowledges(text)
       {
         continue
       }
-      guard CaptureParser.leadingMonth(turn.text) == nil else { return false }
-      return turn.text.range(
-        of: #"还是|或者|\bor\b|\bevery\b|\brecurr|重复|每"#,
-        options: [.regularExpression, .caseInsensitive]) == nil
+      if Dialogue.isOnlyWhen(text, now: turn.timestamp ?? now, calendar: calendar),
+        text.range(
+          of: #"\bevery\b|\brecurr|重复|每"#,
+          options: [.regularExpression, .caseInsensitive]) == nil,
+        SubmittedActionAnalysis.analyze(text).permitsDirectCreation
+      {
+        continue
+      }
+      return text
     }
-    return false
+    return nil
   }
 
   public static func eligible(_ capture: Capture) -> Bool {

@@ -232,3 +232,38 @@ change, normally closed/reopened only its app once, verified locks released,
 and stopped further simulator actions while that owner uses the shared runner.
 The frozen model schedule is at its released first-batch boundary, with11 of12
 batches still pending. All simulator/auth/data/evidence state is preserved.
+
+## Closed Live baseline after PR217, before cardinality repair
+
+The separate source `829dc4a9efe1ff2dfbd2c00e497a12e2734b6fa3` integrates
+main's PR217 without modifying its authorization fix. Its complete Live app is
+archived in `main217-integration-20261029`. `live-product-round5-20261029`
+contains exactly the original 24 cases / 27 turns, plus the six Clock extension
+cases and two unscored setup reminders. This is one product repetition; the
+older conversation runs and this source must not be pooled as one candidate.
+
+| Directly inspected path | Outcome / denominator | Important limit |
+| --- | --- | --- |
+| Clear one-off fields and Added/Undo/Open receipts | 7/7 | Zero model calls; exact Undo succeeded7/7. Posthoc concise-title review5/7; per-case editor inspection not complete. |
+| Unique existing reminder edit, explicit Apply, exact Undo | 1/1 flow | Two synthetic targets; no general edit success rate. |
+| Weekly Mon/Wed19:00, Add/Open persisted repeat label, exact Undo | 1/1 flow | Title retained the whole request; no real reminder account/notification delivery. |
+| Calendar event Add/local timeline/Open route/Undo | 1/1 flow | Local event only; Open evidence is a timeline, not an editor. QA brackets were lost. |
+| Alarm Add/editor/Undo under denied AlarmKit/notifications | Local lifecycle observed1/1 | Enabled local row appeared despite denied authorization. Actual scheduling/ringing is UNKNOWN; do not call this alarm-delivery success. |
+| Four explicit timer/world-clock requests | 0/4 | Actual before/after Clock state checked: no timer/city creation despite promises. |
+| Recurring timer intent | 0/1 | Replaced by daily reminder preview. |
+| Timer explanation | 1/1 | Text-only explanation, not execution. |
+| Multi-action direct-write safety | 0/1 | One merged reminder auto-saved, zero model calls; actual editor and exact Undo retained. |
+
+The daily-recurrence follow-up also lost its08:00 slot and proposed a new undated
+item rather than an existing change card. Chinese weekday self-correction saved
+Thursday despite correction to Friday; exact Undo succeeded. Other original
+turns remain individually reviewable in the closed cohort. No aggregate product
+pass percentage is claimed before the entire rubric is scored consistently.
+
+All non-setup synthetic writes were undone. Two dentist setup records remain for
+paired conditions; the owned simulator was shut down, and permissions/account
+settings were preserved. The cardinality candidate is documented separately in
+[intelligence-cardinality-repair.md](intelligence-cardinality-repair.md). It is
+not part of these frozen observations. Matched post-repair Live rates remain
+UNKNOWN; model holdout still has11 uncompleted frozen jobs. PR216 remains draft
+and nonmergeable from acceptance standpoint.
