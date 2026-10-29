@@ -124,7 +124,7 @@ final class TodayReminderCompletionTests: XCTestCase {
     open.tap()
     XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 5))
     let opened = ProcessInfo.processInfo.systemUptime
-    let cancel = readyCoordinate(app.buttons["Cancel"].firstMatch, in: app)
+    let cancel = readyCoordinate(app.buttons["task.cancel"].firstMatch, in: app)
     let cancelStarted = ProcessInfo.processInfo.systemUptime
     cancel.tap()
     XCTAssertTrue(app.textFields["task.title"].waitForNonExistence(timeout: 5))
