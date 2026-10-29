@@ -67,7 +67,8 @@ public enum SubmittedActionAnalysis: Equatable, Sendable {
     // known predicate never establishes a single action (including object lists).
     let predicate =
       #"\b(?:buy|call|email|send|pay|submit|collect|pick\s+up|return|renew|water|read|clean|book|take)\b|买|购买|给.+?打电话|打电话|取|拿|交|缴|寄|发送|发邮件|浇|读|阅读|打扫|预约|吃"#
-    let regex = try! NSRegularExpression(pattern: predicate, options: .caseInsensitive)
+    guard let regex = try? NSRegularExpression(pattern: predicate, options: .caseInsensitive)
+    else { return .uncertain }
     var ranges: [NSRange] = []
     for part in parts {
       // Every candidate clause must independently establish one complete action;
