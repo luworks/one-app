@@ -696,6 +696,7 @@
           let ek = EKEvent(eventStore: self.store)
           ek.calendar = calendar
           ek.title = event.title
+          ek.notes = event.note
           ek.startDate = event.start
           ek.endDate = event.start.addingTimeInterval(event.duration)
           ek.isAllDay = event.isAllDay
