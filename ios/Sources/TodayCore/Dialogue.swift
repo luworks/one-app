@@ -183,9 +183,11 @@ public enum Dialogue {
     // Day / time / repeat: only the parts the message gives replace the old ones.
     let absolute = CaptureParser.parse(rest, now: calendar.startOfDay(for: now), calendar: calendar)
     let fromNow = CaptureParser.parse(rest, now: now, calendar: calendar)
-    // Absolute clock changes preserve the preview's day; relative offsets retain the real clock.
+    // Absolute clock changes preserve a chosen day; an undated alarm uses the next
+    // occurrence from the real clock, just like a direct alarm request.
     let parsed =
-      absolute.hour != fromNow.hour || absolute.minute != fromNow.minute ? fromNow : absolute
+      absolute.hour != fromNow.hour || absolute.minute != fromNow.minute
+        || (capture.ringsAsAlarm && !capture.hasDay) ? fromNow : absolute
     if parsed.hasDay {
       c.day = parsed.day
       c.hasDay = true
@@ -210,7 +212,7 @@ public enum Dialogue {
     // (The parser falls back to the whole text when nothing is left of the title.)
     var leftover =
       parsed.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        == rest.trimmingCharacters(in: .whitespacesAndNewlines) && changed ? "" : parsed.title
+        == CaptureParser.cleanRequestTitle(rest) && changed ? "" : parsed.title
     if parsed.hasDay || parsed.hour != nil || parsed.repeatRule != nil || changed {
       leftover = leftover.replacingOccurrences(
         of: "(?:\(filler))", with: " ", options: [.regularExpression, .caseInsensitive])
