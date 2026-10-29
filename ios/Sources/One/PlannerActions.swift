@@ -111,6 +111,33 @@
       return entry
     }
 
+    /// Confirmed recurrence edit. Preserve a failed local copy for reconciliation after a remote commit.
+    package func setRepeat(_ task: OneTask, rule: String?, due: Date?, context: ModelContext)
+      throws -> LedgerItem
+    {
+      let before = Ledger.snapshot(of: task)
+      var draft = before
+      draft.repeatRule = rule
+      draft.due = due
+      let accepted = try reminders.commitEdit(task, draft: draft, expected: before)
+      task.repeatRule = rule
+      task.due = due
+      do { try context.save() } catch {
+        if accepted != nil {
+          reminders.scheduleReconcile(after: .milliseconds(50))
+        } else {
+          task.repeatRule = before.repeatRule
+          task.due = before.due
+        }
+        throw error
+      }
+      reminders.didPersistEdit(task, accepted: accepted)
+      return ledger.record(
+        .edited, task: task, title: task.title,
+        before: before.repeatRule ?? "Once", after: rule ?? "Once",
+        actor: .todayAI, channel: .ask, approval: .asked, context: context)
+    }
+
     @discardableResult
     package func insert(
       _ capture: Capture, into context: ModelContext,
