@@ -83,11 +83,12 @@
             await synchronize()
           }
         }
-        func watchAuthorization() async {
+        func watchAuthorization(center: AlarmCenter) async {
           for await state in driver.manager.authorizationUpdates {
             guard !Task.isCancelled else { return }
             driver.receiveAuthorization(Ringer.authorization(state))
             await synchronize()
+            center.refreshStates()
           }
         }
       #endif
@@ -102,7 +103,7 @@
         let session = WatchSession(context: context, driver: driver)
         await withTaskGroup(of: Void.self) { group in
           group.addTask { await session.watchAlarms(center: self) }
-          group.addTask { await session.watchAuthorization() }
+          group.addTask { await session.watchAuthorization(center: self) }
         }
       #endif
     }
