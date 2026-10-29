@@ -15,7 +15,7 @@ python3 scripts/ai/simulator_proxy.py \
 
 Use only an owned, synthetic-data simulator. Launch the Live app with
 `-gptSimulatorProxy` through the device-panel command returned by `device_open`.
-The flag is DEBUG + simulator only; a normal launch does not upload anything.
+Add `-gptEvaluationStore` for a separate persistent synthetic SwiftData/Activity/defaults/inbox store with widget output disabled. The flag is DEBUG + simulator only; a normal launch does not upload anything.
 The relay binds only `127.0.0.1:8789` and requires `X-Today-Development: simulator`.
 This header identifies local development, not public-service authentication.
 

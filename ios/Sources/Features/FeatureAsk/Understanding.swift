@@ -309,6 +309,8 @@
 
     /// A kind the words settle without the model, or nil.
     static func ruleKind(_ text: String, parsed: Capture) -> SimpleKind? {
+      if ChatRouting.requestsEvent(text) { return .event }
+      if parsed.ringsAsAlarm { return .alarm }
       if asksForAlarmStrict(text), parsed.hour != nil { return .alarm }
       if matches(text, #"提醒我|\bremind me\b"#) { return .task }
       if CaptureParser.isBookingAction(text) { return .task }
