@@ -87,9 +87,12 @@ def main():
                     click(args.button)
                     print('Batch submitted; actual log monitored, no idle reservation', flush=True)
                     previous = -1
+                    last_progress = time.monotonic()
                     while time.monotonic() - started < args.max_seconds:
                         text = log.read_text(errors='replace')
                         evidence = collect(text)
+                        if 'TODAY_EVAL_COMPLETE ' in text and not evidence['valid']:
+                            raise RuntimeError('Batch ended with incomplete or corrupt evidence')
                         runs = evidence['runs']
                         if runs:
                             run = runs[0]
@@ -97,6 +100,7 @@ def main():
                                 raise RuntimeError('Unexpected backend or batch mode')
                             if run['observed'] != previous:
                                 previous = run['observed']
+                                last_progress = time.monotonic()
                                 print(f"Observed {previous}/{args.expected}", flush=True)
                             if run['complete']:
                                 if not evidence['valid']:
@@ -106,6 +110,8 @@ def main():
                                 break
                         if 'TODAY_EVAL_START ' not in text and time.monotonic() - started > 180:
                             raise TimeoutError('Batch did not start')
+                        if time.monotonic() - last_progress > 240:
+                            raise TimeoutError('No completed turn within external progress bound')
                         time.sleep(1)
                     else:
                         raise TimeoutError('External batch bound exceeded')
