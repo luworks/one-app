@@ -23,7 +23,7 @@
       -> [Capture]?
     {
       guard isAvailable else { return nil }
-      return await ModelTimeout.run(seconds: 12) {
+      return await ModelTimeout.run(seconds: 12, stage: .proposals) {
         do {
           let result = try await HostedGPT.generate(
             ProposedItems.self, stage: "propose",
@@ -43,17 +43,23 @@
                 ]))
             ]))
           guard (1...5).contains(result.items.count) else { return nil }
-          let captures = result.items.compactMap { item -> Capture? in
-            let draft = CaptureDraft(
+          let drafts = result.items.map { item in
+            CaptureDraft(
               kind: item.kind, title: item.title, date: item.date, time: item.time,
               durationMinutes: item.durationMinutes, repeatRule: item.repeats,
               isAllDay: item.allDay, repeatWeekdays: item.repeatWeekdays)
-            guard var c = CaptureDraftMapper.capture(from: draft, now: now, calendar: calendar)
-            else { return nil }
-            c.title = CaptureDraftMapper.userWording(c.title, source: text)
-            return c
           }
-          return captures.isEmpty ? nil : captures
+          guard let mapped = CaptureDraftMapper.captures(from: drafts, now: now, calendar: calendar)
+          else {
+            ModelCallTrace.selection("proposals_incomplete")
+            return nil
+          }
+          ModelCallTrace.selection("model_proposals_selected")
+          return mapped.map { item in
+            var capture = item
+            capture.title = CaptureDraftMapper.userWording(capture.title, source: text)
+            return capture
+          }
         } catch { return nil }
       }
     }

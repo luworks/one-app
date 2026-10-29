@@ -23,7 +23,7 @@
       localeID: String
     ) async -> Answer? {
       guard isAvailable, !pool.isEmpty else { return nil }
-      return await ModelTimeout.run(seconds: timeout) {
+      return await ModelTimeout.run(seconds: timeout, stage: .rank) {
         struct ChosenSuggestion: Decodable, Sendable {
           let id: String
           let message: String

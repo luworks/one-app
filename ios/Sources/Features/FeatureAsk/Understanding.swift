@@ -18,7 +18,8 @@
         result = Understanding.combine(parser: parsed, kind: kind, text: text)
       } else if AICapture.isAvailable,
         let kind = await ModelTimeout.run(
-          seconds: 8, { await Understanding.classify(text, history: history, localeID: localeID) })
+          seconds: 8, stage: .kind,
+          { await Understanding.classify(text, history: history, localeID: localeID) })
       {
         result = Understanding.combine(parser: parsed, kind: kind, text: text)
       } else {
@@ -37,10 +38,14 @@
 
   /// Whichever finishes first: the work, or nil when the time is up (a late result is dropped).
   enum ModelTimeout {
-    static func run<T: Sendable>(seconds: Double, _ work: @escaping @Sendable () async -> T?) async
+    static func run<T: Sendable>(
+      seconds: Double, stage: ModelCallTrace.Stage? = nil,
+      _ work: @escaping @Sendable () async -> T?
+    ) async
       -> T?
     {
-      try? await AsyncDeadline.run(for: .seconds(seconds), operation: work)
+      if let stage { return await ModelCallTrace.bounded(stage, seconds: seconds, work: work) }
+      return try? await AsyncDeadline.run(for: .seconds(seconds), operation: work)
     }
   }
 

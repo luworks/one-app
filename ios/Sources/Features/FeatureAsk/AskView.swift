@@ -573,6 +573,10 @@
     private func send(_ raw: String) {
       let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !text.isEmpty else { return }
+      ModelCallTrace.withTurn { sendRequest(text) }
+    }
+
+    private func sendRequest(_ text: String) {
       followsTail = true
       let token = AIResponseTrace.enabled ? UUID() : generationToken
       if AIResponseTrace.enabled {
@@ -610,21 +614,41 @@
           ))
         return
       }
-      if !Editing.looksLikeEdit(
-        text, items: editCandidates().items, now: sentAt, calendar: runtime.calendar),
-        let capture = OneOffReminderRequest.capture(text, now: sentAt, calendar: runtime.calendar)
+      if let capture = OneOffReminderRequest.capture(
+        text, now: sentAt, calendar: runtime.calendar, existingItems: { editCandidates().items })
       {
+        ModelCallTrace.selection("rule_direct_grant_selected")
         recordTurn("capture", text)
         clearPreviews()
         createSubmittedReminder(capture)
         return
       }
+      if intent == .capture, !Editing.hasOperationCue(text),
+        !SubmittedActionAnalysis.analyze(text).permitsDirectCreation
+      {
+        recordTurn("capture", text)
+        propose(text, history: history)
+        return
+      }
       if let resolved = CaptureConversation.resolve(
         text, context: turnContext, pending: pending, now: now(), calendar: runtime.calendar)
       {
+        if let analysis = OneOffReminderRequest.contextAnalysis(
+          turnContext, now: sentAt, calendar: runtime.calendar),
+          !analysis.permitsDirectCreation
+        {
+          recordTurn("answer", text)
+          if analysis == .incomplete {
+            clarifySubmittedActionContent()
+          } else {
+            clarifySubmittedActions()
+          }
+          return
+        }
+        ModelCallTrace.selection("context_resolution_selected")
         recordTurn("answer", text)
         if OneOffReminderRequest.eligible(resolved),
-          OneOffReminderRequest.contextAllows(turnContext)
+          OneOffReminderRequest.contextAllows(turnContext, now: sentAt, calendar: runtime.calendar)
         {
           // A subjectless continuation never duplicates a previously decided card, including
           // after reopening the chat. Undo/Cancel require a deliberate Add again/new request.
@@ -734,6 +758,7 @@
         AIResponseTrace.shared.stage("record_turn_after", token: generationToken)
       }
       if let reply = ChatRouting.contextReply(text, context: context) {
+        ModelCallTrace.selection("context_reply_selected")
         messages.append(self.reply(reply))
         return
       }
@@ -741,6 +766,7 @@
       traceBackend(generationToken, modelPath: intent != .capture)
       let token = generationToken
       if intent == .conversation && !intelligence.isAvailable() {
+        ModelCallTrace.selection("unavailable_chat_fallback")
         if AIResponseTrace.enabled { AIResponseTrace.shared.localReply(.before, token: token) }
         thinking = false
         messages.append(reply(ChatRouting.fallbackReply(text)))
@@ -1033,7 +1059,7 @@
         let modelPlan = intelligence.plan
         let anchor = now()
         let calendar = runtime.calendar
-        let plan = await ModelTimeout.run(seconds: 20) {
+        let plan = await ModelTimeout.run(seconds: 20, stage: .edit) {
           try? await modelPlan(text, items, anchor, calendar, history)
         }
         guard !Task.isCancelled, !AIResponseTrace.enabled || token == generationToken else {
@@ -1182,44 +1208,38 @@
         })
     }
 
-    /// One item per line: rules own scheduling, followed by kind classification and title-only refinement.
-    /// A line that lists several things goes to the multi-item model path when it is available.
+    /// Cardinality is established before generation, including unavailable/failed models.
     private func propose(_ text: String, history: String = "") {
-      if ChatRouting.hasMultipleActions(text) {
-        proposeList(text)
-      } else {
+      let analysis = SubmittedActionAnalysis.analyze(text)
+      switch analysis {
+      case .single:
         understand(text, history: history)
+      case .multiple:
+        if let captures = analysis.previews(now: now(), calendar: runtime.calendar) {
+          show(captures)
+        } else {
+          clarifySubmittedActions(timeScope: true)
+        }
+      case .uncertain:
+        clarifySubmittedActions()
+      case .incomplete:
+        clarifySubmittedActionContent()
       }
     }
 
-    /// A list needs separate previews; failed extraction asks for separate messages instead of collapsing actions.
-    private func proposeList(_ text: String) {
-      guard intelligence.isAvailable() else {
-        messages.append(
-          reply(
-            "Please send one item at a time while the AI service is unavailable. Nothing has been added."
-          ))
-        return
-      }
-      thinking = true
-      traceBackend(generationToken, modelPath: true)
-      let token = generationToken
-      captureTask = Task { @MainActor in
-        defer { finishEmission(token) }
-        let proposed = await intelligence.propose(text, now(), runtime.calendar)
-        guard !Task.isCancelled, !AIResponseTrace.enabled || token == generationToken else {
-          return
-        }
-        thinking = false
-        guard let proposed, proposed.count >= 2 else {
-          messages.append(
-            reply(
-              "I couldn't separate those items. Please send them one at a time. Nothing has been added."
-            ))
-          return
-        }
-        show(proposed)
-      }
+    private func clarifySubmittedActionContent() {
+      messages.append(
+        reply(
+          "What would you like to be reminded to do? Please include the action or subject. Nothing has been added."
+        ))
+    }
+
+    private func clarifySubmittedActions(timeScope: Bool = false) {
+      messages.append(
+        reply(
+          timeScope
+            ? "Does that schedule apply to every action, or does each action have its own? Nothing has been added."
+            : "Should this be one reminder or separate actions? Nothing has been added."))
     }
 
     /// The Send tap is the scoped approval for a clear one-off reminder. Save errors leave

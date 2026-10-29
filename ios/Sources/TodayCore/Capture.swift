@@ -587,6 +587,17 @@ public enum CaptureParser {
     #"\bevery\s+"# + englishDay + #"(?:\s*(?:,\s*(?:and\s+)?|and\s+|&\s*)(?:every\s+)?"#
     + englishDay + #")*"#
 
+  /// Hide a recognized recurrence weekday list without changing UTF-16 offsets.
+  /// Its conjunctions coordinate schedule days, not additional planner actions.
+  static func maskingWeeklyDays(in text: String) -> String {
+    let pattern = chineseWeeklyDays + "|" + englishWeeklyDays
+    guard let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive])
+    else { return text }
+    var result = text
+    result.replaceSubrange(range, with: String(repeating: " ", count: text[range].utf16.count))
+    return result
+  }
+
   private static func takeWeeklyDays(from text: inout String) -> [Int] {
     let pattern = chineseWeeklyDays + "|" + englishWeeklyDays
     guard let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive])
@@ -1221,6 +1232,19 @@ public struct CaptureDraft: Equatable {
 }
 
 public enum CaptureDraftMapper {
+  /// A generated batch is indivisible: invalid items cannot silently disappear.
+  public static func captures(
+    from drafts: [CaptureDraft], now: Date, calendar: Calendar
+  ) -> [Capture]? {
+    guard !drafts.isEmpty else { return nil }
+    var captures: [Capture] = []
+    for draft in drafts {
+      guard let item = capture(from: draft, now: now, calendar: calendar) else { return nil }
+      captures.append(item)
+    }
+    return captures
+  }
+
   /// Turns model output into the `Capture` shown on the preview card. Returns nil when the draft is unusable
   /// (empty title), so the caller can fall back to the rule parser. Never trusts the model: bad dates, times,
   /// durations and repeat names are dropped instead of guessed.

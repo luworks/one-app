@@ -17,7 +17,7 @@
       let fallback = ChatRouting.fallbackReply(text)
       // A timeout, unavailable model or empty response stays conversational on every runtime.
       guard AICapture.isAvailable else { return .reply(fallback) }
-      let turn: ChatTurn? = await ModelTimeout.run(seconds: 8) {
+      let turn: ChatTurn? = await ModelTimeout.run(seconds: 8, stage: .chat) {
         let instructions =
           SystemPrompt.planner + "\n" + """
             You are Today, a helpful conversational assistant in a planner app. Users can simply chat with you.

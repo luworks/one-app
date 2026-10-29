@@ -82,6 +82,12 @@ public enum Editing {
   private static let moveCue =
     #"推迟|延后|延期|顺延|提前|推到|改到|改成|改约|约到|约在|调到|调整|换到|换成|调成|挪|移到|移至|排到|拖到|往后推|改一下|改下|修改|晚一点|晚点|早点|早一点|推后|延迟|挪后|往前|换个时间|换时间|对调|互换|\bbump\b|\bshift\b|\bswap\b|\bswitch\b|\bearlier\b|\blater\b|\bpostpone|\breschedule|\bmove\b|\bpush\b|\bdelay\b|\bchange\b|\badjust\b|\bupdate\b|bring forward|安排在|安排到|定在|订在|放到|\binstead\b|can we (?:do|make|have|move)|how about|同一?时间|same time"#
 
+  /// Cheap preflight for callers that must avoid reading candidates on ordinary new requests.
+  /// A cue alone is not an edit decision; `looksLikeEdit` still needs the existing items.
+  public static func hasOperationCue(_ text: String) -> Bool {
+    has(text, deleteCue) || has(text, moveCue)
+  }
+
   /// Does this sentence talk about existing items (edit) rather than add something new (capture)?
   /// An edit needs an existing item it plausibly points at; "remind me to ..." / "提醒我 ..." sentences are new items unless a title
   /// in the list is named by its words. Cancel / delete verbs count as an edit, move-like verbs only when the message also names an

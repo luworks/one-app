@@ -1,0 +1,369 @@
+{
+  "version": 1,
+  "description": "Separately authored holdout frozen before batch results; repository-aware author, not independent external benchmark. Do not inspect failures while tuning. Expected values assume the fixed reference clock.",
+  "reference": {
+    "localNow": "2026-10-28T09:00:00",
+    "timeZone": "America/Los_Angeles",
+    "items": [
+      {
+        "id": "qa-visit-1500",
+        "title": "[QA] follow-up / [QA]复诊",
+        "date": "2026-10-28",
+        "time": "15:00"
+      },
+      {
+        "id": "qa-visit-1600",
+        "title": "[QA] follow-up / [QA]复诊",
+        "date": "2026-10-28",
+        "time": "16:00"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "h-zh-chat",
+      "language": "zh",
+      "category": "conversation",
+      "turns": [
+        {
+          "input": "今天有点累，想听一句鼓励。",
+          "expect": {
+            "intent": "chat",
+            "no_write": true,
+            "reply_language": "zh"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-en-chat",
+      "language": "en",
+      "category": "conversation",
+      "turns": [
+        {
+          "input": "How can I make my mornings less rushed?",
+          "expect": {
+            "intent": "chat",
+            "no_write": true,
+            "reply_language": "en"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-mix-chat",
+      "language": "mixed",
+      "category": "conversation",
+      "turns": [
+        {
+          "input": "今天的 schedule 好满，你能给我一个休息建议吗？",
+          "expect": {
+            "intent": "chat",
+            "no_write": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-zh-once",
+      "language": "zh",
+      "category": "one-off",
+      "turns": [
+        {
+          "input": "明天下午两点提醒我给[QA]兰花浇水",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "兰花",
+            "date": "2026-10-29",
+            "time": "14:00",
+            "repeat": "once",
+            "product_boundary": "direct_reminder_receipt"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-en-once",
+      "language": "en",
+      "category": "one-off",
+      "turns": [
+        {
+          "input": "Remind me to renew the [QA] library book tomorrow at 2pm",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "library book",
+            "date": "2026-10-29",
+            "time": "14:00",
+            "repeat": "once",
+            "product_boundary": "direct_reminder_receipt"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-mixed-once",
+      "language": "mixed",
+      "category": "one-off",
+      "turns": [
+        {
+          "input": "明天下午2点 remind me to send [QA] invoice",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "invoice",
+            "date": "2026-10-29",
+            "time": "14:00",
+            "repeat": "once",
+            "product_boundary": "direct_reminder_receipt"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-zh-slots",
+      "language": "zh",
+      "category": "follow-up",
+      "turns": [
+        {
+          "input": "每周二提醒我检查[QA]滤芯",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "滤芯",
+            "repeat": "weekly",
+            "weekdays": [
+              3
+            ],
+            "time": null,
+            "product_boundary": "preview"
+          }
+        },
+        {
+          "input": "上午十点",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "滤芯",
+            "repeat": "weekly",
+            "weekdays": [
+              3
+            ],
+            "time": "10:00",
+            "product_boundary": "preview",
+            "no_duplicate": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-en-slots",
+      "language": "en",
+      "category": "follow-up",
+      "turns": [
+        {
+          "input": "Every Tuesday remind me to check the [QA] filter",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "filter",
+            "repeat": "weekly",
+            "weekdays": [
+              3
+            ],
+            "time": null,
+            "product_boundary": "preview"
+          }
+        },
+        {
+          "input": "At ten in the morning",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "filter",
+            "repeat": "weekly",
+            "weekdays": [
+              3
+            ],
+            "time": "10:00",
+            "product_boundary": "preview",
+            "no_duplicate": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-mixed-slots",
+      "language": "mixed",
+      "category": "follow-up",
+      "turns": [
+        {
+          "input": "每周二 remind me to check [QA] filter",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "filter",
+            "repeat": "weekly",
+            "weekdays": [
+              3
+            ],
+            "time": null,
+            "product_boundary": "preview"
+          }
+        },
+        {
+          "input": "上午10点 please",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "filter",
+            "repeat": "weekly",
+            "weekdays": [
+              3
+            ],
+            "time": "10:00",
+            "product_boundary": "preview",
+            "no_duplicate": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-zh-refusal",
+      "language": "zh",
+      "category": "safety",
+      "turns": [
+        {
+          "input": "不要提醒我明天买[QA]面包，我只是举个例子。",
+          "expect": {
+            "intent": "chat",
+            "no_write": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-en-report",
+      "language": "en",
+      "category": "safety",
+      "turns": [
+        {
+          "input": "My brother already set an alarm for his [QA] flight at 6am.",
+          "expect": {
+            "intent": "chat",
+            "no_write": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-mix-quote",
+      "language": "mixed",
+      "category": "safety",
+      "turns": [
+        {
+          "input": "同事说“remind me to buy [QA] tea”，这是英文祈使句吗？",
+          "expect": {
+            "intent": "chat",
+            "no_write": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-zh-alarm",
+      "language": "zh",
+      "category": "alarm",
+      "turns": [
+        {
+          "input": "明天早上六点半设一个[QA]起床闹钟",
+          "expect": {
+            "intent": "alarm",
+            "title_contains": "起床",
+            "date": "2026-10-29",
+            "time": "06:30",
+            "product_boundary": "preview"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-en-event",
+      "language": "en",
+      "category": "event",
+      "turns": [
+        {
+          "input": "Create [QA] design review in my calendar tomorrow from 10am to 11am.",
+          "expect": {
+            "intent": "event",
+            "title_contains": "design review",
+            "date": "2026-10-29",
+            "time": "10:00",
+            "duration_minutes": 60,
+            "product_boundary": "preview"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-mix-undated",
+      "language": "mixed",
+      "category": "undated",
+      "turns": [
+        {
+          "input": "Add reminder 带[QA]护照",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "护照",
+            "date": null,
+            "time": null,
+            "repeat": "once",
+            "product_boundary": "direct_reminder_receipt"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-zh-ambiguous",
+      "language": "zh",
+      "category": "ambiguity",
+      "turns": [
+        {
+          "input": "把[QA]复诊改到五点",
+          "expect": {
+            "intent": "clarify",
+            "no_write": true,
+            "needs": "identify one of two existing visits"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-en-edit",
+      "language": "en",
+      "category": "edit",
+      "turns": [
+        {
+          "input": "Move the 3pm [QA] follow-up to 5pm today.",
+          "expect": {
+            "intent": "edit",
+            "target": "qa-visit-1500",
+            "date": "2026-10-28",
+            "time": "17:00",
+            "product_boundary": "preview"
+          }
+        }
+      ]
+    },
+    {
+      "id": "h-mix-correction",
+      "language": "mixed",
+      "category": "correction",
+      "turns": [
+        {
+          "input": "提醒我明天下午三点，不对，four pm，去拿[QA]包裹",
+          "expect": {
+            "intent": "reminder",
+            "title_contains": "包裹",
+            "date": "2026-10-29",
+            "time": "16:00",
+            "repeat": "once",
+            "product_boundary": "direct_reminder_receipt"
+          }
+        }
+      ]
+    }
+  ]
+}

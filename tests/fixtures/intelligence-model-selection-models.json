@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "models": {
+    "apple-system": {
+      "sha256": "system-managed-unexposed",
+      "identity": "FoundationModels.SystemLanguageModel.default; record actual OS builds; exact weights UNKNOWN"
+    },
+    "apple-system-native-schema": {
+      "sha256": "system-managed-unexposed",
+      "identity": "Same system backend with separate native schema diagnostic"
+    },
+    "Qwen3.5-2B-Q4_K_M.gguf": {
+      "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+      "bytes": 1280835840,
+      "source": "unsloth/Qwen3.5-2B-GGUF",
+      "revision": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
+      "mode": "text-only Q4_K_M, non-thinking"
+    },
+    "Qwen3.5-4B-Q4_K_M.gguf": {
+      "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+      "bytes": 2740937888,
+      "source": "unsloth/Qwen3.5-4B-GGUF",
+      "revision": "e87f176479d0855a907a41277aca2f8ee7a09523",
+      "mode": "text-only Q4_K_M, non-thinking"
+    }
+  },
+  "runtime": {
+    "source": "ggml-org/llama.cpp",
+    "revision": "c3df4b7e22a1ac38da663552d19e649dd97ca936",
+    "simulator": "CPU, n_ctx=2048, greedy, maximum output 384 tokens"
+  }
+}

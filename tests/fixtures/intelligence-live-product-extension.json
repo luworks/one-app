@@ -1,0 +1,152 @@
+{
+  "scope": "Manual Live-product development extension; not a blind holdout or model-only benchmark.",
+  "setup": [
+    "Only the existing worktree-owned Today-* simulator; no phone, real accounts, data imports or permission expansion.",
+    "Use fresh chat per case, preserve history within a case, and record actual local clock and app SHA.",
+    "Capture UI evidence and opt-in production trace. Actual generation, fallback and product behavior are separate.",
+    "Any save requires the existing CLAUDE.md boundary. Inspect and Undo only the exact synthetic item created by the case."
+  ],
+  "cases": [
+    {
+      "id": "casual-zh",
+      "category": "conversation",
+      "language": "zh",
+      "turns": [
+        {
+          "input": "今天有点累，想随便聊聊。"
+        }
+      ],
+      "acceptance": "A relevant Chinese conversational reply; no item, execution promise or request for scheduling slots."
+    },
+    {
+      "id": "casual-en",
+      "category": "conversation",
+      "language": "en",
+      "turns": [
+        {
+          "input": "I finally finished a difficult puzzle today."
+        }
+      ],
+      "acceptance": "A relevant English conversational reply acknowledging the puzzle; no planner action."
+    },
+    {
+      "id": "casual-mixed",
+      "category": "conversation",
+      "language": "mixed",
+      "turns": [
+        {
+          "input": "今天debug了一整天，finally fixed the bug。"
+        }
+      ],
+      "acceptance": "A relevant natural reply about finishing debugging; no planner action."
+    },
+    {
+      "id": "memory-zh",
+      "category": "conversation-context",
+      "language": "zh",
+      "turns": [
+        {
+          "input": "我正在学八段锦。"
+        },
+        {
+          "input": "我刚才说在学什么？"
+        }
+      ],
+      "acceptance": "No creation on either turn; the second answer recalls 八段锦 without inventing an agenda item."
+    },
+    {
+      "id": "memory-en",
+      "category": "conversation-context",
+      "language": "en",
+      "turns": [
+        {
+          "input": "I am learning origami in my free time."
+        },
+        {
+          "input": "What did I say I was learning?"
+        }
+      ],
+      "acceptance": "No creation on either turn; the second answer recalls origami."
+    },
+    {
+      "id": "memory-mixed",
+      "category": "conversation-context",
+      "language": "mixed",
+      "turns": [
+        {
+          "input": "我在准备一个关于海洋的presentation。"
+        },
+        {
+          "input": "What topic is my presentation about?"
+        }
+      ],
+      "acceptance": "No creation on either turn; the second answer recalls the ocean topic."
+    },
+    {
+      "id": "timer-en",
+      "category": "clock",
+      "language": "en",
+      "turns": [
+        {
+          "input": "Start a five-minute timer."
+        }
+      ],
+      "acceptance": "Preserve the timer intent and five-minute duration. Use a supported authorized Clock route, or state the limitation honestly. No reminder/alarm substitution or false execution claim."
+    },
+    {
+      "id": "timer-zh",
+      "category": "clock",
+      "language": "zh",
+      "turns": [
+        {
+          "input": "帮我开始一个10分钟的计时器。"
+        }
+      ],
+      "acceptance": "Preserve timer intent and ten-minute duration. A supported authorized Clock route or honest limitation; no substitute reminder/alarm."
+    },
+    {
+      "id": "world-clock-en",
+      "category": "clock",
+      "language": "en",
+      "turns": [
+        {
+          "input": "Add Tokyo to World Clock."
+        }
+      ],
+      "acceptance": "A supported authorized world-clock route or honest limitation. No reminder called Tokyo and no false claim that a clock was added."
+    },
+    {
+      "id": "world-clock-mixed",
+      "category": "clock",
+      "language": "mixed",
+      "turns": [
+        {
+          "input": "在world clock里加一个上海时钟。"
+        }
+      ],
+      "acceptance": "A supported authorized world-clock route or honest limitation. Preserve Shanghai; no reminder substitution."
+    },
+    {
+      "id": "recurring-timer",
+      "category": "ambiguity",
+      "language": "en",
+      "turns": [
+        {
+          "input": "Set a timer for ten minutes every day."
+        }
+      ],
+      "acceptance": "Explain unsupported recurrence or ask one focused clarification about a daily alarm versus timer. Never silently substitute or save an alarm/reminder."
+    },
+    {
+      "id": "explain-event",
+      "category": "conversation",
+      "language": "en",
+      "turns": [
+        {
+          "input": "Can you explain the difference between a reminder and a calendar event?"
+        }
+      ],
+      "acceptance": "Explain the difference in English; no new item, date/time interrogation or execution claim."
+    }
+  ]
+}

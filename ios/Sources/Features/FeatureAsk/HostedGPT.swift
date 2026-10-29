@@ -135,6 +135,24 @@
     static func generate<Value: Decodable & Sendable>(
       _ type: Value.Type, stage: String, instructions: String, input: String, schema: HostedSchema
     ) async throws -> Value {
+      let traceStage: ModelCallTrace.Stage =
+        switch stage {
+        case "propose": .proposals
+        case "classify": .kind
+        case "suggestions": .rank
+        case "title": .title
+        case "edit": .edit
+        default: .chat
+        }
+      return try await ModelCallTrace.generate(traceStage) {
+        try await generateRequest(
+          type, stage: stage, instructions: instructions, input: input, schema: schema)
+      }
+    }
+
+    private static func generateRequest<Value: Decodable & Sendable>(
+      _ type: Value.Type, stage: String, instructions: String, input: String, schema: HostedSchema
+    ) async throws -> Value {
       guard let configuration else { throw Failure.unavailable }
       try Task.checkCancellation()
       guard instructions.utf8.count <= 8000, input.utf8.count <= 12000 else {

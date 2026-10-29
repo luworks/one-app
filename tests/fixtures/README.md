@@ -291,13 +291,76 @@ dataset load clock, then relaunches its isolated persistent store on the next da
 
 ## AI chat capability assessment
 
+[`intelligence-live-product-extension.json`](intelligence-live-product-extension.json)
+defines12 additional manual Live-product development cases (15 turns) for
+natural zh/en/mixed conversation, memory follow-ups, timers and world clocks.
+It is authored before observing its outputs and is not a blind holdout. Use the
+actual app clock, existing confirmation boundaries and isolated synthetic data.
+`tests/qa/intelligence/run_live_product.py` observes selected cases through the
+owned simulator launcher and records ungraded UI/call evidence. It never clicks
+Add/Apply. Optional cleanup only undoes one uniquely traced direct creation in
+that fresh chat. Model-only fixture hashes and expectations remain unchanged.
+
+[`intelligence-live-edit-seed.json`](intelligence-live-edit-seed.json) supplies
+two explicit one-off requests for the synthetic15:00/16:00 dentist preconditions
+in the original Live protocol. These are setup, excluded from scored cases.
+Retain their receipts until edit/ambiguity tests finish; never substitute data
+from an account, another simulator or a phone.
+
+[`intelligence-model-selection-models.json`](intelligence-model-selection-models.json)
+pins the evaluated Qwen conversion artifacts and runtime revision. The evidence
+collector checks model hashes against this catalog. Apple system-managed weights
+remain unexposed; a model marketing name is not an observed weight revision.
+
+[`intelligence-model-selection-holdout.json`](intelligence-model-selection-holdout.json)
+defines 18 separately authored model-selection cases (21 turns), balanced across
+Chinese, English and mixed language. It uses a fixed synthetic clock and two
+synthetic edit targets. Freeze before batch runs and keep failures out of tuning;
+the repository-aware authorship is not an independent external benchmark. See
+[`intelligence-model-selection.md`](../../docs/qa/intelligence-model-selection.md).
+
 [`ai-chat-capability-eval.json`](ai-chat-capability-eval.json) defines 24
 synthetic bilingual manual Live-app scenarios, with explicit expected outcomes
 and a simulator-only setup. [`ai-chat-capability-protocol.md`](../../docs/qa/ai-chat-capability-protocol.md)
 defines evidence, attribution and scoring; this authored set is development data,
-not a blind holdout or a claim of model execution. It has no automated consumer.
+not a blind holdout or a claim of model execution. The standalone simulator
+adapter in `tests/qa/intelligence/` consumes these inputs for model-only batches.
+`IntelligenceRulesExportTests.testFrozenDevelopmentRulesAndPreviewFollowups` and
+`testFrozenHoldoutRulesAndPreviewFollowups` export pure production parser, routing and open-preview refinement observations
+at a fixed clock. Its execution success is not an accuracy score or product write
+acceptance; model calls, save and Undo remain outside that seam. Its two synthetic
+targets allow a separate pure edit-decision observation. `AI_RULES_EVAL_OUTPUT`
+must point to a fresh canonical evidence file to retain complete observations.
+XCTest can truncate long stdout lines; the raw log reports a compact count/path
+and is not a substitute for that JSON file.
 
 Today button color tests keep small opaque RGB inputs inline in
 `ios/Eval/Tests/OneLogicTests/TodayButtonColorTests.swift`; the simulator journey
 `ios/OneUITests/TodayIdentityTests.swift` uses the built-in Blue preset and native
 custom picker, without personal calendar data.
+
+## Submitted action cardinality regressions
+
+[`SubmittedActionAnalysisTests.swift`](../../ios/Eval/Tests/OneLogicTests/SubmittedActionAnalysisTests.swift)
+keeps small synthetic zh/en/mixed clauses inline beside authorization assertions:
+separate and shared times, local overrides, multiple clauses, object/title
+conjunction ambiguity, balanced quoted titles, correction wording, recurrence
+weekday sets and time/acknowledgment/proceed follow-ups. These are independent
+repair regressions, not replacements for or additions to the frozen model
+development/holdout inputs. No real records, model responses or API calls are
+used. Existing single-reminder and existing-item edit boundaries remain covered
+by `OneOffReminderTests` and `SubmittedReminderEditBoundaryTests`.
+
+- [`intelligence-product-blind-holdout-v2.json`](intelligence-product-blind-holdout-v2.json)
+  is an independent contract-only author's product holdout, frozen before observation:
+  24 cases /33 turns, eight cases each Chinese, English and mixed. The Live observer
+  records it without automatic Add/Apply; only five explicit one-off requests allow
+  automatic saves with exact receipt Undo. It is separate from both frozen model
+  fixtures and the cardinality repair regressions. Authoring restrictions and manual
+  rubric are in [the authoring note](../../docs/qa/intelligence-product-blind-holdout-v2-authoring.md).
+
+The same inline repair set also covers incomplete action content: dangling
+infinitives/complements, modifier prefixes, empty quoted operands and bare
+quantities, with positive intransitive/activity and explicitly named-topic
+controls. Optional `AI_COMPLETENESS_EVAL_OUTPUT` exports the identical pure
+rule inputs to a fresh durable path; it never creates app records or calls a model.
