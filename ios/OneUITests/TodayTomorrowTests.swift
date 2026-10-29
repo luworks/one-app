@@ -54,7 +54,8 @@ final class TodayTomorrowTests: XCTestCase {
     let id = String(format: "weekStrip.%04d-%02d-%02d", c.year!, c.month!, c.day!)
     let next = app.buttons[id]
     if !next.exists {
-      let start = app.weekStripDay(.now).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      let start = app.weekStripDay(.now).coordinate(
+        withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
       start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -100, dy: 0)))
     }
     XCTAssertTrue(next.waitForExistence(timeout: 3))
