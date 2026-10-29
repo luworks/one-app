@@ -842,6 +842,7 @@
         if let batch = proposals.last?.batch,
           let i = proposals.firstIndex(where: { $0.batch == batch && $0.status == .open })
         {
+          guard proposals[i].pendingExternalID == nil else { return }
           proposals[i].capture = newValue
         }
       }
@@ -1309,7 +1310,11 @@
         get: { proposals.filter { $0.batch == batch } },
         set: { new in
           for p in new {
-            if let i = proposals.firstIndex(where: { $0.id == p.id }) { proposals[i] = p }
+            if let i = proposals.firstIndex(where: { $0.id == p.id }),
+              proposals[i].pendingExternalID == nil
+            {
+              proposals[i] = p
+            }
           }
         })
     }
@@ -1344,7 +1349,16 @@
       let edits = CaptureEdits.diff(shown: proposals[i].original, final: capture)
       let written: (id: PersistentIdentifier, entry: LedgerItem)
       do {
-        if proposals[i].retainsDraft && OneOffReminderRequest.eligible(capture) {
+        if capture.kind == .event {
+          proposals[i].retainsDraft = true
+          let result = try actions.insertCalendarEvent(
+            capture, requestID: id, recoveryExternalID: proposals[i].pendingExternalID,
+            into: context)
+          written = (result.id, result.entry)
+          if result.localOnly {
+            messages.append(reply("Saved in Today only. Apple Calendar is not connected."))
+          }
+        } else if proposals[i].retainsDraft && OneOffReminderRequest.eligible(capture) {
           written = try actions.insertOneOffReminder(
             capture, requestID: id,
             recoveryExternalID: proposals[i].pendingExternalID, into: context)
@@ -1354,7 +1368,10 @@
             capture, into: context, actor: .todayAI, channel: .ask, approval: .asked)
         }
       } catch {
-        proposals[i].pendingExternalID = actions.pendingReminderCreationID(id)
+        proposals[i].pendingExternalID =
+          capture.kind == .event
+          ? actions.pendingEventCreationID(id) : actions.pendingReminderCreationID(id)
+        persistCards()
         messages.append(
           reply(
             "Couldn't save “\(capture.title)”: \(error.localizedDescription) The draft is still here; tap Add to retry."
@@ -1379,13 +1396,19 @@
       else { return }
       if proposals[i].pendingExternalID != nil {
         do {
-          try actions.cancelReminderCreation(
-            proposals[i].capture, requestID: id,
-            recoveryExternalID: proposals[i].pendingExternalID, context: context)
+          if proposals[i].capture.kind == .event {
+            try actions.cancelEventCreation(
+              proposals[i].capture, requestID: id,
+              recoveryExternalID: proposals[i].pendingExternalID)
+          } else {
+            try actions.cancelReminderCreation(
+              proposals[i].capture, requestID: id,
+              recoveryExternalID: proposals[i].pendingExternalID, context: context)
+          }
         } catch {
           messages.append(
             reply(
-              "Couldn't cancel the Apple reminder: \(error.localizedDescription) Retry from this card."
+              "Couldn't cancel the system item: \(error.localizedDescription) Retry from this card."
             ))
           return
         }
@@ -1412,7 +1435,11 @@
       if let ref = p.itemRef, let pid = CaptureUndo.decode(ref) {
         thread?.items.removeAll { $0 == pid }
       }
-      if p.retainsDraft { actions.didUndoReminderCreation(id) }
+      if p.capture.kind == .event {
+        actions.didUndoEventCreation(id)
+      } else if p.retainsDraft {
+        actions.didUndoReminderCreation(id)
+      }
       proposals[i].itemRef = nil
       proposals[i].entryID = nil
       proposals[i].status = next

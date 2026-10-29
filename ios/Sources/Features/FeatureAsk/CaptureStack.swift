@@ -172,7 +172,11 @@
             ?? Capture(title: "", day: presentation.now, hasDay: false)
         },
         set: { new in
-          if let i = proposals.firstIndex(where: { $0.id == id }) { proposals[i].capture = new }
+          if let i = proposals.firstIndex(where: { $0.id == id }),
+            proposals[i].pendingExternalID == nil
+          {
+            proposals[i].capture = new
+          }
         })
     }
   }
