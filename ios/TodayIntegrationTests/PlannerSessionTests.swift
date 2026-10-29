@@ -14,6 +14,47 @@
   @MainActor
   struct PlannerSessionTests {
     @Test
+    func calendarCreationContractPreservesDraftAndReportsCommitFailure() async throws {
+      let a = try Session(seed: 1920)
+      defer { a.dispose() }
+      let service: any CalendarService = a.services.calendar
+      let draft = OneEvent(title: "Confirmed event", start: a.clock.now(), durationMinutes: 30)
+      #expect(try service.create(draft, calendarID: nil) == .localOnly)
+      await service.setEnabled(true)
+      a.services.calendar.availableCalendars = [
+        SystemCalendar(id: "chosen", title: "Chosen", sourceTitle: "Test", color: .blue),
+        SystemCalendar(
+          id: "readonly", title: "Read only", sourceTitle: "Test", color: .gray,
+          allowsContentModifications: false),
+      ]
+      a.services.calendar.defaultCalendarID = "chosen"
+      for id in ["missing", "readonly"] {
+        #expect(throws: CalendarCreationError.self) { try service.create(draft, calendarID: id) }
+      }
+      a.services.calendar.creationFailure = .unavailable
+      #expect(throws: CalendarCreationError.self) {
+        try service.create(draft, calendarID: "chosen")
+      }
+      #expect(a.services.calendar.creationCalendarIDs.isEmpty)
+      #expect(draft.externalID == nil)
+      a.services.calendar.creationFailure = nil
+      guard case .committed = try service.create(draft, calendarID: "chosen") else {
+        Issue.record("Expected committed receipt")
+        return
+      }
+      guard case .committed = try service.create(draft, calendarID: nil) else {
+        Issue.record("Expected default calendar receipt")
+        return
+      }
+      #expect(a.services.calendar.creationCalendarIDs == ["chosen", "chosen"])
+      #expect(draft.externalID == nil)
+      draft.externalID = "existing"
+      #expect(throws: CalendarCreationError.self) {
+        try service.create(draft, calendarID: "chosen")
+      }
+    }
+
+    @Test
     func submittedOneOffCreationRetriesWithoutDuplicateAndKeepsDeadlineAndUndo() throws {
       let a = try Session(seed: 1910)
       defer { a.dispose() }

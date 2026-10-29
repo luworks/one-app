@@ -43,6 +43,10 @@
     func isRepeating(externalID: String?) -> Bool
     func audience(externalID: String?) -> (attendees: Int, isOrganizer: Bool)?
     func canDelete(externalID: String?) -> Bool
+    /// Creates only after explicit user confirmation. nil selects the default calendar.
+    /// Throws on any connected save failure; never falls back from an explicit destination.
+    /// Does not insert/save the local model or mutate its externalID; callers persist the receipt.
+    func create(_ event: OneEvent, calendarID: String?) throws -> CalendarCreationReceipt
     func save(_ event: OneEvent, span: EKSpan) -> String?
     func delete(_ event: OneEvent, span: EKSpan) -> Bool
     func delete(externalID: String?, occurrence: Date?, span: EKSpan) -> Bool
