@@ -15,6 +15,8 @@
     private var reminderCreationDrafts: [UUID: OneTask] = [:]
     private var reminderCreationReceipts: [UUID: (id: PersistentIdentifier, entry: LedgerItem)] =
       [:]
+    private var eventCreationDrafts: [UUID: OneEvent] = [:]
+    private var eventCreationReceipts: [UUID: (id: PersistentIdentifier, entry: LedgerItem, localOnly: Bool)] = [:]
     package let focus: TodayFocus
     private let calendar: any CalendarService
     private let reminders: any ReminderService
@@ -120,6 +122,59 @@
       try capture.insertRecorded(
         into: context, actor: actor, channel: channel, approval: approval,
         ledger: ledger, runtime: runtime, alarmDefaults: AlarmPlan.newAlarmDefaults(defaults))
+    }
+
+    /// A proposal retains the committed system identity until local persistence succeeds.
+    package func insertCalendarEvent(
+      _ capture: Capture, requestID: UUID, recoveryExternalID: String?,
+      into context: ModelContext, save: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> (id: PersistentIdentifier, entry: LedgerItem, localOnly: Bool) {
+      if let receipt = eventCreationReceipts[requestID] { return receipt }
+      guard capture.kind == .event else { throw CocoaError(.coderInvalidValue) }
+      let event = eventCreationDrafts[requestID].flatMap { $0.externalID == nil ? nil : $0 }
+        ?? capture.makeEvent(calendar: runtime.calendar)
+      if event.externalID == nil { event.externalID = recoveryExternalID }
+      eventCreationDrafts[requestID] = event
+      if event.externalID == nil {
+        let receipt = try calendar.create(event, calendarID: nil)
+        if case .committed(let id) = receipt { event.externalID = id }
+      }
+      let writeContext = ModelContext(context.container)
+      writeContext.autosaveEnabled = false
+      writeContext.insert(event)
+      do { try save(writeContext) } catch {
+        let retained = event.copy()
+        retained.externalID = event.externalID
+        eventCreationDrafts[requestID] = retained
+        writeContext.rollback()
+        throw error
+      }
+      let entry = ledger.record(
+        .created, kind: "event", title: event.title, after: capture.summary,
+        actor: .todayAI, channel: .ask, approval: .asked, context: context)
+      eventCreationDrafts[requestID] = nil
+      let receipt = (event.persistentModelID, entry, event.externalID == nil)
+      eventCreationReceipts[requestID] = receipt
+      return receipt
+    }
+
+    package func didUndoEventCreation(_ requestID: UUID) {
+      eventCreationReceipts[requestID] = nil
+    }
+
+    package func pendingEventCreationID(_ requestID: UUID) -> String? {
+      eventCreationDrafts[requestID]?.externalID
+    }
+
+    package func cancelEventCreation(
+      _ capture: Capture, requestID: UUID, recoveryExternalID: String?
+    ) throws {
+      let event = eventCreationDrafts[requestID] ?? capture.makeEvent(calendar: runtime.calendar)
+      if event.externalID == nil { event.externalID = recoveryExternalID }
+      if event.externalID != nil, !calendar.delete(event, span: .thisEvent) {
+        throw CalendarCreationError.unavailable
+      }
+      eventCreationDrafts[requestID] = nil
     }
 
     /// Explicit native Create confirmation; submitted-chat authority stays in insertOneOffReminder.

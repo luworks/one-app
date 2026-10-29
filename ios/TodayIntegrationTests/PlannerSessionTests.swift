@@ -14,6 +14,62 @@
   @MainActor
   struct PlannerSessionTests {
     @Test
+    func aiCalendarAddFailureRetryRecoveryAndExactUndo() async throws {
+      let a = try Session(seed: 1921)
+      defer { a.dispose() }
+      var capture = Capture(title: "Coffee", day: a.day, hasDay: true)
+      capture.kind = .event
+      let id = UUID()
+      await a.services.calendar.setEnabled(true)
+      a.services.calendar.availableCalendars = [
+        SystemCalendar(id: "chosen", title: "Chosen", sourceTitle: "Test", color: .blue)
+      ]
+      a.services.calendar.defaultCalendarID = "chosen"
+      a.services.calendar.creationFailure = .unavailable
+      #expect(throws: CalendarCreationError.self) {
+        try a.services.actions.insertCalendarEvent(
+          capture, requestID: id, recoveryExternalID: nil, into: a.context)
+      }
+      #expect(try a.context.fetch(FetchDescriptor<OneEvent>()).isEmpty)
+      #expect(try a.rows().isEmpty)
+      a.services.calendar.creationFailure = nil
+      #expect(throws: CocoaError.self) {
+        try a.services.actions.insertCalendarEvent(
+          capture, requestID: id, recoveryExternalID: nil, into: a.context,
+          save: { _ in throw CocoaError(.fileWriteUnknown) })
+      }
+      let externalID = try #require(a.services.actions.pendingEventCreationID(id))
+      #expect(a.services.calendar.creationCalendarIDs == ["chosen"])
+      #expect(try a.context.fetch(FetchDescriptor<OneEvent>()).isEmpty)
+      let receipt = try a.services.actions.insertCalendarEvent(
+        capture, requestID: id, recoveryExternalID: externalID, into: a.context)
+      #expect(!receipt.localOnly)
+      let duplicate = try a.services.actions.insertCalendarEvent(
+        capture, requestID: id, recoveryExternalID: nil, into: a.context)
+      #expect(duplicate.id == receipt.id)
+      #expect(a.services.calendar.creationCalendarIDs == ["chosen"])
+      let persisted = try #require(try a.context.fetch(FetchDescriptor<OneEvent>()).first)
+      #expect(persisted.externalID == externalID)
+      a.services.calendar.deletionResult = false
+      #expect(!a.services.actions.undoCapture(
+        itemRef: Ledger.ref(receipt.id), entryID: receipt.entry.id, title: capture.title,
+        context: a.context))
+      #expect(try a.context.fetch(FetchDescriptor<OneEvent>()).count == 1)
+      a.services.calendar.deletionResult = true
+      #expect(a.services.actions.undoCapture(
+        itemRef: Ledger.ref(receipt.id), entryID: receipt.entry.id, title: capture.title,
+        context: a.context))
+      #expect(a.services.calendar.deletionRequests.last! == externalID)
+      #expect(try a.context.fetch(FetchDescriptor<OneEvent>()).isEmpty)
+      a.services.actions.didUndoEventCreation(id)
+      await a.services.calendar.setEnabled(false)
+      let local = try a.services.actions.insertCalendarEvent(
+        capture, requestID: id, recoveryExternalID: nil, into: a.context)
+      #expect(local.localOnly)
+      #expect(a.services.calendar.creationCalendarIDs.count == 1)
+    }
+
+    @Test
     func calendarCreationContractPreservesDraftAndReportsCommitFailure() async throws {
       let a = try Session(seed: 1920)
       defer { a.dispose() }

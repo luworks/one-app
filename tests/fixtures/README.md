@@ -301,3 +301,5 @@ Today button color tests keep small opaque RGB inputs inline in
 `ios/Eval/Tests/OneLogicTests/TodayButtonColorTests.swift`; the simulator journey
 `ios/OneUITests/TodayIdentityTests.swift` uses the built-in Blue preset and native
 custom picker, without personal calendar data.
+
+AI calendar creation retry fixtures are inline in `ios/TodayIntegrationTests/PlannerSessionTests.swift` (`aiCalendarAddFailureRetryRecoveryAndExactUndo`): synthetic Coffee event, chosen writable calendar, injected remote/local save failures and deletion outcomes. They contain no owner calendar data.
