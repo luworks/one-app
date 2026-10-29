@@ -39,7 +39,7 @@
           ForEach(-1...1, id: \.self) { index in
             if let day = cal.date(byAdding: .day, value: index * 7, to: outgoing ?? selected) {
               let active = index == (outgoing == nil ? 0 : Int(-direction))
-              week(day, selectedDay: selected, accessible: active)
+              week(day, selectedDay: selected)
                 .frame(width: width)
                 .offset(x: CGFloat(index) * width + offset)
                 .accessibilityHidden(!active)
@@ -100,7 +100,7 @@
       .tint(.primary)
     }
 
-    private func week(_ day: Date, selectedDay: Date?, accessible: Bool) -> some View {
+    private func week(_ day: Date, selectedDay: Date?) -> some View {
       let now = presentation.now
       return HStack(spacing: 2) {
         ForEach(weekDays(containing: day), id: \.self) { d in
@@ -135,8 +135,7 @@
                 .weekday(.wide).month(.wide).day())
           )
           .accessibilityAddTraits(isSelected ? .isSelected : [])
-          .accessibilityIdentifier(accessible ? "weekStrip." + Self.key(d, cal) : "")
-          .accessibilityHidden(!accessible)
+          .accessibilityIdentifier("weekStrip." + Self.key(d, cal))
         }
       }
     }

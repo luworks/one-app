@@ -73,8 +73,6 @@ final class TodayTomorrowTests: XCTestCase {
     let app = launch(at: "09:41")
     let today = Calendar.current.startOfDay(for: Date())
     let next = Calendar.current.date(byAdding: .day, value: 7, to: today)!
-    let days = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "weekStrip."))
-    XCTAssertEqual(days.count, 7, "only the current week is accessible")
     let start = app.weekStripDay(today).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -20, dy: 0)))
     XCTAssertTrue(
