@@ -17,7 +17,9 @@ class ProductionTraceTests(unittest.TestCase):
         for i, event in enumerate(['turn_started', 'rule_direct_grant_selected', 'turn_routed']):
             rows.append('TODAY_MODEL_CALL ' + json.dumps(dict(
                 version=1, call='d2193b71-1cce-48dd-9760-c36f0af7f355',
-                turn=turn, stage='routing', event=event, elapsed_ms=i)))
+                turn=turn, stage='routing', event=event, elapsed_ms=i,
+                wall_clock_unix_ms=1793278800000, system_timezone='America/Los_Angeles',
+                system_locale='en_US')))
         result = collect('\n'.join(rows))
         self.assertEqual(len(result['turns'][turn]), 1)
         self.assertNotIn('api_returned', result['stages']['routing'])

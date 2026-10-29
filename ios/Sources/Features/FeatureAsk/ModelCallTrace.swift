@@ -107,6 +107,11 @@
         "elapsed_ms": Double(DispatchTime.now().uptimeNanoseconds - scope.started) / 1_000_000,
       ]
       if let turn = scope.turn { fields["turn"] = turn.uuidString }
+      if event == "turn_started" {
+        fields["wall_clock_unix_ms"] = Date().timeIntervalSince1970 * 1000
+        fields["system_timezone"] = TimeZone.current.identifier
+        fields["system_locale"] = Locale.current.identifier
+      }
       if event == "api_started" {
         fields["reported_context_size"] = SystemLanguageModel.default.contextSize
         if #available(iOS 27, *) {

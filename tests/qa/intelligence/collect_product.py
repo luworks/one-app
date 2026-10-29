@@ -26,7 +26,8 @@ def collect(text):
             continue
         row = json.loads(line.split(MARKER, 1)[1])
         if set(row) - {'version', 'call', 'stage', 'event', 'elapsed_ms', 'error_type',
-                       'turn', 'reported_context_size', 'reported_variant'}:
+                       'turn', 'reported_context_size', 'reported_variant',
+                       'wall_clock_unix_ms', 'system_timezone', 'system_locale'}:
             raise ValueError('Unexpected trace fields; do not accept content-bearing telemetry')
         uuid.UUID(row['call'])
         if 'turn' in row:
