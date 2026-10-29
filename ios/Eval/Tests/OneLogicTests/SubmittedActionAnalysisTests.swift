@@ -154,6 +154,67 @@ final class SubmittedActionAnalysisTests: XCTestCase {
     XCTAssertEqual(localOverride[1].day, calendar.startOfDay(for: now))
   }
 
+  func testIncompleteActionsCannotAuthorizeCreationOrContextRecovery() throws {
+    let inputs = [
+      "Remind me to", "Remind me to buy", "Remind me to send", "Remind me to buy a",
+      "Remind me to send to", "Remind me to notarize", "提醒我购买", "提醒我买一个",
+      "提醒我发送给", "明天9点提醒我买",
+    ]
+    var observations: [[String: Any]] = []
+    for text in inputs {
+      let direct = OneOffReminderRequest.capture(text, now: now, calendar: calendar)
+      let context = ConversationContext(
+        turns: [text, "4pm", "one off", "go ahead"].map {
+          .init(isUser: true, text: $0, timestamp: now)
+        })
+      let recovered = OneOffReminderRequest.contextAllows(context, now: now, calendar: calendar)
+      observations.append([
+        "input": text, "direct_grant": direct != nil,
+        "parsed_title": CaptureParser.parse(text, now: now, calendar: calendar).title,
+        "context_grant": recovered,
+      ])
+      XCTAssertNil(direct, text)
+      XCTAssertFalse(recovered, text)
+      let withoutTime = ConversationContext(
+        turns: [text, "one off", "go ahead"].map {
+          .init(isUser: true, text: $0, timestamp: now)
+        })
+      XCTAssertFalse(
+        OneOffReminderRequest.contextAllows(withoutTime, now: now, calendar: calendar), text)
+    }
+    if let path = ProcessInfo.processInfo.environment["AI_COMPLETENESS_EVAL_OUTPUT"] {
+      let data = try JSONSerialization.data(
+        withJSONObject: [
+          "scope": "Pure rule authorization seam; no model calls, app writes or UI proof",
+          "reference": "2026-10-28T12:00 America/Los_Angeles", "rows": observations,
+        ], options: [.sortedKeys, .prettyPrinted])
+      try data.write(to: URL(fileURLWithPath: path), options: .withoutOverwriting)
+    }
+  }
+
+  func testModifiersAndOpenComplementsDoNotSupplyAnActionObject() {
+    for text in [
+      "Remind me to quickly buy", "Remind me to urgently send", "提醒我尽快购买",
+      "Remind me to buy two", "提醒我购买两", "Remind me to buy \"\"", "提醒我购买《》",
+      "Remind me to send the report to", "提醒我发送报告给",
+      "Remind me to take out", "Remind me to drop off",
+    ] {
+      XCTAssertNil(OneOffReminderRequest.capture(text, now: now, calendar: calendar), text)
+    }
+  }
+
+  func testIntransitiveActionsAndExplicitTopicsRemainComplete() throws {
+    for text in [
+      "Remind me to sleep tomorrow at 9pm", "Remind me to exercise tomorrow at 9am",
+      "Remind me to meditate", "Remind me to swim tomorrow at 9am",
+      "Remind me to jog tomorrow at 9am", "Remind me to work out tomorrow at 9am",
+      "Remind me to buy \"One\" tomorrow at 9am", "明天9点提醒我睡觉", "明天9点提醒我锻炼",
+      "Remind me about passport", "Remind me about dentist tomorrow at 9am",
+    ] {
+      XCTAssertNotNil(OneOffReminderRequest.capture(text, now: now, calendar: calendar), text)
+    }
+  }
+
   func testTimeAnswersAndProceedCannotLaunderMultipleSubject() {
     for original in [
       "Tomorrow remind me to buy rice at 9am and call Mei at 3pm",

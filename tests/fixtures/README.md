@@ -354,3 +354,9 @@ by `OneOffReminderTests` and `SubmittedReminderEditBoundaryTests`.
   automatic saves with exact receipt Undo. It is separate from both frozen model
   fixtures and the cardinality repair regressions. Authoring restrictions and manual
   rubric are in [the authoring note](../../docs/qa/intelligence-product-blind-holdout-v2-authoring.md).
+
+The same inline repair set also covers incomplete action content: dangling
+infinitives/complements, modifier prefixes, empty quoted operands and bare
+quantities, with positive intransitive/activity and explicitly named-topic
+controls. Optional `AI_COMPLETENESS_EVAL_OUTPUT` exports the identical pure
+rule inputs to a fresh durable path; it never creates app records or calls a model.

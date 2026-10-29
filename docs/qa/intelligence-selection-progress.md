@@ -6,23 +6,18 @@ The latest consolidated phone build is outside this thread's validation scope.
 
 ## Completed measurements
 
-| Layer / configuration | Observed records | Format | All specified semantic fields | Meaning |
+| Layer / configuration | Observed records | Strict JSON | All specified semantic fields | Meaning |
 | --- | --- | --- | --- | --- |
-| Apple common raw-JSON prompt, original 30-second budget | 81/81 API returns | 0/81 strict JSON | 6/81 | 24 development cases, 27 turns, three repetitions |
-| Apple common raw-JSON prompt, matched 120-second budget | 81/81 API returns | 0/81 strict JSON | 6/81 | Separate recorded run; same prompt and output limit |
-| Apple native `@Generable` diagnostic, 120-second budget | 81/81 API returns | 81/81 strict JSON | 6/81 | Schema fixed serialization, not all semantic fields |
-| Pure routing/parser/open-preview rules export, latest development candidate | 27/27 observations | Inapplicable | 20/27 | Round5; not the complete app reducer or saves |
-| Qwen3.5-2B Q4_K_M original 30-second smoke | 3/3 records | Not a formal quality score | UNKNOWN | One EOG success, two CPU deadline timeouts; pinned simulator-file hash verified |
-| Qwen3.5-2B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; repetition2 is reported separately |
-| Qwen3.5-2B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; all three runs now complete |
-| Qwen3.5-4B Q4_K_M 120-second smoke | 3/3 EOG | 3/3 strict JSON | 0/3 | Not a formal quality estimate; formal repetition1 completed |
-| Qwen3.5-4B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 6/27 | All three runs now complete; pooled cohort below |
-| Qwen3.5-4B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 6/27 | Whole-case fields5/24; all three runs now complete |
-| Qwen3.5-2B Q4_K_M 120-second development repetition3 | 27/27 EOG | 26/27 strict JSON | 3/27 | Three complete runs; whole-case fields2/24 each |
-| Qwen3.5-4B Q4_K_M 120-second development repetition3 | 27/27 EOG | 26/27 strict JSON | 6/27 | Three complete runs; whole-case fields5/24 each |
-| All holdout configurations | Not yet completed | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
-| Qwen3.5-2B Q4_K_M holdout repetition1 | 21/21 EOG | 21/21 strict JSON | 1/21 | Closed first batch only; two repetitions and other backends remain |
-| Pure rules holdout, three exports | 63/63 observations | Inapplicable | 45/63 | Identical15/21 unique field outcomes; no model calls or product writes |
+| Apple common raw JSON, matched120-second budget, development | 81/81 API returns | 0/81 | 6/81 | 2/27 unique inputs; original30-second run retained separately |
+| Apple native schema diagnostic, development | 81/81 API returns | 81/81 | 6/81 | 2/27 unique; not pooled with raw JSON |
+| Qwen3.5-2B Q4_K_M, development | 81/81 EOG | 78/81 | 9/81 | 3/27 unique |
+| Qwen3.5-4B Q4_K_M, development | 81/81 EOG | 78/81 | 18/81 | 6/27 unique |
+| Apple native schema diagnostic, holdout | 63/63 API returns | 63/63 | 6/63 | 2/21 unique; all outputs identical across3 runs |
+| Qwen3.5-2B Q4_K_M, holdout | 63/63 EOG | 63/63 | 3/63 | 1/21 unique; all outputs identical across3 runs |
+| Apple common raw JSON, holdout | NOT_RUN | UNKNOWN | UNKNOWN | Three frozen jobs remain |
+| Qwen3.5-4B Q4_K_M, holdout | NOT_RUN | UNKNOWN | UNKNOWN | Three frozen jobs remain |
+| Pure legacy rules seam, development before cardinality repair | 27/27 | Inapplicable | 20/27 | Not the app reducer or new multi-preview validation |
+| Pure rules holdout, three exports | 63/63 | Inapplicable | 45/63 | 15/21 unique; not conversational generation or writes |
 
 The semantic column is a **partial schema-based field rubric**, not an overall
 conversational quality, safety or product pass rate. It requires a parseable
@@ -267,3 +262,21 @@ settings were preserved. The cardinality candidate is documented separately in
 not part of these frozen observations. Matched post-repair Live rates remain
 UNKNOWN; model holdout still has11 uncompleted frozen jobs. PR216 remains draft
 and nonmergeable from acceptance standpoint.
+
+## Current bounded validation and decision direction
+
+The closed quantity candidate `5037a18` measured the same frozen multi-action
+input at baseline0/1 correct versus candidate1/1; three after repetitions were
+3/3 for one unique input. Three normal one-off direct-save/Undo flows also passed,
+and the two retained setup records remained unchanged. See
+[intelligence-cardinality-repair.md](intelligence-cardinality-repair.md) for exact
+sources and the subsequent, separately measured content-validation seam.
+
+The deployment direction is to retain the Apple backend for focused language
+roles with authoritative rules/validation/receipts, rather than replace the whole
+planner with Qwen4B. This is not a claim that Apple has the highest general
+intelligence or best phone performance. Qwen2B remains a lower-storage candidate
+for later optimized-runtime validation. No backend has demonstrated reliable
+full planning under the current common protocol. The remaining six model jobs,
+full product repetitions and independent24-case/33-turn product holdout are
+required before the final recommendation. No owner-phone work is in scope.

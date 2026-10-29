@@ -628,7 +628,11 @@
           !analysis.permitsDirectCreation
         {
           recordTurn("answer", text)
-          clarifySubmittedActions()
+          if analysis == .incomplete {
+            clarifySubmittedActionContent()
+          } else {
+            clarifySubmittedActions()
+          }
           return
         }
         ModelCallTrace.selection("context_resolution_selected")
@@ -1199,7 +1203,16 @@
         }
       case .uncertain:
         clarifySubmittedActions()
+      case .incomplete:
+        clarifySubmittedActionContent()
       }
+    }
+
+    private func clarifySubmittedActionContent() {
+      messages.append(
+        reply(
+          "What would you like to be reminded to do? Please include the action or subject. Nothing has been added."
+        ))
     }
 
     private func clarifySubmittedActions(timeScope: Bool = false) {

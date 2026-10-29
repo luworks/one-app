@@ -3,6 +3,11 @@ import Foundation
 /// Decide whether a NEW message asks for a planner item before extracting its kind or dates.
 /// Uncertainty is a conversation, never permission to manufacture an obligation.
 public enum ChatRouting {
+  /// Existing terse activity vocabulary, also used to validate complete infinitives.
+  static let standaloneActivities: Set<String> = [
+    "gym", "workout", "run", "jog", "swim", "yoga", "walk",
+  ]
+
   public enum Intent: Equatable, Sendable { case capture, conversation, unsure }
 
   private static func has(_ text: String, _ pattern: String) -> Bool {
@@ -197,7 +202,8 @@ public enum ChatRouting {
     // Keep terse planner input working, including no-date errands. Dates alone are not an intent.
     if has(
       requestBody(text),
-      #"^(?:buy|pay|send|email|submit|sign|print|book|order|pack|clean|wash|write|finish|fix|water|take out|pick up|drop off|return|renew|file|read|study|prepare|update|reply|follow up|check|call|get|cook|make|gym|workout|run|jog|swim|yoga|walk)\b|^(?:请|帮我)?(?:买|付|交|发|寄|回复|写|整理|订|预订|预约|打电话|取|拿|洗|倒垃圾|遛狗|充电|续|缴|健身|跑步|游泳|瑜伽)"#
+      #"^(?:"# + standaloneActivities.sorted().joined(separator: "|")
+        + #"|buy|pay|send|email|submit|sign|print|book|order|pack|clean|wash|write|finish|fix|water|take out|pick up|drop off|return|renew|file|read|study|prepare|update|reply|follow up|check|call|get|cook|make)\b|^(?:请|帮我)?(?:买|付|交|发|寄|回复|写|整理|订|预订|预约|打电话|取|拿|洗|倒垃圾|遛狗|充电|续|缴|健身|跑步|游泳|瑜伽)"#
     ) {
       return .capture
     }

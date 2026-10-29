@@ -81,6 +81,7 @@ public enum OneOffReminderRequest {
 
   public static func eligible(_ capture: Capture) -> Bool {
     guard capture.kind == .task, !capture.ringsAsAlarm, capture.repeatRule == nil,
+      SubmittedActionAnalysis.hasCompleteTitle(capture.title),
       !capture.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       capture.title.range(
         of:
