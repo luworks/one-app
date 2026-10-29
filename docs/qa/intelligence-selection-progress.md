@@ -11,15 +11,16 @@ The latest consolidated phone build is outside this thread's validation scope.
 | Apple common raw-JSON prompt, original 30-second budget | 81/81 API returns | 0/81 strict JSON | 6/81 | 24 development cases, 27 turns, three repetitions |
 | Apple common raw-JSON prompt, matched 120-second budget | 81/81 API returns | 0/81 strict JSON | 6/81 | Separate recorded run; same prompt and output limit |
 | Apple native `@Generable` diagnostic, 120-second budget | 81/81 API returns | 81/81 strict JSON | 6/81 | Schema fixed serialization, not all semantic fields |
-| Pure routing/parser/open-preview rules export, corrected exporter | 27/27 observations | Inapplicable | 18/27 | Not the complete app reducer, existing-item resolution or saves |
+| Pure routing/parser/open-preview rules export, latest development candidate | 27/27 observations | Inapplicable | 20/27 | Round5; not the complete app reducer or saves |
 | Qwen3.5-2B Q4_K_M original 30-second smoke | 3/3 records | Not a formal quality score | UNKNOWN | One EOG success, two CPU deadline timeouts; pinned simulator-file hash verified |
 | Qwen3.5-2B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; repetition2 is reported separately |
-| Qwen3.5-2B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; repetition3 remains |
+| Qwen3.5-2B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; all three runs now complete |
 | Qwen3.5-4B Q4_K_M 120-second smoke | 3/3 EOG | 3/3 strict JSON | 0/3 | Not a formal quality estimate; formal repetition1 completed |
-| Qwen3.5-4B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 6/27 | One complete repetition; two repetitions still required |
-| Qwen3.5-4B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 6/27 | Whole-case fields5/24; repetition3 remains |
+| Qwen3.5-4B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 6/27 | All three runs now complete; pooled cohort below |
+| Qwen3.5-4B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 6/27 | Whole-case fields5/24; all three runs now complete |
 | Qwen3.5-2B Q4_K_M 120-second development repetition3 | 27/27 EOG | 26/27 strict JSON | 3/27 | Three complete runs; whole-case fields2/24 each |
-| Remaining Qwen formal repetitions and all holdout | Not yet completed | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
+| Qwen3.5-4B Q4_K_M 120-second development repetition3 | 27/27 EOG | 26/27 strict JSON | 6/27 | Three complete runs; whole-case fields5/24 each |
+| All holdout configurations | Not yet completed | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
 
 The semantic column is a **partial schema-based field rubric**, not an overall
 conversational quality, safety or product pass rate. It requires a parseable
@@ -63,7 +64,7 @@ session `intelligence-selection-20261029` (earlier explorations have separate se
   counts and latency definitions; safety/product acceptance remain UNKNOWN.
 * `rules-development-round2.json` and corresponding `-fields.json`: corrected
   rules exporter retains parser fields even when route intent is unresolved.
-  The subsequently added direct-submission eligibility observation is not yet rerun.
+  Later round5 includes direct-submission eligibility and the current guards.
 * `batch-quality-20261029.log`: closed raw chunked transport log. Earlier JSON
   escaping and oversized-log truncation failures remain retained and excluded.
 * `harness-provenance-20261029.json`, `host-runtime-20261029.json`: retained source,
@@ -77,7 +78,7 @@ behavior or memory survivability. Exact Apple weight revision remains UNKNOWN.
 
 ## Decision status
 
-No winning model is established yet. Remaining Qwen formal trials, untouched holdout,
+No winning model is established yet. Untouched holdout,
 broader Live product paths and semantic safety review remain required. Missing
 candidate integration is unmeasured; it does not prove that the incumbent wins.
 Review the [runtime findings](intelligence-runtime-review.md) and
@@ -158,3 +159,39 @@ p90 35654.6 ms (n=81), with32/81 completions within30 seconds. There were
 no adapter timeouts/fallbacks. These are descriptive CPU simulator results,
 not independent quality samples, phone speed or product acceptance. Closed
 three-run evidence and language/category denominators are journal-indexed.
+
+The complete Qwen4B development cohort has81/81 EOG generations across
+three distinct runs:78/81 strict JSON,18/81 specified semantic-field passes
+(6/27 unique turns), and5/24 whole cases passing in every run. All27 raw
+outputs are identical across all three repetitions. Pooled median73692.6 ms,
+p90 91111.8 ms (n=81);0/81 completed within30 seconds. No adapter timeout
+or fallback was observed. Pooled p90 uses the defined sample-index quantile,
+not an average of per-run p90 values. The closed three-run evidence and
+category/language denominators are journal-indexed. These results do not
+establish performance on phone hardware or the quality of other runtimes.
+
+
+The cached-metadata Live development conversation batch observed6 cases and9
+turns, with9/9 actual chat API returns and9 model-reply selections. Relevant
+casual replies appeared3/3; all3 recall replies named the right topic, but the
+Chinese recall response repeated the preceding answer verbatim. A separate
+posthoc directness diagnostic is2/3 direct and1/3 partial; it does not rewrite
+the frozen topic criterion. No action card or receipt was visible; absence of
+all store mutations remains UNKNOWN without a ledger/store audit. API-return
+latency median2139.9 ms, p90 2210.1 ms (n=9), excludes metadata preparation and
+is not exact UI latency. Background ranking separately had3 returns and1
+cancellation after deadline across4 calls. This is not a matched improvement
+rate against the earlier shorter observer window. Closed video, screenshots,
+call log and manual annotations are indexed under `live-product-round2-20261029`.
+The reported system variant is `AFM 3 Core`, context4096; exact weights remain
+UNKNOWN. Repetition and other product categories remain outstanding.
+
+Model candidates, common prompt, sampler, fixtures and field rubric were frozen
+before the first holdout generation in `holdout-freeze-20261029/freeze.json`.
+The randomized12-batch holdout schedule uses seed2026102902,21 turns per batch,
+three separate repetitions per candidate and the separate native Apple
+schema diagnostic. Each active batch closes the sample app and releases locks
+before grading; the stop file halts at the next released boundary. The sample
+was incrementally rebuilt only to expose the existing native holdout button,
+with the previous development executable retained and hashed. Holdout results
+are not yet complete and have not informed any model prompt or sampler change.
