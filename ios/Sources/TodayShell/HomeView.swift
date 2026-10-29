@@ -520,24 +520,11 @@
         CityPicker(store: composition.world, now: session.runtime.now)
       }
       .sheet(item: $newItem) { item in
-        switch item {
-        case .task:
-          QuickReminderSheet(
-            listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
-            actions: session.actions, ledger: session.ledger, alarms: session.alarms,
-            // Due-style quick add; editing a reminder opens TaskEditor
-            activity: session.activity, presentation: presentation)
-        case .event:
-          EventEditor(
-            day: tab == .calendar ? calendarDay : session.runtime.now(), calendar: session.calendar,
-            actions: session.actions, ledger: session.ledger, alarms: session.alarms,
-            presentation: presentation)
-        case .alarm:
-          AlarmEditor(
-            alarms: session.alarms, soundPreview: session.soundPreview, runtime: session.runtime,
-            defaults: session.defaults, onCreated: composition.recordCreatedAlarm
-          ).performanceDestination("alarm.editor")
-        }
+        UnifiedCreateComposer(
+          initialKind: item, day: tab == .calendar ? calendarDay : session.runtime.now(),
+          listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
+          composition: composition)
+
       }
     }
 
@@ -949,40 +936,20 @@
     }
 
     private var plusButton: some View {
-      Group {
-        if plusShowsChoices {
-          Menu {
-            Section(tab == .today ? "Add to Today" : "Add an item") { creationChoices }
-          } label: {
-            plusLabel
-          }
-        } else {
-          Menu {
-            creationChoices
-          } label: {
-            plusLabel
-          } primaryAction: {
-            if plusAddsCity {
-              PerformanceTrace.shared.beginPage("clock.cityPicker")
-              addingCity = true
-            } else if smartNewItem == .event {
-              newEvent()
-            } else {
-              presentNewItem(smartNewItem)
-            }
-          }
+      Button {
+        presentNewItem(smartNewItem)
+      } label: {
+        plusLabel
+      }
+      .contextMenu {
+        if plusAddsCity {
+          Button("Add city", systemImage: "globe") { addingCity = true }
         }
       }
       .tint(.primary)
       .accessibilityIdentifier("New")
-      .accessibilityLabel(
-        plusShowsChoices
-          ? (tab == .today ? "Add to Today" : "Add an item") : "New \(plusCaption.lowercased())"
-      )
-      .accessibilityHint(
-        plusShowsChoices
-          ? "Choose an alarm, reminder or event."
-          : "Adds \(plusAddsCity ? "a city" : smartNewItem.noun). Press and hold for more.")
+      .accessibilityLabel("Create")
+
     }
 
   }
