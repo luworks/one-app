@@ -22,7 +22,7 @@
         let defaults = UserDefaults.standard
         let runtime = PlannerRuntime(
           now: { Date.now }, nextID: { UUID() },
-          calendar: .current, locale: .current)
+          calendar: .autoupdatingCurrent, locale: .autoupdatingCurrent)
         // Preserve the installed store's module, schema and default configuration identity.
         let container = try ModelContainer(
           for: OneTask.self, OneEvent.self, OneAlarm.self, OneList.self,
