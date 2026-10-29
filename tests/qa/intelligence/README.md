@@ -95,3 +95,11 @@ Live manual acceptance additionally uses
 conversation, context recall and Clock intents. It is a development extension,
 not extra blind model-only cases. Preserve the actual app clock and receipt/
 Undo evidence and report unsupported chat-to-Clock operations honestly.
+
+`live_step.py` executes one explicitly selected UI operation using the exact
+owned-device launcher record. It acquires host/cache locks only for that bounded
+operation and its optional observation window, then releases them before any
+analysis. Each raw operation log is durable and journal-indexed. A lock conflict
+is recorded as not executed, never a model failure; do not start dependent steps
+until the previous process handle has actually completed. Video finalization
+can exceed the initial tool observation window. No automatic action retry occurs.

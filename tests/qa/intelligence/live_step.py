@@ -10,7 +10,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
-from scripts.devtools.core import host_lock, dd_lock, worktree_id
+from scripts.devtools.core import host_lock, dd_lock, worktree_id, ResourceBusy
 from tests.qa.journal import Journal, results_root
 
 
@@ -46,24 +46,30 @@ def main():
     journal = Journal()
     session = 'intelligence-selection-20261029'
     journal.record(session, 'qa.ui.operation', json.dumps(argv, ensure_ascii=False), status='started')
-    with host_lock(ROOT), dd_lock(ROOT):
-        started = time.monotonic()
-        try:
-            result = subprocess.run(argv, capture_output=True, text=True, timeout=90)
-        except subprocess.TimeoutExpired as error:
-            def text(value):
-                return value.decode(errors='replace') if isinstance(value, bytes) else value or ''
-            result = subprocess.CompletedProcess(
-                argv, 124, text(error.stdout), text(error.stderr) + '\nOwned UI operation timed out; not retried.\n')
-        if result.returncode == 0 and args.settle_seconds:
-            time.sleep(args.settle_seconds)  # Bounded observation window, never analysis time.
-        elapsed = time.monotonic() - started
+    started = time.monotonic()
+    command_started = False
+    try:
+        with host_lock(ROOT), dd_lock(ROOT):
+            command_started = True
+            try:
+                result = subprocess.run(argv, capture_output=True, text=True, timeout=90)
+            except subprocess.TimeoutExpired as error:
+                def text(value):
+                    return value.decode(errors='replace') if isinstance(value, bytes) else value or ''
+                result = subprocess.CompletedProcess(
+                    argv, 124, text(error.stdout), text(error.stderr) + '\nOwned UI operation timed out; not retried.\n')
+            if result.returncode == 0 and args.settle_seconds:
+                time.sleep(args.settle_seconds)  # Bounded observation window, never analysis time.
+    except ResourceBusy as error:
+        result = subprocess.CompletedProcess(argv, 75, '', str(error) + '\nUI command not executed.\n')
+    elapsed = time.monotonic() - started
     with args.output.open('x') as out:
-        out.write(json.dumps(dict(command=argv, operation_seconds=elapsed), ensure_ascii=False)
+        out.write(json.dumps(dict(command=argv, operation_seconds=elapsed, command_started=command_started), ensure_ascii=False)
                   + '\n' + result.stdout + result.stderr)
     journal.artifact(session, args.output)
     journal.record(session, 'qa.ui.operation', str(args.output),
-                   status='passed' if result.returncode == 0 else 'failed')
+                   status='passed' if result.returncode == 0 else
+                   'interrupted' if result.returncode in (75, 124) else 'failed')
     journal.close()
     print(result.stdout + result.stderr)
     raise SystemExit(result.returncode)

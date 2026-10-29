@@ -24,10 +24,13 @@ def collect(text):
     for line in text.splitlines():
         if MARKER not in line:
             continue
-        row = json.loads(line.split(MARKER, 1)[1])
+        # Compact unified logging encodes a backslash as octal \134.
+        payload = line.split(MARKER, 1)[1].replace(r'\134', '\\')
+        row = json.loads(payload)
         if set(row) - {'version', 'call', 'stage', 'event', 'elapsed_ms', 'error_type',
                        'turn', 'reported_context_size', 'reported_variant',
-                       'wall_clock_unix_ms', 'system_timezone', 'system_locale'}:
+                       'wall_clock_unix_ms', 'system_timezone', 'system_locale',
+                       'metadata_source', 'metadata_snapshot_prepare_ms'}:
             raise ValueError('Unexpected trace fields; do not accept content-bearing telemetry')
         uuid.UUID(row['call'])
         if 'turn' in row:

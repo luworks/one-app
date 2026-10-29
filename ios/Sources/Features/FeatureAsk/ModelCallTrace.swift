@@ -19,6 +19,19 @@
     private static let logger = Logger(
       subsystem: "com.luworks.today.intelligence", category: "calls")
 
+    // Read system metadata once, before a bounded stage starts. These getters can do IPC.
+    private static let metadata: (contextSize: Int, variant: String?, preparationMS: Double) = {
+      let started = DispatchTime.now().uptimeNanoseconds
+      let model = SystemLanguageModel.default
+      let contextSize = model.contextSize
+      var variant: String?
+      if #available(iOS 27, *) { variant = model.variant.displayName }
+      return (
+        contextSize, variant,
+        Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
+      )
+    }()
+
     /// Child tasks inherit the diagnostic turn, including work that finishes after a deadline.
     static func withTurn<T>(_ work: () -> T) -> T {
       guard enabled else { return work() }
@@ -35,6 +48,7 @@
       _ stage: Stage, work: @Sendable () async -> T
     ) async -> T {
       guard enabled, current?.stage != stage else { return await work() }
+      _ = metadata
       return await $current.withValue(Scope(stage: stage), operation: work)
     }
 
@@ -43,6 +57,7 @@
       _ stage: Stage, work: () async throws -> T
     ) async rethrows -> T {
       guard enabled else { return try await work() }
+      _ = metadata
       let scope = current.flatMap { $0.stage == stage ? $0 : nil } ?? Scope(stage: stage)
       emit("api_started", scope: scope)
       do {
@@ -113,13 +128,15 @@
         fields["system_locale"] = Locale.current.identifier
       }
       if event == "api_started" {
-        fields["reported_context_size"] = SystemLanguageModel.default.contextSize
-        if #available(iOS 27, *) {
-          fields["reported_variant"] = SystemLanguageModel.default.variant.displayName
-        }
+        fields["reported_context_size"] = metadata.contextSize
+        if let variant = metadata.variant { fields["reported_variant"] = variant }
+        fields["metadata_source"] = "process_cached_default"
+        fields["metadata_snapshot_prepare_ms"] = metadata.preparationMS
       }
       if let errorType { fields["error_type"] = errorType }
-      guard let data = try? JSONSerialization.data(withJSONObject: fields, options: .sortedKeys),
+      guard
+        let data = try? JSONSerialization.data(
+          withJSONObject: fields, options: [.sortedKeys, .withoutEscapingSlashes]),
         let line = String(data: data, encoding: .utf8)
       else { return }
       logger.info("TODAY_MODEL_CALL \(line, privacy: .public)")

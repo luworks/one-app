@@ -42,6 +42,16 @@ class ProductionTraceTests(unittest.TestCase):
         self.assertEqual(result['stages']['chat']['api_started'], 1)
         self.assertEqual(result['turns'][turn], ['d2193b71-1cce-48dd-9760-c36f0af7f355'])
 
+    def test_compact_log_transport_preserves_escaped_timezone(self):
+        row = dict(version=1, call='d2193b71-1cce-48dd-9760-c36f0af7f355',
+                   stage='routing', event='turn_started', elapsed_ms=0,
+                   system_timezone='America/Los_Angeles')
+        encoded = json.dumps(row).replace('/', '\\/').replace('\\', r'\134')
+        result = collect('TODAY_MODEL_CALL ' + encoded)
+        self.assertEqual(result['calls'][row['call']][0]['system_timezone'],
+                         'America/Los_Angeles')
+        self.assertNotIn('api_started', result['stages']['routing'])
+
     def test_late_api_return_does_not_erase_deadline_or_fallback(self):
         result = collect(trace('api_started', 'deadline_timeout',
                                'chat_fallback_selected', 'api_returned'))

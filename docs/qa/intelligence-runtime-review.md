@@ -173,3 +173,23 @@ corrected. The opt-in trace includes actual ranking API starts/returns and its
 boundary outcome so foreground latency is not analyzed as though background
 calls cannot exist. There is no measured contention effect yet; preserve that
 as UNKNOWN until observing Live overlap and cancellations.
+
+## First Live instrumentation validation
+
+On the owned simulator, a6023f7507 Live build reported `AFM3 Core` and4096
+context tokens. This is observed API metadata, not an inferred weight hash and
+not a retroactive identity assignment to earlier batches. With both sync switches
+off and no Apple Account signed in, the first ordinary Chinese chat returned a
+relevant Chinese answer, with one actual chat API return/model reply selected
+and no item creation observed. Two background rank attempts timed out/cancelled.
+This is one diagnostic-validation sample, not a quality estimate.
+
+The initial observer queried model metadata during API-start emission, potentially
+consuming the bounded generation budget. The correction loads one process-level
+metadata snapshot before entering bounded stages, records its preparation time,
+and never treats it as per-call inference time. These traced timings must not
+be advertised as an untraced production baseline. Revalidation is pending.
+Compact unified logging also renders JSON backslashes as octal escapes; the
+collector now restores that transport before JSON decoding while retaining raw
+logs. New emissions avoid unnecessary slash escaping. These are measurement
+repairs, not changes to model prompts, permissions or planner behavior.
