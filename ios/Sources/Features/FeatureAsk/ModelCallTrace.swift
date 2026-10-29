@@ -1,6 +1,5 @@
 #if os(iOS)
   import Foundation
-  import FoundationModels
   import TodayCore
   import os
 
@@ -19,19 +18,6 @@
     private static let logger = Logger(
       subsystem: "com.luworks.today.intelligence", category: "calls")
 
-    // Read system metadata once, before a bounded stage starts. These getters can do IPC.
-    private static let metadata: (contextSize: Int, variant: String?, preparationMS: Double) = {
-      let started = DispatchTime.now().uptimeNanoseconds
-      let model = SystemLanguageModel.default
-      let contextSize = model.contextSize
-      var variant: String?
-      if #available(iOS 27, *) { variant = model.variant.displayName }
-      return (
-        contextSize, variant,
-        Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
-      )
-    }()
-
     /// Child tasks inherit the diagnostic turn, including work that finishes after a deadline.
     static func withTurn<T>(_ work: () -> T) -> T {
       guard enabled else { return work() }
@@ -48,16 +34,14 @@
       _ stage: Stage, work: @Sendable () async -> T
     ) async -> T {
       guard enabled, current?.stage != stage else { return await work() }
-      _ = metadata
       return await $current.withValue(Scope(stage: stage), operation: work)
     }
 
-    /// Surround the actual Foundation Models respond call, before any error becomes nil.
+    /// Surround the actual hosted model call, before any error becomes nil.
     static func generate<T: Sendable>(
       _ stage: Stage, work: () async throws -> T
     ) async rethrows -> T {
       guard enabled else { return try await work() }
-      _ = metadata
       let scope = current.flatMap { $0.stage == stage ? $0 : nil } ?? Scope(stage: stage)
       emit("api_started", scope: scope)
       do {
@@ -96,20 +80,6 @@
     }
 
     private static func errorClass(_ error: any Error) -> String {
-      if #available(iOS 27, *), let error = error as? LanguageModelError {
-        switch error {
-        case .contextSizeExceeded: return "context_size_exceeded"
-        case .rateLimited: return "rate_limited"
-        case .guardrailViolation: return "guardrail_violation"
-        case .refusal: return "refusal"
-        case .unsupportedCapability: return "unsupported_capability"
-        case .unsupportedTranscriptContent: return "unsupported_transcript"
-        case .unsupportedGenerationGuide: return "unsupported_guide"
-        case .unsupportedLanguageOrLocale: return "unsupported_locale"
-        case .timeout: return "model_timeout"
-        @unknown default: return "unknown_model_error"
-        }
-      }
       // Type only: associated values and localized/debug descriptions may contain user text.
       return String(reflecting: type(of: error))
     }
@@ -128,10 +98,8 @@
         fields["system_locale"] = Locale.current.identifier
       }
       if event == "api_started" {
-        fields["reported_context_size"] = metadata.contextSize
-        if let variant = metadata.variant { fields["reported_variant"] = variant }
-        fields["metadata_source"] = "process_cached_default"
-        fields["metadata_snapshot_prepare_ms"] = metadata.preparationMS
+        fields["reported_variant"] = "gpt-6-luna"
+        fields["metadata_source"] = "hosted_configuration"
       }
       if let errorType { fields["error_type"] = errorType }
       guard

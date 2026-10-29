@@ -21,6 +21,37 @@ public enum ChatRouting {
       options: [.regularExpression, .caseInsensitive])
   }
 
+  /// An anchored event creation request; never a quoted or reported command.
+  public static func requestsEvent(_ text: String) -> Bool {
+    has(
+      requestBody(text.trimmingCharacters(in: .whitespacesAndNewlines)),
+      #"^(?:create|add|schedule) (?:a |an )?(?:calendar )?event\b|^new (?:calendar )?event\b"#)
+  }
+
+  /// Separate action clauses require separate previews; conjunctions inside an object do not.
+  public static func hasMultipleActions(_ text: String) -> Bool {
+    has(
+      text,
+      #"[;；\n]|然后|另外还|\band then\b|\band\s+(?:(?:then|also)\s+)?(?:remind me to\s+)?(?:buy|call|pay|send|email|submit|book|pick up|return|renew|clean|wash|write|finish|take|walk|water)\b"#
+    )
+  }
+
+  /// Contradictory dates in one submitted request are not single-item write authority.
+  public static func hasMaterialCorrection(_ text: String) -> Bool {
+    has(
+      text,
+      #"(?:^|[,，])\s*(?:不对|说错了|纠正一下|更正一下)\s*[,，]|(?:^|[,，])\s*(?:no[, ]+wait|I mean)\b"#)
+  }
+
+  public static func requestsAlarm(_ text: String) -> Bool {
+    // A standalone trailing kind marker is supported in mixed Chinese/English capture.
+    if has(text, #"^提醒(?:我)?\s+.+\s+alarm[.!?]*$"#) { return true }
+    return has(
+      text,
+      #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add|make) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#
+    )
+  }
+
   /// Only complete, supported operation requests may bypass generic chat. The legacy matchers
   /// also find words inside explanations, so they are not sufficient at this boundary.
   public static func isSupportedOperationRequest(_ text: String) -> Bool {
@@ -144,11 +175,7 @@ public enum ChatRouting {
       return .capture
     }
     // Alarm verbs must be the request itself, not words embedded in a question or report.
-    let alarmRequest = has(
-      text,
-      #"^(?:(?:please|can you|could you|would you)\s+)?(?:(?:set|create|add|make) (?:me )?(?:an? )?(?:alarm|timer)\b|wake me\b)|^(?:(?:请|可以|能不能|能|可不可以)(?:你)?(?:帮我)?|帮我)?(?:(?:设|定|加|创建).{0,12}(?:闹钟|计时器)|[明天早上晚今后午晨点分半零一二三四五六七八九十两0-9:：\s]*(?:叫醒我|叫我起床))"#
-    )
-    if alarmRequest { return .capture }
+    if requestsAlarm(text) { return .capture }
     // A leading relative time may precede the imperative. Reuse capture's time grammar and
     // the ordinary request boundary, rather than treating any dated statement as a request.
     if !isQuestion(text),
@@ -157,6 +184,7 @@ public enum ChatRouting {
     {
       return .capture
     }
+    if requestsEvent(text) { return .capture }
     if Dialogue.startsNewItem(text) {
       // Dialogue's unanchored matcher also protects editing follow-ups. At this NEW-message
       // boundary require the request itself, rather than a report/question quoting its words.
@@ -198,6 +226,14 @@ public enum ChatRouting {
       #"^(?:buy|pay|send|email|submit|call|order|book)\s+(?:what|which|who|whom|where|when|how)\b|^(?:买|付|交|发|寄|订|预约)(?:什么|哪|谁)"#
     ) {
       return .conversation
+    }
+    // A leading edit operation cannot authorize a new reminder merely because a
+    // dated object contains "dentist" or "meeting". Existing-item matching runs later.
+    if has(
+      requestBody(text),
+      #"^(?:move|reschedule|postpone|delay|shift|bump|cancel|delete|remove)\b"#)
+    {
+      return .unsure
     }
     // Keep terse planner input working, including no-date errands. Dates alone are not an intent.
     if has(
@@ -288,11 +324,11 @@ public enum ChatRouting {
     }
     let quoted = subject.map { chinese ? "其中你说过：“\($0)”。" : " You said: “\($0)”." } ?? ""
     if chinese {
-      return "我能读取当前聊天已保存的消息，并从中恢复相关请求。设备上的模型收到的是最近历史的精简内容；我不能读取其他聊天。" + quoted
+      return "我能读取当前聊天已保存的消息，并从中恢复相关请求。GPT 服务收到的是最近历史的精简内容；我不能读取其他聊天。" + quoted
         + "这只是回答你的问题，不会添加或更改任何事项；预览仍需要你点 Add 或 Apply。"
     }
     return
-      "I can read the saved messages in this chat and recover relevant requests from them. The on-device model receives a shortened recent history. I cannot read other chats."
+      "I can read the saved messages in this chat and recover relevant requests from them. The GPT service receives a shortened recent history. I cannot read other chats."
       + quoted
       + " This answer creates or changes nothing. Previews still need your Add or Apply tap."
   }

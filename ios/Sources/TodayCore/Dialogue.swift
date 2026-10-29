@@ -300,9 +300,10 @@ public enum CaptureConversation {
   /// tasks even when their object contains event words (e.g. "don't eat dinner").
   public static func parse(_ text: String, now: Date, calendar: Calendar) -> Capture {
     var capture = CaptureParser.parse(text, now: now, calendar: calendar)
-    if ChatRouting.intent(text) == .capture, capture.hour != nil,
-      has(text, #"闹钟|\balarm\b|wake me"#)
-    {
+    if ChatRouting.intent(text) == .capture, ChatRouting.requestsEvent(text) {
+      capture.kind = .event
+      capture.ringsAsAlarm = false
+    } else if ChatRouting.intent(text) == .capture, ChatRouting.requestsAlarm(text) {
       capture.kind = .task
       capture.ringsAsAlarm = true
     } else if ChatRouting.intent(text) == .capture,

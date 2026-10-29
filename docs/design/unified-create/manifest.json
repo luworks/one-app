@@ -1,0 +1,55 @@
+{
+  "status": "generated design mockups; not implemented UI",
+  "date": "2026-10-29",
+  "comparison": "adjacent iterations 4 and 5",
+  "images": [
+    {
+      "file": "round4-alarm.png",
+      "sha256": "8019977bfdd80be4d73d4f3bce75d9ba219541cc2238115e9e492ccb8d8c21d2",
+      "bytes": 245751,
+      "width_px": 390,
+      "height_px": 844,
+      "source": "tests/results/designs/create-round5-20261029/round4-alarm.png"
+    },
+    {
+      "file": "round4-reminder.png",
+      "sha256": "f8340938c98041a43625b718f99c8445519bac4966161c8276cfb5345c044318",
+      "bytes": 255088,
+      "width_px": 390,
+      "height_px": 844,
+      "source": "tests/results/designs/create-round5-20261029/round4-reminder.png"
+    },
+    {
+      "file": "round4-calendar.png",
+      "sha256": "194d04a6b18a08265e1c5cdaa759e27dd450df79b2b145d5b2ba763bd82208ad",
+      "bytes": 225671,
+      "width_px": 390,
+      "height_px": 844,
+      "source": "tests/results/designs/create-round5-20261029/round4-calendar.png"
+    },
+    {
+      "file": "round5-alarm.png",
+      "sha256": "69eef198fa89c9bb0d3b6926e9bb4fa290ff86fceec6c4bd573e675fb5d8f82e",
+      "bytes": 267524,
+      "width_px": 390,
+      "height_px": 844,
+      "source": "tests/results/designs/create-round5-20261029/round5-alarm.png"
+    },
+    {
+      "file": "round5-reminder.png",
+      "sha256": "acd6cb4e4761f977aab7c034a300486117e6bdbb35bc57ec3b9277fb61012a1f",
+      "bytes": 278417,
+      "width_px": 390,
+      "height_px": 844,
+      "source": "tests/results/designs/create-round5-20261029/round5-reminder.png"
+    },
+    {
+      "file": "round5-calendar.png",
+      "sha256": "162deb3c72a1bec68f62c414ca8f525febf62bd9b2ca1f2bc331ad220edd3baf",
+      "bytes": 263995,
+      "width_px": 390,
+      "height_px": 844,
+      "source": "tests/results/designs/create-round5-20261029/round5-calendar.png"
+    }
+  ]
+}

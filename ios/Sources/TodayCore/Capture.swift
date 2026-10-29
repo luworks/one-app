@@ -516,7 +516,9 @@ public enum CaptureParser {
         separator: " "
       )
       .trimmingCharacters(in: CharacterSet(charactersIn: " ,，。.、"))
-    let connectors: Set<String> = ["at", "on", "by", "due", "before", "this", "next", "every"]
+    var connectors: Set<String> = ["at", "on", "by", "due", "before", "this", "next", "every"]
+    // The time-range parser removes the hours in "review from 2pm to 3pm".
+    if hour != nil, duration != nil { connectors.insert("from") }
     var words = title.split(separator: " ").map(String.init)
     while let last = words.last, connectors.contains(last.lowercased()) { words.removeLast() }
     while let first = words.first, connectors.contains(first.lowercased()), words.count > 1 {

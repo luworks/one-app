@@ -8,7 +8,8 @@ public enum OneOffReminderRequest {
     existingItems: () -> [EditItem] = { [] }
   ) -> Capture? {
     guard SubmittedActionAnalysis.analyze(text).permitsDirectCreation,
-      ChatRouting.intent(text) == .capture,
+      ChatRouting.intent(text) == .capture, !ChatRouting.requestsEvent(text),
+      !ChatRouting.hasMultipleActions(text), !ChatRouting.hasMaterialCorrection(text),
       CaptureParser.leadingMonth(text) == nil,
       !CaptureConversation.referencesReminder(text),
       text.range(
@@ -36,7 +37,8 @@ public enum OneOffReminderRequest {
   ) -> Bool {
     guard let text = contextSubject(context, now: now, calendar: calendar),
       SubmittedActionAnalysis.analyze(text).permitsDirectCreation,
-      CaptureParser.leadingMonth(text) == nil
+      CaptureParser.leadingMonth(text) == nil,
+      !ChatRouting.hasMultipleActions(text), !ChatRouting.hasMaterialCorrection(text)
     else { return false }
     return text.range(
       of: #"还是|或者|\bor\b|\bevery\b|\brecurr|重复|每"#,

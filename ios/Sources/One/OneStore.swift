@@ -19,7 +19,20 @@
 
     package static let session: PlannerSession = {
       do {
-        let defaults = UserDefaults.standard
+        let evaluation: Bool
+        #if DEBUG && targetEnvironment(simulator)
+          evaluation = ProcessInfo.processInfo.arguments.contains("-gptEvaluationStore")
+        #else
+          evaluation = false
+        #endif
+        let evaluationRoot = URL.applicationSupportDirectory.appending(path: "GPTMediumEvaluation")
+        if evaluation {
+          try FileManager.default.createDirectory(
+            at: evaluationRoot, withIntermediateDirectories: true)
+        }
+        let defaults =
+          evaluation
+          ? UserDefaults(suiteName: "com.luworks.today.gpt-medium-evaluation")! : .standard
         let runtime = PlannerRuntime(
           now: { Date.now }, nextID: { UUID() },
           calendar: .autoupdatingCurrent, locale: .autoupdatingCurrent)
@@ -27,7 +40,10 @@
         let container = try ModelContainer(
           for: OneTask.self, OneEvent.self, OneAlarm.self, OneList.self,
           Habit.self, ChatThread.self, LedgerEntry.self, AIGrant.self,
-          ShareImportReceipt.self, configurations: ModelConfiguration())
+          ShareImportReceipt.self,
+          configurations: evaluation
+            ? ModelConfiguration(url: evaluationRoot.appending(path: "planner.store"))
+            : ModelConfiguration())
         let calendar = CalendarSync(
           defaults: defaults, runtime: runtime, arguments: [], makeStore: { EKEventStore() })
         let reminders = RemindersSync(
@@ -37,7 +53,9 @@
         let timers = TimerController(
           defaults: defaults, runtime: runtime, driver: driver,
           donate: { TimerIntentSupport.donate(seconds: $0) })
-        let store = try ActivityStore.openOrRecover(at: ActivityStore.defaultURL())
+        let store = try ActivityStore.openOrRecover(
+          at: evaluation
+            ? evaluationRoot.appending(path: "activity.sqlite") : ActivityStore.defaultURL())
         let activity = ActivityCenter(store: store, defaults: defaults, runtime: runtime)
         let ledger = Ledger(activity: activity, reminders: reminders, runtime: runtime)
         let notifications = Reminders(
@@ -50,7 +68,7 @@
           ledger: ledger, runtime: runtime, defaults: defaults)
         let widget = WidgetFeed(
           container: container, calendar: calendar, reminders: reminders,
-          runtime: runtime, enabled: true,
+          runtime: runtime, enabled: !evaluation,
           travel: { travel.widgetFields(eventID: $0, start: $1, isAllDay: $2, place: $3, now: $4) },
           save: { $0.save() }, reload: { WidgetCenter.shared.reloadAllTimelines() })
         travel.didUpdateEstimate = { [weak widget] in widget?.rewriteFromStore() }
@@ -61,7 +79,10 @@
           container: container, defaults: defaults, runtime: runtime, calendar: calendar,
           reminders: reminders, alarms: alarms, timers: timers, notifications: notifications,
           activity: activity, ledger: ledger, actions: actions, travel: travel,
-          soundPreview: sound, widget: widget, inbox: FileShareInbox(url: ShareInbox.fileURL)
+          soundPreview: sound, widget: widget,
+          inbox: FileShareInbox(
+            url: evaluation
+              ? evaluationRoot.appending(path: "share-inbox.json") : ShareInbox.fileURL)
         ) {
           calendar.dispose()
           reminders.dispose()
