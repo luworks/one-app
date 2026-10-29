@@ -73,9 +73,10 @@ final class TodayTomorrowTests: XCTestCase {
     let start = app.weekStripDay(today).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -20, dy: 0)))
     XCTAssertTrue(app.weekStripDay(today).waitForSelected(timeout: 3), "a short drag returns to the same day")
-    app.weekStripDay(today).swipeLeft()
+    start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -100, dy: 0)))
     XCTAssertTrue(app.weekStripDay(next).waitForSelected(timeout: 3))
-    app.weekStripDay(next).swipeRight()
+    let nextStart = app.weekStripDay(next).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    nextStart.press(forDuration: 0.05, thenDragTo: nextStart.withOffset(CGVector(dx: 100, dy: 0)))
     XCTAssertTrue(app.weekStripDay(today).waitForSelected(timeout: 3))
   }
 
