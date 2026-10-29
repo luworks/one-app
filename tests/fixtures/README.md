@@ -287,8 +287,27 @@ dataset load clock, then relaunches its isolated persistent store on the next da
 
 ## AI chat capability assessment
 
+[`intelligence-model-selection-models.json`](intelligence-model-selection-models.json)
+pins the evaluated Qwen conversion artifacts and runtime revision. The evidence
+collector checks model hashes against this catalog. Apple system-managed weights
+remain unexposed; a model marketing name is not an observed weight revision.
+
+[`intelligence-model-selection-holdout.json`](intelligence-model-selection-holdout.json)
+defines 18 separately authored model-selection cases (21 turns), balanced across
+Chinese, English and mixed language. It uses a fixed synthetic clock and two
+synthetic edit targets. Freeze before batch runs and keep failures out of tuning;
+the repository-aware authorship is not an independent external benchmark. See
+[`intelligence-model-selection.md`](../../docs/qa/intelligence-model-selection.md).
+
 [`ai-chat-capability-eval.json`](ai-chat-capability-eval.json) defines 24
 synthetic bilingual manual Live-app scenarios, with explicit expected outcomes
 and a simulator-only setup. [`ai-chat-capability-protocol.md`](../../docs/qa/ai-chat-capability-protocol.md)
 defines evidence, attribution and scoring; this authored set is development data,
-not a blind holdout or a claim of model execution. It has no automated consumer.
+not a blind holdout or a claim of model execution. The standalone simulator
+adapter in `tests/qa/intelligence/` consumes these inputs for model-only batches.
+`IntelligenceRulesExportTests.testFrozenDevelopmentRulesAndPreviewFollowups`
+exports pure production parser, routing and open-preview refinement observations
+at a fixed clock. Its execution success is not an accuracy score or product write
+acceptance; existing-item resolution, model calls, save and Undo remain outside
+that seam. `AI_RULES_EVAL_OUTPUT` may point to a fresh canonical evidence file;
+the full JSON is also retained in the `./dev test unit` raw log.
