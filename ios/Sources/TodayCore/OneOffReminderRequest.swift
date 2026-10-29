@@ -4,7 +4,8 @@ import Foundation
 /// Rules must establish the action and timing; model output alone cannot authorize a write.
 public enum OneOffReminderRequest {
   public static func capture(
-    _ text: String, now: Date, calendar: Calendar
+    _ text: String, now: Date, calendar: Calendar,
+    existingItems: () -> [EditItem] = { [] }
   ) -> Capture? {
     guard ChatRouting.intent(text) == .capture,
       CaptureParser.leadingMonth(text) == nil,
@@ -14,6 +15,13 @@ public enum OneOffReminderRequest {
           #"[;；\n]|然后|另外还|\band then\b|\bevery\b|\brecurr|重复|每|还是|或者|\bor\b|\b(?:alarm|timer)\b|wake me|闹钟|计时器|叫醒|叫我起床"#,
         options: [.regularExpression, .caseInsensitive]) == nil
     else { return nil }
+    // Operations matching existing candidates retain their edit/ambiguity boundary.
+    // Ordinary new reminders never need a candidate lookup or a model call here.
+    if Editing.hasOperationCue(text),
+      Editing.looksLikeEdit(text, items: existingItems(), now: now, calendar: calendar)
+    {
+      return nil
+    }
     let capture = CaptureConversation.parse(text, now: now, calendar: calendar)
     return eligible(capture) ? capture : nil
   }

@@ -45,7 +45,8 @@ final class IntelligenceRulesExportTests: XCTestCase {
         let input = try XCTUnwrap(turn["input"] as? String)
         let started = Date()
         let ruleIntent = ChatRouting.intent(input)
-        let direct = OneOffReminderRequest.capture(input, now: now, calendar: calendar)
+        let direct = OneOffReminderRequest.capture(
+          input, now: now, calendar: calendar, existingItems: { existingItems })
         let editEligible =
           direct == nil
           && Editing.looksLikeEdit(
@@ -131,10 +132,14 @@ final class IntelligenceRulesExportTests: XCTestCase {
     XCTAssertEqual(rows.count, expectedCount, "Every fixture turn must be observed")
     let result: [String: Any] = ["reference": "2026-10-28 09:00 America/Los_Angeles", "rows": rows]
     let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
-    // Host stdout is retained by ./dev. Optional output is only the QA evidence file.
-    print("INTELLIGENCE_RULES " + String(decoding: data, as: UTF8.self))
+    // XCTest can truncate a long stdout line; only the explicit file is complete evidence.
     if let path = ProcessInfo.processInfo.environment["AI_RULES_EVAL_OUTPUT"] {
       try data.write(to: URL(fileURLWithPath: path), options: [.withoutOverwriting])
+      print("INTELLIGENCE_RULES observed=\(rows.count) bytes=\(data.count) output=\(path)")
+    } else {
+      print(
+        "INTELLIGENCE_RULES observed=\(rows.count); set AI_RULES_EVAL_OUTPUT to retain full observations"
+      )
     }
   }
 }

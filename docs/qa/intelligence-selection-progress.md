@@ -13,7 +13,9 @@ The latest consolidated phone build is outside this thread's validation scope.
 | Apple native `@Generable` diagnostic, 120-second budget | 81/81 API returns | 81/81 strict JSON | 6/81 | Schema fixed serialization, not all semantic fields |
 | Pure routing/parser/open-preview rules export, corrected exporter | 27/27 observations | Inapplicable | 18/27 | Not the complete app reducer, existing-item resolution or saves |
 | Qwen3.5-2B Q4_K_M original 30-second smoke | 3/3 records | Not a formal quality score | UNKNOWN | One EOG success, two CPU deadline timeouts; pinned simulator-file hash verified |
-| Qwen3.5-2B/4B matched formal development and holdout | Not yet run | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
+| Qwen3.5-2B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; two repetitions still required |
+| Qwen3.5-4B Q4_K_M 120-second smoke | 3/3 EOG | 3/3 strict JSON | 0/3 | Not a formal quality estimate; repetition1 is now running |
+| Remaining Qwen formal repetitions and all holdout | Not yet completed | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
 
 The semantic column is a **partial schema-based field rubric**, not an overall
 conversational quality, safety or product pass rate. It requires a parseable
@@ -64,7 +66,7 @@ behavior or memory survivability. Exact Apple weight revision remains UNKNOWN.
 
 ## Decision status
 
-No winning model is established yet. Qwen formal trials, untouched holdout,
+No winning model is established yet. Remaining Qwen formal trials, untouched holdout,
 broader Live product paths and semantic safety review remain required. Missing
 candidate integration is unmeasured; it does not prove that the incumbent wins.
 Review the [runtime findings](intelligence-runtime-review.md) and
@@ -72,6 +74,25 @@ Review the [runtime findings](intelligence-runtime-review.md) and
 one-off rule path bypasses ordinary model parsing, and replacing the backend
 cannot repair every failure in that path.
 
-Heavy resources were released normally for root's consolidated phone delivery.
-The owned simulator is shut down; model files, caches and evidence are retained.
+The root delivery reservation ended explicitly. Subsequent batches use automatic
+open/load/submit/monitor/close control, with resource locks released before grading.
+Formal repetitions are split into separate complete27-turn runs without reducing
+the required three repetitions. Model files, caches and evidence are retained.
 This thread does not install, test or record on the owner's phone.
+
+## Narrow application-boundary candidate
+
+The pure rule export found `ambiguous-edit` eligible for direct submitted-reminder
+creation even with two matching synthetic dentist items. The early grant branch
+precedes edit routing in the app. A candidate guard now lazily checks matching
+existing candidates using the existing edit rules; ordinary new reminders do not
+read candidates. No new write authority or sentence-specific regex was added.
+
+On the same27-turn pure seam with the same two edit targets, before19/27 and
+after20/27 passed the partial field rubric; only the ambiguous-edit output changed.
+For that one case, direct creation eligibility changed from true to false and the
+decision became clarify. This is a matched rules-seam result, **not a measured
+product save/Undo rate**. Fourteen focused unit methods passed, missing0.
+The earlier18/27 figure came from a narrower exporter and must not be presented
+as a behavior improvement to20/27. iOS compilation, Live UI reproduction and CI
+verification of the candidate remain outstanding.

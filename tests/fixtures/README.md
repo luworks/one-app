@@ -308,6 +308,8 @@ adapter in `tests/qa/intelligence/` consumes these inputs for model-only batches
 `IntelligenceRulesExportTests.testFrozenDevelopmentRulesAndPreviewFollowups`
 exports pure production parser, routing and open-preview refinement observations
 at a fixed clock. Its execution success is not an accuracy score or product write
-acceptance; existing-item resolution, model calls, save and Undo remain outside
-that seam. `AI_RULES_EVAL_OUTPUT` may point to a fresh canonical evidence file;
-the full JSON is also retained in the `./dev test unit` raw log.
+acceptance; model calls, save and Undo remain outside that seam. Its two synthetic
+targets allow a separate pure edit-decision observation. `AI_RULES_EVAL_OUTPUT`
+must point to a fresh canonical evidence file to retain complete observations.
+XCTest can truncate long stdout lines; the raw log reports a compact count/path
+and is not a substitute for that JSON file.

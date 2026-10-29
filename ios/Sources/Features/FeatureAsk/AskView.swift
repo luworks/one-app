@@ -600,7 +600,8 @@
       }
       turnStart = sentAt
       let intent = ChatRouting.intent(text)
-      if let capture = OneOffReminderRequest.capture(text, now: sentAt, calendar: runtime.calendar)
+      if let capture = OneOffReminderRequest.capture(
+        text, now: sentAt, calendar: runtime.calendar, existingItems: { editCandidates().items })
       {
         recordTurn("capture", text)
         clearPreviews()
