@@ -16,7 +16,7 @@ EVENTS = {
     'turn_started', 'turn_routed', 'rule_direct_grant_selected',
     'context_resolution_selected', 'context_reply_selected', 'unavailable_chat_fallback',
 }
-STAGES = {'routing', 'chat', 'kind', 'title', 'proposals', 'edit'}
+STAGES = {'routing', 'chat', 'kind', 'title', 'proposals', 'edit', 'rank'}
 
 
 def collect(text):

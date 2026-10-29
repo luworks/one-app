@@ -103,8 +103,9 @@ It is not correct content or a successful save. Bounded operations separately
 report deadline/cancellation/nil fallback. A late API return retains its original
 scope and cannot erase the earlier timeout/fallback. Title refinement retains its
 existing four-second deadline; `title_fallback_selected` does not distinguish its
-inner timeout from validation/unavailability on its own. Suggestion ranking and
-prewarming are not covered by this trace. Missing stages remain unobserved.
+inner timeout from validation/unavailability on its own. Suggestion ranking has a separate `rank` scope; background calls without a
+submitted-turn UUID are not assigned to a user turn by guesswork. Prewarming is
+not a generation and is not counted by this trace. Missing stages remain unobserved.
 
 Use `tests/qa/intelligence/collect_product.py` to extract lifecycle counts, and
 correlate the closed observation window with the synthetic UI action record.
@@ -125,3 +126,50 @@ record the reported variant and context size. Earlier batches did not record
 these values and remain UNKNOWN; neither a reported variant nor an OS version
 identifies an exact weight revision/hash. Runtime validation of this addition
 is pending. SDK declaration presence is not a measured model selection.
+
+## Provider migration options reviewed2026-10-29
+
+Apple now documents [third-party model support](https://developer.apple.com/foundation-models-framework/)
+through `LanguageModel`, including Core AI and MLX adapters. The
+[Core AI integration guide](https://developer.apple.com/documentation/foundationmodels/running-a-core-ai-model-in-a-foundation-models-session)
+uses `CoreAILanguageModel(resourcesAt:)` with `LanguageModelSession`; the
+[official repository](https://github.com/apple/coreai-models) requires iOS/macOS27
+and Xcode27. This is a potential deployment route, not a measured port here.
+No OS upgrade, adapter installation or additional model export was performed.
+
+[MLX Swift LM](https://github.com/ml-explore/mlx-swift-lm) provides
+`MLXFoundationModels` and grammar-constrained `MLXGuidedGeneration`. Its
+[release history](https://github.com/ml-explore/mlx-swift-lm/releases) includes
+Qwen3.5 support. The27 SDK bridge can preserve the structured session API,
+but architecture support alone does not validate artifact parity, this app's
+roles, simulator compatibility or phone performance. These remain UNKNOWN.
+
+A replacement in Today must supply the whole `AskIntelligence` composition,
+including backend/readiness, parse, proposals, title, chat, edit planning and
+optional ranking. Simply swapping one session leaves Apple-specific availability
+checks and other default-model calls elsewhere. Keep deterministic scheduling,
+material-ambiguity checks, lifecycle receipts and existing confirmation gates.
+A replacement's generated action narration must not be treated as a save.
+
+For a network candidate, Apple's [PCC eligibility page](https://developer.apple.com/private-cloud-compute/)
+states no cloud API cost for developers enrolled in the Small Business Program,
+with fewer than2 million first-time App Store downloads and an assigned PCC
+entitlement. It describes testing through TestFlight/ad hoc distribution and a
+six-month migration window after losing eligibility. This account's eligibility,
+entitlement and usable test path are UNKNOWN. We did not inspect accounts,
+change signing, request entitlements, install on a phone or call PCC.
+
+PCC is worth considering for a synthetic matched API pilot if the requirements
+and network use are separately approved. Apple's stated privacy protections do
+not make remote computation offline. Measure quality, network failure/latency
+and eligibility/rate limits; never silently upload real planner content. Other
+API candidates need current provider-specific price and retention terms before
+being costed. This is a proposal, not an enabled fallback or a measured API result.
+
+Suggestion ranking can run asynchronously when the Ask screen opens or its
+context refreshes, with a two-second deadline. It is not simulator-disabled in
+the production source despite an obsolete comment saying so; that comment is
+corrected. The opt-in trace includes actual ranking API starts/returns and its
+boundary outcome so foreground latency is not analyzed as though background
+calls cannot exist. There is no measured contention effect yet; preserve that
+as UNKNOWN until observing Live overlap and cancellations.

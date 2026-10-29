@@ -11,7 +11,7 @@
   /// thing is dropped), so the model can rank and rephrase but never send the user somewhere else.
   ///
   /// Everything stays on the device. A fresh session for every call (the instructions carry the facts, no history is kept);
-  /// temperature low; nil on any failure, a timeout, an unavailable model or the simulator (it has no model and would hang).
+  /// temperature low; nil on any failure, a timeout or an unavailable model.
   package enum AskSuggestionRanker {
     package struct Answer: Sendable {
       package var picks: [SuggestionPick]
@@ -35,7 +35,7 @@
       guard isAvailable, !pool.isEmpty else { return nil }
       #if canImport(FoundationModels)
         if #available(iOS 26, *) {
-          return await ModelTimeout.run(seconds: timeout) {
+          return await ModelTimeout.run(seconds: timeout, stage: .rank) {
             await OnDeviceRanker.rank(
               pool: pool, facts: facts, language: language, count: count, localeID: localeID)
           }
@@ -98,9 +98,11 @@
         options.temperature = 0.2
         options.maximumResponseTokens = 250
         do {
-          let result = try await session.respond(
-            to: AskSuggestionRanker.prompt(pool: pool, facts: facts),
-            generating: ChosenSuggestions.self, options: options)
+          let result = try await ModelCallTrace.generate(.rank) {
+            try await session.respond(
+              to: AskSuggestionRanker.prompt(pool: pool, facts: facts),
+              generating: ChosenSuggestions.self, options: options)
+          }
           let picks = result.content.picks.map { SuggestionPick(id: $0.id, message: $0.message) }
           return picks.isEmpty
             ? nil : AskSuggestionRanker.Answer(picks: picks, extra: result.content.extra)

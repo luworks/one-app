@@ -23,6 +23,23 @@ class ProductionTraceTests(unittest.TestCase):
         self.assertNotIn('api_returned', result['stages']['routing'])
         self.assertIn('UNKNOWN', result['window_completeness'])
 
+    def test_background_ranking_stays_outside_submitted_turn_counts(self):
+        background = []
+        for i, event in enumerate(['api_started', 'api_returned', 'result_available']):
+            background.append('TODAY_MODEL_CALL ' + json.dumps(dict(
+                version=1, call='c956870e-535d-42c7-b371-f931b8879cc3',
+                stage='rank', event=event, elapsed_ms=i)))
+        turn = '7810a32f-e118-42b0-9d4a-d05835c00bf4'
+        foreground = []
+        for line in trace('api_started', 'api_returned').splitlines():
+            row = json.loads(line.split('TODAY_MODEL_CALL ')[1])
+            row['turn'] = turn
+            foreground.append('TODAY_MODEL_CALL ' + json.dumps(row))
+        result = collect('\n'.join(foreground + background))
+        self.assertEqual(result['stages']['rank']['api_started'], 1)
+        self.assertEqual(result['stages']['chat']['api_started'], 1)
+        self.assertEqual(result['turns'][turn], ['d2193b71-1cce-48dd-9760-c36f0af7f355'])
+
     def test_late_api_return_does_not_erase_deadline_or_fallback(self):
         result = collect(trace('api_started', 'deadline_timeout',
                                'chat_fallback_selected', 'api_returned'))

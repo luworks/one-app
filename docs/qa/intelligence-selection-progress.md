@@ -17,6 +17,8 @@ The latest consolidated phone build is outside this thread's validation scope.
 | Qwen3.5-2B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; repetition3 remains |
 | Qwen3.5-4B Q4_K_M 120-second smoke | 3/3 EOG | 3/3 strict JSON | 0/3 | Not a formal quality estimate; formal repetition1 completed |
 | Qwen3.5-4B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 6/27 | One complete repetition; two repetitions still required |
+| Qwen3.5-4B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 6/27 | Whole-case fields5/24; repetition3 remains |
+| Qwen3.5-2B Q4_K_M 120-second development repetition3 | 27/27 EOG | 26/27 strict JSON | 3/27 | Three complete runs; whole-case fields2/24 each |
 | Remaining Qwen formal repetitions and all holdout | Not yet completed | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
 
 The semantic column is a **partial schema-based field rubric**, not an overall
@@ -142,3 +144,17 @@ The UI before/after figures use the same unchanged TodayMock journey and
 assertions, on different application revisions and execution dates. They are
 not a controlled single-commit A/B or model comparison; relative-date inputs
 and unmeasured Live behavior remain limitations.
+
+Qwen4B repetition2 completed with median74026.0 ms and p90 85100.2 ms
+(n=27); all27 reached EOG, no timeout/fallback. Raw outputs were identical
+on27/27 matched turns to repetition1. Repeated54 executions remain27 unique
+inputs; the partial field rubric passed6/27 in each run.
+
+The complete Qwen2B development cohort has81/81 EOG generations across
+three distinct runs:78/81 strict JSON,9/81 specified semantic-field passes
+(3/27 unique turns), and2/24 whole cases passing in every run. All27 raw
+outputs are identical across all three repetitions. Pooled median30218.6 ms,
+p90 35654.6 ms (n=81), with32/81 completions within30 seconds. There were
+no adapter timeouts/fallbacks. These are descriptive CPU simulator results,
+not independent quality samples, phone speed or product acceptance. Closed
+three-run evidence and language/category denominators are journal-indexed.

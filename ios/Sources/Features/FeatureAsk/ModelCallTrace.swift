@@ -6,7 +6,7 @@
 
   /// Opt-in synthetic QA attribution. No prompts, replies, titles, item IDs or error descriptions.
   enum ModelCallTrace {
-    enum Stage: String, Sendable { case routing, chat, kind, title, proposals, edit }
+    enum Stage: String, Sendable { case routing, chat, kind, title, proposals, edit, rank }
     struct Scope: Sendable {
       let id = UUID()
       let stage: Stage
