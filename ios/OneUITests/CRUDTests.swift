@@ -400,7 +400,7 @@ final class CRUDTests: XCTestCase {
   /// In Month, selects `day` (paging to its month first if needed).
   private func selectDay(_ day: Date) {
     if !cal.isDate(day, equalTo: .now, toGranularity: .month) {
-      element("calendar.monthPager").swipeLeft()
+      element("calendar.monthPager").swipeUp()
     }
     let id = String(
       format: "day.%04d-%02d-%02d", cal.component(.year, from: day),
