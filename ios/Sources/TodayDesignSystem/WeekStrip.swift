@@ -135,7 +135,7 @@
                 .weekday(.wide).month(.wide).day())
           )
           .accessibilityAddTraits(isSelected ? .isSelected : [])
-          .accessibilityIdentifier("weekStrip." + Self.key(d, cal))
+          .accessibilityIdentifier(accessible ? "weekStrip." + Self.key(d, cal) : "")
           .accessibilityHidden(!accessible)
         }
       }
