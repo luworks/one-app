@@ -1013,7 +1013,7 @@
         let modelPlan = intelligence.plan
         let anchor = now()
         let calendar = runtime.calendar
-        let plan = await ModelTimeout.run(seconds: 20) {
+        let plan = await ModelTimeout.run(seconds: 20, stage: .edit) {
           try? await modelPlan(text, items, anchor, calendar, history)
         }
         guard !Task.isCancelled, !AIResponseTrace.enabled || token == generationToken else {

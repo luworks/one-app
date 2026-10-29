@@ -58,7 +58,8 @@ but context assembly, proposal state, and follow-up routing remain app behavior
 that requires its own tests. There is no planner write tool in the model-only
 runner. Production save, confirmation and Undo remain downstream app gates.
 
-Eight-second production limits return nil/fallback through helpers that erase
+Production limits (eight seconds for chat/kind/proposals, four seconds for
+title refinement, twenty seconds for edit planning) return nil/fallback through helpers that erase
 the distinction between unavailable, timeout, generation error and unusable
 content. The existing source trace is insufficient for per-turn attribution.
 Useful next instrumentation is a typed, text-free outcome for each stage:
@@ -86,3 +87,27 @@ or configured as part of this review.
 The final choice must use completed matched batches plus product evidence,
 not parameter count, a few attractive answers, vendor leaderboards, or the
 assumption that a missing comparison favors the incumbent.
+
+## Opt-in production attribution candidate
+
+Launch the owned simulator's Live build with `-intelligenceTrace` and retain a
+closed unified log filtered to subsystem `com.luworks.today.intelligence`.
+`ModelCallTrace` wraps actual production `respond` calls for chat, kind, title,
+proposals and edit planning. Each call scope has a random diagnostic UUID, stage,
+monotonic elapsed milliseconds and fixed lifecycle/selection events. It records
+no prompt, output, planner item ID or error description. Modern framework errors
+are classified by fixed cases; other errors use their type only.
+
+`api_started` proves an attempted generation, `api_returned` only an API return.
+It is not correct content or a successful save. Bounded operations separately
+report deadline/cancellation/nil fallback. A late API return retains its original
+scope and cannot erase the earlier timeout/fallback. Title refinement retains its
+existing four-second deadline; `title_fallback_selected` does not distinguish its
+inner timeout from validation/unavailability on its own. Suggestion ranking and
+prewarming are not covered by this trace. Missing stages remain unobserved.
+
+Use `tests/qa/intelligence/collect_product.py` to extract lifecycle counts, and
+correlate the closed observation window with the synthetic UI action record.
+The collector never reports product pass rates or window completeness from API
+metadata alone. Actual simulator compilation and Live trace validation of this
+candidate are pending; source instrumentation is not runtime proof.

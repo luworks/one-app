@@ -75,7 +75,9 @@
     ) async throws -> EditPlan {
       let session = LanguageModelSession(
         instructions: instructions(items: items, now: now, calendar: calendar, history: history))
-      return try await session.respond(to: text, generating: EditPlan.self).content
+      return try await ModelCallTrace.generate(.edit) {
+        try await session.respond(to: text, generating: EditPlan.self).content
+      }
     }
   }
 

@@ -31,7 +31,7 @@
       #if canImport(FoundationModels)
         if #available(iOS 26, *) {
           // The model can stall (still warming up, busy): after 8 seconds the caller falls back to the rule parser.
-          return await withTimeout(.seconds(8)) {
+          return await ModelTimeout.run(seconds: 8, stage: .proposals) {
             await OnDeviceCapture.propose(text, now: now, calendar: calendar)
           }
         }
@@ -44,21 +44,19 @@
     static func refineTitle(_ capture: Capture, source: String, history: String = "") async
       -> Capture
     {
-      await CaptureTitleRefinement.refine(
-        capture, source: source, history: history, available: isAvailable
-      ) { prompt in
-        #if canImport(FoundationModels)
-          if #available(iOS 26, *) { return await OnDeviceCapture.refineTitle(prompt) }
-        #endif
-        return nil
+      await ModelCallTrace.scoped(.title) {
+        let result = await CaptureTitleRefinement.refine(
+          capture, source: source, history: history, available: isAvailable
+        ) { prompt in
+          #if canImport(FoundationModels)
+            if #available(iOS 26, *) { return await OnDeviceCapture.refineTitle(prompt) }
+          #endif
+          return nil
+        }
+        ModelCallTrace.selection(
+          result.fromAppleIntelligence ? "model_title_selected" : "title_fallback_selected")
+        return result
       }
-    }
-
-    /// Whichever finishes first: the work, or nil when the time is up (the late result is dropped).
-    private static func withTimeout(
-      _ limit: Duration, _ work: @escaping @Sendable () async -> [Capture]?
-    ) async -> [Capture]? {
-      try? await AsyncDeadline.run(for: limit, operation: work)
     }
   }
 
@@ -123,21 +121,29 @@
       }
 
       static func refineTitle(_ prompt: String) async -> String? {
-        guard isAvailable else { return nil }
+        guard isAvailable else {
+          ModelCallTrace.selection("unavailable")
+          return nil
+        }
         let session = LanguageModelSession(
           model: .default, instructions: CaptureTitleRefinement.instructions)
         var options = GenerationOptions()
         options.temperature = 0
         options.maximumResponseTokens = 160
         do {
-          return try await session.respond(
-            to: prompt, generating: RefinedCaptureTitle.self, options: options
-          ).content.title
+          return try await ModelCallTrace.generate(.title) {
+            try await session.respond(
+              to: prompt, generating: RefinedCaptureTitle.self, options: options
+            ).content.title
+          }
         } catch { return nil }
       }
 
       static func propose(_ text: String, now: Date, calendar: Calendar) async -> [Capture]? {
-        guard isAvailable else { return nil }
+        guard isAvailable else {
+          ModelCallTrace.selection("unavailable")
+          return nil
+        }
         // A fresh session per line: the instructions carry today's date, and no history is kept.
         let session = LanguageModelSession(
           model: .default,
@@ -146,8 +152,10 @@
         options.temperature = 0  // stable output; this is extraction, not writing
         options.maximumResponseTokens = 700
         do {
-          let result = try await session.respond(
-            to: text, generating: ProposedItems.self, options: options)
+          let result = try await ModelCallTrace.generate(.proposals) {
+            try await session.respond(
+              to: text, generating: ProposedItems.self, options: options)
+          }
           let captures = result.content.items.compactMap { item -> Capture? in
             guard
               var c = CaptureDraftMapper.capture(from: draft(item), now: now, calendar: calendar)
@@ -155,6 +163,8 @@
             c.title = CaptureDraftMapper.userWording(c.title, source: text)
             return c
           }
+          ModelCallTrace.selection(
+            captures.isEmpty ? "proposals_unusable" : "model_proposals_selected")
           return captures.isEmpty ? nil : captures
         } catch {
           // Guardrails, unsupported language, context size, cancelled, model went away: use the rule parser.
