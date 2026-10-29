@@ -185,13 +185,14 @@ public struct TaskSnapshot: Codable, Equatable {
   public var repeatRule: String?
   public var checklist: [ChecklistItem] = []
   public var ringsAsAlarm = false
+  public var reminderAlert: String?
 
   public init(
     title: String, note: String = "", isDone: Bool = false, doneAt: Date? = nil,
     durationMinutes: Int = 25, due: Date? = nil,
     createdAt: Date = Date(), reminderOffsetMinutes: Int? = 0, listName: String = "",
     tags: [String] = [], flagged: Bool = false, repeatRule: String? = nil,
-    checklist: [ChecklistItem] = [], ringsAsAlarm: Bool = false
+    checklist: [ChecklistItem] = [], ringsAsAlarm: Bool = false, reminderAlert: String? = nil
   ) {
     self.title = title
     self.note = note
@@ -207,6 +208,7 @@ public struct TaskSnapshot: Codable, Equatable {
     self.repeatRule = repeatRule
     self.checklist = checklist
     self.ringsAsAlarm = ringsAsAlarm
+    self.reminderAlert = reminderAlert
   }
 }
 

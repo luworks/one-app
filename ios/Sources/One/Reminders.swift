@@ -64,12 +64,27 @@
         identifier: Action.snooze60.rawValue, title: "Snooze 1 hour", options: [])
       let tomorrow = UNNotificationAction(
         identifier: Action.tomorrow.rawValue, title: "Move to tomorrow", options: [])
-      center.setNotificationCategories([
+      var categories: Set<UNNotificationCategory> = [
+        UNNotificationCategory(
+          identifier: "TODAY_REMINDER_OFF", actions: [done, tomorrow], intentIdentifiers: [])
+      ]
+      for minutes in AlarmPlan.snoozeChoices {
+        categories.insert(
+          UNNotificationCategory(
+            identifier: "TODAY_REMINDER_\(minutes)",
+            actions: [
+              done,
+              UNNotificationAction(
+                identifier: "SNOOZE_CUSTOM", title: "Snooze \(minutes) min", options: []), tomorrow,
+            ], intentIdentifiers: []))
+      }
+      categories.formUnion([
         UNNotificationCategory(
           identifier: Self.taskCategory, actions: [done, s10, s60, tomorrow], intentIdentifiers: []),
         UNNotificationCategory(
           identifier: Self.eventCategory, actions: [s10], intentIdentifiers: []),
       ])
+      center.setNotificationCategories(categories)
     }
 
     // MARK: Permission
@@ -117,8 +132,10 @@
           (
             fire,
             request(
-              id: "\(id)#0", title: task.title, body: when, category: Self.taskCategory, key: id,
-              at: fire)
+              id: "\(id)#0", title: task.title, body: when,
+              category: ReminderAlert(rawValue: task.reminderAlert)?.category ?? Self.taskCategory,
+              key: id,
+              at: fire, alert: ReminderAlert(rawValue: task.reminderAlert))
           ))
       }
       for event in events {
@@ -152,12 +169,17 @@
     }
 
     private func request(
-      id: String, title: String, body: String, category: String, key: String, at date: Date
+      id: String, title: String, body: String, category: String, key: String, at date: Date,
+      alert: ReminderAlert? = nil
     ) -> UNNotificationRequest {
       let content = UNMutableNotificationContent()
       content.title = title
       content.body = body
-      content.sound = .default
+      if let tone = alert.flatMap({ AlarmSound.named($0.sound) }) {
+        content.sound = UNNotificationSound(named: UNNotificationSoundName(tone.file + ".caf"))
+      } else {
+        content.sound = .default
+      }
       content.categoryIdentifier = category
       content.threadIdentifier = key
       content.userInfo = ["key": key]
@@ -205,11 +227,20 @@
       async
     {
       guard !disposed else { return }
-      if let fire = ReminderPlan.snoozed(action, now: runtime.now()) {
+      let alert: ReminderAlert? = {
+        guard let id = Self.identifier(from: key),
+          let task = container?.mainContext.model(for: id) as? OneTask
+        else { return nil }
+        return ReminderAlert(rawValue: task.reminderAlert)
+      }()
+      let customFire =
+        action == "SNOOZE_CUSTOM"
+        ? alert?.snoozeMinutes.map { runtime.now().addingTimeInterval(Double($0 * 60)) } : nil
+      if let fire = customFire ?? ReminderPlan.snoozed(action, now: runtime.now()) {
         let r = request(
           id: Self.snoozePrefix + runtime.nextID().uuidString, title: title, body: body,
-          category: category, key: key, at: fire)
-        try? await center.add(r)
+          category: category, key: key, at: fire, alert: alert)
+        do { try await center.add(r) } catch { return }
         await clearDelivered(key: key)
         return
       }

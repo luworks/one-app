@@ -13,11 +13,19 @@ package struct CreateDraft {
   package var hasDueTime = false
   package var reminderRepeat: RepeatRule?
   package var listName = ""
+  package var flagged = false
+  package var reminderSound = ""
+  package var reminderSnooze = true
+  package var reminderSnoozeMinutes = 9
   package var eventStart: Date
   package var duration = 60
   package var allDay = false
   package var eventRepeat: RepeatRule?
   package var calendarID: String?
+  package var eventAlert: Int? = 10
+  package var eventLocation = ""
+  package var eventURL = ""
+  package var eventBusy = true
   package var alarmTime: Date
   package var weekdays: Set<Int> = []
   package var sound = ""

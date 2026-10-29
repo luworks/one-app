@@ -697,6 +697,12 @@
           ek.calendar = calendar
           ek.title = event.title
           ek.notes = event.note
+          ek.location = event.location
+          ek.url = event.url.flatMap(URL.init(string:))
+          if let busy = event.busy { ek.availability = busy ? .busy : .free }
+          if let offset = event.reminderOffsetMinutes {
+            ek.addAlarm(EKAlarm(relativeOffset: TimeInterval(-offset * 60)))
+          }
           ek.startDate = event.start
           ek.endDate = event.start.addingTimeInterval(event.duration)
           ek.isAllDay = event.isAllDay
@@ -721,6 +727,9 @@
         event.externalID.flatMap { store.event(withIdentifier: $0) } ?? EKEvent(eventStore: store)
       ek.calendar = ek.calendar ?? calendar
       ek.title = event.title
+      if let location = event.location { ek.location = location }
+      if let url = event.url { ek.url = URL(string: url) }
+      if let busy = event.busy { ek.availability = busy ? .busy : .free }
       ek.startDate = event.start
       ek.endDate = event.start.addingTimeInterval(event.duration)
       ek.isAllDay = event.isAllDay
