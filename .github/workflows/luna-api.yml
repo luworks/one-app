@@ -1,0 +1,26 @@
+name: Luna API
+on:
+  pull_request:
+    paths: ['backend/luna/**', '.github/workflows/luna-api.yml']
+  push:
+    branches: [main]
+    paths: ['backend/luna/**', '.github/workflows/luna-api.yml']
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: backend/luna
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: backend/luna/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm audit --audit-level=high

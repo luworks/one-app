@@ -1,6 +1,6 @@
 #if os(iOS)
   import Foundation
-  import Security
+  import TodayPlatform
   import os
 
   /// A strict JSON schema shared by every hosted planner operation.
@@ -69,11 +69,7 @@
             simulator: true)
         }
       #endif
-      guard let raw = Bundle.main.object(forInfoDictionaryKey: "TodayAIEndpoint") as? String,
-        let endpoint = URL(string: raw), endpoint.scheme == "https", endpoint.host != nil,
-        endpoint.user == nil, endpoint.password == nil, endpoint.query == nil,
-        endpoint.fragment == nil, let bearer = sessionBearer(), !bearer.isEmpty
-      else { return nil }
+      guard let endpoint = AIService.endpoint, let bearer = AIService.bearer else { return nil }
       return Configuration(endpoint: endpoint, bearer: bearer, simulator: false)
     }
 
@@ -95,21 +91,6 @@
         willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
         completionHandler: @escaping @Sendable (URLRequest?) -> Void
       ) { completionHandler(nil) }
-    }
-
-    private static func sessionBearer() -> String? {
-      let query: [String: Any] = [
-        kSecClass as String: kSecClassGenericPassword,
-        kSecAttrService as String: "com.luworks.today.ai-session",
-        kSecAttrAccount as String: "bearer",
-        kSecReturnData as String: true,
-        kSecMatchLimit as String: kSecMatchLimitOne,
-      ]
-      var result: CFTypeRef?
-      guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-        let data = result as? Data
-      else { return nil }
-      return String(data: data, encoding: .utf8)
     }
 
     private struct Request: Encodable {
@@ -156,6 +137,9 @@
     ) async throws -> Value {
       guard let configuration else { throw Failure.unavailable }
       try Task.checkCancellation()
+      guard instructions.utf8.count <= 8000, input.utf8.count <= 12000 else {
+        throw Failure.rejected
+      }
       let id = UUID().uuidString
       let body = Request(
         instructions: instructions, input: input,
@@ -163,6 +147,7 @@
       var request = URLRequest(url: configuration.endpoint)
       request.httpMethod = "POST"
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+      request.setValue("Today-iOS/1.0", forHTTPHeaderField: "User-Agent")
       request.setValue(id, forHTTPHeaderField: "X-Today-Request-ID")
       request.setValue(stage, forHTTPHeaderField: "X-Today-Stage")
       if configuration.simulator {
@@ -171,7 +156,7 @@
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
       }
       request.httpBody = try JSONEncoder().encode(body)
-      guard (request.httpBody?.count ?? 0) <= 32_000 else { throw Failure.rejected }
+      guard (request.httpBody?.count ?? 0) <= 24_000 else { throw Failure.rejected }
       do {
         let (data, response) = try await session.data(for: request)
         try Task.checkCancellation()
