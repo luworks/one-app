@@ -1213,8 +1213,7 @@
     }
 
     private var nowLabel: some View {
-      let c = cal.dateComponents([.hour, .minute], from: presentation.now)
-      let y = CGFloat((c.hour ?? 0) * 60 + (c.minute ?? 0)) / 60 * hourHeight
+      let y = CGFloat(CalendarDayAxis.minute(presentation.now, calendar: cal)) / 60 * hourHeight
       return Text(
         presentation.now.plannerFormatted(
           date: .omitted, time: .shortened, runtime: presentation.runtime)
@@ -1379,7 +1378,7 @@
             (y: Double($0.y(hourHeight)), height: Double(max(18, $0.height(hourHeight))))
           },
           marks: marks.map {
-            $0.start.timeIntervalSince(interval.start) / 3600 * Double(hourHeight)
+            CalendarDayAxis.minute($0.start, calendar: cal) / 60 * Double(hourHeight)
           },
           columnWidth: Double(width), chipHeight: Double(Self.chipHeight),
           foldAfter: max(24, Double(hourHeight) * 0.75))
@@ -1433,8 +1432,7 @@
     }
 
     private func nowLine(strong: Bool) -> some View {
-      let c = cal.dateComponents([.hour, .minute], from: presentation.now)
-      let y = CGFloat((c.hour ?? 0) * 60 + (c.minute ?? 0)) / 60 * hourHeight
+      let y = CGFloat(CalendarDayAxis.minute(presentation.now, calendar: cal)) / 60 * hourHeight
       return Rectangle()
         .fill(strong ? Color.red : Color.red.opacity(0.35))
         .frame(height: strong ? 1.5 : 1)
@@ -1460,9 +1458,7 @@
       }
       .sorted { $0.start < $1.start }
       let spans = items.map { e -> (start: Double, end: Double) in
-        let s = max(e.start, interval.start)
-        let t = min(max(e.end, e.start.addingTimeInterval(1800)), interval.end)
-        return (s.timeIntervalSince(interval.start) / 60, t.timeIntervalSince(interval.start) / 60)
+        CalendarDayAxis.span(start: e.start, end: e.end, in: interval, calendar: cal)
       }
       return items.indices.map { i in
         Placed(
