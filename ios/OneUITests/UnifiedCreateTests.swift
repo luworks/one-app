@@ -2,9 +2,14 @@ import XCTest
 
 @MainActor
 final class UnifiedCreateTests: XCTestCase {
-  private func openComposer() -> XCUIApplication {
+  override func setUp() async throws {
+    continueAfterFailure = false
+  }
+
+  private func openComposer(failOnce: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = TestData.launchArguments
+    if failOnce { app.launchArguments += ["-uiTestingFailReminderCreationOnce"] }
     app.launch()
     app.buttons["New"].tap()
     XCTAssertTrue(app.descendants(matching: .any)["create.title"].waitForExistence(timeout: 5))
@@ -55,7 +60,23 @@ final class UnifiedCreateTests: XCTestCase {
       "The committed item must be readable outside the composer")
   }
 
-  func testCreatesReminder() { saveAndFind("Reminder", title: "Unified saved reminder") }
+  func testCreatesReminder() {
+    let app = openComposer(failOnce: true)
+    let title = "Unified saved reminder"
+    app.descendants(matching: .any)["create.title"].typeText(title)
+    app.buttons["create.save"].tap()
+    XCTAssertTrue(app.alerts["Couldn’t Create"].waitForExistence(timeout: 5))
+    app.alerts.buttons["OK"].tap()
+    XCTAssertEqual(app.descendants(matching: .any)["create.title"].value as? String, title)
+    XCTAssertTrue(app.buttons["create.save"].isEnabled)
+    app.buttons["create.save"].tap()
+    XCTAssertTrue(app.buttons["create.save"].waitForNonExistence(timeout: 5))
+    XCTAssertTrue(search(title, in: app).waitForExistence(timeout: 5))
+    XCTAssertEqual(
+      app.buttons.matching(
+        NSPredicate(format: "identifier == 'search.result' AND label BEGINSWITH %@", title)
+      ).count, 1, "Retry must create exactly one reminder")
+  }
   func testCreatesCalendarEvent() { saveAndFind("Calendar", title: "Unified saved event") }
   func testCreatesAlarm() { saveAndFind("Alarm", title: "Unified saved alarm") }
 

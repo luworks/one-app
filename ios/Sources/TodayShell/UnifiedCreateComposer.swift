@@ -4,6 +4,7 @@
   import One
   import TodayCore
   import FeatureClock
+  import FeatureCalendar
 
   /// A single explicit creation boundary. Detached pending models retain remote receipts on retry.
   struct UnifiedCreateComposer: View {
@@ -35,7 +36,7 @@
       let lists = (try? session.container.mainContext.fetch(FetchDescriptor<OneList>())) ?? []
       draft.listName =
         listName.isEmpty && usesPreferredList
-        ? Preferences.newReminderList(existing: lists.map(\.name), session.defaults)
+        ? (Preferences.newReminderList(existing: lists.map(\.name), session.defaults) ?? "")
         : listName
       draft.sound = Preferences.newAlarmSoundName(session.defaults)
       draft.snoozeMinutes = Preferences.newAlarmSnoozeMinutes(session.defaults)
