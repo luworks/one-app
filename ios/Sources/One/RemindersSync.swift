@@ -844,6 +844,9 @@
       } catch {
         lastError = error.localizedDescription
         log.error("sync failed: \((error as NSError).code, privacy: .public)")
+        ledger?.activity.record(
+          ActivityEvents.error(
+            source: "reminders.sync", code: String((error as NSError).code), at: runtime.now()))
       }
       version += 1
     }
@@ -1058,8 +1061,30 @@
             apply(r, to: t)
             fp[r.id] = r.fingerprint
           } else if local != agreed {
-            try push(t, remote: r)
-            fp[r.id] = Self.fingerprint(of: t)
+            // A repeating reminder whose date was cleared needs one again (code 18): today, like the upload.
+            switch RecurringUploadDate.plan(
+              repeats: t.repeats != nil, due: t.due, isDone: t.isDone, today: runtime.now(),
+              calendar: runtime.calendar)
+            {
+            case .upload: break
+            case .keepLocal:
+              base.insert(r.id)
+              continue
+            case .uploadDated(let day):
+              t.due = day
+              ledger.record(
+                .redated, task: t, title: t.title, before: "No date",
+                after: ledger.timeLabel(day, none: "No date"), beforeDate: nil, afterDate: day,
+                actor: .agent("Apple Reminders"), channel: .sync, approval: .observed,
+                context: context)
+            }
+            // One reminder Apple refuses must not stop the rest of the pass (or its uploads).
+            do {
+              try push(t, remote: r)
+              fp[r.id] = Self.fingerprint(of: t)
+            } catch {
+              skipped(error, ledger: ledger)
+            }
           }
           base.insert(r.id)
         } else if pending.contains(r.id) {
@@ -1128,10 +1153,30 @@
       for t in tasks where t.externalID == nil && t.createdAt >= uploadFrom {
         let cal = (t.listName.isEmpty ? nil : calendarByTitle[t.listName]) ?? defaultCal
         guard let cal else { continue }
+        // Apple needs a date on a repeating reminder (code 18); like Apple's own app, it gets today.
+        switch RecurringUploadDate.plan(
+          repeats: t.repeats != nil, due: t.due, isDone: t.isDone, today: runtime.now(),
+          calendar: runtime.calendar)
+        {
+        case .upload: break
+        case .keepLocal: continue
+        case .uploadDated(let day):
+          t.due = day
+          ledger.record(
+            .redated, task: t, title: t.title, before: "No date",
+            after: ledger.timeLabel(day, none: "No date"), beforeDate: nil, afterDate: day,
+            actor: .agent("Apple Reminders"), channel: .sync, approval: .observed, context: context)
+        }
         debugLog("upload \(t.title)")
         let ek = EKReminder(eventStore: store)
         ek.calendar = cal
-        try write(t, to: ek)
+        do {
+          try write(t, to: ek)
+        } catch {
+          // Left unlinked: the next pass tries again.
+          skipped(error, ledger: ledger)
+          continue
+        }
         if t.listName.isEmpty { t.listName = cal.title }
         t.externalID = ek.calendarItemIdentifier
         base.insert(ek.calendarItemIdentifier)
@@ -1171,6 +1216,14 @@
       if t.listName != r.listTitle { t.listName = r.listTitle }
       if t.flagged != r.flagged { t.flagged = r.flagged }
       if t.repeatRule != r.repeatRule { t.repeatRule = r.repeatRule }
+    }
+
+    /// A per-reminder write Apple refused: logged and recorded by code, then retried on the next pass.
+    private func skipped(_ error: Error, ledger: Ledger) {
+      let code = (error as NSError).code
+      log.error("reminder write skipped: \(code, privacy: .public)")
+      ledger.activity.record(
+        ActivityEvents.error(source: "reminders", code: String(code), at: runtime.now()))
     }
 
     /// App -> Apple for an existing reminder.

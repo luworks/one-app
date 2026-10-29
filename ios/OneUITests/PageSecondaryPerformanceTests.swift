@@ -21,7 +21,7 @@ final class PageSecondaryPerformanceTests: XCTestCase {
       // No -uiTestingCalendarSync: the existing test hook keeps EventKit sync off.
       XCTAssertFalse(app.launchArguments.contains("-uiTestingCalendarSync"))
       app.launch()
-      XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+      XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     }
   }
 
@@ -119,8 +119,9 @@ final class PageSecondaryPerformanceTests: XCTestCase {
       app.buttons["Calendar"].firstMatch.tap()
       XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
       // Existing CRUDTests local editor path; -uiTesting selects this draft instead of EventKit UI.
+      app.buttons["New"].tap()
       tap(
-        app.buttons["New"], route: "event.editor", visit: visit,
+        app.buttons["New event"], route: "event.editor", visit: visit,
         ready: app.navigationBars["New event"])
       XCTAssertTrue(app.textFields["event.title"].exists)
       app.navigationBars["New event"].buttons["Cancel"].tap()
@@ -132,8 +133,9 @@ final class PageSecondaryPerformanceTests: XCTestCase {
         alarms.firstMatch.waitForExistence(timeout: 5), "Existing dataset alarms are ready")
       let countBefore = alarms.count
       // Existing AlarmsTabTests header, field and Cancel selectors. No scheduling occurs.
+      app.buttons["New"].tap()
       tap(
-        app.buttons["New"], route: "alarm.editor", visit: visit,
+        app.buttons["New alarm"], route: "alarm.editor", visit: visit,
         ready: app.staticTexts["Add Alarm"])
       XCTAssertTrue(app.textFields["alarm.label"].exists)
       app.buttons["Cancel"].firstMatch.tap()

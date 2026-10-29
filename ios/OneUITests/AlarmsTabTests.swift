@@ -36,7 +36,7 @@ final class AlarmsTabTests: XCTestCase {
   @discardableResult
   private func addAlarm(days: [String] = []) -> XCUIElement {
     let before = rows.count
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(
       app.staticTexts["Add Alarm"].waitForExistence(timeout: 5), "the editor is titled Add Alarm")
     if !days.isEmpty {
@@ -103,6 +103,32 @@ final class AlarmsTabTests: XCTestCase {
       rows.firstMatch.label.hasSuffix(", Alarm, Mon, Wed"), "Cancel keeps the alarm as it was")
   }
 
+  /// Add Alarm's quick picks: a usual time, Weekdays and a past name, then ✓ (4 taps, no typing on the second alarm).
+  func testQuickPicksFillTheEditor() {
+    let first = addAlarm()
+    first.tap()
+    XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
+    let field = app.textFields["alarm.label"]
+    field.tap()
+    field.typeText("Wake up\n")
+    app.buttons["alarm.save"].tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+
+    app.addNew("New alarm")
+    XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+    app.buttons["alarm.quick.0700"].tap()
+    let wheels = app.pickerWheels
+    XCTAssertTrue((wheels.element(boundBy: 1).value as? String ?? "").hasPrefix("00"))
+    app.buttons["alarm.repeat.weekdays"].tap()
+    XCTAssertEqual(app.descendants(matching: .any)["alarm.repeat"].label, "Repeat, Weekdays")
+    app.buttons["alarm.quick.label.0"].tap()
+    XCTAssertEqual(field.value as? String, "Wake up")
+    app.buttons["alarm.save"].tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+    let saved = rows.matching(NSPredicate(format: "label ENDSWITH %@", ", Wake up, Weekdays"))
+    XCTAssertTrue(saved.firstMatch.waitForExistence(timeout: 5), "the picks were saved")
+  }
+
   func testEditTimeAndLabel() {
     addAlarm()
     rows.firstMatch.tap()
@@ -151,7 +177,7 @@ final class AlarmsTabTests: XCTestCase {
 
   /// Sound opens a list of the app's tones (the system sound, then ours); a choice sticks after saving.
   func testChoosingATone() {
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     XCTAssertEqual(
       app.switches["alarm.snooze"].value as? String, "1", "Snooze is on by default, like Clock")
@@ -202,7 +228,7 @@ final class AlarmsTabTests: XCTestCase {
   }
 
   func testSnoozeOffHidesDuration() {
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     XCTAssertTrue(
       app.buttons["alarm.snoozeDuration"].exists, "Snooze Duration shows while Snooze is on")
@@ -221,7 +247,7 @@ final class AlarmDefaultTimeTests: XCTestCase {
     app.launch()
     app.buttons["Clock"].firstMatch.tap()
     XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     let wheels = app.pickerWheels
     XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
@@ -232,5 +258,73 @@ final class AlarmDefaultTimeTests: XCTestCase {
     XCTAssertTrue(
       (wheels.element(boundBy: 1).value as? String ?? "").hasPrefix("00"),
       "minutes: \(wheels.element(boundBy: 1).value ?? "")")  // "00 minutes"
+  }
+}
+
+/// Saves made while Add Alarm is open (sync, widgets, another device) must not re-render the shell under the sheet:
+/// each re-render cost frames while the wheel was spinning, so the minute column stuttered on a phone.
+@MainActor
+final class AlarmWheelStoreChurnTests: XCTestCase {
+  func testSavesUnderAddAlarmLeaveTheShellAlone() {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launchArguments = ["-uiTesting", "-uiTestingNow", "10:56", "-uiTestingStoreChurn"]
+    app.launch()
+    app.buttons["Clock"].firstMatch.tap()
+    XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
+    app.buttons["New"].tap()
+    XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
+    let minutes = app.pickerWheels.element(boundBy: 1)
+    XCTAssertTrue(minutes.waitForExistence(timeout: 5))
+    let report = app.staticTexts["storeChurn.report"]
+    let before = Self.parse(report.label)
+    for step in 0..<4 {
+      let (from, to) = step.isMultiple(of: 2) ? (0.85, 0.15) : (0.15, 0.85)
+      minutes.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: from)).press(
+        forDuration: 0.02,
+        thenDragTo: minutes.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: to)),
+        withVelocity: .default, thenHoldForDuration: 0.1)
+    }
+    let after = Self.parse(report.label)
+    XCTAssertGreaterThanOrEqual(after.saves - before.saves, 5, "saves kept coming: \(report.label)")
+    XCTAssertLessThanOrEqual(
+      after.shell - before.shell, 1, "the shell re-rendered on saves: \(before) → \(after)")
+  }
+
+  private static func parse(_ label: String) -> (saves: Int, shell: Int) {
+    let values = label.split(separator: " ").map { Int($0.split(separator: "=").last ?? "") ?? 0 }
+    return (values.first ?? 0, values.count > 1 ? values[1] : 0)
+  }
+}
+
+/// The one-time "Set your alarms in Today" card and alarms a Shortcut brought over from the Clock app.
+@MainActor
+final class AlarmIntroTests: XCTestCase {
+  func testIntroShowsOnceAndStagedClockAlarmsAreAddedByTap() {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-uiTesting", "-uiTestingAlarmIntro",
+      "-uiTestingStagedClockAlarms", "07:00|Wake up|Weekdays;22:30||Never",
+    ]
+    app.launch()
+    app.buttons["Clock"].firstMatch.tap()
+    let intro = app.descendants(matching: .any)["alarms.intro"]
+    XCTAssertTrue(intro.waitForExistence(timeout: 5), "the card shows the first time")
+    app.buttons["alarms.intro.import"].tap()
+    XCTAssertTrue(app.buttons["alarms.intro.shortcuts"].waitForExistence(timeout: 3))
+    app.buttons["alarms.intro.done"].tap()
+    XCTAssertTrue(intro.waitForNonExistence(timeout: 3))
+
+    let staged = app.descendants(matching: .any).matching(identifier: "alarms.import.row")
+    XCTAssertEqual(staged.count, 2, "both Clock alarms wait for a tap; none is set yet")
+    XCTAssertFalse(app.buttons["alarm.row"].exists)
+    app.buttons["alarms.import.addAll"].tap()
+    XCTAssertTrue(staged.firstMatch.waitForNonExistence(timeout: 5))
+    let rows = app.buttons.matching(identifier: "alarm.row")
+    XCTAssertEqual(rows.count, 2)
+    XCTAssertTrue(
+      rows.matching(NSPredicate(format: "label ENDSWITH %@", ", Wake up, Weekdays")).firstMatch
+        .exists)
   }
 }

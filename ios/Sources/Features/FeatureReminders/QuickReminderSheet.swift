@@ -19,6 +19,7 @@
     private let usesPreferredList: Bool
     @State private var saveError: String?
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \OneList.order) private var lists: [OneList]
@@ -164,8 +165,10 @@
 
         Spacer(minLength: 0)
 
+        // The sheet's tint is .primary (white in Dark): the fill follows it, so the label takes the inverse.
         Button("Save", action: save)
           .font(.body.weight(.semibold))
+          .foregroundStyle(Color(.systemBackground))
           .buttonStyle(.borderedProminent)
           .buttonBorderShape(.capsule)
           .disabled(!canSave)
@@ -266,10 +269,12 @@
           Image(systemName: showsPicker ? "chevron.up" : "chevron.down").font(
             .footnote.weight(.semibold))
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(
+          when == nil ? Color(.label) : Color.accentColor.contrastForeground(for: colorScheme)
+        )
         .padding(.horizontal, 16)
         .frame(minHeight: 52)
-        .background(when == nil ? Color(.systemGray) : Color.accentColor)
+        .background(when == nil ? Color(.tertiarySystemFill) : Color.accentColor)
       }
       .buttonStyle(.plain)
       .accessibilityIdentifier("quick.when")

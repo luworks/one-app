@@ -23,13 +23,16 @@ RESULT_CLOSED = False
 TEMP = Path(os.environ.get('RUNNER_TEMP', '/tmp')) / 'today-smoke'
 DD = TEMP / 'dd'
 RESULT = TEMP / 'smoke.xcresult'
-# The PR120 freeze (native EventKit lookup during render) and the populated
-# launch/editor/tab/Chat journey. Swift Testing identifiers keep their "()".
+SCREENS = TEMP / 'screens'
+# The PR120 freeze (native EventKit lookup during render), the populated
+# launch/editor/tab/Chat journey and the Light/Dark dataset screenshots (uploaded to
+# smoke-screens-<sha>). Swift Testing identifiers keep their "()".
 TESTS = (
     'TodayTests/PlannerSessionTests/populatedDayAgendaRenderUsesImportedSnapshotsWithoutNativeLookups()',
     'TodayTests/PlannerSessionTests/importedFocusRenderingNeverOpensNativeStoreAndWritesStillRevalidate()',
     'TodayTests/PlannerSessionTests/savedCalendarSnoozeHydratesOutsideOriginalDayAndRejectsStaleImports()',
     'TodayUITests/TodayReminderCompletionTests/testPreconnectedImportedTimelineStaysResponsive',
+    'TodayUITests/SmokeScreenshotTests/testTabsAndChatInBothModes',
 )
 PRODUCTS = {'One.app': 'com.luworks.one',
             'One.app/PlugIns/TodayWidgets.appex': 'com.luworks.one.widgets',
@@ -125,6 +128,7 @@ def main(build_only=False):
     for service in ('reminders', 'calendar'):
         run('xcrun', 'simctl', 'privacy', udid, 'grant', service, 'com.luworks.one')
     step('access granted')
+    os.environ['TEST_RUNNER_SMOKE_SHOTS'] = str(SCREENS)
     code = EVIDENCE.run('xcodebuild', 'test-without-building', '-xctestrun', str(xctestrun[0]),
                            '-destination', destination, '-resultBundlePath', str(RESULT),
                            '-collect-test-diagnostics', 'never', '-parallel-testing-enabled', 'NO',

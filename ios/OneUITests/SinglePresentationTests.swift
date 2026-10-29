@@ -2,7 +2,7 @@ import XCTest
 
 /// One tap opens exactly one editor: no second sheet underneath, nothing left behind after Cancel.
 /// (A sheet on the row plus one on the list, or a tap handler plus a menu action, would stack two.)
-/// Also: long-press an empty slot on the Week grid to make an event there, like Apple Calendar.
+/// Also: long-press an empty slot on the 2 Day grid to make an event there, like Apple Calendar.
 /// Uses the test dataset (tests/fixtures/today-dataset.json). Set TEST_RUNNER_PRESENT_SHOTS=<folder> for screenshots.
 @MainActor
 final class SinglePresentationTests: XCTestCase {
@@ -54,9 +54,9 @@ final class SinglePresentationTests: XCTestCase {
       file: file, line: line)
   }
 
-  func testTappingAnEventInWeekOpensOneEditor() {
+  func testTappingAnEventInTwoDayOpensOneEditor() {
     app.buttons["Calendar"].firstMatch.tap()
-    app.buttons["calendar.mode.week"].tap()
+    app.buttons["calendar.mode.twoday"].tap()
     let block = labeled("Product sync")
     XCTAssertTrue(block.waitForExistence(timeout: 5))
     assertOpensOneEditor("week-event") { block.tap() }
@@ -139,11 +139,10 @@ final class SinglePresentationTests: XCTestCase {
       .withOffset(CGVector(dx: f.minX + 4, dy: f.minY + minutesAfterNine / 60 * 48))
   }
 
-  private func showWeek() {
+  private func showTwoDay() {
     app.buttons["Calendar"].firstMatch.tap()
-    app.buttons["calendar.mode.week"].tap()
-    XCTAssertTrue(
-      app.descendants(matching: .any)["calendar.weekTitle"].waitForExistence(timeout: 5))
+    app.buttons["calendar.mode.twoday"].tap()
+    XCTAssertTrue(app.buttons["calendar.mode.twoday"].waitForSelected())
     XCTAssertTrue(labeled("Product sync").waitForExistence(timeout: 5))
     sleep(2)  // the grid scrolls to 7:00 when it appears; measure after that
   }
@@ -151,7 +150,7 @@ final class SinglePresentationTests: XCTestCase {
   /// Press and hold an empty slot (10:40, between Standup, whose short block reaches past 10:00, and the 11:00
   /// "Renew parking permit"): the new-event editor opens at 10:30-11:30.
   func testLongPressOnAnEmptySlotMakesAnEventThere() {
-    showWeek()
+    showTwoDay()
     let slot = todaySlot(minutesAfterNine: 100)  // 10:40 snaps down to 10:30
     slot.press(forDuration: 0.8)
     let editor = app.navigationBars["New event"]
@@ -169,7 +168,7 @@ final class SinglePresentationTests: XCTestCase {
 
   /// Hold an empty slot (10:40), then drag down an hour before letting go: the event starts where the finger ends (11:30).
   func testLongPressThenDragMovesTheNewEvent() {
-    showWeek()
+    showTwoDay()
     let from = todaySlot(minutesAfterNine: 100)
     let to = from.withOffset(CGVector(dx: 0, dy: 48))
     from.press(forDuration: 0.8, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.3)
@@ -184,7 +183,7 @@ final class SinglePresentationTests: XCTestCase {
 
   /// A long-press on an event shows its menu only: no new-event placeholder or editor on top of it.
   func testLongPressOnAnEventShowsOnlyItsMenu() {
-    showWeek()
+    showTwoDay()
     labeled("Product sync").press(forDuration: 0.8)
     XCTAssertTrue(app.buttons["Show Details"].waitForExistence(timeout: 5), "the event's menu")
     sleep(1)
@@ -197,7 +196,7 @@ final class SinglePresentationTests: XCTestCase {
 
   /// A quick tap on an empty slot does nothing, and a swipe still scrolls the grid (no editor, no placeholder).
   func testTapAndSwipeOnTheGridDoNotMakeAnEvent() {
-    showWeek()
+    showTwoDay()
     todaySlot(minutesAfterNine: 100).tap()  // 10:40, empty (11:00 has "Renew parking permit")
     let block = labeled("Product sync")
     let y = block.frame.minY
@@ -228,19 +227,18 @@ final class SinglePresentationTests: XCTestCase {
       "busy days are shaded: \(month.debugDescription)")
   }
 
-  /// Screenshots of the quiet tints (weekends, days that are over) in Week and Month.
+  /// Screenshots of the quiet tints (weekends, days that are over) in 2 Day and Month.
   func testWeekAndMonthTints() {
-    showWeek()
+    showTwoDay()
     shot("week-tints")
     app.buttons["calendar.mode.month"].tap()
-    XCTAssertTrue(
-      app.descendants(matching: .any)["calendar.monthTitle"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["calendar.mode.month"].waitForSelected())
     shot("month-tints")
   }
 
-  /// Pinching the Week grid out makes hours taller; tapping an event still opens one editor afterwards.
+  /// Pinching the 2 Day grid out makes hours taller; tapping an event still opens one editor afterwards.
   func testPinchZoomsTheWeekGrid() {
-    showWeek()
+    showTwoDay()
     let block = labeled("Product sync")
     let before = block.frame.height
     app.windows.firstMatch.pinch(withScale: 2, velocity: 1)

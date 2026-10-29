@@ -8,7 +8,7 @@ A minimal, AI-native planner for iPhone that puts calendar, reminders and alarms
 
 - **Data:** local. Apple Calendar and Apple Reminders are the source of truth, read and written live through EventKit. Alarms use AlarmKit. (Status, October 2026: Apple Calendar events are read and written through EventKit, and reminders and lists sync both ways with Apple Reminders through EventKit (`RemindersSync`; Apple wins on conflict). The app keeps a local SwiftData copy. Reminders have one date, the deadline; the separate planned time was retired in October 2026.)
 - **Roadmap (Yuan's words):** first **aggregate** (calendar + reminders + alarms in one place, with a very good Today tab that keeps people focused on now), then **optimize**, then **surpass**. Gestures and screens match Apple Calendar / Reminders as closely as possible before we improve on them.
-- **Information architecture (4 tabs):** Today · Calendar · Reminders · Clock. No habits. Calendar is Week (default), Month and Year (Year day taps open Month with that date selected and its agenda below; Week day headers and selected Month day taps open Today). Alarms lists real alarms (AlarmKit) plus items marked "Ring as alarm", with a kitchen timer on top. The bottom-right button is a **+**: tap adds what fits the page (alarm on the Clock tab, event on Calendar, otherwise a reminder); press and hold for the menu (built). Top left is a menu button that opens the sidebar: Search, AI chat history, New chat, Settings.
+- **Information architecture (4 tabs):** Today · Calendar · Reminders · Clock. No habits. Calendar is 2 Day (default; two days on a time grid, one day per swipe), Month and Year (Year day taps open Month with that date selected and its agenda below; 2 Day headers and selected Month day taps open Today). Alarms lists real alarms (AlarmKit) plus items marked "Ring as alarm", with a kitchen timer on top. The bottom-right button is a **+** that opens the same menu on every page: New alarm / New reminder / New event (built). Top left is a menu button that opens the sidebar: Search, AI chat history, New chat, Settings.
 - **Gestures follow Apple:** tap the circle to complete; swipe left for Delete (with Undo) and Flag, with one shared look for swipe actions in every list; long-press menu (Show Details / Flag / Today / Tomorrow / Delete); system events open in Apple's own event viewer. Events are never moved by drag; only flexible tasks move.
 - **Next phase after aggregation:** Apple Intelligence (on-device Foundation Models) turns what the user types into reminders and events and helps tidy overdue items, always as a preview the user confirms. (Capture and edit are built; tidy overdue is not.)
 - **Style:** Notion / Linear / ChatGPT mobile. Calm, dense, monochrome with one accent, system semantic colors, Dynamic Type.
@@ -58,7 +58,7 @@ Humans set direction: Yuan decides product questions (what a claim should mean, 
 ### 1. Calendar (benchmark: Apple Calendar)
 1. Day timeline with a "now" line
 2. Day picker / week strip
-3. Week view
+3. Multi-day view (2 Day time grid)
 4. Month view
 5. Create an event
 6. Edit an event

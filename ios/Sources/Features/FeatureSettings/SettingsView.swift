@@ -35,6 +35,8 @@
     private let exportDiagnostics: @MainActor () throws -> URL
     private let shareDiagnostics: @MainActor (URL) -> AnyView
     private let reset: @MainActor (ModelContext) -> Void
+    /// Debug builds only: the alarm wheel lab (Developer section).
+    private let wheelLab: (@MainActor () -> AnyView)?
 
     package init(
       selection: Selection = .all,
@@ -49,7 +51,8 @@
       holidays: @escaping @MainActor () -> AnyView,
       activityData: @escaping @MainActor () -> AnyView,
       shareDiagnostics: @escaping @MainActor (URL) -> AnyView,
-      reset: @escaping @MainActor (ModelContext) -> Void
+      reset: @escaping @MainActor (ModelContext) -> Void,
+      wheelLab: (@MainActor () -> AnyView)? = nil
     ) {
       self.alarms = alarms
       self.ledger = ledger
@@ -66,16 +69,17 @@
       self.activityData = activityData
       self.shareDiagnostics = shareDiagnostics
       self.reset = reset
+      self.wheelLab = wheelLab
       _calendarOn = State(initialValue: calendar.isOn)
       _remindersOn = State(initialValue: reminders.isConnected)
     }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(PlannerPresentation.self) private var presentation
+    @Environment(WeatherModel.self) private var weather
     @Environment(\.modelContext) private var context
 
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.default.rawValue
-    @AppStorage(SettingsKey.showOverdue) private var showOverdue = true
     @AppStorage(SettingsKey.showAlarms) private var showAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpToNow = true
     @AppStorage(SettingsKey.autoArchiveChats) private var autoArchiveChats = true
@@ -83,6 +87,8 @@
     @AppStorage(SmartListLayout.hiddenKey) private var smartHidden = ""
     @AppStorage(SettingsKey.travelTime) private var travelTime = true
     @AppStorage(SettingsKey.healthSummary) private var healthSummary = true
+    @AppStorage(Preferences.weatherSummaryKey) private var weatherSummary = Preferences
+      .weatherSummary
 
     @State private var systemColorScheme: ColorScheme = .light
     @State private var systemAppearanceObservation: (UIWindowScene, any UITraitChangeRegistration)?
@@ -109,6 +115,9 @@
           if includes(.holidays) { holidaysSection }
           if includes(.ai) { aiSection }
           if includes(.activity) { activitySection }
+          #if DEBUG
+            if selection == .all, let wheelLab { developerSection(wheelLab) }
+          #endif
           if includes(.about) { aboutSection }
           if includes(.data) { dataSection }
         }
@@ -194,6 +203,7 @@
     private var appearanceSection: some View {
       Section {
         AppearanceSettingsRow()
+        TodayButtonColorRow()
       }
     }
 
@@ -244,7 +254,6 @@
 
     private var todaySection: some View {
       Section {
-        Toggle("Show overdue reminders", isOn: $showOverdue)
         Toggle("Show alarms in Today and Calendar", isOn: $showAlarms)
         Toggle("Scroll to now when Today opens", isOn: $jumpToNow)
         TodayTimelineSettings()
@@ -259,6 +268,14 @@
             "Shows one line from Apple Health on Today: your steps and last night's sleep, or the first metrics you chose. Today only reads them."
         )
         HealthMetricsLink()
+        OpenHealthButton()
+        if weather.isAvailable {
+          explainedToggle(
+            "Weather summary", isOn: $weatherSummary,
+            caption:
+              "Shows current weather and an hourly forecast on Today. When enabled, your location is sent to Apple Weather to obtain the forecast."
+          )
+        }
       } header: {
         Text("Today")
       }
@@ -326,6 +343,23 @@
         )
       }
     }
+
+    #if DEBUG
+      private func developerSection(_ wheelLab: @escaping @MainActor () -> AnyView) -> some View {
+        Section {
+          NavigationLink {
+            wheelLab()
+          } label: {
+            Label("Alarm wheel lab", systemImage: "dial.medium")
+          }
+          .accessibilityIdentifier("settings.wheelLab")
+        } header: {
+          Text("Developer")
+        } footer: {
+          Text("Debug builds only. Compares alarm time pickers; never creates an alarm.")
+        }
+      }
+    #endif
 
     private var aboutSection: some View {
       Section {

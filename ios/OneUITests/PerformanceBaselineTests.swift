@@ -39,7 +39,7 @@ final class PerformanceBaselineTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Ask AI or add anything"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["New"].isHittable)
-        XCTAssertTrue(app.staticTexts["todayDate"].exists)
+        XCTAssertTrue(app.weekStripDay(.now).exists)
       }
       let probe = app.staticTexts["coldStartMs"]
       XCTAssertTrue(probe.waitForExistence(timeout: 5))
@@ -58,7 +58,7 @@ final class PerformanceBaselineTests: XCTestCase {
     app.launch()
     for _ in 0..<3 {
       sample("today_to_week") {
-        tap(app.buttons["Calendar"].firstMatch, ready: element("calendar.weekGrid"))
+        tap(app.buttons["Calendar"].firstMatch, ready: element("calendar.dayGrid"))
       }
       sample("week_to_month") {
         tap(app.buttons["calendar.mode.month"], ready: element("calendar.monthPager"))
@@ -66,7 +66,7 @@ final class PerformanceBaselineTests: XCTestCase {
       sample("month_to_year") {
         tap(app.buttons["calendar.mode.year"], ready: element("calendar.year.scroll"))
       }
-      app.buttons["calendar.mode.week"].tap()
+      app.buttons["calendar.mode.twoday"].tap()
       sample("calendar_to_reminders") {
         tap(app.buttons["Reminders"].firstMatch, ready: element("list.Work"))
       }
@@ -74,7 +74,7 @@ final class PerformanceBaselineTests: XCTestCase {
         tap(app.buttons["Clock"].firstMatch, ready: app.buttons["World Clock"])
       }
       sample("clock_to_today") {
-        tap(app.buttons["Today"].firstMatch, ready: app.staticTexts["todayDate"])
+        tap(app.buttons["Today"].firstMatch, ready: app.weekStripDay(.now))
       }
     }
     // Health may be above the automatic scroll-to-now position; reveal outside the timed interval.
@@ -109,7 +109,10 @@ final class PerformanceBaselineTests: XCTestCase {
   func testCreateCompleteSearchAndApply() {
     app.launch()
     app.buttons["Reminders"].firstMatch.tap()
-    sample("open_quick_create") { tap(app.buttons["New"], ready: element("quick.title")) }
+    sample("open_quick_create") {
+      app.buttons["New"].tap()
+      tap(app.buttons["New reminder"], ready: element("quick.title"))
+    }
     element("quick.title").typeText("Performance baseline reminder")
     sample("save_quick_create") {
       app.buttons["quick.save"].tap()

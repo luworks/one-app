@@ -64,6 +64,7 @@
   package struct YearKeySheet: View {
     package init() {}
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     package var body: some View {
       NavigationStack {
@@ -89,7 +90,7 @@
           row(
             AnyView(
               Text("17").font(.system(size: 12, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.red.contrastForeground(for: colorScheme))
                 .frame(width: 20, height: 20).background(Circle().fill(Color.red))),
             "Today", "")
         }

@@ -79,7 +79,8 @@ final class SidebarTests: XCTestCase {
       app.buttons["Anything left today?"].waitForExistence(timeout: 5), "Undo puts it back")
   }
 
-  /// Opened from the sidebar, the chat goes back to the sidebar: by the close button, and by swiping right.
+  /// Opened from the sidebar, the chat goes back to the sidebar: by the close button, and by swiping right from the
+  /// left edge.
   func testChatOpenedFromSidebarGoesBackToSidebar() {
     haveAConversation()
     app.openSidebar()
@@ -92,7 +93,7 @@ final class SidebarTests: XCTestCase {
 
     row.tap()
     XCTAssertTrue(reply.waitForExistence(timeout: 5))
-    let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4))
+    let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.4))
     start.press(
       forDuration: 0.05,
       thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.4)))

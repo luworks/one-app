@@ -32,13 +32,12 @@ final class PreferencesTests: XCTestCase {
     XCTAssertFalse(Preferences.weekNumbers)
     XCTAssertEqual(
       Preferences.calendarStart, .lastUsed, "Calendar reopened in the view it was left in")
-    XCTAssertTrue(Preferences.showTomorrow)
-    XCTAssertEqual(Preferences.eveningHour, 18, "Tomorrow opened at 18:00")
     XCTAssertTrue(Preferences.showFreeTime)
     XCTAssertEqual(Preferences.newReminderList, "", "Auto: nothing was filed by a chosen list")
     XCTAssertEqual(Preferences.newAlarmSnooze, 9, "Clock's nine minutes")
     XCTAssertEqual(Preferences.newAlarmSound, "", "the system alarm sound")
     XCTAssertTrue(Preferences.askSuggestions)
+    XCTAssertFalse(Preferences.weatherSummary)
   }
 
   func testEmptyDefaultsReadAsTheDefaults() {
@@ -54,21 +53,15 @@ final class PreferencesTests: XCTestCase {
     let d = freshDefaults()
     XCTAssertEqual(
       d.object(forKey: Preferences.showSettleKey) as? Bool ?? Preferences.showSettle, true)
-    XCTAssertEqual(
-      d.object(forKey: Preferences.showSnoozeKey) as? Bool ?? Preferences.showSnooze, false)
     d.set(false, forKey: Preferences.showSettleKey)
-    d.set(true, forKey: Preferences.showSnoozeKey)
     LaunchTestConfiguration.applyPreferenceOverrides(arguments: [], defaults: d)
     XCTAssertEqual(d.object(forKey: Preferences.showSettleKey) as? Bool, false)
-    XCTAssertEqual(d.object(forKey: Preferences.showSnoozeKey) as? Bool, true)
     LaunchTestConfiguration.applyPreferenceOverrides(
       arguments: ["-uiTesting", "-uiTestingKeepPreferences"], defaults: d)
     XCTAssertEqual(d.object(forKey: Preferences.showSettleKey) as? Bool, false)
-    XCTAssertEqual(d.object(forKey: Preferences.showSnoozeKey) as? Bool, true)
     LaunchTestConfiguration.applyPreferenceOverrides(
-      arguments: ["-uiTesting", "-uiTestingPrefs", "showSettle=1,showSnooze=0"], defaults: d)
+      arguments: ["-uiTesting", "-uiTestingPrefs", "showSettle=1"], defaults: d)
     XCTAssertEqual(d.object(forKey: Preferences.showSettleKey) as? Bool, true)
-    XCTAssertEqual(d.object(forKey: Preferences.showSnoozeKey) as? Bool, false)
   }
 
   func testEveryKeyIsListedOnceAndSharesThePrefix() {
@@ -125,37 +118,25 @@ final class PreferencesTests: XCTestCase {
   func testCalendarStartPicksAViewOrTheLastUsedOne() {
     XCTAssertEqual(Preferences.CalendarStart.lastUsed.view(lastUsed: "Month"), "Month")
     XCTAssertEqual(
-      Preferences.CalendarStart.lastUsed.view(lastUsed: nil), "Week", "Week the very first time")
+      Preferences.CalendarStart.lastUsed.view(lastUsed: nil), "TwoDay",
+      "2 Day the very first time")
     XCTAssertEqual(Preferences.CalendarStart.year.view(lastUsed: "Month"), "Year")
-    XCTAssertEqual(Preferences.CalendarStart.week.view(lastUsed: "Year"), "Week")
+    XCTAssertEqual(Preferences.CalendarStart.twoDay.view(lastUsed: "Year"), "TwoDay")
     XCTAssertEqual(
       Preferences.CalendarStart(stored: "garbage"), .lastUsed,
       "an unknown value falls back to the default")
   }
 
-  // MARK: Evening hour
-
-  func testTomorrowOpensAtTheChosenHour() {
-    XCTAssertFalse(
-      TomorrowPreview.opensByItself(
-        now: date(16, 18), todayStarts: [date(16, 21)], eveningHour: 19, calendar: cal))
-    XCTAssertTrue(
-      TomorrowPreview.opensByItself(
-        now: date(16, 19), todayStarts: [date(16, 21)], eveningHour: 19, calendar: cal))
-    XCTAssertTrue(
-      TomorrowPreview.opensByItself(
-        now: date(16, 17), todayStarts: [date(16, 21)], eveningHour: 17, calendar: cal))
-  }
-
-  func testOffKeepsOnlyTheNothingLeftRule() {
-    XCTAssertFalse(
-      TomorrowPreview.opensByItself(
-        now: date(16, 22), todayStarts: [date(16, 23)], eveningHour: nil, calendar: cal),
-      "late, but something is still ahead today")
-    XCTAssertTrue(
-      TomorrowPreview.opensByItself(
-        now: date(16, 22), todayStarts: [date(16, 9)], eveningHour: nil, calendar: cal),
-      "nothing left today")
+  /// The 7-day Week and then 3 Day grids became 2 Day: an install that chose one of them is back on Last used.
+  func testRetiredGridChoicesFallBackToLastUsed() {
+    let d = freshDefaults()
+    for retired in ["week", "threeDay"] {
+      d.set(retired, forKey: Preferences.calendarStartKey)
+      XCTAssertEqual(Preferences.calendarStartChoice(d), .lastUsed, retired)
+    }
+    XCTAssertEqual(Preferences.CalendarStart(stored: "month"), .month)
+    XCTAssertEqual(
+      Preferences.CalendarStart.allCases.map(\.title), ["Last used", "2 Day", "Month", "Year"])
   }
 
   // MARK: Default list
@@ -192,11 +173,10 @@ final class PreferencesTests: XCTestCase {
     d.set("monday", forKey: Preferences.firstWeekdayKey)
     LaunchTestConfiguration.applyPreferenceOverrides(
       arguments: [
-        "-uiTesting", "-uiTestingPrefs", "weekNumbers=1,eveningHour=20,firstWeekday=sunday,bogus=1",
+        "-uiTesting", "-uiTestingPrefs", "weekNumbers=1,firstWeekday=sunday,bogus=1",
       ], defaults: d)
     XCTAssertNil(d.object(forKey: Preferences.dimPastDaysKey), "reset")
     XCTAssertEqual(d.bool(forKey: Preferences.weekNumbersKey), true)
-    XCTAssertEqual(d.integer(forKey: Preferences.eveningHourKey), 20)
     XCTAssertEqual(d.string(forKey: Preferences.firstWeekdayKey), "sunday")
     XCTAssertNil(d.object(forKey: "today.setting.bogus"), "unknown keys are ignored")
   }

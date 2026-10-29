@@ -13,7 +13,7 @@ final class TodayTimelineTests: XCTestCase {
       app = XCUIApplication()
       app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "09:41"]
       app.launch()
-      XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+      XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     }
   }
 
@@ -23,8 +23,13 @@ final class TodayTimelineTests: XCTestCase {
   }
 
   func testTodayNamesItsDayAndHasNoScheduleLabel() {
-    let expected = Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
-    XCTAssertEqual(app.staticTexts["todayDate"].label, expected)
+    // The week strip names the day (selected button) and its month; no date row of its own.
+    let day = app.weekStripDay(.now)
+    XCTAssertTrue(day.waitForSelected())
+    XCTAssertEqual(day.label, Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+    // Its month sits in the top bar, on the row of the tab pills.
+    XCTAssertEqual(
+      app.staticTexts["topBar.month"].label, Date.now.formatted(.dateTime.month(.wide).year()))
     XCTAssertFalse(app.staticTexts["Schedule"].exists, "the timeline needs no label of its own")
   }
 

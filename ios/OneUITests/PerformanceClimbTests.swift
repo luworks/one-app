@@ -85,13 +85,13 @@ final class PerformanceClimbTests: XCTestCase {
       app.terminate()
       app.launch()
       let launch = sample("app_init_to_content_layout")
-      XCTAssertTrue(app.staticTexts["todayDate"].exists)
+      XCTAssertTrue(app.weekStripDay(.now).exists)
       XCTAssertTrue(app.buttons["New"].isHittable)
       XCTAssertTrue(app.buttons["Ask AI or add anything"].isHittable)
       XCUIDevice.shared.press(.home)
       app.activate()
       sample("resume_to_content_layout", after: launch)
-      XCTAssertTrue(app.staticTexts["todayDate"].exists)
+      XCTAssertTrue(app.weekStripDay(.now).exists)
       XCTAssertTrue(app.buttons["New"].isHittable)
     }
   }
@@ -112,9 +112,9 @@ final class PerformanceClimbTests: XCTestCase {
   func testYearEntryAllocationDiagnostic() {
     app.launch()
     sample("app_init_to_content_layout")
-    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap("Calendar", sample: "today_to_calendar.twoday", ready: element("calendar.dayGrid"))
     tap(
-      "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+      "calendar.mode.month", sample: "calendar.twoday_to_calendar.month",
       ready: element("calendar.monthPager"))
     tap(
       "calendar.mode.year", sample: "calendar.month_to_calendar.year",
@@ -130,19 +130,19 @@ final class PerformanceClimbTests: XCTestCase {
     app.launch()
     sample("app_init_to_content_layout")
     for _ in 0..<3 {
-      tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+      tap("Calendar", sample: "today_to_calendar.twoday", ready: element("calendar.dayGrid"))
       tap(
-        "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+        "calendar.mode.month", sample: "calendar.twoday_to_calendar.month",
         ready: element("calendar.monthPager"))
       tap(
         "calendar.mode.year", sample: "calendar.month_to_calendar.year",
         ready: element("calendar.year.scroll"))
       tap(
-        "calendar.mode.week", sample: "calendar.year_to_calendar.week",
-        ready: element("calendar.weekGrid"))
-      tap("Reminders", sample: "calendar.week_to_tasks", ready: element("list.Work"))
+        "calendar.mode.twoday", sample: "calendar.year_to_calendar.twoday",
+        ready: element("calendar.dayGrid"))
+      tap("Reminders", sample: "calendar.twoday_to_tasks", ready: element("list.Work"))
       tap("Clock", sample: "tasks_to_clock", ready: app.buttons["World Clock"])
-      tap("Today", sample: "clock_to_today", ready: app.staticTexts["todayDate"])
+      tap("Today", sample: "clock_to_today", ready: app.weekStripDay(.now))
     }
     app.buttons["Reminders"].firstMatch.tap()
     let home = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Home, '")).firstMatch
@@ -168,11 +168,11 @@ final class PerformanceClimbTests: XCTestCase {
     app.launch()
     sample("app_init_to_content_layout")
     for visit in 0..<3 {
-      tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+      tap("Calendar", sample: "today_to_calendar.twoday", ready: element("calendar.dayGrid"))
       XCTAssertTrue(app.buttons["Calendar"].firstMatch.isSelected)
-      XCTAssertTrue(app.buttons["calendar.mode.week"].isSelected)
+      XCTAssertTrue(app.buttons["calendar.mode.twoday"].isSelected)
       if visit == 0 { captureNavigation("week-light") }
-      tap("Today", sample: "calendar.week_to_today", ready: app.staticTexts["todayDate"])
+      tap("Today", sample: "calendar.twoday_to_today", ready: app.weekStripDay(.now))
       XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
     }
   }
@@ -181,17 +181,17 @@ final class PerformanceClimbTests: XCTestCase {
     app.launchArguments += ["-appearance", "dark"]
     app.launch()
     sample("app_init_to_content_layout")
-    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap("Calendar", sample: "today_to_calendar.twoday", ready: element("calendar.dayGrid"))
     for visit in 0..<3 {
       tap(
-        "calendar.mode.year", sample: "calendar.week_to_calendar.year",
+        "calendar.mode.year", sample: "calendar.twoday_to_calendar.year",
         ready: element("calendar.year.scroll"))
       XCTAssertTrue(app.buttons["calendar.mode.year"].isSelected)
       if visit == 0 { captureNavigation("year-dark") }
       tap(
-        "calendar.mode.week", sample: "calendar.year_to_calendar.week",
-        ready: element("calendar.weekGrid"))
-      XCTAssertTrue(app.buttons["calendar.mode.week"].isSelected)
+        "calendar.mode.twoday", sample: "calendar.year_to_calendar.twoday",
+        ready: element("calendar.dayGrid"))
+      XCTAssertTrue(app.buttons["calendar.mode.twoday"].isSelected)
       if visit == 0 { captureNavigation("week-dark") }
     }
   }
@@ -199,19 +199,19 @@ final class PerformanceClimbTests: XCTestCase {
   func testRepeatedNavigationRetainsCalendarSelection() {
     app.launch()
     sample("app_init_to_content_layout")
-    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap("Calendar", sample: "today_to_calendar.twoday", ready: element("calendar.dayGrid"))
     tap(
-      "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+      "calendar.mode.month", sample: "calendar.twoday_to_calendar.month",
       ready: element("calendar.monthPager"))
     for _ in 0..<3 {
-      tap("Today", sample: "calendar.month_to_today", ready: app.staticTexts["todayDate"])
+      tap("Today", sample: "calendar.month_to_today", ready: app.weekStripDay(.now))
       // Repeated taps on the selected destination must not toggle it or schedule a later switch.
       app.buttons["Today"].firstMatch.doubleTap()
       XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
       tap("Calendar", sample: "today_to_calendar.month", ready: element("calendar.monthPager"))
       app.buttons["calendar.mode.month"].doubleTap()
       XCTAssertTrue(app.buttons["calendar.mode.month"].isSelected)
-      XCTAssertFalse(element("calendar.weekGrid").exists)
+      XCTAssertFalse(element("calendar.dayGrid").exists)
     }
   }
 
@@ -222,9 +222,9 @@ final class PerformanceClimbTests: XCTestCase {
       ]
     app.launch()
     sample("app_init_to_content_layout")
-    tap("Calendar", sample: "today_to_calendar.week", ready: element("calendar.weekGrid"))
+    tap("Calendar", sample: "today_to_calendar.twoday", ready: element("calendar.dayGrid"))
     tap(
-      "calendar.mode.month", sample: "calendar.week_to_calendar.month",
+      "calendar.mode.month", sample: "calendar.twoday_to_calendar.month",
       ready: element("calendar.monthPager"))
     let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
     let parts = Calendar.current.dateComponents([.year, .month, .day], from: tomorrow)
@@ -243,18 +243,17 @@ final class PerformanceClimbTests: XCTestCase {
     XCTAssertFalse(agenda.staticTexts["Today meeting 00"].exists)
     day.tap()
     XCTAssertTrue(app.buttons["Today"].firstMatch.isSelected)
-    XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(tomorrow).waitForSelected())
     XCTAssertTrue(app.staticTexts["Tomorrow agenda event"].exists)
     captureNavigation("populated-selected-tomorrow")
     for _ in 0..<2 {
       tap("Calendar", sample: "today_to_calendar.month", ready: element("calendar.monthPager"))
       XCTAssertTrue(day.isSelected)
-      tap("Today", sample: "calendar.month_to_today", ready: app.staticTexts["todayDate"])
-      XCTAssertTrue(app.staticTexts["Tomorrow agenda event"].exists)
+      // The Today button always shows today itself; Calendar keeps its own selected day.
+      tap("Today", sample: "calendar.month_to_today", ready: app.weekStripDay(.now))
+      XCTAssertTrue(app.weekStripDay(.now).waitForSelected())
+      XCTAssertFalse(app.staticTexts["Tomorrow agenda event"].exists)
     }
-    app.buttons["Back to today"].tap()
-    XCTAssertFalse(app.buttons["Back to today"].exists)
-    XCTAssertFalse(app.staticTexts["Tomorrow agenda event"].exists)
     captureNavigation("populated-back-to-today")
   }
 
@@ -272,7 +271,7 @@ final class PerformanceClimbTests: XCTestCase {
     app.buttons["calendar.mode.year"].tap()
     let scroll = element("calendar.year.scroll")
     XCTAssertTrue(scroll.waitForExistence(timeout: 5))
-    sample("calendar.week_to_calendar.year")
+    sample("calendar.twoday_to_calendar.year")
     let options = XCTMeasureOptions()
     options.iterationCount = 3
     measure(

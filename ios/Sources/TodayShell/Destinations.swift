@@ -100,7 +100,16 @@
             toast?.showNotice(
               "Couldn't clear saved Focus choices. Your local data was kept. Try again.")
           }
-        })
+        }, wheelLab: wheelLab)
+    }
+
+    private var wheelLab: (@MainActor () -> AnyView)? {
+      #if DEBUG
+        let runtime = session.runtime
+        return { AnyView(AlarmWheelLab(runtime: runtime)) }
+      #else
+        return nil
+      #endif
     }
   }
 
@@ -109,8 +118,8 @@
     let toast: UndoToast
     let composition: ShellComposition
     let isPresented: Bool
-    let maximumHeight: CGFloat
     let onClose: () -> Void
+    let onMenu: () -> Void
     let onBack: (Bool) -> Void
     let onAdded: (Capture) -> Void
     let onOpenDay: (Date) -> Void
@@ -119,8 +128,8 @@
     private var session: PlannerSession { composition.session }
     package var body: some View {
       AskView(
-        thread: thread, isPresented: isPresented, maximumHeight: maximumHeight,
-        onClose: onClose, calendar: session.calendar, now: session.runtime.now,
+        thread: thread, isPresented: isPresented, onClose: onClose, onMenu: onMenu,
+        calendar: session.calendar, now: session.runtime.now,
         actions: session.actions, ledger: session.ledger, activity: session.activity,
         intelligence: composition.intelligence, voice: composition.voice,
         presentation: composition.presentation,

@@ -76,7 +76,7 @@ class MainInstallTests(unittest.TestCase):
     def test_exact_main_positive_does_not_install_and_rechecks_main(self):
         self.assertEqual(self.check()['sha'], self.sha)
         self.assertEqual(sum(p.endswith('commits/main') for p in self.calls), 2)
-        self.assertTrue(all(p.startswith('repos/luworks/one-app/') for p in self.calls))
+        self.assertTrue(all(p.startswith('repos/luworks/today/') for p in self.calls))
 
     def test_branch_old_main_running_or_failed_run_blocks(self):
         for run_id in ('42', '43'):
@@ -125,6 +125,16 @@ class MainInstallTests(unittest.TestCase):
                              ('product_identity', {}), ('signing_changes', True), ('app', '/tmp/Debug-iphonesimulator/One.app')]:
             with self.subTest(field=field), patch.dict(self.build, {field: value}), self.assertRaises(ValueError):
                 self.check()
+
+    def test_provisioning_updates_require_explicit_matching_authorization(self):
+        self.build['automatic_provisioning_updates'] = True
+        with self.assertRaisesRegex(ValueError, 'provenance_mismatch'):
+            self.check()
+        self.args.allow_provisioning_updates = True
+        self.assertEqual(self.check()['sha'], self.sha)
+        self.build['automatic_provisioning_updates'] = False
+        with self.assertRaisesRegex(ValueError, 'provenance_mismatch'):
+            self.check()
 
     def test_offline_and_main_race_never_pass(self):
         with patch.object(self, 'github', side_effect=OSError('offline')), self.assertRaises(OSError):

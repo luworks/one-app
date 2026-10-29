@@ -19,7 +19,7 @@ final class HealthReviewTests: XCTestCase {
 
   /// Today scrolls to the Now line; the health line sits above everything, so scroll back to the top for it.
   private func healthLine(_ app: XCUIApplication) -> XCUIElement {
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     let line = app.buttons["health.summary"]
     for _ in 0..<4 where !(line.exists && line.isHittable) { app.swipeDown() }
     return line
@@ -46,19 +46,19 @@ final class HealthReviewTests: XCTestCase {
     let app = launch(at: "09:41")
     XCTAssertTrue(healthLine(app).waitForExistence(timeout: 5))
     app.buttons["Calendar"].firstMatch.tap()
-    app.buttons["calendar.mode.week"].tap()
+    app.buttons["calendar.mode.twoday"].tap()
     let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
     let day = app.buttons[tomorrow.formatted(date: .complete, time: .omitted)].firstMatch
     XCTAssertTrue(day.waitForExistence(timeout: 5))
     day.tap()
-    XCTAssertTrue(app.buttons["Back to today"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(tomorrow).waitForSelected())
     for _ in 0..<3 { app.swipeDown() }
     XCTAssertFalse(app.buttons["health.summary"].exists, "another day has no health line")
   }
 
   func testSettingTurnsTheLineOff() {
     let app = launch(at: "09:41", healthOn: false)
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     func openSetting() -> XCUIElement {
       app.openSidebar()
       let settings = app.buttons["Settings"].firstMatch

@@ -29,7 +29,7 @@ public struct DayKey: Hashable, Comparable {
 // MARK: - Holidays
 
 /// A set of fixed festivals and holidays the Year view can mark. Defaults follow region and Chinese language.
-public enum HolidaySet: String, CaseIterable, Identifiable {
+public enum HolidaySet: String, CaseIterable, Identifiable, Sendable {
   case unitedStates, china, international
   public var id: Self { self }
 

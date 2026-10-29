@@ -1,6 +1,6 @@
 import XCTest
 
-/// Leaving a tab and coming back finds it where it was: the open list in Reminders, Week / Month / Year in Calendar.
+/// Leaving a tab and coming back finds it where it was: the open list in Reminders, 2 Day / Month / Year in Calendar.
 @MainActor
 final class TabMemoryTests: XCTestCase {
   private func navigationApp(_ extra: [String] = []) -> XCUIApplication {
@@ -34,7 +34,7 @@ final class TabMemoryTests: XCTestCase {
     app = navigationApp(["-appearance", "dark"])
     app.buttons["Calendar"].tap()
     XCTAssertTrue(app.buttons["Calendar"].isSelected)
-    XCTAssertEqual(app.buttons["New"].label, "New event")
+    XCTAssertEqual(app.buttons["New"].label, "Add an item")
     capture("navigation-final-calendar-dark")
     app.terminate()
 
@@ -98,7 +98,7 @@ final class TabMemoryTests: XCTestCase {
     // Cancelling every creation route leaves the fixture's alarm rows unchanged.
     app.buttons["Clock"].tap()
     let before = app.buttons.matching(identifier: "alarm.row").count
-    plus.tap()
+    app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
     app.buttons["Cancel"].firstMatch.tap()
     XCTAssertTrue(plus.waitForExistence(timeout: 5))
@@ -116,8 +116,8 @@ final class TabMemoryTests: XCTestCase {
       XCTAssertGreaterThanOrEqual(button.frame.height, 44)
       XCTAssertTrue(app.frame.contains(button.frame))
     }
-    XCTAssertLessThanOrEqual(today.frame.maxX, chat.frame.minX)
-    XCTAssertLessThanOrEqual(chat.frame.maxX, plus.frame.minX)
+    XCTAssertLessThanOrEqual(chat.frame.maxX, today.frame.minX)
+    XCTAssertLessThanOrEqual(today.frame.maxX, plus.frame.minX)
     capture("navigation-after-largest-type")
   }
 
@@ -231,12 +231,11 @@ final class TabMemoryTests: XCTestCase {
       ? app.segmentedControls.buttons["Month"] : app.buttons["Month"].firstMatch
     XCTAssertTrue(month.waitForExistence(timeout: 5))
     month.tap()
-    XCTAssertTrue(
-      app.descendants(matching: .any)["calendar.monthTitle"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["calendar.mode.month"].waitForSelected())
     app.buttons["Clock"].firstMatch.tap()
     app.buttons["Calendar"].firstMatch.tap()
     XCTAssertTrue(
-      app.descendants(matching: .any)["calendar.monthTitle"].waitForExistence(timeout: 5),
-      "Calendar comes back in Month, not reset to Week")
+      app.buttons["calendar.mode.month"].waitForSelected(),
+      "Calendar comes back in Month, not reset to 2 Day")
   }
 }

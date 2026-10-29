@@ -127,6 +127,21 @@ final class HealthMetricsTests: XCTestCase {
     XCTAssertTrue(app.buttons["health.row.steps"].waitForExistence(timeout: 3), "back on the list")
   }
 
+  /// Every Health surface offers one tap into Apple's Health app (the jump itself needs a real phone).
+  func testOpenHealthIsOneTapFromTheSheetAndDetail() {
+    let app = launch()
+    openSheet(app)
+    let sheetOpen = app.buttons["health.open"].firstMatch
+    XCTAssertTrue(sheetOpen.waitForExistence(timeout: 3), "Open Health on the sheet")
+    row(app, "steps").tap()
+    XCTAssertTrue(app.navigationBars["Steps"].waitForExistence(timeout: 5))
+    let detailOpen = app.scrollViews.buttons["health.open"]
+    for _ in 0..<3 where !(detailOpen.exists && detailOpen.isHittable) {
+      app.scrollViews.firstMatch.swipeUp()
+    }
+    XCTAssertTrue(detailOpen.isHittable, "Open Health under the stats")
+  }
+
   func testMovingAverageAppearsForWeightButNotSteps() {
     let app = launch()
     openSheet(app)
@@ -452,7 +467,7 @@ final class HealthMetricsTests: XCTestCase {
 
   func testSettingsOpensTheSameSheet() {
     let app = launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     app.openSidebar()
     let settings = app.buttons["Settings"].firstMatch
     XCTAssertTrue(settings.waitForExistence(timeout: 5))

@@ -522,7 +522,7 @@
           }
           Text("City data: GeoNames (CC BY 4.0)")
             .font(.footnote)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
             .listRowSeparator(.hidden)
             .accessibilityIdentifier("cityPicker.credit")

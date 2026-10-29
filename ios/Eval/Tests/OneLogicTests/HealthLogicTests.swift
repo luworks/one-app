@@ -71,4 +71,9 @@ final class HealthLogicTests: XCTestCase {
     XCTAssertEqual(HealthMath.duration(7 * 3600), "7 hr")
     XCTAssertEqual(HealthMath.duration(7 * 3600 + 12 * 60), "7 hr 12 min")
   }
+
+  func testOpenHealthUsesTheSupportedHealthURL() {
+    XCTAssertEqual(HealthLauncher.url.absoluteString, "x-apple-health://")
+    XCTAssertEqual(HealthLauncher.url.scheme, "x-apple-health")
+  }
 }

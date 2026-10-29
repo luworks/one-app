@@ -82,7 +82,7 @@ Stays as Apple Calendar: tapping a month opens Month. A 15-pt day cell is below 
 - **All-day versus timed**: only all-day events lasting two or more days become bands. A timed overnight event (22:00 to 02:00) counts as load on both days. A single all-day event counts as 1 load on its day.
 - **Time zones**: holiday dates are `DayKey` (year, month, day) numbers, never instants, so they cannot slip a day when the phone travels. EventKit all-day events are floating dates in the device's zone. Lunar festivals are read in China time because the festival date is the date in China.
 - **Observed holidays** (July 4 on a Saturday observed on Friday), China's make-up working days and extended holiday blocks: not supported. Cut for now, say so in the key if added later.
-- **Performance**: a year is one cached EventKit query, as today. Holidays are computed per year and cached; the Chinese calendar walk is 365 days and only runs when the China set is on.
+- **Performance**: a year is one EventKit query, read off the main thread. `YearLayout.months` turns it into plain per-day values (holiday, busy, bands, VoiceOver text) once per year and data change, off the main thread, cached in Calendar so Month ↔ Year never recomputes. Each mini month is one `Canvas`; day taps and VoiceOver come from that layout, not 370 views per year. The Chinese calendar walk is 365 days and only runs when the China set is on.
 
 ## 4. What to cut
 

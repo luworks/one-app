@@ -35,7 +35,7 @@ final class ClockTests: XCTestCase {
   /// Opens the picker and searches. `typeText` with Chinese characters needs the simulator to accept them;
   /// the English searches are the reliable ones.
   private func search(_ text: String) {
-    plus.tap()
+    app.addNew("Add city")
     XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
     let field = app.searchFields.firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 3))
@@ -165,13 +165,13 @@ final class ClockTests: XCTestCase {
     XCTAssertFalse(app.buttons["worldClock.overlap"].exists, "no Overlap capsule")
     let before = clocks.map({ $0.label })
 
-    // Start inside the card, clear of the sidebar's reserved 44pt edge: every city advances into the future.
+    // Start inside the card, clear of the sidebar's reserved 44pt edge: every city moves into the past.
     tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5))
       .press(
         forDuration: 0.05,
         thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)),
         withVelocity: .slow, thenHoldForDuration: 0.1)
-    XCTAssertTrue(pill.label.hasSuffix("AFTER NOW"), "the pill says how far: \(pill.label)")
+    XCTAssertTrue(pill.label.hasSuffix("BEFORE NOW"), "the pill says how far: \(pill.label)")
     for (clock, original) in zip(clocks, before) {
       XCTAssertNotEqual(clock.label, original, "every clock moved")
     }
@@ -182,13 +182,13 @@ final class ClockTests: XCTestCase {
     XCTAssertEqual(pill.label, "NOW", "tapping the pill goes back to NOW")
     XCTAssertEqual(clocks.map({ $0.label }), before)
 
-    // Drag left from Now: every city moves into the past.
+    // Drag left from Now: every city advances into the future.
     tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
       .press(
         forDuration: 0.05,
         thenDragTo: tokyo.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)),
         withVelocity: .slow, thenHoldForDuration: 0.1)
-    XCTAssertTrue(pill.label.hasSuffix("BEFORE NOW"), pill.label)
+    XCTAssertTrue(pill.label.hasSuffix("AFTER NOW"), pill.label)
     for (clock, original) in zip(clocks, before) {
       XCTAssertNotEqual(clock.label, original, "every clock moved")
     }
@@ -337,7 +337,7 @@ final class ClockTests: XCTestCase {
           withVelocity: .slow, thenHoldForDuration: 0.1)
       shot("2b-world-clock-scrubbed")
       pill.tap()
-      plus.tap()
+      app.addNew("Add city")
       XCTAssertTrue(app.staticTexts["Choose a City"].waitForExistence(timeout: 5))
       shot("3-choose-city")
       app.buttons["Cancel"].tap()

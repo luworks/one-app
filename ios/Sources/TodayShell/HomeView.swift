@@ -62,6 +62,7 @@
       let today = composition.session.runtime.calendar.startOfDay(
         for: composition.session.runtime.now())
       _calendarDay = State(initialValue: today)
+      _calendarShown = State(initialValue: today...today)
       _todayDay = State(initialValue: today)
       _todayReferenceNow = State(initialValue: composition.session.runtime.now())
       _tab = State(
@@ -71,27 +72,26 @@
         initialValue: Self.restored(
           ClockSection.self, key: Self.clockSectionKey, defaults: defaults, arguments: args)
           ?? .alarms)
-      let last = Self.restored(
-        CalendarView.Mode.self, key: Self.calendarModeKey, defaults: defaults, arguments: args)?
-        .rawValue
+      // Read raw: a view that no longer exists (the 7-day "Week", "ThreeDay") is not a mode and opens on 2 Day.
+      let last =
+        args.contains("-uiTesting") ? nil : defaults.string(forKey: Self.calendarModeKey)
       _calendarMode = State(
         initialValue: CalendarView.Mode(
-          rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .week)
+          rawValue: Preferences.calendarStartChoice(defaults).view(lastUsed: last)) ?? .twoDay)
     }
     @State private var editor: OpenedEntry?
 
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Query private var allTasks: [OneTask]
-    @Query private var allEvents: [OneEvent]
-    @Query private var allAlarms: [OneAlarm]
 
     @State private var tab: HomeTab
     @State private var calendarDay: Date
     // Each tab's place is kept here, outside the tab, so leaving a tab and coming back finds it where it was
-    // (the open list in Reminders, Week / Month / Year in Calendar, the day in Today).
+    // (the open list in Reminders, 2 Day / Month / Year in Calendar, the day in Today).
     @State private var calendarMode: CalendarView.Mode
+    /// The first and last day the Calendar page shows, published by it for the top bar's month label.
+    @State private var calendarShown: ClosedRange<Date>
     /// Alarms · World Clock · Stopwatch · Timer inside the Clock tab.
     @State private var clockSection: ClockSection
     @State private var addingCity = false
@@ -110,7 +110,8 @@
     /// The day Today shows. Picking a day in Calendar opens it here.
     @State private var todayDay: Date
     @State private var todayReferenceNow: Date
-    /// The mounted conversation survives panel dismissal; nil means Chat has not opened yet.
+    /// The full-screen Chat page. A fresh one is built hidden ahead of time (after launch and after each Close), so a
+    /// tap on the bottom field only reveals it; nil until the first one is built.
     @State private var ask: AskRoute?
     @State private var askVisible = false
     @State private var showsSearch = false
@@ -122,6 +123,7 @@
     /// A list screen is pushed inside Reminders; its back swipe owns the left edge.
     @State private var remindersPushed = false
     @State private var toast = UndoToast()
+    @State private var tidying: TidyRoute?
     #if DEBUG
       @State private var shareImportTestState = ""
     #endif
@@ -133,6 +135,9 @@
     @State private var keyboardUp = false
 
     public var body: some View {
+      #if DEBUG
+        let _ = StoreChurnProbe.countShellBody()
+      #endif
       GeometryReader { geo in
         // The sidebar takes most of the width; the page slides aside and stays visible beside it.
         let full = geo.size.width
@@ -201,54 +206,48 @@
           }
         }
       }
-      .overlay(alignment: .bottom) {
+      .overlay {
         GeometryReader { geometry in
-          ZStack(alignment: .bottom) {
-            if askVisible {
-              Color.black.opacity(0.12)
-                .contentShape(Rectangle())
-                .onTapGesture { closeAsk() }
-                .accessibilityHidden(true)
-            }
-            if let route = ask {
-              AskScreen(
-                thread: route.thread, toast: toast, composition: composition,
-                isPresented: askVisible,
-                maximumHeight: max(0, geometry.size.height - 64),
-                onClose: closeAsk,
-                onBack: { _ in },
-                onAdded: { capture in
-                  if capture.hasDay { calendarDay = capture.day }
-                },
-                onOpenDay: { day in
-                  closeAsk()
-                  drawer.set(open: false, animated: false)
-                  tab = .today
-                  todayDay = session.runtime.calendar.startOfDay(for: day)
-                }
-              )
-              .id(route.id)
-              .accessibilityAddTraits(.isModal)
-              .frame(maxWidth: 620)
-              .background(Color(.systemBackground))
-              .clipShape(RoundedRectangle(cornerRadius: 24))
-              .overlay {
-                RoundedRectangle(cornerRadius: 24)
-                  .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
-                  .allowsHitTesting(false)
+          if let route = ask {
+            AskScreen(
+              thread: route.thread, toast: toast, composition: composition,
+              isPresented: askVisible,
+              onClose: closeAsk,
+              onMenu: openSidebarFromAsk,
+              onBack: { _ in },
+              onAdded: { capture in
+                if capture.hasDay { calendarDay = capture.day }
+              },
+              onOpenDay: { day in
+                closeAsk()
+                drawer.set(open: false, animated: false)
+                tab = .today
+                todayDay = session.runtime.calendar.startOfDay(for: day)
               }
-              .shadow(color: .black.opacity(0.16), radius: 20, y: 6)
-              .padding(.horizontal, 12)
-              .padding(.bottom, 12)
-              // Keep native subviews outside the hit-test region while retaining conversation state.
-              .offset(y: askVisible ? 0 : geometry.size.height + 640)
-              .opacity(askVisible ? 1 : 0)
-              .transaction { if !askVisible { $0.disablesAnimations = true } }
-              .allowsHitTesting(askVisible)
-              .accessibilityHidden(!askVisible)
+            )
+            .id(route.id)
+            .background(Color(.systemBackground).ignoresSafeArea())
+            // Like the page under it, a swipe right from the left edge opens the sidebar.
+            .overlay(alignment: .leading) {
+              Color.clear
+                .frame(width: 20)
+                .contentShape(Rectangle())
+                .simultaneousGesture(
+                  DragGesture(minimumDistance: 20).onEnded { v in
+                    if v.translation.width > 60, v.translation.width > 2 * abs(v.translation.height)
+                    {
+                      openSidebarFromAsk()
+                    }
+                  })
             }
+            // A hidden page stays mounted below the screen, out of hit testing; AskView drops its header and editor.
+            .offset(y: askVisible ? 0 : geometry.size.height + 640)
+            .opacity(askVisible ? 1 : 0)
+            .transaction { if !askVisible { $0.disablesAnimations = true } }
+            .allowsHitTesting(askVisible)
+            .accessibilityAddTraits(askVisible ? .isModal : [])
+            .accessibilityHidden(!askVisible)
           }
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
         .allowsHitTesting(askVisible)
       }
@@ -261,7 +260,7 @@
       .sheet(isPresented: $showsActivity) {
         ActivityView(
           activity: session.activity, flush: { session.ledger.flush(context) },
-          undo: { session.ledger.undo($0, context: context) })
+          undo: { await session.actions.undo($0, context: context) })
       }
       .environment(toast)
       .environment(session.actions)
@@ -316,28 +315,47 @@
 
     private var edgeSwipeEnabled: Bool { !(tab == .tasks && remindersPushed) }
 
-    /// Bottom Chat resumes the conversation; sidebar actions select a new or saved conversation.
+    /// The bottom field and sidebar New chat start a new conversation; a sidebar row reopens that one.
+    /// A new conversation uses the page built hidden ahead of time, so opening only reveals it.
     private func openAsk(_ thread: ChatThread?, fromSidebar: Bool = false) {
       PerformanceTrace.shared.beginPage("ai")
-      // A history selection keeps its sidebar context underneath the panel.
+      // Opened from the sidebar, the sidebar stays underneath: Close goes back to it.
       if !fromSidebar { drawer.set(open: false, animated: false) }
       var transaction = Transaction()
       transaction.disablesAnimations = true
       withTransaction(transaction) {
-        // Bottom Chat resumes the mounted conversation, including its unsent draft.
-        // Sidebar New chat and history selections intentionally choose a different conversation.
-        if ask == nil || fromSidebar {
-          ask = AskRoute(thread: thread, fromSidebar: fromSidebar)
-        }
+        if thread != nil || ask == nil || ask?.used == true { ask = AskRoute(thread: thread) }
+        ask?.used = true
         askVisible = true
       }
     }
 
+    /// Back to the page. The conversation is already saved in the sidebar (from its first message); an unsent draft
+    /// goes with it, since the next tap starts a new chat.
     private func closeAsk() {
       if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.close_requested") }
       var transaction = Transaction()
       transaction.disablesAnimations = true
       withTransaction(transaction) { askVisible = false }
+      // Once this page is off screen, build the next new chat hidden.
+      Task {
+        try? await Task.sleep(for: .milliseconds(350))
+        prepareNewAsk()
+      }
+    }
+
+    /// Builds a new, hidden Chat page unless an unused one is ready or Chat is on screen.
+    private func prepareNewAsk() {
+      guard !askVisible, ask == nil || ask?.used == true else { return }
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) { ask = AskRoute(thread: nil) }
+    }
+
+    /// Chat's menu button: past chats are in the sidebar beside the page.
+    private func openSidebarFromAsk() {
+      closeAsk()
+      drawer.set(open: true)
     }
 
     /// Reminders added from the Share sheet wait in the App Group (`ShareInbox`) until the app is active; they come in
@@ -457,18 +475,19 @@
                 tab = .clock
               }, actions: session.actions, calendar: session.calendar, timers: session.timers,
               reminders: session.reminders, ledger: session.ledger, travel: session.travel,
-              presentation: presentation)
+              presentation: presentation, openTidy: { tidying = TidyRoute(overdue: $0) })
           case .calendar:
             CalendarView(
               day: $calendarDay,
               mode: PerformanceTrace.enabled ? tracedCalendarMode : $calendarMode,
               calendar: session.calendar, actions: session.actions, ledger: session.ledger,
               alarms: session.alarms, onOpenTask: { editor = .task($0) },
-              onOpenAlarm: { editor = .alarm($0) }
-            ) { picked in
-              todayDay = picked
-              tab = .today
-            }
+              onOpenAlarm: { editor = .alarm($0) },
+              onOpenDay: { picked in
+                todayDay = picked
+                tab = .today
+              },
+              onVisibleDays: { calendarShown = $0 })
           case .tasks:
             RemindersView(
               isPushed: $remindersPushed,
@@ -503,7 +522,8 @@
       .onReceive(
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
       ) { _ in
-        keyboardUp = true
+        // Chat covers the page and owns its keyboard; the page does not re-lay out under it.
+        if !askVisible, !KeyboardWarmup.isRunning { keyboardUp = true }
       }
       .onReceive(
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
@@ -515,6 +535,11 @@
         SearchView(calendar: session.calendar, defaults: session.defaults) { destination in
           PlannerEditor(destination: destination, toast: toast, composition: composition)
         }
+      }
+      .sheet(item: $tidying) { route in
+        TidySheet(
+          overdue: route.overdue, actions: session.actions, ledger: session.ledger,
+          presentation: presentation, toast: toast)
       }
       .sheet(isPresented: $addingCity) {
         CityPicker(store: composition.world, now: session.runtime.now)
@@ -548,6 +573,7 @@
             ).accessibilityLabel(String(ms))
           }
           #if DEBUG
+            if composition.arguments.contains("-uiTestingStoreChurn") { StoreChurnProbe() }
             if composition.arguments.contains("-uiTestingSyncDump"),
               let sync = session.reminders as? RemindersSync
             {
@@ -567,13 +593,8 @@
           guard scenePhase == .active else { return }
           await session.calendar.hydrateFocus(session.actions.focus.records)
         }
-        .task(id: reminderSignature) {
-          try? await Task.sleep(for: .milliseconds(300))
-          allAlarms.forEach { $0.retireIfRung(now: session.runtime.now()) }
-          await session.notifications.resync()
-          await session.alarms.sync(context)
-          updateWidgets()
-        }
+        // Store observation lives in a child so a save doesn't re-run this whole shell (and the sheet over it).
+        .background { ReminderSignatureObserver(session: session) }
         .onChange(of: QuickAction.shared.pending, initial: true) { _, type in
           guard let type else { return }
           QuickAction.shared.pending = nil
@@ -606,7 +627,7 @@
             todayReferenceNow = session.runtime.now()
             if PerformanceTrace.enabled, PerformanceTrace.shared.launchComplete {
               // Covered roots cannot prove the visible page resumed. Keep those samples absent.
-              if ask == nil, !showsSettings, !showsActivity, !showsSearch, newItem == nil,
+              if !askVisible, !showsSettings, !showsActivity, !showsSearch, newItem == nil,
                 !addingCity, !drawer.isOpen, remindersPath.isEmpty
               {
                 PerformanceTrace.shared.begin("resume_to_content_layout", destination: traceRoute)
@@ -676,18 +697,25 @@
       await FirstRun.calendar(
         session.calendar, defaults: session.defaults, arguments: composition.arguments)
       if PerformanceTrace.enabled { PerformanceTrace.shared.finishBootstrap() }
-
+      // Off the cold-start path, build the Chat page hidden so even the first tap only reveals it.
+      try? await Task.sleep(for: .milliseconds(250))
+      prepareNewAsk()
+      // The first keyboard of the process is slow to load; load it now so the first Chat tap is as quick as later ones.
+      if !askVisible, editor == nil, newItem == nil, !showsSearch, !showsSettings, !showsActivity,
+        !addingCity
+      {
+        KeyboardWarmup.run()
+      }
     }
 
     /// Rewrites the Lock Screen / Home Screen widget snapshot (skipped when nothing changed).
     private func updateWidgets() {
-      session.widget.update(
-        tasks: allTasks, events: allEvents, alarms: allAlarms, now: session.runtime.now(),
-        calendar: session.runtime.calendar)
+      ReminderSignatureObserver.updateWidgets(session: session, context: context)
     }
 
     private func dropDeletedMirrors() {
-      let gone = session.calendar.removedMirrors(allEvents)
+      let gone = session.calendar.removedMirrors(
+        (try? context.fetch(FetchDescriptor<OneEvent>())) ?? [])
       guard !gone.isEmpty else { return }
       for event in gone {
         session.ledger.record(
@@ -696,28 +724,6 @@
         context.delete(event)
       }
       try? context.save()
-    }
-
-    /// Changes whenever anything that affects reminders changes.
-    private var reminderSignature: Int {
-      var h = Hasher()
-      for t in allTasks {
-        h.combine(t.title)
-        h.combine(t.isDone)
-        h.combine(t.due)
-        h.combine(t.reminderOffsetMinutes)
-        h.combine(t.ringsAsAlarm)
-      }
-      for a in allAlarms { h.combine(a.scheduleSignature) }
-      for e in allEvents {
-        h.combine(e.title)
-        h.combine(e.start)
-        h.combine(e.reminderOffsetMinutes)
-        h.combine(e.repeatRule)
-        h.combine(e.isAllDay)
-        h.combine(e.ringsAsAlarm)
-      }
-      return h.finalize()
     }
 
     // MARK: Top: avatar + tab pills
@@ -731,11 +737,25 @@
         ) {
           drawer.set(open: true)
         }
-        // Only scrolls when the pills don't fit (very large text). Otherwise there is no scroll view
-        // to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
-        ViewThatFits(in: .horizontal) {
-          pills
-          ScrollView(.horizontal, showsIndicators: false) { pills }
+        // The month on screen sits right of the pills; when it doesn't fit it gets shorter, then goes, before the
+        // pills shrink. Only scrolls when the pills alone don't fit (very large text). Otherwise there is no scroll
+        // view to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
+        // Only the label picks its length: the pills stay one view, so switching tabs never swaps the whole row
+        // (a swapped row left the old selected pill fading out over the new one, e.g. Reminders → Clock).
+        HStack(spacing: 12) {
+          ViewThatFits(in: .horizontal) {
+            pills
+            ScrollView(.horizontal, showsIndicators: false) { pills }
+          }
+          .layoutPriority(1)
+          Spacer(minLength: 0)
+          if let days = shownDays {
+            ViewThatFits(in: .horizontal) {
+              monthLabel(days, .full)
+              monthLabel(days, .short)
+              Color.clear.frame(width: 0, height: 0)
+            }
+          }
         }
         Spacer(minLength: 0)
       }
@@ -744,6 +764,34 @@
       .contentShape(Rectangle())
       // Chrome stays usable at the largest text sizes; content below still scales fully.
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    /// The days whose month the top bar names: Today's day, what Calendar shows, else this month. Nil in
+    /// Calendar's Year, which names each year in its own heading, and under Chat: the label would sit beneath
+    /// Chat's Close in accessibility and take its taps there (XCTest, Voice Control).
+    private var shownDays: ClosedRange<Date>? {
+      if askVisible { return nil }
+      switch tab {
+      case .today: return todayDay...todayDay
+      case .calendar: return calendarMode == .year ? nil : calendarShown
+      case .tasks, .clock:
+        let now = session.runtime.now()
+        return now...now
+      }
+    }
+
+    /// Quiet, like Apple Calendar's month above its week; inert for now.
+    private func monthLabel(_ days: ClosedRange<Date>, _ length: MonthLabel.Length) -> some View {
+      Text(
+        MonthLabel.text(
+          first: days.lowerBound, last: days.upperBound, length: length,
+          calendar: presentation.calendar, locale: presentation.locale)
+      )
+      .font(.footnote.weight(.semibold))
+      .foregroundStyle(Color(.secondaryLabel))
+      .lineLimit(1)
+      .fixedSize()
+      .accessibilityIdentifier("topBar.month")
     }
 
     private var pills: some View {
@@ -798,59 +846,74 @@
           calendar: session.runtime.calendar), end: nil, fullOptions: false, onComplete: nil)
     }
 
-    /// What + adds right now: the thing this page is about.
-    private var smartNewItem: NewItem {
-      switch tab {
-      case .calendar: .event
-      case .clock: .alarm
-      case .today, .tasks: .task
-      }
-    }
-
     /// On World Clock, + adds a city.
     private var plusAddsCity: Bool { tab == .clock && clockSection == .worldClock }
 
+    /// A chat field that fills the bar, then Today and + on the right.
     private var bottomButtons: some View {
-      HStack(spacing: 12) {
-        HStack(spacing: 4) {
-          Button {
-            traceTabAction(to: .today)
-            tab = .today
-          } label: {
-            bottomDestinationLabel(icon: "sun.max", selected: tab == .today && !askVisible)
-          }
-          .buttonStyle(PressScale())
-          .accessibilityLabel("Today")
-          .accessibilityAddTraits(tab == .today && !askVisible ? .isSelected : [])
-          Button {
-            openAsk(nil)
-          } label: {
-            bottomDestinationLabel(icon: "bubble.left.and.bubble.right", selected: false)
-          }
-          .buttonStyle(PressScale())
-          .accessibilityLabel("Chat")
-          // Keep the existing automation entry while giving VoiceOver the visible control's name.
-          .accessibilityIdentifier("Ask AI or add anything")
-          .accessibilityHint("Opens your conversation. New and past chats are in the menu.")
+      HStack(spacing: 10) {
+        Button {
+          openAsk(nil)
+        } label: {
+          Text("Ask AI or add anything")
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(
+              maxWidth: .infinity, minHeight: ButtonConfiguration.minimumHitSize,
+              alignment: .leading
+            )
+            .padding(.horizontal, 16)
+            .background(ButtonConfiguration.Icon.background, in: Capsule())
+            .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
+            .contentShape(Capsule())
         }
-        .padding(3)
-        .background(ButtonConfiguration.Icon.background, in: Capsule())
-        .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.25), lineWidth: 0.5) }
+        .buttonStyle(PressScale())
+        .accessibilityLabel("Chat")
+        // Keep the existing automation entry while giving VoiceOver the visible control's name.
+        .accessibilityIdentifier("Ask AI or add anything")
+        .accessibilityHint("Starts a new chat. Past chats are in the menu.")
+        // Always today itself: from another tab, and from another day on the Today tab.
+        Button {
+          traceTabAction(to: .today)
+          todayDay = session.runtime.calendar.startOfDay(for: session.runtime.now())
+          tab = .today
+        } label: {
+          todayLabel(selected: tab == .today && !askVisible)
+        }
+        .buttonStyle(PressScale())
+        .accessibilityLabel("Today")
+        .accessibilityAddTraits(tab == .today && !askVisible ? .isSelected : [])
         plusButton
       }
-      .frame(maxWidth: 280)
-      .frame(maxWidth: .infinity)
-      .padding(.horizontal, 20)
+      .padding(.horizontal, 16)
       .padding(.top, 6)
       .padding(.bottom, 4)
     }
 
-    private func bottomDestinationLabel(icon: String, selected: Bool) -> some View {
-      Image(systemName: icon)
-        .font(ButtonConfiguration.Icon.font)
-        .frame(maxWidth: .infinity, minHeight: ButtonConfiguration.minimumHitSize)
-        .background(selected ? ButtonConfiguration.Icon.selectedFill : .clear, in: Capsule())
-        .foregroundStyle(selected ? Color.primary : Color.secondary)
+    /// The word "Today", like Apple Calendar's button: a capsule as tall as +.
+    @AppStorage(TodayButtonColor.storageKey) private var todayButtonColor = TodayButtonColor.green
+      .stored
+    @Environment(\.colorScheme) private var identityColorScheme
+
+    private func todayLabel(selected: Bool) -> some View {
+      let fill = TodayButtonColor(stored: todayButtonColor).color
+      return
+        Text("Today")
+        .font(.subheadline.weight(.semibold))
+        .lineLimit(1)
+        .fixedSize()
+        .foregroundStyle(fill.contrastForeground(for: identityColorScheme))
+        .padding(.horizontal, 14)
+        .frame(
+          minWidth: ButtonConfiguration.minimumHitSize,
+          minHeight: ButtonConfiguration.minimumHitSize
+        )
+        .background(
+          fill,
+          in: Capsule()
+        )
+        .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
         .animation(reduceMotion ? nil : PillStyle.selectionAnimation, value: selected)
         .contentShape(Capsule())
     }
@@ -878,21 +941,6 @@
       }
       PerformanceTrace.shared.beginPage(route)
       newItem = item
-    }
-
-    /// Stopwatch and Timer retain their own start controls; + offers the other creation routes.
-    private var plusShowsChoices: Bool {
-      tab == .today || (tab == .clock && (clockSection == .stopwatch || clockSection == .timer))
-    }
-
-    private var plusCaption: String {
-      if plusShowsChoices { return "Add" }
-      if plusAddsCity { return "City" }
-      switch smartNewItem {
-      case .task: return "Reminder"
-      case .event: return "Event"
-      case .alarm: return "Alarm"
-      }
     }
 
     private var plusLabel: some View {
@@ -935,9 +983,10 @@
       }
     }
 
+    /// + opens the shared native composer; World Clock retains Add city in its context menu.
     private var plusButton: some View {
       Button {
-        presentNewItem(smartNewItem)
+        presentNewItem(tab == .calendar ? .event : tab == .clock ? .alarm : .task)
       } label: {
         plusLabel
       }
@@ -949,6 +998,7 @@
       .tint(.primary)
       .accessibilityIdentifier("New")
       .accessibilityLabel("Create")
+
 
     }
 
@@ -985,12 +1035,18 @@
     }
   }
 
-  /// What the AI screen opens on. A fresh id per presentation, so "New chat" always starts clean.
+  /// What the AI screen opens on. A fresh id per conversation, so a new chat always starts clean.
+  /// Today's overdue reminders waiting in the Tidy sheet.
+  struct TidyRoute: Identifiable {
+    let id = UUID()
+    let overdue: [OneTask]
+  }
+
   struct AskRoute: Identifiable {
     let id = UUID()
     let thread: ChatThread?
-    /// Opened from the sidebar: going back returns there instead of to the page.
-    var fromSidebar = false
+    /// Shown at least once: the next new chat needs a new page.
+    var used = false
   }
 
   enum NewItem: Identifiable {

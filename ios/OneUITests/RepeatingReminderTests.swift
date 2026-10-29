@@ -17,18 +17,14 @@ final class RepeatingReminderTests: XCTestCase {
         TestData.fixtureArguments("repeating-reminder-daily-home.json")
         + ["-uiTestingNow", "09:41"]
       app.launch()
-      XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+      XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     }
   }
 
   private var circle: XCUIElement { app.buttons["Complete \(title)"] }
 
-  /// How many rows of the reminder sit above the Tomorrow header, i.e. in today's own timeline.
   private func rowsOnToday() -> Int {
-    let header = app.buttons["tomorrowHeader"]
-    let circles = app.buttons.matching(NSPredicate(format: "label == %@", "Complete \(title)"))
-      .allElementsBoundByIndex
-    return circles.filter { !header.exists || $0.frame.minY < header.frame.minY }.count
+    app.buttons.matching(NSPredicate(format: "label == %@", "Complete \(title)")).count
   }
 
   func testCompletingARepeatingReminderMovesItToItsNextDay() {
@@ -40,24 +36,20 @@ final class RepeatingReminderTests: XCTestCase {
       app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Completed “\(title)”"))
         .firstMatch
         .waitForExistence(timeout: 3), "the toast says it is done")
-    // Only the Tomorrow preview below today's timeline may still list it.
-    let header = app.buttons["tomorrowHeader"]
-    XCTAssertTrue(header.waitForExistence(timeout: 3), "tomorrow now has it")
     XCTAssertEqual(rowsOnToday(), 0, "it leaves today's timeline")
 
     // Its next occurrence is tomorrow's own day.
     app.buttons["Calendar"].firstMatch.tap()
-    app.buttons["calendar.mode.week"].tap()
+    app.buttons["calendar.mode.twoday"].tap()
     let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
     let day = app.buttons[tomorrow.formatted(date: .complete, time: .omitted)].firstMatch
     XCTAssertTrue(day.waitForExistence(timeout: 5))
     day.tap()
     XCTAssertTrue(
-      app.buttons["Back to today"].waitForExistence(timeout: 5),
-      "tomorrow opens as a day of its own")
+      app.weekStripDay(tomorrow).waitForSelected(), "tomorrow opens as a day of its own")
     XCTAssertTrue(circle.waitForExistence(timeout: 3), "the next occurrence is on tomorrow")
-    app.buttons["Back to today"].tap()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    app.returnToToday()
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     XCTAssertEqual(rowsOnToday(), 0, "and still not on today")
 
     // Scheduled lists it once, with the new date.
@@ -82,7 +74,6 @@ final class RepeatingReminderTests: XCTestCase {
     XCTAssertEqual(rowsOnToday(), 1)
 
     circle.tap()
-    XCTAssertTrue(app.buttons["tomorrowHeader"].waitForExistence(timeout: 3))
     XCTAssertEqual(rowsOnToday(), 0, "completed, it left today")
     let undo = app.buttons["Undo"]
     XCTAssertTrue(undo.waitForExistence(timeout: 3))
@@ -92,7 +83,7 @@ final class RepeatingReminderTests: XCTestCase {
     XCTAssertEqual(rowsOnToday(), 1, "Undo brings the reminder back")
     XCTAssertEqual(
       app.buttons.matching(NSPredicate(format: "label == %@", "Complete \(title)")).count, 1,
-      "and the next occurrence Undo took away is not left on tomorrow")
+      "Undo restores exactly one row on today")
     XCTAssertEqual(
       circle.frame.minY, before, accuracy: 1,
       "at the same place on the timeline, so at the same time")

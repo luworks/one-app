@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Calendar tab (modeled on Apple Calendar): Month grid with the day's list, paging, Year, Week, and the Calendars filter.
+/// The Calendar tab (modeled on Apple Calendar): Month grid with the day's list, paging, Year, 2 Day, and the Calendars filter.
 /// Launched with -uiTesting: a fresh in-memory store with sample data (events today and tomorrow, "Team offsite" in two days).
 @MainActor
 final class CalendarTabTests: XCTestCase {
@@ -19,44 +19,102 @@ final class CalendarTabTests: XCTestCase {
 
   private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
 
-  /// The Calendar tab opens on the next 3 days; the Month tests switch to Month first.
+  /// The Calendar tab opens on the next 2 days; the Month tests switch to Month first.
   private func showMonth() { modeButton("Month").tap() }
 
-  /// The Week / Month / Year pills (buttons, not a segmented control).
+  /// The 2 Day / Month / Year pills (buttons, not a segmented control), by identifier: "TwoDay", "Month", "Year".
   private func modeButton(_ title: String) -> XCUIElement {
     app.buttons["calendar.mode.\(title.lowercased())"]
   }
 
-  private func monthName(_ date: Date) -> String { date.formatted(.dateTime.month(.wide)) }
+  /// The top bar's month label for a page that shows one month ("October 2026").
+  private func monthName(_ date: Date) -> String { date.formatted(.dateTime.month(.wide).year()) }
+
+  /// The month label is in the top bar on every tab; wait until it names `month`.
+  @discardableResult
+  private func waitForMonthLabel(_ month: Date, timeout: TimeInterval = 5) -> Bool {
+    let label = element("topBar.month")
+    let named = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "label == %@", monthName(month)), object: label)
+    return XCTWaiter().wait(for: [named], timeout: timeout) == .completed
+  }
 
   private func dayID(_ date: Date) -> String {
     let c = cal.dateComponents([.year, .month, .day], from: date)
     return String(format: "day.%04d-%02d-%02d", c.year!, c.month!, c.day!)
   }
 
-  /// The default view is Week: one switcher row (Week / Month / Year), no Day segment, no Today or Calendars buttons.
-  func testWeekIsTheDefault() {
-    XCTAssertTrue(modeButton("Week").waitForExistence(timeout: 5))
+  /// The default view is 2 Day: one switcher row (2 Day / Month / Year), no Day segment, no Today or Calendars
+  /// buttons, and the grid starts on today.
+  func testTwoDayIsTheDefault() {
+    XCTAssertTrue(modeButton("TwoDay").waitForExistence(timeout: 5))
     let pills = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'calendar.mode.'"))
     XCTAssertEqual(
-      pills.allElementsBoundByIndex.map({ $0.label }), ["Week", "Month", "Year"],
-      "one switcher: Week / Month / Year (Day is the Today tab)")
+      pills.allElementsBoundByIndex.map({ $0.label }), ["2 Day", "Month", "Year"],
+      "one switcher: 2 Day / Month / Year (Day is the Today tab, no 7-day Week)")
     XCTAssertFalse(app.segmentedControls.buttons["Month"].exists, "pills, not a segmented control")
-    XCTAssertTrue(modeButton("Week").isSelected, "Week is selected when the tab opens")
+    XCTAssertTrue(modeButton("TwoDay").isSelected, "2 Day is selected when the tab opens")
     XCTAssertFalse(modeButton("Month").isSelected)
     XCTAssertTrue(
-      element("calendar.weekTitle").waitForExistence(timeout: 5), "a time grid with a month title")
+      element("topBar.month").waitForExistence(timeout: 5), "the top bar names the month")
+    for offset in 0..<2 {
+      XCTAssertTrue(
+        onScreen(dayHeader(offset)), "today and tomorrow are the columns (day \(offset))")
+    }
+    XCTAssertFalse(dayHeader(2).isFullyVisible(in: app.frame), "only two columns")
     XCTAssertFalse(
       app.buttons["calendar.today"].exists || app.buttons["calendar.calendars"].exists
         || app.buttons["calendar.year"].exists)
   }
 
-  /// Month: big month title, weekday letters, grid, and today's events below.
+  /// The header button of the day `offset` days from today (its label is the full date).
+  private func dayHeader(_ offset: Int) -> XCUIElement {
+    let day = cal.date(byAdding: .day, value: offset, to: .now)!
+    return app.buttons[day.formatted(date: .complete, time: .omitted)].firstMatch
+  }
+
+  /// Waits until the element is entirely on screen (columns off to either side exist but are clipped).
+  private func onScreen(_ e: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+    let end = Date.now.addingTimeInterval(timeout)
+    repeat {
+      if e.isFullyVisible(in: app.frame) { return true }
+      RunLoop.current.run(until: .now.addingTimeInterval(0.2))
+    } while Date.now < end
+    return false
+  }
+
+  /// A swipe moves the grid by one day, like Apple Calendar's multi-day view; a swipe back returns to today.
+  func testTwoDaySwipeMovesOneDay() {
+    let grid = element("calendar.dayGrid")
+    XCTAssertTrue(grid.waitForExistence(timeout: 5))
+    grid.swipeLeft()
+    XCTAssertTrue(onScreen(dayHeader(2)), "the day after the second comes in from the right")
+    XCTAssertFalse(dayHeader(0).isFullyVisible(in: app.frame), "today moved off to the left")
+    XCTAssertFalse(
+      dayHeader(3).isFullyVisible(in: app.frame), "one day per swipe, not a page of two")
+    grid.swipeRight()
+    XCTAssertTrue(onScreen(dayHeader(0)), "back to today")
+  }
+
+  /// A day picked in Month opens 2 Day on that day.
+  func testTwoDayStartsOnTheDayPickedInMonth() {
+    showMonth()
+    let target = cal.date(byAdding: .day, value: 5, to: .now)!
+    if !cal.isDate(target, equalTo: .now, toGranularity: .month) {
+      element("calendar.monthPager").swipeLeft()
+    }
+    let cell = element(dayID(target))
+    XCTAssertTrue(cell.waitForExistence(timeout: 5))
+    cell.tap()
+    modeButton("TwoDay").tap()
+    XCTAssertTrue(onScreen(dayHeader(5)), "the picked day is the first column")
+    XCTAssertFalse(dayHeader(0).isFullyVisible(in: app.frame), "not today")
+  }
+
+  /// Month: the top bar names the month, weekday letters, grid, and today's events below.
   func testMonthListsTodaysEvents() {
     showMonth()
-    let title = element("calendar.monthTitle")
-    XCTAssertTrue(title.waitForExistence(timeout: 5))
-    XCTAssertEqual(title.label, monthName(.now))
+    XCTAssertTrue(waitForMonthLabel(.now), "the top bar names this month")
     XCTAssertTrue(element(dayID(.now)).exists, "today is in the grid")
     let today = element(dayID(.now))
     let selected = XCTNSPredicateExpectation(
@@ -73,13 +131,10 @@ final class CalendarTabTests: XCTestCase {
   /// Swipe the grid sideways to change month (no Today button appears).
   func testMonthPaging() {
     showMonth()
-    let title = element("calendar.monthTitle")
-    XCTAssertTrue(title.waitForExistence(timeout: 5))
+    XCTAssertTrue(waitForMonthLabel(.now))
+    let title = element("topBar.month")
     let next = cal.date(byAdding: .month, value: 1, to: .now)!
     element("calendar.monthPager").swipeLeft()
-    XCTAssertTrue(
-      NSPredicate(format: "label == %@", monthName(next)).evaluate(with: title)
-        || title.waitForExistence(timeout: 2), "title follows the page")
     let expectation = XCTNSPredicateExpectation(
       predicate: NSPredicate(format: "label == %@", monthName(next)), object: title)
     XCTAssertEqual(
@@ -124,11 +179,10 @@ final class CalendarTabTests: XCTestCase {
     XCTAssertTrue(january.waitForExistence(timeout: 5), "January of this year is on screen")
     XCTAssertTrue(
       element(String(format: "miniMonth.%04d-12", year)).exists, "so is the rest of the year")
+    XCTAssertFalse(element("topBar.month").exists, "Year names its years in its own headings")
     january.tap()
-    let title = element("calendar.monthTitle")
-    XCTAssertTrue(title.waitForExistence(timeout: 5))
     let january1 = DateComponents(calendar: cal, year: year, month: 1, day: 1).date!
-    XCTAssertEqual(title.label, monthName(january1), "tapping a mini month opens it")
+    XCTAssertTrue(waitForMonthLabel(january1), "tapping a mini month opens it")
     let landing = cal.isDate(january1, equalTo: .now, toGranularity: .month) ? Date.now : january1
     XCTAssertTrue(
       element(dayID(landing)).isSelected, "month headers retain their usual landing day")
@@ -190,9 +244,7 @@ final class CalendarTabTests: XCTestCase {
         cell.isFullyVisible(in: scroll.frame) && cell.frame.maxY < app.frame.maxY - 140
           && cell.isHittable, "chosen day is visible in Year")
       cell.tap()
-      let title = element("calendar.monthTitle")
-      XCTAssertTrue(title.waitForExistence(timeout: 5))
-      XCTAssertEqual(title.label, monthName(chosen))
+      XCTAssertTrue(waitForMonthLabel(chosen))
       XCTAssertTrue(modeButton("Month").isSelected, "Year day taps stay in Calendar's Month view")
       let selected = app.buttons[dayID(chosen)]
       XCTAssertTrue(selected.waitForExistence(timeout: 5))
@@ -247,7 +299,7 @@ final class CalendarTabTests: XCTestCase {
     XCTAssertTrue(birthdayCell.waitForExistence(timeout: 5))
     XCTAssertFalse((birthdayCell.value as? String ?? "").contains("birthday"))
     birthdayCell.tap()
-    XCTAssertTrue(element("calendar.monthTitle").waitForExistence(timeout: 5))
+    XCTAssertTrue(waitForMonthLabel(birthday))
     XCTAssertTrue(modeButton("Month").isSelected)
     let day = element(dayID(birthday))
     XCTAssertTrue(day.waitForExistence(timeout: 5))
@@ -258,17 +310,17 @@ final class CalendarTabTests: XCTestCase {
       ).firstMatch.waitForExistence(timeout: 5))
   }
 
-  /// Week keeps the time grid with all-day banners on top.
-  func testWeekShowsAllDayBanner() {
-    modeButton("Week").tap()
-    XCTAssertTrue(element("calendar.weekTitle").waitForExistence(timeout: 5))
-    // "Team offsite" is two days from now: this week or, near the weekend, the next one.
+  /// 2 Day keeps the time grid with all-day banners on top.
+  func testTwoDayShowsAllDayBanner() {
+    modeButton("TwoDay").tap()
+    XCTAssertTrue(modeButton("TwoDay").waitForSelected())
+    // "Team offsite" starts two days from now: one swipe brings it on screen.
+    let grid = element("calendar.dayGrid")
+    XCTAssertTrue(grid.waitForExistence(timeout: 5))
+    grid.swipeLeft()
     let banner = app.descendants(matching: .any).matching(
       NSPredicate(format: "label BEGINSWITH 'Team offsite'")
     ).firstMatch
-    if !banner.waitForExistence(timeout: 3) {
-      app.swipeLeft()
-    }
     XCTAssertTrue(banner.waitForExistence(timeout: 5), "multi-day all-day event shows in the strip")
     XCTAssertTrue(banner.label.contains("all-day"))
   }
@@ -326,7 +378,7 @@ final class CalendarTabTests: XCTestCase {
 
     // An all-day event sorts first in the day's list, so it is on screen without scrolling.
     let name = "Filter check \(Int(Date.now.timeIntervalSince1970) % 100000)"
-    app.buttons["New"].tap()
+    app.addNew("New event")
     let title = app.textFields["Title"]
     XCTAssertTrue(title.waitForExistence(timeout: 5))
     title.typeText(name)

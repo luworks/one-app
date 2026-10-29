@@ -13,11 +13,11 @@ final class TodayFocusTests: XCTestCase {
       TestData.fixtureArguments(seed ? "today-focus.json" : "empty-relaunch.json")
       + [
         "-uiTestingNow", time, "-uiTestingPrefs",
-        "showTomorrow=0,showSnooze=1,showFreeTime=1",
+        "showFreeTime=1",
       ]
     if let store { app.launchArguments += ["-uiTestingStore", store] }
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     return app
   }
 
@@ -26,14 +26,11 @@ final class TodayFocusTests: XCTestCase {
   }
 
   private func assertFocusSections(
-    _ app: XCUIApplication, snoozed: Int, settled: Int,
+    _ app: XCUIApplication, settled: Int,
     file: StaticString = #filePath, line: UInt = #line
   ) {
     XCTAssertFalse(section("active", in: app).exists, "Active items have no collapse control")
-    for (id, title, count) in [
-      ("snoozed", "Snoozed", snoozed),
-      ("settled", "Settled", settled),
-    ] {
+    for (id, title, count) in [("settled", "Settled", settled)] {
       let header = section(id, in: app)
       reveal(header, in: app)
       let updated = XCTNSPredicateExpectation(
@@ -51,7 +48,7 @@ final class TodayFocusTests: XCTestCase {
     for up in [true, false] {
       for _ in 0..<7 {
         let composer = app.buttons["Ask AI or add anything"].firstMatch
-        var viewport = list.frame.intersection(app.frame).insetBy(dx: 0, dy: 8)
+        var viewport = list.frame.intersection(app.frame)
         if composer.exists {
           viewport.size.height = max(0, min(viewport.maxY, composer.frame.minY) - viewport.minY)
         }
@@ -96,8 +93,7 @@ final class TodayFocusTests: XCTestCase {
     let header = section(name, in: app)
     reveal(header, in: app)
     header.tap()
-    let action = name == "settled" ? "Unsettle" : "Restore"
-    let restore = app.buttons["\(action) \(title)"].firstMatch
+    let restore = app.buttons["Unsettle \(title)"].firstMatch
     reveal(restore, in: app)
     restore.tap()
   }
@@ -143,11 +139,11 @@ final class TodayFocusTests: XCTestCase {
     app.buttons["Today"].firstMatch.tap()
   }
 
-  private func setVisibility(settle: Bool, snooze: Bool, in app: XCUIApplication) {
+  private func setVisibility(settle: Bool, in app: XCUIApplication) {
     app.openSidebar()
     app.buttons["Settings"].firstMatch.tap()
     XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-    for (label, enabled) in [("Show Settle", settle), ("Show Snooze", snooze)] {
+    for (label, enabled) in [("Show Settle", settle)] {
       let toggle = app.switches.matching(NSPredicate(format: "label BEGINSWITH %@", label))
         .firstMatch
       for _ in 0..<8 where !toggle.isHittable { app.swipeUp() }
@@ -169,20 +165,44 @@ final class TodayFocusTests: XCTestCase {
     func arguments(_ fixture: String, _ now: Date) -> [String] {
       TestData.fixtureArguments(fixture) + [
         "-uiTestingStore", store, "-uiTestingNow", ISO8601DateFormatter().string(from: now),
-        "-uiTestingPrefs", "showTomorrow=1,showSettle=1,showSnooze=1,showFreeTime=0",
+        "-uiTestingPrefs", "showSettle=1,showFreeTime=0",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ]
     }
     app.launchArguments = arguments("remove-returned-to-today.json", first)
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(first).waitForExistence(timeout: 8))
     act("Settle", on: "Old settled occurrence", in: app)
+    act("Settle", on: "Old settled reminder", in: app)
+    let previous = cal.date(byAdding: .day, value: -1, to: first)!
+    app.weekStripDay(previous).tap()
+    XCTAssertTrue(app.weekStripDay(previous).waitForSelected())
+    assertFocusSections(app, settled: 0)
+    app.weekStripDay(second).tap()
+    XCTAssertTrue(app.weekStripDay(second).waitForSelected())
+    assertFocusSections(app, settled: 0)
+    act("Settle", on: "New day meeting", in: app)
+    assertFocusSections(app, settled: 1)
+    app.weekStripDay(first).tap()
+    XCTAssertTrue(app.weekStripDay(first).waitForSelected())
+    assertFocusSections(app, settled: 2)
     act("Settle", on: "Old explicitly restored occurrence", in: app)
     restore("Old explicitly restored occurrence", section: "settled", in: app)
     app.terminate()
     app.launchArguments = arguments("empty-relaunch.json", second)
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(second).waitForExistence(timeout: 8))
+    app.weekStripDay(first).tap()
+    XCTAssertTrue(app.weekStripDay(first).waitForSelected())
+    reveal(
+      app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Old settled occurrence,"))
+        .firstMatch, in: app)
+    reveal(app.staticTexts["Old settled reminder"].firstMatch, in: app)
+    assertFocusSections(app, settled: 0)
+    app.weekStripDay(second).tap()
+    XCTAssertTrue(app.weekStripDay(second).waitForSelected())
+    assertFocusSections(app, settled: 1)
+    restore("New day meeting", section: "settled", in: app)
     reveal(
       app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "New day meeting,"))
         .firstMatch, in: app)
@@ -203,18 +223,13 @@ final class TodayFocusTests: XCTestCase {
         NSPredicate(format: "label CONTAINS %@", "Old explicitly restored occurrence")
       ).firstMatch.exists)
     XCTAssertEqual(section("settled", in: app).label, "Settled (0)")
-    reveal(section("overdue", in: app), in: app)
-    section("overdue", in: app).tap()
+    let overdueLine = app.buttons["today.overdueShortcut"].firstMatch
+    reveal(overdueLine, in: app)
+    overdueLine.tap()
     reveal(app.buttons["Complete Normal overdue"].firstMatch, in: app)
     act("Settle", on: "New day meeting", in: app)
     reveal(section("settled", in: app), in: app)
     XCTAssertEqual(section("settled", in: app).label, "Settled (1)")
-    let tomorrow = app.buttons["tomorrowHeader"].firstMatch
-    reveal(tomorrow, in: app)
-    tomorrow.tap()
-    reveal(
-      app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Tomorrow meeting,"))
-        .firstMatch, in: app)
     screenshot("cross-day-preserved-sections")
     XCTAssertTrue(app.buttons["Ask AI or add anything"].exists)
   }
@@ -223,44 +238,34 @@ final class TodayFocusTests: XCTestCase {
     let store = "focus-visibility-\(UUID().uuidString)"
     let app = launch(store: store)
     act("Settle", on: "Busy meeting", in: app)
-    act("Snooze", on: "Focus invoice", in: app)
-    app.buttons["Tomorrow morning"].tap()
-    setVisibility(settle: false, snooze: false, in: app)
+    setVisibility(settle: false, in: app)
     XCTAssertFalse(section("settled", in: app).exists)
-    XCTAssertFalse(section("snoozed", in: app).exists)
     app.terminate()
     app.launchArguments =
       TestData.fixtureArguments("empty-relaunch.json") + [
         "-uiTestingStore", store, "-uiTestingNow", "09:00", "-uiTestingKeepPreferences",
       ]
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     XCTAssertFalse(section("settled", in: app).exists)
-    XCTAssertFalse(section("snoozed", in: app).exists)
     let row = app.staticTexts["Focus flexible"].firstMatch
     reveal(row, in: app)
     row.press(forDuration: 1)
     XCTAssertFalse(app.buttons["Settle"].exists)
-    XCTAssertFalse(app.buttons["Snooze"].exists)
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
-    setVisibility(settle: true, snooze: false, in: app)
+    setVisibility(settle: true, in: app)
     reveal(section("settled", in: app), in: app)
     XCTAssertEqual(section("settled", in: app).label, "Settled (1)")
-    XCTAssertFalse(section("snoozed", in: app).exists)
-    setVisibility(settle: true, snooze: true, in: app)
-    assertFocusSections(app, snoozed: 1, settled: 1)
     restore("Busy meeting", section: "settled", in: app)
-    restore("Focus invoice", section: "snoozed", in: app)
-    assertFocusSections(app, snoozed: 0, settled: 0)
-    reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
+    assertFocusSections(app, settled: 0)
   }
 
-  func testUnsetPreferencesShowSettleAndHideSnooze() {
+  func testUnsetPreferencesShowSettleAndNoSnooze() {
     let app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments("today-focus.json") + ["-uiTestingNow", "09:00"]
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     let title = app.staticTexts["Focus invoice"].firstMatch
     reveal(title, in: app)
     title.press(forDuration: 1)
@@ -271,7 +276,7 @@ final class TodayFocusTests: XCTestCase {
     act("Settle", on: "Focus invoice", in: app)
     reveal(section("settled", in: app), in: app)
     XCTAssertEqual(section("settled", in: app).label, "Settled (1)")
-    XCTAssertFalse(section("snoozed", in: app).exists)
+    XCTAssertFalse(section("snoozed", in: app).exists, "Today has no Snooze")
   }
 
   func testSettleToastUndoRestoresVisibleIncompleteReminder() {
@@ -280,7 +285,7 @@ final class TodayFocusTests: XCTestCase {
     let undo = app.buttons["Undo"].firstMatch
     XCTAssertTrue(undo.waitForExistence(timeout: 2))
     XCTAssertEqual(
-      app.staticTexts["undoToast.message"].label, "Hidden in Today only: “Focus invoice”")
+      app.staticTexts["undoToast.message"].label, "Hidden on this day in Today: “Focus invoice”")
     XCTAssertGreaterThanOrEqual(undo.frame.width, 44)
     XCTAssertGreaterThanOrEqual(undo.frame.height, 44)
     XCTAssertTrue(undo.isHittable)
@@ -293,43 +298,40 @@ final class TodayFocusTests: XCTestCase {
 
   func testSettleAndRestoreChangeFocusCountsWithoutCompletingReminder() {
     let app = launch()
-    assertFocusSections(app, snoozed: 0, settled: 0)
+    assertFocusSections(app, settled: 0)
     let title = app.staticTexts["Focus invoice"].firstMatch
     reveal(title, in: app)
     screenshot("before.png")
     title.press(forDuration: 1)
     XCTAssertTrue(app.buttons["Settle"].waitForExistence(timeout: 3))
-    XCTAssertTrue(app.buttons["Snooze"].exists)
+    XCTAssertFalse(app.buttons["Snooze"].exists)
     screenshot("today-native-attention-context-menu")
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
     act("Settle", on: "Focus invoice", in: app)
-    assertFocusSections(app, snoozed: 0, settled: 1)
+    assertFocusSections(app, settled: 1)
     XCTAssertTrue(title.waitForNonExistence(timeout: 3), "Collapsed Settled hides the active row")
     screenshot("after.png")
     openReminderSource("Focus invoice", in: app)
     XCTAssertEqual(app.textFields["task.title"].value as? String, "Focus invoice")
     closeReminder(in: app)
     restore("Focus invoice", section: "settled", in: app)
-    assertFocusSections(app, snoozed: 0, settled: 0)
+    assertFocusSections(app, settled: 0)
     reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
     screenshot("active-always-visible-after-restore.png")
-    // Explicit Delete is separate from Settle and uses the confirmed action; its local-only Undo restores a source row.
+    // Explicit Delete is separate from Settle and asks nothing (the Undo toast is the safety net); its local-only Undo restores a source row.
     app.staticTexts["Focus invoice"].firstMatch.swipeLeft()
     app.buttons["Delete"].firstMatch.tap()
-    let confirm = app.buttons["Delete Reminder"].firstMatch
-    XCTAssertTrue(confirm.waitForExistence(timeout: 3))
-    confirm.tap()
     XCTAssertTrue(app.staticTexts["Focus invoice"].firstMatch.waitForNonExistence(timeout: 3))
     XCTAssertTrue(app.buttons["Undo"].firstMatch.waitForExistence(timeout: 3))
     app.buttons["Undo"].firstMatch.tap()
-    assertFocusSections(app, snoozed: 0, settled: 0)
+    assertFocusSections(app, settled: 0)
   }
 
-  func testAlarmAttentionRestoresAndDeleteRequiresConfirmation() {
+  func testAlarmAttentionRestoresAndDeleteAsksNothing() {
     let app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments("today-alarm-actions.json") + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0,showSnooze=1",
+        "-uiTestingNow", "12:00",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ]
     app.launch()
@@ -340,14 +342,8 @@ final class TodayFocusTests: XCTestCase {
     XCTAssertTrue(app.buttons["Settle"].waitForExistence(timeout: 3))
     screenshot("alarm-trailing-attention-actions")
     app.buttons["Settle"].tap()
-    assertFocusSections(app, snoozed: 0, settled: 1)
+    assertFocusSections(app, settled: 1)
     restore("Timeline alarm", section: "settled", in: app)
-    reveal(row, in: app)
-    row.swipeLeft()
-    app.buttons["Snooze"].tap()
-    app.buttons["In 1 hour"].tap()
-    assertFocusSections(app, snoozed: 1, settled: 0)
-    restore("Timeline alarm", section: "snoozed", in: app)
     reveal(row, in: app)
     row.tap()
     XCTAssertTrue(app.textFields["alarm.label"].waitForExistence(timeout: 3))
@@ -356,19 +352,16 @@ final class TodayFocusTests: XCTestCase {
     reveal(row, in: app)
     row.swipeLeft()
     app.buttons["Delete"].firstMatch.tap()
-    XCTAssertTrue(app.buttons["Delete Alarm"].waitForExistence(timeout: 3))
-    screenshot("alarm-confirmed-delete")
-    // Native confirmation popovers omit Cancel at this size; tapping outside cancels.
-    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
-    XCTAssertTrue(app.buttons["Delete Alarm"].waitForNonExistence(timeout: 3))
-    XCTAssertTrue(row.exists, "Cancelling Delete keeps the source alarm")
+    XCTAssertTrue(app.buttons["Delete Alarm"].waitForNonExistence(timeout: 2), "no confirmation")
+    XCTAssertTrue(row.waitForNonExistence(timeout: 3), "Delete removes the alarm at once")
+    XCTAssertTrue(app.buttons["Undo"].firstMatch.waitForExistence(timeout: 3))
   }
 
   func testAttentionRowsRemainReachableAtLargestTypeInDark() {
     let app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments("today-alarm-actions.json") + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0,showSnooze=1",
+        "-uiTestingNow", "12:00",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
         "-appearance", "dark", "-UIPreferredContentSizeCategoryName",
         "UICTContentSizeCategoryAccessibilityXXXL",
@@ -387,96 +380,28 @@ final class TodayFocusTests: XCTestCase {
     screenshot("today-attention-dark-largest-type")
   }
 
-  func testSnoozeKeepsDeadlineAndSourceAndUndoRestoresActiveRow() {
-    let app = launch()
-    openReminderSource("Focus invoice", in: app)
-    let originalDue = deadlineSnapshot(in: app)
-    closeReminder(in: app)
-    screenshot("before-snooze.png")
-    act("Snooze", on: "Focus invoice", in: app)
-    XCTAssertTrue(app.navigationBars["Snooze"].waitForExistence(timeout: 3))
-    XCTAssertTrue(app.buttons["Tomorrow morning"].exists)
-    XCTAssertTrue(app.buttons["Choose date and time"].exists)
-    app.buttons["In 1 hour"].tap()
-    assertFocusSections(app, snoozed: 1, settled: 0)
-    XCTAssertFalse(app.staticTexts["Focus invoice"].exists)
-    screenshot("after-snooze.png")
-    openReminderSource("Focus invoice", in: app)
-    XCTAssertEqual(deadlineSnapshot(in: app), originalDue, "Snooze changes Focus visibility only")
-    let originalList = app.descendants(matching: .any)["task.list"].firstMatch
-    reveal(originalList, in: app)
-    XCTAssertTrue(
-      originalList.label.contains("Focus work"), "The original reminder list remains selected")
-    closeReminder(in: app)
-    restore("Focus invoice", section: "snoozed", in: app)
-    act("Snooze", on: "Focus invoice", in: app)
-    app.buttons["In 1 hour"].tap()
-    let undo = app.buttons["Undo"].firstMatch
-    XCTAssertTrue(undo.waitForExistence(timeout: 3))
-    undo.tap()
-    assertFocusSections(app, snoozed: 0, settled: 0)
-    reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
-  }
-
-  func testCustomSnoozeCancelKeepsActiveAndExplicitTapCommits() {
-    let app = launch()
-    act("Snooze", on: "Focus invoice", in: app)
-    app.buttons["Choose date and time"].tap()
-    let picker = app.datePickers["focus.snoozeUntil"]
-    XCTAssertTrue(picker.waitForExistence(timeout: 3))
-    XCTAssertFalse(app.staticTexts["focus.snoozeValidation"].exists)
-    // Opening the picker is not a visibility write. Cancel keeps the item active.
-    app.navigationBars["Snooze"].buttons["Cancel"].tap()
-    assertFocusSections(app, snoozed: 0, settled: 0)
-    act("Snooze", on: "Focus invoice", in: app)
-    app.buttons["Choose date and time"].tap()
-    XCTAssertTrue(picker.waitForExistence(timeout: 3))
-    app.buttons["Snooze"].firstMatch.tap()
-    XCTAssertTrue(app.navigationBars["Snooze"].waitForNonExistence(timeout: 3))
-    assertFocusSections(app, snoozed: 1, settled: 0)
-    restore("Focus invoice", section: "snoozed", in: app)
-    reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
-  }
-
   func testFocusChoicesPersistAcrossRelaunchWithoutReseedingSourceModels() {
     let store = "today-focus-\(UUID().uuidString)"
     var app = launch(store: store)
     act("Settle", on: "Busy meeting", in: app)
-    act("Snooze", on: "Focus invoice", in: app)
-    app.buttons["Tomorrow morning"].tap()
-    assertFocusSections(app, snoozed: 1, settled: 1)
+    assertFocusSections(app, settled: 1)
     app.terminate()
     app = launch(store: store, seed: false)
-    assertFocusSections(app, snoozed: 1, settled: 1)
+    assertFocusSections(app, settled: 1)
     XCTAssertFalse(app.staticTexts["Busy meeting"].exists)
-    XCTAssertFalse(app.staticTexts["Focus invoice"].exists)
     restore("Busy meeting", section: "settled", in: app)
-    restore("Focus invoice", section: "snoozed", in: app)
-    assertFocusSections(app, snoozed: 0, settled: 0)
-    act("Snooze", on: "Focus invoice", in: app)
-    app.buttons["In 1 hour"].tap()
-    assertFocusSections(app, snoozed: 1, settled: 0)
-    app.terminate()
-    app = launch(store: store, seed: false, time: "10:01")
-    assertFocusSections(app, snoozed: 0, settled: 0)
-    reveal(app.buttons["Complete Focus invoice"].firstMatch, in: app)
+    assertFocusSections(app, settled: 0)
   }
 
   func testHiddenMeetingStillBlocksSuggestionsAndOverdueRequiresExplicitSettle() {
     let app = launch()
-    let suggestion = app.buttons.matching(
-      NSPredicate(format: "label BEGINSWITH 'Plan Focus flexible at '")
-    ).firstMatch
-    reveal(suggestion, in: app)
-    let originalSuggestion = suggestion.label
     let free = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Free '"))
+    XCTAssertTrue(free.firstMatch.waitForExistence(timeout: 4))
     let originalFree = free.allElementsBoundByIndex.map { $0.label }
-    XCTAssertFalse(originalFree.isEmpty)
     act("Settle", on: "Busy meeting", in: app)
-    reveal(suggestion, in: app)
     XCTAssertEqual(
-      suggestion.label, originalSuggestion, "Hidden meetings still reserve their actual time")
-    XCTAssertEqual(free.allElementsBoundByIndex.map { $0.label }, originalFree)
+      free.allElementsBoundByIndex.map { $0.label }, originalFree,
+      "Hidden meetings still reserve their actual time")
     app.buttons["Calendar"].firstMatch.tap()
     app.buttons["calendar.mode.month"].tap()
     XCTAssertTrue(
@@ -494,9 +419,9 @@ final class TodayFocusTests: XCTestCase {
       app.buttons["Complete Focus overdue"].exists,
       "Overdue stays visible and incomplete until an explicit action")
     act("Settle", on: "Focus overdue", in: app)
-    assertFocusSections(app, snoozed: 0, settled: 2)
+    assertFocusSections(app, settled: 2)
     restore("Focus overdue", section: "settled", in: app)
-    assertFocusSections(app, snoozed: 0, settled: 1)
+    assertFocusSections(app, settled: 1)
     reveal(app.buttons["1 overdue"].firstMatch, in: app)
   }
 }

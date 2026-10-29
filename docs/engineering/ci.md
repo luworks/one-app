@@ -12,6 +12,9 @@ Two parallel hosted jobs, no simulator:
 | `checks` | `./dev format --check`, `./dev lint`, `./dev test helpers`, `./dev test unit` (all logic tests on the macOS host) |
 | `today-required` | `python3 scripts/ci/smoke.py --build-only`: one `TodayCI` build-for-testing (App, Widget, Share, Mock and every test bundle) and an identity check of `One.app`, `TodayWidgets.appex` and `ShareExtension.appex` |
 
+`today-required` also uploads `TodayMock-sim-<sha>` (7 days): the arm64 simulator `TodayMock.app`,
+zipped. Simulator only (never a phone, never next to `One.app`); launch it with `-uiTesting -dataset <path>`.
+
 Merge elapsed time is the time for both jobs to turn green. The measured numbers are in
 [the measurements](../qa/ci-under-five-minutes-20261020.md). A green merge gate does **not**
 mean the app opens or stays responsive.
@@ -32,7 +35,18 @@ mean the app opens or stays responsive.
   all four tabs, and types an unsent Chat draft. The Settings-connection variant stays in the
   full UI suite.
 
-The run fails unless exactly those four leaves are in the completed xcresult and all of them
+- `SmokeScreenshotTests/testTabsAndChatInBothModes`. TodayMock on the test dataset, Light then
+  Dark: Today, Calendar, Reminders, Clock, Chat with a typed unsent draft, and Today after Close.
+  The 12 PNGs are uploaded as `smoke-screens-<sha>` (7 days, also on failure). Fetch them on a
+  host without Xcode:
+
+  ```sh
+  sha=$(git rev-parse origin/main)
+  run=$(gh run list -w today.yml -e workflow_dispatch -c "$sha" -L 1 --json databaseId -q '.[0].databaseId')
+  gh run download "$run" -n "smoke-screens-$sha" -D "tests/results/ci-screens/$sha"
+  ```
+
+The run fails unless exactly those five leaves are in the completed xcresult and all of them
 passed. The xcresult is uploaded only on failure. Simulator devices are cached after their
 first boot for each runner image (~1.3 GB, synthetic data only). A simulator booting during
 the build made the build 4–5× slower on the 3-CPU runner, so boot always follows the build.

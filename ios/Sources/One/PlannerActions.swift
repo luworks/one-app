@@ -21,11 +21,14 @@
     private let alarms: any AlarmService
     private let ledger: Ledger
     private let runtime: PlannerRuntime
+    private let defaults: UserDefaults
 
     package init(
       calendar: any CalendarService, reminders: any ReminderService,
-      alarms: any AlarmService, ledger: Ledger, runtime: PlannerRuntime
+      alarms: any AlarmService, ledger: Ledger, runtime: PlannerRuntime,
+      defaults: UserDefaults = .standard
     ) {
+      self.defaults = defaults
       focus = TodayFocus(ledger: ledger, runtime: runtime)
       self.calendar = calendar
       self.reminders = reminders
@@ -56,6 +59,29 @@
       try TaskActions.deleteConfirmed(
         task, context: context, toast: toast, reminders: reminders, ledger: ledger, runtime: runtime
       )
+    }
+
+    /// Undo from Activity: reminders through the ledger, alarms through AlarmKit. Nil when done, else what the row says.
+    package func undo(_ entry: LedgerItem, context: ModelContext) async -> String? {
+      switch entry.itemKind {
+      case "alarm":
+        return await AlarmActions.undo(
+          entry, context: context, alarms: alarms, ledger: ledger, runtime: runtime)
+      case "list":
+        return ListActions.undo(
+          entry, context: context, reminders: reminders, ledger: ledger, runtime: runtime)
+      case "event":
+        return EntryDeletion.undo(entry, context: context, calendar: calendar, ledger: ledger)
+      default:
+        return ledger.undo(entry, context: context) ? nil : ActivityUndoMessage.changedSince
+      }
+    }
+
+    /// Records an alarm edit or switch flip (see `AlarmActions.recordChange`).
+    package func recordChange(_ alarm: OneAlarm, from before: AlarmSnapshot, context: ModelContext)
+    {
+      AlarmActions.recordChange(
+        alarm, from: before, ledger: ledger, runtime: runtime, context: context)
     }
 
     @discardableResult
@@ -93,7 +119,7 @@
     ) throws -> (id: PersistentIdentifier, entry: LedgerItem) {
       try capture.insertRecorded(
         into: context, actor: actor, channel: channel, approval: approval,
-        ledger: ledger, runtime: runtime)
+        ledger: ledger, runtime: runtime, alarmDefaults: AlarmPlan.newAlarmDefaults(defaults))
     }
 
     /// Explicit native Create confirmation; submitted-chat authority stays in insertOneOffReminder.

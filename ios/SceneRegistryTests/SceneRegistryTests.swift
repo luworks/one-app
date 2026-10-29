@@ -9,7 +9,7 @@ struct SceneRegistryTests {
     let journeys = [
       ["today"],
       [
-        "calendar.week", "calendar.month", "calendar.year", "calendar.year.key",
+        "calendar.twoday", "calendar.month", "calendar.year", "calendar.year.key",
         "calendar.event.editor",
       ],
       [
@@ -22,7 +22,7 @@ struct SceneRegistryTests {
         "clock.world.cityPicker", "clock.stopwatch", "clock.timer",
       ],
       [
-        "ask", "ask.card.capture", "ask.card.stack", "ask.card.plan", "ask.card.change",
+        "ask", "ask.card.capture", "ask.card.stack", "ask.card.change",
         "ask.card.tidy",
       ],
       [
@@ -77,7 +77,7 @@ struct SceneRegistryTests {
 
   @Test func configurationRoundTripPreservesClockCalendarAndIdentity() throws {
     let config = try SceneConfiguration(
-      scene: .calendarWeek, scenario: .dense,
+      scene: .calendarTwoDay, scenario: .dense,
       now: Date(timeIntervalSince1970: 1_794_123_456), uuidSeed: 73,
       timeZoneIdentifier: "Asia/Shanghai", localeIdentifier: "zh_CN")
     let decoded = try JSONDecoder().decode(
@@ -87,7 +87,7 @@ struct SceneRegistryTests {
     #expect(decoded.calendar.locale?.identifier == "zh_CN")
     #expect(decoded.uuid(at: 5) == config.uuid(at: 5))
     #expect(decoded.uuid(at: 5) != config.uuid(at: 6))
-    let anotherSeed = try SceneConfiguration(scene: .calendarWeek, uuidSeed: 74)
+    let anotherSeed = try SceneConfiguration(scene: .calendarTwoDay, uuidSeed: 74)
     #expect(anotherSeed.uuid(at: 5) != config.uuid(at: 5))
     #expect(Set((0..<1_000).map { config.uuid(at: UInt64($0)) }).count == 1_000)
   }

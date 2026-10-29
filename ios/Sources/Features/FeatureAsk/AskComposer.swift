@@ -41,11 +41,9 @@
       view.accessibilityElementsHidden = !isPresented
       // SwiftUI redraws must never replace an in-progress IME composition.
       if view.markedTextRange == nil, view.text != text { view.text = text }
-      if focused, !view.isFirstResponder {
-        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.focus_begin") }
-        view.becomeFirstResponder()
-        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.focus_end") }
-      }
+      // A new editor gets its window after this update and focuses itself then (`didMoveToWindow`).
+      view.wantsFocus = focused
+      if focused, !view.isFirstResponder, view.window != nil { view.focusAfterNextFrame() }
       if !focused, view.isFirstResponder { view.resignFirstResponder() }
     }
 
@@ -59,6 +57,37 @@
     final class Editor: UITextView {
       private var tracedGeneration = -1
       var tracedPresentation: Bool?
+      var wantsFocus = false
+
+      private func focus() {
+        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.focus_begin") }
+        becomeFirstResponder()
+        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.focus_end") }
+      }
+
+      private var focusLink: CADisplayLink?
+
+      /// Focus at the next display refresh: the frame that reveals the page is on screen first, then the keyboard
+      /// comes up (bringing up the keyboard would otherwise hold that frame back).
+      override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if wantsFocus, window != nil { focusAfterNextFrame() }
+      }
+
+      func focusAfterNextFrame() {
+        guard focusLink == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(focusAfterFrame))
+        link.add(to: .main, forMode: .common)
+        focusLink = link
+      }
+
+      @objc private func focusAfterFrame() {
+        focusLink?.invalidate()
+        focusLink = nil
+        if PerformanceTrace.enabled { PerformanceTrace.shared.mark("chat.revealed") }
+        guard wantsFocus, window != nil, !isFirstResponder else { return }
+        focus()
+      }
 
       override func layoutSubviews() {
         super.layoutSubviews()

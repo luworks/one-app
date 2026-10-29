@@ -2,6 +2,14 @@ import XCTest
 
 @MainActor
 extension XCUIApplication {
+  /// + is one menu on every page; open it and pick `choice` ("New alarm", "New reminder", "New event", "Add city").
+  func addNew(_ choice: String, file: StaticString = #filePath, line: UInt = #line) {
+    buttons["New"].firstMatch.tap()
+    let item = buttons[choice].firstMatch
+    XCTAssertTrue(item.waitForExistence(timeout: 3), "+ offers \(choice)", file: file, line: line)
+    item.tap()
+  }
+
   /// There is no avatar button: the sidebar opens with a swipe from the left edge, like in ChatGPT or Claude.
   func openSidebar() {
     let start = coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
@@ -200,7 +208,30 @@ extension CGRect {
 }
 
 @MainActor
+extension XCUIApplication {
+  /// The Today tab's week strip button for a day ("weekStrip.2026-10-26"); it is selected while Today shows that day.
+  func weekStripDay(_ date: Date) -> XCUIElement {
+    let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+    return buttons[String(format: "weekStrip.%04d-%02d-%02d", c.year!, c.month!, c.day!)]
+  }
+
+  /// Taps the bottom bar's Today button and waits until Today shows today itself.
+  func returnToToday(file: StaticString = #filePath, line: UInt = #line) {
+    buttons["Today"].firstMatch.tap()
+    XCTAssertTrue(
+      weekStripDay(.now).waitForSelected(), "the Today button shows today", file: file, line: line)
+  }
+}
+
+@MainActor
 extension XCUIElement {
+  /// Waits for the selected trait, e.g. the week strip day Today is showing.
+  func waitForSelected(timeout: TimeInterval = 5) -> Bool {
+    let selected = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "isSelected == true"), object: self)
+    return XCTWaiter().wait(for: [selected], timeout: timeout) == .completed
+  }
+
   /// Check geometry before isHittable: XCTest can throw while deriving an off-screen element's activation point.
   func isFullyVisible(in viewport: CGRect) -> Bool {
     guard exists else { return false }

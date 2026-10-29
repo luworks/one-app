@@ -141,17 +141,17 @@ final class TodayReminderCompletionTests: XCTestCase {
       app.buttons[tab].firstMatch.tap()
       let destination: XCUIElement
       switch tab {
-      case "Calendar": destination = app.descendants(matching: .any)["calendar.weekGrid"]
+      case "Calendar": destination = app.descendants(matching: .any)["calendar.dayGrid"]
       case "Reminders": destination = app.staticTexts["My Lists"]
       case "Clock": destination = app.buttons["World Clock"]
-      default: destination = app.staticTexts["todayDate"]
+      default: destination = app.weekStripDay(.now)
       }
       XCTAssertTrue(destination.waitForExistence(timeout: 5), "the tap presents " + tab)
     }
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     app.buttons["Ask AI or add anything"].firstMatch.tap()
     try assertChatDraftAndClose(in: app, draft: XCTUnwrap(fixture["chatDraft"]))
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 5))
     assertState(app, done: false)
   }
 
@@ -199,7 +199,7 @@ final class TodayReminderCompletionTests: XCTestCase {
     XCTAssertEqual(entered.value as? String, draft)
     XCTAssertTrue(app.buttons["ask-send"].exists)
     XCTAssertFalse(app.staticTexts[draft].exists, "Typing alone does not send the draft")
-    app.buttons["Close"].firstMatch.tap()
+    app.buttons["chat.close"].tap()
     let closed = XCTAttachment(screenshot: app.screenshot())
     closed.name = "Imported timeline after Chat Close"
     closed.lifetime = .keepAlways
@@ -211,9 +211,10 @@ final class TodayReminderCompletionTests: XCTestCase {
     chat.tap()
     let reopened = app.textViews["ask-input"].firstMatch
     XCTAssertTrue(reopened.waitForExistence(timeout: 5))
-    XCTAssertEqual(reopened.value as? String, draft, "Close/reopen retains the exact unsent draft")
+    XCTAssertNotEqual(
+      reopened.value as? String, draft, "Each tap starts a new chat; the unsent draft is dropped")
     XCTAssertFalse(app.staticTexts[draft].exists, "Reopening does not submit the draft")
-    app.buttons["Close"].firstMatch.tap()
+    app.buttons["chat.close"].tap()
     XCTAssertTrue(reopened.waitForNonExistence(timeout: 5))
   }
 

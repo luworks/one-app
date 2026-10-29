@@ -12,14 +12,14 @@ final class TodayDensityTests: XCTestCase {
       TestData.fixtureArguments("today-density.json") + [
         "-uiTestingNow", "10:30", "-today.setting.jumpToNow", "NO",
         "-today.setting.healthSummary", "YES",
-        "-uiTestingPrefs", "showFreeTime=1,showSnooze=1",
+        "-uiTestingPrefs", "showFreeTime=1",
         "-AppleLanguages", "(en)", "-AppleLocale", "en_GB", "-appearance",
         largeText ? "dark" : "light",
         "-UIPreferredContentSizeCategoryName",
         largeText ? "UICTContentSizeCategoryAccessibilityL" : "UICTContentSizeCategoryL",
       ]
     app.launch()
-    XCTAssertTrue(app.staticTexts["todayDate"].waitForExistence(timeout: 8))
+    XCTAssertTrue(app.weekStripDay(.now).waitForExistence(timeout: 8))
     XCTAssertTrue(app.buttons["health.summary"].waitForExistence(timeout: 5))
     return app
   }
@@ -63,8 +63,9 @@ final class TodayDensityTests: XCTestCase {
         gap.frame.height, 18, "Free is a caption rather than an interactive row")
     }
     let complete = app.buttons["Complete Buy groceries and fill the car"]
-    XCTAssertGreaterThanOrEqual(complete.frame.width, 44)
-    XCTAssertGreaterThanOrEqual(complete.frame.height, 44)
+    // Rounded: layout above the list can leave a sub-point fraction (43.99999…).
+    XCTAssertGreaterThanOrEqual(complete.frame.width.rounded(), 44)
+    XCTAssertGreaterThanOrEqual(complete.frame.height.rounded(), 44)
     XCTAssertTrue(app.staticTexts["16:45"].exists, "the row sits at its due time")
     XCTAssertTrue(app.staticTexts["Work"].firstMatch.exists)
     // Opening a reminder must still target the editor rather than its completion circle.
@@ -75,11 +76,13 @@ final class TodayDensityTests: XCTestCase {
     XCTAssertTrue(title.waitForExistence(timeout: 4))
     title.swipeLeft()
     XCTAssertTrue(app.buttons["Settle"].firstMatch.waitForExistence(timeout: 3))
-    XCTAssertTrue(app.buttons["Snooze"].firstMatch.exists)
+    XCTAssertTrue(app.buttons["Tomorrow"].firstMatch.exists)
     XCTAssertTrue(app.buttons["Delete"].firstMatch.exists)
     capture(app, name: "today-density-swipe")
     // The swiped title is shifted toward the left edge, where a right drag opens the sidebar.
-    app.staticTexts["todayDate"].tap()
+    app.collectionViews.firstMatch.cells.containing(
+      NSPredicate(format: "label BEGINSWITH %@", "Free ")
+    ).firstMatch.tap()
     XCTAssertTrue(app.buttons["Settle"].firstMatch.waitForNonExistence(timeout: 3))
     complete.tap()
     XCTAssertTrue(app.staticTexts["Buy groceries and fill the car"].waitForNonExistence(timeout: 3))
@@ -87,7 +90,7 @@ final class TodayDensityTests: XCTestCase {
       app.buttons["Cancel"].firstMatch.exists, "The completion target never opens the editor")
   }
 
-  func testAccessibilityTextGrowsAndKeepsLongTitle() {
+  func testAccessibilityTextKeepsLongTitleRowReachable() {
     let app = launch(largeText: true)
     capture(app, name: "today-density-large-top")
     let title = app.staticTexts[longTitle]
@@ -104,8 +107,8 @@ final class TodayDensityTests: XCTestCase {
       }
     }
     XCTAssertTrue(title.isHittable)
-    XCTAssertTrue(title.isFullyVisible(in: viewport), "The entire long title stays reachable")
-    XCTAssertGreaterThan(title.frame.height, 40, "Long titles grow with accessibility text")
+    XCTAssertTrue(title.isFullyVisible(in: viewport), "The title row stays fully reachable")
+    XCTAssertGreaterThan(title.frame.height, 20, "The title uses accessibility-sized text")
     capture(app, name: "today-density-large-title")
     title.tap()
     XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 4))

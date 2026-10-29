@@ -62,11 +62,13 @@
     package let title: String
     package let sourceTitle: String
     package let color: Color
+    package var allowsContentModifications: Bool
     package var isBirthday = false
     package var isHoliday = false
     package init(
       id: String, title: String, sourceTitle: String, color: Color,
-      isBirthday: Bool = false, isHoliday: Bool = false
+      isBirthday: Bool = false, isHoliday: Bool = false,
+      allowsContentModifications: Bool = true
     ) {
       self.id = id
       self.title = title
@@ -74,6 +76,7 @@
       self.color = color
       self.isBirthday = isBirthday
       self.isHoliday = isHoliday
+      self.allowsContentModifications = allowsContentModifications
     }
 
   }
@@ -146,6 +149,72 @@
             repeats: repeats, canDelete: event.calendar.allowsContentModifications))
       }
       return result
+    }
+  }
+
+  /// Scalar transport for a range read off the main actor (the Year view's year of events).
+  private struct CalendarRangeImport: Sendable {
+    let eventIdentifier: String
+    let title: String
+    let start: Date
+    let end: Date
+    let isAllDay: Bool
+    let calendarID: String
+    let calendarTitle: String
+    /// sRGB red, green, blue; empty when the calendar color has no sRGB form.
+    let rgb: [Double]
+    let repeats: Bool
+    let isSubscription: Bool
+    let isBirthday: Bool
+
+    @MainActor var event: ExternalEvent {
+      ExternalEvent(
+        id: eventIdentifier + "@\(start.timeIntervalSince1970)", eventIdentifier: eventIdentifier,
+        title: title, start: start, end: end, isAllDay: isAllDay, calendarID: calendarID,
+        calendarTitle: calendarTitle,
+        color: rgb.count == 3 ? Color(.sRGB, red: rgb[0], green: rgb[1], blue: rgb[2]) : .blue,
+        repeats: repeats,
+        isBackground: YearLoad.isBackgroundCalendar(
+          isSubscription: isSubscription, isBirthday: isBirthday, title: calendarTitle),
+        isBirthday: isBirthday,
+        isHoliday: YearEventMarks.isHolidayCalendar(
+          isSubscription: isSubscription, title: calendarTitle))
+    }
+  }
+
+  /// Reads long ranges with its own store, so a year of events never blocks the main actor. EventKit objects stay here.
+  private actor CalendarRangeReader {
+    private var store: EKEventStore?
+
+    func events(in interval: DateInterval, hidden: Set<String>) -> [CalendarRangeImport] {
+      guard !Task.isCancelled, EKEventStore.authorizationStatus(for: .event) == .fullAccess else {
+        return []
+      }
+      let store = self.store ?? EKEventStore()
+      self.store = store
+      let all = store.calendars(for: .event)
+      let visible = all.filter { !hidden.contains($0.calendarIdentifier) }
+      guard !visible.isEmpty else { return [] }
+      let srgb = CGColorSpace(name: CGColorSpace.sRGB)
+      var colors: [String: [Double]] = [:]
+      for calendar in visible {
+        colors[calendar.calendarIdentifier] =
+          srgb.flatMap {
+            calendar.cgColor.converted(to: $0, intent: .defaultIntent, options: nil)?.components
+          }.map { Array($0.prefix(3).map(Double.init)) } ?? []
+      }
+      let predicate = store.predicateForEvents(
+        withStart: interval.start, end: interval.end,
+        calendars: visible.count == all.count ? nil : visible)
+      return store.events(matching: predicate).map { e in
+        CalendarRangeImport(
+          eventIdentifier: e.eventIdentifier ?? UUID().uuidString, title: e.title ?? "Untitled",
+          start: e.startDate, end: e.endDate, isAllDay: e.isAllDay,
+          calendarID: e.calendar.calendarIdentifier, calendarTitle: e.calendar.title,
+          rgb: colors[e.calendar.calendarIdentifier] ?? [], repeats: e.hasRecurrenceRules,
+          isSubscription: e.calendar.type == .subscription,
+          isBirthday: e.calendar.type == .birthday)
+      }
     }
   }
 
@@ -353,7 +422,8 @@
         color: Color(cgColor: c.cgColor),
         isBirthday: c.type == .birthday,
         isHoliday: YearEventMarks.isHolidayCalendar(
-          isSubscription: c.type == .subscription, title: c.title))
+          isSubscription: c.type == .subscription, title: c.title),
+        allowsContentModifications: c.allowsContentModifications)
     }
 
     // MARK: Events
@@ -406,6 +476,21 @@
           return value
         }
         .filter { !exclude.contains($0.eventIdentifier) }
+    }
+
+    @ObservationIgnored private let rangeReader = CalendarRangeReader()
+
+    /// `events(in:excluding:)` read on a background actor: no travel place and no focus snapshots (the Year view needs
+    /// neither). Fixtures and a store that is still warming up take the main-actor path.
+    package func loadEvents(in interval: DateInterval, excluding exclude: Set<String>) async
+      -> [ExternalEvent]
+    {
+      guard isOn, readEvents == nil, storeReady else {
+        return events(in: interval, excluding: exclude)
+      }
+      let rows = await rangeReader.events(in: interval, hidden: hiddenCalendarIDs)
+      guard isOn else { return [] }
+      return rows.filter { !exclude.contains($0.eventIdentifier) }.map { $0.event }
     }
 
     package func events(on day: Date, excluding exclude: Set<String> = []) -> [ExternalEvent] {
@@ -592,6 +677,35 @@
           ?? store.event(withIdentifier: identifier)
       else { return nil }
       return (e, store)
+    }
+
+    package func create(_ event: OneEvent, calendarID: String? = nil) throws
+      -> CalendarCreationReceipt
+    {
+      guard event.externalID == nil else { throw CalendarCreationError.existingEvent }
+      // Enabled but denied/disposed must not be reported as a successful local-only creation.
+      guard !enabled || isOn else { throw CalendarCreationError.unavailable }
+      return try CalendarCreation.commit(
+        calendarID: calendarID, connected: isOn,
+        resolve: { id in
+          if let id { return self.store.calendar(withIdentifier: id) }
+          return self.store.defaultCalendarForNewEvents
+        },
+        writable: { $0.allowsContentModifications },
+        save: { calendar in
+          let ek = EKEvent(eventStore: self.store)
+          ek.calendar = calendar
+          ek.title = event.title
+          ek.startDate = event.start
+          ek.endDate = event.start.addingTimeInterval(event.duration)
+          ek.isAllDay = event.isAllDay
+          if let rule = event.repeats {
+            ek.recurrenceRules = [RemindersSync.recurrence(for: rule)]
+          }
+          try self.store.save(ek, span: .thisEvent, commit: true)
+          self.version += 1
+          return ek.eventIdentifier
+        })
     }
 
     /// Saves a copy of `event` to the default calendar and returns its identifier.

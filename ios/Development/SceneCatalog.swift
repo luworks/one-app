@@ -33,6 +33,7 @@
     let presentation: PlannerPresentation
     let health: HealthModel
     let healthLine: HealthLineModel
+    let weather: WeatherModel
     let healthSelection: HealthSelectionStore
     let healthGate: HealthAccessGate
     let world: WorldClockStore
@@ -120,6 +121,7 @@
         source: source, store: healthSelection, runtime: runtime, gate: healthGate,
         timeout: configuration.scenario == .error ? 0.05 : HealthTimeout.seconds)
       healthLine = HealthLineModel(model: health)
+      weather = WeatherModel(sample: WeatherTestData.snapshot(now: runtime.now()))
       guard let citiesURL else { throw SceneSessionError.missingCities }
       let cities = try CityDatabase.decode(Data(contentsOf: citiesURL))
       let keys =
@@ -243,16 +245,16 @@
       }
     }
     func alarmCreated(_ alarm: OneAlarm, context: ModelContext) {
-      services.ledger.record(
-        .created, kind: "alarm", title: alarm.label.isEmpty ? "Alarm" : alarm.label,
-        context: context)
+      AlarmActions.recordCreated(
+        alarm, title: alarm.label.isEmpty ? "Alarm" : alarm.label, ledger: services.ledger,
+        runtime: runtime, context: context)
     }
 
     /// Explicitly apply at UIKit hosting roots as well as the SwiftUI entry and detached sheets.
     func host<V: View>(_ view: V) -> some View {
       view.modelContainer(container).defaultAppStorage(defaults)
         .environment(services.actions).environment(presentation).environment(toast)
-        .environment(health).environment(healthLine)
+        .environment(health).environment(healthLine).environment(weather)
         .environment(\.locale, runtime.locale).environment(\.calendar, runtime.calendar)
         .environment(\.timeZone, runtime.calendar.timeZone)
         .environment(
@@ -506,7 +508,7 @@
       _day = State(initialValue: session.configuration.now)
       let id = session.configuration.scene
       _mode = State(
-        initialValue: id == .calendarYear ? .year : id == .calendarMonth ? .month : .week)
+        initialValue: id == .calendarYear ? .year : id == .calendarMonth ? .month : .twoDay)
     }
 
     var body: some View {
@@ -539,7 +541,7 @@
       switch session.configuration.scene {
       case .today:
         NavigationStack { agenda }
-      case .calendarWeek, .calendarMonth, .calendarYear:
+      case .calendarTwoDay, .calendarMonth, .calendarYear:
         NavigationStack {
           CalendarView(
             day: $day, mode: $mode, calendar: session.services.calendar,
@@ -619,13 +621,15 @@
               opened = .alarm(alarm)
             })
         }
-      case .askCapture, .askStack, .askPlan, .askChange, .askTidy:
+      case .askCapture, .askStack, .askChange, .askTidy:
         SceneAskCards(session: session)
       case .activity:
         ActivityView(
           activity: session.services.activity,
           flush: { session.services.ledger.flush(session.container.mainContext) },
-          undo: { session.services.ledger.undo($0, context: session.container.mainContext) })
+          undo: {
+            await session.services.actions.undo($0, context: session.container.mainContext)
+          })
       case .search:
         SearchView(calendar: session.services.calendar, defaults: session.defaults) {
           session.host(editor($0))
@@ -800,12 +804,6 @@
       (try? session.container.mainContext.fetch(
         FetchDescriptor<OneTask>(sortBy: [SortDescriptor(\.createdAt)]))) ?? []
     }
-    private var plan: [(task: OneTask, start: Date)] {
-      tasks.filter { !$0.isDone }.prefix(3).enumerated().map {
-        ($0.element, session.configuration.now.addingTimeInterval(Double($0.offset + 1) * 3600))
-      }
-    }
-
     var body: some View {
       NavigationStack {
         ScrollView {
@@ -829,19 +827,6 @@
                 onSkip: { id in update(id, status: .dropped) },
                 onAddAll: { for p in proposals where p.status == .open { add(p.id) } },
                 onUndo: undo, onOpen: open, onRename: rename)
-            case .askPlan:
-              PlanCard(
-                plan: plan, onApply: applyPlan,
-                onAlways: {
-                  var rows = plan
-                  var grant: AIGrant?
-                  feedback(
-                    AskNativeActions.applyPlanAlways(
-                      plan: &rows, grant: &grant,
-                      context: session.container.mainContext, actions: session.services.actions,
-                      ledger: session.services.ledger, runtime: session.runtime,
-                      onApproved: session.planApproved))
-                }, onCancel: { resolved = true })
             case .askChange:
               if let task = tasks.first {
                 let change = PendingChange(
@@ -939,14 +924,6 @@
       } else if let message = feedback.messages.last {
         session.toast.showNotice(message.text)
       }
-    }
-    private func applyPlan() {
-      var rows = plan
-      feedback(
-        AskNativeActions.applyPlan(
-          plan: &rows, grant: nil, context: session.container.mainContext,
-          actions: session.services.actions, ledger: session.services.ledger,
-          runtime: session.runtime))
     }
   }
 

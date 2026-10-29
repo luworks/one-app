@@ -2,7 +2,7 @@ import Foundation
 
 /// The choices in Settings that were added after the first release: their keys, their defaults, and plain readers.
 /// Plain Swift (Foundation only) so the defaults run under `swift test`. Every default is what the app did before the
-/// choice existed, except the intentionally opt-in Snooze display. Screens read these through `@AppStorage`
+/// choice existed. Screens read these through `@AppStorage`
 /// with the same key and default; the readers here are for code that is not a view.
 ///
 /// The older choices (overdue, alarms, scroll to now, travel time, Health summary, chat archive) keep their keys in
@@ -15,20 +15,17 @@ public enum Preferences {
   public static let weekNumbersKey = "today.setting.weekNumbers"
   public static let calendarStartKey = "today.setting.calendarStart"
   public static let showSettleKey = "today.setting.showSettle"
-  public static let showSnoozeKey = "today.setting.showSnooze"
-  public static let showTomorrowKey = "today.setting.showTomorrow"
-  public static let eveningHourKey = "today.setting.eveningHour"
   public static let showFreeTimeKey = "today.setting.showFreeTime"
   public static let newReminderListKey = "today.setting.newReminderList"
   public static let newAlarmSnoozeKey = "today.setting.newAlarmSnooze"
   public static let newAlarmSoundKey = "today.setting.newAlarmSound"
   public static let askSuggestionsKey = "today.setting.askSuggestions"
+  public static let weatherSummaryKey = "today.setting.weatherSummary"
 
   static let allKeys = [
-    dimPastDaysKey, firstWeekdayKey, weekNumbersKey, calendarStartKey, showTomorrowKey,
-    eveningHourKey,
+    dimPastDaysKey, firstWeekdayKey, weekNumbersKey, calendarStartKey,
     showFreeTimeKey, newReminderListKey, newAlarmSnoozeKey, newAlarmSoundKey,
-    askSuggestionsKey, showSettleKey, showSnoozeKey,
+    askSuggestionsKey, showSettleKey, weatherSummaryKey,
   ]
 
   // MARK: Defaults (the behaviour before these choices existed)
@@ -38,10 +35,6 @@ public enum Preferences {
   public static let weekNumbers = false
   public static let calendarStart = CalendarStart.lastUsed
   public static let showSettle = true
-  public static let showSnooze = false
-  public static let showTomorrow = true
-  /// 18:00, Apple Reminders' "Tonight".
-  public static let eveningHour = TomorrowPreview.eveningHour
   public static let showFreeTime = true
   /// "" = Auto: the list the text clearly belongs to, else the Inbox (Ask), else the default list (quick add).
   public static let newReminderList = ""
@@ -49,10 +42,11 @@ public enum Preferences {
   /// "" = the system alarm sound.
   public static let newAlarmSound = ""
   public static let askSuggestions = true
+  public static let weatherSummary = false
 
   // MARK: Choices
 
-  /// Which day the week starts on in Calendar (Month, Week and Year). System follows the region set on the iPhone.
+  /// Which day the week starts on in Calendar (Month and Year, and the week numbers). System follows the region set on the iPhone.
   public enum FirstWeekday: String, CaseIterable, Identifiable, Sendable {
     case system, sunday, monday
     public var id: String { rawValue }
@@ -89,9 +83,10 @@ public enum Preferences {
 
   /// Which Calendar view opens when the app starts. Last used keeps the view you left it in.
   public enum CalendarStart: String, CaseIterable, Identifiable, Sendable {
-    case lastUsed, week, month, year
+    case lastUsed, twoDay, month, year
     public var id: String { rawValue }
 
+    /// A retired choice (`week`, `threeDay`) or anything unknown is the default.
     public init(stored: String?) {
       self = stored.flatMap(CalendarStart.init(rawValue:)) ?? Preferences.calendarStart
     }
@@ -99,17 +94,18 @@ public enum Preferences {
     public var title: String {
       switch self {
       case .lastUsed: "Last used"
-      case .week: "Week"
+      case .twoDay: "2 Day"
       case .month: "Month"
       case .year: "Year"
       }
     }
 
-    /// The view to open: this choice when it names one, else the last used (Week the very first time).
+    /// The view to open (a `CalendarView.Mode` raw value): this choice when it names one, else the last used
+    /// (2 Day the very first time). A retired last view ("Week", "ThreeDay") is not a mode, so it opens the default.
     public func view(lastUsed: String?) -> String {
       switch self {
-      case .lastUsed: lastUsed ?? "Week"
-      case .week: "Week"
+      case .lastUsed: lastUsed ?? "TwoDay"
+      case .twoDay: "TwoDay"
       case .month: "Month"
       case .year: "Year"
       }
@@ -143,6 +139,19 @@ public enum Preferences {
 
   public static func newAlarmSoundName(_ defaults: UserDefaults = .standard) -> String {
     defaults.string(forKey: newAlarmSoundKey) ?? newAlarmSound
+  }
+
+  // MARK: One-time notices (not Settings)
+
+  /// The Clock tab's "Alarms live in Today now" card: shown once, then never again (also after Delete All Data).
+  public static let alarmIntroSeenKey = "today.notice.alarmIntroSeen"
+
+  public static func alarmIntroSeen(_ defaults: UserDefaults = .standard) -> Bool {
+    defaults.bool(forKey: alarmIntroSeenKey)
+  }
+
+  public static func markAlarmIntroSeen(_ defaults: UserDefaults = .standard) {
+    defaults.set(true, forKey: alarmIntroSeenKey)
   }
 }
 

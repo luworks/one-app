@@ -35,16 +35,33 @@ public struct FocusRecord: Equatable, Codable, Sendable {
   public let identity: FocusIdentity
   public let state: TodayFocusState
   public let changedAt: Date
+  /// The selected agenda day; absent in older records, which apply to the day they were changed.
+  public let settledDay: Date?
+  /// Time zone in which the selected civil day was recorded.
+  public let settledTimeZone: String?
   /// Opaque local record anchor; it never substitutes for a resolved source identity.
   public let localReference: String?
 
   public init(
-    identity: FocusIdentity, state: TodayFocusState, changedAt: Date, localReference: String? = nil
+    identity: FocusIdentity, state: TodayFocusState, changedAt: Date, localReference: String? = nil,
+    settledDay: Date? = nil, settledTimeZone: String? = nil
   ) {
     self.identity = identity
     self.state = state
     self.changedAt = changedAt
+    self.settledDay = settledDay
+    self.settledTimeZone = settledTimeZone
     self.localReference = localReference
+  }
+  /// Reconstruct the selected civil day in the current time zone after travel.
+  public func agendaDay(calendar: Calendar) -> Date {
+    guard let settledDay, let settledTimeZone,
+      let zone = TimeZone(identifier: settledTimeZone)
+    else { return self.settledDay ?? changedAt }
+    var original = calendar
+    original.timeZone = zone
+    let components = original.dateComponents([.era, .year, .month, .day], from: settledDay)
+    return calendar.date(from: components) ?? settledDay
   }
 }
 
@@ -98,39 +115,63 @@ public final class TodayFocusStore {
   }
 
   /// Expiration is a read-time decision: no timer, midnight reset, or source mutation is required.
-  public func state(for identity: FocusIdentity, now: Date, calendar: Calendar = .current)
+  public func state(
+    for identity: FocusIdentity, now: Date, on day: Date? = nil, calendar: Calendar = .current
+  )
     -> TodayFocusState?
   {
     guard now.timeIntervalSinceReferenceDate.isFinite else { return nil }
-    lock.lock()
-    defer { lock.unlock() }
-    guard let record = storedRecords.first(where: { $0.identity == identity }) else { return nil }
+    guard let record = record(for: identity, on: day ?? now, calendar: calendar) else { return nil }
     if case .active = record.state { return nil }
-    if case .settled = record.state,
-      !calendar.isDate(record.changedAt, inSameDayAs: now)
-    {
-      return nil
+    if case .settled = record.state {
+      let start = calendar.startOfDay(for: record.agendaDay(calendar: calendar))
+      guard let end = calendar.date(byAdding: .day, value: 1, to: start), now < end else {
+        return nil
+      }
     }
     if case .snoozed(let until) = record.state, until <= now { return nil }
     return record.state
   }
 
+  public func record(for identity: FocusIdentity, on day: Date, calendar: Calendar = .current)
+    -> FocusRecord?
+  {
+    lock.lock()
+    defer { lock.unlock() }
+    return storedRecords.first {
+      $0.identity == identity && calendar.isDate($0.agendaDay(calendar: calendar), inSameDayAs: day)
+    }
+      ?? storedRecords.first {
+        guard $0.identity == identity else { return false }
+        if case .snoozed = $0.state { return true }
+        return false
+      }
+  }
+
   public func set(
-    state: TodayFocusState?, for identity: FocusIdentity, now: Date, localReference: String? = nil
+    state: TodayFocusState?, for identity: FocusIdentity, now: Date, localReference: String? = nil,
+    on day: Date? = nil, calendar: Calendar = .current
   ) throws {
     try Self.validate(identity)
     guard now.timeIntervalSinceReferenceDate.isFinite else {
       throw TodayFocusStoreError.invalidTime
     }
     if let state { try Self.validate(state, changedAt: now) }
+    let selectedDay = calendar.startOfDay(for: day ?? now)
     lock.lock()
     defer { lock.unlock() }
     let reference =
       localReference ?? storedRecords.first(where: { $0.identity == identity })?.localReference
-    var next = storedRecords.filter { $0.identity != identity }
+    var next = storedRecords.filter {
+      $0.identity != identity
+        || !calendar.isDate($0.agendaDay(calendar: calendar), inSameDayAs: selectedDay)
+    }
     if let state {
       next.append(
-        FocusRecord(identity: identity, state: state, changedAt: now, localReference: reference))
+        FocusRecord(
+          identity: identity, state: state, changedAt: now, localReference: reference,
+          settledDay: day == nil ? nil : selectedDay,
+          settledTimeZone: day == nil ? nil : calendar.timeZone.identifier))
     }
     try commit(next)
   }
@@ -155,7 +196,8 @@ public final class TodayFocusStore {
         return record
       }
       return FocusRecord(
-        identity: record.identity, state: record.state, changedAt: record.changedAt)
+        identity: record.identity, state: record.state, changedAt: record.changedAt,
+        settledDay: record.settledDay, settledTimeZone: record.settledTimeZone)
     }
     try commit(next)
   }
@@ -163,7 +205,7 @@ public final class TodayFocusStore {
   private func commit(_ next: [FocusRecord]) throws {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
-    let encoded = try encoder.encode(Payload(version: 1, records: next))
+    let encoded = try encoder.encode(Payload(version: 2, records: next))
     // Validate the exact bytes before any replacement, including the empty clear payload.
     guard try Self.decode(encoded) == next else { throw TodayFocusStoreError.corruptPayload }
     Self.diskLock.lock()
@@ -198,13 +240,32 @@ public final class TodayFocusStore {
       // Read the version first so even an otherwise unfamiliar newer payload remains untouched.
       struct Version: Decodable { let version: Int }
       let version = try JSONDecoder().decode(Version.self, from: data).version
-      guard version == 1 else { throw TodayFocusStoreError.unsupportedVersion(version) }
+      guard version == 1 || version == 2 else {
+        throw TodayFocusStoreError.unsupportedVersion(version)
+      }
       let payload = try JSONDecoder().decode(Payload.self, from: data)
-      var identities = Set<FocusIdentity>()
+      struct RecordKey: Hashable {
+        let identity: FocusIdentity
+        let day: Date
+        let timeZone: String?
+      }
+      var identities = Set<RecordKey>()
+      var legacyIdentities = Set<FocusIdentity>()
       for record in payload.records {
         try validate(record.identity)
         try validate(record.state, changedAt: record.changedAt)
-        guard identities.insert(record.identity).inserted else {
+        if let day = record.settledDay, !day.timeIntervalSinceReferenceDate.isFinite {
+          throw TodayFocusStoreError.invalidTime
+        }
+        if let zone = record.settledTimeZone, TimeZone(identifier: zone) == nil {
+          throw TodayFocusStoreError.corruptPayload
+        }
+        let key = RecordKey(
+          identity: record.identity, day: record.settledDay ?? record.changedAt,
+          timeZone: record.settledTimeZone)
+        guard identities.insert(key).inserted,
+          version != 1 || legacyIdentities.insert(record.identity).inserted
+        else {
           throw TodayFocusStoreError.corruptPayload
         }
       }

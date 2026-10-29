@@ -56,7 +56,7 @@
       ledger = Ledger(activity: activity, reminders: reminders, runtime: runtime)
       actions = PlannerActions(
         calendar: calendar, reminders: reminders, alarms: alarms,
-        ledger: ledger, runtime: runtime)
+        ledger: ledger, runtime: runtime, defaults: defaults)
     }
 
     /// Cancel view-owned tasks/toasts first. Remove defaults only after this method returns.
@@ -160,6 +160,28 @@
     package func isRepeating(externalID: String?) -> Bool { event(externalID)?.repeats ?? false }
     package func audience(externalID: String?) -> (attendees: Int, isOrganizer: Bool)? { nil }
     package func canDelete(externalID: String?) -> Bool { !isDisposed && externalID == nil }
+    package var creationFailure: CalendarCreationError?
+    package var defaultCalendarID: String?
+    package private(set) var creationCalendarIDs: [String] = []
+    package func create(_ event: OneEvent, calendarID: String? = nil) throws
+      -> CalendarCreationReceipt
+    {
+      guard event.externalID == nil else { throw CalendarCreationError.existingEvent }
+      guard !enabled || isOn else { throw CalendarCreationError.unavailable }
+      return try CalendarCreation.commit(
+        calendarID: calendarID, connected: isOn,
+        resolve: { id in
+          guard let id = id ?? self.defaultCalendarID else { return nil as SystemCalendar? }
+          return self.availableCalendars.first { $0.id == id }
+        },
+        writable: { $0.allowsContentModifications },
+        save: { destination in
+          if let failure = self.creationFailure { throw failure }
+          self.creationCalendarIDs.append(destination.id)
+          self.version += 1
+          return "test-event-\(event.id)"
+        })
+    }
     package func save(_ event: OneEvent, span: EKSpan) -> String? { nil }
     package func delete(_ event: OneEvent, span: EKSpan) -> Bool {
       delete(externalID: event.externalID, occurrence: event.start, span: span)

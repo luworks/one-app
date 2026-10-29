@@ -11,7 +11,7 @@ final class TodayAlarmActionsTests: XCTestCase {
     app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments(dataset) + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-uiTestingNow", "12:00",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ] + extra
     app.launch()
@@ -74,9 +74,6 @@ final class TodayAlarmActionsTests: XCTestCase {
     if delete.waitForExistence(timeout: 1) {
       shot("alarm-after-swipe")
       delete.tap()
-      let confirm = app.buttons["Delete Alarm"].firstMatch
-      XCTAssertTrue(confirm.waitForExistence(timeout: 3))
-      confirm.tap()
     }
     XCTAssertTrue(row().waitForNonExistence(timeout: 5))
     XCTAssertTrue(row("Keep this alarm").exists)

@@ -1,5 +1,6 @@
 #if os(iOS)
   import TodayCore
+  import TodayData
   import SwiftUI
   import SwiftData
   import EventKit
@@ -30,6 +31,10 @@
             "“\(entry.title)” is in a read-only calendar, so it can't be deleted here.")
           return
         }
+        // Activity's Undo only for a one-off with nobody else on it (see `EventUndo.canRestore`).
+        let restorable = EventUndo.canRestore(
+          repeats: entry.repeats, inAppleCalendar: true,
+          attendees: calendar.audience(externalID: id)?.attendees)
         guard calendar.delete(externalID: id, occurrence: entry.start, span: span) else {
           calendar.refresh()
           toast?.showNotice(
@@ -37,9 +42,16 @@
           return
         }
         calendar.refresh()
-        ledger.record(
+        let logged = ledger.record(
           .deleted, kind: "event", title: entry.title,
-          before: plannerDayLabel(entry.start, runtime: runtime), context: context)
+          before: plannerDayLabel(entry.start, runtime: runtime),
+          snapshot: restorable
+            ? EventSnapshot(
+              title: entry.title, start: entry.start,
+              durationMinutes: max(1, Int(entry.end.timeIntervalSince(entry.start) / 60)),
+              isAllDay: entry.isAllDay, calendarName: entry.calendarTitle, externalID: id)
+            : nil,
+          context: context)
         // Undo puts back a plain copy (title, time, place) in the default calendar, for a one-off event only:
         // a series has its own rules and attendees that a plain copy would not carry, and it was asked about first.
         guard !entry.repeats else {
@@ -52,6 +64,8 @@
           calendarName: entry.calendarTitle)
         backup.isAllDay = entry.isAllDay
         toast?.show("Deleted “\(entry.title)”. Undo adds a new copy in the default calendar.") {
+          // Activity's Undo may have put it back already.
+          guard !ledger.isUndone(logged) else { return }
           guard case .notFound = calendar.focusIdentity(externalID: id, occurrence: entry.start)
           else {
             toast?.showNotice("Calendar changed again. The event was not recreated.")
@@ -62,6 +76,7 @@
             return
           }
           calendar.refresh()
+          ledger.recordUndo(of: logged, context: context)
         }
       case .local(let event):
         // A local repeating model has no per-occurrence exception storage. Keep the existing series-only
@@ -77,6 +92,11 @@
         let resolution = calendar.focusIdentity(externalID: externalID, occurrence: entry.start)
         let alreadyAbsent: Bool
         if case .notFound = resolution { alreadyAbsent = true } else { alreadyAbsent = false }
+        let restorable =
+          !alreadyAbsent
+          && EventUndo.canRestore(
+            repeats: event.repeats != nil, inAppleCalendar: wasLinked,
+            attendees: wasLinked ? calendar.audience(externalID: externalID)?.attendees : 0)
         if wasLinked {
           switch resolution {
           case .available, .notFound: break
@@ -102,9 +122,16 @@
               : "Couldn't save the deletion. This event was kept.")
           return
         }
-        ledger.record(
+        let logged = ledger.record(
           .deleted, kind: "event", title: backup.title,
-          before: plannerDayLabel(entry.start, runtime: runtime), context: context)
+          before: plannerDayLabel(entry.start, runtime: runtime),
+          snapshot: restorable
+            ? EventSnapshot(
+              title: backup.title, start: backup.start, durationMinutes: backup.durationMinutes,
+              isAllDay: backup.isAllDay, calendarName: backup.calendarName, note: backup.note,
+              externalID: externalID, local: true)
+            : nil,
+          context: context)
         guard !alreadyAbsent else {
           toast?.showNotice("Removed the local copy. It was already deleted in Calendar.")
           return
@@ -118,6 +145,7 @@
           ? "Deleted “\(backup.title)”. Undo adds a new copy in the default calendar."
           : "Deleted “\(backup.title)”"
         toast?.show(message) {
+          guard !ledger.isUndone(logged) else { return }
           if wasLinked {
             guard
               case .notFound = calendar.focusIdentity(
@@ -134,6 +162,7 @@
           }
           withAnimation(.snappy) { context.insert(backup) }
           try? context.save()
+          ledger.recordUndo(of: logged, item: backup, context: context)
         }
       case .task(let task):
         do {
@@ -147,6 +176,43 @@
         AlarmActions.delete(
           alarm, context: context, toast: toast, alarms: alarms, ledger: ledger, runtime: runtime)
       }
+    }
+
+    /// Undo from Activity of an event delete: adds the event again from its snapshot, as a new event (Apple Calendar gives
+    /// it a new identifier), and only while the deleted one is still gone. Returns nil when done, else why it could not.
+    package static func undo(
+      _ entry: LedgerItem, context: ModelContext, calendar: any CalendarService, ledger: Ledger
+    ) -> String? {
+      guard entry.itemKind == "event", entry.actionValue == .deleted,
+        let s = ledger.undoSnapshot(EventSnapshot.self, of: entry, context: context)
+      else { return ActivityUndoMessage.changedSince }
+      if let id = s.externalID {
+        switch calendar.focusIdentity(externalID: id, occurrence: s.start) {
+        case .notFound: break
+        case .available, .localOnly: return ActivityUndoMessage.changedSince
+        case .unavailable, .permissionDenied:
+          return "Calendar access is unavailable. Reconnect and try again."
+        }
+      }
+      let event = OneEvent(
+        title: s.title, start: s.start, durationMinutes: s.durationMinutes,
+        calendarName: s.calendarName)
+      event.isAllDay = s.isAllDay
+      event.note = s.note
+      if s.externalID != nil {
+        guard let id = calendar.save(event) else {
+          return "Couldn’t restore this event in Calendar. Try again."
+        }
+        event.externalID = id
+      }
+      if s.local {
+        context.insert(event)
+        try? context.save()
+      }
+      calendar.refresh()
+      ledger.recordUndo(of: entry, item: s.local ? event : nil, context: context)
+      ledger.flush(context)
+      return nil
     }
   }
 #endif

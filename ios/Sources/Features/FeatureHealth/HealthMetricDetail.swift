@@ -63,6 +63,7 @@
             if !metric.isCumulative { legend }
             chart
             facts
+            OpenHealthButton()
           }
           .padding(.horizontal, 20)
           .padding(.top, 8)
@@ -99,12 +100,12 @@
           }
           Text(HealthFormat.dateLabel(latest.date, now: now, calendar: calendar, locale: locale))
             .font(.subheadline)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
             .padding(.leading, 4)
         } else {
           Text("—").font(.system(size: 44, weight: .semibold, design: .rounded)).foregroundStyle(
             .secondary)
-          Text("No data").font(.subheadline).foregroundStyle(.tertiary)
+          Text("No data").font(.subheadline).foregroundStyle(.secondary)
         }
       }
       .lineLimit(1)

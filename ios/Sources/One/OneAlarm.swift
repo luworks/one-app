@@ -46,6 +46,19 @@
       self.createdAt = .now
     }
 
+    /// A new alarm as every path makes it (Add Alarm, the chat, Siri): the new-alarm sound and snooze from Settings.
+    package static func new(
+      hour: Int, minute: Int, label: String, weekdays: [Int],
+      defaults: AlarmPlan.NewAlarmDefaults, now: Date
+    ) -> OneAlarm {
+      let alarm = OneAlarm(
+        hour: hour, minute: minute, label: label, weekdays: weekdays, snooze: defaults.snooze)
+      alarm.sound = defaults.sound
+      alarm.snoozeMinutes = defaults.snoozeMinutes
+      alarm.createdAt = now
+      return alarm
+    }
+
     /// An unsaved copy with the same settings, to put a deleted alarm back (Undo). It gets its own AlarmKit id.
     package func copy() -> OneAlarm {
       let a = OneAlarm(hour: hour, minute: minute, label: label, weekdays: weekdays, snooze: snooze)

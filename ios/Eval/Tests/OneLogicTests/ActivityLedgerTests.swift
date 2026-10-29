@@ -52,7 +52,7 @@ final class ActivityLedgerTests: XCTestCase {
   func testGrantsUseTheGrantKindAndEveryActionRoundTrips() {
     for action in [
       LedgerAction.created, .completed, .reopened, .deleted, .planned, .moved, .unscheduled,
-      .redated, .undone, .granted, .revoked,
+      .redated, .edited, .switchedOn, .switchedOff, .undone, .granted, .revoked,
     ] {
       let item = LedgerItem(
         date: now, actor: .you, channel: .app, action: action,

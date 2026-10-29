@@ -48,7 +48,7 @@ final class SystemEventEditorTests: XCTestCase {
     sleep(1)
     app.buttons["Calendar"].firstMatch.tap()
     sleep(1)
-    app.buttons["New"].tap()
+    app.addNew("New event")
     let field = app.textFields["Title"]
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     field.typeText(title)

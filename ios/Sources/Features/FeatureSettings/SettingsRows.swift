@@ -14,8 +14,6 @@
   package struct TodayTimelineSettings: View {
     package init() {}
     @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
-    @AppStorage(Preferences.showSnoozeKey) private var showsSnooze = Preferences.showSnooze
-    @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
 
     package var body: some View {
@@ -25,14 +23,6 @@
           "Show Settle actions and Settled items in Today. Settle hides an item in Today only. Turn this back on to access settled items."
       )
       ExplainedToggle(
-        title: "Show Snooze", isOn: $showsSnooze,
-        caption:
-          "Show Snooze actions and Snoozed items in Today. Snooze hides an item until a time you choose; alerts stay unchanged. Turn this back on to access snoozed items."
-      )
-      ExplainedToggle(
-        title: "Show Tomorrow", isOn: $showsTomorrow,
-        caption: "Expand Tomorrow at the end of Today to see all its items.")
-      ExplainedToggle(
         title: "Show free time", isOn: $showsFreeTime,
         caption: "Quiet “Free 1 h” lines in the gaps between your plans.")
     }
@@ -40,7 +30,7 @@
 
   // MARK: - Calendar
 
-  /// Settings > Calendar: how Month, Week and Year look and where Calendar opens.
+  /// Settings > Calendar: how 2 Day, Month and Year look and where Calendar opens.
   package struct CalendarSettingsSection: View {
     package init() {}
     @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
@@ -55,7 +45,7 @@
         ExplainedToggle(
           title: "Dim past days", isOn: $dimsPast,
           caption:
-            "Days that are over show in light grey in Month and Week, and so do their events.")
+            "Days that are over show in light grey in 2 Day and Month, and so do their events.")
         PillChoiceRow(
           title: "First day of the week",
           items: Preferences.FirstWeekday.allCases,
@@ -64,7 +54,9 @@
             set: { firstWeekday = $0.rawValue }),
           caption: "System follows the region set on your iPhone.",
           label: { $0.title }, identifier: { "settings.firstWeekday.\($0.rawValue)" })
-        ExplainedToggle(title: "Show week numbers", isOn: $showsWeekNumbers, caption: nil)
+        ExplainedToggle(
+          title: "Show week numbers", isOn: $showsWeekNumbers,
+          caption: "Beside each row in Month, and over the hours in 2 Day (the first day's week).")
         PillChoiceRow(
           title: "Open Calendar on",
           items: Preferences.CalendarStart.allCases,

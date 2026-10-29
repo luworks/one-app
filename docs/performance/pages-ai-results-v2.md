@@ -1,6 +1,6 @@
 # Current-main page and AI baseline results v2
 
-Production `b1fc12b62e796ac6c232da5e524235a59edba945`; measurement `83b4fb8af1b72d80fc344ecd78f313e2ccec9149`. Draft [PR76](https://github.com/luworks/one-app/pull/76). No production optimization has been measured in this current-main track. Earlier branch results remain historical.
+Production `b1fc12b62e796ac6c232da5e524235a59edba945`; measurement `83b4fb8af1b72d80fc344ecd78f313e2ccec9149`. Draft [PR76](https://github.com/luworks/today/pull/76). No production optimization has been measured in this current-main track. Earlier branch results remain historical.
 
 ## First bounded batch
 

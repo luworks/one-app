@@ -27,6 +27,8 @@
     func calendars() -> [SystemCalendar]
     func setVisibleCalendars(_ selected: Set<String>)
     func events(in interval: DateInterval, excluding: Set<String>) -> [ExternalEvent]
+    /// The same events, read off the main actor where the adapter can (a whole year for the Year view).
+    func loadEvents(in interval: DateInterval, excluding: Set<String>) async -> [ExternalEvent]
     func events(on day: Date, excluding: Set<String>) -> [ExternalEvent]
     func focusIdentity(externalID: String?, occurrence: Date?) -> FocusIdentityResolution
     /// Display-only import snapshots. These never query EventKit and never authorize a write.
@@ -41,6 +43,10 @@
     func isRepeating(externalID: String?) -> Bool
     func audience(externalID: String?) -> (attendees: Int, isOrganizer: Bool)?
     func canDelete(externalID: String?) -> Bool
+    /// Creates only after explicit user confirmation. nil selects the default calendar.
+    /// Throws on any connected save failure; never falls back from an explicit destination.
+    /// Does not insert/save the local model or mutate its externalID; callers persist the receipt.
+    func create(_ event: OneEvent, calendarID: String?) throws -> CalendarCreationReceipt
     func save(_ event: OneEvent, span: EKSpan) -> String?
     func delete(_ event: OneEvent, span: EKSpan) -> Bool
     func delete(externalID: String?, occurrence: Date?, span: EKSpan) -> Bool
@@ -152,6 +158,11 @@
     }
     package func events(in interval: DateInterval) -> [ExternalEvent] {
       events(in: interval, excluding: [])
+    }
+    package func loadEvents(in interval: DateInterval, excluding: Set<String>) async
+      -> [ExternalEvent]
+    {
+      events(in: interval, excluding: excluding)
     }
     package func events(on day: Date) -> [ExternalEvent] { events(on: day, excluding: []) }
     package func save(_ event: OneEvent) -> String? { save(event, span: .futureEvents) }

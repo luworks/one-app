@@ -16,7 +16,7 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 | [`populated-history.json`](populated-history.json), [`populated-unsent-draft.txt`](populated-unsent-draft.txt) | `PerformanceClimbTests.testPopulatedHistorySelectedDayNavigation` and `PopulatedHistoryTests`: 800 completed reminders + 200 past events over 90 days, 30 active reminders + 10 events today, two tomorrow anchors, and 100 mixed English/CJK messages. Real calendar selection, old-message position across panel Close/reopen, native multiline paste with exact unsent retention. No live sync or alarms. |
 | [`today-density.json`](today-density.json) | `TodayDensityTests`: synthetic bilingual schedule modeled on the owner's density screenshot, two all-day events, timed rows, repeat/list/deadline metadata and multiple gaps. UI time 10:30, auto-scroll off, same viewport and font for before/after; accessibility text checks grow long titles. |
 | [`today-reminder-completion.json`](today-reminder-completion.json) | `TodayReminderCompletionTests`: owner-reported Bring the water cup at 12:30, with notes and a due time. Tests namespace the title and seed the simulator EventKit store through `addToday`; no user reminder is used. |
-| [`today-disclosure-sections.json`](today-disclosure-sections.json) | `TodayTomorrowTests`: one overdue reminder, current task, daily recurring meeting/alarm and five tomorrow entries. Validates collapsed section order, overdue jump, complete next-day disclosure, review availability and explicit day/item routes. |
+| [`today-disclosure-sections.json`](today-disclosure-sections.json) | `TodayTomorrowTests`: one overdue reminder, current task, daily recurring meeting/alarm and next-day entries. Validates collapsed section order, overdue expansion and week-strip day navigation. |
 | [`today-focus.json`](today-focus.json) | `TodayFocusTests`: local 10:00–11:00 meeting, 09:00 invoice, yesterday's overdue reminder and one untimed 60-minute task. Clock pinned to 09:00; four native journeys cover Settle/Restore, Snooze/Undo, source deadline/completion preservation, same-store relaunch and retained busy-time reservations. Relaunch consumes `empty-relaunch.json` without reseeding; no Apple sync, timers or alarms. |
 | Snooze timing inline inputs | [`SnoozeSelectionTests.swift`](../../ios/Eval/Tests/OneLogicTests/SnoozeSelectionTests.swift) keeps synthetic absolute instants and a Los Angeles DST boundary beside the pure clock-at-submit regressions. The custom-picker/cancel journey in `TodayFocusTests` reuses `today-focus.json` at 09:00; no generated fixture. |
 | Focus logic and integration inline inputs | [`TodayFocusStoreTests.swift`](../../ios/Eval/Tests/OneLogicTests/TodayFocusStoreTests.swift) versions tiny opaque identities, JSON failure inputs and absolute/DST instants beside the tests. [`TodayFocusIntegrationTests.swift`](../../ios/TodayIntegrationTests/TodayFocusIntegrationTests.swift) versions synthetic SwiftData/Activity models and read-only source identity/deletion spies; no private content or EventKit account is used. |
@@ -279,8 +279,21 @@ They are not reusable UI datasets; the production retention policy lives in
 
 `ChatPanelTests.swift` keeps its small unsent English/Chinese draft and Hello interaction inline. Long-history panel scrolling reuses `ask-reading-history.json`; failed creation and exact Undo/Open reuse `ai-oneoff-reminder-ui.json`. No private data is required.
 
-`remove-returned-to-today.json` supplies synthetic old settled/restored events,
-new-day task/meeting, overdue reminder and tomorrow event for
+`remove-returned-to-today.json` supplies synthetic old settled/restored events and a settled reminder,
+new-day task/meeting and overdue reminder for
 `TodayFocusTests.testCrossDayReleaseUsesOriginalDatesWithoutReturnHistory`.
 The test pins local dates using ISO `-uiTestingNow`, which also supplies the Mock
 dataset load clock, then relaunches its isolated persistent store on the next day.
+
+## AI chat capability assessment
+
+[`ai-chat-capability-eval.json`](ai-chat-capability-eval.json) defines 24
+synthetic bilingual manual Live-app scenarios, with explicit expected outcomes
+and a simulator-only setup. [`ai-chat-capability-protocol.md`](../../docs/qa/ai-chat-capability-protocol.md)
+defines evidence, attribution and scoring; this authored set is development data,
+not a blind holdout or a claim of model execution. It has no automated consumer.
+
+Today button color tests keep small opaque RGB inputs inline in
+`ios/Eval/Tests/OneLogicTests/TodayButtonColorTests.swift`; the simulator journey
+`ios/OneUITests/TodayIdentityTests.swift` uses the built-in Blue preset and native
+custom picker, without personal calendar data.

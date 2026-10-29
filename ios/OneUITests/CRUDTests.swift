@@ -117,6 +117,49 @@ final class CRUDTests: XCTestCase {
 
   // MARK: - Reminders
 
+  func testReminderRepeatWeekdaysCanBeChosenAndPersisted() {
+    openTab("Reminders")
+    let home = element("list.Home")
+    reveal(home)
+    home.tap()
+    let reminder = app.staticTexts["Buy milk"].firstMatch
+    reveal(reminder)
+    reminder.tap()
+    XCTAssertTrue(app.textFields["task.title"].waitForExistence(timeout: 5))
+
+    app.buttons["task.repeat"].tap()
+    let choose = app.buttons["task.repeat.chooseDays"]
+    XCTAssertTrue(choose.waitForExistence(timeout: 5))
+    choose.tap()
+    let monday = app.switches["task.repeat.weekday.2"]
+    let wednesday = app.switches["task.repeat.weekday.4"]
+    XCTAssertTrue(monday.waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["task.repeat.days.done"].isEnabled)
+    monday.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+    XCTAssertEqual(monday.value as? String, "1")
+    wednesday.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+    XCTAssertEqual(wednesday.value as? String, "1")
+    app.buttons["task.repeat.days.done"].tap()
+    XCTAssertTrue(
+      wait(app.buttons["task.repeat"], "label CONTAINS 'Every Mon, Wed'"),
+      app.buttons["task.repeat"].debugDescription)
+    app.buttons["task.save"].tap()
+
+    XCTAssertTrue(reminder.waitForExistence(timeout: 5))
+    reminder.tap()
+    XCTAssertTrue(wait(app.buttons["task.repeat"], "label CONTAINS 'Every Mon, Wed'"))
+    app.buttons["task.repeat"].tap()
+    choose.tap()
+    XCTAssertTrue(monday.waitForExistence(timeout: 5))
+    XCTAssertEqual(monday.value as? String, "1")
+    XCTAssertEqual(wednesday.value as? String, "1")
+    monday.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+    XCTAssertEqual(monday.value as? String, "0")
+    app.navigationBars["Repeat on"].buttons["Cancel"].tap()
+    XCTAssertTrue(wait(app.buttons["task.repeat"], "label CONTAINS 'Every Mon, Wed'"))
+    app.buttons["Cancel"].tap()
+  }
+
   /// New Reminder in a list, edit title and due date in its editor, flag, complete (shows in Completed), delete and Undo.
   func testReminderCreateEditFlagCompleteDeleteUndo() {
     openTab("Reminders")
@@ -208,7 +251,7 @@ final class CRUDTests: XCTestCase {
   /// + on Reminders opens the quick-add sheet: a title, a day chip and a time from the grid, Save.
   func testReminderQuickAddWithPlus() {
     openTab("Reminders")
-    app.buttons["New"].tap()
+    app.addNew("New reminder")
     let title =
       app.textFields["quick.title"].exists
       ? app.textFields["quick.title"] : app.textViews["quick.title"]
@@ -351,7 +394,7 @@ final class CRUDTests: XCTestCase {
     let month = app.buttons["calendar.mode.month"]
     XCTAssertTrue(month.waitForExistence(timeout: 5))
     month.tap()
-    XCTAssertTrue(element("calendar.monthTitle").waitForExistence(timeout: 5))
+    XCTAssertTrue(element("calendar.monthPager").waitForExistence(timeout: 5))
   }
 
   /// In Month, selects `day` (paging to its month first if needed).
@@ -392,7 +435,7 @@ final class CRUDTests: XCTestCase {
   func testEventCreateEditDeleteInEditor() {
     openTab("Calendar")
     let start = nextFullHour
-    app.buttons["New"].tap()
+    app.addNew("New event")
     XCTAssertTrue(
       app.navigationBars["New event"].waitForExistence(timeout: 5), "+ on Calendar adds an event")
     app.textFields["event.title"].typeText("Piano lesson")
@@ -497,7 +540,7 @@ final class CRUDTests: XCTestCase {
     if app.buttons["Cancel"].exists {
       app.buttons["Cancel"].tap()
     } else {
-      dismissPopover(tapping: element("calendar.monthTitle"))
+      dismissPopover(tapping: element("topBar.month"))
     }
     XCTAssertTrue(
       app.buttons["Delete All Occurrences"].waitForNonExistence(timeout: 3), "the question closes")
@@ -541,7 +584,7 @@ final class CRUDTests: XCTestCase {
     XCTAssertEqual(alarmRows.count, 4)
 
     // Create.
-    app.buttons["New"].tap()
+    app.addNew("New alarm")
     XCTAssertTrue(
       app.staticTexts["Add Alarm"].waitForExistence(timeout: 5), "+ on Alarms adds an alarm")
     let label = app.textFields["alarm.label"]

@@ -117,6 +117,9 @@ public enum LedgerAction: String {
   /// The deadline changed (Tidy overdue).
   case redated
   case renamed
+  /// Settings changed (an alarm's time, label, repeat, sound or snooze).
+  case edited
+  case switchedOn, switchedOff
   case undone
   case granted, revoked
 
@@ -134,6 +137,9 @@ public enum LedgerAction: String {
     case .unscheduled: "Unscheduled"
     case .redated: "New date for"
     case .renamed: "Renamed"
+    case .edited: "Changed"
+    case .switchedOn: "Turned on"
+    case .switchedOff: "Turned off"
     case .undone: "Undid"
     case .granted: "Allowed"
     case .revoked: "Revoked"
@@ -234,19 +240,37 @@ public enum LedgerFormat {
     date.map { DayLabel.withTime($0, calendar: calendar) } ?? none
   }
 
-  /// Activity offers Undo for changes it can put back on its own: Today's own reminders (complete, date,
-  /// add, delete). Not for events, alarms or grants (they have their own screens), undo records,
-  /// changes seen in sync, or something already undone.
+  /// Activity offers Undo for changes it can put back on its own: Today's own reminders (complete, date, rename, add,
+  /// delete) and alarms (add, delete, edit, on/off; each needs the snapshot taken when it changed, so old rows and rows older
+  /// than the snapshot window have none). Not for Focus choices (Settle and its reverse), grants, undo records, changes seen
+  /// in sync, or something already undone.
   public static func canUndo(
     action: LedgerAction, itemKind: String, approval: LedgerApproval, hasItem: Bool,
     hasSnapshot: Bool, alreadyUndone: Bool
   ) -> Bool {
-    guard !alreadyUndone, itemKind == "task", approval != .observed else { return false }
-    switch action {
-    case .deleted: return hasSnapshot
-    case .completed, .reopened, .redated, .renamed, .created: return hasItem
-    // Retired planned-time entries stay listed but cannot be undone: a reminder has one date now.
-    case .planned, .moved, .unscheduled, .undone, .granted, .revoked, .settled, .snoozed, .restored:
+    guard !alreadyUndone, approval != .observed else { return false }
+    switch itemKind {
+    case "task":
+      switch action {
+      case .deleted: return hasSnapshot
+      case .completed, .reopened, .redated, .renamed, .created: return hasItem
+      // Retired planned-time entries stay listed but cannot be undone: a reminder has one date now.
+      default: return false
+      }
+    case "alarm":
+      switch action {
+      case .created, .deleted, .edited, .moved, .switchedOn, .switchedOff: return hasSnapshot
+      default: return false
+      }
+    case "list":
+      switch action {
+      case .created, .deleted, .renamed, .edited: return hasSnapshot
+      default: return false
+      }
+    case "event":
+      // Only a delete that kept a snapshot (a one-off without attendees); moves and series deletes have none.
+      return action == .deleted && hasSnapshot
+    default:
       return false
     }
   }

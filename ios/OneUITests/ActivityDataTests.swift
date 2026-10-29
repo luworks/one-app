@@ -125,6 +125,45 @@ final class ActivityDataTests: XCTestCase {
       "the oldest row is there")
   }
 
+  /// Search asks the store within the current chip: a seeded title is found, nothing matches shows the empty state, and
+  /// clearing the search returns to the full list where it was scrolled.
+  func testSearchFindsATitleAndClearingRestoresTheList() {
+    launch(["-uiTestingActivityRows", "40"])
+    app.openSidebar()
+    openActivityFromSidebar()
+    let newest = app.staticTexts["Completed “Synthetic 0”"]
+    XCTAssertTrue(newest.waitForExistence(timeout: 5))
+    for _ in 0..<3 { app.swipeUp() }
+    XCTAssertFalse(newest.exists && newest.isHittable, "scrolled away from the top")
+
+    let field = app.searchFields["Search Activity"]
+    XCTAssertTrue(field.waitForExistence(timeout: 3), "a native search field")
+    field.tap()
+    field.typeText("Synthetic 37")
+    let match = app.staticTexts["Completed “Synthetic 37”"]
+    XCTAssertTrue(match.waitForExistence(timeout: 3), "the seeded title is found")
+    XCTAssertTrue(match.isHittable)
+    XCTAssertFalse(newest.exists, "only matches are listed")
+
+    field.buttons["Clear text"].firstMatch.tap()
+    let rows = app.staticTexts.matching(
+      NSPredicate(format: "label BEGINSWITH 'Completed “Synthetic'"))
+    XCTAssertTrue(
+      rows.element(boundBy: 1).waitForExistence(timeout: 3),
+      "clearing restores the list: \(rows.count) rows")
+    XCTAssertFalse(
+      newest.exists && newest.isHittable, "at the same scroll position, not back at the top")
+
+    // Combined with the chip: the seeded changes are yours, so AI finds none.
+    field.typeText("Synthetic 37")
+    XCTAssertTrue(match.waitForExistence(timeout: 3))
+    app.buttons["activity.filter.AI"].tap()
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'No Results'")).firstMatch
+        .waitForExistence(timeout: 3), "an empty state when nothing matches")
+    XCTAssertFalse(match.exists)
+  }
+
   /// An install from before the Activity store: the old SwiftData ledger rows are copied into the store at launch (the real
   /// import path), listed in Activity with their Undo and Undone state, kept for that launch, and retired in the next one.
   func testOldLedgerRowsAreImportedOnceAndRetiredInALaterLaunch() {

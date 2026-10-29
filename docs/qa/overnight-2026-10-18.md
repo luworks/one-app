@@ -36,16 +36,16 @@ The integrated 100k Activity benchmark ran on the Mac: 2.33 seconds insertion, 4
 
 | Issue | Behavior repaired | PR / acceptance |
 |---|---|---|
-| [#33](https://github.com/luworks/one-app/issues/33) | A new reminder answered an older event's time question | [#40](https://github.com/luworks/one-app/pull/40); logic red/green and new interruption UI passed |
-| [#34](https://github.com/luworks/one-app/issues/34) | Old recurrence history exhausted expansion before the visible date | [#43](https://github.com/luworks/one-app/pull/43); calendar boundary regressions and integrated logic passed |
-| [#35](https://github.com/luworks/one-app/issues/35) | Week/Month added a date to EventKit's exclusive all-day end | [#43](https://github.com/luworks/one-app/pull/43); production projection seam tested; live EventKit edge not exercised |
-| [#36](https://github.com/luworks/one-app/issues/36) | Corrupt Share inbox was deleted/overwritten; failed submission dismissed as success | [#42](https://github.com/luworks/one-app/pull/42); file-backed red/green and submit/retry boundary tests; extension compiles |
-| [#37](https://github.com/luworks/one-app/issues/37) | Midnight point alarm leaked into the preceding day | [#43](https://github.com/luworks/one-app/pull/43); half-open membership/DST tests passed |
-| [#38](https://github.com/luworks/one-app/issues/38) | Share inbox was consumed before successful persistence | [#45](https://github.com/luworks/one-app/pull/45),[#46](https://github.com/luworks/one-app/pull/46); all 3 real file-backed SwiftData UI journeys passed |
-| [#39](https://github.com/luworks/one-app/issues/39) | A 90-day Health comparison had insufficient previous-period history | [#44](https://github.com/luworks/one-app/pull/44); uneven 180-day data regression passed |
-| [#47](https://github.com/luworks/one-app/issues/47) | Leading relative time hid the imperative in “30分钟后关烤箱” | [#48](https://github.com/luworks/one-app/pull/48); routing/dialogue logic and five-sentence capture UI passed |
-| [#49](https://github.com/luworks/one-app/issues/49) | “Anything left today?” / “What's on today?” missed the read-only agenda route | [#50](https://github.com/luworks/one-app/pull/50); CRUD chat, MessageCopy and all 7 previously blocked Sidebar bodies passed |
-| [#53](https://github.com/luworks/one-app/issues/53) | Empty-slot long-press layer interfered with late Week alarm taps | [#55](https://github.com/luworks/one-app/pull/55); source fix `c9b3973`, six targeted UI checks passed |
+| [#33](https://github.com/luworks/today/issues/33) | A new reminder answered an older event's time question | [#40](https://github.com/luworks/today/pull/40); logic red/green and new interruption UI passed |
+| [#34](https://github.com/luworks/today/issues/34) | Old recurrence history exhausted expansion before the visible date | [#43](https://github.com/luworks/today/pull/43); calendar boundary regressions and integrated logic passed |
+| [#35](https://github.com/luworks/today/issues/35) | Week/Month added a date to EventKit's exclusive all-day end | [#43](https://github.com/luworks/today/pull/43); production projection seam tested; live EventKit edge not exercised |
+| [#36](https://github.com/luworks/today/issues/36) | Corrupt Share inbox was deleted/overwritten; failed submission dismissed as success | [#42](https://github.com/luworks/today/pull/42); file-backed red/green and submit/retry boundary tests; extension compiles |
+| [#37](https://github.com/luworks/today/issues/37) | Midnight point alarm leaked into the preceding day | [#43](https://github.com/luworks/today/pull/43); half-open membership/DST tests passed |
+| [#38](https://github.com/luworks/today/issues/38) | Share inbox was consumed before successful persistence | [#45](https://github.com/luworks/today/pull/45),[#46](https://github.com/luworks/today/pull/46); all 3 real file-backed SwiftData UI journeys passed |
+| [#39](https://github.com/luworks/today/issues/39) | A 90-day Health comparison had insufficient previous-period history | [#44](https://github.com/luworks/today/pull/44); uneven 180-day data regression passed |
+| [#47](https://github.com/luworks/today/issues/47) | Leading relative time hid the imperative in “30分钟后关烤箱” | [#48](https://github.com/luworks/today/pull/48); routing/dialogue logic and five-sentence capture UI passed |
+| [#49](https://github.com/luworks/today/issues/49) | “Anything left today?” / “What's on today?” missed the read-only agenda route | [#50](https://github.com/luworks/today/pull/50); CRUD chat, MessageCopy and all 7 previously blocked Sidebar bodies passed |
+| [#53](https://github.com/luworks/today/issues/53) | Empty-slot long-press layer interfered with late Week alarm taps | [#55](https://github.com/luworks/today/pull/55); source fix `c9b3973`, six targeted UI checks passed |
 
 For issue #53, one diagnostic binary retained the failure when independently removing ViewThatFits, menus or offset
 positioning; disabling only the empty-slot layer restored the same in-bounds tap. The final fix rejects occupied points
@@ -63,8 +63,8 @@ The actual Share extension failure/error/retry UI was not exercised; its durable
 command/result recording and final shutdown; `--full` is explicit. No second full UI run was performed.
 Logic uses `swift test` from `ios/`, with jobs 2/shared mutex during parallel work.
 
-[PR51](https://github.com/luworks/one-app/pull/51) made overlap/repeating inputs permanent;
-[PR54](https://github.com/luworks/one-app/pull/54) retained the old-schema fixture, evidence and readiness repairs.
+[PR51](https://github.com/luworks/today/pull/51) made overlap/repeating inputs permanent;
+[PR54](https://github.com/luworks/today/pull/54) retained the old-schema fixture, evidence and readiness repairs.
 The new late-alarm fixture is also versioned. [The fixture catalog](../../tests/fixtures/README.md) identifies consumers,
 relative dates and defaults. Package capture resources and small Swift generators remain versioned with their tests.
 
