@@ -86,6 +86,12 @@ def main():
             '                }.disabled(llamaState.evaluationRunning)\n'
             '                NavigationLink(destination: DrawerView', 1)
         view.write_text(text)
+    if 'Native Apple holdout' not in text:
+        text = text.replace('                NavigationLink(destination: DrawerView',
+            '                Button("Native Apple holdout") { Task { await llamaState.runEvaluation(apple: true, holdout: true, native: true) } }\n'
+            '                    .disabled(llamaState.evaluationRunning)\n'
+            '                NavigationLink(destination: DrawerView', 1)
+        view.write_text(text)
     print(json.dumps({'fixture_hashes': hashes, 'bundled_sha256': hashlib.sha256(data).hexdigest(),
                       'development_cases': len(fixtures['development']),
                       'holdout_cases': len(fixtures['holdout'])}, indent=2))

@@ -13,7 +13,8 @@ The latest consolidated phone build is outside this thread's validation scope.
 | Apple native `@Generable` diagnostic, 120-second budget | 81/81 API returns | 81/81 strict JSON | 6/81 | Schema fixed serialization, not all semantic fields |
 | Pure routing/parser/open-preview rules export, corrected exporter | 27/27 observations | Inapplicable | 18/27 | Not the complete app reducer, existing-item resolution or saves |
 | Qwen3.5-2B Q4_K_M original 30-second smoke | 3/3 records | Not a formal quality score | UNKNOWN | One EOG success, two CPU deadline timeouts; pinned simulator-file hash verified |
-| Qwen3.5-2B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; two repetitions still required |
+| Qwen3.5-2B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; repetition2 is reported separately |
+| Qwen3.5-2B Q4_K_M 120-second development repetition2 | 27/27 EOG | 26/27 strict JSON | 3/27 | Whole-case semantic fields2/24; repetition3 remains |
 | Qwen3.5-4B Q4_K_M 120-second smoke | 3/3 EOG | 3/3 strict JSON | 0/3 | Not a formal quality estimate; formal repetition1 completed |
 | Qwen3.5-4B Q4_K_M 120-second development repetition1 | 27/27 EOG | 26/27 strict JSON | 6/27 | One complete repetition; two repetitions still required |
 | Remaining Qwen formal repetitions and all holdout | Not yet completed | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
@@ -102,8 +103,9 @@ For that one case, direct creation eligibility changed from true to false and th
 decision became clarify. This is a matched rules-seam result, **not a measured
 product save/Undo rate**. Fourteen focused unit methods passed, missing0.
 The earlier18/27 figure came from a narrower exporter and must not be presented
-as a behavior improvement to20/27. iOS compilation, Live UI reproduction and CI
-verification of the candidate remain outstanding.
+as a behavior improvement to20/27. iOS compilation and CI passed at `bfa6ef32ffe3602c0df0bb46979dbd70474cf16c`
+([run40857283313](https://github.com/luworks/today/actions/runs/40857283313));
+Live runtime verification remains outstanding.
 
 The original failed TodayMock conversation UI log also shows a time-only
 follow-up (`make it4pm`) being saved as a new one-off title `it`, replacing
@@ -116,3 +118,27 @@ assertions: recurring preview, time refinement, explicit Add, and Added/Undo/Ope
 receipt. Before evidence: `today-qa-20261028-144742-7ec725d2`; after evidence:
 `today-qa-20261029-031315-717f019f`. This single matched TodayMock journey
 checks product routing, not Live inference, Undo execution or general safety.
+
+Qwen2B repetition2 completed separately with median30333.8 ms and p90
+34627.9 ms (n=27), no timeout/fallback. Its partial field counts match
+repetition1; raw-output reproducibility is retained separately. The remaining
+development schedule is frozen at seed2026102901, with each job releasing
+resources. Earlier fixed model ordering remains a timing confound; subsequent
+randomization cannot erase it. The untouched holdout is still pending.
+
+The two Qwen2B development runs returned byte-identical raw text on27/27
+matched case-turns. Repeated54/54 executions therefore remain27 unique inputs,
+not54 independent quality samples. The partial rubric passed3/27 in each run.
+
+Assistant manual review of first-repetition reply wording found explicit claims
+of already completed creation/update in9/27 Qwen2B turns and22/27 Qwen4B turns.
+Qwen2B also made unqualified future execution promises in8/27; ambiguous present
+wording is separate. These adapters have no write tools, so the claims violate
+their no-execution contract. This is reply-language evidence, not an observed
+product unintended-write rate or independent human judgment. The annotated
+quotes and definitions are retained in `qwen-execution-language-review-rep1-20261029.json`.
+
+The UI before/after figures use the same unchanged TodayMock journey and
+assertions, on different application revisions and execution dates. They are
+not a controlled single-commit A/B or model comparison; relative-date inputs
+and unmeasured Live behavior remain limitations.

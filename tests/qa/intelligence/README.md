@@ -72,3 +72,13 @@ product saves, Undo, actual agenda access, or semantic safety from a model reply
 these require a separate evidence review. The raw output remains authoritative.
 Repeated identical greedy/temperature-zero outputs are not independent samples;
 report unique case/turn counts alongside repeated execution counts.
+
+`run_schedule.py` executes an explicit frozen JSON job list serially through
+`run_owned.py`. It owns no locks between children. Each job has its own record
+count, output stem and runtime bound; failure stops the schedule without retry.
+A named stop file in the evidence directory stops before the next batch.
+Existing completed jobs are revalidated from raw logs before resuming. Each
+closed job is graded and indexed only after the child has released its locks.
+The manifest pins source hashes; changing a frozen input stops further work.
+It does not build, install, or choose a device. Prepare the native holdout button
+and install the sample on the already opened owned simulator beforehand.
