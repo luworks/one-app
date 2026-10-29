@@ -31,4 +31,13 @@ final class CreateDraftTests: XCTestCase {
     draft.hasDueDate = true
     XCTAssertTrue(draft.isValid)
   }
+  func testCommitRejectsDuplicateAndAllowsRetryAfterFailure() {
+    var state = CreateCommitState()
+    XCTAssertTrue(state.begin())
+    XCTAssertFalse(state.begin())
+    state.finish(success: false)
+    XCTAssertTrue(state.begin())
+    state.finish(success: true)
+    XCTAssertFalse(state.begin())
+  }
 }

@@ -33,3 +33,19 @@ package struct CreateDraft {
     !trimmedTitle.isEmpty && (kind != .reminder || reminderRepeat == nil || hasDueDate)
   }
 }
+
+/// Serializes the explicit Create action and permits retry only after a failed attempt.
+package struct CreateCommitState {
+  package private(set) var saving = false
+  package private(set) var committed = false
+  package init() {}
+  package mutating func begin() -> Bool {
+    guard !saving, !committed else { return false }
+    saving = true
+    return true
+  }
+  package mutating func finish(success: Bool) {
+    saving = false
+    committed = success
+  }
+}

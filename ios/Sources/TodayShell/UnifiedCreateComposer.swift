@@ -11,7 +11,8 @@
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @State private var draft: CreateDraft
-    @State private var saving = false
+    @State private var commitState = CreateCommitState()
+    private var saving: Bool { commitState.saving }
     @State private var error: String?
     @State private var pendingTask: OneTask?
     @State private var pendingEvent: OneEvent?
@@ -214,11 +215,10 @@
     }
 
     private func create() {
-      guard !saving, draft.isValid else { return }
-      saving = true
+      guard draft.isValid, commitState.begin() else { return }
       titleFocused = false
       Task { @MainActor in
-        defer { saving = false }
+        defer { if commitState.saving { commitState.finish(success: false) } }
         do {
           let session = composition.session
           switch draft.kind {
@@ -275,6 +275,7 @@
             try await session.alarms.commit(alarm, context: context)
             composition.recordCreatedAlarm(alarm, context: context)
           }
+          commitState.finish(success: true)
           dismiss()
         } catch {
           if let alarm = pendingAlarm { pendingAlarm = alarm.snapshot() }
