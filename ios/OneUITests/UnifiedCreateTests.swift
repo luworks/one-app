@@ -28,11 +28,11 @@ final class UnifiedCreateTests: XCTestCase {
     let app = openComposer()
     app.descendants(matching: .any)["create.title"].typeText("Shared native draft")
     app.buttons["create.type"].tap()
-    app.buttons["Calendar"].tap()
+    app.collectionViews.buttons["Calendar"].tap()
     XCTAssertEqual(
       app.descendants(matching: .any)["create.title"].value as? String, "Shared native draft")
     app.buttons["create.type"].tap()
-    app.buttons["Alarm"].tap()
+    app.collectionViews.buttons["Alarm"].tap()
     XCTAssertEqual(
       app.descendants(matching: .any)["create.title"].value as? String, "Shared native draft")
   }
@@ -52,7 +52,7 @@ final class UnifiedCreateTests: XCTestCase {
     let app = openComposer()
     app.descendants(matching: .any)["create.title"].typeText(title)
     app.buttons["create.type"].tap()
-    app.buttons[kind].tap()
+    app.collectionViews.buttons[kind].tap()
     app.buttons["create.save"].tap()
     XCTAssertTrue(app.buttons["create.save"].waitForNonExistence(timeout: 5))
     XCTAssertTrue(
