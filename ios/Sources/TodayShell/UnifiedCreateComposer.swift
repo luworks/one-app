@@ -27,14 +27,15 @@
       let session = composition.session
       var draft = CreateDraft(now: session.runtime.now())
       draft.kind = initialKind == .event ? .calendar : initialKind == .alarm ? .alarm : .reminder
-      draft.eventStart =
-        session.runtime.calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
+      draft.reminderDate = day
+      draft.eventStart = EventEditor.defaultStart(
+        for: day, now: session.runtime.now(), calendar: session.runtime.calendar)
       draft.alarmTime = AlarmPlan.nextQuarterHour(
         after: session.runtime.now(), calendar: session.runtime.calendar)
       let lists = (try? session.container.mainContext.fetch(FetchDescriptor<OneList>())) ?? []
       draft.listName =
         listName.isEmpty && usesPreferredList
-        ? Preferences.newReminderList(existing: lists.map(\.name), defaults: session.defaults)
+        ? Preferences.newReminderList(existing: lists.map(\.name), session.defaults)
         : listName
       draft.sound = Preferences.newAlarmSoundName(session.defaults)
       draft.snoozeMinutes = Preferences.newAlarmSnoozeMinutes(session.defaults)
@@ -91,7 +92,7 @@
         .background(Color(.systemBackground))
         .toolbar {
           ToolbarItem(placement: .cancellationAction) {
-            Button("Close", systemImage: "xmark") { dismiss() }.disabled(saving)
+            Button("Close", systemImage: "xmark") { dismiss() }.disabled(locked)
           }
           ToolbarItem(placement: .principal) {
             Menu {
@@ -119,7 +120,7 @@
         }
       }
       .presentationDetents([.large])
-      .interactiveDismissDisabled(saving)
+      .interactiveDismissDisabled(locked)
       .onAppear { titleFocused = true }
     }
 
@@ -255,8 +256,19 @@
               let receipt = try session.calendar.create(event, calendarID: draft.calendarID)
               if case .committed(let id) = receipt { event.externalID = id }
             }
-            context.insert(event)
-            try context.save()
+            // Isolate the pending insert from main-context autosave on failure.
+            let writeContext = ModelContext(session.container)
+            writeContext.autosaveEnabled = false
+            writeContext.insert(event)
+            do {
+              try writeContext.save()
+            } catch {
+              let retained = event.copy()
+              retained.externalID = event.externalID
+              pendingEvent = retained
+              writeContext.rollback()
+              throw error
+            }
             session.ledger.record(.created, kind: "event", title: event.title, context: context)
           case .alarm:
             let alarm = pendingAlarm ?? OneAlarm(hour: 0, minute: 0)
@@ -279,7 +291,9 @@
           dismiss()
         } catch {
           if let alarm = pendingAlarm { pendingAlarm = alarm.snapshot() }
-          self.error = error.localizedDescription
+          self.error =
+            error.localizedDescription
+            + (locked ? " A system item may already exist. Retry Create to finish saving it." : "")
         }
       }
     }

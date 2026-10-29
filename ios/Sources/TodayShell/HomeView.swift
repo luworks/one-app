@@ -546,7 +546,8 @@
       }
       .sheet(item: $newItem) { item in
         UnifiedCreateComposer(
-          initialKind: item, day: tab == .calendar ? calendarDay : session.runtime.now(),
+          initialKind: item,
+          day: tab == .calendar ? calendarDay : tab == .today ? todayDay : session.runtime.now(),
           listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
           composition: composition)
 
