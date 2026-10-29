@@ -267,6 +267,7 @@
       VStack(spacing: 16) {
         HStack(spacing: 0) {
           icon("xmark", label: "Cancel") { dismiss() }
+            .accessibilityIdentifier("task.cancel")
           Spacer(minLength: 8)
           Menu {
             Picker("Repeat", selection: $repeatRule) {
