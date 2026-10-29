@@ -63,8 +63,20 @@ def main():
 
             def click(label):
                 snapshot = agent('snapshot', '-i')
-                match = re.search(r'^\s*(@e\d+) \[(?:button|cell)\] "' + re.escape(label) + r'"',
-                                  snapshot, re.M)
+                pattern = r'^\s*(@e\d+) \[(?:button|cell)\] "' + re.escape(label) + r'"'
+                match = re.search(pattern, snapshot, re.M)
+                # Retained evaluation exports share the model list. Reveal an
+                # offscreen pinned model without deleting evidence or changing it.
+                if label.startswith('Load '):
+                    for _ in range(6):
+                        if match or '[content below collection hidden]' not in snapshot:
+                            break
+                        agent('scroll', 'down', '0.6', '--settle', '--timeout', '10000')
+                        revealed = agent('snapshot', '-i')
+                        if revealed == snapshot:
+                            break
+                        snapshot = revealed
+                        match = re.search(pattern, snapshot, re.M)
                 if not match:
                     raise RuntimeError(f'Visible control missing: {label}')
                 agent('click', match[1])

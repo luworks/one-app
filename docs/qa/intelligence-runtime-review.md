@@ -110,8 +110,8 @@ not a generation and is not counted by this trace. Missing stages remain unobser
 Use `tests/qa/intelligence/collect_product.py` to extract lifecycle counts, and
 correlate the closed observation window with the synthetic UI action record.
 The collector never reports product pass rates or window completeness from API
-metadata alone. Actual simulator compilation and Live trace validation of this
-candidate are pending; source instrumentation is not runtime proof.
+metadata alone. Subsequent Live validation is recorded below; source
+instrumentation alone is not runtime proof.
 
 The candidate also propagates a random diagnostic turn UUID into child tasks,
 so a late model completion stays associated with the original submitted turn.
@@ -124,8 +124,29 @@ The installed iOS27.1 SDK exposes `SystemLanguageModel.variant.displayName`,
 `Variant.core3`/`coreAdvanced3`, and `contextSize`. Future traced API starts will
 record the reported variant and context size. Earlier batches did not record
 these values and remain UNKNOWN; neither a reported variant nor an OS version
-identifies an exact weight revision/hash. Runtime validation of this addition
-is pending. SDK declaration presence is not a measured model selection.
+identifies an exact weight revision/hash. SDK declaration presence alone is not
+a measured model selection.
+
+### Subsequent closed Live evidence
+
+The separate `829dc4a` Live product baseline completed the original24 cases /
+27 turns after integrating PR217. Its closed
+`live-product-round5-20261029/original-development-call-summary.json` in the
+primary evaluation results records18 foreground SDK starts and18 returns:
+eight title, seven chat and three kind calls. Their reported metadata was
+`AFM 3 Core`, context4096. Median measured API span was1398.65 ms, p90
+1992.46 ms (n=18), excluding background ranking, setup and extension cases.
+This validates attribution for these observations, not semantic correctness,
+earlier uninstrumented batches or phone performance. Exact weights remain
+UNKNOWN. The original cohort also had10 rule direct grants; a rule grant is
+not an SDK generation.
+
+The later `5037a18` quantity candidate has separate matched evidence in
+`live-cardinality-5037a18-20261029/matched-cardinality-review.json`. Its frozen
+multi-action request produced two correct previews with no automatic write or
+SDK call in all three repetitions of that one input. Three clear one-off flows
+retained direct-save/Undo behavior, also without SDK calls. Do not relabel either
+closed product source as the newer `3edc6e9` content-validation candidate.
 
 ## Provider migration options reviewed2026-10-29
 
