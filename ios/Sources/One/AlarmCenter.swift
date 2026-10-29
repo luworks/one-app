@@ -32,7 +32,6 @@
     private let driver: Ringer
     package init(driver: Ringer) {
       self.driver = driver
-      authorization = driver.authorization
     }
     package var isAvailable: Bool { driver.isAvailable }
     package func sync(_ context: ModelContext) async {
@@ -52,7 +51,7 @@
       refreshStates()
     }
 
-    package private(set) var authorization: AlarmAuthorization
+    package var authorization: AlarmAuthorization { driver.authorization }
     /// Keyed by `OneAlarm.alarmKitID` (and the ids of items that ring as alarms).
     package private(set) var states: [UUID: AlarmLiveState] = [:]
 
@@ -62,7 +61,6 @@
 
     package func requestAuthorization() async {
       await driver.requestAuthorization()
-      authorization = driver.authorization
     }
 
     @MainActor
@@ -86,10 +84,11 @@
           }
         }
         func watchAuthorization(center: AlarmCenter) async {
-          for await _ in driver.manager.authorizationUpdates {
+          for await state in driver.manager.authorizationUpdates {
             guard !Task.isCancelled else { return }
-            center.authorization = driver.authorization
+            driver.receiveAuthorization(Ringer.authorization(state))
             await synchronize()
+            center.refreshStates()
           }
         }
       #endif
@@ -100,7 +99,6 @@
     package func watch(context: ModelContext) async {
       #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
-        authorization = driver.authorization
         refreshStates()
         let session = WatchSession(context: context, driver: driver)
         await withTaskGroup(of: Void.self) { group in
@@ -113,6 +111,10 @@
     private func refreshStates() {
       #if canImport(AlarmKit)
         guard #available(iOS 26, *) else { return }
+        guard authorization == .authorized else {
+          states = [:]
+          return
+        }
         var next: [UUID: AlarmLiveState] = [:]
         for alarm in (try? driver.manager.alarms) ?? [] {
           switch alarm.state {

@@ -84,10 +84,10 @@
           message = "Timers need iOS 26 or later."
           return nil
         }
-        if driver.manager.authorizationState == .notDetermined {
+        if driver.authorization == .notDetermined {
           await driver.requestAuthorization()
         }
-        guard driver.manager.authorizationState == .authorized else {
+        guard driver.authorization == .authorized else {
           message = "Timers need alarm access. Allow alarms for Today in Settings."
           return nil
         }
