@@ -603,7 +603,7 @@
         recordTurn("edit", text)
         guard let receipt = proposals.last, receipt.status == .added,
           let ref = receipt.itemRef,
-          let task = tasks.first(where: { Ledger.ref($0.persistentModelID) == ref }),
+          case .task(let task)? = CaptureUndo.resolve(ref, in: context),
           !task.isDone, let due = task.due, !task.ringsAsAlarm
         else {
           messages.append(
