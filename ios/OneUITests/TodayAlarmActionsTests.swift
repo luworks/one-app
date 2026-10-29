@@ -11,7 +11,7 @@ final class TodayAlarmActionsTests: XCTestCase {
     app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments(dataset) + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-uiTestingNow", "12:00",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ] + extra
     app.launch()

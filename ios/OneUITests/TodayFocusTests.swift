@@ -13,7 +13,7 @@ final class TodayFocusTests: XCTestCase {
       TestData.fixtureArguments(seed ? "today-focus.json" : "empty-relaunch.json")
       + [
         "-uiTestingNow", time, "-uiTestingPrefs",
-        "showTomorrow=0,showFreeTime=1",
+        "showFreeTime=1",
       ]
     if let store { app.launchArguments += ["-uiTestingStore", store] }
     app.launch()
@@ -165,7 +165,7 @@ final class TodayFocusTests: XCTestCase {
     func arguments(_ fixture: String, _ now: Date) -> [String] {
       TestData.fixtureArguments(fixture) + [
         "-uiTestingStore", store, "-uiTestingNow", ISO8601DateFormatter().string(from: now),
-        "-uiTestingPrefs", "showTomorrow=1,showSettle=1,showFreeTime=0",
+        "-uiTestingPrefs", "showSettle=1,showFreeTime=0",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ]
     }
@@ -230,12 +230,6 @@ final class TodayFocusTests: XCTestCase {
     act("Settle", on: "New day meeting", in: app)
     reveal(section("settled", in: app), in: app)
     XCTAssertEqual(section("settled", in: app).label, "Settled (1)")
-    let tomorrow = app.buttons["tomorrowHeader"].firstMatch
-    reveal(tomorrow, in: app)
-    tomorrow.tap()
-    reveal(
-      app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Tomorrow meeting,"))
-        .firstMatch, in: app)
     screenshot("cross-day-preserved-sections")
     XCTAssertTrue(app.buttons["Ask AI or add anything"].exists)
   }
@@ -337,7 +331,7 @@ final class TodayFocusTests: XCTestCase {
     let app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments("today-alarm-actions.json") + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-uiTestingNow", "12:00",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
       ]
     app.launch()
@@ -367,7 +361,7 @@ final class TodayFocusTests: XCTestCase {
     let app = XCUIApplication()
     app.launchArguments =
       TestData.fixtureArguments("today-alarm-actions.json") + [
-        "-uiTestingNow", "12:00", "-uiTestingPrefs", "showTomorrow=0",
+        "-uiTestingNow", "12:00",
         "-today.setting.jumpToNow", "NO", "-today.setting.healthSummary", "NO",
         "-appearance", "dark", "-UIPreferredContentSizeCategoryName",
         "UICTContentSizeCategoryAccessibilityXXXL",

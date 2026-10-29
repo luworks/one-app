@@ -545,24 +545,12 @@
         CityPicker(store: composition.world, now: session.runtime.now)
       }
       .sheet(item: $newItem) { item in
-        switch item {
-        case .task:
-          QuickReminderSheet(
-            listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
-            actions: session.actions, ledger: session.ledger, alarms: session.alarms,
-            // Due-style quick add; editing a reminder opens TaskEditor
-            activity: session.activity, presentation: presentation)
-        case .event:
-          EventEditor(
-            day: tab == .calendar ? calendarDay : session.runtime.now(), calendar: session.calendar,
-            actions: session.actions, ledger: session.ledger, alarms: session.alarms,
-            presentation: presentation)
-        case .alarm:
-          AlarmEditor(
-            alarms: session.alarms, soundPreview: session.soundPreview, runtime: session.runtime,
-            defaults: session.defaults, onCreated: composition.recordCreatedAlarm
-          ).performanceDestination("alarm.editor")
-        }
+        UnifiedCreateComposer(
+          initialKind: item,
+          day: tab == .calendar ? calendarDay : tab == .today ? todayDay : session.runtime.now(),
+          listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
+          composition: composition)
+
       }
     }
 
@@ -750,24 +738,19 @@
         ) {
           drawer.set(open: true)
         }
-        // The month on screen sits right of the pills; when it doesn't fit it gets shorter, then goes, before the
-        // pills shrink. Only scrolls when the pills alone don't fit (very large text). Otherwise there is no scroll
-        // view to swallow the drag, so a sideways swipe on this bar switches tabs (see `TabSwipe`).
-        // Only the label picks its length: the pills stay one view, so switching tabs never swaps the whole row
-        // (a swapped row left the old selected pill fading out over the new one, e.g. Reminders → Clock).
-        HStack(spacing: 12) {
+        // Reserve the current month before adapting the pills. Keep their hit areas intact.
+        HStack(spacing: 8) {
           ViewThatFits(in: .horizontal) {
             pills
             ScrollView(.horizontal, showsIndicators: false) { pills }
           }
-          .layoutPriority(1)
           Spacer(minLength: 0)
-          if let days = shownDays {
-            ViewThatFits(in: .horizontal) {
-              monthLabel(days, .full)
-              monthLabel(days, .short)
-              Color.clear.frame(width: 0, height: 0)
+          if !askVisible {
+            TimelineView(.periodic(from: presentation.now, by: 60)) { _ in
+              monthLabel
             }
+            .id(headerTimeRevision)
+            .layoutPriority(1)
           }
         }
         Spacer(minLength: 0)
@@ -779,32 +762,36 @@
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// The days whose month the top bar names: Today's day, what Calendar shows, else this month. Nil in
-    /// Calendar's Year, which names each year in its own heading, and under Chat: the label would sit beneath
-    /// Chat's Close in accessibility and take its taps there (XCTest, Voice Control).
-    private var shownDays: ClosedRange<Date>? {
-      if askVisible { return nil }
-      switch tab {
-      case .today: return todayDay...todayDay
-      case .calendar: return calendarMode == .year ? nil : calendarShown
-      case .tasks, .clock:
-        let now = session.runtime.now()
-        return now...now
-      }
-    }
+    @State private var headerTimeRevision = 0
 
-    /// Quiet, like Apple Calendar's month above its week; inert for now.
-    private func monthLabel(_ days: ClosedRange<Date>, _ length: MonthLabel.Length) -> some View {
+    /// All tabs name the device's current month, independently of the browsed day.
+    private var monthLabel: some View {
       Text(
         MonthLabel.text(
-          first: days.lowerBound, last: days.upperBound, length: length,
-          calendar: presentation.calendar, locale: presentation.locale)
+          now: presentation.now, calendar: presentation.calendar,
+          locale: presentation.locale)
       )
       .font(.footnote.weight(.semibold))
       .foregroundStyle(Color(.secondaryLabel))
       .lineLimit(1)
       .fixedSize()
+      .accessibilityLabel(
+        MonthLabel.text(
+          now: presentation.now, length: .full,
+          calendar: presentation.calendar, locale: presentation.locale)
+      )
       .accessibilityIdentifier("topBar.month")
+      .onReceive(
+        NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)
+      ) { _ in
+        headerTimeRevision += 1
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+        headerTimeRevision += 1
+      }
+      .onChange(of: scenePhase) { _, phase in
+        if phase == .active { headerTimeRevision += 1 }
+      }
     }
 
     private var pills: some View {
@@ -905,19 +892,25 @@
     }
 
     /// The word "Today", like Apple Calendar's button: a capsule as tall as +.
+    @AppStorage(TodayButtonColor.storageKey) private var todayButtonColor = TodayButtonColor.green
+      .stored
+    @Environment(\.colorScheme) private var identityColorScheme
+
     private func todayLabel(selected: Bool) -> some View {
-      Text("Today")
+      let fill = TodayButtonColor(stored: todayButtonColor).color
+      return
+        Text("Today")
         .font(.subheadline.weight(.semibold))
         .lineLimit(1)
         .fixedSize()
-        .foregroundStyle(selected ? Color.primary : Color.secondary)
+        .foregroundStyle(fill.contrastForeground(for: identityColorScheme))
         .padding(.horizontal, 14)
         .frame(
           minWidth: ButtonConfiguration.minimumHitSize,
           minHeight: ButtonConfiguration.minimumHitSize
         )
         .background(
-          selected ? ButtonConfiguration.Icon.selectedFill : ButtonConfiguration.Icon.background,
+          fill,
           in: Capsule()
         )
         .overlay { Capsule().strokeBorder(Color(.separator).opacity(0.35), lineWidth: 0.5) }
@@ -990,18 +983,22 @@
       }
     }
 
-    /// + is the same menu on every page (alarm, reminder, event; plus Add city on World Clock), so what it
-    /// offers never depends on where you are.
+    /// + opens the shared native composer; World Clock retains Add city in its context menu.
     private var plusButton: some View {
-      Menu {
-        Section(tab == .today ? "Add to Today" : "Add an item") { creationChoices }
+      Button {
+        presentNewItem(tab == .calendar ? .event : tab == .clock ? .alarm : .task)
       } label: {
         plusLabel
       }
+      .contextMenu {
+        if plusAddsCity {
+          Button("Add city", systemImage: "globe") { addingCity = true }
+        }
+      }
       .tint(.primary)
       .accessibilityIdentifier("New")
-      .accessibilityLabel(tab == .today ? "Add to Today" : "Add an item")
-      .accessibilityHint("Choose an alarm, reminder or event.")
+      .accessibilityLabel("Create")
+
     }
 
   }

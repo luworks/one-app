@@ -23,6 +23,7 @@ struct OneApp: App {
   private let composition: ShellComposition
   private let healthModel: HealthModel
   private let healthLineModel: HealthLineModel
+  private let weatherModel: WeatherModel
   #if TODAY_MOCK
     private let mock: MockAppComposition
   #endif
@@ -62,9 +63,11 @@ struct OneApp: App {
     #endif
     let session = composition.session
     #if TODAY_MOCK
+      weatherModel = WeatherModel(sample: WeatherTestData.snapshot(now: session.runtime.now()))
       let selection = HealthTestSelection.make(
         defaults: session.defaults, arguments: composition.arguments)
     #else
+      weatherModel = WeatherModel()
       let selection = HealthSelectionStore(defaults: session.defaults)
     #endif
     let gate = HealthAccessGate()
@@ -117,11 +120,11 @@ struct OneApp: App {
     WindowGroup {
       #if TODAY_MOCK
         HomeView(composition: composition, diagnostics: diagnostics, prepareData: prepareMockData)
-          .environment(healthModel).environment(healthLineModel)
+          .environment(healthModel).environment(healthLineModel).environment(weatherModel)
           .appearanceRoot(defaults: composition.session.defaults, windows: appWindows)
       #else
         HomeView(composition: composition, diagnostics: diagnostics)
-          .environment(healthModel).environment(healthLineModel)
+          .environment(healthModel).environment(healthLineModel).environment(weatherModel)
           .appearanceRoot(defaults: composition.session.defaults, windows: appWindows)
       #endif
     }

@@ -28,14 +28,19 @@ final class CalendarTabTests: XCTestCase {
   }
 
   /// The top bar's month label for a page that shows one month ("October 2026").
-  private func monthName(_ date: Date) -> String { date.formatted(.dateTime.month(.wide).year()) }
+  private func monthNames(_ date: Date) -> [String] {
+    [
+      date.formatted(.dateTime.month(.wide).year()),
+      date.formatted(.dateTime.month(.abbreviated).year()),
+    ]
+  }
 
   /// The month label is in the top bar on every tab; wait until it names `month`.
   @discardableResult
   private func waitForMonthLabel(_ month: Date, timeout: TimeInterval = 5) -> Bool {
     let label = element("topBar.month")
     let named = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "label == %@", monthName(month)), object: label)
+      predicate: NSPredicate(format: "label IN %@", monthNames(month)), object: label)
     return XCTWaiter().wait(for: [named], timeout: timeout) == .completed
   }
 
@@ -101,7 +106,7 @@ final class CalendarTabTests: XCTestCase {
     showMonth()
     let target = cal.date(byAdding: .day, value: 5, to: .now)!
     if !cal.isDate(target, equalTo: .now, toGranularity: .month) {
-      element("calendar.monthPager").swipeLeft()
+      element("calendar.monthPager").swipeUp()
     }
     let cell = element(dayID(target))
     XCTAssertTrue(cell.waitForExistence(timeout: 5))
@@ -128,27 +133,32 @@ final class CalendarTabTests: XCTestCase {
     XCTAssertTrue(first.waitForExistence(timeout: 5), "today's events are listed under the grid")
   }
 
-  /// Swipe the grid sideways to change month (no Today button appears).
+  /// Swipe the grid vertically to change month (no Today button appears).
   func testMonthPaging() {
     showMonth()
-    XCTAssertTrue(waitForMonthLabel(.now))
     let title = element("topBar.month")
+    XCTAssertTrue(waitForMonthLabel(.now), "Unexpected month: \(title.debugDescription)")
     let next = cal.date(byAdding: .month, value: 1, to: .now)!
-    element("calendar.monthPager").swipeLeft()
+    element("calendar.monthPager").swipeUp()
     let expectation = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "label == %@", monthName(next)), object: title)
+      predicate: NSPredicate(format: "label IN %@", monthNames(next)), object: title)
     XCTAssertEqual(
       XCTWaiter().wait(for: [expectation], timeout: 5), .completed, "paged to next month")
-    element("calendar.monthPager").swipeRight()
+    element("calendar.monthPager").swipeDown()
     let back = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "label == %@", monthName(.now)), object: title)
+      predicate: NSPredicate(format: "label IN %@", monthNames(.now)), object: title)
     XCTAssertEqual(XCTWaiter().wait(for: [back], timeout: 5), .completed, "and back")
-    element("calendar.monthPager").swipeRight()
+    element("calendar.monthPager").swipeDown()
     let prev = XCTNSPredicateExpectation(
       predicate: NSPredicate(
-        format: "label == %@",
-        monthName(cal.date(byAdding: .month, value: -1, to: .now)!)), object: title)
+        format: "label IN %@",
+        monthNames(cal.date(byAdding: .month, value: -1, to: .now)!)), object: title)
     XCTAssertEqual(XCTWaiter().wait(for: [prev], timeout: 5), .completed, "previous month")
+    element("calendar.monthPager").swipeLeft()
+    XCTAssertTrue(waitForMonthLabel(cal.date(byAdding: .month, value: -1, to: .now)!))
+    XCTAssertTrue(modeButton("Month").isSelected, "a horizontal grid swipe keeps Calendar open")
+    app.descendants(matching: .any).matching(identifier: "calendar.dayList").firstMatch.swipeUp()
+    XCTAssertTrue(waitForMonthLabel(cal.date(byAdding: .month, value: -1, to: .now)!))
     XCTAssertFalse(app.buttons["calendar.today"].exists, "paging does not add a Today button")
   }
 

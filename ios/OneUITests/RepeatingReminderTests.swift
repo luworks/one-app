@@ -23,12 +23,8 @@ final class RepeatingReminderTests: XCTestCase {
 
   private var circle: XCUIElement { app.buttons["Complete \(title)"] }
 
-  /// How many rows of the reminder sit above the Tomorrow header, i.e. in today's own timeline.
   private func rowsOnToday() -> Int {
-    let header = app.buttons["tomorrowHeader"]
-    let circles = app.buttons.matching(NSPredicate(format: "label == %@", "Complete \(title)"))
-      .allElementsBoundByIndex
-    return circles.filter { !header.exists || $0.frame.minY < header.frame.minY }.count
+    app.buttons.matching(NSPredicate(format: "label == %@", "Complete \(title)")).count
   }
 
   func testCompletingARepeatingReminderMovesItToItsNextDay() {
@@ -40,9 +36,6 @@ final class RepeatingReminderTests: XCTestCase {
       app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Completed “\(title)”"))
         .firstMatch
         .waitForExistence(timeout: 3), "the toast says it is done")
-    // Only the Tomorrow preview below today's timeline may still list it.
-    let header = app.buttons["tomorrowHeader"]
-    XCTAssertTrue(header.waitForExistence(timeout: 3), "tomorrow now has it")
     XCTAssertEqual(rowsOnToday(), 0, "it leaves today's timeline")
 
     // Its next occurrence is tomorrow's own day.
@@ -81,7 +74,6 @@ final class RepeatingReminderTests: XCTestCase {
     XCTAssertEqual(rowsOnToday(), 1)
 
     circle.tap()
-    XCTAssertTrue(app.buttons["tomorrowHeader"].waitForExistence(timeout: 3))
     XCTAssertEqual(rowsOnToday(), 0, "completed, it left today")
     let undo = app.buttons["Undo"]
     XCTAssertTrue(undo.waitForExistence(timeout: 3))
@@ -91,7 +83,7 @@ final class RepeatingReminderTests: XCTestCase {
     XCTAssertEqual(rowsOnToday(), 1, "Undo brings the reminder back")
     XCTAssertEqual(
       app.buttons.matching(NSPredicate(format: "label == %@", "Complete \(title)")).count, 1,
-      "and the next occurrence Undo took away is not left on tomorrow")
+      "Undo restores exactly one row on today")
     XCTAssertEqual(
       circle.frame.minY, before, accuracy: 1,
       "at the same place on the timeline, so at the same time")

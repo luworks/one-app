@@ -9,10 +9,11 @@
   import FeatureHealth
   import SwiftUI
   import SwiftData
+  import UIKit
 
   /// One day's view: active events, tasks and alarms stay directly visible in a single timeline.
   /// On today a red "N overdue" line sits above the timeline (tap to show the rows, Tidy to reschedule them all);
-  /// collapsed Settled and Tomorrow disclosures follow the timeline.
+  /// a collapsed Settled disclosure follows the timeline.
   /// The Calendar tab adds the week strip to pick a day.
   package struct DayAgenda: View {
     private let actions: PlannerActions
@@ -54,11 +55,11 @@
         wrappedValue: true, SettingsKey.jumpToNow, store: presentation.defaults)
       _showsHealth = AppStorage(
         wrappedValue: true, SettingsKey.healthSummary, store: presentation.defaults)
+      _showsWeather = AppStorage(
+        wrappedValue: Preferences.weatherSummary, Preferences.weatherSummaryKey,
+        store: presentation.defaults)
       _showsSettle = AppStorage(
         wrappedValue: Preferences.showSettle, Preferences.showSettleKey,
-        store: presentation.defaults)
-      _showsTomorrow = AppStorage(
-        wrappedValue: Preferences.showTomorrow, Preferences.showTomorrowKey,
         store: presentation.defaults)
       _showsFreeTime = AppStorage(
         wrappedValue: Preferences.showFreeTime, Preferences.showFreeTimeKey,
@@ -78,17 +79,17 @@
     @AppStorage(SettingsKey.showAlarms) private var showsAlarms = true
     @AppStorage(SettingsKey.jumpToNow) private var jumpsToNow = true
     @AppStorage(SettingsKey.healthSummary) private var showsHealth = true
+    @AppStorage(Preferences.weatherSummaryKey) private var showsWeather = Preferences.weatherSummary
     @AppStorage(Preferences.showSettleKey) private var showsSettle = Preferences.showSettle
-    @AppStorage(Preferences.showTomorrowKey) private var showsTomorrow = Preferences.showTomorrow
     @AppStorage(Preferences.showFreeTimeKey) private var showsFreeTime = Preferences.showFreeTime
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(HealthLineModel.self) private var health
+    @Environment(WeatherModel.self) private var weather
     private var cal: Calendar {
       Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
     }
     @State private var showsAllOverdue = false
-    @State private var expandsTomorrow = false
     /// Refreshed every minute for the Now line and time-dependent timeline content.
     @State private var now: Date
     /// A repeating system event whose Delete is waiting for "this event or the series?".
@@ -114,7 +115,6 @@
         }
         .onChange(of: day) { _, _ in
           showsAllOverdue = false
-          expandsTomorrow = false
           scrollToNow(proxy)
         }
       }
@@ -128,10 +128,20 @@
         guard showsHealth, isTodayTab, scenePhase == .active else { return }
         await health.load()
       }
+      .task(id: [showsWeather, isTodayTab, scenePhase == .active]) {
+        guard !showsWeekStrip else { return }
+        weather.update(enabled: showsWeather && isTodayTab && scenePhase == .active)
+      }
+      .onDisappear {
+        if !showsWeekStrip { weather.update(enabled: false) }
+      }
       .task {
         while !Task.isCancelled {
           try? await Task.sleep(for: .seconds(60))
           refreshClock()
+          if !Task.isCancelled, !showsWeekStrip, showsWeather, isTodayTab, scenePhase == .active {
+            weather.update(enabled: true)
+          }
         }
       }
     }
@@ -164,6 +174,36 @@
         if isTodayTab { TodayTimerRows(controller: timers, open: openTimer) }
         if isTodayTab, showsHealth, let line = health.line {
           TodayHealthLine(line: line)
+        }
+        if isTodayTab, showsWeather, weather.isAvailable {
+          if let snapshot = weather.snapshot {
+            TodayWeatherLine(snapshot: snapshot)
+          } else if weather.state == .loading {
+            Text("Loading weather…")
+              .font(.footnote).foregroundStyle(.secondary)
+              .accessibilityIdentifier("weather.loading")
+              .listRowSeparator(.hidden)
+          } else if weather.state == .locationDenied || weather.state == .unavailable {
+            Button {
+              if weather.state == .locationDenied,
+                let url = URL(string: UIApplication.openSettingsURLString)
+              {
+                UIApplication.shared.open(url)
+              } else {
+                weather.update(enabled: true, force: true)
+              }
+            } label: {
+              Label(
+                weather.state == .locationDenied
+                  ? "Allow location for weather" : "Weather unavailable · Try again",
+                systemImage: "cloud"
+              )
+              .font(.footnote).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("weather.retry")
+            .listRowSeparator(.hidden)
+          }
         }
         if !showsWeekStrip {
           if let error = actions.focus.errorMessage {
@@ -211,9 +251,6 @@
           Section { timelineContent(items) }
         }
         if !showsWeekStrip, showsSettle { settledSection }
-        if !showsWeekStrip, showsTomorrow, cal.isDate(day, inSameDayAs: now) {
-          tomorrowSection()
-        }
       }
       .listStyle(.plain)
       // Interactive rows own their 44pt targets. Today captions and gaps use their natural text height.
@@ -269,51 +306,6 @@
             ? nil : { _ = actions.delete(alarm, context: context, toast: toast) })
       case .gap(let free): FreeRow(free: free)
       case .nowMarker(let date): NowRow(date: date).id("now-line")
-      }
-    }
-
-    // MARK: Tomorrow
-
-    /// Tomorrow stays collapsed until opened; expanding always reveals the complete next day.
-    @ViewBuilder
-    private func tomorrowSection() -> some View {
-      let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: day)) ?? day
-      let next = items(on: tomorrow, now: now)
-      let entries = next.entries.filter {
-        switch $0 {
-        case .timeline(.gap), .timeline(.nowMarker): false
-        default: true
-        }
-      }
-      focusHeader(
-        "Tomorrow", count: entries.count, id: "tomorrow", expanded: $expandsTomorrow,
-        detail: tomorrow.plannerFormatted(
-          .dateTime.weekday(.abbreviated).day().month(.abbreviated), runtime: presentation.runtime),
-        identifier: "tomorrowHeader")
-      if expandsTomorrow {
-        Section {
-          if entries.isEmpty {
-            Text("Nothing planned").foregroundStyle(.secondary)
-              .listRowSeparator(.hidden)
-          }
-          ForEach(entries) { entry in
-            switch entry {
-            case .allDay(let e):
-              EventRow(
-                event: e, pendingDelete: $pendingDelete, open: openEvent, calendar: calendar,
-                travel: travel, attention: attention(target(e, start: tomorrow), on: tomorrow))
-            case .externalAllDay(let e):
-              ExternalEventRow(
-                event: e, pendingDelete: $pendingDelete, calendar: calendar, travel: travel,
-                attention: attention(target(e), on: tomorrow))
-            case .anytime(let t):
-              TaskRow(
-                task: t, compact: true, agendaDay: tomorrow, onDelete: { requestDelete(t) },
-                open: openTask, attention: attention(target(t), on: tomorrow))
-            case .timeline(let item): timelineRow(item, on: tomorrow)
-            }
-          }
-        }
       }
     }
 
@@ -465,8 +457,7 @@
     }
 
     private func focusHeader(
-      _ title: String, count: Int, id: String, expanded: Binding<Bool>,
-      detail: String? = nil, identifier: String? = nil
+      _ title: String, count: Int, id: String, expanded: Binding<Bool>
     )
       -> some View
     {
@@ -475,7 +466,6 @@
       } label: {
         HStack {
           Text("\(title) (\(count))").font(AgendaRowStyle.disclosure.weight(.medium))
-          if let detail { Text(detail).font(.caption).lineLimit(1) }
           Rectangle().fill(.quaternary).frame(height: 1)
           Image(systemName: expanded.wrappedValue ? "chevron.down" : "chevron.right")
             .font(.caption.weight(.semibold))
@@ -487,12 +477,10 @@
       .buttonStyle(.plain)
       .listRowSeparator(.hidden)
       .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-      .accessibilityIdentifier(identifier ?? "focus." + id)
-      .accessibilityLabel("\(title) (\(count))" + (detail.map { ", " + $0 } ?? ""))
+      .accessibilityIdentifier("focus." + id)
+      .accessibilityLabel("\(title) (\(count))")
       .accessibilityValue(expanded.wrappedValue ? "Expanded" : "Collapsed")
-      .accessibilityHint(
-        id == "settled"
-          ? "Changes visibility for this day in Today only" : "Shows or hides tomorrow's items")
+      .accessibilityHint("Changes visibility for this day in Today only")
     }
 
     private var overdueRows: some View {
@@ -785,28 +773,6 @@
     var timeline: [TimelineItem]
     /// Due this day with no time, and no free gap left to suggest one.
     var anytime: [OneTask]
-
-    /// Everything as one list (all day, the timeline, then anytime), for the short Tomorrow view.
-    var entries: [DayEntry] {
-      allDay.map(DayEntry.allDay) + externalAllDay.map(DayEntry.externalAllDay)
-        + timeline.map(DayEntry.timeline) + anytime.map(DayEntry.anytime)
-    }
-  }
-
-  enum DayEntry: Identifiable {
-    case allDay(OneEvent)
-    case externalAllDay(ExternalEvent)
-    case anytime(OneTask)
-    case timeline(TimelineItem)
-
-    var id: AnyHashable {
-      switch self {
-      case .allDay(let e): return ["allDay", AnyHashable(ObjectIdentifier(e))]
-      case .externalAllDay(let e): return ["allDay", AnyHashable(e.id)]
-      case .anytime(let t): return ["anytime", AnyHashable(ObjectIdentifier(t))]
-      case .timeline(let item): return ["timeline", item.id]
-      }
-    }
   }
 
   enum TimelineItem: Identifiable {

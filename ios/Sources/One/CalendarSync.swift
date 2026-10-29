@@ -62,11 +62,13 @@
     package let title: String
     package let sourceTitle: String
     package let color: Color
+    package var allowsContentModifications: Bool
     package var isBirthday = false
     package var isHoliday = false
     package init(
       id: String, title: String, sourceTitle: String, color: Color,
-      isBirthday: Bool = false, isHoliday: Bool = false
+      isBirthday: Bool = false, isHoliday: Bool = false,
+      allowsContentModifications: Bool = true
     ) {
       self.id = id
       self.title = title
@@ -74,6 +76,7 @@
       self.color = color
       self.isBirthday = isBirthday
       self.isHoliday = isHoliday
+      self.allowsContentModifications = allowsContentModifications
     }
 
   }
@@ -419,7 +422,8 @@
         color: Color(cgColor: c.cgColor),
         isBirthday: c.type == .birthday,
         isHoliday: YearEventMarks.isHolidayCalendar(
-          isSubscription: c.type == .subscription, title: c.title))
+          isSubscription: c.type == .subscription, title: c.title),
+        allowsContentModifications: c.allowsContentModifications)
     }
 
     // MARK: Events
@@ -673,6 +677,36 @@
           ?? store.event(withIdentifier: identifier)
       else { return nil }
       return (e, store)
+    }
+
+    package func create(_ event: OneEvent, calendarID: String? = nil) throws
+      -> CalendarCreationReceipt
+    {
+      guard event.externalID == nil else { throw CalendarCreationError.existingEvent }
+      // Enabled but denied/disposed must not be reported as a successful local-only creation.
+      guard !enabled || isOn else { throw CalendarCreationError.unavailable }
+      return try CalendarCreation.commit(
+        calendarID: calendarID, connected: isOn,
+        resolve: { id in
+          if let id { return self.store.calendar(withIdentifier: id) }
+          return self.store.defaultCalendarForNewEvents
+        },
+        writable: { $0.allowsContentModifications },
+        save: { calendar in
+          let ek = EKEvent(eventStore: self.store)
+          ek.calendar = calendar
+          ek.title = event.title
+          ek.notes = event.note
+          ek.startDate = event.start
+          ek.endDate = event.start.addingTimeInterval(event.duration)
+          ek.isAllDay = event.isAllDay
+          if let rule = event.repeats {
+            ek.recurrenceRules = [RemindersSync.recurrence(for: rule)]
+          }
+          try self.store.save(ek, span: .thisEvent, commit: true)
+          self.version += 1
+          return ek.eventIdentifier
+        })
     }
 
     /// Saves a copy of `event` to the default calendar and returns its identifier.

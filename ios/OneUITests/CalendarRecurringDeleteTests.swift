@@ -57,21 +57,9 @@ final class CalendarRecurringDeleteTests: XCTestCase {
       .firstMatch
   }
 
-  /// Whether today's occurrence is gone from Today. Today ends with a short look at tomorrow, where the next
-  /// occurrence of a repeating event is listed too: only a row above the Tomorrow header is today's.
+  /// Whether today's occurrence is gone from Today.
   private func isTodaysRowGone(_ app: XCUIApplication, timeout: TimeInterval = 5) -> Bool {
-    let deadline = Date().addingTimeInterval(timeout)
-    repeat {
-      let header = app.buttons["tomorrowHeader"]
-      let limit = header.exists ? header.frame.minY : .greatestFiniteMagnitude
-      let rows = app.descendants(matching: .any).matching(
-        NSPredicate(format: "label BEGINSWITH %@", title))
-      if !rows.allElementsBoundByIndex.contains(where: { $0.exists && $0.frame.minY < limit }) {
-        return true
-      }
-      usleep(250_000)
-    } while Date() < deadline
-    return false
+    row(app).waitForNonExistence(timeout: timeout)
   }
 
   /// The Today list is lazy and opens on the now line, and other tests leave events at the same hour: look further
@@ -99,7 +87,7 @@ final class CalendarRecurringDeleteTests: XCTestCase {
     XCTAssertTrue(pager.waitForExistence(timeout: 5))
     // Yesterday or tomorrow can be in the next or previous month.
     if !cal.isDate(day, equalTo: .now, toGranularity: .month) {
-      if day > .now { pager.swipeLeft() } else { pager.swipeRight() }
+      if day > .now { pager.swipeUp() } else { pager.swipeDown() }
     }
     let cell = app.descendants(matching: .any)[calendarDayID(day)]
     XCTAssertTrue(cell.waitForExistence(timeout: 5), "the day is in the grid")

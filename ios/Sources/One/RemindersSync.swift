@@ -323,11 +323,12 @@
 
     /// Explicit editor writes use EventKit's commit acknowledgement, never an old reconcile pass.
     /// The same fence rejects any in-flight fetch that predates this accepted write.
-    /// Commits only a new, clear one-off reminder. Synchronous MainActor work cannot race
+    /// Commits an explicitly confirmed reminder. The AI caller separately restricts recurrence.
+    /// Synchronous MainActor work cannot race
     /// a permission-generation change; the fence invalidates any older asynchronous fetch.
     package func commitCreation(_ task: OneTask, context: ModelContext) throws {
       guard !disposed else { throw CompletionError.disconnected }
-      guard task.repeatRule == nil, !task.ringsAsAlarm else { throw CompletionError.changedOutside }
+      guard !task.ringsAsAlarm else { throw CompletionError.changedOutside }
       // An intentionally disconnected app remains local-only, as in the existing add flow.
       if !enabled {
         guard task.externalID == nil else { throw CompletionError.disconnected }

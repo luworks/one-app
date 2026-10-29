@@ -71,28 +71,31 @@
     }
   }
 
-  /// A row's title with its detail caption. Both sit on one line when they fit; otherwise the detail drops below.
-  /// Long titles stop at `titleLines` so one item can't fill the screen (the full title is in Show Details).
+  /// Title and detail share at most two lines, including at accessibility text sizes.
   package struct TitleDetail<Detail: View>: View {
-    package init(title: Text, titleLines: Int? = 2, @ViewBuilder detail: () -> Detail) {
+    package init(title: Text, hasDetail: Bool = true, @ViewBuilder detail: () -> Detail) {
       self.title = title
-      self.titleLines = titleLines
+      self.hasDetail = hasDetail
       self.detail = detail()
     }
     package let title: Text
-    package var titleLines: Int? = 2
+    package let hasDetail: Bool
     @ViewBuilder package var detail: Detail
 
-    package var body: some View {
-      ViewThatFits(in: .horizontal) {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-          title.lineLimit(1)
-          detail
+    @ViewBuilder package var body: some View {
+      if hasDetail {
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            title.lineLimit(1)
+            detail.lineLimit(1)
+          }
+          VStack(alignment: .leading, spacing: 1) {
+            title.lineLimit(1)
+            detail.lineLimit(1)
+          }
         }
-        VStack(alignment: .leading, spacing: 1) {
-          title.lineLimit(titleLines)
-          detail
-        }
+      } else {
+        title.lineLimit(2)
       }
     }
   }
@@ -130,6 +133,7 @@
     @Environment(PlannerPresentation.self) private var presentation
     package var body: some View {
       HStack(spacing: 8) {
+        NowDot()
         Text(
           "Now "
             + date.formatted(
@@ -139,11 +143,53 @@
         )
         .font(.caption.weight(.semibold).monospacedDigit())
         .foregroundStyle(.red)
+        .fixedSize(horizontal: true, vertical: false)
         Rectangle().fill(Color.red).frame(height: 1)
       }
       .listRowSeparator(.hidden)
-      .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
+      .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
   }
 
+  /// Only this decoration animates; the agenda keeps its existing minute clock.
+  private struct NowDot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var visible = false
+    private var animates: Bool { visible && scenePhase == .active && !reduceMotion }
+    var body: some View {
+      ZStack {
+        if animates {
+          BreathingHalo()
+        } else {
+          Circle().fill(Color.red.opacity(0.12)).frame(width: 24, height: 24)
+        }
+        Circle().fill(.red).frame(width: 12, height: 12)
+      }
+      .frame(width: 32, height: 32)
+      .accessibilityHidden(true)
+      .onScrollVisibilityChange(threshold: 0.1) { visible = $0 }
+      .onDisappear { visible = false }
+    }
+  }
+
+  private struct BreathingHalo: View {
+    @State private var expanded = false
+    var body: some View {
+      Circle()
+        .fill(
+          RadialGradient(
+            colors: [.red.opacity(0.4), .red.opacity(0)],
+            center: .center, startRadius: 3, endRadius: 16)
+        )
+        .frame(width: 32, height: 32)
+        .scaleEffect(expanded ? 1 : 0.65)
+        .opacity(expanded ? 0.6 : 1)
+        .onAppear {
+          withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+            expanded = true
+          }
+        }
+    }
+  }
 #endif

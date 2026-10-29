@@ -32,13 +32,12 @@ final class PreferencesTests: XCTestCase {
     XCTAssertFalse(Preferences.weekNumbers)
     XCTAssertEqual(
       Preferences.calendarStart, .lastUsed, "Calendar reopened in the view it was left in")
-    XCTAssertTrue(Preferences.showTomorrow)
-    XCTAssertEqual(Preferences.eveningHour, 18, "Tomorrow opened at 18:00")
     XCTAssertTrue(Preferences.showFreeTime)
     XCTAssertEqual(Preferences.newReminderList, "", "Auto: nothing was filed by a chosen list")
     XCTAssertEqual(Preferences.newAlarmSnooze, 9, "Clock's nine minutes")
     XCTAssertEqual(Preferences.newAlarmSound, "", "the system alarm sound")
     XCTAssertTrue(Preferences.askSuggestions)
+    XCTAssertFalse(Preferences.weatherSummary)
   }
 
   func testEmptyDefaultsReadAsTheDefaults() {
@@ -140,31 +139,6 @@ final class PreferencesTests: XCTestCase {
       Preferences.CalendarStart.allCases.map(\.title), ["Last used", "2 Day", "Month", "Year"])
   }
 
-  // MARK: Evening hour
-
-  func testTomorrowOpensAtTheChosenHour() {
-    XCTAssertFalse(
-      TomorrowPreview.opensByItself(
-        now: date(16, 18), todayStarts: [date(16, 21)], eveningHour: 19, calendar: cal))
-    XCTAssertTrue(
-      TomorrowPreview.opensByItself(
-        now: date(16, 19), todayStarts: [date(16, 21)], eveningHour: 19, calendar: cal))
-    XCTAssertTrue(
-      TomorrowPreview.opensByItself(
-        now: date(16, 17), todayStarts: [date(16, 21)], eveningHour: 17, calendar: cal))
-  }
-
-  func testOffKeepsOnlyTheNothingLeftRule() {
-    XCTAssertFalse(
-      TomorrowPreview.opensByItself(
-        now: date(16, 22), todayStarts: [date(16, 23)], eveningHour: nil, calendar: cal),
-      "late, but something is still ahead today")
-    XCTAssertTrue(
-      TomorrowPreview.opensByItself(
-        now: date(16, 22), todayStarts: [date(16, 9)], eveningHour: nil, calendar: cal),
-      "nothing left today")
-  }
-
   // MARK: Default list
 
   func testDefaultListIsUsedOnlyWhileItExists() {
@@ -199,11 +173,10 @@ final class PreferencesTests: XCTestCase {
     d.set("monday", forKey: Preferences.firstWeekdayKey)
     LaunchTestConfiguration.applyPreferenceOverrides(
       arguments: [
-        "-uiTesting", "-uiTestingPrefs", "weekNumbers=1,eveningHour=20,firstWeekday=sunday,bogus=1",
+        "-uiTesting", "-uiTestingPrefs", "weekNumbers=1,firstWeekday=sunday,bogus=1",
       ], defaults: d)
     XCTAssertNil(d.object(forKey: Preferences.dimPastDaysKey), "reset")
     XCTAssertEqual(d.bool(forKey: Preferences.weekNumbersKey), true)
-    XCTAssertEqual(d.integer(forKey: Preferences.eveningHourKey), 20)
     XCTAssertEqual(d.string(forKey: Preferences.firstWeekdayKey), "sunday")
     XCTAssertNil(d.object(forKey: "today.setting.bogus"), "unknown keys are ignored")
   }
