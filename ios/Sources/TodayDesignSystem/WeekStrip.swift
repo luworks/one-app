@@ -36,24 +36,14 @@
       GeometryReader { geometry in
         let width = geometry.size.width
         ZStack {
-          if let outgoing {
-            week(outgoing, selectedDay: outgoing)
-              .offset(x: offset)
-              .accessibilityHidden(true)
-              .allowsHitTesting(false)
-            week(selected, selectedDay: selected)
-              .offset(x: offset - direction * width)
-              .allowsHitTesting(false)
-          } else {
-            week(selected, selectedDay: selected)
-              .offset(x: offset)
-            if !reduceMotion, offset != 0,
-              let neighbor = cal.date(byAdding: .day, value: offset < 0 ? 7 : -7, to: selected)
-            {
-              week(neighbor, selectedDay: nil)
-                .offset(x: offset + (offset < 0 ? width : -width))
-                .accessibilityHidden(true)
-                .allowsHitTesting(false)
+          ForEach(-1...1, id: \.self) { index in
+            if let day = cal.date(byAdding: .day, value: index * 7, to: outgoing ?? selected) {
+              let active = index == (outgoing == nil ? 0 : Int(-direction))
+              week(day, selectedDay: selected)
+                .frame(width: width)
+                .offset(x: CGFloat(index) * width + offset)
+                .accessibilityHidden(!active)
+                .allowsHitTesting(active && outgoing == nil)
             }
           }
         }

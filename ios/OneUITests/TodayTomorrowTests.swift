@@ -70,6 +70,9 @@ final class TodayTomorrowTests: XCTestCase {
     let app = launch(at: "09:41")
     let today = Calendar.current.startOfDay(for: Date())
     let next = Calendar.current.date(byAdding: .day, value: 7, to: today)!
+    let start = app.weekStripDay(today).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -20, dy: 0)))
+    XCTAssertTrue(app.weekStripDay(today).waitForSelected(timeout: 3), "a short drag returns to the same day")
     app.weekStripDay(today).swipeLeft()
     XCTAssertTrue(app.weekStripDay(next).waitForSelected(timeout: 3))
     app.weekStripDay(next).swipeRight()
