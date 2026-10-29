@@ -12,7 +12,7 @@ EVENTS = {
     'caller_cancelled', 'deadline_error', 'fallback_nil', 'result_available',
     'unavailable', 'model_title_selected', 'title_fallback_selected',
     'chat_fallback_selected', 'capture_route_selected', 'model_reply_selected',
-    'proposals_unusable', 'model_proposals_selected',
+    'proposals_unusable', 'proposals_incomplete', 'model_proposals_selected',
     'turn_started', 'turn_routed', 'rule_direct_grant_selected',
     'context_resolution_selected', 'context_reply_selected', 'unavailable_chat_fallback',
 }

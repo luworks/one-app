@@ -61,6 +61,14 @@ class ProductionTraceTests(unittest.TestCase):
         self.assertEqual(counts['chat_fallback_selected'], 1)
         self.assertNotIn('model_reply_selected', counts)
 
+    def test_incomplete_batch_return_is_not_a_selected_usable_proposal(self):
+        rows = trace('api_started', 'api_returned', 'proposals_incomplete')
+        rows = rows.replace('"stage": "chat"', '"stage": "proposals"')
+        counts = collect(rows)['stages']['proposals']
+        self.assertEqual(counts['api_returned'], 1)
+        self.assertEqual(counts['proposals_incomplete'], 1)
+        self.assertNotIn('model_proposals_selected', counts)
+
     def test_unavailability_does_not_become_generation(self):
         counts = collect(trace('unavailable'))['stages']['chat']
         self.assertNotIn('api_started', counts)
