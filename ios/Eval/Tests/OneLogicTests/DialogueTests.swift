@@ -19,21 +19,32 @@ final class DialogueTests: XCTestCase {
   func testPendingAlarmClarificationDateAndTime() {
     let afternoon = cal.date(bySettingHour: 15, minute: 42, second: 0, of: now)!
     let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: afternoon))!
-    let pending = CaptureConversation.parse("Set an alarm to wake me up.", now: afternoon, calendar: cal)
+    let pending = CaptureConversation.parse(
+      "Set an alarm to wake me up.", now: afternoon, calendar: cal)
     for answer in ["Tomorrow at 7am.", "tomorrow at 7am", "明天早上7点"] {
       XCTAssertTrue(Dialogue.isOnlyWhen(answer, now: afternoon, calendar: cal), answer)
-      guard case .updated(let updated) = Dialogue.refine(pending, with: answer, now: afternoon, calendar: cal) else {
-        XCTFail("Rejected time answer: \(answer)"); continue
+      guard
+        case .updated(let updated) = Dialogue.refine(
+          pending, with: answer, now: afternoon, calendar: cal)
+      else {
+        XCTFail("Rejected time answer: \(answer)")
+        continue
       }
       XCTAssertTrue(updated.ringsAsAlarm)
       XCTAssertEqual(updated.day, tomorrow)
       XCTAssertEqual(updated.hour, 7)
-      guard case .updated(let repeated) = Dialogue.refine(updated, with: "7am", now: afternoon, calendar: cal) else {
-        XCTFail("Rejected short answer"); continue
+      guard
+        case .updated(let repeated) = Dialogue.refine(
+          updated, with: "7am", now: afternoon, calendar: cal)
+      else {
+        XCTFail("Rejected short answer")
+        continue
       }
       XCTAssertEqual(repeated.day, tomorrow)
     }
-    guard case .updated(let bare) = Dialogue.refine(pending, with: "7am", now: afternoon, calendar: cal) else {
+    guard
+      case .updated(let bare) = Dialogue.refine(pending, with: "7am", now: afternoon, calendar: cal)
+    else {
       return XCTFail("Rejected bare time")
     }
     XCTAssertEqual(bare.day, tomorrow)
