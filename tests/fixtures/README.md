@@ -303,3 +303,8 @@ Today button color tests keep small opaque RGB inputs inline in
 custom picker, without personal calendar data.
 
 AI calendar creation retry fixtures are inline in `ios/TodayIntegrationTests/PlannerSessionTests.swift` (`aiCalendarAddFailureRetryRecoveryAndExactUndo`): synthetic Coffee event, chosen writable calendar, injected remote/local save failures and deletion outcomes. They contain no owner calendar data.
+
+Calendar 2 Day DST coordinate cases are small inline ISO-8601 inputs in
+`ios/Eval/Tests/OneLogicTests/CalendarDayAxisTests.swift`: Los Angeles rollback,
+spring forward, ordinary days, repeated-hour spans and cross-midnight clipping.
+They contain no personal planner data.
