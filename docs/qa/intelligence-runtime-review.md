@@ -193,3 +193,42 @@ Compact unified logging also renders JSON backslashes as octal escapes; the
 collector now restores that transport before JSON decoding while retaining raw
 logs. New emissions avoid unnecessary slash escaping. These are measurement
 repairs, not changes to model prompts, permissions or planner behavior.
+
+## Closed cached-metadata Live observations
+
+The subsequent6-case/9-turn conversation window reconciled9 actual chat API
+returns with9 model-reply selections. API-return median2139.9 ms and p90
+2210.1 ms (n=9) exclude process-level metadata preparation; exact visible-response
+latency and observer overhead remain UNKNOWN. All3 recall replies named the
+right topic, but the Chinese follow-up repeated the preceding reply verbatim.
+That meets only the coarse topic criterion; a separate posthoc direct-answer
+diagnostic is2 direct and1 partial. Ranking separately returned3 times and
+timed out/cancelled once across4 actual calls, with no matched contention study.
+
+A later7-case/7-turn product window included the original Chinese one-off
+request and6 extension cases. The one-off was created by the traced rule grant,
+with0 generation calls, correct local date/14:00, Never selected, Added/Undo/Open,
+the existing editor reached through Open, and exact Undo to Undone/Add again
+with the item removed from the Today timeline. Its first-person title remains
+wordy; no matched Live title-improvement rate was measured.
+
+The extension had7 actual foreground API returns:5 chat,1 kind and1 title.
+Clock acceptance failed3 of3 assessed cases, with a fourth case UNKNOWN until
+the city list can be inspected. The separate recurring-timer case produced a
+daily reminder preview and failed its type/ambiguity criterion; no Add was
+clicked. The reminder/event explanation was relevant English. These results
+show that API-return success does not establish correct intent or execution.
+The reviewable next design is in `intelligence-product-boundaries.md`; no new
+Clock authority or sentence-specific prompt patch was applied.
+
+Entering Clock then triggered its first AlarmKit permission prompt. The test
+selected Don't Allow. Subsequent AX reads and a coordinate tap timed out;
+a verified owned-app process sample retained1571/1571 primary-thread samples
+in `AlarmCenter.requestAuthorization` -> `Ringer.authorization` -> AlarmKit's
+synchronous XPC wait. This identifies an observed blocking location, not the
+ultimate framework cause. Normal app close and a later reopen completed; reopen
+alone does not prove interaction recovered. Root assigned an independent fix
+owner, separate from PR216. This thread changed no authorization source and
+released the shared runner; its model schedule remains at a closed boundary.
+The denied permission, simulator and raw evidence are preserved. Actual alarm
+ringing, timer/city store inspection and phone behavior remain UNKNOWN.

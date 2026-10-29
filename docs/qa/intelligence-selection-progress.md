@@ -21,6 +21,8 @@ The latest consolidated phone build is outside this thread's validation scope.
 | Qwen3.5-2B Q4_K_M 120-second development repetition3 | 27/27 EOG | 26/27 strict JSON | 3/27 | Three complete runs; whole-case fields2/24 each |
 | Qwen3.5-4B Q4_K_M 120-second development repetition3 | 27/27 EOG | 26/27 strict JSON | 6/27 | Three complete runs; whole-case fields5/24 each |
 | All holdout configurations | Not yet completed | UNKNOWN | UNKNOWN | Exploratory sample conversations are excluded from matched scores |
+| Qwen3.5-2B Q4_K_M holdout repetition1 | 21/21 EOG | 21/21 strict JSON | 1/21 | Closed first batch only; two repetitions and other backends remain |
+| Pure rules holdout, three exports | 63/63 observations | Inapplicable | 45/63 | Identical15/21 unique field outcomes; no model calls or product writes |
 
 The semantic column is a **partial schema-based field rubric**, not an overall
 conversational quality, safety or product pass rate. It requires a parseable
@@ -195,3 +197,38 @@ before grading; the stop file halts at the next released boundary. The sample
 was incrementally rebuilt only to expose the existing native holdout button,
 with the previous development executable retained and hashed. Holdout results
 are not yet complete and have not informed any model prompt or sampler change.
+
+The first Qwen2B holdout batch closed with21/21 EOG generations, no timeout or
+fallback,21/21 strict JSON and1/21 specified semantic-field passes. Median30533.2
+ms and p90 35050.5 ms (n=21) are CPU simulator timings;10/21 finished within30
+seconds. This single repetition is not a final holdout or model-choice result.
+The three rules holdout exports each executed the selected unit method1/1,
+missing0, and retained all21 observations. Semantic rule output is identical
+apart from elapsed time:15/21 unique specified-field matches,45/63 repeated.
+No pre-change holdout was measured; a holdout before/after rate is UNKNOWN.
+Conversational intent matches are not generated conversation, and all these
+pure-rule exports explicitly have no model attempt, save, receipt or Undo.
+
+The next Live window completed the original Chinese one-off with a full
+Added/Open/editor/Cancel/Undo/Undone flow on the exact synthetic item. It was
+a traced rule grant with0 model calls; local Thursday October29 at14:00 and
+Never recurrence were observed. This is1 selected flow, not a general save or
+matched before/after rate. Its first-person title remains wordy.
+
+All remaining6 extension cases were observed. Clock cases failed3 of3 assessed,
+with1 of4 UNKNOWN pending actual city-list inspection. The recurring-timer
+ambiguity case became a daily reminder preview and failed its type criterion;
+no Add was clicked. The explanation case answered in English. Foreground
+calls returned7/7 (5 chat,1 kind,1 title), demonstrating why return success
+cannot stand for product success. Raw snapshots/video/calls and manual verdicts
+are indexed under `live-product-round3-20261029`.
+
+Clock inspection then exposed an AlarmKit-denial hang. The test denied the new
+permission rather than expanding access; AX observations and a coordinate tap
+timed out. An owned-app process sample retained the blocking stack in
+`AlarmCenter.requestAuthorization` -> `Ringer.authorization` -> synchronous
+AlarmKit XPC. Root assigned a separate fix owner. This thread made no auth-source
+change, normally closed/reopened only its app once, verified locks released,
+and stopped further simulator actions while that owner uses the shared runner.
+The frozen model schedule is at its released first-batch boundary, with11 of12
+batches still pending. All simulator/auth/data/evidence state is preserved.

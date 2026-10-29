@@ -51,3 +51,42 @@ explicit product decision covering undoability, recurrence scope, system
 permissions, ambiguous targets and failure receipts. This evaluation does not
 enable it. Undo is a recovery mechanism, not permission to bypass the existing
 confirmation gate.
+
+## Clock findings and concrete next design
+
+The first frozen Live extension observed timer requests being answered as chat,
+unqualified promises to set a timer/add Shanghai, and a recurring timer becoming
+a daily reminder preview. Foreground traces reconcile the former replies to
+chat generation and the latter to kind/title generation. No Clock executor was
+provided by those model calls. Tokyo's claimed existing-city state remains
+UNKNOWN because the subsequent Clock inspection was interrupted by a separate
+AlarmKit-denial hang. Do not infer that city's actual presence from model text.
+The raw UI, call records and manual verdicts are retained under
+`tests/results/intelligence-eval-20261028/live-product-round3-20261029` in the
+primary checkout. These are first-repetition development observations, not a
+model comparison or a general Clock pass rate.
+
+The shared production instruction already says not to promise an action without
+a preview. Repeating that sentence is insufficient protection against these
+observed replies. The next coherent product change should introduce explicit
+timer/world-clock intent variants and validated Clock proposals, then execute
+only through the existing app services and confirmation boundaries:
+
+* A concrete timer request resolves a duration within the existing Timer limit,
+  prepares one timer proposal and offers Start. No further time/kind questions
+  are needed when the duration is supplied. A model reply cannot start a timer.
+* A city request resolves a concrete city record against the existing city
+  database. An already-present answer must read the actual WorldClockStore.
+  An absent city gets an Add proposal; an ambiguous city gets one selection.
+  Undo must remove only the newly added city while its state is unchanged.
+* A recurring timer retains the unsupported combination and asks one focused
+  timer-versus-daily-alarm question. It never becomes a reminder by substitution.
+* Denied AlarmKit access remains denied. A timer/alarm proposal must report the
+  required access honestly and cannot claim a successful schedule. Do not
+  request broader access as an evaluation workaround.
+
+This design reduces redundant dialogue without granting new autonomous writes.
+Making Send itself start timers, add cities or schedule alarms would be a
+separate authority proposal requiring an explicit decision about exact Undo,
+system permissions, duplicate submissions, background execution and failure
+receipts. None of those new grants is enabled by this evaluation or this document.

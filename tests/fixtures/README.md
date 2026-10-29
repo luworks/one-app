@@ -292,8 +292,16 @@ defines12 additional manual Live-product development cases (15 turns) for
 natural zh/en/mixed conversation, memory follow-ups, timers and world clocks.
 It is authored before observing its outputs and is not a blind holdout. Use the
 actual app clock, existing confirmation boundaries and isolated synthetic data.
-No automated runner consumes this extension yet; model-only fixture hashes and
-expectations remain unchanged.
+`tests/qa/intelligence/run_live_product.py` observes selected cases through the
+owned simulator launcher and records ungraded UI/call evidence. It never clicks
+Add/Apply. Optional cleanup only undoes one uniquely traced direct creation in
+that fresh chat. Model-only fixture hashes and expectations remain unchanged.
+
+[`intelligence-live-edit-seed.json`](intelligence-live-edit-seed.json) supplies
+two explicit one-off requests for the synthetic15:00/16:00 dentist preconditions
+in the original Live protocol. These are setup, excluded from scored cases.
+Retain their receipts until edit/ambiguity tests finish; never substitute data
+from an account, another simulator or a phone.
 
 [`intelligence-model-selection-models.json`](intelligence-model-selection-models.json)
 pins the evaluated Qwen conversion artifacts and runtime revision. The evidence

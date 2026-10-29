@@ -1,0 +1,18 @@
+{
+  "scope": "Synthetic Live simulator setup only; not scored model or product cases.",
+  "setup": "Only the worktree-owned simulator, with Calendar and Reminders sync off. Actual local today is used. Keep these two reminders unchanged for edit/ambiguity cases; clean up only their exact receipts after the related batch.",
+  "cases": [
+    {
+      "id": "seed-dentist-1500",
+      "category": "setup",
+      "language": "en",
+      "turns": [{"input": "Remind me about [QA] dentist today at 3pm", "expect": {"action": "added_reminder", "title_contains": "[QA] dentist", "time": "15:00", "repeat": "once"}}]
+    },
+    {
+      "id": "seed-dentist-1600",
+      "category": "setup",
+      "language": "en",
+      "turns": [{"input": "Remind me about [QA] dentist today at 4pm", "expect": {"action": "added_reminder", "title_contains": "[QA] dentist", "time": "16:00", "repeat": "once"}}]
+    }
+  ]
+}
