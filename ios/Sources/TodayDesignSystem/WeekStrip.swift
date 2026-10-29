@@ -58,7 +58,9 @@
               let x = value.translation.width
               let y = value.translation.height
               if let weeks = swipe.update(x: x, y: y) {
-                guard let next = cal.date(byAdding: .day, value: weeks * 7, to: selected) else { return }
+                guard let next = cal.date(byAdding: .day, value: weeks * 7, to: selected) else {
+                  return
+                }
                 feedback += 1
                 if reduceMotion {
                   selected = next

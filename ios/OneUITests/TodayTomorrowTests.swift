@@ -53,7 +53,10 @@ final class TodayTomorrowTests: XCTestCase {
     let c = cal.dateComponents([.year, .month, .day], from: tomorrow)
     let id = String(format: "weekStrip.%04d-%02d-%02d", c.year!, c.month!, c.day!)
     let next = app.buttons[id]
-    if !next.exists { app.weekStripDay(.now).swipeLeft() }
+    if !next.exists {
+      let start = app.weekStripDay(.now).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -100, dy: 0)))
+    }
     XCTAssertTrue(next.waitForExistence(timeout: 3))
     next.tap()
     XCTAssertTrue(next.waitForSelected(timeout: 3))
@@ -72,10 +75,12 @@ final class TodayTomorrowTests: XCTestCase {
     let next = Calendar.current.date(byAdding: .day, value: 7, to: today)!
     let start = app.weekStripDay(today).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -20, dy: 0)))
-    XCTAssertTrue(app.weekStripDay(today).waitForSelected(timeout: 3), "a short drag returns to the same day")
+    XCTAssertTrue(
+      app.weekStripDay(today).waitForSelected(timeout: 3), "a short drag returns to the same day")
     start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: -100, dy: 0)))
     XCTAssertTrue(app.weekStripDay(next).waitForSelected(timeout: 3))
-    let nextStart = app.weekStripDay(next).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    let nextStart = app.weekStripDay(next).coordinate(
+      withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
     nextStart.press(forDuration: 0.05, thenDragTo: nextStart.withOffset(CGVector(dx: 100, dy: 0)))
     XCTAssertTrue(app.weekStripDay(today).waitForSelected(timeout: 3))
   }
