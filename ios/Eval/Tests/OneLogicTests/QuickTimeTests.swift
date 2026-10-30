@@ -50,10 +50,16 @@ final class QuickTimeTests: XCTestCase {
 
   func testRepeatLabelsFollowSelectedDate() {
     let locale = Locale(identifier: "en_US")
-    XCTAssertEqual(QuickTime.repeatLabel(.daily, date: now, calendar: cal, locale: locale), "Daily 22:17")
-    XCTAssertEqual(QuickTime.repeatLabel(.weekly, date: now, calendar: cal, locale: locale), "Fridays 22:17")
-    XCTAssertEqual(QuickTime.repeatLabel(.monthly, date: now, calendar: cal, locale: locale), "16th each month at 22:17")
-    XCTAssertEqual(QuickTime.repeatLabel(.yearly, date: now, calendar: cal, locale: locale), "Every Oct 16 at 22:17")
+    XCTAssertEqual(
+      QuickTime.repeatLabel(.daily, date: now, calendar: cal, locale: locale), "Daily 22:17")
+    XCTAssertEqual(
+      QuickTime.repeatLabel(.weekly, date: now, calendar: cal, locale: locale), "Fridays 22:17")
+    XCTAssertEqual(
+      QuickTime.repeatLabel(.monthly, date: now, calendar: cal, locale: locale),
+      "16th each month at 22:17")
+    XCTAssertEqual(
+      QuickTime.repeatLabel(.yearly, date: now, calendar: cal, locale: locale),
+      "Every Oct 16 at 22:17")
   }
 
   func testNudges() {

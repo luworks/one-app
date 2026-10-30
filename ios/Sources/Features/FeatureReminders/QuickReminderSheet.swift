@@ -68,9 +68,9 @@
             card
             Spacer(minLength: 60)
           }
-            .frame(minHeight: 440)
-            .padding(.horizontal, 10)
-            .padding(.bottom, 16)
+          .frame(minHeight: 440)
+          .padding(.horizontal, 10)
+          .padding(.bottom, 16)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
@@ -138,9 +138,12 @@
           Picker("Repeat", selection: $repeatRule) {
             Text("Repeat Off").tag(RepeatRule?.none)
             ForEach(RepeatRule.allCases, id: \.self) { rule in
-              Text(QuickTime.repeatLabel(rule, date: when ?? presentation.now,
-                                         calendar: presentation.calendar))
-                .tag(RepeatRule?.some(rule))
+              Text(
+                QuickTime.repeatLabel(
+                  rule, date: when ?? presentation.now,
+                  calendar: presentation.calendar)
+              )
+              .tag(RepeatRule?.some(rule))
             }
           }
         } label: {
@@ -277,7 +280,12 @@
         )
         .padding(.horizontal, 16)
         .frame(minHeight: 52)
-        .background(when == nil ? Color(.tertiarySystemFill) : (colorScheme == .dark ? Color(red: 0.58, green: 0.16, blue: 0.16) : Color(red: 0.53, green: 0.09, blue: 0.09)))
+        .background(
+          when == nil
+            ? Color(.tertiarySystemFill)
+            : (colorScheme == .dark
+              ? Color(red: 0.58, green: 0.16, blue: 0.16)
+              : Color(red: 0.53, green: 0.09, blue: 0.09)))
       }
       .buttonStyle(.plain)
       .accessibilityIdentifier("quick.when")
@@ -319,7 +327,9 @@
     }
 
     private var grid: some View {
-      QuickTimeGrid(date: when, now: presentation.now, calendar: presentation.calendar, selectedDayPresets: true, set: set)
+      QuickTimeGrid(
+        date: when, now: presentation.now, calendar: presentation.calendar,
+        selectedDayPresets: true, set: set)
     }
 
     private func set(_ date: Date) {
@@ -372,8 +382,11 @@
           cell(String(format: "%02d:%02d", preset.hour, preset.minute)) {
             set(
               selectedDayPresets
-                ? QuickTime.presetOnSelectedDay(hour: preset.hour, minute: preset.minute, on: date ?? now, calendar: calendar)
-                : QuickTime.preset(hour: preset.hour, minute: preset.minute, on: date ?? now, now: now, calendar: calendar))
+                ? QuickTime.presetOnSelectedDay(
+                  hour: preset.hour, minute: preset.minute, on: date ?? now, calendar: calendar)
+                : QuickTime.preset(
+                  hour: preset.hour, minute: preset.minute, on: date ?? now, now: now,
+                  calendar: calendar))
           }
         }
         ForEach(QuickTime.nudges + QuickTime.nudges.map { -$0 }, id: \.self) { minutes in

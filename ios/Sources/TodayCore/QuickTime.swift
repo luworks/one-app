@@ -30,11 +30,15 @@ public enum QuickTime {
   }
 
   /// Due-style preset: retain the selected calendar day even when the time is in the past.
-  public static func presetOnSelectedDay(hour: Int, minute: Int, on date: Date, calendar: Calendar = .current) -> Date {
+  public static func presetOnSelectedDay(
+    hour: Int, minute: Int, on date: Date, calendar: Calendar = .current
+  ) -> Date {
     calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
   }
 
-  public static func repeatLabel(_ rule: RepeatRule, date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+  public static func repeatLabel(
+    _ rule: RepeatRule, date: Date, calendar: Calendar = .current, locale: Locale = .current
+  ) -> String {
     let formatter = DateFormatter()
     formatter.calendar = calendar
     formatter.timeZone = calendar.timeZone
