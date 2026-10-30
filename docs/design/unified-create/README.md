@@ -3,7 +3,7 @@
 Status: retired 2026-10-29. The unified composer (rounds 7–9, PRs #214, #231–#233) was removed at the
 user's request; creation reuses Apple's own designs instead: + opens New alarm / New reminder / New event;
 a new event uses Apple's own event editor (EventKitUI) when Calendar access is on, a new reminder opens
-the Apple Reminders-style details form (`TaskEditor`), and a new alarm opens the Clock-style Add Alarm
+the quick add (`QuickReminderSheet`, chosen again by the user on 2026-10-30), and a new alarm opens the Clock-style Add Alarm
 sheet without custom quick picks. iOS offers no embeddable system editor for reminders or alarms. This page
 remains as design history. These images are generated mockups, not
 screenshots of implemented UI or evidence of device behavior. This checkpoint
