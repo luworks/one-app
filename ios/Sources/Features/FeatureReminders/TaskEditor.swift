@@ -48,10 +48,19 @@
     @State private var repeatDayDraft: RepeatDayDraft?
     @FocusState private var titleFocused: Bool
 
+    /// Settings > Reminders > "New reminders go to" applies to a new reminder opened from +.
+    private let usesPreferredList: Bool
+
+    /// A new reminder from + opens straight in the full form, like Apple Reminders' New Reminder sheet.
     package init(
-      task: OneTask? = nil, actions: PlannerActions, ledger: Ledger, reminders: any ReminderService,
+      task: OneTask? = nil, listName: String = "", usesPreferredList: Bool = false,
+      startsInDetails: Bool = false,
+      actions: PlannerActions, ledger: Ledger, reminders: any ReminderService,
       alarms: any AlarmService, presentation: PlannerPresentation
     ) {
+      self.usesPreferredList = usesPreferredList
+      _advanced = State(initialValue: startsInDetails)
+      _detent = State(initialValue: startsInDetails ? .large : .height(366))
       self.actions = actions
       self.ledger = ledger
       self.reminders = reminders
@@ -65,7 +74,7 @@
       _due = State(
         initialValue: task?.due ?? presentation.calendar.startOfDay(for: presentation.now))
       _reminder = State(initialValue: task == nil ? 0 : task?.reminderOffsetMinutes)
-      _listName = State(initialValue: task?.listName ?? "")
+      _listName = State(initialValue: task?.listName ?? listName)
       _tagsText = State(initialValue: task?.tags.joined(separator: ", ") ?? "")
       _flagged = State(initialValue: task?.flagged ?? false)
       _repeatRule = State(initialValue: task?.repeats)
@@ -104,7 +113,16 @@
           }
         }
         .toolbar(advanced ? .visible : .hidden, for: .navigationBar)
-        .onAppear { if task == nil { titleFocused = true } }
+        .onAppear {
+          guard task == nil else { return }
+          titleFocused = true
+          if usesPreferredList, listName.isEmpty,
+            let chosen = Preferences.newReminderList(
+              existing: lists.map(\.name), presentation.defaults)
+          {
+            listName = chosen
+          }
+        }
         .alert(
           "Couldn’t Update Reminder",
           isPresented: Binding(

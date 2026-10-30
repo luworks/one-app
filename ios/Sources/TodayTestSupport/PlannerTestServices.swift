@@ -39,16 +39,6 @@
       self.defaults = defaults
       self.runtime = runtime
       calendar = TestCalendarService(runtime: runtime)
-      if arguments.contains("-uiTestingCalendars") {
-        // Two writable local calendars, Work the default, for calendar choice journeys.
-        calendar.enabled = true
-        calendar.hasAccess = true
-        calendar.availableCalendars = [
-          SystemCalendar(id: "work", title: "Work", sourceTitle: "Local", color: .blue),
-          SystemCalendar(id: "personal", title: "Personal", sourceTitle: "Local", color: .green),
-        ]
-        calendar.defaultCalendarID = "work"
-      }
       reminders = TestReminderService(runtime: runtime, arguments: arguments)
       alarms = TestAlarmService()
       alarms.failsSchedule = arguments.contains("-uiTestingAlarmScheduleError")

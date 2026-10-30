@@ -80,14 +80,14 @@ final class TabMemoryTests: XCTestCase {
     XCTAssertTrue(plus.waitForExistence(timeout: 5))
     XCTAssertTrue(today.isSelected)
     for (choice, editor) in [
-      ("New alarm", "Add Alarm"), ("New reminder", "quick.title"), ("New event", "Title"),
+      ("New alarm", "Add Alarm"), ("New reminder", "task.title"), ("New event", "Title"),
     ] {
       plus.tap()
       for name in ["New alarm", "New reminder", "New event"] {
         XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 3))
       }
       XCTAssertFalse(
-        app.textFields["quick.title"].exists, "opening the menu does not open an editor")
+        app.textFields["task.title"].exists, "opening the menu does not open an editor")
       if choice == "New alarm" { capture("navigation-after-add-menu") }
       app.buttons[choice].tap()
       XCTAssertTrue(app.descendants(matching: .any)[editor].firstMatch.waitForExistence(timeout: 5))
@@ -137,16 +137,25 @@ final class TabMemoryTests: XCTestCase {
     app.buttons["Reminders"].tap()
     plus.tap()
     XCTAssertTrue(
-      app.buttons["List, Work"].waitForExistence(timeout: 5), "unspecified list uses Settings")
+      app.descendants(matching: .any).matching(
+        NSPredicate(
+          format: "identifier == 'task.list' AND (label CONTAINS %@ OR value CONTAINS %@)", "Work",
+          "Work")
+      ).firstMatch.waitForExistence(timeout: 5), "unspecified list uses Settings")
     app.buttons["Cancel"].tap()
     let home = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Home, '")).firstMatch
     XCTAssertTrue(home.waitForExistence(timeout: 5))
     home.tap()
     XCTAssertEqual(plus.label, "New reminder")
     plus.tap()
-    let title = app.descendants(matching: .any)["quick.title"].firstMatch
+    let title = app.descendants(matching: .any)["task.title"].firstMatch
     XCTAssertTrue(title.waitForExistence(timeout: 5))
-    XCTAssertTrue(app.buttons["List, Home"].exists, "global + uses the open list")
+    XCTAssertTrue(
+      app.descendants(matching: .any).matching(
+        NSPredicate(
+          format: "identifier == 'task.list' AND (label CONTAINS %@ OR value CONTAINS %@)", "Home",
+          "Home")
+      ).firstMatch.exists, "global + uses the open list")
     title.tap()
     title.typeText("Cancelled navigation reminder")
     app.buttons["Cancel"].tap()
@@ -158,12 +167,16 @@ final class TabMemoryTests: XCTestCase {
     defaultList.tap()
     plus.tap()
     XCTAssertTrue(
-      app.buttons["List, Reminders"].waitForExistence(timeout: 5),
+      app.descendants(matching: .any).matching(
+        NSPredicate(
+          format: "identifier == 'task.list' AND (label CONTAINS %@ OR value CONTAINS %@)",
+          "Reminders", "Reminders")
+      ).firstMatch.waitForExistence(timeout: 5),
       "explicit default list must not fall back to the Work preference")
-    app.descendants(matching: .any)["quick.title"].firstMatch.typeText(
+    app.descendants(matching: .any)["task.title"].firstMatch.typeText(
       "Explicit default list reminder")
-    app.buttons["quick.save"].tap()
-    XCTAssertTrue(app.buttons["quick.save"].waitForNonExistence(timeout: 5))
+    app.buttons["task.save"].tap()
+    XCTAssertTrue(app.buttons["task.save"].waitForNonExistence(timeout: 5))
     XCTAssertTrue(
       app.staticTexts["Explicit default list reminder"].waitForExistence(timeout: 5),
       "Save writes into the explicit default list instead of the Work preference")

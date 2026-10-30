@@ -127,8 +127,6 @@
     @State private var errorMessage: String?
     @State private var snoozeMinutes: Int
     @FocusState private var labelFocused: Bool
-    /// The user's alarms, for the quick picks (their usual times and names).
-    @Query private var allAlarms: [OneAlarm]
     @Environment(\.colorScheme) private var colorScheme
 
     static let snoozeChoices = AlarmPlan.snoozeChoices
@@ -171,9 +169,7 @@
               .padding(.horizontal, 19)
               .padding(.top, 14)
               .accessibilityIdentifier("alarm.time")
-            if alarm == nil { quickTimes.padding(.top, 6) }
             labelCard.padding(.top, 20)
-            if alarm == nil { quickLabels.padding(.top, 8) }
             repeatCard.padding(.top, 20)
             optionsCard.padding(.top, 33)
             if let alarm { deleteButton(alarm).padding(.top, 33) }
@@ -277,57 +273,6 @@
         .padding(.horizontal, 18)
         .padding(.vertical, 13)
       }
-    }
-
-    // MARK: Quick picks (Add Alarm only)
-
-    /// Your usual times and a nap "in 20 / 30 min": a tap sets the wheel; ✓ still saves.
-    private var quickTimes: some View {
-      let history = allAlarms.map { AlarmQuickPicks.Time(hour: $0.hour, minute: $0.minute) }
-      return ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 8) {
-          ForEach(AlarmQuickPicks.times(history: history), id: \.self) { pick in
-            let parts = AlarmPlan.timeParts(
-              hour: pick.hour, minute: pick.minute, locale: runtime.locale)
-            QuickChip(title: [parts.time, parts.suffix].compactMap { $0 }.joined(separator: " ")) {
-              setTime(pick)
-            }
-            .accessibilityIdentifier(
-              "alarm.quick.\(String(format: "%02d%02d", pick.hour, pick.minute))")
-          }
-          ForEach(AlarmQuickPicks.napMinutes, id: \.self) { minutes in
-            QuickChip(title: "In \(minutes) min", tint: Color(.systemOrange)) {
-              setTime(
-                AlarmQuickPicks.time(
-                  inMinutes: minutes, from: runtime.now(), calendar: runtime.calendar))
-            }
-            .accessibilityIdentifier("alarm.quick.in\(minutes)")
-          }
-        }
-        .padding(.horizontal, 19)
-      }
-    }
-
-    /// Names you have given alarms before; a tap fills the Label.
-    @ViewBuilder private var quickLabels: some View {
-      let picks = AlarmQuickPicks.labels(history: allAlarms.map(\.label))
-      if !picks.isEmpty {
-        ScrollView(.horizontal, showsIndicators: false) {
-          HStack(spacing: 8) {
-            ForEach(Array(picks.enumerated()), id: \.offset) { index, name in
-              QuickChip(title: name, isOn: label == name) { label = name }
-                .accessibilityIdentifier("alarm.quick.label.\(index)")
-            }
-          }
-          .padding(.horizontal, 19)
-        }
-      }
-    }
-
-    private func setTime(_ pick: AlarmQuickPicks.Time) {
-      time =
-        runtime.calendar.date(
-          bySettingHour: pick.hour, minute: pick.minute, second: 0, of: runtime.now()) ?? time
     }
 
     /// The name gets its own card right under the time: the whole card is a text field, so it reads as a place to type.
