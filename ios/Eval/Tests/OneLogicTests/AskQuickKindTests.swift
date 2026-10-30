@@ -14,11 +14,11 @@ final class AskQuickKindTests: XCTestCase {
   }
 
   private func parse(_ kind: AskQuickKind, _ rest: String) -> Capture {
-    CaptureConversation.parse(kind.prefix + rest, now: now, calendar: calendar)
+    CaptureConversation.parse(kind.skill + rest, now: now, calendar: calendar)
   }
 
   func testReminderPrefixMakesAReminder() {
-    let text = AskQuickKind.reminder.prefix + "buy milk at 5pm"
+    let text = AskQuickKind.reminder.skill + "buy milk at 5pm"
     XCTAssertEqual(ChatRouting.intent(text), .capture)
     let c = parse(.reminder, "buy milk at 5pm")
     XCTAssertEqual(c.kind, .task)
@@ -34,7 +34,7 @@ final class AskQuickKindTests: XCTestCase {
   }
 
   func testEventPrefixMakesAnEventAndLeavesTheTitleClean() {
-    let text = AskQuickKind.event.prefix + "Review tomorrow from 2pm to 3pm"
+    let text = AskQuickKind.event.skill + "Review tomorrow from 2pm to 3pm"
     XCTAssertEqual(ChatRouting.intent(text), .capture)
     XCTAssertNil(OneOffReminderRequest.capture(text, now: now, calendar: calendar))
     let c = parse(.event, "Review tomorrow from 2pm to 3pm")
@@ -46,7 +46,7 @@ final class AskQuickKindTests: XCTestCase {
   }
 
   func testAlarmPrefixMakesAnAlarm() {
-    let text = AskQuickKind.alarm.prefix + "7am"
+    let text = AskQuickKind.alarm.skill + "7am"
     XCTAssertEqual(ChatRouting.intent(text), .capture)
     XCTAssertTrue(ChatRouting.requestsAlarm(text))
     XCTAssertNil(OneOffReminderRequest.capture(text, now: now, calendar: calendar))
@@ -55,9 +55,17 @@ final class AskQuickKindTests: XCTestCase {
     XCTAssertEqual(c.hour, 7)
   }
 
-  func testPrefixesEndInASpace() {
+  func testSkillsEndInASpace() {
     for kind in AskQuickKind.allCases {
-      XCTAssertTrue(kind.prefix.hasSuffix(" "), kind.rawValue)
+      XCTAssertTrue(kind.skill.hasSuffix(" "), kind.rawValue)
     }
+  }
+
+  func testRequestAddsTheSkillOnceAndKeepsTypedText() {
+    XCTAssertEqual(AskQuickKind.reminder.request("buy milk at 5pm"), "Remind me to buy milk at 5pm")
+    XCTAssertEqual(
+      AskQuickKind.reminder.request("  Remind me to call Mom "), "Remind me to call Mom")
+    XCTAssertEqual(AskQuickKind.alarm.request("7am"), "Set an alarm for 7am")
+    XCTAssertEqual(AskQuickKind.event.placeholder, "Add an event…")
   }
 }

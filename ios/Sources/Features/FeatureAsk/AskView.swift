@@ -51,6 +51,8 @@
     @State private var cardShownAt: Date?
     @State private var messages: [ChatMessage]
     @State private var draft = ""
+    /// The Reminder / Event / Alarm button the user selected for the next message (`AskQuickKind`).
+    @State private var quickKind: AskQuickKind?
     @State private var followsTail = true
     @State private var scrollPhase: ScrollPhase = .idle
 
@@ -498,7 +500,7 @@
             openEvent: { onOpenDay($0.start) })
         }
         // Gated like the composer: the hidden, pre-built page must not expose duplicate buttons.
-        if isPresented, isEmpty, voice.state != .listening, subject == nil {
+        if isPresented, isEmpty || quickKind != nil, voice.state != .listening, subject == nil {
           quickKinds
         }
         HStack(alignment: .bottom, spacing: 8) {
@@ -513,7 +515,7 @@
             .frame(maxWidth: .infinity)
             .overlay(alignment: .topLeading) {
               if draft.isEmpty {
-                Text("Ask AI or add anything")
+                Text(quickKind?.placeholder ?? "Ask AI or add anything")
                   .foregroundStyle(.secondary)
                   .allowsHitTesting(false)
                   .accessibilityHidden(true)
@@ -598,21 +600,30 @@
       .accessibilityIdentifier("ask-subject")
     }
 
-    /// Reminder / Event / Alarm: start the draft with words that tell the AI which kind to create (`AskQuickKind`).
+    /// Reminder / Event / Alarm: a tap selects (highlights) the kind for the next message and leaves the draft alone;
+    /// tapping it again deselects. The kind's skill is added when the message is sent (`AskQuickKind`).
     private var quickKinds: some View {
       HStack(spacing: 8) {
         ForEach(AskQuickKind.allCases, id: \.self) { kind in
+          let selected = quickKind == kind
           Button {
-            draft = kind.prefix
+            quickKind = selected ? nil : kind
             focused = true
           } label: {
             Label(kind.label, systemImage: kind.symbol)
               .font(.subheadline.weight(.medium))
+              .foregroundStyle(selected ? Color.accentColor : Color.primary)
               .padding(.horizontal, 12)
               .padding(.vertical, 7)
-              .background(Color(.secondarySystemBackground), in: Capsule())
+              .background(
+                selected ? Color.accentColor.opacity(0.18) : Color(.secondarySystemBackground),
+                in: Capsule()
+              )
+              .overlay(
+                Capsule().strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
           }
           .buttonStyle(.plain)
+          .accessibilityAddTraits(selected ? .isSelected : [])
           .accessibilityIdentifier("ask-kind-\(kind.rawValue)")
         }
         Spacer(minLength: 0)
@@ -629,8 +640,11 @@
     }
 
     private func send(_ raw: String) {
-      let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !text.isEmpty else { return }
+      let typed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !typed.isEmpty else { return }
+      // The selected kind's skill is routed and parsed with the message; the chat shows what was typed.
+      let text = quickKind?.request(typed) ?? typed
+      quickKind = nil
       followsTail = true
       let token = AIResponseTrace.enabled ? UUID() : generationToken
       if AIResponseTrace.enabled {
@@ -652,7 +666,7 @@
       let history = turnContext.prompt
       if AIResponseTrace.enabled { AIResponseTrace.shared.stage("context_complete", token: token) }
       let sentAt = now()
-      messages.append(ChatMessage(role: .user, text: text, timestamp: sentAt))
+      messages.append(ChatMessage(role: .user, text: typed, timestamp: sentAt))
       if AIResponseTrace.enabled {
         sentMessageID = messages.last?.id
         responseBaseline = responseSignature
