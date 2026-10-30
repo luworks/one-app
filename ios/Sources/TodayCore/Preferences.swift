@@ -8,7 +8,6 @@ import Foundation
 /// The older choices (overdue, alarms, scroll to now, travel time, Health summary, chat archive) keep their keys in
 /// `SettingsKey`; Appearance has its own in `Appearance`.
 public enum Preferences {
-  public static let createWeekStartKey = "today.create.weekStart"
   // MARK: Keys
 
   public static let dimPastDaysKey = "today.setting.dimPastDays"

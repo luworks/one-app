@@ -250,7 +250,7 @@ final class PagePerformanceTests: XCTestCase {
       app.buttons["Close search"].tap()
       app.buttons["Close sidebar"].tap()
       app.buttons["New"].tap()
-      tap(app.buttons["New reminder"], route: "reminder.quick", ready: element("quick.title"))
+      tap(app.buttons["New reminder"], route: "reminder.editor", ready: element("task.title"))
       // Cancel preserves the Add/Apply boundary and creates no reminder or user data.
       app.buttons["Cancel"].firstMatch.tap()
       app.buttons["Reminders"].firstMatch.tap()

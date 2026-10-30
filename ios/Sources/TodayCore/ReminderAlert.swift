@@ -1,22 +1,5 @@
 import Foundation
 
-/// Display order never changes the stored Calendar weekday identity (Sunday = 1).
-package enum CreateWeekdays {
-  package static func order(starting day: Int) -> [Int] {
-    (0..<7).map { ((day - 1 + $0) % 7) + 1 }
-  }
-
-  package static func days(for rule: RepeatRule?, date: Date, calendar: Calendar) -> Set<Int> {
-    switch rule {
-    case .daily: Set(1...7)
-    case .weekdays: [2, 3, 4, 5, 6]
-    case .weeklyOn(let days): Set(days)
-    case .weekly: [calendar.component(.weekday, from: date)]
-    default: []
-    }
-  }
-}
-
 /// Optional per-reminder delivery settings. A missing value preserves legacy notifications.
 public struct ReminderAlert: Codable, Equatable {
   public var sound: String

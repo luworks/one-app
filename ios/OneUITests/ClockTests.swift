@@ -81,7 +81,7 @@ final class ClockTests: XCTestCase {
     XCTAssertTrue(app.buttons["New reminder"].waitForExistence(timeout: 3))
     app.buttons["New reminder"].tap()
     XCTAssertTrue(
-      app.descendants(matching: .any)["quick.title"].firstMatch.waitForExistence(timeout: 5))
+      app.descendants(matching: .any)["task.title"].firstMatch.waitForExistence(timeout: 5))
     app.buttons["Cancel"].tap()
     XCTAssertTrue(app.staticTexts["timer.title"].waitForExistence(timeout: 3))
     XCTAssertFalse(

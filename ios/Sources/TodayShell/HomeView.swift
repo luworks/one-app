@@ -545,12 +545,23 @@
         CityPicker(store: composition.world, now: session.runtime.now)
       }
       .sheet(item: $newItem) { item in
-        UnifiedCreateComposer(
-          initialKind: item,
-          day: tab == .calendar ? calendarDay : tab == .today ? todayDay : session.runtime.now(),
-          listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
-          composition: composition)
-
+        switch item {
+        case .task:
+          TaskEditor(
+            listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
+            startsInDetails: true, actions: session.actions, ledger: session.ledger,
+            reminders: session.reminders, alarms: session.alarms, presentation: presentation)
+        case .event:
+          EventEditor(
+            day: tab == .calendar ? calendarDay : session.runtime.now(), calendar: session.calendar,
+            actions: session.actions, ledger: session.ledger, alarms: session.alarms,
+            presentation: presentation)
+        case .alarm:
+          AlarmEditor(
+            alarms: session.alarms, soundPreview: session.soundPreview, runtime: session.runtime,
+            defaults: session.defaults, onCreated: composition.recordCreatedAlarm
+          ).performanceDestination("alarm.editor")
+        }
       }
     }
 
@@ -935,7 +946,7 @@
     private func presentNewItem(_ item: NewItem) {
       let route: String
       switch item {
-      case .task: route = "reminder.quick"
+      case .task: route = "reminder.editor"
       case .event: route = "event.editor"
       case .alarm: route = "alarm.editor"
       }
@@ -983,22 +994,18 @@
       }
     }
 
-    /// + opens the shared native composer; World Clock retains Add city in its context menu.
+    /// + is the same menu on every page (alarm, reminder, event; plus Add city on World Clock), so what it
+    /// offers never depends on where you are.
     private var plusButton: some View {
-      Button {
-        presentNewItem(tab == .calendar ? .event : tab == .clock ? .alarm : .task)
+      Menu {
+        Section(tab == .today ? "Add to Today" : "Add an item") { creationChoices }
       } label: {
         plusLabel
       }
-      .contextMenu {
-        if plusAddsCity {
-          Button("Add city", systemImage: "globe") { addingCity = true }
-        }
-      }
       .tint(.primary)
       .accessibilityIdentifier("New")
-      .accessibilityLabel("Create")
-
+      .accessibilityLabel(tab == .today ? "Add to Today" : "Add an item")
+      .accessibilityHint("Choose an alarm, reminder or event.")
     }
 
   }

@@ -340,16 +340,19 @@ final class SettingsChoicesTests: XCTestCase {
     // Add from the Reminders home, without choosing a list in the draft.
     app.buttons["Reminders"].firstMatch.tap()
     app.addNew("New reminder")
-    XCTAssertTrue(element("quick.title").waitForExistence(timeout: 5))
+    XCTAssertTrue(element("task.title").waitForExistence(timeout: 5))
     XCTAssertTrue(
-      app.buttons["List, Work"].waitForExistence(timeout: 3),
+      app.descendants(matching: .any).matching(
+        NSPredicate(
+          format: "identifier == 'task.list' AND (label CONTAINS %@ OR value CONTAINS %@)", "Work",
+          "Work")
+      ).firstMatch.waitForExistence(timeout: 3),
       "the quick add inherits the list selected through Settings")
     let title =
-      app.textFields["quick.title"].exists
-      ? app.textFields["quick.title"] : app.textViews["quick.title"]
+      app.textFields["task.title"]
     title.typeText("Check the handoff checklist")
-    app.buttons["quick.save"].tap()
-    XCTAssertTrue(app.buttons["quick.save"].waitForNonExistence(timeout: 5))
+    app.buttons["task.save"].tap()
+    XCTAssertTrue(app.buttons["task.save"].waitForNonExistence(timeout: 5))
 
     reveal(element("list.Work")).tap()
     let saved = app.staticTexts["Check the handoff checklist"]

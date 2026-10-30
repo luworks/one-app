@@ -248,38 +248,22 @@ final class CRUDTests: XCTestCase {
       "Undo brings it back")
   }
 
-  /// + on Reminders opens the quick-add sheet: a title, a day chip and a time from the grid, Save.
-  func testReminderQuickAddWithPlus() {
+  /// + on Reminders opens the New reminder form (Apple Reminders' details): a title, Save.
+  func testReminderAddWithPlus() {
     openTab("Reminders")
     app.addNew("New reminder")
-    let title =
-      app.textFields["quick.title"].exists
-      ? app.textFields["quick.title"] : app.textViews["quick.title"]
-    XCTAssertTrue(title.waitForExistence(timeout: 5), "+ on Reminders opens the quick-add sheet")
+    let title = app.textFields["task.title"]
+    XCTAssertTrue(title.waitForExistence(timeout: 5), "+ on Reminders opens the New reminder form")
     title.typeText("Water the garden")
-    app.buttons["Tomorrow"].tap()
-    app.buttons["09:30"].tap()
-    let when = app.buttons["quick.when"]
-    let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: .now))!
-    let at = cal.date(bySettingHour: 9, minute: 30, second: 0, of: tomorrow)!
-    let shown = at.formatted(
-      .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+    app.buttons["task.save"].tap()
     XCTAssertTrue(
-      wait(when, "label CONTAINS %@".replacingOccurrences(of: "%@", with: "'\(shown)'")),
-      "the when bar shows tomorrow 09:30: \(when.label), expected \(shown)")
-    app.buttons["quick.save"].tap()
-    XCTAssertTrue(
-      app.buttons["quick.save"].waitForNonExistence(timeout: 5), "Save closes the sheet")
-
-    let scheduled = element("smart.scheduled")
-    app.revealReminderPill(scheduled)
-    scheduled.tap()
+      app.buttons["task.save"].waitForNonExistence(timeout: 5), "Save closes the sheet")
+    let all = element("smart.all")
+    app.revealReminderPill(all)
+    all.tap()
     let row = app.staticTexts["Water the garden"]
     reveal(row)
-    XCTAssertTrue(row.exists, "the reminder is in Scheduled")
-    let due = "Due Tomorrow " + at.formatted(date: .omitted, time: .shortened)
-    XCTAssertTrue(
-      any("label BEGINSWITH %@", due).waitForExistence(timeout: 3), "with its due time (\(due))")
+    XCTAssertTrue(row.exists, "the reminder is saved")
   }
 
   /// Swipe left on a reminder offers Flag and Delete; Flag flags it, and the Flagged list shows it.
