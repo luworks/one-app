@@ -363,14 +363,14 @@ public enum ActivityCSV {
 
 // MARK: Settings, retention
 
-/// How long the changes ledger (tier 1) is kept. Settings → Activity data.
+/// Forever keeps raw events in every tier. Finite choices limit changes (tier 1); other tiers use fixed windows.
 public enum ActivityRetention: String, CaseIterable, Identifiable, Sendable {
   case days90 = "90d"
   case year = "1y"
   case forever
   public var id: Self { self }
 
-  public static let `default`: ActivityRetention = .year
+  public static let `default`: ActivityRetention = .forever
 
   public var title: String {
     switch self {
@@ -388,7 +388,7 @@ public enum ActivityRetention: String, CaseIterable, Identifiable, Sendable {
     }
   }
 
-  /// Changes recorded before this moment are dropped by `prune`; nil keeps everything.
+  /// Changes before this moment are dropped by `prune`; nil keeps raw events in every tier.
   public func cutoff(now: Date, calendar: Calendar = .current) -> Date? {
     days.flatMap { calendar.date(byAdding: .day, value: -$0, to: calendar.startOfDay(for: now)) }
   }

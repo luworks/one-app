@@ -341,7 +341,7 @@ final class ActivityStoreTests: XCTestCase {
     try a.prune(retention: .year, now: now, calendar: cal)
     XCTAssertEqual(
       Set(try a.page(ActivityQuery(tiers: [.changes])).map(\.uid)), ["c1", "c60", "c120", "c300"],
-      "1 year default")
+      "explicit 1 year")
     XCTAssertEqual(
       Set(try a.page(ActivityQuery(tiers: [.ai])).map(\.uid)), ["a1", "a60", "a120"],
       "AI decisions: 180 days")
@@ -355,6 +355,77 @@ final class ActivityStoreTests: XCTestCase {
     try fill(c)
     try c.prune(retention: .forever, now: now, calendar: cal)
     XCTAssertEqual(try c.count(ActivityQuery(tiers: [.changes])), 5, "forever keeps every change")
+  }
+
+  func testDefaultRetentionAndExplicitSavedChoices() throws {
+    let suite = "activity-retention-\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    XCTAssertEqual(ActivitySettings().retention, .forever)
+    XCTAssertEqual(ActivitySettings(defaults).retention, .forever)
+    for choice in [ActivityRetention.days90, .year, .forever] {
+      defaults.set(choice.rawValue, forKey: ActivitySettings.retentionKey)
+      XCTAssertEqual(ActivitySettings(defaults).retention, choice)
+    }
+  }
+
+  func testForeverKeepsRawEventsAndContentAcrossAllTiersButExpiresSnapshots() throws {
+    let s = try memory()
+    var events: [ActivityEvent] = []
+    for tier in ActivityTier.allCases {
+      var e = ActivityEvent(
+        kind: "test.\(tier.rawValue)", tier: tier, actor: "you",
+        at: now.addingTimeInterval(-500 * 86_400), calendar: cal)
+      e.uid = "old-\(tier.rawValue)"
+      e.beforeText = "before"
+      e.afterText = "after"
+      e.content = [ActivityContent(field: "title", before: "old", after: "new")]
+      e.snapshot = Data("undo".utf8)
+      events.append(e)
+    }
+    try s.insert(events)
+    for _ in 0..<2 {
+      let result = try s.prune(retention: .forever, now: now, calendar: cal)
+      XCTAssertEqual(result.changes, 0)
+      XCTAssertEqual(result.ai, 0)
+      XCTAssertEqual(result.usageAndSystem, 0)
+      XCTAssertEqual(try s.count(), events.count)
+      XCTAssertTrue(try s.rollups().isEmpty)
+    }
+    var exported: [ActivityEvent] = []
+    try s.export { exported.append(contentsOf: $0) }
+    XCTAssertEqual(exported.count, events.count)
+    for event in exported {
+      XCTAssertEqual(event.beforeText, "before")
+      XCTAssertEqual(event.afterText, "after")
+      XCTAssertEqual(event.content, [ActivityContent(field: "title", before: "old", after: "new")])
+      XCTAssertNil(event.snapshot)
+    }
+  }
+
+  func testFiniteChoicesKeepFixedWindowsForOtherTiers() throws {
+    for retention in [ActivityRetention.days90, .year] {
+      let s = try memory()
+      var events: [ActivityEvent] = []
+      for tier in [ActivityTier.ai, .usage, .system] {
+        for days in [10, 45, 100, 200] {
+          var e = ActivityEvent(
+            kind: "test.\(tier.rawValue)", tier: tier, actor: "you",
+            at: now.addingTimeInterval(-Double(days) * 86_400), calendar: cal)
+          e.uid = "\(tier.rawValue)-\(days)"
+          events.append(e)
+        }
+      }
+      try s.insert(events)
+      let result = try s.prune(retention: retention, now: now, calendar: cal)
+      XCTAssertEqual(result.ai, 1)
+      XCTAssertEqual(result.usageAndSystem, 5)
+      XCTAssertEqual(
+        Set(try s.page(ActivityQuery(tiers: [.ai])).map(\.uid)), ["2-10", "2-45", "2-100"])
+      XCTAssertEqual(Set(try s.page(ActivityQuery(tiers: [.usage])).map(\.uid)), ["3-10"])
+      XCTAssertEqual(Set(try s.page(ActivityQuery(tiers: [.system])).map(\.uid)), ["4-10", "4-45"])
+      XCTAssertEqual(try s.rollups().reduce(0) { $0 + $1.n }, 5)
+    }
   }
 
   func testUsageAndSystemEventsAreRolledUpBeforeTheyExpire() throws {

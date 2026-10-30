@@ -288,8 +288,9 @@ public final class ActivityStore: ActivityStoring, @unchecked Sendable {
     }
   }
 
-  /// Drops what has expired (document §2.3): the changes ledger by the user's retention setting, AI decisions after 180 days,
-  /// usage after 30 and system events after 90 (their counts are first rolled up per day), Undo snapshots after 30.
+  /// Forever keeps raw events in every tier. For finite settings, changes follow the chosen window, AI expires after
+  /// 180 days, usage after 30 and system after 90 (usage and system are rolled up first). Undo snapshots expire after
+  /// 30 days regardless of the setting; event text and content are retained for as long as their event is kept.
   @discardableResult
   public func prune(retention: ActivityRetention, now: Date = .now, calendar: Calendar = .current)
     throws -> ActivityPruneResult
@@ -299,15 +300,15 @@ public final class ActivityStore: ActivityStoring, @unchecked Sendable {
       if let cutoff = retention.cutoff(now: now, calendar: calendar) {
         result.changes = try execCount(
           "DELETE FROM event WHERE tier = 1 AND ts < ?", [ActivityClock.ms(cutoff)])
-      }
-      let aiCut = ActivityWindows.cutoffMs(
-        days: ActivityWindows.aiDays, now: now, calendar: calendar)
-      result.ai = try execCount("DELETE FROM event WHERE tier = 2 AND ts < ?", [aiCut])
-      for (tier, days) in [(3, ActivityWindows.usageDays), (4, ActivityWindows.systemDays)] {
-        let cut = ActivityWindows.cutoffMs(days: days, now: now, calendar: calendar)
-        try rollUp(tier: tier, before: cut)
-        result.usageAndSystem += try execCount(
-          "DELETE FROM event WHERE tier = ? AND ts < ?", [tier, cut])
+        let aiCut = ActivityWindows.cutoffMs(
+          days: ActivityWindows.aiDays, now: now, calendar: calendar)
+        result.ai = try execCount("DELETE FROM event WHERE tier = 2 AND ts < ?", [aiCut])
+        for (tier, days) in [(3, ActivityWindows.usageDays), (4, ActivityWindows.systemDays)] {
+          let cut = ActivityWindows.cutoffMs(days: days, now: now, calendar: calendar)
+          try rollUp(tier: tier, before: cut)
+          result.usageAndSystem += try execCount(
+            "DELETE FROM event WHERE tier = ? AND ts < ?", [tier, cut])
+        }
       }
       let snapCut = ActivityWindows.cutoffMs(
         days: ActivityWindows.snapshotDays, now: now, calendar: calendar)

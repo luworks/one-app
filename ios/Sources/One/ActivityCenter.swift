@@ -104,8 +104,9 @@
       guard !files.isEmpty else { return }
       let read = ActivityOutboxImport.read(files)
       for e in read.events { recorder.record(e) }
-      recorder.flush()
-      ActivityOutbox.remove(read.done)
+      // Keep the source files until the database transaction has committed. Reimports are
+      // idempotent by event UUID if an earlier attempt already wrote some events.
+      if recorder.flush() { ActivityOutbox.remove(read.done) }
     }
 
     /// Drops expired rows (once per launch) according to the retention setting.
