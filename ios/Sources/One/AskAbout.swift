@@ -41,7 +41,7 @@
         kind: .alarm, title: alarm.label.isEmpty ? "Alarm" : alarm.label, details: details)
     }
 
-    /// `start` is the occurrence being shown, which differs from `event.start` for a repeating event.
+    /// `start` is the occurrence being shown (differs from `event.start` for a repeating event).
     package init(event: OneEvent, start: Date) {
       var details: [String] = []
       if event.repeats != nil { details.append("repeats") }
