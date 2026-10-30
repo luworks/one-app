@@ -111,12 +111,12 @@ final class PerformanceBaselineTests: XCTestCase {
     app.buttons["Reminders"].firstMatch.tap()
     sample("open_quick_create") {
       app.buttons["New"].tap()
-      tap(app.buttons["New reminder"], ready: element("task.title"))
+      tap(app.buttons["New reminder"], ready: element("quick.title"))
     }
-    element("task.title").typeText("Performance baseline reminder")
+    element("quick.title").typeText("Performance baseline reminder")
     sample("save_quick_create") {
-      app.buttons["task.save"].tap()
-      XCTAssertTrue(app.buttons["task.save"].waitForNonExistence(timeout: 5))
+      app.buttons["quick.save"].tap()
+      XCTAssertTrue(app.buttons["quick.save"].waitForNonExistence(timeout: 5))
     }
     element("list.Work").tap()
     let title = app.staticTexts["Prepare the demo"]

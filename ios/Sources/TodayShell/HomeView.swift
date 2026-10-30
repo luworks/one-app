@@ -547,10 +547,11 @@
       .sheet(item: $newItem) { item in
         switch item {
         case .task:
-          TaskEditor(
+          QuickReminderSheet(
             listName: newReminderListName, usesPreferredList: newReminderUsesPreferredList,
-            startsInDetails: true, actions: session.actions, ledger: session.ledger,
-            reminders: session.reminders, alarms: session.alarms, presentation: presentation)
+            actions: session.actions, ledger: session.ledger, alarms: session.alarms,
+            // Due-style quick add; editing a reminder opens TaskEditor
+            activity: session.activity, presentation: presentation)
         case .event:
           EventEditor(
             day: tab == .calendar ? calendarDay : session.runtime.now(), calendar: session.calendar,
@@ -946,7 +947,7 @@
     private func presentNewItem(_ item: NewItem) {
       let route: String
       switch item {
-      case .task: route = "reminder.editor"
+      case .task: route = "reminder.quick"
       case .event: route = "event.editor"
       case .alarm: route = "alarm.editor"
       }
