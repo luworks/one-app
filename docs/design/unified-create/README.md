@@ -1,9 +1,32 @@
 # Unified creation: design checkpoint
 
-Status: design reference with round 8 implementation, 2026-10-29. These images are generated mockups, not
+Status: design reference with round 9 implementation, 2026-10-29. These images are generated mockups, not
 screenshots of implemented UI or evidence of device behavior. This checkpoint
 originally changed documentation only. The round 7 implementation updates the
 creation flow introduced in PR #214 while retaining its explicit commit boundary.
+
+## Round 9 implementation: closer to Apple
+
+Chosen from the round 9 review (decisions 1B, 2B, 3B, 4A; green accent in the
+composer). The five-operation budget still holds and is tested.
+
+- iOS 26 sheet pattern: ✕ (cancellation) and a tinted ✓ (confirmation, the
+  explicit Create) in the navigation bar; the Reminder / Event / Alarm segmented
+  control sits under it, as in Calendar's New sheet. Titles: New Reminder, New
+  Event, Add Alarm. The dock above the keyboard is one row (two for events:
+  duration and calendar).
+- Reminder: Apple Reminders' Date and Time rows (graphical date, 24-hour time
+  wheel with the ±10 min…±1 day nudges inside it), List and Flag. The quick row
+  shows Today / Tomorrow / This Weekend / Next Week / No Date / Date & Time, and
+  after a day is picked switches to 09:30 / 12:00 / 18:30 / 22:00 / Time… (‹
+  goes back). The due date is shown once.
+- Typed timing is highlighted in the title (`CreateTitleField`, a UITextView,
+  because a SwiftUI TextField cannot colour ranges). The summary line and a
+  `Keep as text` button appear only while something is understood; tapping the
+  highlight or the button restores the previous timing, keeps the words in the
+  title and stops parsing until the title is cleared.
+- All-day events use a one-column day wheel in the same row style as the timed
+  day · hour · minute wheel.
 
 ## Round 8 implementation: five operations or fewer
 

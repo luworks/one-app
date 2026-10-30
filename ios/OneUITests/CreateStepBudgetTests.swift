@@ -40,9 +40,8 @@ final class CreateStepBudgetTests: XCTestCase {
 
   private func type(_ text: String) {
     steps.append("type \"\(text)\"")
-    let field = app.textFields["create.title"]
+    let field = app.textViews["create.title"]
     XCTAssertTrue(field.waitForExistence(timeout: 3))
-    if !(field.value(forKey: "hasKeyboardFocus") as? Bool ?? false) { field.tap() }
     field.typeText(text)
   }
 
@@ -53,7 +52,7 @@ final class CreateStepBudgetTests: XCTestCase {
     element.tap()
   }
 
-  private func chip(_ label: String) { tap(app.buttons[label].firstMatch, label) }
+  private func chip(_ label: String) { tap(app.buttons["create.chip.\(label)"], label) }
 
   private func wheel(_ index: Int, _ value: String) {
     steps.append("wheel → \(value)")
@@ -66,7 +65,7 @@ final class CreateStepBudgetTests: XCTestCase {
   private func returnKey() {
     shot()
     steps.append("Return")
-    app.textFields["create.title"].typeText("\n")
+    app.textViews["create.title"].typeText("\n")
   }
 
   private func create() {
@@ -86,6 +85,21 @@ final class CreateStepBudgetTests: XCTestCase {
     let summary = app.staticTexts["create.summary"]
     XCTAssertTrue(summary.waitForExistence(timeout: 3), file: file, line: line)
     XCTAssertEqual(summary.label, text, file: file, line: line)
+  }
+
+  private func expectDue(
+    _ day: String, _ time: String, file: StaticString = #filePath, line: UInt = #line
+  ) {
+    XCTAssertEqual(app.staticTexts["create.reminder.dateValue"].label, day, file: file, line: line)
+    XCTAssertEqual(app.staticTexts["create.reminder.timeValue"].label, time, file: file, line: line)
+  }
+
+  private func expectWheels(_ values: [String], file: StaticString = #filePath, line: UInt = #line)
+  {
+    for (i, v) in values.enumerated() {
+      let value = app.pickerWheels.element(boundBy: i).value as? String ?? ""
+      XCTAssertTrue(value.hasPrefix(v), "wheel \(i) is \(value)", file: file, line: line)
+    }
   }
 
   /// Created, within budget, composer closed.
@@ -122,7 +136,7 @@ final class CreateStepBudgetTests: XCTestCase {
       "an alarm at \(time) is listed", file: file, line: line)
   }
 
-  /// "Fri 30 Oct, 18:30" for a day offset from the fixed 10:41 today.
+  /// "Fri 30 Oct" (or "Fri 30 Oct, 18:30") for a day offset from the fixed 10:41 today.
   private func day(_ offset: Int, _ time: String? = nil) -> String {
     let date = Calendar.current.date(byAdding: .day, value: offset, to: .now)!
     let f = DateFormatter()
@@ -137,8 +151,9 @@ final class CreateStepBudgetTests: XCTestCase {
     launch(tab: nil)
     plus()
     type("Buy milk")
+    chip("Today")
     chip("18:30")
-    expectSummary(day(0, "18:30"))
+    expectDue(day(0), "18:30")
     returnKey()
     expectCreated()
     expectFound("Buy milk")
@@ -150,7 +165,7 @@ final class CreateStepBudgetTests: XCTestCase {
     type("Pay rent")
     chip("Tomorrow")
     chip("18:30")
-    expectSummary(day(1, "18:30"))
+    expectDue(day(1), "18:30")
     returnKey()
     expectCreated()
     expectFound("Pay rent")
@@ -176,7 +191,7 @@ final class CreateStepBudgetTests: XCTestCase {
     plus()
     wheel(0, "07")
     wheel(1, "00")
-    expectSummary("Rings 07:00 · Once")
+    expectWheels(["07", "00"])
     create()
     expectCreated()
     expectAlarm("7:00", nil)
@@ -187,8 +202,9 @@ final class CreateStepBudgetTests: XCTestCase {
     plus()
     wheel(0, "06")
     wheel(1, "30")
-    chip("Weekdays")
-    expectSummary("Rings 06:30 · Weekdays")
+    tap(app.buttons["Weekdays"].firstMatch, "Weekdays")
+    expectWheels(["06", "30"])
+    XCTAssertTrue(app.buttons["create.day.2"].isSelected && app.buttons["create.day.6"].isSelected)
     create()
     expectCreated()
     expectAlarm("6:30", "Weekdays")
@@ -207,7 +223,7 @@ final class CreateStepBudgetTests: XCTestCase {
   func testA3AlarmInTwentyMinutesTyped() {
     launch(tab: "Clock")
     plus()
-    tap(app.textFields["create.title"], "label field")
+    tap(app.textViews["create.title"], "label field")
     type("in 20 min")
     expectSummary("Rings 11:01 · Once")
     returnKey()
@@ -231,12 +247,12 @@ final class CreateStepBudgetTests: XCTestCase {
     launch(tab: "Calendar", extra: ["-uiTestingCalendars"])
     plus()
     type("Dinner with Alex fri 19:00-21:00")
-    chip("Personal")
-    XCTAssertTrue(app.buttons["Personal"].firstMatch.isSelected)
+    tap(app.buttons["create.calendar.Personal"], "Personal")
+    XCTAssertTrue(app.buttons["create.calendar.Personal"].isSelected)
     let summary = app.staticTexts["create.summary"]
     XCTAssertTrue(summary.label.hasPrefix("Fri "), summary.label)
     XCTAssertTrue(summary.label.hasSuffix(", 19:00–21:00"), summary.label)
-    XCTAssertTrue(app.buttons["2 h"].firstMatch.isSelected, "typed range set the 2 h duration")
+    XCTAssertTrue(app.buttons["create.chip.2 h"].isSelected, "typed range set the 2 h duration")
     returnKey()
     expectCreated()
   }
@@ -260,8 +276,32 @@ final class CreateStepBudgetTests: XCTestCase {
     type("Planning")
     wheel(1, "15")
     chip("2 h")
-    expectSummary(day(0, "15:00") + "–17:00")
+    expectWheels(["Today", "15", "00"])
+    XCTAssertTrue(app.buttons["create.chip.2 h"].isSelected)
     create()
     expectCreated()
+  }
+}
+
+@MainActor
+final class CreateTypedTimingTests: XCTestCase {
+  /// A wrong parse is undone in one tap: the words stay in the title and nothing is highlighted.
+  func testKeepAsTextUndoesTheParse() {
+    let app = XCUIApplication()
+    app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "10:41"]
+    app.launch()
+    app.buttons["New"].firstMatch.tap()
+    let field = app.textViews["create.title"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.typeText("Read chapter 7")
+    let keep = app.buttons["create.keepText"]
+    if keep.waitForExistence(timeout: 2) {
+      keep.tap()
+      XCTAssertFalse(keep.waitForExistence(timeout: 1))
+      XCTAssertEqual(app.staticTexts["create.reminder.dateValue"].label, "None")
+    }
+    XCTAssertEqual(field.value as? String, "Read chapter 7")
+    app.buttons["create.save"].tap()
+    XCTAssertTrue(app.buttons["create.save"].waitForNonExistence(timeout: 5))
   }
 }
