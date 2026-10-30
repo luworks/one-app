@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Timer section of the Clock tab, copied from Apple's Timers screen: the "Timers" title (no Edit button), running
+/// The Timer section of the Clock tab, copied from Apple's Timers screen (no title, no Edit button), running
 /// timers as ring cards, the hours / min / sec wheel with a gray X and a green play button, a Label / Sound card and
 /// Recents (play button starts at once, tap the row to load it, swipe left to delete). Until you start your own timer,
 /// Recents shows the three Pomodoro presets.
@@ -107,7 +107,7 @@ final class TimerTests: XCTestCase {
 
   func testScreenIsAppleTimersWithoutEdit() {
     launch()
-    XCTAssertEqual(app.staticTexts["timer.title"].label, "Timers")
+    XCTAssertFalse(app.staticTexts["Timers"].exists, "no large title: the pill already says Timer")
     XCTAssertFalse(
       app.buttons["Edit"].exists,
       "there is no Edit button in this app: Recents are deleted by swiping")

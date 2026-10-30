@@ -69,9 +69,9 @@ final class ClockTests: XCTestCase {
 
     section("timer").tap()
     XCTAssertTrue(
-      app.staticTexts["timer.title"].waitForExistence(timeout: 3),
+      app.descendants(matching: .any)["timer.picker"].waitForExistence(timeout: 3),
       "the Timers screen is the Timer section")
-    XCTAssertEqual(app.staticTexts["timer.title"].label, "Timers")
+    XCTAssertFalse(app.staticTexts["Timers"].exists, "no large title: the pill already says Timer")
     XCTAssertEqual(app.pickerWheels.count, 3, "hours, minutes and seconds")
     app.revealTimerControl(app.buttons["timer.start"].firstMatch)
     XCTAssertFalse(app.buttons["timer.start"].isEnabled, "the empty picker cannot start a timer")
