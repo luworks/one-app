@@ -10,6 +10,7 @@ import Foundation
 public enum Preferences {
   // MARK: Keys
 
+  public static let compressEmptyHoursKey = "today.setting.compressEmptyHours"
   public static let dimPastDaysKey = "today.setting.dimPastDays"
   public static let firstWeekdayKey = "today.setting.firstWeekday"
   public static let weekNumbersKey = "today.setting.weekNumbers"
@@ -23,13 +24,14 @@ public enum Preferences {
   public static let weatherSummaryKey = "today.setting.weatherSummary"
 
   static let allKeys = [
-    dimPastDaysKey, firstWeekdayKey, weekNumbersKey, calendarStartKey,
+    compressEmptyHoursKey, dimPastDaysKey, firstWeekdayKey, weekNumbersKey, calendarStartKey,
     showFreeTimeKey, newReminderListKey, newAlarmSnoozeKey, newAlarmSoundKey,
     askSuggestionsKey, showSettleKey, weatherSummaryKey,
   ]
 
   // MARK: Defaults (the behaviour before these choices existed)
 
+  public static let compressEmptyHours = true
   public static let dimPastDays = true
   public static let firstWeekday = FirstWeekday.system
   public static let weekNumbers = false
