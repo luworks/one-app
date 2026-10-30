@@ -98,4 +98,77 @@ final class CreateDraftTests: XCTestCase {
     state.finish(success: true)
     XCTAssertFalse(state.begin())
   }
+
+  private var cal: Calendar {
+    var c = Calendar(identifier: .gregorian)
+    c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+    return c
+  }
+  private var now: Date {
+    cal.date(from: DateComponents(year: 2026, month: 10, day: 29, hour: 10, minute: 41))!
+  }
+
+  private func typed(_ text: String, _ kind: CreateDraft.Kind) -> CreateDraft {
+    var draft = CreateDraft(now: now)
+    draft.kind = kind
+    // Simulate typing so partial input is parsed on the way, as in the composer.
+    for end in text.indices {
+      draft.title = String(text[...end])
+      draft.applyTyped(now: now, calendar: cal)
+    }
+    return draft
+  }
+
+  private func parts(_ date: Date) -> [Int] {
+    let c = cal.dateComponents([.month, .day, .hour, .minute], from: date)
+    return [c.month!, c.day!, c.hour!, c.minute!]
+  }
+
+  func testTypedTimingFillsReminder() {
+    let d = typed("Pay rent tomorrow 18:30", .reminder)
+    XCTAssertEqual(d.savedTitle, "Pay rent")
+    XCTAssertTrue(d.hasDueDate && d.hasDueTime)
+    XCTAssertEqual(parts(d.reminderDate), [10, 30, 18, 30])
+    let r3 = typed("Call mom next mon 19:05", .reminder)
+    XCTAssertEqual(r3.savedTitle, "Call mom")
+    XCTAssertEqual(parts(r3.reminderDate), [11, 2, 19, 5])
+    XCTAssertTrue(r3.isValid)
+  }
+
+  func testTypedTimingFillsEventDurationAndAllDay() {
+    let e2 = typed("Dinner with Alex fri 19:00-21:00", .calendar)
+    XCTAssertEqual(e2.savedTitle, "Dinner with Alex")
+    XCTAssertEqual(parts(e2.eventStart), [10, 30, 19, 0])
+    XCTAssertEqual(e2.duration, 120)
+    XCTAssertFalse(e2.allDay)
+    let e3 = typed("Mom's birthday nov 3", .calendar)
+    XCTAssertEqual(e3.savedTitle, "Mom's birthday")
+    XCTAssertTrue(e3.allDay)
+    XCTAssertEqual(cal.component(.day, from: e3.eventStart), 3)
+  }
+
+  func testTypedTimingFillsAlarmAndLabelIsOptional() {
+    let a2 = typed("6:30 weekdays", .alarm)
+    XCTAssertEqual(a2.savedTitle, "")
+    XCTAssertEqual(Array(parts(a2.alarmTime).suffix(2)), [6, 30])
+    XCTAssertEqual(a2.weekdays, [2, 3, 4, 5, 6])
+    XCTAssertTrue(a2.isValid)
+    let a3 = typed("in 20 min", .alarm)
+    XCTAssertEqual(Array(parts(a3.alarmTime).suffix(2)), [11, 1])
+    XCTAssertTrue(CreateDraft(now: now).isValid == false)
+    var empty = CreateDraft(now: now)
+    empty.kind = .alarm
+    XCTAssertTrue(empty.isValid, "An alarm needs no label")
+  }
+
+  func testChipAfterTypingWinsUntilTypedTimingChanges() {
+    var d = typed("Buy milk 18:30", .reminder)
+    d.reminderDate = cal.date(byAdding: .hour, value: 2, to: d.reminderDate)!
+    d.title += " "
+    d.applyTyped(now: now, calendar: cal)
+    XCTAssertEqual(
+      parts(d.reminderDate), [10, 29, 20, 30], "Same typed timing keeps the chip choice")
+    let plain = typed("Buy 2 apples", .reminder)
+    XCTAssertEqual(plain.savedTitle, plain.parsedTitle == nil ? "Buy 2 apples" : plain.savedTitle)
+  }
 }

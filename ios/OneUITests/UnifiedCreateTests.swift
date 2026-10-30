@@ -27,12 +27,10 @@ final class UnifiedCreateTests: XCTestCase {
   func testSwitchTypesPreservesTitle() {
     let app = openComposer()
     app.descendants(matching: .any)["create.title"].typeText("Shared native draft")
-    app.buttons["create.type"].tap()
-    app.collectionViews.buttons["Calendar"].tap()
+    app.segmentedControls["create.type"].buttons["Calendar"].tap()
     XCTAssertEqual(
       app.descendants(matching: .any)["create.title"].value as? String, "Shared native draft")
-    app.buttons["create.type"].tap()
-    app.collectionViews.buttons["Alarm"].tap()
+    app.segmentedControls["create.type"].buttons["Alarm"].tap()
     XCTAssertEqual(
       app.descendants(matching: .any)["create.title"].value as? String, "Shared native draft")
   }
@@ -51,8 +49,7 @@ final class UnifiedCreateTests: XCTestCase {
   private func saveAndFind(_ kind: String, title: String) {
     let app = openComposer()
     app.descendants(matching: .any)["create.title"].typeText(title)
-    app.buttons["create.type"].tap()
-    app.collectionViews.buttons[kind].tap()
+    app.segmentedControls["create.type"].buttons[kind].tap()
     app.buttons["create.save"].tap()
     XCTAssertTrue(app.buttons["create.save"].waitForNonExistence(timeout: 5))
     XCTAssertTrue(
@@ -90,18 +87,15 @@ final class UnifiedCreateTests: XCTestCase {
     app.descendants(matching: .any)["create.title"].typeText("Weekly draft")
     app.buttons["Hide keyboard"].tap()
     XCTAssertTrue(app.buttons["create.save"].exists)
-    app.buttons["create.type"].tap()
-    app.collectionViews.buttons["Alarm"].tap()
+    app.segmentedControls["create.type"].buttons["Alarm"].tap()
     app.swipeUp()
     let monday = app.buttons["create.day.2"]
     XCTAssertTrue(monday.waitForExistence(timeout: 3))
     monday.tap()
     XCTAssertTrue(monday.isSelected)
-    app.buttons["create.type"].tap()
-    app.collectionViews.buttons["Reminder"].tap()
+    app.segmentedControls["create.type"].buttons["Reminder"].tap()
     XCTAssertFalse(app.buttons["create.day.2"].isSelected)
-    app.buttons["create.type"].tap()
-    app.collectionViews.buttons["Alarm"].tap()
+    app.segmentedControls["create.type"].buttons["Alarm"].tap()
     XCTAssertTrue(app.buttons["create.day.2"].isSelected)
     XCTAssertEqual(app.descendants(matching: .any)["create.title"].value as? String, "Weekly draft")
     app.buttons["Close"].tap()

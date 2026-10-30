@@ -1,9 +1,40 @@
 # Unified creation: design checkpoint
 
-Status: design reference with round 7 implementation, 2026-10-29. These images are generated mockups, not
+Status: design reference with round 8 implementation, 2026-10-29. These images are generated mockups, not
 screenshots of implemented UI or evidence of device behavior. This checkpoint
 originally changed documentation only. The round 7 implementation updates the
 creation flow introduced in PR #214 while retaining its explicit commit boundary.
+
+## Round 8 implementation: five operations or fewer
+
+Goal: every common, typical and hard Reminder, Event and Alarm is created in at
+most five operations, counted from + to Create (one tap, one Return, one wheel
+column or one typed entry each). `CreateStepBudgetTests` runs eleven such
+journeys on the simulator and fails above five.
+
+- A fixed dock sits above the keyboard (and at the bottom without it): the one
+  `Create reminder` / `Create event` / `Create alarm` button, this type's quick
+  choices, then a Reminder / Calendar / Alarm segmented control. It replaces the
+  header type menu and checkmark. The header keeps Close and a Hide keyboard
+  button while typing.
+- The title understands timing ("Pay rent tomorrow 18:30", "Dinner fri
+  19:00-21:00", "6:30 weekdays", "in 20 min") through the existing
+  `CaptureParser`. It only fills the fields and the summary line under the
+  title; the understood words are left out of the saved title. A chip tapped
+  afterwards wins until the typed timing changes. Return creates a complete
+  draft (an explicit action, like Create); otherwise it closes the keyboard.
+- Reminder dock: Today / Tomorrow / This Weekend / Next Week / No Date / Date…,
+  then 09:30 / 12:00 / 18:30 / 22:00 / Time… (a 24-hour wheel).
+- Event: one 24-hour day · hour · minute wheel replaces the Starts popovers;
+  dock chips set 30 min / 1 h / 2 h / All-day and the writable calendar. A dated
+  event with no time is all-day. Ends, location, repeat, alert, availability,
+  URL and notes remain below.
+- Alarm opens without the keyboard: the label is optional (saved empty, shown
+  as "Alarm"), and the wheel and the round 7 Repeat card (presets plus tappable
+  weekday circles) are visible at once. A bare typed hour is a morning hour.
+
+Modelled counts and KLM time estimates for the alternatives are in the QA
+results (`designs/create-round8-20261029`).
 
 ## Round 7 implementation
 
@@ -46,8 +77,8 @@ opening the keyboard. Each exported image is 390 × 844 pixels.
 ## Shared design rules
 
 - Use one header pattern: circular close control on the left, centered
-  `Add Alarm`, `Add Reminder` or `Add Event`, and an orange circular checkmark on
-  the right. The checkmark explicitly submits the current draft.
+  `Add Alarm`, `Add Reminder` or `Add Event`. Since round 8 the explicit submit
+  is the dock's Create button (or Return on a complete draft).
 - Put the name in an independent first section. Keep its typography, margins
   and height consistent across all three types.
 - Use the same Repeat component for Alarm and Reminder: a readable summary,
