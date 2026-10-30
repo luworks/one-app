@@ -41,6 +41,28 @@
         kind: .alarm, title: alarm.label.isEmpty ? "Alarm" : alarm.label, details: details)
     }
 
+    /// `start` is the occurrence being shown (differs from `event.start` for a repeating event).
+    package init(event: OneEvent, start: Date) {
+      var details: [String] = []
+      if event.repeats != nil { details.append("repeats") }
+      if !event.calendarName.isEmpty { details.append("calendar \(event.calendarName)") }
+      if let location = event.location, !location.isEmpty { details.append("at \(location)") }
+      self.init(
+        kind: .event, title: event.title, start: start, isAllDay: event.isAllDay,
+        minutes: event.isAllDay ? 0 : event.durationMinutes, details: details)
+    }
+
+    package init(event: ExternalEvent) {
+      var details: [String] = []
+      if event.repeats { details.append("repeats") }
+      if !event.calendarTitle.isEmpty { details.append("calendar \(event.calendarTitle)") }
+      if !event.location.isEmpty { details.append("at \(event.location)") }
+      let minutes = Int(event.end.timeIntervalSince(event.start) / 60)
+      self.init(
+        kind: .event, title: event.title, start: event.start, isAllDay: event.isAllDay,
+        minutes: event.isAllDay ? 0 : max(0, minutes), details: details)
+    }
+
     package init(entry: CalEntry) {
       switch entry.source {
       case .task(let task): self.init(task: task)
