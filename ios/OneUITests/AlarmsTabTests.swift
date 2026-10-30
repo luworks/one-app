@@ -116,9 +116,7 @@ final class AlarmsTabTests: XCTestCase {
 
     app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
-    let wheels = app.pickerWheels
-    wheels.element(boundBy: 1).adjust(toPickerWheelValue: "00")
-    XCTAssertTrue((wheels.element(boundBy: 1).value as? String ?? "").hasPrefix("00"))
+    app.setAlarmMinutes("00")
     app.buttons["alarm.repeat.weekdays"].tap()
     XCTAssertEqual(app.descendants(matching: .any)["alarm.repeat"].label, "Repeat, Weekdays")
     field.tap()
@@ -134,10 +132,8 @@ final class AlarmsTabTests: XCTestCase {
     addAlarm()
     rows.firstMatch.tap()
     XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
-    let wheels = app.pickerWheels
-    XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
     // The simulator may be on a 12- or 24-hour clock: set only the minutes, which read the same on both.
-    wheels.element(boundBy: 1).adjust(toPickerWheelValue: "30")
+    app.setAlarmMinutes("30")
     let field = app.textFields["alarm.label"]
     field.tap()
     field.typeText("Gym")
@@ -238,10 +234,10 @@ final class AlarmsTabTests: XCTestCase {
   }
 }
 
-/// Add Alarm opens on the next quarter hour of Today's clock (pinned to 10:56, so 11:00), not on a whole hour.
+/// Add Alarm opens on the next ten-minute mark of Today's clock (pinned to 10:56, so 11:00), not on a whole hour.
 @MainActor
 final class AlarmDefaultTimeTests: XCTestCase {
-  func testAddAlarmOpensOnTheNextQuarterHour() {
+  func testAddAlarmOpensOnTheNextTenMinuteMark() {
     continueAfterFailure = false
     let app = XCUIApplication()
     app.launchArguments = ["-uiTesting", "-uiTestingNow", "10:56"]
@@ -250,15 +246,12 @@ final class AlarmDefaultTimeTests: XCTestCase {
     XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
     app.addNew("New alarm")
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
-    let wheels = app.pickerWheels
-    XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
-    // 12- or 24-hour clock: the hour reads "11 o’clock" or "11", the minutes "00" on both.
-    XCTAssertTrue(
-      (wheels.element(boundBy: 0).value as? String ?? "").hasPrefix("11"),
-      "hour: \(wheels.element(boundBy: 0).value ?? "")")
-    XCTAssertTrue(
-      (wheels.element(boundBy: 1).value as? String ?? "").hasPrefix("00"),
-      "minutes: \(wheels.element(boundBy: 1).value ?? "")")  // "00 minutes"
+    let hours = app.descendants(matching: .any)["wheelLab.hours"].firstMatch
+    let minutes = app.descendants(matching: .any)["wheelLab.minutes"].firstMatch
+    XCTAssertTrue(hours.waitForExistence(timeout: 5))
+    // 12- or 24-hour clock: the hour reads "11" on both, the minutes "00".
+    XCTAssertEqual(hours.value as? String, "11")
+    XCTAssertEqual(minutes.value as? String, "00")
   }
 }
 
@@ -275,7 +268,7 @@ final class AlarmWheelStoreChurnTests: XCTestCase {
     XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 5))
     app.buttons["New"].tap()
     XCTAssertTrue(app.staticTexts["Add Alarm"].waitForExistence(timeout: 5))
-    let minutes = app.pickerWheels.element(boundBy: 1)
+    let minutes = app.descendants(matching: .any)["wheelLab.minutes"].firstMatch
     XCTAssertTrue(minutes.waitForExistence(timeout: 5))
     let report = app.staticTexts["storeChurn.report"]
     let before = Self.parse(report.label)

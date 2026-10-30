@@ -576,7 +576,19 @@ public enum AlarmPlan {
     }.joined(separator: ", ")
   }
 
-  /// The next quarter hour after `date` (10:56 → 11:00, 10:45 → 11:00): where Add Alarm opens.
+  /// The next ten-minute mark after `date` (10:56 → 11:00, 10:41 → 10:50): where Add Alarm opens, on the
+  /// alarm wheel's ten-minute minute column.
+  public static func nextTenMinutes(after date: Date, calendar: Calendar = .current) -> Date {
+    let c = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+    let next = ((c.minute ?? 0) / 10 + 1) * 10
+    let base =
+      calendar.date(
+        from: DateComponents(year: c.year, month: c.month, day: c.day, hour: c.hour, minute: 0))
+      ?? date
+    return calendar.date(byAdding: .minute, value: next, to: base) ?? date
+  }
+
+  /// The next quarter hour after `date` (10:56 → 11:00, 10:45 → 11:00).
   public static func nextQuarterHour(after date: Date, calendar: Calendar = .current) -> Date {
     let c = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
     let next = ((c.minute ?? 0) / 15 + 1) * 15

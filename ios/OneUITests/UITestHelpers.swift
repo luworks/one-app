@@ -315,3 +315,21 @@ extension XCTestCase {
     return String(format: "day.%04d-%02d-%02d", c.year!, c.month!, c.day!)
   }
 }
+
+extension XCUIApplication {
+  /// The alarm editor's minute wheel (ten-minute steps, or every minute for an off-grid alarm): a slow drag moves it
+  /// one row, so drag until it reads `target` ("00", "30"). The wheel wraps, so a full turn is at most 60 drags.
+  @MainActor
+  func setAlarmMinutes(_ target: String, file: StaticString = #filePath, line: UInt = #line) {
+    let minutes = descendants(matching: .any)["wheelLab.minutes"].firstMatch
+    XCTAssertTrue(minutes.waitForExistence(timeout: 5), "the minute wheel", file: file, line: line)
+    for _ in 0..<60 {
+      if (minutes.value as? String) == target { return }
+      let from = minutes.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      from.withOffset(CGVector(dx: 0, dy: 0)).press(
+        forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -40)),
+        withVelocity: .slow, thenHoldForDuration: 0.3)
+    }
+    XCTAssertEqual(minutes.value as? String, target, "the minute wheel", file: file, line: line)
+  }
+}

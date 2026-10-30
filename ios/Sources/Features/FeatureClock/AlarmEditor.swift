@@ -118,6 +118,9 @@
     let alarm: OneAlarm?
 
     @State private var time: Date
+    /// The minute wheel's step: 10 (00, 10 … 50), or 1 when the alarm being edited is not on a ten-minute mark, so
+    /// opening and saving it never moves its minute.
+    @State private var minuteStep: Int
     @State private var label: String
     @State private var weekdays: Set<Int>
     @State private var snooze: Bool
@@ -142,13 +145,14 @@
       self.soundPreview = soundPreview
       self.runtime = runtime
       self.onCreated = onCreated
-      // A new alarm starts at the next quarter hour (10:56 → 11:00), so it still rings today when saved straight away.
+      // A new alarm starts at the next ten-minute mark (10:56 → 11:00), so it still rings today when saved straight away.
       _time = State(
         initialValue: alarm.map {
           runtime.calendar.date(
             bySettingHour: $0.hour, minute: $0.minute, second: 0, of: runtime.now())
             ?? runtime.now()
-        } ?? AlarmPlan.nextQuarterHour(after: runtime.now(), calendar: runtime.calendar))
+        } ?? AlarmPlan.nextTenMinutes(after: runtime.now(), calendar: runtime.calendar))
+      _minuteStep = State(initialValue: (alarm?.minute ?? 0) % 10 == 0 ? 10 : 1)
       _label = State(initialValue: alarm?.label ?? "")
       _weekdays = State(initialValue: Set(alarm?.weekdays ?? []))
       // A new alarm starts like one made in the chat or by Siri (Settings > Alarms); an existing one keeps its own.
@@ -159,16 +163,33 @@
         initialValue: AlarmPlan.snoozeMinutes(nearest: alarm?.snoozeMinutes ?? fresh.snoozeMinutes))
     }
 
+    /// The wheel works in minutes of the day; the editor keeps a date.
+    private var wheelMinutes: Binding<Int> {
+      Binding(
+        get: {
+          let c = runtime.calendar.dateComponents([.hour, .minute], from: time)
+          return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        },
+        set: { minutes in
+          time =
+            runtime.calendar.date(
+              bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: time) ?? time
+        })
+    }
+
     package var body: some View {
       NavigationStack {
         ScrollView {
           VStack(spacing: 0) {
             header
-            AlarmTimePicker(time: $time)
-              .frame(maxWidth: .infinity)
-              .padding(.horizontal, 19)
-              .padding(.top, 14)
-              .accessibilityIdentifier("alarm.time")
+            TimeWheelPicker(
+              minutes: wheelMinutes, adaptiveMinutes: true, minuteStep: minuteStep,
+              locale: runtime.locale
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 19)
+            .padding(.top, 14)
+            .accessibilityIdentifier("alarm.time")
             labelCard.padding(.top, 20)
             repeatCard.padding(.top, 20)
             optionsCard.padding(.top, 33)

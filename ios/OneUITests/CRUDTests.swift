@@ -595,18 +595,18 @@ final class CRUDTests: XCTestCase {
     XCTAssertTrue(created.waitForExistence(timeout: 5), "the new alarm is listed")
     XCTAssertEqual(alarmRows.count, 5)
     XCTAssertTrue(
-      [":00", ":15", ":30", ":45"].contains { created.label.contains($0) },
-      "opens on a quarter hour: \(created.label)")
+      [":00", ":10", ":20", ":30", ":40", ":50"].contains { created.label.contains($0) },
+      "opens on a ten-minute mark: \(created.label)")
 
     // Update: minutes and label (right away: a just-created alarm must keep its editor open).
     created.tap()
     XCTAssertTrue(app.staticTexts["Edit Alarm"].waitForExistence(timeout: 5))
-    app.pickerWheels.element(boundBy: 1).adjust(toPickerWheelValue: "15")
+    app.setAlarmMinutes("20")
     replaceText(in: app.textFields["alarm.label"], with: "Piano lesson")
     app.buttons["alarm.save"].tap()
     let edited = alarmRow("Piano lesson")
     XCTAssertTrue(edited.waitForExistence(timeout: 5), "the new label is saved")
-    XCTAssertTrue(edited.label.contains(":15"), "and the new time: \(edited.label)")
+    XCTAssertTrue(edited.label.contains(":20"), "and the new time: \(edited.label)")
     XCTAssertFalse(alarmRow("Piano practice").exists, "the old label is gone")
     XCTAssertEqual(alarmRows.count, 5, "edited in place, not added")
 
