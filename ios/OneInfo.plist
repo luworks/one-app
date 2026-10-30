@@ -40,7 +40,7 @@
 			<key>UIApplicationShortcutItemIconSymbolName</key>
 			<string>sparkles</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>Ask AI</string>
+			<string>Ask Today</string>
 			<key>UIApplicationShortcutItemType</key>
 			<string>com.luworks.one.ask</string>
 		</dict>
@@ -51,6 +51,14 @@
 			<string>New task</string>
 			<key>UIApplicationShortcutItemType</key>
 			<string>com.luworks.one.newTask</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>alarm</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New alarm</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.luworks.one.newAlarm</string>
 		</dict>
 		<dict>
 			<key>UIApplicationShortcutItemIconSymbolName</key>

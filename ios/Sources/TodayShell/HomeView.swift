@@ -620,6 +620,7 @@
           switch type {
           case "com.luworks.one.ask": openAsk(nil)
           case "com.luworks.one.newTask": presentNewItem(.task)
+          case "com.luworks.one.newAlarm": presentNewItem(.alarm)
           case "com.luworks.one.newEvent": newEvent()
           default: break
           }
