@@ -1030,11 +1030,12 @@
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday
       .rawValue
     @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
+    @AppStorage(Preferences.compressEmptyHoursKey) private var compressEmptyHours =
+      Preferences.compressEmptyHours
+    @State private var expandedGaps: Set<CalendarGapLayout.Interval> = []
     /// Days from today of the first column.
     @State private var pos: Int? = 0
     @State private var scroll = DayScroll()
-    /// The hour at the top of the grid.
-    @State private var topHour: Int? = 7
     /// Points per hour; pinch the grid to change it.
     @State private var hourHeight: CGFloat = 48
     /// The hour height when the current pinch started.
@@ -1142,17 +1143,45 @@
 
     // MARK: Time grid
 
+    // A single axis shared by every visible column and the hour gutter.
+    private var gapLayout: CalendarGapLayout {
+      let left = Int(scroll.columns.rounded(.down))
+      let right = Int((scroll.columns + CGFloat(Self.columns)).rounded(.up))
+      let days = (left..<max(left + 1, right)).map { offset in
+        let day = date(offset)
+        let interval =
+          cal.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 86400)
+        let entries = CalendarEntries.make(
+          in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar,
+          now: presentation.now, calendar: cal
+        ).filter { !$0.isAllDay }
+        let spans = entries.filter { !$0.isTask && !$0.isAlarm }.map { entry in
+          let span = CalendarDayAxis.span(
+            start: entry.start, end: entry.end, in: interval, calendar: cal)
+          return CalendarGapLayout.Interval(start: span.start, end: span.end)
+        }
+        let marks = entries.filter { ($0.isTask || $0.isAlarm) && interval.contains($0.start) }
+          .map { CalendarDayAxis.minute($0.start, calendar: cal) }
+        return CalendarGapLayout.Day(intervals: spans, marks: marks)
+      }
+      return CalendarGapLayout(
+        days: compressEmptyHours ? days : [], pointsPerHour: Double(hourHeight),
+        minimumGapMinutes: 120, compressedGapHeight: 28, expandedGaps: expandedGaps)
+    }
+
     /// Hour labels stay put on the left; the day columns scroll sideways and snap to a day, one day per swipe.
     private var grid: some View {
-      ScrollView {
+      let axis = gapLayout
+      return ScrollView {
         HStack(alignment: .top, spacing: 0) {
-          hourLabels
+          hourLabels(axis)
           ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 0) {
               ForEach(range, id: \.self) { o in
                 DayColumn(
                   calendar: calendar, day: date(o), fromToday: o, events: events, tasks: tasks,
-                  alarms: alarms, hourHeight: hourHeight, pendingDelete: $pendingDelete,
+                  alarms: alarms, hourHeight: hourHeight, axis: axis, expandedGaps: $expandedGaps,
+                  pendingDelete: $pendingDelete,
                   open: open, edit: edit, create: create
                 )
                 .containerRelativeFrame(.horizontal, count: Self.columns, span: 1, spacing: 0)
@@ -1169,12 +1198,11 @@
           } action: { _, x in
             scroll.columns = CGFloat(range.lowerBound) + x
           }
-          .frame(height: 24 * hourHeight)
+          .frame(height: CGFloat(axis.height))
         }
         .padding(.top, 10)
         .padding(.bottom, 12)
       }
-      .scrollPosition(id: $topHour, anchor: .top)
       .scrollIndicators(.hidden)
       // Two fingers zoom the hours; one finger still scrolls, swipes days, taps and long-presses.
       .simultaneousGesture(
@@ -1190,30 +1218,49 @@
       .accessibilityIdentifier("calendar.dayGrid")
     }
 
-    private var hourLabels: some View {
-      VStack(spacing: 0) {
+    private func hourLabels(_ axis: CalendarGapLayout) -> some View {
+      ZStack(alignment: .topLeading) {
         ForEach(0..<24, id: \.self) { h in
-          Text(hourLabel(h))
-            .font(.system(size: 10).monospacedDigit())
+          if !axis.gaps.contains(where: {
+            !expandedGaps.contains($0) && Double(h * 60) >= $0.start && Double(h * 60) < $0.end
+          }) {
+            Text(hourLabel(h))
+              .font(.system(size: 10).monospacedDigit())
+              .foregroundStyle(.secondary)
+              .frame(width: gutter - 4, alignment: .trailing)
+              .offset(y: CGFloat(axis.y(forMinute: Double(h * 60))) - 6)
+              .accessibilityHidden(true)
+          }
+        }
+        ForEach(axis.gaps, id: \.self) { gap in
+          let expanded = expandedGaps.contains(gap)
+          Button {
+            if expanded { expandedGaps.remove(gap) } else { expandedGaps.insert(gap) }
+          } label: {
+            VStack(spacing: 1) {
+              Image(systemName: expanded ? "chevron.compact.up" : "arrow.up.and.down")
+              Text(String(format: "%02d–%02d", Int(gap.start / 60), Int(gap.end / 60)))
+                .font(.system(size: 9).monospacedDigit())
+            }
             .foregroundStyle(.secondary)
-            .frame(width: gutter - 4, alignment: .trailing)
-            .offset(y: -6)
-            .frame(width: gutter, height: hourHeight, alignment: .topLeading)
-            .id(h)
+            .frame(width: gutter, height: 28)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .offset(y: CGFloat(axis.y(forMinute: gap.start)))
+          .accessibilityLabel("Empty hours \(Int(gap.start / 60)) to \(Int(gap.end / 60))")
+          .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+          .accessibilityIdentifier("calendar.gap.\(Int(gap.start / 60)).\(Int(gap.end / 60))")
         }
-      }
-      .scrollTargetLayout()
-      .accessibilityHidden(true)
-      .overlay(alignment: .topLeading) {
-        // The time, over the hour labels, while today is one of the columns on screen.
         if (1 - Self.columns...0).contains(first) {
-          TimelineView(.everyMinute) { _ in nowLabel }
+          TimelineView(.everyMinute) { _ in nowLabel(axis) }
         }
       }
+      .frame(width: gutter, height: CGFloat(axis.height), alignment: .topLeading)
     }
 
-    private var nowLabel: some View {
-      let y = CGFloat(CalendarDayAxis.minute(presentation.now, calendar: cal)) / 60 * hourHeight
+    private func nowLabel(_ axis: CalendarGapLayout) -> some View {
+      let y = CGFloat(axis.y(forMinute: CalendarDayAxis.minute(presentation.now, calendar: cal)))
       return Text(
         presentation.now.plannerFormatted(
           date: .omitted, time: .shortened, runtime: presentation.runtime)
@@ -1349,6 +1396,8 @@
     let tasks: [OneTask]
     let alarms: [OneAlarm]
     let hourHeight: CGFloat
+    let axis: CalendarGapLayout
+    @Binding var expandedGaps: Set<CalendarGapLayout.Interval>
     @Binding var pendingDelete: CalEntry?
     var open: (CalEntry) -> Void
     var edit: (CalEntry) -> Void
@@ -1375,10 +1424,13 @@
         let width = geo.size.width
         let layout = CalendarLayout.timedDay(
           blocks: placed.map {
-            (y: Double($0.y(hourHeight)), height: Double(max(18, $0.height(hourHeight))))
+            let start = Double($0.startMinute)
+            let end = Double($0.startMinute + $0.lengthMinutes)
+            let height = max(18, axis.height(from: start, to: end) - 1)
+            return (y: axis.y(forMinute: start), height: height)
           },
           marks: marks.map {
-            CalendarDayAxis.minute($0.start, calendar: cal) / 60 * Double(hourHeight)
+            axis.y(forMinute: CalendarDayAxis.minute($0.start, calendar: cal))
           },
           columnWidth: Double(width), chipHeight: Double(Self.chipHeight),
           foldAfter: max(24, Double(hourHeight) * 0.75))
@@ -1391,6 +1443,16 @@
           hourLines
           // Bottom layer: long-press an empty slot to make an event there. Blocks and chips keep their own taps and menus.
           pressLayer(blockRects + markRects.compactMap { $0 }, width: width)
+          ForEach(axis.gaps, id: \.self) { gap in
+            if !expandedGaps.contains(gap) {
+              Color(.secondarySystemBackground).opacity(0.5)
+                .frame(width: width, height: CGFloat(axis.height(from: gap.start, to: gap.end)))
+                .contentShape(Rectangle())
+                .onTapGesture { expandedGaps.insert(gap) }
+                .offset(y: CGFloat(axis.y(forMinute: gap.start)))
+                .accessibilityHidden(true)
+            }
+          }
           ForEach(drawOrder, id: \.self) { i in
             let r = blockRects[i]
             block(
@@ -1414,25 +1476,30 @@
           }
           if let draft { draftBlock(draft, width: width) }
         }
-        .frame(width: width, height: 24 * hourHeight, alignment: .topLeading)
+        .frame(width: width, height: CGFloat(axis.height), alignment: .topLeading)
       }
-      .frame(height: 24 * hourHeight)
+      .frame(height: CGFloat(axis.height))
     }
 
     private var hourLines: some View {
-      VStack(spacing: 0) {
-        ForEach(0..<24, id: \.self) { _ in
-          Rectangle().fill(Color(.separator)).frame(height: 0.5)
-            .frame(height: hourHeight, alignment: .top)
+      ZStack(alignment: .topLeading) {
+        ForEach(0..<24, id: \.self) { h in
+          if !axis.gaps.contains(where: {
+            !expandedGaps.contains($0) && Double(h * 60) > $0.start && Double(h * 60) < $0.end
+          }) {
+            Rectangle().fill(Color(.separator)).frame(height: 0.5)
+              .offset(y: CGFloat(axis.y(forMinute: Double(h * 60))))
+          }
         }
       }
+      .frame(height: CGFloat(axis.height), alignment: .topLeading)
       .overlay(alignment: .leading) { Rectangle().fill(Color(.separator)).frame(width: 0.5) }
       .accessibilityHidden(true)
       .allowsHitTesting(false)
     }
 
     private func nowLine(strong: Bool) -> some View {
-      let y = CGFloat(CalendarDayAxis.minute(presentation.now, calendar: cal)) / 60 * hourHeight
+      let y = CGFloat(axis.y(forMinute: CalendarDayAxis.minute(presentation.now, calendar: cal)))
       return Rectangle()
         .fill(strong ? Color.red : Color.red.opacity(0.35))
         .frame(height: strong ? 1.5 : 1)
@@ -1576,14 +1643,18 @@
     /// recognized, the scroll views don't take the finger.
     private func pressLayer(_ blocks: [CGRect], width: CGFloat) -> some View {
       func minute(_ point: CGPoint) -> Int {
-        CalendarLayout.slot(
-          x: point.x, y: point.y, gutter: 0, columnWidth: width, hourHeight: hourHeight,
-          dayCount: 1
-        ).minute
+        let minute = axis.minute(atY: Double(point.y))
+        return min(1425, max(0, Int((minute / 15).rounded()) * 15))
       }
       return SlotPressView { point in
         // A press on an event or alarm is theirs (its menu); only empty space makes an event.
         !blocks.contains { $0.contains(point) }
+          && !axis.gaps.contains { gap in
+            let y = Double(point.y)
+            return axis.height(from: gap.start, to: gap.end)
+              < (gap.end - gap.start) / 60 * Double(hourHeight)
+              && y >= axis.y(forMinute: gap.start) && y < axis.y(forMinute: gap.end)
+          }
       } changed: { point in
         draft = minute(point)
       } ended: { point in
@@ -1592,7 +1663,7 @@
         else { return }
         create(start, start.addingTimeInterval(3600))
       }
-      .frame(width: width, height: 24 * hourHeight)
+      .frame(width: width, height: CGFloat(axis.height))
       .sensoryFeedback(trigger: draft) { (old: Int?, new: Int?) -> SensoryFeedback? in
         // A thump when the placeholder appears, a tick each time it moves to another slot.
         guard new != nil else { return nil }
@@ -1603,6 +1674,7 @@
     /// The placeholder under the finger while a new event is placed, like Apple's "New Event" block.
     private func draftBlock(_ minute: Int, width: CGFloat) -> some View {
       let start = cal.date(byAdding: .minute, value: minute, to: day) ?? day
+      let height = CGFloat(axis.height(from: Double(minute), to: Double(minute + 60)))
       return VStack(alignment: .leading, spacing: 0) {
         Text("New Event").font(.system(size: 10, weight: .semibold))
         Text(
@@ -1614,8 +1686,8 @@
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))
       .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-      .frame(width: width - 2, height: hourHeight - 1)
-      .offset(x: 1, y: CGFloat(minute) / 60 * hourHeight)
+      .frame(width: width - 2, height: max(1, height - 1))
+      .offset(x: 1, y: CGFloat(axis.y(forMinute: Double(minute))))
       .allowsHitTesting(false)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("New Event, \(plannerDayLabel(start, runtime: presentation.runtime))")

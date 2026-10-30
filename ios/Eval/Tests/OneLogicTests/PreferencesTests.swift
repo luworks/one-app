@@ -40,6 +40,19 @@ final class PreferencesTests: XCTestCase {
     XCTAssertFalse(Preferences.weatherSummary)
   }
 
+  func testCompressEmptyHoursDefaultsOnAndPreservesExplicitChoice() {
+    let d = freshDefaults()
+    XCTAssertTrue(
+      d.object(forKey: Preferences.compressEmptyHoursKey) as? Bool
+        ?? Preferences.compressEmptyHours)
+    d.set(false, forKey: Preferences.compressEmptyHoursKey)
+    LaunchTestConfiguration.applyPreferenceOverrides(arguments: [], defaults: d)
+    XCTAssertEqual(d.object(forKey: Preferences.compressEmptyHoursKey) as? Bool, false)
+    LaunchTestConfiguration.applyPreferenceOverrides(
+      arguments: ["-uiTesting", "-uiTestingKeepPreferences"], defaults: d)
+    XCTAssertEqual(d.object(forKey: Preferences.compressEmptyHoursKey) as? Bool, false)
+  }
+
   func testEmptyDefaultsReadAsTheDefaults() {
     let d = freshDefaults()
     XCTAssertEqual(Preferences.firstWeekdayChoice(d), .system)

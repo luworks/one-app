@@ -33,6 +33,8 @@
   /// Settings > Calendar: how 2 Day, Month and Year look and where Calendar opens.
   package struct CalendarSettingsSection: View {
     package init() {}
+    @AppStorage(Preferences.compressEmptyHoursKey) private var compressesEmptyHours =
+      Preferences.compressEmptyHours
     @AppStorage(Preferences.dimPastDaysKey) private var dimsPast = Preferences.dimPastDays
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday
       .rawValue
@@ -42,6 +44,9 @@
 
     package var body: some View {
       Section {
+        ExplainedToggle(
+          title: "Compress empty hours", isOn: $compressesEmptyHours,
+          caption: "Use less space for empty hours in 2 Day.")
         ExplainedToggle(
           title: "Dim past days", isOn: $dimsPast,
           caption:

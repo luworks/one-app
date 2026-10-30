@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "reminders": [],
+  "events": [
+    { "title": "Morning anchor", "start": { "day": 0, "time": "09:00" }, "minutes": 60 },
+    { "title": "Afternoon anchor", "start": { "day": 1, "time": "15:00" }, "minutes": 60 }
+  ],
+  "alarms": [],
+  "chats": []
+}
