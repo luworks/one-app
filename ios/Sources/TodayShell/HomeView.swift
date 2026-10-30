@@ -210,7 +210,7 @@
         GeometryReader { geometry in
           if let route = ask {
             AskScreen(
-              thread: route.thread, toast: toast, composition: composition,
+              thread: route.thread, subject: route.subject, toast: toast, composition: composition,
               isPresented: askVisible,
               onClose: closeAsk,
               onMenu: openSidebarFromAsk,
@@ -265,6 +265,7 @@
       .environment(toast)
       .environment(session.actions)
       .environment(presentation)
+      .environment(\.askAbout, { openAsk(nil, subject: $0) })
       .defaultAppStorage(session.defaults)
       .environment(\.calendar, session.runtime.calendar)
       .environment(\.locale, session.runtime.locale)
@@ -317,14 +318,19 @@
 
     /// The bottom field and sidebar New chat start a new conversation; a sidebar row reopens that one.
     /// A new conversation uses the page built hidden ahead of time, so opening only reveals it.
-    private func openAsk(_ thread: ChatThread?, fromSidebar: Bool = false) {
+    /// A chat about one item ("Ask AI" in its menu) is always a fresh page that carries the item.
+    private func openAsk(
+      _ thread: ChatThread?, subject: AskSubject? = nil, fromSidebar: Bool = false
+    ) {
       PerformanceTrace.shared.beginPage("ai")
       // Opened from the sidebar, the sidebar stays underneath: Close goes back to it.
       if !fromSidebar { drawer.set(open: false, animated: false) }
       var transaction = Transaction()
       transaction.disablesAnimations = true
       withTransaction(transaction) {
-        if thread != nil || ask == nil || ask?.used == true { ask = AskRoute(thread: thread) }
+        if thread != nil || subject != nil || ask == nil || ask?.used == true {
+          ask = AskRoute(thread: thread, subject: subject)
+        }
         ask?.used = true
         askVisible = true
       }
@@ -1052,6 +1058,8 @@
   struct AskRoute: Identifiable {
     let id = UUID()
     let thread: ChatThread?
+    /// The item this chat was opened about, from an item's "Ask AI" menu row.
+    var subject: AskSubject? = nil
     /// Shown at least once: the next new chat needs a new page.
     var used = false
   }
