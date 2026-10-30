@@ -38,6 +38,30 @@ final class QuickTimeTests: XCTestCase {
     )
   }
 
+  func testDuePresetRetainsSelectedDayEvenWhenPast() {
+    XCTAssertEqual(
+      parts(QuickTime.presetOnSelectedDay(hour: 9, minute: 30, on: now, calendar: cal)),
+      DateComponents(month: 10, day: 16, hour: 9, minute: 30))
+    let yesterday = cal.date(byAdding: .day, value: -1, to: now)!
+    XCTAssertEqual(
+      parts(QuickTime.presetOnSelectedDay(hour: 12, minute: 0, on: yesterday, calendar: cal)),
+      DateComponents(month: 10, day: 15, hour: 12, minute: 0))
+  }
+
+  func testRepeatLabelsFollowSelectedDate() {
+    let locale = Locale(identifier: "en_US")
+    XCTAssertEqual(
+      QuickTime.repeatLabel(.daily, date: now, calendar: cal, locale: locale), "Daily 22:17")
+    XCTAssertEqual(
+      QuickTime.repeatLabel(.weekly, date: now, calendar: cal, locale: locale), "Fridays 22:17")
+    XCTAssertEqual(
+      QuickTime.repeatLabel(.monthly, date: now, calendar: cal, locale: locale),
+      "16th each month at 22:17")
+    XCTAssertEqual(
+      QuickTime.repeatLabel(.yearly, date: now, calendar: cal, locale: locale),
+      "Every Oct 16 at 22:17")
+  }
+
   func testNudges() {
     XCTAssertEqual(
       parts(QuickTime.nudge(now, minutes: 10, calendar: cal)),

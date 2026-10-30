@@ -29,6 +29,41 @@ public enum QuickTime {
     return next
   }
 
+  /// Due-style preset: retain the selected calendar day even when the time is in the past.
+  public static func presetOnSelectedDay(
+    hour: Int, minute: Int, on date: Date, calendar: Calendar = .current
+  ) -> Date {
+    calendar.date(bySettingHour: hour, minute: minute, second: 0, of: date) ?? date
+  }
+
+  public static func repeatLabel(
+    _ rule: RepeatRule, date: Date, calendar: Calendar = .current, locale: Locale = .current
+  ) -> String {
+    let formatter = DateFormatter()
+    formatter.calendar = calendar
+    formatter.timeZone = calendar.timeZone
+    formatter.locale = locale
+    formatter.dateFormat = "HH:mm"
+    let time = formatter.string(from: date)
+    switch rule {
+    case .daily: return "Daily \(time)"
+    case .weekdays: return "Weekdays \(time)"
+    case .weekly:
+      formatter.dateFormat = "EEEE"
+      return "\(formatter.string(from: date))s \(time)"
+    case .monthly:
+      let number = NSNumber(value: calendar.component(.day, from: date))
+      let ordinal = NumberFormatter()
+      ordinal.locale = locale
+      ordinal.numberStyle = .ordinal
+      return "\(ordinal.string(from: number) ?? number.stringValue) each month at \(time)"
+    case .yearly:
+      formatter.dateFormat = "MMM d"
+      return "Every \(formatter.string(from: date)) at \(time)"
+    case .weeklyOn: return rule.label
+    }
+  }
+
   public static func nudge(_ date: Date, minutes: Int, calendar cal: Calendar = .current) -> Date {
     // A day button keeps wall-clock time across daylight-saving transitions.
     if abs(minutes) == 1440 {
