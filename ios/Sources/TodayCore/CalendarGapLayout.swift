@@ -75,11 +75,11 @@ public struct CalendarGapLayout: Sendable {
     self.pointsPerMinute = pointsPerHour / 60
     self.compressedGapHeight = compressedGapHeight
     self.expandedGaps = expandedGaps
-    self.height =
-      1440 * (pointsPerHour / 60) - found.reduce(0) { total, gap in
-        let full = (gap.end - gap.start) * (pointsPerHour / 60)
-        return total + (expandedGaps.contains(gap) ? 0 : max(0, full - compressedGapHeight))
-      }
+    let savedHeight = found.reduce(0.0) { total, gap in
+      let full = (gap.end - gap.start) * (pointsPerHour / 60)
+      return total + (expandedGaps.contains(gap) ? 0 : max(0, full - compressedGapHeight))
+    }
+    self.height = 1440 * (pointsPerHour / 60) - savedHeight
   }
 
   private func gapScale(_ gap: Interval) -> Double {

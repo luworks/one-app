@@ -39,7 +39,7 @@ final class CalendarGapLayoutTests: XCTestCase {
       Day(intervals: [
         Gap(start: 61, end: 120), Gap(start: 180, end: 180.01),
         Gap(start: 300, end: 360), Gap(start: 420, end: 420),
-      ]),
+      ])
     ])
     XCTAssertEqual(
       axis.gaps,

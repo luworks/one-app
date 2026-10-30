@@ -1424,12 +1424,9 @@
         let width = geo.size.width
         let layout = CalendarLayout.timedDay(
           blocks: placed.map {
-            (
-              y: axis.y(forMinute: Double($0.startMinute)),
-              height: max(
-                18, axis.height(
-                  from: Double($0.startMinute), to: Double($0.startMinute + $0.lengthMinutes)) - 1)
-            )
+            let start = Double($0.startMinute)
+            let end = Double($0.startMinute + $0.lengthMinutes)
+            return (y: axis.y(forMinute: start), height: max(18, axis.height(from: start, to: end) - 1))
           },
           marks: marks.map {
             axis.y(forMinute: CalendarDayAxis.minute($0.start, calendar: cal))
@@ -1676,6 +1673,7 @@
     /// The placeholder under the finger while a new event is placed, like Apple's "New Event" block.
     private func draftBlock(_ minute: Int, width: CGFloat) -> some View {
       let start = cal.date(byAdding: .minute, value: minute, to: day) ?? day
+      let height = CGFloat(axis.height(from: Double(minute), to: Double(minute + 60)))
       return VStack(alignment: .leading, spacing: 0) {
         Text("New Event").font(.system(size: 10, weight: .semibold))
         Text(
@@ -1687,9 +1685,7 @@
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))
       .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-      .frame(
-        width: width - 2,
-        height: max(1, CGFloat(axis.height(from: Double(minute), to: Double(minute + 60))) - 1))
+      .frame(width: width - 2, height: max(1, height - 1))
       .offset(x: 1, y: CGFloat(axis.y(forMinute: Double(minute))))
       .allowsHitTesting(false)
       .accessibilityElement(children: .ignore)
