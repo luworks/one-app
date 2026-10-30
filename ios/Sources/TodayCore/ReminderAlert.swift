@@ -8,8 +8,11 @@ public struct ReminderAlert: Codable, Equatable {
     self.sound = sound
     self.snoozeMinutes = snoozeMinutes.map { AlarmPlan.snoozeMinutes(nearest: $0) }
   }
+  /// Sorted keys: the same settings always give the same string (stored values and snapshots compare by it).
   public var rawValue: String? {
-    (try? JSONEncoder().encode(self)).flatMap { String(data: $0, encoding: .utf8) }
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    return (try? encoder.encode(self)).flatMap { String(data: $0, encoding: .utf8) }
   }
   public init?(rawValue: String?) {
     guard let rawValue, let data = rawValue.data(using: .utf8),
