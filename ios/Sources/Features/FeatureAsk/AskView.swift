@@ -189,7 +189,8 @@
     @State private var focused = false
 
     package init(
-      thread: ChatThread? = nil, subject: AskSubject? = nil, isPresented: Bool = true, onClose: (() -> Void)? = nil,
+      thread: ChatThread? = nil, subject: AskSubject? = nil, isPresented: Bool = true,
+      onClose: (() -> Void)? = nil,
       onMenu: (() -> Void)? = nil, calendar: any CalendarService, now: @escaping () -> Date,
       actions: PlannerActions, ledger: Ledger, activity: ActivityCenter,
       intelligence: AskIntelligence, voice: VoiceInput, presentation: PlannerPresentation,
