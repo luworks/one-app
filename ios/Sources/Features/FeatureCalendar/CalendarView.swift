@@ -1030,7 +1030,8 @@
     @AppStorage(Preferences.firstWeekdayKey) private var firstWeekday = Preferences.firstWeekday
       .rawValue
     @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
-    @AppStorage(Preferences.compressEmptyHoursKey) private var compressEmptyHours = Preferences.compressEmptyHours
+    @AppStorage(Preferences.compressEmptyHoursKey) private var compressEmptyHours =
+      Preferences.compressEmptyHours
     @State private var expandedGaps: Set<CalendarGapLayout.Interval> = []
     /// Days from today of the first column.
     @State private var pos: Int? = 0
@@ -1148,12 +1149,15 @@
       let right = Int((scroll.columns + CGFloat(Self.columns)).rounded(.up))
       let days = (left..<max(left + 1, right)).map { offset in
         let day = date(offset)
-        let interval = cal.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 86400)
+        let interval =
+          cal.dateInterval(of: .day, for: day) ?? DateInterval(start: day, duration: 86400)
         let entries = CalendarEntries.make(
           in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar,
-          now: presentation.now, calendar: cal).filter { !$0.isAllDay }
+          now: presentation.now, calendar: cal
+        ).filter { !$0.isAllDay }
         let spans = entries.filter { !$0.isTask && !$0.isAlarm }.map { entry in
-          let span = CalendarDayAxis.span(start: entry.start, end: entry.end, in: interval, calendar: cal)
+          let span = CalendarDayAxis.span(
+            start: entry.start, end: entry.end, in: interval, calendar: cal)
           return CalendarGapLayout.Interval(start: span.start, end: span.end)
         }
         let marks = entries.filter { ($0.isTask || $0.isAlarm) && interval.contains($0.start) }
@@ -1217,7 +1221,9 @@
     private func hourLabels(_ axis: CalendarGapLayout) -> some View {
       ZStack(alignment: .topLeading) {
         ForEach(0..<24, id: \.self) { h in
-          if !axis.gaps.contains(where: { !expandedGaps.contains($0) && Double(h * 60) >= $0.start && Double(h * 60) < $0.end }) {
+          if !axis.gaps.contains(where: {
+            !expandedGaps.contains($0) && Double(h * 60) >= $0.start && Double(h * 60) < $0.end
+          }) {
             Text(hourLabel(h))
               .font(.system(size: 10).monospacedDigit())
               .foregroundStyle(.secondary)
@@ -1418,7 +1424,12 @@
         let width = geo.size.width
         let layout = CalendarLayout.timedDay(
           blocks: placed.map {
-            (y: axis.y(forMinute: Double($0.startMinute)), height: max(18, axis.height(from: Double($0.startMinute), to: Double($0.startMinute + $0.lengthMinutes)) - 1))
+            (
+              y: axis.y(forMinute: Double($0.startMinute)),
+              height: max(
+                18, axis.height(
+                  from: Double($0.startMinute), to: Double($0.startMinute + $0.lengthMinutes)) - 1)
+            )
           },
           marks: marks.map {
             axis.y(forMinute: CalendarDayAxis.minute($0.start, calendar: cal))
@@ -1475,7 +1486,9 @@
     private var hourLines: some View {
       ZStack(alignment: .topLeading) {
         ForEach(0..<24, id: \.self) { h in
-          if !axis.gaps.contains(where: { !expandedGaps.contains($0) && Double(h * 60) > $0.start && Double(h * 60) < $0.end }) {
+          if !axis.gaps.contains(where: {
+            !expandedGaps.contains($0) && Double(h * 60) > $0.start && Double(h * 60) < $0.end
+          }) {
             Rectangle().fill(Color(.separator)).frame(height: 0.5)
               .offset(y: CGFloat(axis.y(forMinute: Double(h * 60))))
           }
@@ -1637,11 +1650,13 @@
       }
       return SlotPressView { point in
         // A press on an event or alarm is theirs (its menu); only empty space makes an event.
-        !blocks.contains { $0.contains(point) } && !axis.gaps.contains { gap in
-          let y = Double(point.y)
-          return axis.height(from: gap.start, to: gap.end) < (gap.end - gap.start) / 60 * Double(hourHeight)
-            && y >= axis.y(forMinute: gap.start) && y < axis.y(forMinute: gap.end)
-        }
+        !blocks.contains { $0.contains(point) }
+          && !axis.gaps.contains { gap in
+            let y = Double(point.y)
+            return axis.height(from: gap.start, to: gap.end)
+              < (gap.end - gap.start) / 60 * Double(hourHeight)
+              && y >= axis.y(forMinute: gap.start) && y < axis.y(forMinute: gap.end)
+          }
       } changed: { point in
         draft = minute(point)
       } ended: { point in
@@ -1672,7 +1687,9 @@
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 4))
       .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-      .frame(width: width - 2, height: max(1, CGFloat(axis.height(from: Double(minute), to: Double(minute + 60))) - 1))
+      .frame(
+        width: width - 2,
+        height: max(1, CGFloat(axis.height(from: Double(minute), to: Double(minute + 60))) - 1))
       .offset(x: 1, y: CGFloat(axis.y(forMinute: Double(minute))))
       .allowsHitTesting(false)
       .accessibilityElement(children: .ignore)

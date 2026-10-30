@@ -43,7 +43,8 @@ public struct CalendarGapLayout: Sendable {
 
     var barriers: [Interval] = []
     for day in days {
-      for interval in day.intervals where interval.start.isFinite && interval.end.isFinite && interval.start < interval.end {
+      for interval in day.intervals
+      where interval.start.isFinite && interval.end.isFinite && interval.start < interval.end {
         let start = max(0, (interval.start / 60).rounded(.down) * 60)
         let end = min(1440, (interval.end / 60).rounded(.up) * 60)
         if start < end {
@@ -74,10 +75,11 @@ public struct CalendarGapLayout: Sendable {
     self.pointsPerMinute = pointsPerHour / 60
     self.compressedGapHeight = compressedGapHeight
     self.expandedGaps = expandedGaps
-    self.height = 1440 * (pointsPerHour / 60) - found.reduce(0) { total, gap in
-      let full = (gap.end - gap.start) * (pointsPerHour / 60)
-      return total + (expandedGaps.contains(gap) ? 0 : max(0, full - compressedGapHeight))
-    }
+    self.height =
+      1440 * (pointsPerHour / 60) - found.reduce(0) { total, gap in
+        let full = (gap.end - gap.start) * (pointsPerHour / 60)
+        return total + (expandedGaps.contains(gap) ? 0 : max(0, full - compressedGapHeight))
+      }
   }
 
   private func gapScale(_ gap: Interval) -> Double {

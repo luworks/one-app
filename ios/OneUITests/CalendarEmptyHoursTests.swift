@@ -6,10 +6,11 @@ final class CalendarEmptyHoursTests: XCTestCase {
   func testEmptyHoursExpandAndCollapse() throws {
     continueAfterFailure = false
     let app = XCUIApplication()
-    app.launchArguments = TestData.fixtureArguments("calendar-empty-hours.json") + [
-      "-uiTestingNow", "09:00", "-uiTestingPrefs", "compressEmptyHours=1",
-      "-AppleLocale", "en_US",
-    ]
+    app.launchArguments =
+      TestData.fixtureArguments("calendar-empty-hours.json") + [
+        "-uiTestingNow", "09:00", "-uiTestingPrefs", "compressEmptyHours=1",
+        "-AppleLocale", "en_US",
+      ]
     app.launch()
     app.buttons["Calendar"].firstMatch.tap()
 

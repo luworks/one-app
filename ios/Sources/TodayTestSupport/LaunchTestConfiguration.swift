@@ -94,7 +94,8 @@ public enum LaunchTestConfiguration {
   ]
 
   private static let allKeys = [
-    Preferences.compressEmptyHoursKey, Preferences.dimPastDaysKey, Preferences.firstWeekdayKey, Preferences.weekNumbersKey,
+    Preferences.compressEmptyHoursKey, Preferences.dimPastDaysKey, Preferences.firstWeekdayKey,
+    Preferences.weekNumbersKey,
     Preferences.calendarStartKey,
     Preferences.showSettleKey,
     Preferences.showFreeTimeKey, Preferences.newReminderListKey,

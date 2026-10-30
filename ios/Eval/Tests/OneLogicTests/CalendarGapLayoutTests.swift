@@ -14,10 +14,14 @@ final class CalendarGapLayoutTests: XCTestCase {
 
   func testCommonGapsUseUnionOfClippedOverlappingAndAdjacentEvents() {
     let axis = layout([
-      Day(intervals: [Gap(start: -30, end: 90), Gap(start: 120, end: 240),
-                      Gap(start: 220, end: 300), Gap(start: 1400, end: 1500)]),
-      Day(intervals: [Gap(start: 300, end: 360), Gap(start: 720, end: 780),
-                      Gap(start: 900, end: 850)])
+      Day(intervals: [
+        Gap(start: -30, end: 90), Gap(start: 120, end: 240),
+        Gap(start: 220, end: 300), Gap(start: 1400, end: 1500),
+      ]),
+      Day(intervals: [
+        Gap(start: 300, end: 360), Gap(start: 720, end: 780),
+        Gap(start: 900, end: 850),
+      ]),
     ])
     XCTAssertEqual(axis.gaps, [Gap(start: 360, end: 720), Gap(start: 780, end: 1380)])
     XCTAssertEqual(axis.height(from: 120, to: 360), 240, accuracy: 0.0001)
@@ -31,12 +35,18 @@ final class CalendarGapLayoutTests: XCTestCase {
   }
 
   func testTouchedHoursAndHalfOpenEndBoundaries() {
-    let axis = layout([Day(intervals: [
-      Gap(start: 61, end: 120), Gap(start: 180, end: 180.01),
-      Gap(start: 300, end: 360), Gap(start: 420, end: 420)
-    ])])
-    XCTAssertEqual(axis.gaps, [Gap(start: 0, end: 60), Gap(start: 120, end: 180),
-                               Gap(start: 240, end: 300), Gap(start: 360, end: 1440)])
+    let axis = layout([
+      Day(intervals: [
+        Gap(start: 61, end: 120), Gap(start: 180, end: 180.01),
+        Gap(start: 300, end: 360), Gap(start: 420, end: 420),
+      ]),
+    ])
+    XCTAssertEqual(
+      axis.gaps,
+      [
+        Gap(start: 0, end: 60), Gap(start: 120, end: 180),
+        Gap(start: 240, end: 300), Gap(start: 360, end: 1440),
+      ])
   }
 
   func testMinimumDurationFiltersWholeHourRuns() {
@@ -61,7 +71,7 @@ final class CalendarGapLayoutTests: XCTestCase {
     XCTAssertEqual(axis.height, 1240, accuracy: 0.0001)
     XCTAssertEqual(axis.y(forMinute: 120), 20, accuracy: 0.0001)
     XCTAssertEqual(axis.y(forMinute: 180), 80, accuracy: 0.0001)
-    XCTAssertEqual(axis.y(forMinute: 240), 90, accuracy: 0.0001) // now inside a gap
+    XCTAssertEqual(axis.y(forMinute: 240), 90, accuracy: 0.0001)  // now inside a gap
     XCTAssertEqual(axis.height(from: 60, to: 240), 80, accuracy: 0.0001)
     XCTAssertEqual(axis.height(from: 300, to: 120), 0, accuracy: 0.0001)
     for minute in [0.0, 60, 120, 150, 180, 240, 300, 1440] {

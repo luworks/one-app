@@ -43,7 +43,8 @@ final class PreferencesTests: XCTestCase {
   func testCompressEmptyHoursDefaultsOnAndPreservesExplicitChoice() {
     let d = freshDefaults()
     XCTAssertTrue(
-      d.object(forKey: Preferences.compressEmptyHoursKey) as? Bool ?? Preferences.compressEmptyHours)
+      d.object(forKey: Preferences.compressEmptyHoursKey) as? Bool
+        ?? Preferences.compressEmptyHours)
     d.set(false, forKey: Preferences.compressEmptyHoursKey)
     LaunchTestConfiguration.applyPreferenceOverrides(arguments: [], defaults: d)
     XCTAssertEqual(d.object(forKey: Preferences.compressEmptyHoursKey) as? Bool, false)
