@@ -49,6 +49,8 @@ Per tier, the extra fields:
 
 ### 2.3 Size and volume (estimates)
 
+Current policy: raw events default to Forever across all tiers; the finite-period behavior and 30-day Undo snapshot window are described in `ios/README.md`. The table below is the original sizing proposal, not the current retention policy.
+
 Basis: a heavy active day (about 8 app opens). Row size basis is the measurement in section 3.2: 156 bytes per row for an 11-column row with three indexes at 1M rows (about 40 bytes of title). Rows with more JSON or text are taken as 200 to 300 bytes. Counts per day are my estimates, not measured on real usage; Phase 1 should log real counts for two weeks and replace these numbers.
 
 | Tier | Events / active day | Bytes / event | Rows / year | MB / year (raw) | Retention proposal |
@@ -59,7 +61,7 @@ Basis: a heavy active day (about 8 app opens). Row size basis is the measurement
 | 4 System | 50 | 200 | 18k | 4 | Errors and conflicts 90 days; counters rolled up forever |
 | Total | about 670 | | about 240k | about 40 MB raw | Steady state after retention: about 15 to 20 MB |
 
-At three times heavier use, 1M rows is reached in about 1.4 years of raw data, which the store handles (section 3.2). Rollups keep it flat after that.
+At three times heavier use, 1M rows is reached in about 1.4 years of raw data, which the store handles (section 3.2). Forever retention does not roll up or prune raw events, so storage continues to grow.
 
 Steady-state cost on the phone is small. The cost that matters is write frequency (battery), so events are batched: the recorder buffers in memory and commits every 1 to 2 seconds or on backgrounding, in one transaction.
 

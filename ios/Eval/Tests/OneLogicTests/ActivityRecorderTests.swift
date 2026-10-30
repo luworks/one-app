@@ -144,7 +144,7 @@ final class ActivityRecorderTests: XCTestCase {
     XCTAssertEqual(
       fresh.tiers, Set(ActivityTier.allCases),
       "every category is on by default (decision 1: usage too)")
-    XCTAssertEqual(fresh.retention, .year, "default retention is a year (decision 2)")
+    XCTAssertEqual(fresh.retention, .forever, "raw events are kept by default")
     XCTAssertTrue(
       fresh.keepChatText,
       "chat text is kept by default, on this device only (the user wants real chats recorded)")
@@ -171,6 +171,21 @@ final class ActivityRecorderTests: XCTestCase {
   }
 
   // MARK: Event shapes
+
+  func testRepeatedWriteFailuresKeepBatchUntilSuccessfulFlush() async {
+    let store = SpyStore()
+    let r = recorder(store)
+    r.record(ev())
+    store.fail = true
+    for _ in 0..<6 {
+      XCTAssertFalse(r.flush())
+      XCTAssertEqual(r.bufferedCount, 1)
+    }
+    store.fail = false
+    XCTAssertTrue(r.flush())
+    XCTAssertEqual(r.bufferedCount, 0)
+    XCTAssertEqual(store.batches.flatMap { $0 }.count, 1)
+  }
 
   func testAITurnKeepsNoTextUnlessAsked() async {
     let thread = UUID()

@@ -63,31 +63,35 @@ public final class ActivityRecorder {
     if full {
       flush()
     } else if needsSchedule {
-      schedule(flushDelay) { [weak self] in self?.flush() }
+      schedule(flushDelay) { [weak self] in _ = self?.flush() }
     }
     return true
   }
 
   /// Writes what is buffered, now. Owned by the app lifecycle actor; nothing happens when the buffer is empty.
-  public func flush() {
+  @discardableResult
+  public func flush() -> Bool {
     lock.lock()
     let batch = buffer
     buffer = []
     flushScheduled = false
     lock.unlock()
-    guard let store, !batch.isEmpty else { return }
+    guard let store else { return false }
+    guard !batch.isEmpty else { return true }
     do {
       let inserted = try store.insert(batch)
       lock.lock()
       writeFailures = 0
       lock.unlock()
       didFlush?(inserted)
+      return true
     } catch {
-      // Keep the events for the next try instead of losing them; give up on a batch that keeps failing.
+      // Keep the entire batch for a later retry, including after repeated failures.
       lock.lock()
       writeFailures += 1
-      if writeFailures < 5 { buffer.insert(contentsOf: batch, at: 0) }
+      buffer.insert(contentsOf: batch, at: 0)
       lock.unlock()
+      return false
     }
   }
 

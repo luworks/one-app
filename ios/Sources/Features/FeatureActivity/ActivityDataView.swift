@@ -116,13 +116,13 @@
         .accessibilityIdentifier("activity.where")
 
         Section {
-          Picker("Keep changes for", selection: retention) {
+          Picker("Keep activity for", selection: retention) {
             ForEach(ActivityRetention.allCases) { Text($0.title).tag($0) }
           }
           .accessibilityIdentifier("activity.retention")
         } footer: {
           Text(
-            "Older changes are removed when Today opens. Other records are kept shorter: AI decisions 180 days, usage 30 days, system events 90 days. Undo for a deleted reminder works for 30 days."
+            "Forever keeps raw activity in all categories. With a shorter choice, changes follow that period; AI decisions are kept 180 days, usage 30 days and system events 90 days. Undo snapshots are kept 30 days."
           )
         }
 
