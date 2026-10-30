@@ -58,20 +58,25 @@
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     package var body: some View {
-      VStack(spacing: 16) {
+      VStack(spacing: 0) {
         header
           .padding(.horizontal, 16)
         // Scrolls so a short phone (SE, mini) or a large text size still reaches the grid above the keyboard.
         ScrollView {
-          card
-            .padding(.horizontal, 16)
+          VStack {
+            Spacer(minLength: 60)
+            card
+            Spacer(minLength: 60)
+          }
+            .frame(minHeight: 440)
+            .padding(.horizontal, 10)
             .padding(.bottom, 16)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
       }
       .padding(.top, 16)
-      .background(Color(.systemBackground))
+      .background(Color(.systemGroupedBackground))
       .performanceDestination("reminder.quick")
       .onAppear {
         focused = true
@@ -100,7 +105,7 @@
         Text(saveError ?? "")
       }
       .presentationDetents([.large])
-      .presentationDragIndicator(.visible)
+      .presentationDragIndicator(.hidden)
     }
 
     // MARK: Header: cancel, options, save
@@ -119,49 +124,51 @@
         Spacer(minLength: 0)
 
         Menu {
+          Text("Auto snooze is not available for Apple Reminders")
+          Button("Auto snooze off") {}.disabled(true)
+        } label: {
+          HStack(spacing: 0) {
+            Image(systemName: "zzz")
+            Text("–").font(.body)
+          }.frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Auto snooze unavailable")
+
+        Menu {
+          Picker("Repeat", selection: $repeatRule) {
+            Text("Repeat Off").tag(RepeatRule?.none)
+            ForEach(RepeatRule.allCases, id: \.self) { rule in
+              Text(QuickTime.repeatLabel(rule, date: when ?? presentation.now,
+                                         calendar: presentation.calendar))
+                .tag(RepeatRule?.some(rule))
+            }
+          }
+        } label: {
+          Image(systemName: "repeat").frame(width: 40, height: 44)
+            .foregroundStyle(repeatRule == nil ? Color.secondary : Color.primary)
+        }
+        .disabled(when == nil)
+        .accessibilityLabel(repeatRule.map { "Repeat, \($0.label)" } ?? "Repeat")
+        .accessibilityIdentifier("quick.repeat")
+
+        Menu {
+          Text("Apple Reminders uses its own alert sound")
           Picker("List", selection: $listName) {
             Text("Reminders").tag("")
             ForEach(lists.filter { !$0.name.isEmpty && $0.name != "Reminders" }) {
               Text($0.name).tag($0.name)
             }
           }
-        } label: {
-          Image(systemName: "list.bullet").frame(width: 40, height: 40)
-        }
-        .accessibilityLabel("List, \(listName.isEmpty ? "Reminders" : listName)")
-
-        Button {
-          flagged.toggle()
-        } label: {
-          Image(systemName: flagged ? "flag.fill" : "flag").frame(width: 40, height: 40)
-            .foregroundStyle(flagged ? Color.orange : Color.primary)
-        }
-        .accessibilityLabel(flagged ? "Flagged" : "Flag")
-
-        Menu {
-          Picker("Repeat", selection: $repeatRule) {
-            Text("Never").tag(RepeatRule?.none)
-            ForEach(RepeatRule.choices(including: repeatRule), id: \.self) {
-              Text($0.label).tag(RepeatRule?.some($0))
-            }
+          Toggle("Flag", isOn: $flagged)
+          if alarms.isAvailable {
+            Toggle("Ring as alarm", isOn: $ringsAsAlarm)
           }
         } label: {
-          Image(systemName: "repeat").frame(width: 40, height: 40)
-            .foregroundStyle(repeatRule == nil ? Color.primary : Color.accentColor)
+          Image(systemName: ringsAsAlarm ? "alarm.fill" : "bell")
+            .frame(width: 40, height: 44)
         }
-        .disabled(when == nil)
-        .accessibilityLabel(repeatRule.map { "Repeat, \($0.label)" } ?? "Repeat")
-
-        if alarms.isAvailable {
-          Button {
-            ringsAsAlarm.toggle()
-          } label: {
-            Image(systemName: ringsAsAlarm ? "alarm.fill" : "bell").frame(width: 40, height: 40)
-              .foregroundStyle(ringsAsAlarm ? Color.orange : Color.primary)
-          }
-          .disabled(when == nil)
-          .accessibilityLabel(ringsAsAlarm ? "Rings as alarm" : "Notification")
-        }
+        .accessibilityLabel("Alert options")
+        .accessibilityIdentifier("quick.alert")
 
         Spacer(minLength: 0)
 
@@ -192,7 +199,6 @@
           .padding(16)
           .accessibilityIdentifier("quick.title")
 
-        if title.isEmpty, !suggestions.isEmpty { suggestionRow }
         whenBar
         if showsPicker, let when {
           DatePicker(
@@ -202,14 +208,13 @@
           .datePickerStyle(.graphical)
           .padding(.horizontal, 12)
         }
-        dayRow
         grid
       }
       .background(
-        Color(.secondarySystemBackground),
-        in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        Color(.secondarySystemGroupedBackground),
+        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
       )
-      .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+      .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     /// Tap a guess to fill in the title and its usual time; Save is then one more tap.
@@ -266,15 +271,13 @@
             Text("No date").font(.title3.weight(.medium))
           }
           Spacer(minLength: 0)
-          Image(systemName: showsPicker ? "chevron.up" : "chevron.down").font(
-            .footnote.weight(.semibold))
         }
         .foregroundStyle(
-          when == nil ? Color(.label) : Color.accentColor.contrastForeground(for: colorScheme)
+          when == nil ? Color(.label) : Color.white
         )
         .padding(.horizontal, 16)
         .frame(minHeight: 52)
-        .background(when == nil ? Color(.tertiarySystemFill) : Color.accentColor)
+        .background(when == nil ? Color(.tertiarySystemFill) : (colorScheme == .dark ? Color(red: 0.58, green: 0.16, blue: 0.16) : Color(red: 0.53, green: 0.09, blue: 0.09)))
       }
       .buttonStyle(.plain)
       .accessibilityIdentifier("quick.when")
@@ -316,7 +319,7 @@
     }
 
     private var grid: some View {
-      QuickTimeGrid(date: when, now: presentation.now, calendar: presentation.calendar, set: set)
+      QuickTimeGrid(date: when, now: presentation.now, calendar: presentation.calendar, selectedDayPresets: true, set: set)
     }
 
     private func set(_ date: Date) {
@@ -354,6 +357,7 @@
     let date: Date?
     let now: Date
     let calendar: Calendar
+    var selectedDayPresets = false
     let set: (Date) -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -367,9 +371,9 @@
         ForEach(QuickTime.presets, id: \.hour) { preset in
           cell(String(format: "%02d:%02d", preset.hour, preset.minute)) {
             set(
-              QuickTime.preset(
-                hour: preset.hour, minute: preset.minute,
-                on: date ?? now, now: now, calendar: calendar))
+              selectedDayPresets
+                ? QuickTime.presetOnSelectedDay(hour: preset.hour, minute: preset.minute, on: date ?? now, calendar: calendar)
+                : QuickTime.preset(hour: preset.hour, minute: preset.minute, on: date ?? now, now: now, calendar: calendar))
           }
         }
         ForEach(QuickTime.nudges + QuickTime.nudges.map { -$0 }, id: \.self) { minutes in
@@ -395,7 +399,7 @@
           .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
           .minimumScaleFactor(typeSize.isAccessibilitySize ? 1 : 0.7)
           .padding(.horizontal, 3)
-          .frame(maxWidth: .infinity, minHeight: 46)
+          .frame(maxWidth: .infinity, minHeight: selectedDayPresets ? 51 : 46)
           .background(Color(.secondarySystemGroupedBackground))
           .overlay(alignment: .bottom) { Rectangle().fill(Color(.separator)).frame(height: 0.5) }
           .overlay(alignment: .trailing) { Rectangle().fill(Color(.separator)).frame(width: 0.5) }

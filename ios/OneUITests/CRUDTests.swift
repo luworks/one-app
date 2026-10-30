@@ -248,7 +248,7 @@ final class CRUDTests: XCTestCase {
       "Undo brings it back")
   }
 
-  /// + on Reminders opens the quick-add sheet: a title, a day chip and a time from the grid, Save.
+  /// + on Reminders opens the quick-add sheet: a title and time grid, then Save.
   func testReminderQuickAddWithPlus() {
     openTab("Reminders")
     app.addNew("New reminder")
@@ -257,7 +257,7 @@ final class CRUDTests: XCTestCase {
       ? app.textFields["quick.title"] : app.textViews["quick.title"]
     XCTAssertTrue(title.waitForExistence(timeout: 5), "+ on Reminders opens the quick-add sheet")
     title.typeText("Water the garden")
-    app.buttons["Tomorrow"].tap()
+    app.buttons["+1 day"].tap()
     app.buttons["09:30"].tap()
     let when = app.buttons["quick.when"]
     let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: .now))!

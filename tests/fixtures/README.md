@@ -6,6 +6,8 @@ These JSON inputs are versioned, read-only assets. UI tests resolve their names 
 `TestData.path` and `TestData.launchArguments` continue to select the canonical
 `today-dataset.json`; that dataset is unchanged.
 
+The four images in [`design-refs/due-quick-add-20261030`](design-refs/due-quick-add-20261030/) are the owner's Due quick-add visual references, including its menus and alert sheet.
+
 `PerformanceClimbTests.testTodayWeekResponse`, `testYearWeekResponse` and
 `testRepeatedNavigationRetainsCalendarSelection` reuse this canonical dataset at
 09:41 for matched navigation response samples; they create no temporary dataset.
