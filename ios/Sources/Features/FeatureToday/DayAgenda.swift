@@ -390,7 +390,7 @@
         identity: actions.focus.identity(
           resolution: reminders.focusIdentity(task), localReference: ref, kind: "reminder",
           occurrence: task.repeats == nil ? nil : task.due),
-        reference: ref, title: task.title)
+        reference: ref, title: task.title, subject: AskSubject(task: task))
     }
 
     private func target(_ event: OneEvent, start: Date) -> FocusTarget {
@@ -399,7 +399,7 @@
         identity: actions.focus.identity(
           resolution: calendar.cachedFocusIdentity(externalID: event.externalID, occurrence: start),
           localReference: ref, kind: "event", occurrence: event.repeats == nil ? nil : start),
-        reference: ref, title: event.title)
+        reference: ref, title: event.title, subject: AskSubject(event: event, start: start))
     }
 
     private func target(_ event: ExternalEvent) -> FocusTarget {
@@ -409,7 +409,7 @@
           resolution: calendar.cachedFocusIdentity(
             externalID: event.eventIdentifier, occurrence: event.start),
           localReference: ref, kind: "event", occurrence: event.repeats ? event.start : nil),
-        reference: ref, title: event.title)
+        reference: ref, title: event.title, subject: AskSubject(event: event))
     }
 
     private func target(_ alarm: OneAlarm, fireDate: Date) -> FocusTarget {
@@ -417,7 +417,8 @@
       return FocusTarget(
         identity: actions.focus.identity(
           resolution: .localOnly, localReference: ref, kind: "alarm", occurrence: fireDate),
-        reference: ref, title: alarm.label.isEmpty ? "Alarm" : alarm.label)
+        reference: ref, title: alarm.label.isEmpty ? "Alarm" : alarm.label,
+        subject: AskSubject(alarm: alarm))
     }
 
     private func attention(_ target: FocusTarget, on rowDay: Date? = nil) -> TodayRowAttention? {
@@ -574,7 +575,7 @@
           .modifier(TodayItemSurface(enabled: true))
           .modifier(
             TodayFocusRowActions(
-              enabled: true, settle: {},
+              enabled: true, settle: {}, ask: source?.subject,
               open: source == nil ? nil : { openAttentionItem(target) },
               delete: source != nil && canDeleteAttention(target)
                 ? { requestDeleteAttention(target) } : nil,

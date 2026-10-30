@@ -280,6 +280,7 @@
         }
       }
       .contextMenu {
+        AskAIMenuButton(AskSubject(task: task))
         Button {
           PerformanceTrace.shared.beginPage("reminder.editor")
           open(task)
@@ -428,6 +429,7 @@
       }
       .buttonStyle(.plain)
       .contextMenu {
+        AskAIMenuButton(AskSubject(alarm: alarm))
         Button("Edit Alarm", systemImage: "pencil") { open(alarm) }
         if let attention { Section { attention.menu } }
         Section {

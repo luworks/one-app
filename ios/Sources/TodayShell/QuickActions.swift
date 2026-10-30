@@ -10,7 +10,7 @@
   import SwiftUI
   import UIKit
 
-  /// Home Screen quick actions (long-press the app icon): Ask AI, New task, New event.
+  /// Home Screen quick actions (long-press the app icon): New event, New alarm, New task, Ask Today.
   @MainActor
   @Observable
   final class QuickAction {

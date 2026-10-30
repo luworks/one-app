@@ -32,6 +32,8 @@
     private let suggestionMemory: AskSuggestionMemory
     private var runtime: PlannerRuntime { presentation.runtime }
     private let now: () -> Date
+    /// The item this chat was opened about (its "Ask AI" menu row); nil for an ordinary chat.
+    private let subject: AskSubject?
 
     let onAdded: (Capture) -> Void
     /// Asks the presenter to show what this screen goes back to (`true`), underneath it, or to undo that
@@ -49,6 +51,8 @@
     @State private var cardShownAt: Date?
     @State private var messages: [ChatMessage]
     @State private var draft = ""
+    /// The Reminder / Event / Alarm button the user selected for the next message (`AskQuickKind`).
+    @State private var quickKind: AskQuickKind?
     @State private var followsTail = true
     @State private var scrollPhase: ScrollPhase = .idle
 
@@ -187,7 +191,8 @@
     @State private var focused = false
 
     package init(
-      thread: ChatThread? = nil, isPresented: Bool = true, onClose: (() -> Void)? = nil,
+      thread: ChatThread? = nil, subject: AskSubject? = nil, isPresented: Bool = true,
+      onClose: (() -> Void)? = nil,
       onMenu: (() -> Void)? = nil, calendar: any CalendarService, now: @escaping () -> Date,
       actions: PlannerActions, ledger: Ledger, activity: ActivityCenter,
       intelligence: AskIntelligence, voice: VoiceInput, presentation: PlannerPresentation,
@@ -197,6 +202,9 @@
       onOpenTask: @escaping (OneTask, @escaping () -> Void) -> Void,
       onOpenAlarm: @escaping (OneAlarm, @escaping () -> Void) -> Void
     ) {
+      self.subject = subject
+      // "it" means this item until the conversation touches another one.
+      _lastTouched = State(initialValue: subject?.title)
       self.isPresented = isPresented
       self.onClose = onClose
       self.onMenu = onMenu
@@ -421,10 +429,13 @@
 
     private var emptyState: some View {
       VStack(alignment: .leading, spacing: 24) {
-        Text("What do you want to plan?")
+        Text(subject == nil ? "What do you want to plan?" : "What about this?")
           .font(.title2.weight(.medium))
+        if let subject {
+          subjectCard(subject)
+        }
         // Built with the hidden page, so the chips are ready when it opens.
-        if showsSuggestions {
+        if showsSuggestions, subject == nil {
           AskSuggestionList(
             calendar: calendarSync, now: now, presentation: presentation, travel: travel,
             activity: activity, intelligence: intelligence, memory: suggestionMemory,
@@ -489,7 +500,7 @@
             openEvent: { onOpenDay($0.start) })
         }
         // Gated like the composer: the hidden, pre-built page must not expose duplicate buttons.
-        if isPresented, isEmpty, voice.state != .listening {
+        if isPresented, isEmpty || quickKind != nil, voice.state != .listening, subject == nil {
           quickKinds
         }
         HStack(alignment: .bottom, spacing: 8) {
@@ -504,7 +515,7 @@
             .frame(maxWidth: .infinity)
             .overlay(alignment: .topLeading) {
               if draft.isEmpty {
-                Text("Ask AI or add anything")
+                Text(quickKind?.placeholder ?? "Ask AI or add anything")
                   .foregroundStyle(.secondary)
                   .allowsHitTesting(false)
                   .accessibilityHidden(true)
@@ -566,21 +577,53 @@
       }
     }
 
-    /// Reminder / Event / Alarm: start the draft with words that tell the AI which kind to create (`AskQuickKind`).
+    /// The item this chat is about: what "it" means in the next message.
+    private func subjectCard(_ subject: AskSubject) -> some View {
+      let symbol =
+        switch subject.kind {
+        case .event: "calendar"
+        case .reminder: "checklist"
+        case .alarm: "alarm"
+        }
+      return HStack(spacing: 12) {
+        Image(systemName: symbol).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(subject.title).font(.body.weight(.medium)).lineLimit(2)
+          Text(subject.whenLabel(calendar: runtime.calendar))
+            .font(.subheadline).foregroundStyle(.secondary)
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(14)
+      .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+      .accessibilityElement(children: .combine)
+      .accessibilityIdentifier("ask-subject")
+    }
+
+    /// Reminder / Event / Alarm: a tap selects (highlights) the kind for the next message and leaves the draft alone;
+    /// tapping it again deselects. The kind's skill is added when the message is sent (`AskQuickKind`).
     private var quickKinds: some View {
       HStack(spacing: 8) {
         ForEach(AskQuickKind.allCases, id: \.self) { kind in
+          let selected = quickKind == kind
           Button {
-            draft = kind.prefix
+            quickKind = selected ? nil : kind
             focused = true
           } label: {
             Label(kind.label, systemImage: kind.symbol)
               .font(.subheadline.weight(.medium))
+              .foregroundStyle(selected ? Color.accentColor : Color.primary)
               .padding(.horizontal, 12)
               .padding(.vertical, 7)
-              .background(Color(.secondarySystemBackground), in: Capsule())
+              .background(
+                selected ? Color.accentColor.opacity(0.18) : Color(.secondarySystemBackground),
+                in: Capsule()
+              )
+              .overlay(
+                Capsule().strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
           }
           .buttonStyle(.plain)
+          .accessibilityAddTraits(selected ? .isSelected : [])
           .accessibilityIdentifier("ask-kind-\(kind.rawValue)")
         }
         Spacer(minLength: 0)
@@ -597,8 +640,11 @@
     }
 
     private func send(_ raw: String) {
-      let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !text.isEmpty else { return }
+      let typed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !typed.isEmpty else { return }
+      // The selected kind's skill is routed and parsed with the message; the chat shows what was typed.
+      let text = quickKind?.request(typed) ?? typed
+      quickKind = nil
       followsTail = true
       let token = AIResponseTrace.enabled ? UUID() : generationToken
       if AIResponseTrace.enabled {
@@ -612,14 +658,15 @@
       draft = ""
       captureTask?.cancel()
       thinking = false
-      let turnContext = ConversationContext(
+      var turnContext = ConversationContext(
         turns: messages.map {
           .init(isUser: $0.role == .user, text: $0.text, timestamp: $0.timestamp)
         })
+      turnContext.subject = subject?.contextLine(calendar: runtime.calendar) ?? ""
       let history = turnContext.prompt
       if AIResponseTrace.enabled { AIResponseTrace.shared.stage("context_complete", token: token) }
       let sentAt = now()
-      messages.append(ChatMessage(role: .user, text: text, timestamp: sentAt))
+      messages.append(ChatMessage(role: .user, text: typed, timestamp: sentAt))
       if AIResponseTrace.enabled {
         sentMessageID = messages.last?.id
         responseBaseline = responseSignature

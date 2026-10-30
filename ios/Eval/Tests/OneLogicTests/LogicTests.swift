@@ -126,6 +126,16 @@ final class AlarmPlanTests: XCTestCase {
     cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: h, minute: m))!
   }
 
+  func testNextTenMinutes() {
+    XCTAssertEqual(AlarmPlan.nextTenMinutes(after: at(12, 10, 56), calendar: cal), at(12, 11, 0))
+    XCTAssertEqual(AlarmPlan.nextTenMinutes(after: at(12, 10, 41), calendar: cal), at(12, 10, 50))
+    XCTAssertEqual(
+      AlarmPlan.nextTenMinutes(after: at(12, 10, 50), calendar: cal), at(12, 11, 0),
+      "on a mark, the next one")
+    XCTAssertEqual(AlarmPlan.nextTenMinutes(after: at(12, 10, 0), calendar: cal), at(12, 10, 10))
+    XCTAssertEqual(AlarmPlan.nextTenMinutes(after: at(12, 23, 55), calendar: cal), at(13, 0, 0))
+  }
+
   func testNextQuarterHour() {
     XCTAssertEqual(AlarmPlan.nextQuarterHour(after: at(12, 10, 56), calendar: cal), at(12, 11, 0))
     XCTAssertEqual(

@@ -1,4 +1,5 @@
 #if os(iOS)
+  import One
   import SwiftUI
   import TodayCore
   import TodayData
@@ -8,6 +9,8 @@
     var identity: FocusIdentity?
     var reference: String?
     var title: String
+    /// What "Ask AI" opens a chat about; nil when the item can't be read any more.
+    var subject: AskSubject? = nil
     var id: String {
       (reference ?? identity?.item ?? "unavailable")
         + String(identity?.occurrence?.timeIntervalSince1970 ?? 0)
@@ -17,6 +20,7 @@
   struct TodayFocusRowActions: ViewModifier {
     let enabled: Bool
     let settle: () -> Void
+    var ask: AskSubject? = nil
     var open: (() -> Void)? = nil
     var delete: (() -> Void)? = nil
     var restore: (() -> Void)? = nil
@@ -44,6 +48,7 @@
             }
           }
           .contextMenu {
+            if let ask { AskAIMenuButton(ask) }
             if let open { Section { Button("Open", systemImage: "pencil", action: open) } }
             Section { attentionButtons }
             if let delete {
