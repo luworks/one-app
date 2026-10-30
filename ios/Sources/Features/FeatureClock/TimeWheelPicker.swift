@@ -24,16 +24,19 @@
     /// Change it to show `minutes` again (a new trial), stopping any motion.
     var resetID: Int
     var adaptiveMinutes: Bool
+    /// The minute column's step: 1 = every minute, 10 = 00, 10 … 50. `minutes` must be a multiple of it.
+    var minuteStep: Int
     var locale: Locale
     var onEvent: (TimeWheelEvent, Double) -> Void
 
     package init(
-      minutes: Binding<Int>, resetID: Int, adaptiveMinutes: Bool, locale: Locale,
-      onEvent: @escaping (TimeWheelEvent, Double) -> Void
+      minutes: Binding<Int>, resetID: Int = 0, adaptiveMinutes: Bool, minuteStep: Int = 1,
+      locale: Locale, onEvent: @escaping (TimeWheelEvent, Double) -> Void = { _, _ in }
     ) {
       _minutes = minutes
       self.resetID = resetID
       self.adaptiveMinutes = adaptiveMinutes
+      self.minuteStep = minuteStep
       self.locale = locale
       self.onEvent = onEvent
     }
@@ -41,7 +44,8 @@
     package func makeCoordinator() -> Coordinator { Coordinator() }
 
     package func makeUIView(context: Context) -> TimeWheelView {
-      let view = TimeWheelView(minutes: minutes, adaptive: adaptiveMinutes, locale: locale)
+      let view = TimeWheelView(
+        minutes: minutes, adaptive: adaptiveMinutes, minuteStep: minuteStep, locale: locale)
       let coordinator = context.coordinator
       coordinator.resetID = resetID
       coordinator.parent = self
@@ -79,11 +83,15 @@
     private let mins: TimeWheelColumnView
     private let period = PeriodColumnView()
     private var locale: Locale
+    private let minuteStep: Int
 
-    init(minutes: Int, adaptive: Bool, locale: Locale) {
+    init(minutes: Int, adaptive: Bool, minuteStep: Int, locale: Locale) {
       self.locale = locale
+      self.minuteStep = max(minuteStep, 1)
       hours = TimeWheelColumnView(kind: .hour, value: minutes / 60, adaptive: false)
-      mins = TimeWheelColumnView(kind: .minute, value: minutes % 60, adaptive: adaptive)
+      mins = TimeWheelColumnView(
+        kind: .minute, value: minutes % 60 / self.minuteStep, adaptive: adaptive && minuteStep == 1,
+        step: self.minuteStep)
       super.init(frame: .zero)
       band.backgroundColor = .tertiarySystemFill
       band.layer.cornerRadius = 8
@@ -112,10 +120,11 @@
       CGSize(width: UIView.noIntrinsicMetric, height: 216)
     }
 
-    var minutes: Int { hours.value * 60 + mins.value }
+    var minutes: Int { hours.value * 60 + mins.minuteValue }
 
     func configure(adaptive: Bool, locale: Locale) {
-      mins.setAdaptive(adaptive)
+      // A coarse step has only a few rows: nothing to compress.
+      mins.setAdaptive(adaptive && minuteStep == 1)
       guard locale != self.locale else { return }
       self.locale = locale
       hours.uses24Hour = Self.uses24Hour(locale)
@@ -126,7 +135,7 @@
 
     func show(minutes: Int) {
       hours.show(value: minutes / 60)
-      mins.show(value: minutes % 60)
+      mins.show(value: minutes % 60 / minuteStep)
       period.isPM = hours.value >= 12
     }
 
@@ -206,10 +215,14 @@
     private var link: CADisplayLink?
     private var labelStep = 1
     private var reportedValue: Int
+    /// Minutes per row in the minute column (10 → 00, 10 … 50); 1 for hours.
+    private let step: Int
 
-    init(kind: Kind, value: Int, adaptive: Bool) {
+    init(kind: Kind, value: Int, adaptive: Bool, step: Int = 1) {
       self.kind = kind
-      model = TimeWheelColumn(count: kind == .hour ? 24 : 60, value: value, adaptive: adaptive)
+      self.step = kind == .minute ? step : 1
+      model = TimeWheelColumn(
+        count: kind == .hour ? 24 : 60 / self.step, value: value, adaptive: adaptive)
       reportedValue = model.value
       super.init(frame: .zero)
       clipsToBounds = true
@@ -230,6 +243,8 @@
     required init?(coder: NSCoder) { fatalError() }
 
     var value: Int { model.value }
+    /// What the column shows, in minutes (`value` times the step).
+    var minuteValue: Int { model.value * step }
     var isMoving: Bool { model.isMoving }
 
     func setAdaptive(_ adaptive: Bool) {
@@ -359,7 +374,7 @@
 
     private func text(_ value: Int) -> String {
       switch kind {
-      case .minute: return String(format: "%02d", value)
+      case .minute: return String(format: "%02d", value * step)
       case .hour:
         if uses24Hour { return String(format: "%02d", value) }
         return "\(value % 12 == 0 ? 12 : value % 12)"
@@ -386,7 +401,7 @@
       for v in low...high {
         let y = mid + (Double(v) - model.position) * ppu
         let wrapped = TimeWheelColumn.wrap(v, model.count)
-        let major = wrapped % 5 == 0
+        let major = wrapped * step % 5 == 0
         if ppu >= 3 || major {
           let length = major ? 10.0 : 5.0
           path.move(to: CGPoint(x: inner, y: y))

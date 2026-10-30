@@ -2,9 +2,9 @@
   import SwiftUI
   import UIKit
 
-  /// The alarm editor's time picker: Apple's wheel `DatePicker`, hours and minutes. The editor and the alarm wheel
-  /// lab's version A both use this, so the lab measures exactly what ships. The caller sets the calendar, locale and
-  /// time zone in the environment.
+  /// Apple's wheel `DatePicker`, hours and minutes: version A of the alarm wheel lab. The alarm editor itself uses
+  /// the custom wheel (`TimeWheelPicker`, version C with ten-minute minutes). The caller sets the calendar, locale
+  /// and time zone in the environment.
   struct AlarmTimePicker: View {
     @Binding var time: Date
 
