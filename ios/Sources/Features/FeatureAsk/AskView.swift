@@ -488,6 +488,10 @@
             openTask: { onOpenTask($0, refreshCardTitles) },
             openEvent: { onOpenDay($0.start) })
         }
+        // Gated like the composer: the hidden, pre-built page must not expose duplicate buttons.
+        if isPresented, isEmpty, voice.state != .listening {
+          quickKinds
+        }
         HStack(alignment: .bottom, spacing: 8) {
           // Keep draft/conversation state mounted, but remove the hidden UIKit editor from AX.
           if isPresented {
@@ -560,6 +564,28 @@
         default: break
         }
       }
+    }
+
+    /// Reminder / Event / Alarm: start the draft with words that tell the AI which kind to create (`AskQuickKind`).
+    private var quickKinds: some View {
+      HStack(spacing: 8) {
+        ForEach(AskQuickKind.allCases, id: \.self) { kind in
+          Button {
+            draft = kind.prefix
+            focused = true
+          } label: {
+            Label(kind.label, systemImage: kind.symbol)
+              .font(.subheadline.weight(.medium))
+              .padding(.horizontal, 12)
+              .padding(.vertical, 7)
+              .background(Color(.secondarySystemBackground), in: Capsule())
+          }
+          .buttonStyle(.plain)
+          .accessibilityIdentifier("ask-kind-\(kind.rawValue)")
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 4)
     }
 
     private func reply(_ text: String) -> ChatMessage {
