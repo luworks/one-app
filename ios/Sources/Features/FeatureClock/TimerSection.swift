@@ -6,7 +6,7 @@
   import SwiftUI
 
   /// The Timer section of the Clock tab, copied from the Timers screen of Apple's Clock app (iPhone, 440 pt wide):
-  /// the large "Timers" title, the running timers (rings, several stack), Apple's hours / min / sec wheel with a gray X
+  /// the running timers (rings, several stack), Apple's hours / min / sec wheel with a gray X
   /// and a green play button under it, a card with Label and Sound, and "Recents": the last timers you started, each
   /// a big light time with a small caption and a round play button. Tap the play button to start it at once, tap
   /// the rest of the row to put it on the wheel, swipe left to delete it.
@@ -36,7 +36,6 @@
 
     /// Apple's screen insets: the title 20 pt, the buttons and card 26 pt, Recents 30 pt (28 on the right).
     private enum Inset {
-      static let title: CGFloat = 20
       static let card: CGFloat = 26
       static let recents: CGFloat = 30
     }
@@ -44,11 +43,6 @@
     package var body: some View {
       NavigationStack {
         List {
-          Text("Timers")
-            .font(.largeTitle.bold())
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier("timer.title")
-            .row(top: 2, bottom: 0, leading: Inset.title, trailing: Inset.title)
           runningCards
           TimerWheel(seconds: $seconds)
             .frame(height: 216)

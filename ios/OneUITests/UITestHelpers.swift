@@ -137,14 +137,14 @@ extension XCUIApplication {
   }
 
   func scrollTimerToTop(file: StaticString = #filePath, line: UInt = #line) {
-    let title = staticTexts["timer.title"].firstMatch
+    let top = descendants(matching: .any)["timer.picker"].firstMatch
     for _ in 0..<8 {
-      if title.isFullyVisible(in: timerViewport) && title.isHittable { return }
+      if top.isFullyVisible(in: timerViewport) && top.isHittable { return }
       if !scrollTimerList(up: false, file: file, line: line) { break }
     }
     XCTAssertTrue(
-      title.isFullyVisible(in: timerViewport) && title.isHittable,
-      "Timer title is visible after scrolling to the top", file: file, line: line)
+      top.isFullyVisible(in: timerViewport) && top.isHittable,
+      "The wheel is visible after scrolling to the top", file: file, line: line)
   }
 
   /// The Form can extend behind its navigation bar and home indicator. Only accept rows inside its usable viewport.
