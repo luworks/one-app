@@ -1426,7 +1426,8 @@
           blocks: placed.map {
             let start = Double($0.startMinute)
             let end = Double($0.startMinute + $0.lengthMinutes)
-            return (y: axis.y(forMinute: start), height: max(18, axis.height(from: start, to: end) - 1))
+            let height = max(18, axis.height(from: start, to: end) - 1)
+            return (y: axis.y(forMinute: start), height: height)
           },
           marks: marks.map {
             axis.y(forMinute: CalendarDayAxis.minute($0.start, calendar: cal))
