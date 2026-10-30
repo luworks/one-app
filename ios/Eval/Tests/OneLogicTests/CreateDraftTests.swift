@@ -171,4 +171,37 @@ final class CreateDraftTests: XCTestCase {
     let plain = typed("Buy 2 apples", .reminder)
     XCTAssertEqual(plain.savedTitle, plain.parsedTitle == nil ? "Buy 2 apples" : plain.savedTitle)
   }
+
+  private func highlighted(_ d: CreateDraft) -> [String] {
+    d.typedTimingRanges.map { (d.title as NSString).substring(with: $0) }
+  }
+
+  func testTypedTimingIsHighlighted() {
+    XCTAssertEqual(highlighted(typed("Pay rent tomorrow 18:30", .reminder)), ["tomorrow 18:30"])
+    XCTAssertEqual(
+      highlighted(typed("Dinner with Alex fri 19:00-21:00", .calendar)), ["fri 19:00-21:00"])
+    XCTAssertEqual(highlighted(typed("6:30 weekdays", .alarm)), ["6:30 weekdays"])
+    XCTAssertEqual(highlighted(typed("Buy milk", .reminder)), [])
+    XCTAssertEqual(
+      TypedTiming.ranges(typed: "明天下午3点买牛奶", kept: "买牛奶").map {
+        ("明天下午3点买牛奶" as NSString).substring(with: $0)
+      }, ["明天下午3点"])
+  }
+
+  func testKeepAsTextRestoresTimingAndStopsParsing() {
+    var d = typed("Pay rent tomorrow 18:30", .reminder)
+    XCTAssertTrue(d.hasDueDate)
+    d.keepTypedAsText()
+    XCTAssertFalse(d.hasDueDate, "timing goes back to before the parse")
+    XCTAssertEqual(d.savedTitle, "Pay rent tomorrow 18:30")
+    XCTAssertEqual(d.typedTimingRanges, [])
+    d.title += " now"
+    d.applyTyped(now: now, calendar: cal)
+    XCTAssertFalse(d.hasDueDate, "no parsing after Keep as text")
+    d.title = ""
+    d.applyTyped(now: now, calendar: cal)
+    d.title = "Gym 7:00"
+    d.applyTyped(now: now, calendar: cal)
+    XCTAssertTrue(d.hasDueDate, "clearing the title turns parsing back on")
+  }
 }

@@ -19,10 +19,12 @@
     @State private var pendingTask: OneTask?
     @State private var pendingEvent: OneEvent?
     @State private var pendingAlarm: OneAlarm?
-    @FocusState private var titleFocused: Bool
+    @State private var titleFocused = false
     @FocusState private var notesFocused: Bool
     @State private var showsDate = false
     @State private var showsTime = false
+    /// The reminder's one quick row shows days, then times once a day is picked (like Apple Reminders).
+    @State private var reminderRowShowsTimes = false
     @State private var weekStart = 2
     @Environment(\.dynamicTypeSize) private var typeSize
     private var calendar: Calendar { composition.session.runtime.calendar }
@@ -30,10 +32,11 @@
     private var heading: String {
       switch draft.kind {
       case .alarm: "Add Alarm"
-      case .reminder: "Add Reminder"
-      case .calendar: "Add Event"
+      case .reminder: "New Reminder"
+      case .calendar: "New Event"
       }
     }
+    private static let accent = Color(.systemGreen)
     private var createLabel: String {
       switch draft.kind {
       case .alarm: "Create alarm"
@@ -73,33 +76,56 @@
     var body: some View {
       NavigationStack {
         VStack(spacing: 10) {
-          header
-          TextField(
-            draft.kind == .alarm ? "Label (optional)" : "Title", text: $draft.title
-          )
-          .font(.title3.weight(.medium))
-          .focused($titleFocused).submitLabel(.done)
-          .onSubmit {
-            // Return is the explicit Create when the draft is complete; otherwise it only closes the keyboard.
-            if draft.isValid { create() } else { titleFocused = false }
+          Picker("Type", selection: $draft.kind) {
+            ForEach(CreateDraft.Kind.allCases, id: \.self) {
+              Text($0 == .calendar ? "Event" : $0.rawValue).tag($0)
+            }
           }
-          .padding(14).background(
-            Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16)
+          .pickerStyle(.segmented).accessibilityIdentifier("create.type").disabled(locked)
+          CreateTitleField(
+            text: $draft.title, focused: $titleFocused,
+            placeholder: draft.kind == .alarm ? "Label (optional)" : "Title",
+            highlights: draft.typedTimingRanges, enabled: !locked,
+            onReturn: {
+              // Return is the explicit Create when the draft is complete; otherwise it closes the keyboard.
+              if draft.isValid { create() } else { titleFocused = false }
+            },
+            onTapHighlight: { draft.keepTypedAsText() }
           )
-          .accessibilityIdentifier("create.title").disabled(locked)
-          Text(summary).font(.subheadline.weight(.medium).monospacedDigit())
-            .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 4).accessibilityIdentifier("create.summary")
+          .padding(14).background(
+            Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+          if !draft.typedTimingRanges.isEmpty {
+            HStack {
+              Text(summary).font(.subheadline.weight(.medium).monospacedDigit())
+                .foregroundStyle(.secondary).accessibilityIdentifier("create.summary")
+              Spacer(minLength: 8)
+              Button("Keep as text") { draft.keepTypedAsText() }
+                .font(.subheadline).tint(Self.accent).accessibilityIdentifier("create.keepText")
+            }
+            .padding(.horizontal, 4)
+          }
           ScrollView {
             VStack(spacing: 16) { settings }
               .padding(.bottom, 16).disabled(locked)
           }
           .scrollDismissesKeyboard(.interactively)
         }
-        .padding(.horizontal, 20).padding(.top, 12)
+        .padding(.horizontal, 20).padding(.top, 4)
         .background(Color(.systemGroupedBackground))
         .safeAreaInset(edge: .bottom, spacing: 0) { dock }
-        .toolbar(.hidden, for: .navigationBar)
+        .tint(Self.accent)
+        .navigationTitle(heading).navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Close", systemImage: "xmark") { dismiss() }.disabled(locked)
+          }
+          ToolbarItem(placement: .confirmationAction) {
+            Button(createLabel, systemImage: saving ? "ellipsis" : "checkmark", action: create)
+              .buttonStyle(.borderedProminent).tint(Self.accent)
+              .accessibilityIdentifier("create.save")
+              .disabled(saving || !draft.isValid)
+          }
+        }
         .alert(
           "Couldn’t Create",
           isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })
@@ -127,97 +153,60 @@
       }
     }
 
-    private var header: some View {
-      HStack {
-        Button {
-          dismiss()
-        } label: {
-          Image(systemName: "xmark").frame(width: 44, height: 44)
-            .background(Color(.tertiarySystemFill), in: Circle())
-        }
-        .tint(.primary).accessibilityLabel("Close").disabled(locked)
-        Spacer()
-        Text(heading).font(.headline).accessibilityAddTraits(.isHeader)
-        Spacer()
-        if titleFocused || notesFocused {
-          Button {
-            titleFocused = false
-            notesFocused = false
-          } label: {
-            Image(systemName: "keyboard.chevron.compact.down").frame(width: 44, height: 44)
-          }
-          .tint(.primary).accessibilityLabel("Hide keyboard")
-        } else {
-          Color.clear.frame(width: 44, height: 44)
-        }
-      }
-    }
-
-    /// Fixed above the keyboard (and at the bottom without it): the one Create button, this type's quick
-    /// choices, then the three types, all visible at once.
-    private var dock: some View {
-      VStack(spacing: 8) {
-        Button(action: create) {
-          Text(saving ? "Creating…" : createLabel).font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 44)
-        }
-        .buttonStyle(.borderedProminent).tint(Color(.systemOrange))
-        .buttonBorderShape(.roundedRectangle(radius: 12))
-        .accessibilityIdentifier("create.save")
-        .disabled(saving || !draft.isValid)
-        switch draft.kind {
-        case .reminder:
-          chipRow {
-            ForEach(QuickTime.Day.allCases) { day in
-              chip(day.rawValue, selected: isDay(day)) {
-                setReminder(
-                  QuickTime.move(draft.reminderDate, to: day, now: now, calendar: calendar))
-              }
-            }
-            chip("No Date", selected: !draft.hasDueDate) {
-              draft.hasDueDate = false
-              draft.reminderRepeat = nil
-            }
-            chip("Date…", selected: showsDate) {
-              if !draft.hasDueDate { setReminder(QuickTime.start(now: now, calendar: calendar)) }
-              titleFocused = false
-              showsDate = true
-            }
-          }
-          chipRow {
+    /// One quick row above the keyboard (and at the bottom without it), like Apple Reminders' toolbar.
+    @ViewBuilder private var dock: some View {
+      switch draft.kind {
+      case .reminder:
+        chipRow {
+          if reminderRowShowsTimes {
+            chip("‹", selected: false) { reminderRowShowsTimes = false }
+              .accessibilityLabel("Days").accessibilityIdentifier("create.chip.days")
             ForEach(QuickTime.presets, id: \.hour) { preset in
-              chip(
-                String(format: "%02d:%02d", preset.hour, preset.minute),
-                selected: isPreset(preset.hour, preset.minute)
-              ) {
+              let label = String(format: "%02d:%02d", preset.hour, preset.minute)
+              chip(label, selected: isPreset(preset.hour, preset.minute)) {
                 setReminder(
                   QuickTime.preset(
                     hour: preset.hour, minute: preset.minute,
                     on: draft.hasDueDate ? draft.reminderDate : now, now: now, calendar: calendar))
               }
+              .accessibilityIdentifier("create.chip.\(label)")
             }
-            chip("Time…", selected: showsTime) {
-              if !draft.hasDueDate {
-                setReminder(QuickTime.start(now: now, calendar: calendar))
-              } else {
-                draft.hasDueTime = true
+            chip("Time…", selected: showsTime) { openTime() }
+              .accessibilityIdentifier("create.chip.Time")
+          } else {
+            ForEach(QuickTime.Day.allCases) { day in
+              chip(day.rawValue, selected: isDay(day)) {
+                setReminder(
+                  QuickTime.move(draft.reminderDate, to: day, now: now, calendar: calendar))
+                reminderRowShowsTimes = true
               }
-              titleFocused = false
-              showsTime = true
+              .accessibilityIdentifier("create.chip.\(day.rawValue)")
             }
+            chip("No Date", selected: !draft.hasDueDate) {
+              draft.hasDueDate = false
+              draft.reminderRepeat = nil
+              showsDate = false
+              showsTime = false
+            }
+            .accessibilityIdentifier("create.chip.No Date")
+            chip("Date & Time", selected: showsDate) { openDate() }
+              .accessibilityIdentifier("create.chip.Date & Time")
           }
-        case .calendar:
+        }
+        .padding(.vertical, 6).background(Color(.systemGroupedBackground))
+      case .calendar:
+        VStack(spacing: 0) {
           chipRow {
             ForEach([30, 60, 120], id: \.self) { minutes in
-              chip(
-                DurationLabel.text(minutes: minutes),
-                selected: !draft.allDay && draft.duration == minutes
-              ) {
+              let label = DurationLabel.text(minutes: minutes)
+              chip(label, selected: !draft.allDay && draft.duration == minutes) {
                 draft.allDay = false
                 draft.duration = minutes
               }
+              .accessibilityIdentifier("create.chip.\(label)")
             }
             chip("All-day", selected: draft.allDay) { draft.allDay.toggle() }
+              .accessibilityIdentifier("create.chip.All-day")
           }
           if !writableCalendars.isEmpty {
             chipRow {
@@ -229,21 +218,32 @@
               }
             }
           }
-        case .alarm:
-          EmptyView()
         }
-        Picker("Type", selection: $draft.kind) {
-          ForEach(CreateDraft.Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-        }
-        .pickerStyle(.segmented).accessibilityIdentifier("create.type").disabled(locked)
+        .padding(.vertical, 6).background(Color(.systemGroupedBackground))
+      case .alarm:
+        EmptyView()
       }
-      .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 8)
-      .background(Color(.systemGroupedBackground))
+    }
+
+    private func openDate() {
+      if !draft.hasDueDate { setReminder(QuickTime.start(now: now, calendar: calendar)) }
+      titleFocused = false
+      showsDate = true
+    }
+
+    private func openTime() {
+      if !draft.hasDueDate {
+        setReminder(QuickTime.start(now: now, calendar: calendar))
+      } else {
+        draft.hasDueTime = true
+      }
+      titleFocused = false
+      showsTime = true
     }
 
     private func chipRow<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
       ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 6, content: content)
+        HStack(spacing: 6, content: content).padding(.horizontal, 20)
       }
       .disabled(locked)
     }
@@ -315,14 +315,25 @@
         }
         notes
       case .calendar:
-        DatePicker(
-          "Starts", selection: $draft.eventStart,
-          displayedComponents: draft.allDay ? .date : [.date, .hourAndMinute]
-        )
-        .datePickerStyle(.wheel).labelsHidden()
-        .environment(\.locale, Locale(identifier: "en_GB"))
-        .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
-        .frame(height: 170).clipped().accessibilityIdentifier("create.event.start")
+        if draft.allDay {
+          // A day column in the same row style as the timed wheel (the date-only UIDatePicker is larger).
+          let dayFormat = formatter("EEE d MMM")
+          Picker("Starts", selection: allDayStart) {
+            ForEach(allDayChoices, id: \.self) { day in
+              Text(dayFormat.string(from: day)).tag(day)
+            }
+          }
+          .pickerStyle(.wheel).labelsHidden()
+          .frame(height: 170).clipped().accessibilityIdentifier("create.event.start")
+        } else {
+          DatePicker(
+            "Starts", selection: $draft.eventStart, displayedComponents: [.date, .hourAndMinute]
+          )
+          .datePickerStyle(.wheel).labelsHidden()
+          .environment(\.locale, Locale(identifier: "en_GB"))
+          .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
+          .frame(height: 170).clipped().accessibilityIdentifier("create.event.start")
+        }
         card { TextField("Location or Video Call", text: $draft.eventLocation) }
         card {
           Toggle("All-day", isOn: $draft.allDay)
@@ -363,6 +374,21 @@
       }
     }
 
+    private var allDayStart: Binding<Date> {
+      Binding(
+        get: { calendar.startOfDay(for: draft.eventStart) },
+        set: { draft.eventStart = $0 })
+    }
+
+    /// A stable list (anchored on today, so it does not shift while scrolling) that includes the chosen day.
+    private var allDayChoices: [Date] {
+      let today = calendar.startOfDay(for: now)
+      var days = (-30...400).compactMap { calendar.date(byAdding: .day, value: $0, to: today) }
+      let chosen = calendar.startOfDay(for: draft.eventStart)
+      if !days.contains(chosen) { days.append(chosen) }
+      return days.sorted()
+    }
+
     private var eventEnd: Binding<Date> {
       Binding(
         get: {
@@ -385,59 +411,53 @@
           Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 
+    /// Apple Reminders' Date and Time rows. Tapping a row opens its picker; nudges live with the time.
     private var reminderTiming: some View {
-      card {
-        Button {
-          if !draft.hasDueDate { setReminder(QuickTime.start(now: now, calendar: calendar)) }
-          showsDate.toggle()
-        } label: {
-          HStack {
-            Image(systemName: "calendar")
-            Text(draft.hasDueDate ? dueLabel : "No date").fontWeight(.medium)
-            Spacer(minLength: 0)
-            if draft.hasDueDate {
-              Text(QuickTime.relative(draft.reminderDate, now: now)).font(.caption)
-            }
-            Image(systemName: "chevron.down")
-          }
-          .padding(10).frame(minHeight: 44)
-          .foregroundStyle(.white).background(
-            Color(.systemOrange), in: RoundedRectangle(cornerRadius: 10))
-        }.buttonStyle(.plain).accessibilityIdentifier("create.reminder.date")
+      VStack(spacing: 0) {
+        timingRow(
+          "Date", symbol: "calendar", color: .red,
+          value: draft.hasDueDate ? format(draft.reminderDate, "EEE d MMM") : "None",
+          id: "create.reminder.dateValue"
+        ) {
+          if showsDate { showsDate = false } else { openDate() }
+        }
         if showsDate {
-          DatePicker(
-            "Due", selection: $draft.reminderDate,
-            displayedComponents: draft.hasDueTime ? [.date, .hourAndMinute] : .date
-          )
-          .environment(\.locale, Locale(identifier: "en_GB"))
-          Toggle("Time", isOn: $draft.hasDueTime)
+          DatePicker("Date", selection: reminderDay, displayedComponents: .date)
+            .datePickerStyle(.graphical).tint(Self.accent)
+            .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
+            .padding(.horizontal, 8)
+        }
+        Divider().padding(.leading, 52)
+        timingRow(
+          "Time", symbol: "clock", color: .blue,
+          value: draft.hasDueDate && draft.hasDueTime
+            ? format(draft.reminderDate, "HH:mm") : "None",
+          id: "create.reminder.timeValue"
+        ) {
+          if showsTime { showsTime = false } else { openTime() }
         }
         if showsTime {
-          DatePicker(
-            "Time", selection: reminderTime, displayedComponents: .hourAndMinute
-          )
-          .datePickerStyle(.wheel).labelsHidden()
-          .environment(\.locale, Locale(identifier: "en_GB"))
-          .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
-          .frame(height: 150).clipped().frame(maxWidth: .infinity)
-          .accessibilityIdentifier("create.reminder.time")
-        }
-        LazyVGrid(
-          columns: Array(
-            repeating: GridItem(.flexible(), spacing: 1),
-            count: typeSize.isAccessibilitySize ? 2 : 4), spacing: 1
-        ) {
-          ForEach(QuickTime.nudges + QuickTime.nudges.map { -$0 }, id: \.self) { minutes in
-            gridButton(QuickTime.nudgeLabel(minutes)) {
-              setReminder(
-                QuickTime.nudge(
-                  draft.hasDueDate
-                    ? draft.reminderDate : QuickTime.start(now: now, calendar: calendar),
-                  minutes: minutes, calendar: calendar))
+          DatePicker("Time", selection: reminderTime, displayedComponents: .hourAndMinute)
+            .datePickerStyle(.wheel).labelsHidden()
+            .environment(\.locale, Locale(identifier: "en_GB"))
+            .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
+            .frame(height: 150).clipped().frame(maxWidth: .infinity)
+            .accessibilityIdentifier("create.reminder.time")
+          LazyVGrid(
+            columns: Array(
+              repeating: GridItem(.flexible(), spacing: 1),
+              count: typeSize.isAccessibilitySize ? 2 : 4), spacing: 1
+          ) {
+            ForEach(QuickTime.nudges + QuickTime.nudges.map { -$0 }, id: \.self) { minutes in
+              gridButton(QuickTime.nudgeLabel(minutes)) {
+                setReminder(
+                  QuickTime.nudge(draft.reminderDate, minutes: minutes, calendar: calendar))
+              }
             }
           }
+          .padding(12)
         }
-        Divider()
+        Divider().padding(.leading, 52)
         HStack {
           Menu {
             Picker("List", selection: $draft.listName) {
@@ -445,26 +465,66 @@
               ForEach(lists, id: \.self) { Text($0).tag($0) }
             }
           } label: {
-            Image(systemName: "list.bullet").frame(maxWidth: .infinity, minHeight: 44)
+            Label(
+              draft.listName.isEmpty ? "Default list" : draft.listName, systemImage: "list.bullet"
+            )
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
           }
           .accessibilityLabel("List, \(draft.listName.isEmpty ? "Default list" : draft.listName)")
           Button {
             draft.flagged.toggle()
           } label: {
-            Image(systemName: draft.flagged ? "flag.fill" : "flag").frame(
-              maxWidth: .infinity, minHeight: 44)
+            Image(systemName: draft.flagged ? "flag.fill" : "flag").frame(width: 44, height: 44)
           }.accessibilityLabel(draft.flagged ? "Flagged" : "Flag")
-        }.tint(.primary)
+        }
+        .tint(.primary).padding(.horizontal, 16)
       }
+      .background(
+        Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private var dueLabel: String {
+    private func timingRow(
+      _ title: String, symbol: String, color: Color, value: String, id: String,
+      action: @escaping () -> Void
+    ) -> some View {
+      Button(action: action) {
+        HStack(spacing: 12) {
+          Image(systemName: symbol).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+            .frame(width: 28, height: 28).background(color, in: RoundedRectangle(cornerRadius: 7))
+          Text(title).foregroundStyle(.primary)
+          Spacer()
+          Text(value).monospacedDigit().foregroundStyle(Self.accent)
+            .accessibilityIdentifier(id)
+        }
+        .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+    }
+
+    private func formatter(_ pattern: String) -> DateFormatter {
       let formatter = DateFormatter()
       formatter.calendar = calendar
       formatter.timeZone = calendar.timeZone
       formatter.locale = Locale(identifier: "en_US_POSIX")
-      formatter.dateFormat = draft.hasDueTime ? "EEE, MMM d, HH:mm" : "EEE, MMM d"
-      return formatter.string(from: draft.reminderDate)
+      formatter.dateFormat = pattern
+      return formatter
+    }
+
+    private func format(_ date: Date, _ pattern: String) -> String {
+      formatter(pattern).string(from: date)
+    }
+
+    /// Picking a day keeps the reminder's time of day.
+    private var reminderDay: Binding<Date> {
+      Binding(
+        get: { draft.reminderDate },
+        set: { day in
+          let t = calendar.dateComponents([.hour, .minute], from: draft.reminderDate)
+          draft.reminderDate =
+            calendar.date(bySettingHour: t.hour ?? 9, minute: t.minute ?? 0, second: 0, of: day)
+            ?? day
+          draft.hasDueDate = true
+        })
     }
 
     private var reminderTime: Binding<Date> {
@@ -559,7 +619,7 @@
                 )
                 .background(
                   selectedDays.wrappedValue.contains(day)
-                    ? Color(.systemOrange) : Color(.tertiarySystemFill), in: Circle())
+                    ? Self.accent : Color(.tertiarySystemFill), in: Circle())
             }.buttonStyle(.plain)
               .accessibilityLabel(calendar.weekdaySymbols[day - 1])
               .accessibilityAddTraits(selectedDays.wrappedValue.contains(day) ? .isSelected : [])
@@ -591,7 +651,7 @@
         }
         .font(.caption).fixedSize().padding(.horizontal, 10).frame(minHeight: 44)
         .foregroundStyle(selected ? Color.white : Color.primary)
-        .background(selected ? Color(.systemOrange) : Color(.tertiarySystemFill), in: Capsule())
+        .background(selected ? Self.accent : Color(.tertiarySystemFill), in: Capsule())
       }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 

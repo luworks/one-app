@@ -27,7 +27,7 @@ final class UnifiedCreateTests: XCTestCase {
   func testSwitchTypesPreservesTitle() {
     let app = openComposer()
     app.descendants(matching: .any)["create.title"].typeText("Shared native draft")
-    app.segmentedControls["create.type"].buttons["Calendar"].tap()
+    app.segmentedControls["create.type"].buttons["Event"].tap()
     XCTAssertEqual(
       app.descendants(matching: .any)["create.title"].value as? String, "Shared native draft")
     app.segmentedControls["create.type"].buttons["Alarm"].tap()
@@ -74,7 +74,7 @@ final class UnifiedCreateTests: XCTestCase {
         NSPredicate(format: "identifier == 'search.result' AND label BEGINSWITH %@", title)
       ).count, 1, "Retry must create exactly one reminder")
   }
-  func testCreatesCalendarEvent() { saveAndFind("Calendar", title: "Unified saved event") }
+  func testCreatesCalendarEvent() { saveAndFind("Event", title: "Unified saved event") }
   func testCreatesAlarm() { saveAndFind("Alarm", title: "Unified saved alarm") }
 
   func testEmptyDraftCannotCreate() {
@@ -85,7 +85,7 @@ final class UnifiedCreateTests: XCTestCase {
   func testKeyboardDismissDoesNotSubmitAndWeekdaysSurviveTypeSwitch() {
     let app = openComposer()
     app.descendants(matching: .any)["create.title"].typeText("Weekly draft")
-    app.buttons["Hide keyboard"].tap()
+    app.buttons["create.chip.Date & Time"].tap()
     XCTAssertTrue(app.buttons["create.save"].exists)
     app.segmentedControls["create.type"].buttons["Alarm"].tap()
     app.swipeUp()
