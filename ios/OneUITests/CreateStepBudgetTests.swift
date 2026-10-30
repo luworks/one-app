@@ -27,7 +27,8 @@ final class CreateStepBudgetTests: XCTestCase {
     app.launchArguments = TestData.launchArguments + ["-uiTestingNow", "10:41"] + extra
     app.launch()
     XCTAssertTrue(app.buttons["New"].waitForExistence(timeout: 10))
-    if let tab { app.buttons[tab].firstMatch.tap() }  // Being on the matching tab is not an operation.
+    // Being on the matching tab is not an operation.
+    if let tab { app.buttons[tab].firstMatch.tap() }
     steps = []
   }
 
