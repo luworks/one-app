@@ -115,6 +115,7 @@
 
   package struct AskScreen: View {
     let thread: ChatThread?
+    var subject: AskSubject? = nil
     let toast: UndoToast
     let composition: ShellComposition
     let isPresented: Bool
@@ -128,7 +129,8 @@
     private var session: PlannerSession { composition.session }
     package var body: some View {
       AskView(
-        thread: thread, isPresented: isPresented, onClose: onClose, onMenu: onMenu,
+        thread: thread, subject: subject, isPresented: isPresented, onClose: onClose,
+        onMenu: onMenu,
         calendar: session.calendar, now: session.runtime.now,
         actions: session.actions, ledger: session.ledger, activity: session.activity,
         intelligence: composition.intelligence, voice: composition.voice,

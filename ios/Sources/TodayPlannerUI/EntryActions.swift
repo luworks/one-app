@@ -11,7 +11,7 @@
   import EventKit
 
   /// The same gestures on a calendar entry as on a task: swipe from the right for Delete (a full swipe deletes), and
-  /// press and hold for the menu (Show Details, Edit, Delete). Tasks keep their own extras (Flag, Today, Tomorrow).
+  /// press and hold for the menu (Ask AI, Show Details, Edit, Delete). Tasks keep their own extras (Flag, Today, Tomorrow).
   /// A repeating event asks first whether Delete means this one or the series, so a swipe never silently removes a series.
   /// The question is asked by `entryDeleteDialog` on the container (the list), not on the row: a row is rebuilt when its
   /// swipe actions close, which would drop the dialog.
@@ -50,6 +50,7 @@
     }
 
     @ViewBuilder private var menu: some View {
+      AskAIMenuButton(AskSubject(entry: entry))
       Button {
         open(entry)
       } label: {

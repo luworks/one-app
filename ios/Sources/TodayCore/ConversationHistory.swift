@@ -119,6 +119,8 @@ public struct ConversationContext: Sendable {
   /// Deterministic reference recovery reads only supplied user messages from this thread.
   /// Model prompts remain bounded independently; assistant replies cannot evict the request.
   public let userTurns: [Turn]
+  /// What the chat was opened about (`AskSubject.contextLine`); the model sees it before the turns. Empty for an ordinary chat.
+  public var subject = ""
 
   public init(_ lines: [(isUser: Bool, text: String)]) {
     self.init(turns: lines.map { Turn(isUser: $0.isUser, text: $0.text) })
@@ -140,10 +142,11 @@ public struct ConversationContext: Sendable {
 
   public var users: [String] { turns.filter(\.isUser).map(\.text) }
   public var prompt: String {
-    turns.map {
+    let lines = turns.map {
       ($0.isUser ? "User" : "Assistant")
         + ($0.timestamp.map { " [" + $0.ISO8601Format() + "]" } ?? "") + ": " + $0.text
     }.joined(separator: "\n")
+    return subject.isEmpty ? lines : subject + "\n" + lines
   }
 }
 
