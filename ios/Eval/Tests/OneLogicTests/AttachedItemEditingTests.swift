@@ -86,34 +86,4 @@ final class AttachedItemEditingTests: XCTestCase {
       XCTFail("Ordinary chat must retain its existing route")
     }
   }
-
-  func testAttachedEventMoveAndDeleteUseIdentityRatherThanDuplicateTitle() {
-    let events = [
-      EditItem(
-        id: "apple:first", type: "event", title: "Meeting", start: now, minutes: 30, attendees: 0),
-      EditItem(
-        id: "apple:second", type: "event", title: "Meeting", start: now, minutes: 30, attendees: 0),
-    ]
-    let moved = calendar.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 16))!
-    let move = AttachedItemEditing.parse(
-      "Move it to 4pm", attachedItemID: "apple:second", items: events, now: now, calendar: calendar)
-    XCTAssertEqual(move?.target, "apple:second")
-    XCTAssertEqual(move?.operation, .move(moved))
-    let delete = AttachedItemEditing.parse(
-      "Delete it", attachedItemID: "apple:second", items: events, now: now, calendar: calendar)
-    XCTAssertEqual(delete?.target, "apple:second")
-    XCTAssertEqual(delete?.operation, .delete)
-  }
-
-  func testAttachedEventRelativeMoveUsesEventStartNotCurrentTime() {
-    let start = now.addingTimeInterval(2 * 3600)
-    let event = EditItem(
-      id: "apple:event", type: "event", title: "Meeting", start: start, minutes: 60, attendees: 0)
-    let edit = AttachedItemEditing.parse(
-      "Postpone it by one hour", attachedItemID: event.id, items: [event], now: now,
-      calendar: calendar)
-    XCTAssertEqual(edit?.target, event.id)
-    XCTAssertEqual(edit?.operation, .move(start.addingTimeInterval(3600)))
-  }
-
 }

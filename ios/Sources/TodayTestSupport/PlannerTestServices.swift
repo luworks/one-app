@@ -182,20 +182,6 @@
           return "test-event-\(event.id)"
         })
     }
-    // A fake never silently claims a system move succeeded without an explicit fixture.
-    package func moveSnapshot(externalID: String, occurrence: Date) throws -> CalendarMoveSnapshot {
-      throw CalendarMoveError.unavailable
-    }
-    package func moveEvent(
-      expected: CalendarMoveSnapshot, to start: Date, acknowledgingAudience: Bool
-    ) throws -> CalendarMoveOutcome {
-      throw CalendarMoveError.unavailable
-    }
-    package func undoMove(_ receipt: CalendarMoveReceipt, acknowledgingAudience: Bool) throws
-      -> CalendarMoveUndoOutcome
-    {
-      throw CalendarMoveError.unavailable
-    }
     package func save(_ event: OneEvent, span: EKSpan) -> String? { nil }
     package func delete(_ event: OneEvent, span: EKSpan) -> Bool {
       delete(externalID: event.externalID, occurrence: event.start, span: span)

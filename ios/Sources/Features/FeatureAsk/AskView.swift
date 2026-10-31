@@ -874,40 +874,11 @@
       else { return false }
       clearPreviews()
       if subject.kind == .event && subject.isSystemEvent == true {
-        guard case .move(let start)? = edit.operation,
-          let identifier = subject.itemRef, let occurrence = subject.start
-        else {
-          messages.append(reply("Please open this calendar event to make that change."))
-          openSystemEvent = subject.itemRef != nil && subject.start != nil
-          return true
-        }
-        do {
-          let snapshot = try calendarSync.moveSnapshot(
-            externalID: identifier, occurrence: occurrence)
-          let audience = snapshot.audience
-          var notes = ["Only this occurrence changes."]
-          if audience.attendeeCount == 0 {
-            notes.append("No attendees are listed.")
-          } else {
-            let role =
-              audience.isOrganizer == true ? "You are the organizer." : "You are not the organizer."
-            notes.append(
-              "\(audience.attendeeCount) attendee(s) listed. \(role) Calendar may send updates; Undo may send another update."
-            )
-          }
-          if snapshot.isAllDay { notes.append("The timed event will last 1 hour.") }
-          var card = PendingChange(
-            subject: .systemEvent, delete: false, title: snapshot.title,
-            oldText: subject.whenLabel(calendar: runtime.calendar), newStart: start,
-            notes: notes, attendees: audience.attendeeCount)
-          card.systemMove = snapshot
-          change = card
-          messages.append(reply("Here's the change. Nothing changes until you apply it."))
-          recordCard(shown: "change", items: 1)
-        } catch {
-          messages.append(reply("This event can't safely be changed here. Open it in Calendar."))
-          openSystemEvent = true
-        }
+        messages.append(
+          reply(
+            "This calendar event can't be edited from chat yet. Open it in Calendar to make the change."
+          ))
+        openSystemEvent = subject.itemRef != nil && subject.start != nil
         return true
       }
       guard let operation = edit.operation else {
@@ -1431,63 +1402,6 @@
     }
 
     private func apply(_ c: PendingChange) {
-      if case .systemEvent = c.subject, let snapshot = c.systemMove, let start = c.newStart {
-        do {
-          let outcome = try calendarSync.moveEvent(
-            expected: snapshot, to: start, acknowledgingAudience: true)
-          recordCard(resolved: "change", "applied")
-          change = nil
-          switch outcome {
-          case .verified(let receipt):
-            let entry = ledger.record(
-              .moved, kind: "event", title: snapshot.title,
-              before: ledger.timeLabel(snapshot.start), after: ledger.timeLabel(start),
-              beforeDate: snapshot.start, afterDate: start, actor: .todayAI, channel: .ask,
-              approval: .asked, snapshot: receipt, context: context)
-            subject?.itemRef = receipt.after.externalID
-            subject?.start = receipt.after.start
-            subject?.isAllDay = false
-            subject?.minutes = Int(receipt.after.end.timeIntervalSince(receipt.after.start) / 60)
-            thread?.subject = subject
-            try? context.save()
-            messages.append(reply("The calendar event was moved."))
-            offerUndo("Moved the event. Calendar may notify attendees again.", card: "change") {
-              do {
-                switch try calendarSync.undoMove(receipt, acknowledgingAudience: true) {
-                case .verified:
-                  ledger.recordUndo(of: entry, channel: .ask, context: context)
-                  messages.append(reply("The event was restored."))
-                case .committedUnverified:
-                  ledger.record(
-                    .edited, kind: "event", title: snapshot.title,
-                    after: "Undo committed; result not verified", actor: .you, channel: .ask,
-                    approval: .userMade, snapshot: receipt, context: context)
-                  messages.append(
-                    reply(
-                      "Calendar accepted Undo, but the result couldn't be verified. Open Calendar to check it."
-                    ))
-                }
-              } catch {
-                messages.append(reply("Couldn't undo the event change. Open Calendar to check it."))
-              }
-            }
-          case .committedUnverified(let pending):
-            ledger.record(
-              .moved, kind: "event", title: snapshot.title,
-              before: ledger.timeLabel(snapshot.start),
-              after: "Calendar accepted; result unverified",
-              beforeDate: snapshot.start, afterDate: start, actor: .todayAI, channel: .ask,
-              approval: .asked, snapshot: pending, context: context)
-            messages.append(
-              reply(
-                "Calendar accepted the change, but the result couldn't be verified. Open Calendar to check it before trying again."
-              ))
-          }
-        } catch {
-          messages.append(reply("The event could not be changed. Open Calendar to check it."))
-        }
-        return
-      }
       if case .task(let task) = c.subject, let operation = c.attachedOperation,
         let expected = c.expectedTask
       {
@@ -2077,7 +1991,6 @@
       case task(OneTask)
       case event(OneEvent)
       case alarm(OneAlarm)
-      case systemEvent
     }
     package let id = UUID()
     package let subject: Subject
@@ -2091,16 +2004,10 @@
     package var expectedTask: TaskSnapshot?
     package var attachedOperation: AttachedItemEdit.Operation?
     package var alarmChange: AttachedAlarmChange?
-    package var systemMove: CalendarMoveSnapshot?
 
     package static func == (a: PendingChange, b: PendingChange) -> Bool { a.id == b.id }
 
-    package var isEvent: Bool {
-      switch subject {
-      case .event, .systemEvent: true
-      default: false
-      }
-    }
+    package var isEvent: Bool { if case .event = subject { true } else { false } }
 
     package init(
       subject: Subject, delete: Bool, title: String, oldText: String,
@@ -2316,7 +2223,7 @@
             )
           }
         }
-      case .alarm, .systemEvent:
+      case .alarm:
         feedback.applied = false
         return feedback
       case .event(let event):
