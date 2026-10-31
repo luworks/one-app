@@ -29,6 +29,14 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 scripts/ci/smoke.py --command ./dev bootstrap --tool swift-format --tool swiftlint --tool ruff --tool actionlint
+      # Temporary draft-only diagnostic: export the pinned formatter's patch for this PR.
+      - run: |
+          ./dev format
+          git diff -- ios > "$RUNNER_TEMP/today-format.patch"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: today-format-patch
+          path: ${{ runner.temp }}/today-format.patch
       - run: python3 scripts/ci/smoke.py --command ./dev format --check
       - run: python3 scripts/ci/smoke.py --command ./dev lint
       - run: python3 scripts/ci/smoke.py --command ./dev test helpers
