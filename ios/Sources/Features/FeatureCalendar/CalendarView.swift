@@ -396,8 +396,9 @@
         h.combine(a.weekdays)
         h.combine(a.isOn)
         if a.isOn && a.weekdays.isEmpty {
-          h.combine(AlarmPlan.nextFire(
-            hour: a.hour, minute: a.minute, weekdays: [], after: presentation.now, calendar: cal))
+          h.combine(
+            AlarmPlan.nextFire(
+              hour: a.hour, minute: a.minute, weekdays: [], after: presentation.now, calendar: cal))
         }
       }
       return h.finalize()
@@ -405,12 +406,14 @@
 
     private func load(_ start: Date, signature: Int) async {
       guard marks.pages[start]?.signature != signature, marks.loading[start] != signature,
-        let interval = cal.dateInterval(of: .month, for: start) else { return }
+        let interval = cal.dateInterval(of: .month, for: start)
+      else { return }
       marks.loading[start] = signature
       defer { if marks.loading[start] == signature { marks.loading[start] = nil } }
       let c = cal
       let now = presentation.now
-      let system = await calendar.loadEvents(in: interval, excluding: Set(events.compactMap(\.externalID)))
+      let system = await calendar.loadEvents(
+        in: interval, excluding: Set(events.compactMap(\.externalID)))
       guard !Task.isCancelled, self.signature == signature else { return }
       var tints: [Color] = []
       var indexes: [Color: Int] = [:]
@@ -423,12 +426,14 @@
       }
       let local: [MonthLocalSnapshot] = events.compactMap { e in
         guard !calendar.isHidden(externalID: e.externalID) else { return nil }
-        return MonthLocalSnapshot(start: e.start, duration: e.duration, rule: e.repeats,
+        return MonthLocalSnapshot(
+          start: e.start, duration: e.duration, rule: e.repeats,
           allDay: e.isAllDay, title: e.title,
           tint: tint(calendar.calendar(forExternalID: e.externalID)?.color ?? .blue))
       }
       var entries: [MonthSummaryEntry] = system.map { e in
-        MonthSummaryEntry(start: e.start, end: e.end, isAllDay: e.isAllDay,
+        MonthSummaryEntry(
+          start: e.start, end: e.end, isAllDay: e.isAllDay,
           title: e.title, isAlarm: false, tintIndex: tint(e.color))
       }
       let accent = tint(.accentColor)
@@ -436,8 +441,10 @@
         guard let due = t.due, interval.contains(due),
           c.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0)
         else { continue }
-        entries.append(MonthSummaryEntry(start: due, end: due.addingTimeInterval(TimeInterval(t.durationMinutes * 60)),
-          isAllDay: false, title: t.title, isAlarm: false, tintIndex: accent))
+        entries.append(
+          MonthSummaryEntry(
+            start: due, end: due.addingTimeInterval(TimeInterval(t.durationMinutes * 60)),
+            isAllDay: false, title: t.title, isAlarm: false, tintIndex: accent))
       }
       let alarmSpecs = alarms.map(\.spec)
       let fixedEntries = entries
@@ -445,22 +452,31 @@
       let result = await Task.detached(priority: .userInitiated) {
         var all: [MonthSummaryEntry] = []
         for e in local {
-          for occurrence in Recurrence.occurrences(start: e.start, duration: e.duration,
-            rule: e.rule, in: interval, calendar: c) {
-            all.append(MonthSummaryEntry(start: occurrence, end: occurrence.addingTimeInterval(e.duration),
-              isAllDay: e.allDay, title: e.title, isAlarm: false, tintIndex: e.tint))
+          for occurrence in Recurrence.occurrences(
+            start: e.start, duration: e.duration, rule: e.rule, in: interval, calendar: c)
+          {
+            all.append(
+              MonthSummaryEntry(
+                start: occurrence, end: occurrence.addingTimeInterval(e.duration),
+                isAllDay: e.allDay, title: e.title, isAlarm: false, tintIndex: e.tint))
           }
         }
         all.append(contentsOf: fixedEntries)
-        for ring in CalendarAlarms.occurrences(of: alarmSpecs, in: interval, now: now, calendar: c) {
-          all.append(MonthSummaryEntry(start: ring.date, end: ring.date, isAllDay: false,
-            title: CalendarAlarms.title(alarmSpecs[ring.index].label), isAlarm: true, tintIndex: accent))
+        for ring in CalendarAlarms.occurrences(
+          of: alarmSpecs, in: interval, now: now, calendar: c)
+        {
+          all.append(
+            MonthSummaryEntry(
+              start: ring.date, end: ring.date, isAllDay: false,
+              title: CalendarAlarms.title(alarmSpecs[ring.index].label), isAlarm: true,
+              tintIndex: accent))
         }
         return MonthSummary.summarize(days: days, entries: all, calendar: c)
       }.value
       guard !Task.isCancelled, self.signature == signature else { return }
-      marks.pages[start] = MonthMarksCache.Page(signature: signature,
-        days: Dictionary(uniqueKeysWithValues: result.map { ($0.day, $0) }), tints: tints)
+      marks.pages[start] = MonthMarksCache.Page(
+        signature: signature, days: Dictionary(uniqueKeysWithValues: result.map { ($0.day, $0) }),
+        tints: tints)
     }
 
     private var pager: some View {
@@ -494,7 +510,8 @@
       .onScrollPhaseChange { _, phase in
         guard phase == .idle, let page = pos, page != settled else { return }
         settled = page
-        day = CalendarMath.landingDay(inMonthOf: month(page), today: presentation.now, calendar: cal)
+        day = CalendarMath.landingDay(
+          inMonthOf: month(page), today: presentation.now, calendar: cal)
       }
       .scrollBounceBehavior(.basedOnSize)
       .frame(
@@ -529,13 +546,16 @@
           HStack(spacing: 0) {
             ForEach(0..<7, id: \.self) { i in
               if let d = weeks[w][i] {
-                MonthCell(day: d, number: cal.component(.day, from: d),
+                MonthCell(
+                  day: d, number: cal.component(.day, from: d),
                   isToday: cal.isDate(d, inSameDayAs: presentation.now),
                   isSelected: cal.isDate(d, inSameDayAs: selected),
                   past: dimsPast && d < cal.startOfDay(for: presentation.now),
                   rowHeight: rowHeight, summary: page?.days[d], tints: page?.tints ?? [],
-                  label: d.plannerFormatted(date: .complete, time: .omitted, runtime: presentation.runtime),
-                  identifier: CalendarIDs.day(d, calendar: cal), onTap: onTap).equatable()
+                  label: d.plannerFormatted(
+                    date: .complete, time: .omitted, runtime: presentation.runtime),
+                  identifier: CalendarIDs.day(d, calendar: cal), onTap: onTap
+                ).equatable()
               } else {
                 Color.clear.frame(maxWidth: .infinity, minHeight: rowHeight)
               }
@@ -561,7 +581,7 @@
     let identifier: String
     let onTap: (Date) -> Void
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
       lhs.day == rhs.day && lhs.number == rhs.number && lhs.isToday == rhs.isToday
         && lhs.isSelected == rhs.isSelected && lhs.past == rhs.past
         && lhs.rowHeight == rhs.rowHeight && lhs.summary == rhs.summary
@@ -583,14 +603,22 @@
 
     var body: some View {
       let fill: Color = isSelected ? (isToday ? .red : Color(.label)) : .clear
-      let text: Color = isSelected ? (isToday ? .white : Color(.systemBackground))
+      let text: Color =
+        isSelected
+        ? (isToday ? .white : Color(.systemBackground))
         : (isToday ? .red : (past ? Color(.tertiaryLabel) : Color(.label)))
-      return Button { onTap(day) } label: {
+      return Button {
+        onTap(day)
+      } label: {
         VStack(spacing: 4) {
           Text("\(number)").font(.system(size: 17, weight: .medium)).foregroundStyle(text)
             .frame(width: 29, height: 29).background(fill, in: Circle())
-          DayDots(colors: (summary?.tintIndices ?? []).compactMap { tints.indices.contains($0) ? tints[$0] : nil })
-            .frame(height: 5).opacity(past ? DayTint.past : 1)
+          DayDots(
+            colors: (summary?.tintIndices ?? []).compactMap {
+              tints.indices.contains($0) ? tints[$0] : nil
+            }
+          )
+          .frame(height: 5).opacity(past ? DayTint.past : 1)
         }
         .padding(.top, 4).frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .top)
         .contentShape(Rectangle())
@@ -611,9 +639,12 @@
       let original = context.originalTarget.rect.minY
       let proposed = target.rect.minY
       let delta = proposed - original
-      let direction: CGFloat = abs(delta) > height * 0.15 ? (delta > 0 ? 1 : -1)
+      let direction: CGFloat =
+        abs(delta) > height * 0.15
+        ? (delta > 0 ? 1 : -1)
         : (abs(context.velocity.dy) > 100 ? (context.velocity.dy > 0 ? 1 : -1) : 0)
-      target.rect.origin.y = max(0, min(context.contentSize.height - height, original + direction * height))
+      target.rect.origin.y = max(
+        0, min(context.contentSize.height - height, original + direction * height))
     }
   }
 

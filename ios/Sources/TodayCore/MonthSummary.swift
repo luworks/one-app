@@ -39,11 +39,13 @@ public enum MonthSummary {
     days.map { day in
       let interval = calendar.dateInterval(of: .day, for: day)
       let ordered = entries.enumerated().filter {
-        CalendarEntryDates.overlaps(start: $0.element.start, end: $0.element.end, day: day, calendar: calendar)
+        CalendarEntryDates.overlaps(
+          start: $0.element.start, end: $0.element.end, day: day, calendar: calendar)
       }.sorted { lhs, rhs in
         func sortKey(_ entry: MonthSummaryEntry) -> (Bool, Date) {
           guard let interval else { return (entry.isAllDay, entry.start) }
-          let allDay = entry.isAllDay || (entry.start <= interval.start && entry.end >= interval.end)
+          let allDay =
+            entry.isAllDay || (entry.start <= interval.start && entry.end >= interval.end)
           return (allDay, entry.isAllDay ? interval.start : max(entry.start, interval.start))
         }
         let a = sortKey(lhs.element)

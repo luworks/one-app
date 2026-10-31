@@ -196,7 +196,8 @@ final class CalendarTabTests: XCTestCase {
     XCTAssertTrue(waitForMonthLabel(.now), "the top bar names the device month")
     january.tap()
     let january1 = DateComponents(calendar: cal, year: year, month: 1, day: 1).date!
-    XCTAssertTrue(waitForMonthLabel(.now), "tapping a mini month keeps the device month in the top bar")
+    XCTAssertTrue(
+      waitForMonthLabel(.now), "tapping a mini month keeps the device month in the top bar")
     let landing = cal.isDate(january1, equalTo: .now, toGranularity: .month) ? Date.now : january1
     XCTAssertTrue(
       element(dayID(landing)).isSelected, "month headers retain their usual landing day")

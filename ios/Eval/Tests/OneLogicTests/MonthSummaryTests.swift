@@ -40,7 +40,9 @@ final class MonthSummaryTests: XCTestCase {
   }
 
   func testOverlapExclusiveEndsMidnightPointsAndEmptyDays() {
-    let days = [date(12, 30), date(12, 31), calendar.date(byAdding: .day, value: 1, to: date(12, 31))!]
+    let days = [
+      date(12, 30), date(12, 31), calendar.date(byAdding: .day, value: 1, to: date(12, 31))!,
+    ]
     let entries = [
       entry(date(12, 30), date(12, 31), "All day", 1, allDay: true),
       entry(date(12, 30, 23), date(12, 31, 1), "Crossing", 2),
@@ -80,8 +82,10 @@ final class MonthSummaryTests: XCTestCase {
 
   func testEqualSortKeysRetainInputOrderAndDuplicateTints() {
     let start = date(10, 10, 9)
-    let entries = [entry(start, start, "Same", 7), entry(start, start, "Same", 7),
-                   entry(start, start, "Same", 8)]
+    let entries = [
+      entry(start, start, "Same", 7), entry(start, start, "Same", 7),
+      entry(start, start, "Same", 8),
+    ]
     XCTAssertEqual(
       MonthSummary.summarize(days: [start], entries: entries, calendar: calendar)[0].tintIndices,
       [7, 7, 8])
@@ -107,13 +111,17 @@ final class MonthSummaryTests: XCTestCase {
       let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
       samples.append(elapsed)
       XCTAssertEqual(result.count, dayCount)
-      XCTAssertEqual(result.map(\.eventCount), (0..<dayCount).map { day in
-        day < 28 ? (eventCount / 28 + (day < eventCount % 28 ? 1 : 0)) : 0
-      })
+      XCTAssertEqual(
+        result.map(\.eventCount),
+        (0..<dayCount).map { day in
+          day < 28 ? (eventCount / 28 + (day < eventCount % 28 ? 1 : 0)) : 0
+        })
       XCTAssertTrue(result.allSatisfy { $0.alarmCount == 0 })
     }
     let median = samples.sorted()[1]
-    print("MonthSummary perf: events=\(eventCount), days=\(dayCount), samples_ms=\(samples), median_ms=\(median), budget_ms=\(budgetMilliseconds)")
+    print(
+      "MonthSummary perf: events=\(eventCount), days=\(dayCount), samples_ms=\(samples), "
+        + "median_ms=\(median), budget_ms=\(budgetMilliseconds)")
     XCTAssertLessThan(median, budgetMilliseconds, "Month summary exceeded its CI wall-clock budget")
   }
 
