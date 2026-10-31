@@ -4,7 +4,7 @@ import Foundation
 /// The rule is `AlarmPlan.fire`: a repeating alarm rings on each of its weekdays, a one-time alarm on the day of its next
 /// occurrence, and an alarm that is switched off rings never (so it is not shown). Items marked "Ring as alarm" are reminders
 /// or events with an alert, not alarms: they keep showing as the reminder or event they are, so nothing appears twice.
-public struct AlarmSpec: Equatable {
+public struct AlarmSpec: Equatable, Sendable {
   public var hour: Int
   public var minute: Int
   public var label: String

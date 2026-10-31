@@ -133,32 +133,36 @@ final class CalendarTabTests: XCTestCase {
     XCTAssertTrue(first.waitForExistence(timeout: 5), "today's events are listed under the grid")
   }
 
-  /// Swipe the grid vertically to change month (no Today button appears).
+  /// Each vertical swipe moves exactly one month; the top bar remains the device month.
   func testMonthPaging() {
     showMonth()
-    let title = element("topBar.month")
-    XCTAssertTrue(waitForMonthLabel(.now), "Unexpected month: \(title.debugDescription)")
-    let next = cal.date(byAdding: .month, value: 1, to: .now)!
-    element("calendar.monthPager").swipeUp()
-    let expectation = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "label IN %@", monthNames(next)), object: title)
-    XCTAssertEqual(
-      XCTWaiter().wait(for: [expectation], timeout: 5), .completed, "paged to next month")
-    element("calendar.monthPager").swipeDown()
-    let back = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "label IN %@", monthNames(.now)), object: title)
-    XCTAssertEqual(XCTWaiter().wait(for: [back], timeout: 5), .completed, "and back")
-    element("calendar.monthPager").swipeDown()
-    let prev = XCTNSPredicateExpectation(
-      predicate: NSPredicate(
-        format: "label IN %@",
-        monthNames(cal.date(byAdding: .month, value: -1, to: .now)!)), object: title)
-    XCTAssertEqual(XCTWaiter().wait(for: [prev], timeout: 5), .completed, "previous month")
-    element("calendar.monthPager").swipeLeft()
-    XCTAssertTrue(waitForMonthLabel(cal.date(byAdding: .month, value: -1, to: .now)!))
+    let pager = element("calendar.monthPager")
+    XCTAssertTrue(pager.waitForExistence(timeout: 5))
+    let start = cal.date(from: cal.dateComponents([.year, .month], from: .now))!
+    func middleDay(_ offset: Int) -> XCUIElement {
+      let month = cal.date(byAdding: .month, value: offset, to: start)!
+      return element(dayID(cal.date(byAdding: .day, value: 14, to: month)!))
+    }
+    func assertPage(_ offset: Int, _ message: String) {
+      let day = middleDay(offset)
+      let visible = XCTNSPredicateExpectation(
+        predicate: NSPredicate { _, _ in day.isFullyVisible(in: pager.frame) }, object: nil)
+      XCTAssertEqual(XCTWaiter().wait(for: [visible], timeout: 5), .completed, message)
+    }
+
+    assertPage(0, "starts on the current month")
+    pager.swipeUp(velocity: .fast)
+    assertPage(1, "one fast swipe up advances exactly one month")
+    pager.swipeDown(velocity: .fast)
+    assertPage(0, "one fast swipe down returns exactly one month")
+    pager.swipeDown()
+    assertPage(-1, "one swipe down moves exactly one month earlier")
+    pager.swipeLeft()
+    assertPage(-1, "a horizontal swipe does not change the month")
     XCTAssertTrue(modeButton("Month").isSelected, "a horizontal grid swipe keeps Calendar open")
-    app.descendants(matching: .any).matching(identifier: "calendar.dayList").firstMatch.swipeUp()
-    XCTAssertTrue(waitForMonthLabel(cal.date(byAdding: .month, value: -1, to: .now)!))
+    element("calendar.dayList").swipeUp()
+    assertPage(-1, "scrolling the day list does not change the month")
+    XCTAssertTrue(waitForMonthLabel(start), "the top bar still names the device month")
     XCTAssertFalse(app.buttons["calendar.today"].exists, "paging does not add a Today button")
   }
 
@@ -189,10 +193,11 @@ final class CalendarTabTests: XCTestCase {
     XCTAssertTrue(january.waitForExistence(timeout: 5), "January of this year is on screen")
     XCTAssertTrue(
       element(String(format: "miniMonth.%04d-12", year)).exists, "so is the rest of the year")
-    XCTAssertFalse(element("topBar.month").exists, "Year names its years in its own headings")
+    XCTAssertTrue(waitForMonthLabel(.now), "the top bar names the device month")
     january.tap()
     let january1 = DateComponents(calendar: cal, year: year, month: 1, day: 1).date!
-    XCTAssertTrue(waitForMonthLabel(january1), "tapping a mini month opens it")
+    XCTAssertTrue(
+      waitForMonthLabel(.now), "tapping a mini month keeps the device month in the top bar")
     let landing = cal.isDate(january1, equalTo: .now, toGranularity: .month) ? Date.now : january1
     XCTAssertTrue(
       element(dayID(landing)).isSelected, "month headers retain their usual landing day")
@@ -254,7 +259,7 @@ final class CalendarTabTests: XCTestCase {
         cell.isFullyVisible(in: scroll.frame) && cell.frame.maxY < app.frame.maxY - 140
           && cell.isHittable, "chosen day is visible in Year")
       cell.tap()
-      XCTAssertTrue(waitForMonthLabel(chosen))
+      XCTAssertTrue(waitForMonthLabel(.now))
       XCTAssertTrue(modeButton("Month").isSelected, "Year day taps stay in Calendar's Month view")
       let selected = app.buttons[dayID(chosen)]
       XCTAssertTrue(selected.waitForExistence(timeout: 5))
@@ -309,7 +314,7 @@ final class CalendarTabTests: XCTestCase {
     XCTAssertTrue(birthdayCell.waitForExistence(timeout: 5))
     XCTAssertFalse((birthdayCell.value as? String ?? "").contains("birthday"))
     birthdayCell.tap()
-    XCTAssertTrue(waitForMonthLabel(birthday))
+    XCTAssertTrue(waitForMonthLabel(.now))
     XCTAssertTrue(modeButton("Month").isSelected)
     let day = element(dayID(birthday))
     XCTAssertTrue(day.waitForExistence(timeout: 5))
