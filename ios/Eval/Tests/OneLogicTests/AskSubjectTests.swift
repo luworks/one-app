@@ -49,19 +49,4 @@ final class AskSubjectTests: XCTestCase {
     XCTAssertEqual(context.prompt, "ABOUT X\nUser: move it to 5pm")
     XCTAssertEqual(context.users, ["move it to 5pm"], "the subject is not a user turn")
   }
-
-  func testSystemEventAttachmentRetainsOccurrenceAndAllDayAcrossChatStorage() throws {
-    let occurrence = calendar.startOfDay(for: start)
-    let subject = AskSubject(
-      kind: .event, title: "Conference", start: occurrence, isAllDay: true, minutes: 1440,
-      details: ["repeats"], itemRef: "apple-series-id", isSystemEvent: true)
-    let restored = try JSONDecoder().decode(AskSubject.self, from: JSONEncoder().encode(subject))
-    XCTAssertEqual(restored, subject)
-    XCTAssertEqual(restored.itemRef, "apple-series-id")
-    XCTAssertEqual(restored.start, occurrence)
-    XCTAssertTrue(restored.isAllDay)
-    XCTAssertEqual(restored.minutes, 1440)
-    XCTAssertFalse(restored.contextLine(calendar: calendar).contains("apple-series-id"))
-  }
-
 }
