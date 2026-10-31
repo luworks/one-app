@@ -64,6 +64,49 @@ final class EventSaveTests: XCTestCase {
     nativeSave(changed: false, allDay: true)
   }
 
+  func testAskAIMovesAllDaySystemEventAndUndoes() {
+    let title = "Ask event \(UUID().uuidString.prefix(8))"
+    let app = XCUIApplication()
+    let base = TestData.fixtureArguments("event-save.json") + [
+      "-uiTestingCalendarSync", "-uiTestingCalendarSaveAllDay", "-appearance", "dark",
+    ]
+    app.launchArguments = base
+    app.launch()
+    enableCalendarSync(app)
+    app.terminate()
+    addTeardownBlock {
+      app.terminate()
+      app.launchArguments = base + ["-debugDeleteSystemEvent", title]
+      app.launch()
+      XCTAssertTrue(app.buttons["Calendar"].firstMatch.waitForExistence(timeout: 10))
+    }
+    app.launchArguments = base + ["-debugCreateSystemEvent", title]
+    app.launch()
+    calendar(app)
+    let event = row(app, title)
+    XCTAssertTrue(event.waitForExistence(timeout: 15))
+    event.press(forDuration: 1.0)
+    let ask = app.buttons["Ask AI"].firstMatch
+    XCTAssertTrue(ask.waitForExistence(timeout: 5))
+    ask.tap()
+    let input = app.textViews["Ask AI or add anything"].firstMatch
+    XCTAssertTrue(input.waitForExistence(timeout: 10))
+    input.tap()
+    input.typeText("Move it to tomorrow at 11am")
+    app.buttons["ask-send"].tap()
+    let card = app.descendants(matching: .any)["change-card"].firstMatch
+    XCTAssertTrue(card.waitForExistence(timeout: 15))
+    XCTAssertTrue(card.staticTexts["The timed event will last 1 hour."].exists)
+    XCTAssertTrue(card.staticTexts["Only this occurrence changes."].exists)
+    XCTAssertFalse(app.staticTexts["Which item do you mean?"].exists)
+    card.buttons["Apply"].tap()
+    XCTAssertTrue(app.staticTexts["The calendar event was moved."].waitForExistence(timeout: 15))
+    let undo = app.buttons["ask-undo"]
+    XCTAssertTrue(undo.waitForExistence(timeout: 5))
+    undo.tap()
+    XCTAssertTrue(app.staticTexts["The event was restored."].waitForExistence(timeout: 15))
+  }
+
   private func nativeSave(changed: Bool, failing: Bool = false, allDay: Bool = false) {
     let title = "Save check \(UUID().uuidString.prefix(8))"
     let app = XCUIApplication()

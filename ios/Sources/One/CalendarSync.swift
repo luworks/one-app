@@ -105,7 +105,8 @@
   }
 
   package enum CalendarMoveError: Error, Equatable {
-    case unavailable, notFound, readOnly, audienceUnknownOrUnsafe, audienceAcknowledgmentRequired, stale, invalidTime
+    case unavailable, notFound, readOnly, audienceUnknownOrUnsafe, audienceAcknowledgmentRequired,
+      stale, invalidTime
   }
 
   /// A system calendar (one line in Apple's Calendars list).
@@ -803,7 +804,9 @@
     /// Strictly resolves the occurrence; never falls back to another series instance.
     private func moveTarget(id: String, start: Date) -> EKEvent? {
       if let exact = occurrence(id, at: start), exact.startDate == start { return exact }
-      guard let event = store.event(withIdentifier: id), event.startDate == start else { return nil }
+      guard let event = store.event(withIdentifier: id), event.startDate == start else {
+        return nil
+      }
       return event
     }
 
@@ -813,7 +816,8 @@
       // an inconsistent or incompletely identified participant list.
       let attendees = event.attendees ?? []
       guard event.hasAttendees == !attendees.isEmpty,
-        attendees.isEmpty || event.organizer != nil else {
+        attendees.isEmpty || event.organizer != nil
+      else {
         throw CalendarMoveError.audienceUnknownOrUnsafe
       }
       let participantIDs = attendees.map { $0.url.absoluteString }.sorted()
@@ -843,10 +847,14 @@
       return try moveSnapshot(event)
     }
 
-    package func moveEvent(expected: CalendarMoveSnapshot, to start: Date, acknowledgingAudience: Bool) throws
+    package func moveEvent(
+      expected: CalendarMoveSnapshot, to start: Date, acknowledgingAudience: Bool
+    ) throws
       -> CalendarMoveOutcome
     {
-      guard start.timeIntervalSinceReferenceDate.isFinite else { throw CalendarMoveError.invalidTime }
+      guard start.timeIntervalSinceReferenceDate.isFinite else {
+        throw CalendarMoveError.invalidTime
+      }
       guard isOn, hasAccess, storeReady else { throw CalendarMoveError.unavailable }
       guard let event = moveTarget(id: expected.externalID, start: expected.occurrence) else {
         throw CalendarMoveError.stale
@@ -855,8 +863,10 @@
       guard expected.audience.attendeeCount == 0 || acknowledgingAudience else {
         throw CalendarMoveError.audienceAcknowledgmentRequired
       }
-      guard let end = CalendarMoveTiming.end(
-        newStart: start, oldStart: expected.start, oldEnd: expected.end, wasAllDay: expected.isAllDay)
+      guard
+        let end = CalendarMoveTiming.end(
+          newStart: start, oldStart: expected.start, oldEnd: expected.end,
+          wasAllDay: expected.isAllDay)
       else { throw CalendarMoveError.invalidTime }
       event.isAllDay = false
       event.startDate = start
@@ -871,16 +881,20 @@
         !after.isAllDay, after.calendarID == expected.calendarID,
         after.sourceID == expected.sourceID, after.audience == expected.audience,
         after.participantIDs == expected.participantIDs, after.title == expected.title,
-        after.location == expected.location, after.notes == expected.notes, after.url == expected.url
+        after.location == expected.location, after.notes == expected.notes,
+        after.url == expected.url
       else {
-        return .committedUnverified(CalendarMoveUnverified(
-          before: expected, requestedStart: start, requestedEnd: end,
-          savedExternalID: event.eventIdentifier))
+        return .committedUnverified(
+          CalendarMoveUnverified(
+            before: expected, requestedStart: start, requestedEnd: end,
+            savedExternalID: event.eventIdentifier))
       }
       return .verified(CalendarMoveReceipt(before: expected, after: after))
     }
 
-    package func undoMove(_ receipt: CalendarMoveReceipt, acknowledgingAudience: Bool) throws -> CalendarMoveUndoOutcome {
+    package func undoMove(_ receipt: CalendarMoveReceipt, acknowledgingAudience: Bool) throws
+      -> CalendarMoveUndoOutcome
+    {
       guard isOn, hasAccess, storeReady else { throw CalendarMoveError.unavailable }
       let after = receipt.after
       guard let event = moveTarget(id: after.externalID, start: after.occurrence) else {
@@ -891,7 +905,8 @@
         throw CalendarMoveError.audienceAcknowledgmentRequired
       }
       guard receipt.before.calendarID == after.calendarID,
-        receipt.before.sourceID == after.sourceID else { throw CalendarMoveError.stale }
+        receipt.before.sourceID == after.sourceID
+      else { throw CalendarMoveError.stale }
       event.isAllDay = receipt.before.isAllDay
       event.startDate = receipt.before.start
       event.endDate = receipt.before.end

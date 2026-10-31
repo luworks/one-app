@@ -55,9 +55,11 @@
     func rename(externalID: String, occurrence: Date?, to title: String) -> Bool
     /// Read live state before presenting a user-confirmed move. Never authorizes a write by itself.
     func moveSnapshot(externalID: String, occurrence: Date) throws -> CalendarMoveSnapshot
-    func moveEvent(expected: CalendarMoveSnapshot, to start: Date, acknowledgingAudience: Bool) throws
+    func moveEvent(expected: CalendarMoveSnapshot, to start: Date, acknowledgingAudience: Bool)
+      throws
       -> CalendarMoveOutcome
-    func undoMove(_ receipt: CalendarMoveReceipt, acknowledgingAudience: Bool) throws -> CalendarMoveUndoOutcome
+    func undoMove(_ receipt: CalendarMoveReceipt, acknowledgingAudience: Bool) throws
+      -> CalendarMoveUndoOutcome
   }
 
   /// Native EventKit UI is an explicit live capability, absent from deterministic sessions.

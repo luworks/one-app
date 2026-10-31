@@ -882,17 +882,22 @@
           return true
         }
         do {
-          let snapshot = try calendarSync.moveSnapshot(externalID: identifier, occurrence: occurrence)
+          let snapshot = try calendarSync.moveSnapshot(
+            externalID: identifier, occurrence: occurrence)
           let audience = snapshot.audience
           var notes = ["Only this occurrence changes."]
           if audience.attendeeCount == 0 {
             notes.append("No attendees are listed.")
           } else {
-            let role = audience.isOrganizer == true ? "You are the organizer." : "You are not the organizer."
-            notes.append("\(audience.attendeeCount) attendee(s) listed. \(role) Calendar may send updates; Undo may send another update.")
+            let role =
+              audience.isOrganizer == true ? "You are the organizer." : "You are not the organizer."
+            notes.append(
+              "\(audience.attendeeCount) attendee(s) listed. \(role) Calendar may send updates; Undo may send another update."
+            )
           }
           if snapshot.isAllDay { notes.append("The timed event will last 1 hour.") }
-          var card = PendingChange(subject: .systemEvent, delete: false, title: snapshot.title,
+          var card = PendingChange(
+            subject: .systemEvent, delete: false, title: snapshot.title,
             oldText: subject.whenLabel(calendar: runtime.calendar), newStart: start,
             notes: notes, attendees: audience.attendeeCount)
           card.systemMove = snapshot
@@ -1434,7 +1439,8 @@
           change = nil
           switch outcome {
           case .verified(let receipt):
-            let entry = ledger.record(.moved, kind: "event", title: snapshot.title,
+            let entry = ledger.record(
+              .moved, kind: "event", title: snapshot.title,
               before: ledger.timeLabel(snapshot.start), after: ledger.timeLabel(start),
               beforeDate: snapshot.start, afterDate: start, actor: .todayAI, channel: .ask,
               approval: .asked, snapshot: receipt, context: context)
@@ -1452,19 +1458,30 @@
                   ledger.recordUndo(of: entry, channel: .ask, context: context)
                   messages.append(reply("The event was restored."))
                 case .committedUnverified:
-                  ledger.record(.edited, kind: "event", title: snapshot.title,
+                  ledger.record(
+                    .edited, kind: "event", title: snapshot.title,
                     after: "Undo committed; result not verified", actor: .you, channel: .ask,
                     approval: .userMade, snapshot: receipt, context: context)
-                  messages.append(reply("Calendar accepted Undo, but the result couldn't be verified. Open Calendar to check it."))
+                  messages.append(
+                    reply(
+                      "Calendar accepted Undo, but the result couldn't be verified. Open Calendar to check it."
+                    ))
                 }
-              } catch { messages.append(reply("Couldn't undo the event change. Open Calendar to check it.")) }
+              } catch {
+                messages.append(reply("Couldn't undo the event change. Open Calendar to check it."))
+              }
             }
           case .committedUnverified(let pending):
-            ledger.record(.moved, kind: "event", title: snapshot.title,
-              before: ledger.timeLabel(snapshot.start), after: "Calendar accepted; result unverified",
+            ledger.record(
+              .moved, kind: "event", title: snapshot.title,
+              before: ledger.timeLabel(snapshot.start),
+              after: "Calendar accepted; result unverified",
               beforeDate: snapshot.start, afterDate: start, actor: .todayAI, channel: .ask,
               approval: .asked, snapshot: pending, context: context)
-            messages.append(reply("Calendar accepted the change, but the result couldn't be verified. Open Calendar to check it before trying again."))
+            messages.append(
+              reply(
+                "Calendar accepted the change, but the result couldn't be verified. Open Calendar to check it before trying again."
+              ))
           }
         } catch {
           messages.append(reply("The event could not be changed. Open Calendar to check it."))
