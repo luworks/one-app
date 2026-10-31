@@ -104,6 +104,26 @@ final class CalendarRecurringDeleteTests: XCTestCase {
     return found
   }
 
+  func testAskAIMovesOnlyTheSelectedRepeatingOccurrence() {
+    let app = start(repeating: true)
+    row(app).press(forDuration: 1.2)
+    let ask = app.buttons["Ask AI"].firstMatch
+    XCTAssertTrue(ask.waitForExistence(timeout: 5))
+    ask.tap()
+    let input = app.textViews["Ask AI or add anything"].firstMatch
+    XCTAssertTrue(input.waitForExistence(timeout: 10))
+    input.tap()
+    input.typeText("Move it to tomorrow at 11am")
+    app.buttons["ask-send"].tap()
+    let card = app.descendants(matching: .any)["change-card"].firstMatch
+    XCTAssertTrue(card.waitForExistence(timeout: 15))
+    XCTAssertTrue(card.staticTexts["Only this occurrence changes."].exists)
+    card.buttons["Apply"].tap()
+    XCTAssertTrue(app.staticTexts["The calendar event was moved."].waitForExistence(timeout: 15))
+    app.buttons["chat.close"].tap()
+    XCTAssertTrue(isListed(on: yesterday, app), "the earlier series occurrence is unchanged")
+  }
+
   private func deleteFromRow(_ app: XCUIApplication) {
     row(app).press(forDuration: 1.2)
     let delete = app.buttons["Delete"].firstMatch
