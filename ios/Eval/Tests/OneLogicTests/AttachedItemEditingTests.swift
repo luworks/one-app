@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+
 @testable import TodayCore
 
 final class AttachedItemEditingTests: XCTestCase {
@@ -12,9 +13,11 @@ final class AttachedItemEditingTests: XCTestCase {
     calendar.date(from: DateComponents(year: 2026, month: 10, day: 30, hour: 9))!
   }
   private var items: [EditItem] {
-    [EditItem(id: "a", type: "task", title: "Milk", start: now, minutes: 0, attendees: 0),
-     EditItem(id: "b", type: "task", title: "Milk", start: now, minutes: 0, attendees: 0),
-     EditItem(id: "e", type: "event", title: "Meeting", start: now, minutes: 30, attendees: 1)]
+    [
+      EditItem(id: "a", type: "task", title: "Milk", start: now, minutes: 0, attendees: 0),
+      EditItem(id: "b", type: "task", title: "Milk", start: now, minutes: 0, attendees: 0),
+      EditItem(id: "e", type: "event", title: "Meeting", start: now, minutes: 30, attendees: 1),
+    ]
   }
   private func parse(_ text: String, id: String? = "a") -> AttachedItemEdit? {
     AttachedItemEditing.parse(text, attachedItemID: id, items: items, now: now, calendar: calendar)
@@ -55,8 +58,10 @@ final class AttachedItemEditingTests: XCTestCase {
     XCTAssertNil(parse("Delete it", id: "missing")?.operation)
     XCTAssertNil(parse("Complete it", id: "e")?.operation)
     let duplicate = items + [items[0]]
-    XCTAssertNil(AttachedItemEditing.parse(
-      "Delete it", attachedItemID: "a", items: duplicate, now: now, calendar: calendar)?.operation)
+    XCTAssertNil(
+      AttachedItemEditing.parse(
+        "Delete it", attachedItemID: "a", items: duplicate, now: now, calendar: calendar)?.operation
+    )
   }
 
   func testQuestionsOtherTargetsAndMultipleActionsAreNotApplied() {
@@ -67,13 +72,18 @@ final class AttachedItemEditingTests: XCTestCase {
   }
 
   func testSentenceRoutePassesAttachmentAndKeepsOrdinaryRoute() {
-    let route = SentenceRoute.route("Delete it", items: items, now: now, calendar: calendar, attachedItemID: "b")
+    let route = SentenceRoute.route(
+      "Delete it", items: items, now: now, calendar: calendar, attachedItemID: "b")
     guard case .attachedEdit(let edit) = route else { return XCTFail("Expected attached edit") }
     XCTAssertEqual(edit.target, "b")
     XCTAssertEqual(edit.operation, .delete)
     XCTAssertFalse(route.isActionable, "The app must integrate the preview before suggesting it")
-    if case .edit(let edit) = SentenceRoute.route("Delete it", items: items, now: now, calendar: calendar) {
+    if case .edit(let edit) = SentenceRoute.route(
+      "Delete it", items: items, now: now, calendar: calendar)
+    {
       XCTAssertEqual(edit.op, .clarify)
-    } else { XCTFail("Ordinary chat must retain its existing route") }
+    } else {
+      XCTFail("Ordinary chat must retain its existing route")
+    }
   }
 }

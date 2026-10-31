@@ -36,20 +36,23 @@
       runtime: PlannerRuntime
     ) throws -> Receipt {
       guard !task.isDeleted, task.modelContext === context,
-        Ledger.snapshot(of: task) == expected else { throw Failure.changed }
+        Ledger.snapshot(of: task) == expected
+      else { throw Failure.changed }
       switch operation {
       case .rename(let title):
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != expected.title else { throw Failure.noChange }
         var draft = expected
         draft.title = name
-        return try edit(task, before: expected, after: draft, context: context,
+        return try edit(
+          task, before: expected, after: draft, context: context,
           reminders: reminders, ledger: ledger)
       case .move(let due):
         guard expected.due != due else { throw Failure.noChange }
         var draft = expected
         draft.due = due
-        return try edit(task, before: expected, after: draft, context: context,
+        return try edit(
+          task, before: expected, after: draft, context: context,
           reminders: reminders, ledger: ledger)
       case .done:
         guard !expected.isDone else { throw Failure.noChange }
@@ -59,13 +62,15 @@
         let toast = UndoToast()
         let undoManager = UndoManager()
         toast.undoManager = undoManager
-        TaskActions.toggleDone(task, context: context, toast: toast, reminders: reminders,
+        TaskActions.toggleDone(
+          task, context: context, toast: toast, reminders: reminders,
           ledger: ledger, runtime: runtime, actor: .todayAI, channel: .ask)
         guard toast.canUndo else { throw Failure.changed }
         let after = Ledger.snapshot(of: task)
         return Receipt {
           guard !task.isDeleted, task.modelContext === context,
-            Ledger.snapshot(of: task) == after else { throw Failure.changed }
+            Ledger.snapshot(of: task) == after
+          else { throw Failure.changed }
           guard undoManager.canUndo else { throw Failure.changed }
           withExtendedLifetime(toast) { undoManager.undo() }
           guard Ledger.snapshot(of: task) == expected else { throw Failure.changed }
@@ -88,7 +93,8 @@
         if externalID != nil { reminders.noteDeleted(reminder: externalID) }
         let snapshot: TaskSnapshot?
         if case .localOnly = deletion { snapshot = expected } else { snapshot = nil }
-        let entry = ledger.record(.deleted, title: expected.title, actor: .todayAI,
+        let entry = ledger.record(
+          .deleted, title: expected.title, actor: .todayAI,
           channel: .ask, approval: .asked, snapshot: snapshot, context: context)
         return Receipt {
           guard backup.modelContext == nil else { throw Failure.changed }
@@ -112,13 +118,16 @@
       try persist(task, from: before, to: after, context: context, reminders: reminders)
       let entry = ledger.record(
         before.title == after.title ? .redated : .edited, task: task, title: after.title,
-        before: before.title == after.title ? ledger.timeLabel(before.due, none: "No date") : before.title,
-        after: before.title == after.title ? ledger.timeLabel(after.due, none: "No date") : after.title,
+        before: before.title == after.title
+          ? ledger.timeLabel(before.due, none: "No date") : before.title,
+        after: before.title == after.title
+          ? ledger.timeLabel(after.due, none: "No date") : after.title,
         beforeDate: before.due, afterDate: after.due, actor: .todayAI, channel: .ask,
         approval: .asked, context: context)
       return Receipt {
         guard !task.isDeleted, task.modelContext === context,
-          Ledger.snapshot(of: task) == after else { throw Failure.changed }
+          Ledger.snapshot(of: task) == after
+        else { throw Failure.changed }
         try persist(task, from: after, to: before, context: context, reminders: reminders)
         ledger.recordUndo(of: entry, task: task, channel: .ask, context: context)
       }

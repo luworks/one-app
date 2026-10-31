@@ -44,11 +44,14 @@
       _ operation: AttachedItemEdit.Operation, task: OneTask, expected: TaskSnapshot,
       context: ModelContext
     ) throws -> AttachedReminderActions.Receipt {
-      try AttachedReminderActions.apply(operation, to: task, expected: expected,
+      try AttachedReminderActions.apply(
+        operation, to: task, expected: expected,
         context: context, reminders: reminders, ledger: ledger, runtime: runtime)
     }
 
-    package func applyAttachedAlarm(_ change: AttachedAlarmChange, context: ModelContext) async throws -> LedgerItem {
+    package func applyAttachedAlarm(_ change: AttachedAlarmChange, context: ModelContext)
+      async throws -> LedgerItem
+    {
       try await change.apply(context: context, alarms: alarms, ledger: ledger, runtime: runtime)
     }
 

@@ -19,7 +19,9 @@
     }
     private struct RefinedTitle: Codable, Sendable { let title: String }
 
-    static func propose(_ text: String, history: String = "", now: Date = .now, calendar: Calendar = .current) async
+    static func propose(
+      _ text: String, history: String = "", now: Date = .now, calendar: Calendar = .current
+    ) async
       -> [Capture]?
     {
       guard isAvailable else { return nil }

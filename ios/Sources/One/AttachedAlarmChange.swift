@@ -37,7 +37,8 @@
       guard !alarm.isDeleted, alarm.modelContext != nil, let systemID = alarm.alarmKitID else {
         throw Failure.unavailable
       }
-      if case .rename(let name) = edit, name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      if case .rename(let name) = edit, name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      {
         throw Failure.unsupported
       }
       self.id = alarm.persistentModelID
@@ -52,15 +53,21 @@
     package func apply(
       context: ModelContext, alarms: any AlarmService, ledger: Ledger, runtime: PlannerRuntime
     ) async throws -> LedgerItem {
-      let matches = try context.fetch(FetchDescriptor<OneAlarm>()).filter { $0.persistentModelID == id }
+      let matches = try context.fetch(FetchDescriptor<OneAlarm>()).filter {
+        $0.persistentModelID == id
+      }
       guard matches.count == 1, let alarm = matches.first, !alarm.isDeleted,
-        alarm.alarmKitID == systemID else { throw Failure.unavailable }
+        alarm.alarmKitID == systemID
+      else { throw Failure.unavailable }
       let reader = ModelContext(context.container)
-      let saved = try reader.fetch(FetchDescriptor<OneAlarm>()).filter { $0.persistentModelID == id }
+      let saved = try reader.fetch(FetchDescriptor<OneAlarm>()).filter {
+        $0.persistentModelID == id
+      }
       guard saved.count == 1, let persisted = saved.first,
         persisted.alarmKitID == systemID, persisted.activitySnapshot == before,
         persisted.createdAt == createdAt, alarm.activitySnapshot == before,
-        alarm.createdAt == createdAt else { throw Failure.changed }
+        alarm.createdAt == createdAt
+      else { throw Failure.changed }
 
       if case .delete = edit {
         _ = try AlarmActions.remove(alarm, context: context, alarms: alarms)
@@ -104,7 +111,8 @@
       _ entry: LedgerItem, context: ModelContext, alarms: any AlarmService,
       ledger: Ledger, runtime: PlannerRuntime
     ) async -> String? {
-      await AlarmActions.undo(entry, context: context, alarms: alarms, ledger: ledger, runtime: runtime)
+      await AlarmActions.undo(
+        entry, context: context, alarms: alarms, ledger: ledger, runtime: runtime)
     }
   }
 #endif

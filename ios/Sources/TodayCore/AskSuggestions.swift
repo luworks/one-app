@@ -69,8 +69,10 @@ public enum SentenceRoute: Equatable {
     let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     if OverdueTidy.isRequest(text) { return .tidy }
     if Editing.isQuestion(text) { return .question }
-    if attachedItemID != nil, let edit = AttachedItemEditing.parse(
-      text, attachedItemID: attachedItemID, items: items, now: now, calendar: calendar) {
+    if attachedItemID != nil,
+      let edit = AttachedItemEditing.parse(
+        text, attachedItemID: attachedItemID, items: items, now: now, calendar: calendar)
+    {
       return .attachedEdit(edit)
     }
     if Editing.looksLikeEdit(text, items: items, now: now, calendar: calendar) {
@@ -85,7 +87,7 @@ public enum SentenceRoute: Equatable {
   public var isActionable: Bool {
     switch self {
     case .tidy, .question: return true
-    case .attachedEdit: return false // Requires an app-side preview integration.
+    case .attachedEdit: return false  // Requires an app-side preview integration.
     case .edit(let d):
       return (d.op == .move && d.target != nil && d.newStart != nil)
         || (d.op == .delete && d.target != nil)

@@ -490,7 +490,8 @@
           let start = subject.start, let native = calendarSync as? any NativeCalendarService
         {
           Button("Open in Calendar") {
-            native.edit(identifier: identifier, start: start, end: nil, fullOptions: true, onComplete: nil)
+            native.edit(
+              identifier: identifier, start: start, end: nil, fullOptions: true, onComplete: nil)
           }
           .buttonStyle(.bordered)
           .accessibilityIdentifier("ask-open-system-event")
@@ -859,26 +860,45 @@
       let type = subject.kind == .reminder ? "task" : subject.kind.rawValue
       var start = subject.start
       if case .alarm(let alarm)? = attached {
-        start = runtime.calendar.nextDate(after: now(), matching: DateComponents(hour: alarm.hour, minute: alarm.minute), matchingPolicy: .nextTime)
+        start = runtime.calendar.nextDate(
+          after: now(), matching: DateComponents(hour: alarm.hour, minute: alarm.minute),
+          matchingPolicy: .nextTime)
       }
-      let candidate = EditItem(id: "attached", type: type, title: subject.title,
+      let candidate = EditItem(
+        id: "attached", type: type, title: subject.title,
         start: start, minutes: subject.minutes, attendees: 0)
-      guard let edit = AttachedItemEditing.parse(text, attachedItemID: "attached", items: [candidate], now: now(), calendar: runtime.calendar) else { return false }
+      guard
+        let edit = AttachedItemEditing.parse(
+          text, attachedItemID: "attached", items: [candidate], now: now(),
+          calendar: runtime.calendar)
+      else { return false }
       clearPreviews()
       if subject.kind == .event && subject.isSystemEvent == true {
-        messages.append(reply("This calendar event can't be edited from chat yet. Open it in Calendar to make the change."))
+        messages.append(
+          reply(
+            "This calendar event can't be edited from chat yet. Open it in Calendar to make the change."
+          ))
         openSystemEvent = subject.itemRef != nil && subject.start != nil
         return true
       }
       guard let operation = edit.operation else {
-        messages.append(reply(edit.reason == "no new time" ? "When should I move this item?" : "I can't safely prepare that change. Please open the item to edit it."))
+        messages.append(
+          reply(
+            edit.reason == "no new time"
+              ? "When should I move this item?"
+              : "I can't safely prepare that change. Please open the item to edit it."))
         return true
       }
       switch attached {
       case .task(let task):
-        var card = PendingChange(subject: .task(task), delete: operation == .delete,
-          title: task.title, oldText: task.due.map { plannerDayLabel($0, runtime: runtime) } ?? "No date",
-          newStart: { if case .move(let date) = operation { return date }; return nil }(),
+        var card = PendingChange(
+          subject: .task(task), delete: operation == .delete,
+          title: task.title,
+          oldText: task.due.map { plannerDayLabel($0, runtime: runtime) } ?? "No date",
+          newStart: {
+            if case .move(let date) = operation { return date }
+            return nil
+          }(),
           notes: ["Nothing changes until you tap Apply."], attendees: 0)
         card.expectedTask = Ledger.snapshot(of: task)
         card.attachedOperation = operation
@@ -890,30 +910,41 @@
         case .rename(let name): alarmEdit = .rename(name)
         case .delete: alarmEdit = .delete
         default:
-          messages.append(reply("This alarm change can't be prepared here yet. Open the alarm to edit it."))
+          messages.append(
+            reply("This alarm change can't be prepared here yet. Open the alarm to edit it."))
           return true
         }
         do {
-          var card = PendingChange(subject: .alarm(alarm), delete: operation == .delete, title: subject.title,
+          var card = PendingChange(
+            subject: .alarm(alarm), delete: operation == .delete, title: subject.title,
             oldText: subject.whenLabel(calendar: runtime.calendar),
-            newStart: { if case .move(let date) = operation { return date }; return nil }(),
+            newStart: {
+              if case .move(let date) = operation { return date }
+              return nil
+            }(),
             notes: ["Nothing changes until you tap Apply."], attendees: 0)
           card.alarmChange = try AttachedAlarmChange(alarm: alarm, edit: alarmEdit)
           card.attachedOperation = operation
           change = card
-        } catch { messages.append(reply(error.localizedDescription)); return true }
+        } catch {
+          messages.append(reply(error.localizedDescription))
+          return true
+        }
       case .event(let event):
         switch operation {
         case .move(let date):
-          present(EditDecision(op: .move, target: "attached", newStart: date, reason: "attached"),
+          present(
+            EditDecision(op: .move, target: "attached", newStart: date, reason: "attached"),
             id: "attached", candidates: ([candidate], [:], ["attached": event]))
           return true
         case .delete:
-          present(EditDecision(op: .delete, target: "attached", reason: "attached"),
+          present(
+            EditDecision(op: .delete, target: "attached", reason: "attached"),
             id: "attached", candidates: ([candidate], [:], ["attached": event]))
           return true
         default:
-          messages.append(reply("This event change can't be prepared in chat. Open the event to edit it."))
+          messages.append(
+            reply("This event change can't be prepared in chat. Open the event to edit it."))
           return true
         }
       case nil:
@@ -1375,7 +1406,8 @@
         let expected = c.expectedTask
       {
         do {
-          let receipt = try actions.applyAttachedReminder(operation, task: task, expected: expected, context: context)
+          let receipt = try actions.applyAttachedReminder(
+            operation, task: task, expected: expected, context: context)
           recordCard(resolved: "change", "applied")
           change = nil
           messages.append(reply("The reminder was updated."))
@@ -1394,7 +1426,9 @@
             messages.append(reply("The alarm was updated."))
             offerUndo("Changed the alarm.", card: "change") {
               Task { @MainActor in
-                if let error = await actions.undo(entry, context: context) { messages.append(reply(error)) }
+                if let error = await actions.undo(entry, context: context) {
+                  messages.append(reply(error))
+                }
               }
             }
           } catch { messages.append(reply(error.localizedDescription)) }
