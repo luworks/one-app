@@ -136,7 +136,7 @@
       flushScheduled = false
     }
 
-    package static func ref(_ id: PersistentIdentifier) -> String? {
+    nonisolated package static func ref(_ id: PersistentIdentifier) -> String? {
       (try? JSONEncoder().encode(id)).flatMap { String(data: $0, encoding: .utf8) }
     }
 

@@ -28,6 +28,14 @@
     /// JSON of `[StoredCard]`: the decided cards. Additive field: older conversations have none and show none.
     package var cardsData: Data = Data()
 
+    /// The item attached to this conversation, independently of preview cards.
+    package var subjectData: Data = Data()
+
+    package var subject: AskSubject? {
+      get { try? JSONDecoder().decode(AskSubject.self, from: subjectData) }
+      set { subjectData = newValue.flatMap { try? JSONEncoder().encode($0) } ?? Data() }
+    }
+
     package var cards: [StoredCard] {
       get { StoredCard.restore(cardsData) }
       set { cardsData = StoredCard.encode(newValue) }
@@ -76,6 +84,7 @@
       c.archived = archived
       c.itemsData = itemsData
       c.cardsData = cardsData
+      c.subjectData = subjectData
       return c
     }
   }

@@ -33,7 +33,7 @@
     private var runtime: PlannerRuntime { presentation.runtime }
     private let now: () -> Date
     /// The item this chat was opened about (its "Ask AI" menu row); nil for an ordinary chat.
-    private let subject: AskSubject?
+    @State private var subject: AskSubject?
 
     let onAdded: (Capture) -> Void
     /// Asks the presenter to show what this screen goes back to (`true`), underneath it, or to undo that
@@ -183,6 +183,7 @@
     @State private var tidy: [TidyRow] = []
     @State private var voice: VoiceInput
     @State private var change: PendingChange?
+    @State private var openSystemEvent = false
     @State private var undoRow: UndoRow?
     /// What the last turn left open (a "which one?" with real items, or a "when?"), so the next message can answer it.
     @State private var followup: Followup?
@@ -202,9 +203,10 @@
       onOpenTask: @escaping (OneTask, @escaping () -> Void) -> Void,
       onOpenAlarm: @escaping (OneAlarm, @escaping () -> Void) -> Void
     ) {
-      self.subject = subject
+      let attached = thread?.subject ?? subject
+      _subject = State(initialValue: attached)
       // "it" means this item until the conversation touches another one.
-      _lastTouched = State(initialValue: subject?.title)
+      _lastTouched = State(initialValue: attached?.title)
       self.isPresented = isPresented
       self.onClose = onClose
       self.onMenu = onMenu
@@ -316,6 +318,7 @@
             emptyState
           } else {
             LazyVStack(alignment: .leading, spacing: 16) {
+              if let subject { subjectCard(subject) }
               ForEach(messages) { message in
                 MessageView(message: message).id(message.id)
                   .background {
@@ -414,6 +417,7 @@
       guard let first = messages.first(where: { $0.role == .user }) else { return }
       if let thread {
         thread.messages = messages
+        thread.subject = subject
         thread.updatedAt = now()
         // Continuing an archived conversation brings it back to the main list.
         thread.archived = false
@@ -421,6 +425,7 @@
         let created = ChatThread(
           title: ConversationHistory.title(from: first.text), messages: messages, createdAt: now(),
           updatedAt: now(), id: threadID)
+        created.subject = subject
         context.insert(created)
         thread = created
       }
@@ -480,6 +485,16 @@
           ChoiceBar(options: options, onPick: tapChoice)
             .background { responseProbe(.choices(options.map(\.id))) }
             .transition(cardTransition)
+        }
+        if openSystemEvent, let subject, let identifier = subject.itemRef,
+          let start = subject.start, let native = calendarSync as? any NativeCalendarService
+        {
+          Button("Open in Calendar") {
+            native.edit(
+              identifier: identifier, start: start, end: nil, fullOptions: true, onComplete: nil)
+          }
+          .buttonStyle(.bordered)
+          .accessibilityIdentifier("ask-open-system-event")
         }
         if let change {
           ChangeCard(
@@ -593,10 +608,20 @@
             .font(.subheadline).foregroundStyle(.secondary)
         }
         Spacer(minLength: 0)
+        Button {
+          self.subject = nil
+          lastTouched = nil
+          thread?.subject = nil
+          try? context.save()
+        } label: {
+          Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+        }
+        .accessibilityLabel("Remove item context")
+        .accessibilityIdentifier("ask-subject-remove")
       }
       .padding(14)
       .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
-      .accessibilityElement(children: .combine)
+      .accessibilityElement(children: .contain)
       .accessibilityIdentifier("ask-subject")
     }
 
@@ -672,6 +697,11 @@
         responseBaseline = responseSignature
       }
       turnStart = sentAt
+      openSystemEvent = false
+      if routeAttachedEdit(text) {
+        recordTurn("edit", text)
+        return
+      }
       if pending == nil, SavedReminderRefinement.isRequest(text) {
         recordTurn("edit", text)
         guard let receipt = proposals.last, receipt.status == .added,
@@ -821,6 +851,109 @@
       } else {
         respond(text, context: turnContext, intent: intent)
       }
+    }
+
+    /// Resolve an explicit anaphoric edit against the selected identity, never a matching title.
+    private func routeAttachedEdit(_ text: String) -> Bool {
+      guard let subject else { return false }
+      let attached = CaptureUndo.resolve(subject.itemRef, in: context)
+      let type = subject.kind == .reminder ? "task" : subject.kind.rawValue
+      var start = subject.start
+      if case .alarm(let alarm)? = attached {
+        start = runtime.calendar.nextDate(
+          after: now(), matching: DateComponents(hour: alarm.hour, minute: alarm.minute),
+          matchingPolicy: .nextTime)
+      }
+      let candidate = EditItem(
+        id: "attached", type: type, title: subject.title,
+        start: start, minutes: subject.minutes, attendees: 0)
+      guard
+        let edit = AttachedItemEditing.parse(
+          text, attachedItemID: "attached", items: [candidate], now: now(),
+          calendar: runtime.calendar)
+      else { return false }
+      clearPreviews()
+      if subject.kind == .event && subject.isSystemEvent == true {
+        messages.append(
+          reply(
+            "This calendar event can't be edited from chat yet. Open it in Calendar to make the change."
+          ))
+        openSystemEvent = subject.itemRef != nil && subject.start != nil
+        return true
+      }
+      guard let operation = edit.operation else {
+        messages.append(
+          reply(
+            edit.reason == "no new time"
+              ? "When should I move this item?"
+              : "I can't safely prepare that change. Please open the item to edit it."))
+        return true
+      }
+      switch attached {
+      case .task(let task):
+        var card = PendingChange(
+          subject: .task(task), delete: operation == .delete,
+          title: task.title,
+          oldText: task.due.map { plannerDayLabel($0, runtime: runtime) } ?? "No date",
+          newStart: {
+            if case .move(let date) = operation { return date }
+            return nil
+          }(),
+          notes: ["Nothing changes until you tap Apply."], attendees: 0)
+        card.expectedTask = Ledger.snapshot(of: task)
+        card.attachedOperation = operation
+        change = card
+      case .alarm(let alarm):
+        let alarmEdit: AttachedAlarmChange.Edit
+        switch operation {
+        case .move(let date): alarmEdit = .move(date)
+        case .rename(let name): alarmEdit = .rename(name)
+        case .delete: alarmEdit = .delete
+        default:
+          messages.append(
+            reply("This alarm change can't be prepared here yet. Open the alarm to edit it."))
+          return true
+        }
+        do {
+          var card = PendingChange(
+            subject: .alarm(alarm), delete: operation == .delete, title: subject.title,
+            oldText: subject.whenLabel(calendar: runtime.calendar),
+            newStart: {
+              if case .move(let date) = operation { return date }
+              return nil
+            }(),
+            notes: ["Nothing changes until you tap Apply."], attendees: 0)
+          card.alarmChange = try AttachedAlarmChange(alarm: alarm, edit: alarmEdit)
+          card.attachedOperation = operation
+          change = card
+        } catch {
+          messages.append(reply(error.localizedDescription))
+          return true
+        }
+      case .event(let event):
+        switch operation {
+        case .move(let date):
+          present(
+            EditDecision(op: .move, target: "attached", newStart: date, reason: "attached"),
+            id: "attached", candidates: ([candidate], [:], ["attached": event]))
+          return true
+        case .delete:
+          present(
+            EditDecision(op: .delete, target: "attached", reason: "attached"),
+            id: "attached", candidates: ([candidate], [:], ["attached": event]))
+          return true
+        default:
+          messages.append(
+            reply("This event change can't be prepared in chat. Open the event to edit it."))
+          return true
+        }
+      case nil:
+        messages.append(reply("This item is no longer available. Open it to edit it."))
+        return true
+      }
+      messages.append(reply("Here's the change. Nothing changes until you apply it."))
+      recordCard(shown: "change", items: 1)
+      return true
     }
 
     /// Route before either extractor. Conversation leaves pending previews and follow-ups untouched.
@@ -1269,6 +1402,39 @@
     }
 
     private func apply(_ c: PendingChange) {
+      if case .task(let task) = c.subject, let operation = c.attachedOperation,
+        let expected = c.expectedTask
+      {
+        do {
+          let receipt = try actions.applyAttachedReminder(
+            operation, task: task, expected: expected, context: context)
+          recordCard(resolved: "change", "applied")
+          change = nil
+          messages.append(reply("The reminder was updated."))
+          offerUndo("Changed the reminder.", card: "change") {
+            do { try receipt.undo() } catch { messages.append(reply(error.localizedDescription)) }
+          }
+        } catch { messages.append(reply(error.localizedDescription)) }
+        return
+      }
+      if case .alarm = c.subject, let proposal = c.alarmChange {
+        Task { @MainActor in
+          do {
+            let entry = try await actions.applyAttachedAlarm(proposal, context: context)
+            recordCard(resolved: "change", "applied")
+            change = nil
+            messages.append(reply("The alarm was updated."))
+            offerUndo("Changed the alarm.", card: "change") {
+              Task { @MainActor in
+                if let error = await actions.undo(entry, context: context) {
+                  messages.append(reply(error))
+                }
+              }
+            }
+          } catch { messages.append(reply(error.localizedDescription)) }
+        }
+        return
+      }
       let feedback = AskNativeActions.applyChange(
         c, context: context, calendar: calendarSync, actions: actions, ledger: ledger,
         runtime: runtime)
@@ -1298,14 +1464,14 @@
     /// A line that lists several things goes to the multi-item model path when it is available.
     private func propose(_ text: String, history: String = "") {
       if ChatRouting.hasMultipleActions(text) {
-        proposeList(text)
+        proposeList(text, history: history)
       } else {
         understand(text, history: history)
       }
     }
 
     /// A list needs separate previews; failed extraction asks for separate messages instead of collapsing actions.
-    private func proposeList(_ text: String) {
+    private func proposeList(_ text: String, history: String) {
       guard intelligence.isAvailable() else {
         messages.append(
           reply(
@@ -1318,7 +1484,7 @@
       let token = generationToken
       captureTask = Task { @MainActor in
         defer { finishEmission(token) }
-        let proposed = await intelligence.propose(text, now(), runtime.calendar)
+        let proposed = await intelligence.propose(text, history, now(), runtime.calendar)
         guard !Task.isCancelled, !AIResponseTrace.enabled || token == generationToken else {
           return
         }
@@ -1824,6 +1990,7 @@
     package enum Subject {
       case task(OneTask)
       case event(OneEvent)
+      case alarm(OneAlarm)
     }
     package let id = UUID()
     package let subject: Subject
@@ -1835,6 +2002,8 @@
     package let attendees: Int
     package var newRepeatRule: String?
     package var expectedTask: TaskSnapshot?
+    package var attachedOperation: AttachedItemEdit.Operation?
+    package var alarmChange: AttachedAlarmChange?
 
     package static func == (a: PendingChange, b: PendingChange) -> Bool { a.id == b.id }
 
@@ -1881,6 +2050,10 @@
         Text(change.title).font(.headline)
         if change.delete {
           Text(change.oldText).font(.subheadline).foregroundStyle(.secondary)
+        } else if case .rename(let name)? = change.attachedOperation {
+          Text("\(change.title) → \(name)").font(.subheadline)
+        } else if case .done? = change.attachedOperation {
+          Text("Mark completed").font(.subheadline)
         } else if let new = change.newStart {
           Text("\(change.oldText) → \(plannerDayLabel(new, runtime: presentation.runtime))")
             .font(.subheadline)
@@ -1908,6 +2081,7 @@
     }
 
     private var heading: String {
+      if change.attachedOperation != nil { return "Change item" }
       if change.newRepeatRule != nil { return "Change reminder" }
       switch (change.delete, change.isEvent) {
       case (false, false): return "Move task"
@@ -2049,6 +2223,9 @@
             )
           }
         }
+      case .alarm:
+        feedback.applied = false
+        return feedback
       case .event(let event):
         guard !event.isDeleted, event.modelContext != nil, event.repeatRule == nil,
           event.externalID == nil || calendar.canDelete(externalID: event.externalID)

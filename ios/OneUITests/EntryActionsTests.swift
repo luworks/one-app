@@ -47,6 +47,33 @@ final class EntryActionsTests: XCTestCase {
     XCTAssertTrue(title.waitForNonExistence(timeout: 5), "it leaves today for tomorrow")
   }
 
+  func testAskAIOnReminderResolvesMoveItToThatReminder() {
+    let title = app.staticTexts["Write up design review notes"]
+    XCTAssertTrue(title.waitForExistence(timeout: 8))
+    title.press(forDuration: 1.0)
+    let askAI = app.buttons["Ask AI"]
+    XCTAssertTrue(askAI.waitForExistence(timeout: 3))
+    askAI.tap()
+
+    let field = app.textViews["Ask AI or add anything"].firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 10))
+    field.tap()
+    field.typeText("Move it to tomorrow at 5pm")
+    let send = app.buttons["ask-send"]
+    XCTAssertTrue(send.waitForExistence(timeout: 5))
+    send.tap()
+
+    let card = app.descendants(matching: .any).matching(identifier: "change-card").firstMatch
+    XCTAssertTrue(card.waitForExistence(timeout: 90), "The selected reminder gets a move preview")
+    XCTAssertTrue(card.staticTexts["Write up design review notes"].exists)
+    XCTAssertTrue(card.staticTexts["Change item"].exists)
+    XCTAssertTrue(card.buttons["Apply"].exists, "The move still requires confirmation")
+    XCTAssertFalse(
+      app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Which item do you mean"))
+        .firstMatch.exists,
+      "The item selected before opening AI resolves the pronoun")
+  }
+
   func testLongPressOnAnEventOffersTheUsualActions() {
     showMonth()
     let dentist = row("Dentist")

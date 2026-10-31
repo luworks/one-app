@@ -26,7 +26,7 @@
       }
       // One title-only refinement for a NEW parse. Preview follow-ups reuse the prepared title.
       return await AICapture.refineTitle(
-        result, source: text, history: String(history.suffix(1600)))
+        result, source: text, history: history)
     }
 
     /// Loads the model ahead of the first request. No-op where the model isn't available.

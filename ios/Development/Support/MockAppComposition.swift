@@ -128,7 +128,7 @@
           if askReplyDelay { try? await Task.sleep(for: .seconds(12)) }
           return AskIntelligence.ruleCapture(text, now: now, calendar: calendar)
         },
-        propose: { text, now, calendar in
+        propose: { text, _, now, calendar in
           guard multiCapture, text.contains(";") else { return nil }
           return text.split(separator: ";").map {
             CaptureParser.parse(

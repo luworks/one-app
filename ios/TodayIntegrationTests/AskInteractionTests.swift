@@ -146,7 +146,7 @@
         backend: { .scripted },
         parse: { text, _, now, calendar in CaptureParser.parse(text, now: now, calendar: calendar)
         },
-        propose: { _, _, _ in nil }, refineTitle: { capture, _, _ in capture },
+        propose: { _, _, _, _ in nil }, refineTitle: { capture, _, _ in capture },
         respond: { _, _, _ in
           return .reply("Delayed fixture reply")
         }, plan: { _, _, _, _, _ in EditPlan(op: .none, target: nil) },

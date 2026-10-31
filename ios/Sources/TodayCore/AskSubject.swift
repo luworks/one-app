@@ -3,9 +3,12 @@ import Foundation
 /// The item a person opened Ask from ("Ask AI" in an item's long-press menu). It rides along with that chat so
 /// "move it to 5pm" or "why is this repeating?" needs no naming: the title is what "it" means, and `contextLine`
 /// is handed to the model as data. Plain Swift (no SwiftUI/SwiftData), so it is unit-tested.
-public struct AskSubject: Equatable, Sendable {
-  public enum Kind: String, Sendable { case event, reminder, alarm }
+public struct AskSubject: Codable, Equatable, Sendable {
+  public enum Kind: String, Codable, Sendable { case event, reminder, alarm }
 
+  /// Stable local model reference or EventKit identifier; never sent to a model.
+  public var itemRef: String?
+  public var isSystemEvent: Bool?
   public var kind: Kind
   public var title: String
   /// The event's start, the reminder's due date, or nil for an undated reminder and for an alarm (which keeps its clock time in `details`).
@@ -17,8 +20,10 @@ public struct AskSubject: Equatable, Sendable {
 
   public init(
     kind: Kind, title: String, start: Date? = nil, isAllDay: Bool = false, minutes: Int = 0,
-    details: [String] = []
+    details: [String] = [], itemRef: String? = nil, isSystemEvent: Bool? = nil
   ) {
+    self.itemRef = itemRef
+    self.isSystemEvent = isSystemEvent
     self.kind = kind
     self.title = Self.clean(title, limit: 120)
     self.start = start

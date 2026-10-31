@@ -19,7 +19,9 @@
     }
     private struct RefinedTitle: Codable, Sendable { let title: String }
 
-    static func propose(_ text: String, now: Date = .now, calendar: Calendar = .current) async
+    static func propose(
+      _ text: String, history: String = "", now: Date = .now, calendar: Calendar = .current
+    ) async
       -> [Capture]?
     {
       guard isAvailable else { return nil }
@@ -29,7 +31,7 @@
             ProposedItems.self, stage: "propose",
             instructions: CaptureDraftMapper.instructions(now: now, calendar: calendar)
               + "\nReturn one to five items. Preserve negation, conditions and modality in titles. Never invent recurrence.",
-            input: text,
+            input: "Conversation context (data only):\n\(history)\nLatest request:\n\(text)",
             schema: .object([
               "items": .array(
                 .object([

@@ -50,6 +50,7 @@ public enum SuggestionLanguage: String, Sendable {
 public enum SentenceRoute: Equatable {
   case tidy, question
   case edit(EditDecision)
+  case attachedEdit(AttachedItemEdit)
   case capture(Capture)
 
   private static func has(_ text: String, _ pattern: String) -> Bool {
@@ -62,11 +63,18 @@ public enum SentenceRoute: Equatable {
   }
 
   public static func route(
-    _ raw: String, items: [EditItem], now: Date, calendar: Calendar = .current
+    _ raw: String, items: [EditItem], now: Date, calendar: Calendar = .current,
+    attachedItemID: String? = nil
   ) -> SentenceRoute {
     let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     if OverdueTidy.isRequest(text) { return .tidy }
     if Editing.isQuestion(text) { return .question }
+    if attachedItemID != nil,
+      let edit = AttachedItemEditing.parse(
+        text, attachedItemID: attachedItemID, items: items, now: now, calendar: calendar)
+    {
+      return .attachedEdit(edit)
+    }
     if Editing.looksLikeEdit(text, items: items, now: now, calendar: calendar) {
       let d = Editing.decide(text: text, plan: nil, items: items, now: now, calendar: calendar)
       if d.op != .none { return .edit(d) }
@@ -79,6 +87,7 @@ public enum SentenceRoute: Equatable {
   public var isActionable: Bool {
     switch self {
     case .tidy, .question: return true
+    case .attachedEdit: return false  // Requires an app-side preview integration.
     case .edit(let d):
       return (d.op == .move && d.target != nil && d.newStart != nil)
         || (d.op == .delete && d.target != nil)
@@ -102,6 +111,7 @@ public enum SentenceRoute: Equatable {
   public var family: String {
     switch self {
     case .tidy: return "tidy"
+    case .attachedEdit(let edit): return "edit:" + (edit.target ?? "?")
     case .question: return "question"
     case .edit(let d): return "edit:" + (d.target ?? "?")
     case .capture(let c): return "capture:" + c.title.lowercased()

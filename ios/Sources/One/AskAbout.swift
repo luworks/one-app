@@ -28,7 +28,8 @@
       if !task.note.isEmpty { details.append("note: \(task.note)") }
       self.init(
         kind: .reminder, title: task.title, start: task.due,
-        minutes: task.due == nil ? 0 : task.durationMinutes, details: details)
+        minutes: task.due == nil ? 0 : task.durationMinutes, details: details,
+        itemRef: Ledger.ref(task.persistentModelID))
     }
 
     package init(alarm: OneAlarm) {
@@ -38,7 +39,8 @@
       details.append(days.isEmpty ? "once" : "repeats " + days.joined(separator: " "))
       if !alarm.isOn { details.append("off") }
       self.init(
-        kind: .alarm, title: alarm.label.isEmpty ? "Alarm" : alarm.label, details: details)
+        kind: .alarm, title: alarm.label.isEmpty ? "Alarm" : alarm.label, details: details,
+        itemRef: Ledger.ref(alarm.persistentModelID))
     }
 
     /// `start` is the occurrence being shown (differs from `event.start` for a repeating event).
@@ -49,7 +51,8 @@
       if let location = event.location, !location.isEmpty { details.append("at \(location)") }
       self.init(
         kind: .event, title: event.title, start: start, isAllDay: event.isAllDay,
-        minutes: event.isAllDay ? 0 : event.durationMinutes, details: details)
+        minutes: event.isAllDay ? 0 : event.durationMinutes, details: details,
+        itemRef: Ledger.ref(event.persistentModelID), isSystemEvent: false)
     }
 
     package init(event: ExternalEvent) {
@@ -60,14 +63,16 @@
       let minutes = Int(event.end.timeIntervalSince(event.start) / 60)
       self.init(
         kind: .event, title: event.title, start: event.start, isAllDay: event.isAllDay,
-        minutes: event.isAllDay ? 0 : max(0, minutes), details: details)
+        minutes: event.isAllDay ? 0 : max(0, minutes), details: details,
+        itemRef: event.eventIdentifier, isSystemEvent: true)
     }
 
     package init(entry: CalEntry) {
       switch entry.source {
       case .task(let task): self.init(task: task)
       case .alarm(let alarm): self.init(alarm: alarm)
-      case .system, .local:
+      case .local(let event): self.init(event: event, start: entry.start)
+      case .system(let identifier):
         var details: [String] = []
         if entry.repeats { details.append("repeats") }
         if !entry.calendarTitle.isEmpty { details.append("calendar \(entry.calendarTitle)") }
@@ -75,7 +80,8 @@
         let minutes = Int(entry.end.timeIntervalSince(entry.start) / 60)
         self.init(
           kind: .event, title: entry.title, start: entry.start, isAllDay: entry.isAllDay,
-          minutes: entry.isAllDay ? 0 : max(0, minutes), details: details)
+          minutes: entry.isAllDay ? 0 : max(0, minutes), details: details,
+          itemRef: identifier, isSystemEvent: true)
       }
     }
   }
