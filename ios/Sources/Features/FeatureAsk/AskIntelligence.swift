@@ -7,7 +7,7 @@
     package enum Backend: Sendable, Equatable { case hosted, rules, scripted }
     package let backend: @MainActor @Sendable () -> Backend
     package let parse: @MainActor @Sendable (String, String, Date, Calendar) async -> Capture
-    package let propose: @MainActor @Sendable (String, Date, Calendar) async -> [Capture]?
+    package let propose: @MainActor @Sendable (String, String, Date, Calendar) async -> [Capture]?
     package let refineTitle: @MainActor @Sendable (Capture, String, String) async -> Capture
     package let respond:
       @MainActor @Sendable (String, String, ChatRouting.Intent) async -> ChatResponse.Result
@@ -23,7 +23,7 @@
     package init(
       backend: @escaping @MainActor @Sendable () -> Backend,
       parse: @escaping @MainActor @Sendable (String, String, Date, Calendar) async -> Capture,
-      propose: @escaping @MainActor @Sendable (String, Date, Calendar) async -> [Capture]?,
+      propose: @escaping @MainActor @Sendable (String, String, Date, Calendar) async -> [Capture]?,
       refineTitle: @escaping @MainActor @Sendable (Capture, String, String) async -> Capture,
       respond:
         @escaping @MainActor @Sendable (String, String, ChatRouting.Intent) async ->
@@ -67,7 +67,7 @@
           await Understander.parse(
             $0, history: $1, now: $2, calendar: $3, localeID: locale.identifier)
         },
-        propose: { await AICapture.propose($0, now: $1, calendar: $2) },
+        propose: { await AICapture.propose($0, history: $1, now: $2, calendar: $3) },
         refineTitle: { await AICapture.refineTitle($0, source: $1, history: $2) },
         respond: { await ChatResponse.respond($0, history: $1, intent: $2) },
         plan: { try await Editing.plan($0, items: $1, now: $2, calendar: $3, history: $4) },

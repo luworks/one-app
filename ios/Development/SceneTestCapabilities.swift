@@ -53,7 +53,7 @@
           calls.append("parse")
           return CaptureConversation.parse(text, now: now, calendar: calendar)
         },
-        propose: { [self] text, now, calendar in
+        propose: { [self] text, _, now, calendar in
           calls.append("propose")
           guard !disposed, scenario != .unavailable, scenario != .error else { return nil }
           // A batch is explicit input; uncertain conversation never becomes a fixture capture.
