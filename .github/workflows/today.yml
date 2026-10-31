@@ -29,14 +29,6 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 scripts/ci/smoke.py --command ./dev bootstrap --tool swift-format --tool swiftlint --tool ruff --tool actionlint
-      # Temporary draft diagnostic; this run is not final merge-gate evidence.
-      - run: |
-          ./dev format
-          git diff -- ios > "$RUNNER_TEMP/today-format.patch"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: today-format-patch
-          path: ${{ runner.temp }}/today-format.patch
       - run: python3 scripts/ci/smoke.py --command ./dev format --check
       - run: python3 scripts/ci/smoke.py --command ./dev lint
       - run: python3 scripts/ci/smoke.py --command ./dev test helpers
@@ -83,29 +75,6 @@ jobs:
           path: ${{ runner.temp }}/today-smoke/failure
           if-no-files-found: warn
           retention-days: 7
-  # Temporary draft diagnostic for the attached system-calendar event journey.
-  attached-calendar-ui:
-    if: github.event_name == 'pull_request'
-    runs-on: xcode-27
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - run: ./dev bootstrap --tool xcodegen
-      - run: |
-          ./dev generate
-          mkdir -p ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cp ios/Dependencies/Package.resolved ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-      - run: python3 scripts/ci/smoke.py --command ./dev test ui --only TodayUITests/EventSaveTests/testAskAIMovesAllDaySystemEventAndUndoes --only TodayUITests/CalendarRecurringDeleteTests/testAskAIMovesOnlyTheSelectedRepeatingOccurrence
-      - if: failure() || cancelled()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: attached-calendar-ui-failure
-          path: ${{ runner.temp }}/today-smoke/failure
-          if-no-files-found: warn
-          retention-days: 7
-
   # Install gate, run explicitly on main before any phone install. Never installs a phone.
   install-smoke:
     if: github.event_name == 'workflow_dispatch' && inputs.lane == 'install-smoke'
