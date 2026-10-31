@@ -75,6 +75,18 @@ jobs:
           path: ${{ runner.temp }}/today-smoke/failure
           if-no-files-found: warn
           retention-days: 7
+  # Temporary PR diagnostic; removed after this focused UI journey is observed.
+  attached-item-ui:
+    if: github.event_name == 'pull_request'
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: ./dev bootstrap --tool xcodegen
+      - run: ./dev test ui --only TodayUITests/EntryActionsTests/testAskAIOnReminderResolvesMoveItToThatReminder
+
   # Install gate, run explicitly on main before any phone install. Never installs a phone.
   install-smoke:
     if: github.event_name == 'workflow_dispatch' && inputs.lane == 'install-smoke'
