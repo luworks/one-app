@@ -481,6 +481,7 @@
 
     private var pager: some View {
       let signature = signature
+      let selectedDay = $day
       return ScrollView(.vertical, showsIndicators: false) {
         LazyVStack(spacing: 0) {
           ForEach(range, id: \.self) { offset in
@@ -490,10 +491,10 @@
                 month: month(offset), selected: day, rowHeight: rowHeight,
                 page: marks.pages[month(offset)]
               ) { picked in
-                if cal.isDate(picked, inSameDayAs: day) {
+                if cal.isDate(picked, inSameDayAs: selectedDay.wrappedValue) {
                   openDay(picked)
                 } else {
-                  day = cal.startOfDay(for: picked)
+                  selectedDay.wrappedValue = cal.startOfDay(for: picked)
                 }
               }
             }
