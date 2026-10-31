@@ -1,5 +1,6 @@
 import Dispatch
 import XCTest
+
 @testable import TodayCore
 
 final class MonthSummaryTests: XCTestCase {
