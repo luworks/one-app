@@ -67,9 +67,10 @@ final class EventSaveTests: XCTestCase {
   func testAskAIMovesAllDaySystemEventAndUndoes() {
     let title = "Ask event \(UUID().uuidString.prefix(8))"
     let app = XCUIApplication()
-    let base = TestData.fixtureArguments("event-save.json") + [
-      "-uiTestingCalendarSync", "-uiTestingCalendarSaveAllDay", "-appearance", "dark",
-    ]
+    let base =
+      TestData.fixtureArguments("event-save.json") + [
+        "-uiTestingCalendarSync", "-uiTestingCalendarSaveAllDay", "-appearance", "dark",
+      ]
     app.launchArguments = base
     app.launch()
     enableCalendarSync(app)

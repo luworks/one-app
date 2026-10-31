@@ -97,7 +97,7 @@ jobs:
           ./dev generate
           mkdir -p ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
           cp ios/Dependencies/Package.resolved ios/Today.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-      - run: python3 scripts/ci/smoke.py --command ./dev test ui --only TodayUITests/EventSaveTests/testAskAIMovesAllDaySystemEventAndUndoes
+      - run: python3 scripts/ci/smoke.py --command ./dev test ui --only TodayUITests/EventSaveTests/testAskAIMovesAllDaySystemEventAndUndoes --only TodayUITests/CalendarRecurringDeleteTests/testAskAIMovesOnlyTheSelectedRepeatingOccurrence
       - if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
