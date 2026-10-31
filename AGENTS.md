@@ -4,9 +4,9 @@ Read `CLAUDE.md` and `ios/README.md` before changing the app. Their product prin
 
 ## Dev hosts
 
-- The GitHub repo is `luworks/today` (renamed from `luworks/one-app`). On ubuntu03 the checkout is `/home/sn0admin/code/today` (`/home/sn0admin/code/one-app` is a symlink to it); on the MacBook Pro it is still `/Users/yuanlu/code/one-app`.
-- **ubuntu03** is the default host: agents edit code, open PRs and watch CI there. It has no Xcode or Swift toolchain, so it cannot build or run the app; `./dev test helpers`, `./dev test qa` and the Python tests run, and CI (macOS runners) does the rest.
-- **MacBook Pro** only for what needs Xcode on a real device: signed device builds, installing to the owner's iPhone with `devicectl`, real-device checks, and occasional simulator measurement.
+- The GitHub repo is `luworks/today` (renamed from `luworks/one-app`). The development checkout is on the owner's **MacBook Pro** at `/Users/yuanlu/code/one-app`; verify the actual path before starting work.
+- **MacBook Pro is the default host for all Today development**, including code changes, architecture experiments, local tooling, simulator work, PRs and CI observation. Reuse its existing environment and credentials without displaying secrets. Do not create or restore a Today development checkout on Ubuntu03.
+- Keep the CI-first testing rules below. The owner's explicitly authorized Luna architecture exploration may run bounded local experiments on the Mac. Real-device installs and signing changes retain their existing authorization boundaries.
 
 ## Testing: CI owns it
 

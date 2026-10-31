@@ -1,0 +1,15 @@
+{
+  "freeze_id": "architecture-journeys-v1-20261031",
+  "frozen_at": "2026-10-31T06:52:29.285122+00:00",
+  "before_model_tuning": true,
+  "paid_calls_before_freeze": 0,
+  "counts": {
+    "development": 24,
+    "holdout": 16
+  },
+  "sha256": {
+    "development.json": "6e1ca04411a75bce2a5840383f557395a7dc1e2f0c9348bd0702dc51e9fd2b1e",
+    "holdout.json": "672bd83a783fd995c7f9adcb8999edbcf2449540f5a11ef86078e259255478bb",
+    "author_fixtures.py": "35282cdb664ccb6c601bb106d21781cf40f3adedf842e4e7b6472c409dcbd600"
+  }
+}

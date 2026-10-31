@@ -1,0 +1,2653 @@
+{
+  "schema_version": "architecture-journey-v1",
+  "split": "holdout",
+  "synthetic": true,
+  "journeys": [
+    {
+      "id": "holdout-01-missing-duration",
+      "language": "zh",
+      "tags": [
+        "clarification",
+        "multi_turn"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "11月6日下午2点安排个人阅读。",
+          "reference_facts": {
+            "clarification_slots": [
+              "duration"
+            ]
+          },
+          "expect": [
+            {
+              "path": "observations.0.facts.clarification_slots",
+              "op": "equals",
+              "value": [
+                "duration"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "user",
+          "text": "45分钟，不邀请别人。",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "event",
+                      "title": "阅读",
+                      "start": "2026-11-06T14:00:00-08:00",
+                      "end": "2026-11-06T14:45:00-08:00",
+                      "due": null,
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 1
+          },
+          {
+            "path": "new_entities",
+            "op": "contains",
+            "value": {
+              "start": "2026-11-06T14:00:00-08:00",
+              "end": "2026-11-06T14:45:00-08:00"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-02-same-name-clarify",
+      "language": "en",
+      "tags": [
+        "identity",
+        "clarification"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "Delete Dentist.",
+          "reference_facts": {
+            "clarification_slots": [
+              "entity_id"
+            ]
+          },
+          "expect": [
+            {
+              "path": "observations.0.facts.clarification_slots",
+              "op": "equals",
+              "value": [
+                "entity_id"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "user",
+          "text": "Only the Monday November 2 occurrence.",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "delete",
+                    "target_id": "e-dentist-a",
+                    "expected_version": 1,
+                    "values": null
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [
+          "e-dentist-a"
+        ],
+        "predicates": [
+          {
+            "path": "state.entities.e-dentist-a",
+            "op": "exists",
+            "value": false
+          },
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-03-negated-recurrence",
+      "language": "mixed",
+      "tags": [
+        "negation",
+        "recurrence"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "Not every week，just 11月5日周四上午9点提醒我报销。",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "报销",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-05T09:00:00-08:00",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 1
+          },
+          {
+            "path": "new_entities",
+            "op": "contains",
+            "value": {
+              "due": "2026-11-05T09:00:00-08:00",
+              "weekdays": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-04-weekend-correction",
+      "language": "zh",
+      "tags": [
+        "recurrence",
+        "multi_turn"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "从11月7日开始每周六日早上9点提醒我拉伸。"
+        },
+        {
+          "type": "user",
+          "text": "改成只有周日，上午10点。",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "拉伸",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-08T10:00:00-08:00",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [
+                        6
+                      ],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 1
+          },
+          {
+            "path": "new_entities",
+            "op": "contains",
+            "value": {
+              "due": "2026-11-08T10:00:00-08:00",
+              "weekdays": [
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-05-three-item-revision",
+      "language": "en",
+      "tags": [
+        "multi_item",
+        "negation"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "November 6 reminders: buy tea at 9, write notes at 10, call bank at 11 AM."
+        },
+        {
+          "type": "user",
+          "text": "Drop tea. Keep the other two, but bank at noon.",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "Write notes",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-06T10:00:00-08:00",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  },
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "Call bank",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-06T12:00:00-08:00",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 2
+          },
+          {
+            "path": "new_entities",
+            "op": "contains",
+            "value": {
+              "due": "2026-11-06T10:00:00-08:00"
+            }
+          },
+          {
+            "path": "new_entities",
+            "op": "contains",
+            "value": {
+              "due": "2026-11-06T12:00:00-08:00"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-06-tokyo",
+      "language": "mixed",
+      "tags": [
+        "timezone",
+        "date_boundary"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "Tokyo time 11月4日早上8点，提醒我 check flight，不是洛杉矶的8点。",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "Check flight",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-04T08:00:00+09:00",
+                      "timezone": "Asia/Tokyo",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 1
+          },
+          {
+            "path": "new_entities",
+            "op": "contains",
+            "value": {
+              "due": "2026-11-04T08:00:00+09:00",
+              "timezone": "Asia/Tokyo"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-07-dst-gap",
+      "language": "en",
+      "tags": [
+        "DST",
+        "clarification"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "Preview a reminder for March 14, 2027 at 2:30 AM Los Angeles time.",
+          "reference_facts": {
+            "clarification_slots": [
+              "valid_local_time"
+            ]
+          },
+          "expect": [
+            {
+              "path": "observations.0.facts.clarification_slots",
+              "op": "equals",
+              "value": [
+                "valid_local_time"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "user",
+          "text": "Use 3:30 AM that day instead.",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "Reminder",
+                      "start": null,
+                      "end": null,
+                      "due": "2027-03-14T03:30:00-07:00",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "state.receipts",
+            "op": "count",
+            "value": 0
+          },
+          {
+            "path": "state.proposals.p-0001.changes.0.values.due",
+            "op": "equals",
+            "value": "2027-03-14T03:30:00-07:00"
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-08-empty-scope",
+      "language": "zh",
+      "tags": [
+        "query",
+        "range",
+        "scope"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "只查工作日历，11月3日有会议吗？",
+          "reference_facts": {
+            "result_entity_ids": []
+          },
+          "expect": [
+            {
+              "path": "observations.0.facts.result_entity_ids",
+              "op": "equals",
+              "value": []
+            }
+          ]
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-09-range-end",
+      "language": "en",
+      "tags": [
+        "query",
+        "range"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "Show events from November 2 at 10 AM inclusive to November 3 at 3 PM exclusive, all calendars.",
+          "reference_facts": {
+            "result_entity_ids": [
+              "e-team"
+            ]
+          },
+          "expect": [
+            {
+              "path": "observations.0.facts.result_entity_ids",
+              "op": "equals",
+              "value": [
+                "e-team"
+              ]
+            }
+          ]
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-10-stale-card-version",
+      "language": "mixed",
+      "tags": [
+        "card_edit",
+        "stale",
+        "proposal_version"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "11月7日提醒我 laundry。",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "Laundry",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-07",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "card_edit",
+          "proposal_id": "latest",
+          "changes": [
+            {
+              "op": "create",
+              "target_id": null,
+              "expected_version": null,
+              "values": {
+                "kind": "reminder",
+                "title": "Laundry",
+                "start": null,
+                "end": null,
+                "due": "2026-11-08",
+                "timezone": "America/Los_Angeles",
+                "weekdays": [],
+                "attendees": [],
+                "calendar": "personal",
+                "completed": false,
+                "notes": ""
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": 1,
+          "approval_id": "ui-apply-1",
+          "expect_error": true
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-2"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 1
+          },
+          {
+            "path": "new_entities",
+            "op": "contains",
+            "value": {
+              "due": "2026-11-08"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-11-restart-undo",
+      "language": "en",
+      "tags": [
+        "restart",
+        "undo"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "Move Report to November 6, keep no specific time.",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "update",
+                    "target_id": "r-report",
+                    "expected_version": 1,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "Report",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-06",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "work",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        },
+        {
+          "type": "restart"
+        },
+        {
+          "type": "undo",
+          "receipt_id": "latest",
+          "approval_id": "ui-undo-1"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [
+          "r-report"
+        ],
+        "predicates": [
+          {
+            "path": "state.entities.r-report.due",
+            "op": "equals",
+            "value": "2026-11-02T17:00:00-08:00"
+          },
+          {
+            "path": "state.receipts.0.undone",
+            "op": "equals",
+            "value": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-12-external-undo-block",
+      "language": "en",
+      "tags": [
+        "external_mutation",
+        "undo"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "Move Report to November 6.",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "update",
+                    "target_id": "r-report",
+                    "expected_version": 1,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "Report",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-06",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "work",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        },
+        {
+          "type": "external_update",
+          "entity_id": "r-report",
+          "values": {
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-07",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        {
+          "type": "undo",
+          "receipt_id": "latest",
+          "approval_id": "ui-undo-1",
+          "expect_error": true
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [
+          "r-report"
+        ],
+        "predicates": [
+          {
+            "path": "state.entities.r-report.due",
+            "op": "equals",
+            "value": "2026-11-07"
+          },
+          {
+            "path": "state.receipts.0.undone",
+            "op": "equals",
+            "value": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-13-retry-429",
+      "language": "zh",
+      "tags": [
+        "failure",
+        "429",
+        "retry"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "11月9日提醒我寄信。",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "寄信",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-09",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "failure_mode",
+          "mode": "429"
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        },
+        {
+          "type": "failure_mode",
+          "mode": null
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-2"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 1
+          },
+          {
+            "path": "new_entities",
+            "op": "contains",
+            "value": {
+              "due": "2026-11-09"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-14-unknown-no-retry",
+      "language": "mixed",
+      "tags": [
+        "failure",
+        "unknown",
+        "no_duplicate"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "11月9日 add a reminder to file taxes.",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "create",
+                    "target_id": null,
+                    "expected_version": null,
+                    "values": {
+                      "kind": "reminder",
+                      "title": "File taxes",
+                      "start": null,
+                      "end": null,
+                      "due": "2026-11-09",
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [],
+                      "calendar": "personal",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ]
+        },
+        {
+          "type": "failure_mode",
+          "mode": "unknown"
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        },
+        {
+          "type": "user",
+          "text": "不要重试，只告诉我有没有确定成功。",
+          "reference_facts": {
+            "write_status": "unknown"
+          },
+          "expect": [
+            {
+              "path": "observations.3.facts.write_status",
+              "op": "equals",
+              "value": "unknown"
+            }
+          ]
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 0
+          },
+          {
+            "path": "state.events",
+            "op": "matches_count",
+            "value": {
+              "match": {
+                "type": "apply_outcome"
+              },
+              "count": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-15-attendee-scope",
+      "language": "en",
+      "tags": [
+        "availability",
+        "attendees",
+        "approval"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "Move Team sync on November 2 to 1 PM, one occurrence only. Keep Alex; do not claim Alex is available.",
+          "reference_actions": [
+            {
+              "tool": "propose_changes",
+              "arguments": {
+                "base_revision": 1,
+                "proposal_id": null,
+                "changes": [
+                  {
+                    "op": "update",
+                    "target_id": "e-team",
+                    "expected_version": 1,
+                    "values": {
+                      "kind": "event",
+                      "title": "Team sync",
+                      "start": "2026-11-02T13:00:00-08:00",
+                      "end": "2026-11-02T14:00:00-08:00",
+                      "due": null,
+                      "timezone": "America/Los_Angeles",
+                      "weekdays": [],
+                      "attendees": [
+                        "alex@example.invalid"
+                      ],
+                      "calendar": "work",
+                      "completed": false,
+                      "notes": ""
+                    }
+                  }
+                ],
+                "reason": "Synthetic reference action; evaluator only"
+              }
+            }
+          ],
+          "reference_facts": {
+            "external_attendee_availability": "unknown"
+          },
+          "expect": [
+            {
+              "path": "observations.0.facts.external_attendee_availability",
+              "op": "equals",
+              "value": "unknown"
+            }
+          ]
+        },
+        {
+          "type": "apply",
+          "proposal_id": "latest",
+          "version": "latest",
+          "approval_id": "ui-apply-1"
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [
+          "e-team"
+        ],
+        "predicates": [
+          {
+            "path": "state.entities.e-team.start",
+            "op": "equals",
+            "value": "2026-11-02T13:00:00-08:00"
+          },
+          {
+            "path": "state.entities.e-team.attendees",
+            "op": "equals",
+            "value": [
+              "alex@example.invalid"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "holdout-16-idea-not-task",
+      "language": "zh",
+      "tags": [
+        "idea",
+        "no_write",
+        "negation"
+      ],
+      "initial_state": {
+        "schema_version": "planner-world-v1",
+        "revision": 1,
+        "now": "2026-10-31T09:00:00-07:00",
+        "timezone": "America/Los_Angeles",
+        "entities": {
+          "e-dentist-a": {
+            "id": "e-dentist-a",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-02T09:00:00-08:00",
+            "end": "2026-11-02T10:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-dentist-b": {
+            "id": "e-dentist-b",
+            "version": 1,
+            "kind": "event",
+            "title": "Dentist",
+            "start": "2026-11-03T15:00:00-08:00",
+            "end": "2026-11-03T16:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          },
+          "e-team": {
+            "id": "e-team",
+            "version": 1,
+            "kind": "event",
+            "title": "Team sync",
+            "start": "2026-11-02T11:00:00-08:00",
+            "end": "2026-11-02T12:00:00-08:00",
+            "due": null,
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [
+              "alex@example.invalid"
+            ],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-report": {
+            "id": "r-report",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Report",
+            "start": null,
+            "end": null,
+            "due": "2026-11-02T17:00:00-08:00",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "work",
+            "completed": false,
+            "notes": ""
+          },
+          "r-overdue": {
+            "id": "r-overdue",
+            "version": 1,
+            "kind": "reminder",
+            "title": "Renew library card",
+            "start": null,
+            "end": null,
+            "due": "2026-10-29",
+            "timezone": "America/Los_Angeles",
+            "weekdays": [],
+            "attendees": [],
+            "calendar": "personal",
+            "completed": false,
+            "notes": ""
+          }
+        },
+        "proposals": {},
+        "receipts": [],
+        "events": [],
+        "next_entity": 1,
+        "next_proposal": 1,
+        "next_receipt": 1,
+        "failure_mode": null
+      },
+      "steps": [
+        {
+          "type": "user",
+          "text": "随便想想：周末也许可以学陶艺。不是要加提醒，也不要建任务。",
+          "reference_facts": {
+            "intent": "conversation"
+          },
+          "expect": [
+            {
+              "path": "observations.0.facts.intent",
+              "op": "equals",
+              "value": "conversation"
+            }
+          ]
+        }
+      ],
+      "oracle": {
+        "mutable_entity_ids": [],
+        "predicates": [
+          {
+            "path": "new_entities",
+            "op": "count",
+            "value": 0
+          },
+          {
+            "path": "state.proposals",
+            "op": "count",
+            "value": 0
+          }
+        ]
+      }
+    }
+  ]
+}
