@@ -284,6 +284,7 @@
     /// Months from the current one, the id of each page in the pager.
     @State private var pos: Int? = 0
     @State private var settled = 0
+    @State private var clockRevision = 0
     @State private var marks = MonthMarksCache()
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 51
     private var cal: Calendar {
@@ -318,6 +319,9 @@
         }
       }
       .onChange(of: current, initial: true) { _, new in onVisibleDays(month(new)...month(new)) }
+      .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
+        clockRevision += 1
+      }
       .onAppear {
         let target = CalendarMath.monthOffset(of: day, from: base, calendar: cal)
         settled = target
@@ -362,6 +366,7 @@
     }
 
     private var signature: Int {
+      _ = clockRevision
       var h = Hasher()
       h.combine(calendar.version)
       h.combine(cal.identifier)
@@ -390,6 +395,10 @@
         h.combine(a.label)
         h.combine(a.weekdays)
         h.combine(a.isOn)
+        if a.isOn && a.weekdays.isEmpty {
+          h.combine(AlarmPlan.nextFire(
+            hour: a.hour, minute: a.minute, weekdays: [], after: presentation.now, calendar: cal))
+        }
       }
       return h.finalize()
     }

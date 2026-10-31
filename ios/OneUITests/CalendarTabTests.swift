@@ -151,10 +151,10 @@ final class CalendarTabTests: XCTestCase {
     }
 
     assertPage(0, "starts on the current month")
-    pager.swipeUp()
-    assertPage(1, "one swipe up advances exactly one month")
-    pager.swipeDown()
-    assertPage(0, "one swipe down returns exactly one month")
+    pager.swipeUp(velocity: .fast)
+    assertPage(1, "one fast swipe up advances exactly one month")
+    pager.swipeDown(velocity: .fast)
+    assertPage(0, "one fast swipe down returns exactly one month")
     pager.swipeDown()
     assertPage(-1, "one swipe down moves exactly one month earlier")
     pager.swipeLeft()
