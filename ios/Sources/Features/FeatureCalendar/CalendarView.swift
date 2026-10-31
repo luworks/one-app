@@ -244,6 +244,26 @@
 
   // MARK: - Month
 
+  private struct MonthLocalSnapshot: Sendable {
+    let start: Date
+    let duration: TimeInterval
+    let rule: RepeatRule?
+    let allDay: Bool
+    let title: String
+    let tint: Int
+  }
+
+  @MainActor @Observable
+  private final class MonthMarksCache {
+    struct Page {
+      let signature: Int
+      let days: [Date: MonthDaySummary]
+      let tints: [Color]
+    }
+    var pages: [Date: Page] = [:]
+    @ObservationIgnored var loading: [Date: Int] = [:]
+  }
+
   private struct MonthView: View {
     let calendar: any CalendarService
     @Environment(PlannerPresentation.self) private var presentation
@@ -263,6 +283,8 @@
     @AppStorage(Preferences.weekNumbersKey) private var showsWeekNumbers = Preferences.weekNumbers
     /// Months from the current one, the id of each page in the pager.
     @State private var pos: Int? = 0
+    @State private var settled = 0
+    @State private var marks = MonthMarksCache()
     @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 51
     private var cal: Calendar {
       Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
@@ -275,7 +297,7 @@
     private func month(_ offset: Int) -> Date {
       CalendarMath.monthStart(offset: offset, from: base, calendar: cal)
     }
-    private var current: Int { pos ?? 0 }
+    private var current: Int { settled }
     /// Alarms follow Settings → "Show alarms in the day", like the Today timeline.
     private var alarms: [OneAlarm] { showsAlarms ? allAlarms : [] }
 
@@ -290,16 +312,17 @@
       }
       .onChange(of: day) { _, new in
         let target = CalendarMath.monthOffset(of: new, from: base, calendar: cal)
-        if target != pos { withAnimation(.snappy) { pos = target } }
-      }
-      .onChange(of: pos) { _, new in
-        guard let new, CalendarMath.monthOffset(of: day, from: base, calendar: cal) != new else {
-          return
+        if target != settled {
+          settled = target
+          withAnimation(.snappy) { pos = target }
         }
-        day = CalendarMath.landingDay(inMonthOf: month(new), today: presentation.now, calendar: cal)
       }
       .onChange(of: current, initial: true) { _, new in onVisibleDays(month(new)...month(new)) }
-      .onAppear { pos = CalendarMath.monthOffset(of: day, from: base, calendar: cal) }
+      .onAppear {
+        let target = CalendarMath.monthOffset(of: day, from: base, calendar: cal)
+        settled = target
+        pos = target
+      }
     }
 
     private var weekdayHeader: some View {
@@ -338,15 +361,109 @@
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
+    private var signature: Int {
+      var h = Hasher()
+      h.combine(calendar.version)
+      h.combine(cal.identifier)
+      h.combine(cal.timeZone.identifier)
+      h.combine(cal.firstWeekday)
+      h.combine(cal.startOfDay(for: presentation.now))
+      h.combine(showsAlarms)
+      for e in events {
+        h.combine(e.start)
+        h.combine(e.durationMinutes)
+        h.combine(e.repeatRule)
+        h.combine(e.isAllDay)
+        h.combine(e.title)
+        h.combine(e.externalID)
+        h.combine(e.calendarName)
+      }
+      for t in tasks {
+        h.combine(t.title)
+        h.combine(t.due)
+        h.combine(t.durationMinutes)
+        h.combine(t.isDone)
+      }
+      for a in alarms {
+        h.combine(a.hour)
+        h.combine(a.minute)
+        h.combine(a.label)
+        h.combine(a.weekdays)
+        h.combine(a.isOn)
+      }
+      return h.finalize()
+    }
+
+    private func load(_ start: Date, signature: Int) async {
+      guard marks.pages[start]?.signature != signature, marks.loading[start] != signature,
+        let interval = cal.dateInterval(of: .month, for: start) else { return }
+      marks.loading[start] = signature
+      defer { if marks.loading[start] == signature { marks.loading[start] = nil } }
+      let c = cal
+      let now = presentation.now
+      let system = await calendar.loadEvents(in: interval, excluding: Set(events.compactMap(\.externalID)))
+      guard !Task.isCancelled, self.signature == signature else { return }
+      var tints: [Color] = []
+      var indexes: [Color: Int] = [:]
+      func tint(_ color: Color) -> Int {
+        if let index = indexes[color] { return index }
+        let index = tints.count
+        tints.append(color)
+        indexes[color] = index
+        return index
+      }
+      let local: [MonthLocalSnapshot] = events.compactMap { e in
+        guard !calendar.isHidden(externalID: e.externalID) else { return nil }
+        return MonthLocalSnapshot(start: e.start, duration: e.duration, rule: e.repeats,
+          allDay: e.isAllDay, title: e.title,
+          tint: tint(calendar.calendar(forExternalID: e.externalID)?.color ?? .blue))
+      }
+      var entries: [MonthSummaryEntry] = system.map { e in
+        MonthSummaryEntry(start: e.start, end: e.end, isAllDay: e.isAllDay,
+          title: e.title, isAlarm: false, tintIndex: tint(e.color))
+      }
+      let accent = tint(.accentColor)
+      for t in tasks where !t.isDone {
+        guard let due = t.due, interval.contains(due),
+          c.dateComponents([.hour, .minute], from: due) != DateComponents(hour: 0, minute: 0)
+        else { continue }
+        entries.append(MonthSummaryEntry(start: due, end: due.addingTimeInterval(TimeInterval(t.durationMinutes * 60)),
+          isAllDay: false, title: t.title, isAlarm: false, tintIndex: accent))
+      }
+      let alarmSpecs = alarms.map(\.spec)
+      let fixedEntries = entries
+      let days = CalendarMath.monthWeeks(of: start, calendar: c).flatMap { $0 }.compactMap { $0 }
+      let result = await Task.detached(priority: .userInitiated) {
+        var all: [MonthSummaryEntry] = []
+        for e in local {
+          for occurrence in Recurrence.occurrences(start: e.start, duration: e.duration,
+            rule: e.rule, in: interval, calendar: c) {
+            all.append(MonthSummaryEntry(start: occurrence, end: occurrence.addingTimeInterval(e.duration),
+              isAllDay: e.allDay, title: e.title, isAlarm: false, tintIndex: e.tint))
+          }
+        }
+        all.append(contentsOf: fixedEntries)
+        for ring in CalendarAlarms.occurrences(of: alarmSpecs, in: interval, now: now, calendar: c) {
+          all.append(MonthSummaryEntry(start: ring.date, end: ring.date, isAllDay: false,
+            title: CalendarAlarms.title(alarmSpecs[ring.index].label), isAlarm: true, tintIndex: accent))
+        }
+        return MonthSummary.summarize(days: days, entries: all, calendar: c)
+      }.value
+      guard !Task.isCancelled, self.signature == signature else { return }
+      marks.pages[start] = MonthMarksCache.Page(signature: signature,
+        days: Dictionary(uniqueKeysWithValues: result.map { ($0.day, $0) }), tints: tints)
+    }
+
     private var pager: some View {
-      ScrollView(.vertical, showsIndicators: false) {
+      let signature = signature
+      return ScrollView(.vertical, showsIndicators: false) {
         LazyVStack(spacing: 0) {
           ForEach(range, id: \.self) { offset in
             HStack(alignment: .top, spacing: 0) {
               if showsWeekNumbers { weekNumberColumn(for: offset) }
               MonthPage(
-                calendar: calendar, month: month(offset), selected: day, rowHeight: rowHeight,
-                events: events, tasks: tasks, alarms: alarms
+                month: month(offset), selected: day, rowHeight: rowHeight,
+                page: marks.pages[month(offset)]
               ) { picked in
                 if cal.isDate(picked, inSameDayAs: day) {
                   openDay(picked)
@@ -358,12 +475,18 @@
             .frame(maxWidth: .infinity, alignment: .top)
             .containerRelativeFrame(.vertical, alignment: .top)
             .id(offset)
+            .task(id: signature) { await load(month(offset), signature: signature) }
           }
         }
         .scrollTargetLayout()
       }
-      .scrollTargetBehavior(.paging)
+      .scrollTargetBehavior(OneMonthPaging())
       .scrollPosition(id: $pos)
+      .onScrollPhaseChange { _, phase in
+        guard phase == .idle, let page = pos, page != settled else { return }
+        settled = page
+        day = CalendarMath.landingDay(inMonthOf: month(page), today: presentation.now, calendar: cal)
+      }
       .scrollBounceBehavior(.basedOnSize)
       .frame(
         height: CGFloat(CalendarMath.monthWeeks(of: month(current), calendar: cal).count)
@@ -377,14 +500,11 @@
 
   /// One month of day cells: number, selection circle, and a small dot per event in the calendar's color.
   private struct MonthPage: View {
-    let calendar: any CalendarService
     @Environment(PlannerPresentation.self) private var presentation
     let month: Date
     let selected: Date
     let rowHeight: CGFloat
-    let events: [OneEvent]
-    let tasks: [OneTask]
-    let alarms: [OneAlarm]
+    let page: MonthMarksCache.Page?
     var onTap: (Date) -> Void
     private var cal: Calendar {
       Preferences.firstWeekdayChoice(presentation.defaults).calendar(base: presentation.calendar)
@@ -395,19 +515,18 @@
 
     var body: some View {
       let weeks = CalendarMath.monthWeeks(of: month, calendar: cal)
-      let all = weeks.flatMap { $0 }.compactMap { $0 }
-      let interval = DateInterval(
-        start: all.first ?? month,
-        end: cal.date(byAdding: .day, value: 1, to: all.last ?? month) ?? month)
-      let entries = CalendarEntries.make(
-        in: interval, events: events, tasks: tasks, alarms: alarms, calendarService: calendar,
-        now: presentation.now, calendar: cal)
       VStack(spacing: 0) {
         ForEach(weeks.indices, id: \.self) { w in
           HStack(spacing: 0) {
             ForEach(0..<7, id: \.self) { i in
               if let d = weeks[w][i] {
-                cell(d, CalendarEntries.on(d, in: entries, calendar: cal))
+                MonthCell(day: d, number: cal.component(.day, from: d),
+                  isToday: cal.isDate(d, inSameDayAs: presentation.now),
+                  isSelected: cal.isDate(d, inSameDayAs: selected),
+                  past: dimsPast && d < cal.startOfDay(for: presentation.now),
+                  rowHeight: rowHeight, summary: page?.days[d], tints: page?.tints ?? [],
+                  label: d.plannerFormatted(date: .complete, time: .omitted, runtime: presentation.runtime),
+                  identifier: CalendarIDs.day(d, calendar: cal), onTap: onTap).equatable()
               } else {
                 Color.clear.frame(maxWidth: .infinity, minHeight: rowHeight)
               }
@@ -418,57 +537,74 @@
       }
     }
 
-    private func cell(_ d: Date, _ items: [CalEntry]) -> some View {
-      let isToday = cal.isDate(d, inSameDayAs: presentation.now)
-      let isSelected = cal.isDate(d, inSameDayAs: selected)
-      let past = dimsPast && d < cal.startOfDay(for: presentation.now)
-      // Today is a red circle when selected (red number otherwise); any other selected day is a label-colored circle.
-      // Days that are over are dimmed (Settings > Calendar > "Dim past days"). Weekends look like any other day.
+  }
+
+  private struct MonthCell: View, Equatable {
+    let day: Date
+    let number: Int
+    let isToday: Bool
+    let isSelected: Bool
+    let past: Bool
+    let rowHeight: CGFloat
+    let summary: MonthDaySummary?
+    let tints: [Color]
+    let label: String
+    let identifier: String
+    let onTap: (Date) -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+      lhs.day == rhs.day && lhs.number == rhs.number && lhs.isToday == rhs.isToday
+        && lhs.isSelected == rhs.isSelected && lhs.past == rhs.past
+        && lhs.rowHeight == rhs.rowHeight && lhs.summary == rhs.summary
+        && lhs.tints == rhs.tints && lhs.label == rhs.label && lhs.identifier == rhs.identifier
+    }
+
+    private var speech: String {
+      guard let summary else { return "" }
+      if summary.eventCount == 0 && summary.alarmCount == 0 { return "no events" }
+      var parts: [String] = []
+      if summary.eventCount > 0 {
+        parts.append("\(summary.eventCount) event\(summary.eventCount == 1 ? "" : "s")")
+      }
+      if summary.alarmCount > 0 {
+        parts.append("\(summary.alarmCount) alarm\(summary.alarmCount == 1 ? "" : "s")")
+      }
+      return parts.joined(separator: ", ")
+    }
+
+    var body: some View {
       let fill: Color = isSelected ? (isToday ? .red : Color(.label)) : .clear
-      let text: Color =
-        isSelected
-        ? (isToday ? .white : Color(.systemBackground))
+      let text: Color = isSelected ? (isToday ? .white : Color(.systemBackground))
         : (isToday ? .red : (past ? Color(.tertiaryLabel) : Color(.label)))
-      return Button {
-        onTap(d)
-      } label: {
+      return Button { onTap(day) } label: {
         VStack(spacing: 4) {
-          Text("\(cal.component(.day, from: d))")
-            .font(.system(size: 17, weight: .medium))
-            .foregroundStyle(text)
-            .frame(width: 29, height: 29)
-            .background(fill, in: Circle())
-          // Alarms come after events and reminders, so a busy day keeps its calendar colors.
-          DayDots(
-            colors: (items.filter { !$0.isAlarm } + items.filter(\.isAlarm)).prefix(3).map(\.color)
-          )
-          .frame(height: 5)
-          .opacity(past ? DayTint.past : 1)
+          Text("\(number)").font(.system(size: 17, weight: .medium)).foregroundStyle(text)
+            .frame(width: 29, height: 29).background(fill, in: Circle())
+          DayDots(colors: (summary?.tintIndices ?? []).compactMap { tints.indices.contains($0) ? tints[$0] : nil })
+            .frame(height: 5).opacity(past ? DayTint.past : 1)
         }
-        .padding(.top, 4)
-        .frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .top)
+        .padding(.top, 4).frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .top)
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .accessibilityElement(children: .ignore)
-      .accessibilityLabel(
-        "\(d.plannerFormatted(date: .complete, time: .omitted, runtime: presentation.runtime)), \(Self.summary(items))"
-      )
+      .accessibilityLabel(speech.isEmpty ? label : "\(label), \(speech)")
       .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-      .accessibilityIdentifier(CalendarIDs.day(d, calendar: cal))
+      .accessibilityIdentifier(identifier)
     }
   }
 
-  extension MonthPage {
-    /// "no events", "2 events", "1 event, 1 alarm", "1 alarm".
-    static func summary(_ items: [CalEntry]) -> String {
-      let alarms = items.filter(\.isAlarm).count
-      let events = items.count - alarms
-      if items.isEmpty { return "no events" }
-      var parts: [String] = []
-      if events > 0 { parts.append("\(events) event\(events == 1 ? "" : "s")") }
-      if alarms > 0 { parts.append("\(alarms) alarm\(alarms == 1 ? "" : "s")") }
-      return parts.joined(separator: ", ")
+  /// Restrict even a high-velocity flick to the adjacent page.
+  private struct OneMonthPaging: ScrollTargetBehavior {
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+      let height = context.containerSize.height
+      guard height > 0 else { return }
+      let original = context.originalTarget.rect.minY
+      let proposed = target.rect.minY
+      let delta = proposed - original
+      let direction: CGFloat = abs(delta) > height * 0.15 ? (delta > 0 ? 1 : -1)
+        : (abs(context.velocity.dy) > 100 ? (context.velocity.dy > 0 ? 1 : -1) : 0)
+      target.rect.origin.y = max(0, min(context.contentSize.height - height, original + direction * height))
     }
   }
 
