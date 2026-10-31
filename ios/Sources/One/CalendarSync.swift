@@ -56,6 +56,59 @@
     package var durationMinutes: Int { max(1, Int(end.timeIntervalSince(start) / 60)) }
   }
 
+  /// Private-content-bearing snapshots belong in the ledger snapshot, never in props.
+  package struct CalendarMoveSnapshot: Codable, Equatable {
+    package let externalID: String
+    package let calendarID: String
+    package let sourceID: String
+    package let itemID: String
+    /// The actual start used for occurrence lookup, including after a move.
+    package let occurrence: Date
+    package let start: Date
+    package let end: Date
+    package let isAllDay: Bool
+    package let lastModified: Date
+    package let title: String
+    package let location: String?
+    package let notes: String?
+    package let url: String?
+    package let audience: CalendarMoveAudience
+    /// Participant identifiers make changes to the audience stale, not just count changes.
+    package let participantIDs: [String]
+  }
+
+  package struct CalendarMoveAudience: Codable, Equatable {
+    package let attendeeCount: Int
+    package let isOrganizer: Bool?
+  }
+
+  package struct CalendarMoveReceipt: Codable, Equatable {
+    package let before: CalendarMoveSnapshot
+    package let after: CalendarMoveSnapshot
+  }
+
+  package struct CalendarMoveUnverified: Codable, Equatable {
+    package let before: CalendarMoveSnapshot
+    package let requestedStart: Date
+    package let requestedEnd: Date
+    package let savedExternalID: String?
+  }
+
+  package enum CalendarMoveOutcome {
+    case verified(CalendarMoveReceipt)
+    case committedUnverified(CalendarMoveUnverified)
+  }
+
+  package enum CalendarMoveUndoOutcome {
+    case verified
+    case committedUnverified
+  }
+
+  package enum CalendarMoveError: Error, Equatable {
+    case unavailable, notFound, readOnly, audienceUnknownOrUnsafe, audienceAcknowledgmentRequired,
+      stale, invalidTime
+  }
+
   /// A system calendar (one line in Apple's Calendars list).
   package struct SystemCalendar: Identifiable, Hashable {
     package let id: String
@@ -746,6 +799,132 @@
         log.error("save failed \((error as NSError).code, privacy: .public)")
         return nil
       }
+    }
+
+    /// Strictly resolves the occurrence; never falls back to another series instance.
+    private func moveTarget(id: String, start: Date) -> EKEvent? {
+      if let exact = occurrence(id, at: start), exact.startDate == start { return exact }
+      guard let event = store.event(withIdentifier: id), event.startDate == start else {
+        return nil
+      }
+      return event
+    }
+
+    private func moveSnapshot(_ event: EKEvent) throws -> CalendarMoveSnapshot {
+      guard event.calendar.allowsContentModifications else { throw CalendarMoveError.readOnly }
+      // Require the two EventKit audience signals to agree; do not infer safety from
+      // an inconsistent or incompletely identified participant list.
+      let attendees = event.attendees ?? []
+      guard event.hasAttendees == !attendees.isEmpty,
+        attendees.isEmpty || event.organizer != nil
+      else {
+        throw CalendarMoveError.audienceUnknownOrUnsafe
+      }
+      let participantIDs = attendees.map { $0.url.absoluteString }.sorted()
+      guard participantIDs.allSatisfy({ !$0.isEmpty }) else {
+        throw CalendarMoveError.audienceUnknownOrUnsafe
+      }
+      guard let id = event.eventIdentifier, let source = event.calendar.source,
+        let modified = event.lastModifiedDate, let start = event.startDate, let end = event.endDate,
+        end > start
+      else { throw CalendarMoveError.unavailable }
+      return CalendarMoveSnapshot(
+        externalID: id, calendarID: event.calendar.calendarIdentifier,
+        sourceID: source.sourceIdentifier, itemID: event.calendarItemIdentifier,
+        occurrence: start, start: start, end: end, isAllDay: event.isAllDay,
+        lastModified: modified, title: event.title ?? "", location: event.location,
+        notes: event.notes, url: event.url?.absoluteString,
+        audience: CalendarMoveAudience(
+          attendeeCount: attendees.count, isOrganizer: event.organizer?.isCurrentUser),
+        participantIDs: participantIDs)
+    }
+
+    package func moveSnapshot(externalID: String, occurrence: Date) throws -> CalendarMoveSnapshot {
+      guard isOn, hasAccess, storeReady else { throw CalendarMoveError.unavailable }
+      guard let event = moveTarget(id: externalID, start: occurrence) else {
+        throw CalendarMoveError.notFound
+      }
+      return try moveSnapshot(event)
+    }
+
+    package func moveEvent(
+      expected: CalendarMoveSnapshot, to start: Date, acknowledgingAudience: Bool
+    ) throws
+      -> CalendarMoveOutcome
+    {
+      guard start.timeIntervalSinceReferenceDate.isFinite else {
+        throw CalendarMoveError.invalidTime
+      }
+      guard isOn, hasAccess, storeReady else { throw CalendarMoveError.unavailable }
+      guard let event = moveTarget(id: expected.externalID, start: expected.occurrence) else {
+        throw CalendarMoveError.stale
+      }
+      guard try moveSnapshot(event) == expected else { throw CalendarMoveError.stale }
+      guard expected.audience.attendeeCount == 0 || acknowledgingAudience else {
+        throw CalendarMoveError.audienceAcknowledgmentRequired
+      }
+      guard
+        let end = CalendarMoveTiming.end(
+          newStart: start, oldStart: expected.start, oldEnd: expected.end,
+          wasAllDay: expected.isAllDay)
+      else { throw CalendarMoveError.invalidTime }
+      event.isAllDay = false
+      event.startDate = start
+      event.endDate = end
+      try store.save(event, span: .thisEvent, commit: true)
+      version += 1
+      // EventKit may detach the instance and replace its identifier. Read back the moved
+      // instance, not the old occurrence; ambiguity or incomplete metadata is not success.
+      guard let id = event.eventIdentifier,
+        let moved = moveTarget(id: id, start: start),
+        let after = try? moveSnapshot(moved), after.start == start, after.end == end,
+        !after.isAllDay, after.calendarID == expected.calendarID,
+        after.sourceID == expected.sourceID, after.audience == expected.audience,
+        after.participantIDs == expected.participantIDs, after.title == expected.title,
+        after.location == expected.location, after.notes == expected.notes,
+        after.url == expected.url
+      else {
+        return .committedUnverified(
+          CalendarMoveUnverified(
+            before: expected, requestedStart: start, requestedEnd: end,
+            savedExternalID: event.eventIdentifier))
+      }
+      return .verified(CalendarMoveReceipt(before: expected, after: after))
+    }
+
+    package func undoMove(_ receipt: CalendarMoveReceipt, acknowledgingAudience: Bool) throws
+      -> CalendarMoveUndoOutcome
+    {
+      guard isOn, hasAccess, storeReady else { throw CalendarMoveError.unavailable }
+      let after = receipt.after
+      guard let event = moveTarget(id: after.externalID, start: after.occurrence) else {
+        throw CalendarMoveError.stale
+      }
+      guard try moveSnapshot(event) == after else { throw CalendarMoveError.stale }
+      guard after.audience.attendeeCount == 0 || acknowledgingAudience else {
+        throw CalendarMoveError.audienceAcknowledgmentRequired
+      }
+      guard receipt.before.calendarID == after.calendarID,
+        receipt.before.sourceID == after.sourceID
+      else { throw CalendarMoveError.stale }
+      event.isAllDay = receipt.before.isAllDay
+      event.startDate = receipt.before.start
+      event.endDate = receipt.before.end
+      try store.save(event, span: .thisEvent, commit: true)
+      version += 1
+      guard let id = event.eventIdentifier,
+        let restored = moveTarget(id: id, start: receipt.before.start),
+        let snapshot = try? moveSnapshot(restored),
+        snapshot.start == receipt.before.start, snapshot.end == receipt.before.end,
+        snapshot.isAllDay == receipt.before.isAllDay,
+        snapshot.calendarID == receipt.before.calendarID,
+        snapshot.sourceID == receipt.before.sourceID,
+        snapshot.audience == receipt.before.audience,
+        snapshot.participantIDs == receipt.before.participantIDs,
+        snapshot.title == receipt.before.title, snapshot.location == receipt.before.location,
+        snapshot.notes == receipt.before.notes, snapshot.url == receipt.before.url
+      else { return .committedUnverified }
+      return .verified
     }
 
     /// Removes the system copy of an event. False when the calendar refused (read-only or subscribed calendars such as
